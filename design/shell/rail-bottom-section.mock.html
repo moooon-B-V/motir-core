@@ -19,15 +19,6 @@
   rows: this asset owns the BOTTOM section, and design/shell/desktop.pen still
   owns the primary one.
 
-  REVISED by MOTIR-4238. The Legal row LEFT this section: a rail answers
-  "where inside this project can I go today", and the terms of service is not a
-  daily-work destination, so the door moved to the account menu in the top bar.
-  design/shell/account-menu.mock.html is the design of record for its new home
-  and draws both of its arms; the divergence ledger records the move. The three
-  complete arms lose the row and the three floor arms never had it, so the
-  section is five rows with three conditionals. Only that section data changed:
-  the rails are still the real Sidebar markup.
-
   REVISED by MOTIR-4167. The Docs row lost its hard-coded app-relative path — a
   route this application stopped serving when MOTIR-3932 moved the public
   reading surface to motir-marketing — and reads MOTIR_DOCS_URL, an absolute url
@@ -3640,20 +3631,18 @@
       <header>
         <h1>The rail&rsquo;s bottom section &mdash; every row it renders</h1>
         <p class="sub">
-          The authed rail&rsquo;s bottom section carries <b>five</b> rows, three of them
-          conditional. This asset draws all five at each of the three widths the shell renders
-          &mdash; expanded (240px), collapsed (56px) and the mobile drawer (300px) &mdash; and draws
-          each conditional row in <b>both</b> arms, present and absent. Measured at
-          <code>8d80ac8db</code>; revised by MOTIR-4167, which made the <b>Docs</b> row conditional,
-          and by MOTIR-4238, which moved the <b>legal-documents</b> row out of this section and into
-          the account menu (<code>account-menu.mock.html</code>).
+          The authed rail&rsquo;s bottom section carries <b>six</b> rows, four of them conditional.
+          This asset draws all six at each of the three widths the shell renders &mdash; expanded
+          (240px), collapsed (56px) and the mobile drawer (300px) &mdash; and draws each conditional
+          row in <b>both</b> arms, present and absent. Measured at <code>8d80ac8db</code>; revised
+          by MOTIR-4167, which made the <b>Docs</b> row conditional.
         </p>
         <p class="sub">
           <b>This asset is the source for this element.</b> <code>desktop.pen</code>,
-          <code>desktop-collapsed.pen</code> and <code>mobile-drawer.pen</code> draw two of the five
+          <code>desktop-collapsed.pen</code> and <code>mobile-drawer.pen</code> draw two of the six
           and cannot be re-exported; the rails in <code>navigation-pending.mock.html</code>,
           <code>top-bar.mock.html</code> and <code>design/home/home.mock.html</code> carry this
-          section as context for something else and are three rows short between them. See the
+          section as context for something else and are four rows short between them. See the
           divergence ledger in <code>design-notes.md</code>.
         </p>
       </header>
@@ -3665,17 +3654,16 @@
         <p class="panel-n">
           Left: every conditional row present &mdash; the state a workspace admin on a revealed tier
           sees on a deployment that has configured its legal documents and its documentation url.
-          Right: all three conditionals absent, which is the
-          <b>open product&rsquo;s common case</b>. Nothing marks the gap: the rows simply close up
-          and the section is three shorter. No disabled row, no tooltip, no empty state &mdash; an
-          entry point is a promise about a room, and a disabled row is a promise the product then
-          refuses.
+          Right: all four conditionals absent, which is the <b>open product&rsquo;s common case</b>.
+          Nothing marks the gap: the rows simply close up and the section is four shorter. No
+          disabled row, no tooltip, no empty state &mdash; an entry point is a promise about a room,
+          and a disabled row is a promise the product then refuses.
         </p>
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 5 rows</span
-              ><span class="fc-note">Settings · Security · Job runs · Git · Docs</span>
+              <span class="fc-label">Complete &mdash; 6 rows</span
+              ><span class="fc-note">Settings · Security · Job runs · Git · Docs · Legal</span>
             </figcaption>
             <div class="rail" style="width: 240px">
               <nav
@@ -3908,6 +3896,31 @@
                                 d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
                               ></path></svg></span
                           ><span class="flex-1 truncate">Docs</span></a
+                        ><a
+                          href="https://motir.co/legal"
+                          class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
+                          ><span
+                            aria-hidden="true"
+                            class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
+                            ><svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="lucide lucide-scale"
+                              aria-hidden="true"
+                            >
+                              <path d="M12 3v18"></path>
+                              <path d="m19 8 3 8a5 5 0 0 1-6 0zV7"></path>
+                              <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"></path>
+                              <path d="m5 8 3 8a5 5 0 0 1-6 0zV7"></path>
+                              <path d="M7 21h10"></path></svg></span
+                          ><span class="flex-1 truncate">Legal</span></a
                         >
                       </div>
                     </div>
@@ -4103,9 +4116,9 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 5 glyphs</span
+              <span class="fc-label">Complete &mdash; 6 glyphs</span
               ><span class="fc-note"
-                >settings · shield-check · list-checks · git-branch · book-open</span
+                >settings · shield-check · list-checks · git-branch · book-open · scale</span
               >
             </figcaption>
             <div class="rail" style="width: 56px">
@@ -4348,7 +4361,33 @@
                               <path d="M12 7v14"></path>
                               <path
                                 d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-                              ></path></svg></span
+                              ></path></svg></span></a
+                        ><a
+                          href="https://motir.co/legal"
+                          aria-label="Legal"
+                          class="relative mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) transition-colors hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+                          data-state="closed"
+                          ><span
+                            aria-hidden="true"
+                            class="inline-flex [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px]"
+                            ><svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="24"
+                              height="24"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              class="lucide lucide-scale"
+                              aria-hidden="true"
+                            >
+                              <path d="M12 3v18"></path>
+                              <path d="m19 8 3 8a5 5 0 0 1-6 0zV7"></path>
+                              <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"></path>
+                              <path d="m5 8 3 8a5 5 0 0 1-6 0zV7"></path>
+                              <path d="M7 21h10"></path></svg></span
                         ></a>
                       </div>
                     </div>
@@ -4553,7 +4592,7 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 5 rows</span
+              <span class="fc-label">Complete &mdash; 6 rows</span
               ><span class="fc-note">the configured, revealed, admin state</span>
             </figcaption>
             <div class="rail" style="width: 300px">
@@ -4816,6 +4855,31 @@
                                     d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
                                   ></path></svg></span
                               ><span class="flex-1 truncate">Docs</span></a
+                            ><a
+                              href="https://motir.co/legal"
+                              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
+                              ><span
+                                aria-hidden="true"
+                                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
+                                ><svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="24"
+                                  height="24"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  class="lucide lucide-scale"
+                                  aria-hidden="true"
+                                >
+                                  <path d="M12 3v18"></path>
+                                  <path d="m19 8 3 8a5 5 0 0 1-6 0zV7"></path>
+                                  <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"></path>
+                                  <path d="m5 8 3 8a5 5 0 0 1-6 0zV7"></path>
+                                  <path d="M7 21h10"></path></svg></span
+                              ><span class="flex-1 truncate">Legal</span></a
                             >
                           </div>
                         </div>
@@ -5036,15 +5100,14 @@
         <p class="panel-h">Panel D &mdash; what governs each row</p>
         <p class="panel-n">
           Declaration order, from <code>app/(authed)/_components/SidebarNav.tsx</code>&rsquo;s
-          <code>sections.push({ id: 'bottom' })</code>. The <b>Docs</b> row is the one whose absent
-          arm is worth reading twice: it used to carry a hard-coded app-relative path to a page this
-          application no longer serves, and since MOTIR-4167 it reads the operator&rsquo;s
-          configured absolute url or does not render at all.
-          <b>The section is one row shorter than it was</b> &mdash; the <b>legal-documents</b> row
-          moved to the account menu (MOTIR-4238), and its absent arm&rsquo;s two-cause reasoning
-          moved with it to <code>account-menu.mock.html</code> and
-          <code>design-notes.md</code> &sect; <i>The account menu</i>. Nothing else about this
-          section changed.
+          <code>sections.push({ id: 'bottom' })</code>. The <b>Legal</b> row is the one whose absent
+          arm has two distinct causes, and the second is easy to miss: an operator who publishes
+          their documents at unrelated addresses has no index for the row to point at, so the row is
+          absent rather than guessed &mdash; sign-up and the re-consent rows still link each
+          document directly, so nothing becomes unreachable. The <b>Docs</b> row took the same shape
+          with MOTIR-4167: it used to carry a hard-coded app-relative path to a page this
+          application no longer serves, and it now reads the operator&rsquo;s configured absolute
+          url or does not render.
         </p>
         <table>
           <thead>
@@ -5095,16 +5158,24 @@
                 <code>http(s)</code> url — a relative path is refused, not rendered
               </td>
             </tr>
+            <tr>
+              <td><b>Legal</b></td>
+              <td><code>scale</code></td>
+              <td>the operator’s own <b>absolute</b> url — <code>legalIndexUrl()</code></td>
+              <td>CONDITIONAL — <code>legalIndexUrl</code> is non-null</td>
+              <td>
+                no documents are configured, <b>or</b> their urls share no
+                <code>&lt;base&gt;/&lt;slug&gt;</code> stem
+              </td>
+            </tr>
           </tbody>
         </table>
         <p class="legend">
           Every row is a <code>SidebarItem</code> with no <code>active</code> arm except
-          <b>Settings</b>, <b>Security</b>, <b>Job runs</b> and <b>Git</b>: <b>Docs</b> renders
-          outside this shell, so the rail is never on screen at its destination and
-          <code>pathname</code> can never match. That was also true of the
-          <b>legal-documents</b> row, and is the property it kept when it moved &mdash; see
-          <code>account-menu.mock.html</code>. (This asset draws no legal-documents row any more,
-          which is what the section&rsquo;s own grep checks.)
+          <b>Settings</b>, <b>Security</b>, <b>Job runs</b> and <b>Git</b>: <b>Docs</b> and
+          <b>Legal</b>
+          render outside this shell, so the rail is never on screen at their destinations and
+          <code>pathname</code> can never match.
         </p>
       </section>
     </div>

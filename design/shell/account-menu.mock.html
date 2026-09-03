@@ -1,25 +1,27 @@
 <!doctype html>
 <!--
-  THE ACCOUNT MENU — every row it renders, and where `Legal` sits (MOTIR-4238).
+  THE ACCOUNT MENU — every row it renders (MOTIR-4248).
 
   The design of record for the avatar popover in the authed top bar. Read it
   with design/shell/design-notes.md § *The account menu*, which carries the
-  measurement that says why this asset exists, the divergence ledger naming it
-  as the source for this surface, and the reasoning for the `Legal` row's
-  position.
+  measurement that says why this asset exists and the divergence ledger naming
+  it as the source for this surface.
 
   BUILT AGAINST SHIPPED REALITY, NOT AGAINST THE SOURCE. Every menu below is
   the REAL app/(authed)/_components/UserMenu.tsx, rendered through the repo's
-  own vitest setup and OPENED, so the panel is Radix's own portal output.
-  Only the STATE is authored — which of the three conditionals are on. The
-  stylesheet is tailwindcss's own engine compiled over app/globals.css, not a
-  retyped token block.
+  own vitest setup and OPENED, so the panel is Radix's own portal output. Only
+  the STATE is authored — which of the two conditionals are on. The stylesheet
+  is tailwindcss's own engine compiled over app/globals.css, not a retyped
+  token block.
 
-  THE ONE ELEMENT THE SHIPPED COMPONENT DOES NOT YET RENDER IS THE `Legal` ROW,
-  because this asset is what MOTIR-4239 builds to. It is not hand-written
-  either: it is the rendered `Account settings` anchor, cloned, with its href,
-  label and glyph swapped for the real lucide `Scale` element. Its class
-  string, its structure and its glyph are all component output.
+  ⚠️ ORIGINALLY BUILT FOR MOTIR-4238, which proposed adding a `Legal` row here.
+  MOTIR-4237 was re-planned: that row goes to a HELP MENU in the rail's footer
+  instead — its asset is MOTIR-4238's and does not exist yet — on the evidence that GitLab,
+  Sentry, Plane and Mattermost all keep the account menu for acts on your
+  account and route legal and documentation to a help surface. So this asset
+  draws the menu exactly as it SHIPS, and adds nothing. The two frames below
+  were rendered with no legal row in the first place — they are unmodified
+  component output, not markup edited afterwards.
 
   The three top bars in Panel A are LIFTED from design/shell/top-bar.mock.html,
   which owns the bar's composition and its control budget — this asset draws
@@ -34,7 +36,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The account menu — every row it renders, and where Legal sits (MOTIR-4238)</title>
+    <title>The account menu — every row it renders (MOTIR-4248)</title>
     <style>
       /*! tailwindcss v4.3.0 | MIT License | https://tailwindcss.com */
       @layer properties;
@@ -4052,11 +4054,11 @@
   <body>
     <div class="board">
       <header>
-        <h1>The account menu &mdash; every row it renders, and where Legal sits</h1>
+        <h1>The account menu &mdash; every row it renders</h1>
         <p class="sub">
           The avatar popover in the authed top bar carries an identity block and up to
-          <b>five</b> rows, three of them conditional. This asset draws the <b>access path</b> at
-          each of the three states the bar itself has &mdash; <code>&ge; lg</code> labelled,
+          <b>four</b> rows, two of them conditional. This asset draws the <b>access path</b> at each
+          of the three states the bar itself has &mdash; <code>&ge; lg</code> labelled,
           <code>md</code>&ndash;<code>lg</code> icon-only, and <code>&lt; md</code> where the avatar
           is <b>slot 4 of four</b> &mdash; and then the menu OPEN, with every conditional row drawn
           in <b>both</b> arms. Measured at <code>b1457268b</code>.
@@ -5073,178 +5075,33 @@
           The budget is <code>top-bar.mock.html</code> Panel B&rsquo;s and is not re-derived here:
           <b>four slots below <code>md</code></b
           >, and the avatar holds one of them. That is the whole of this asset&rsquo;s claim on the
-          bar &mdash; a row added to this menu costs no slot at any width, which is why the menu is
-          where a non-daily door belongs.
+          bar &mdash; the menu&rsquo;s own length costs no slot at any width, because only the
+          bar&rsquo;s control COUNT is budgeted.
         </p>
       </section>
 
       <section class="panel">
         <p class="panel-h">
-          Panel B &mdash; the menu OPEN: every row the component can render, and both arms of
-          <code>Legal</code>
+          Panel B &mdash; the menu OPEN: every row the component can render, in both arms of each
+          conditional one
         </p>
         <p class="panel-n">
           Declaration order, top to bottom: the <b>identity block</b>, <b>Account settings</b>,
           <b>Workspace settings</b> (conditional on <code>workspaceTierRevealed</code>), a
           separator, <b>Platform admin</b> with its hint line and <code>Staff only</code> pill
-          (staff-only), a second separator, <b>Legal</b> (conditional on
-          <code>legalIndexUrl</code>), and <b>Sign out</b>. Nothing marks an absent row: the rows
-          close up and the menu is shorter &mdash; no disabled row, no tooltip, no empty state, the
-          same line the rail draws for the same reason.
+          (conditional on <code>platformStaff</code>), a second separator, and <b>Sign out</b>.
+          <b>Two frames cover all four arms</b>: the complete one has both conditionals on, the
+          floor has both off. Nothing marks an absent row &mdash; the rows close up and the menu is
+          shorter, with no disabled row, no tooltip and no empty state, the same line the rail draws
+          for the same reason.
         </p>
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 5 rows</span
-              ><span class="fc-note">staff &middot; tier revealed &middot; legal configured</span>
-            </figcaption>
-            <div class="menu">
-              <div
-                data-state="open"
-                role="dialog"
-                data-surface="popover"
-                class="z-50 rounded-(--radius-card) bg-(--el-page-bg) overflow-hidden shadow-(--shadow-elevated) border border-(--el-border) focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0 py-1"
+              <span class="fc-label">Complete &mdash; 4 rows</span
+              ><span class="fc-note"
+                >platform staff, on an org whose workspace tier is revealed</span
               >
-                <div class="border-(--el-border) mb-1 border-b px-3 pb-2 pt-2">
-                  <p class="truncate font-sans text-sm font-medium text-(--el-text)">Zhu Yue</p>
-                  <p class="text-(--el-text-muted) truncate font-sans text-xs">
-                    zhuyue11@gmail.com
-                  </p>
-                </div>
-                <div class="px-1">
-                  <a
-                    href="/settings/account"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-user-cog text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="M10 15H6a4 4 0 0 0-4 4v2"></path>
-                      <path d="m14.305 16.53.923-.382"></path>
-                      <path d="m15.228 13.852-.923-.383"></path>
-                      <path d="m16.852 12.228-.383-.923"></path>
-                      <path d="m16.852 17.772-.383.924"></path>
-                      <path d="m19.148 12.228.383-.923"></path>
-                      <path d="m19.53 18.696-.382-.924"></path>
-                      <path d="m20.772 13.852.924-.383"></path>
-                      <path d="m20.772 16.148.924.383"></path>
-                      <circle cx="18" cy="15" r="3"></circle>
-                      <circle cx="9" cy="7" r="4"></circle></svg
-                    >Account settings</a
-                  ><a
-                    href="/settings/workspace"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-settings text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
-                      ></path>
-                      <circle cx="12" cy="12" r="3"></circle></svg
-                    >Workspace settings</a
-                  >
-                  <div role="separator" class="my-1 border-t border-(--el-border)"></div>
-                  <a
-                    href="/admin"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-start gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-shield mt-0.5 h-4 w-4 shrink-0 text-(--el-info)"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
-                      ></path></svg
-                    ><span class="min-w-0 flex-1"
-                      ><span class="block">Platform admin</span
-                      ><span class="block text-xs text-(--el-text-secondary)"
-                        >Operator console · the whole estate</span
-                      ></span
-                    ><span
-                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) mt-0.5 shrink-0"
-                      >Staff only</span
-                    ></a
-                  >
-                  <div role="separator" class="my-1 border-t border-(--el-border)"></div>
-                  <a
-                    href="https://motir.co/legal"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-scale text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 3v18"></path>
-                      <path d="m19 8 3 8a5 5 0 0 1-6 0zV7"></path>
-                      <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"></path>
-                      <path d="m5 8 3 8a5 5 0 0 1-6 0zV7"></path>
-                      <path d="M7 21h10"></path></svg
-                    >Legal</a
-                  ><button
-                    type="button"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-log-out text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="m16 17 5-5-5-5"></path>
-                      <path d="M21 12H9"></path>
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg
-                    >Sign out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </figure>
-          <figure class="frame">
-            <figcaption>
-              <span class="fc-label">Legal ABSENT &mdash; 4 rows</span
-              ><span class="fc-note">the same session on a build that configured no documents</span>
             </figcaption>
             <div class="menu">
               <div
@@ -5371,105 +5228,10 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Floor &mdash; 3 rows</span
+              <span class="fc-label">Floor &mdash; 2 rows</span
               ><span class="fc-note"
-                >an ordinary member, one workspace &middot; legal configured</span
+                >an ordinary member, one workspace &mdash; the common case</span
               >
-            </figcaption>
-            <div class="menu">
-              <div
-                data-state="open"
-                role="dialog"
-                data-surface="popover"
-                class="z-50 rounded-(--radius-card) bg-(--el-page-bg) overflow-hidden shadow-(--shadow-elevated) border border-(--el-border) focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0 py-1"
-              >
-                <div class="border-(--el-border) mb-1 border-b px-3 pb-2 pt-2">
-                  <p class="truncate font-sans text-sm font-medium text-(--el-text)">Zhu Yue</p>
-                  <p class="text-(--el-text-muted) truncate font-sans text-xs">
-                    zhuyue11@gmail.com
-                  </p>
-                </div>
-                <div class="px-1">
-                  <a
-                    href="/settings/account"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-user-cog text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="M10 15H6a4 4 0 0 0-4 4v2"></path>
-                      <path d="m14.305 16.53.923-.382"></path>
-                      <path d="m15.228 13.852-.923-.383"></path>
-                      <path d="m16.852 12.228-.383-.923"></path>
-                      <path d="m16.852 17.772-.383.924"></path>
-                      <path d="m19.148 12.228.383-.923"></path>
-                      <path d="m19.53 18.696-.382-.924"></path>
-                      <path d="m20.772 13.852.924-.383"></path>
-                      <path d="m20.772 16.148.924.383"></path>
-                      <circle cx="18" cy="15" r="3"></circle>
-                      <circle cx="9" cy="7" r="4"></circle></svg
-                    >Account settings</a
-                  ><a
-                    href="https://motir.co/legal"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-scale text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 3v18"></path>
-                      <path d="m19 8 3 8a5 5 0 0 1-6 0zV7"></path>
-                      <path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"></path>
-                      <path d="m5 8 3 8a5 5 0 0 1-6 0zV7"></path>
-                      <path d="M7 21h10"></path></svg
-                    >Legal</a
-                  ><button
-                    type="button"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-log-out text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="m16 17 5-5-5-5"></path>
-                      <path d="M21 12H9"></path>
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg
-                    >Sign out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </figure>
-          <figure class="frame">
-            <figcaption>
-              <span class="fc-label">Floor, Legal absent &mdash; 2 rows</span
-              ><span class="fc-note">the open product&rsquo;s day-one state</span>
             </figcaption>
             <div class="menu">
               <div
@@ -5541,10 +5303,11 @@
           </figure>
         </div>
         <p class="legend">
-          <b>Read the two right-hand frames against the two on their left.</b> Removing the
-          <code>Legal</code> row leaves no gap, no rule and no disabled entry &mdash; in the floor
-          pair it takes the menu from three rows to two, and nothing in the panel says a row was
-          ever there. That is the arm an open-source deployment ships on day one.
+          <b>Read the floor frame against the complete one.</b> Dropping <i>Workspace settings</i>
+          and the whole staff block &mdash; its row, its hint, its pill and BOTH separators &mdash;
+          leaves no gap, no rule and no disabled entry: the menu goes from four rows to two and
+          nothing in the panel says anything was ever there. The floor is the common case, not an
+          edge state, which is why it is drawn beside its complete twin rather than described.
         </p>
       </section>
 
@@ -5591,13 +5354,6 @@
             </tr>
             <tr>
               <td>4</td>
-              <td><b>Legal</b></td>
-              <td><code>scale</code></td>
-              <td>the operator&rsquo;s own ABSOLUTE url &mdash; <code>legalIndexUrl()</code></td>
-              <td>CONDITIONAL &mdash; <code>legalIndexUrl</code> is non-null</td>
-            </tr>
-            <tr>
-              <td>5</td>
               <td><b>Sign out</b></td>
               <td><code>log-out</code></td>
               <td>&mdash; (a button; signs out and bounces to <code>/sign-in</code>)</td>
@@ -5606,19 +5362,18 @@
           </tbody>
         </table>
         <p class="legend">
-          <b>Three of the five are conditional and the menu&rsquo;s FLOOR is two rows</b> &mdash;
-          Account settings &middot; Sign out. <b>Where <code>Legal</code> sits, and why:</b> it is a
-          door to a document set rather than an act on this account, so it goes below the account,
-          workspace and admin rows and directly above <code>Sign out</code> &mdash; behind the
-          separator the staff block already establishes when that block is present.
-          <b>No separator is added when it is not.</b> The two rules in the menu are the identity
-          block&rsquo;s bottom border and the pair that brackets the staff row; a third rule for one
-          row would make the short arms &mdash; which are most of them &mdash; read as four groups
-          of one. <b>The row is an off-shell target</b>, like the rail row it replaces: an ordinary
-          anchor to an absolute url with no <code>active</code> state, because this menu is never on
-          screen at the destination and there is nothing for a pathname to match. No external-link
-          glyph and no <code>target</code> &mdash; the rail row has neither, and this asset invents
-          no treatment.
+          <b>Two of the four are conditional and the menu&rsquo;s FLOOR is two rows</b> &mdash;
+          Account settings &middot; Sign out. <b>Both conditionals fail CLOSED</b>: `platformStaff`
+          and `workspaceTierRevealed` each default to <code>false</code>, so a caller that forgets
+          to thread one hides the row rather than leaking it &mdash; which matters here more than it
+          looks, because the staff row is the only markup in the product that names
+          <code>/admin</code>, and the workspace row is the only entry point that NAMES the
+          workspace tier while the product is still telling that user the tier does not exist.
+          <b>Absent, never disabled</b>, for the same reason: a dimmed row still teaches the
+          concept. <b>The staff block owns BOTH separators</b> &mdash; it is bracketed above and
+          below &mdash; so a menu without it has exactly one rule, the identity block&rsquo;s bottom
+          border. Anything added to this menu later inherits that arithmetic: there is no third
+          group, and a row that wants one is asking for a rule the short arms cannot carry.
         </p>
       </section>
     </div>
