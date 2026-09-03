@@ -305,52 +305,24 @@ export async function applyCiStatusFeedback(
   const actorCtx = { userId: resolved.actorUserId, workspaceId: resolved.workspaceId };
   const noun = changeRequestNoun(resolved.provider);
 
-  // Record this check's row and write THE feedback comment for
-  // `(changeRequest, headSha)` ON EVERY DELIVERED CARD — under a row lock on the
-  // change request, because the comment body is DERIVED from every check row at
-  // this sha and the comment itself is the write. Without the lock, two of the N
-  // deliveries that land together both read "no comment yet" and both create one,
-  // which is the very duplication MOTIR-2946 removed (the
-  // lock-before-read-derived-update rule). `commentsService` runs its own
-  // transaction on its own connection and touches neither `github_pull_request`
-  // nor `github_check_run`, so no cycle can form.
-  const ciState = await withSystemContext(async (tx) => {
-    // The tenant is known here (phase 1 resolved it), so bind it up front: the
-    // lock below reads `github_pull_request` and the comment path reads tenant
-    // tables that carry no system arm (MOTIR-2880).
+  // ── 1. RECORD THIS CHECK'S ROW, ON ITS OWN, BEFORE ANY RENDERING (MOTIR-4264) ──
+  // This delivery's conclusion is the one thing it holds that nothing else can
+  // reproduce: GitHub does not retry a failed webhook delivery and no job carries
+  // this path, so a row not written here is a vote that is GONE. Every derivation
+  // downstream — the comment's summary, `deriveCiState`, both promotion edges — is
+  // a fold over the RECORDED rows, so a dropped `failure` does not read as "we do
+  // not know", it reads as GREEN, and the next success writes "this work is
+  // verified" over a red build.
+  //
+  // It used to be the first write INSIDE the locked render transaction below,
+  // which made it the statement that died when that transaction expired — the
+  // observed `P2028` at this file's old `:353`, 5379 ms into a 5000 ms budget, all
+  // of it spent waiting for the lock. Recording it FIRST makes the render a side
+  // effect of a durable write rather than a condition of it (the post-commit
+  // side-effects-are-best-effort rule the promotion below already follows).
+  await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, resolved.workspaceId);
-    await githubPullRequestRepository.lockById(resolved.prId, tx);
-
-    // Read the sha's rows UNDER THE LOCK — every sibling that landed while we
-    // waited is in here.
-    const siblings = await githubCheckRunRepository.listByPrAndSha(
-      resolved.prId,
-      event.commitSha,
-      tx,
-    );
-
-    // THE comments for this head commit, one per card that already has one
-    // (MOTIR-3770). This is the source of truth; a new check joins the comment its
-    // card already carries instead of opening a second one.
-    const recordedComments = await githubCiFeedbackCommentRepository.listByPrAndSha(
-      resolved.prId,
-      event.commitSha,
-      tx,
-    );
-    const commentByWorkItem = new Map(
-      recordedComments.map((row) => [row.workItemId, row.commentId] as const),
-    );
-
-    // ⚠️ THE LEGACY SCALAR IS NO LONGER READ, AND THIS IS THE WHOLE OF MOTIR-3863
-    // ON THIS PATH. It used to be a fallback for exactly one case — a
-    // `(change request, head commit)` whose first verdict was written by a build
-    // that had only the column — and that case is now closed from both ends: the
-    // EXPAND migration BACKFILLED every such row into
-    // `github_ci_feedback_comment` (reading the card off the COMMENT, not off a
-    // link column), and MOTIR-3818 verified the per-card build is on every
-    // machine, so no instance writes the column any more either. What is left is
-    // `commentByWorkItem`, which is the source of truth and always was.
-    const recorded = await githubCheckRunRepository.upsert(
+    await githubCheckRunRepository.upsert(
       {
         pullRequestId: resolved.prId,
         commitSha: event.commitSha,
@@ -360,46 +332,28 @@ export async function applyCiStatusFeedback(
       },
       tx,
     );
+  });
 
-    // The authoritative check set at this head commit: the siblings plus this
-    // delivery's own row, which the upsert either created or just refreshed —
-    // MINUS every run a later run has replaced (MOTIR-3209). Filtering here
-    // rather than in the query is deliberate: the query's own answer is the whole
-    // set, and `liveCheckRows` is the one place that decides which of them still
-    // votes.
-    const rows = liveCheckRows([...siblings.filter((r) => r.id !== recorded.id), recorded]);
-    const bodyMd = feedbackCommentBody(summarizeChecks(rows), resolved.checksUrl, noun);
-
-    // ONE COMMENT PER DELIVERED CARD (MOTIR-3770). The first terminal conclusion
-    // CREATES each card's comment; every later one at this commit EDITS every one
-    // of them in place. (An edit whose body is unchanged is a no-op in
-    // `commentsService` — no "Edited" tag, no event — so a delivery that moves
-    // nothing stays silent.)
-    //
-    // ⚠️ The set is `deliveredWorkItemIds`, which is EMPTY on the session arm — a
-    // session pull request's cards are reached by the promotion below and by
-    // nothing here, exactly as a null link column reached nothing before. So this
-    // loop runs zero times for one, and once for an ordinary single-card pull
-    // request, which is why that case is byte-identical to what it was.
-    for (const workItemId of resolved.deliveredWorkItemIds) {
-      let commentId = commentByWorkItem.get(workItemId) ?? null;
-      if (commentId) {
-        await commentsService.editComment(commentId, { bodyMd }, actorCtx);
-      } else {
-        commentId = (await commentsService.addComment(workItemId, { bodyMd }, actorCtx)).id;
-      }
-
-      // Record it per card — an upsert, so a re-entry at the same key converges
-      // on the one row rather than racing a second one onto it.
-      await githubCiFeedbackCommentRepository.upsert(
-        { pullRequestId: resolved.prId, commitSha: event.commitSha, workItemId, commentId },
-        tx,
-      );
-    }
-
-    return deriveCiState(rows.map((r) => r.conclusion));
-    // (deriveCiState ignores non-terminal conclusions — pending rows at this sha,
-    // recorded for the Development surface, never gate the verdict.)
+  // ── 2. RENDER THE FEEDBACK — the FOLD under the lock, the WRITES outside it ──
+  // Best-effort by construction (see `renderFeedbackComments`): the row above is
+  // committed, so a render that fails must not fail the delivery. On a failure the
+  // verdict is still derived from the store, because `ciState` and the promotion
+  // are about the recorded set and not about whether a comment got written.
+  const ciState = await renderFeedbackComments({
+    prId: resolved.prId,
+    workspaceId: resolved.workspaceId,
+    commitSha: event.commitSha,
+    checksUrl: resolved.checksUrl,
+    noun,
+    deliveredWorkItemIds: resolved.deliveredWorkItemIds,
+    actorCtx,
+  }).catch(async (err: unknown) => {
+    console.error('[changeRequestCiFeedback] feedback render failed; the row still stands', {
+      changeRequestId: resolved.prId,
+      commitSha: event.commitSha,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+    return deriveRecordedCiState(resolved.prId, resolved.workspaceId, event.commitSha);
   });
 
   // Flip the verification signal through the service (no raw work_item write) —
@@ -453,6 +407,198 @@ export async function applyCiStatusFeedback(
     ...(firstDelivered ? { workItemId: firstDelivered, ciState } : {}),
     ...(promoted.length > 0 ? { promoted } : {}),
   };
+}
+
+/** What ONE delivery may do to the feedback comment before it gives up: render,
+ *  and re-render at most twice more if the recorded check set MOVED while it was
+ *  writing. See `renderFeedbackComments` for why a re-render can be owed at all. */
+const MAX_RENDER_PASSES = 3;
+
+interface RenderFeedbackArgs {
+  prId: string;
+  workspaceId: string;
+  commitSha: string;
+  checksUrl: string;
+  noun: string;
+  deliveredWorkItemIds: readonly string[];
+  actorCtx: { userId: string; workspaceId: string };
+}
+
+/**
+ * Render THE feedback comment for `(change request, head commit)` onto every
+ * delivered card, and answer the head commit's aggregate `ciState`.
+ *
+ * ⚠️ THE LOCK IS HELD OVER THE FOLD AND NOTHING ELSE (MOTIR-4264). The body is
+ * derived from every check row at this commit, so deciding what to write is a
+ * read-derived write and owes the row lock — that part is MOTIR-2946's rule and
+ * is unchanged. What changed is what happens INSIDE it: `commentsService` opens
+ * its OWN transaction on its OWN connection, so calling it under the lock held
+ * the change request across N comment round trips, and every other check
+ * finishing at that commit queued behind them on the same `FOR UPDATE`. A
+ * motir-core pull request carries ~34 checks that finish in bursts, so the k-th
+ * delivery waited on k−1 holders and blew Prisma's 5 s budget with a 500. The
+ * fold is now three indexed statements and the comment writes happen after it has
+ * committed.
+ *
+ * ⚠️ AND THAT COSTS THE ORDERING THE LOCK USED TO BUY, WHICH IS WHY THIS CONVERGES
+ * RATHER THAN WRITING ONCE. Two deliveries that fold in order can still write out
+ * of order, and the loser's older body would be the one that stands — permanently,
+ * if it was the last check to land. So after writing, a delivery RE-READS the
+ * recorded set: unchanged ⇒ what it wrote is current and it stops; changed ⇒
+ * somebody landed a row while it was writing, and it renders again from the newer
+ * set. Every delivery therefore leaves the comment agreeing with the rows recorded
+ * at the moment it finished, which is exactly the property the long lock had.
+ */
+async function renderFeedbackComments(
+  args: RenderFeedbackArgs,
+): Promise<'passing' | 'failing' | null> {
+  const { prId, workspaceId, commitSha, checksUrl, noun, deliveredWorkItemIds, actorCtx } = args;
+  let ciState: 'passing' | 'failing' | null = null;
+
+  for (let pass = 0; pass < MAX_RENDER_PASSES; pass += 1) {
+    // THE FOLD — under the change request's row lock, and DB-ONLY. Nothing in
+    // this callback reaches another connection.
+    const fold = await withSystemContext(async (tx) => {
+      // The tenant is known (phase 1 resolved it): the lock reads
+      // `github_pull_request` and the comment rows are a tenant table with no
+      // system arm (MOTIR-2880).
+      await bindWorkspaceContext(tx, workspaceId);
+      await githubPullRequestRepository.lockById(prId, tx);
+
+      // Every row at this commit — this delivery's own included, because it was
+      // committed before the lock was taken — MINUS every run a later run has
+      // replaced (MOTIR-3209). `liveCheckRows` stays the one place that decides
+      // which rows still vote.
+      const stored = await githubCheckRunRepository.listByPrAndSha(prId, commitSha, tx);
+      const rows = liveCheckRows(stored);
+
+      // THE comments for this head commit, one per card that already has one
+      // (MOTIR-3770). This is the source of truth; a new check joins the comment
+      // its card already carries instead of opening a second one.
+      const recordedComments = await githubCiFeedbackCommentRepository.listByPrAndSha(
+        prId,
+        commitSha,
+        tx,
+      );
+
+      return {
+        rows,
+        fingerprint: checkSetFingerprint(stored),
+        bodyMd: feedbackCommentBody(summarizeChecks(rows), checksUrl, noun),
+        commentByWorkItem: new Map(
+          recordedComments.map((row) => [row.workItemId, row.commentId] as const),
+        ),
+      };
+    });
+
+    ciState = deriveCiState(fold.rows.map((r) => r.conclusion));
+    // (deriveCiState ignores non-terminal conclusions — pending rows at this sha,
+    // recorded for the Development surface, never gate the verdict.)
+
+    // ONE COMMENT PER DELIVERED CARD (MOTIR-3770), written with NO lock held. The
+    // set is EMPTY on the session arm — a session pull request's cards are reached
+    // by the promotion and by nothing here — so this loop runs zero times for one,
+    // and once for an ordinary single-card pull request.
+    for (const workItemId of deliveredWorkItemIds) {
+      await writeCardComment({
+        prId,
+        workspaceId,
+        commitSha,
+        workItemId,
+        bodyMd: fold.bodyMd,
+        existingCommentId: fold.commentByWorkItem.get(workItemId) ?? null,
+        actorCtx,
+      });
+    }
+
+    // Nothing was written, so there is nothing to keep current.
+    if (deliveredWorkItemIds.length === 0) return ciState;
+
+    // DID THE SET MOVE WHILE WE WROTE? One indexed read, no lock: if it did not,
+    // the body on every card is the current one and this delivery is done.
+    const after = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, workspaceId);
+      return githubCheckRunRepository.listByPrAndSha(prId, commitSha, tx);
+    });
+    if (checkSetFingerprint(after) === fold.fingerprint) return ciState;
+  }
+
+  return ciState;
+}
+
+/** Put `bodyMd` on ONE card's feedback comment for this `(change request, head
+ *  commit)` — editing the comment the card already carries, or opening the one it
+ *  does not.
+ *
+ *  ⚠️ THE CREATE IS ARBITRATED BY THE UNIQUE INDEX, NOT BY THE LOCK (MOTIR-4264).
+ *  Two deliveries that both folded before either wrote can both find no comment
+ *  row for a card, and the lock no longer spans the create that would have
+ *  serialized them. `github_ci_feedback_comment` is unique on
+ *  `(pull_request_id, commit_sha, work_item_id)`, so the row — not the comment —
+ *  decides: the delivery whose insert lands owns the card's comment, and the other
+ *  one DELETES the comment it just posted and edits the winner's instead. The
+ *  duplicate MOTIR-2946 removed is a comment that STAYS; this one exists for the
+ *  length of one round trip and never survives the request that made it. */
+async function writeCardComment(args: {
+  prId: string;
+  workspaceId: string;
+  commitSha: string;
+  workItemId: string;
+  bodyMd: string;
+  existingCommentId: string | null;
+  actorCtx: { userId: string; workspaceId: string };
+}): Promise<void> {
+  const { prId, workspaceId, commitSha, workItemId, bodyMd, existingCommentId, actorCtx } = args;
+
+  if (existingCommentId) {
+    // An edit whose body is unchanged is a no-op in `commentsService` — no
+    // "Edited" tag, no event — so a delivery that moves nothing stays silent.
+    await commentsService.editComment(existingCommentId, { bodyMd }, actorCtx);
+    return;
+  }
+
+  const created = await commentsService.addComment(workItemId, { bodyMd }, actorCtx);
+  const winner = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    return githubCiFeedbackCommentRepository.claim(
+      { pullRequestId: prId, commitSha, workItemId, commentId: created.id },
+      tx,
+    );
+  });
+
+  if (winner.commentId === created.id) return;
+
+  // We lost the race. Take our comment back out — a person must never be left
+  // holding two verdicts about one commit — and make sure the surviving one
+  // carries the body we folded.
+  await commentsService.deleteComment(created.id, actorCtx);
+  await commentsService.editComment(winner.commentId, { bodyMd }, actorCtx);
+}
+
+/** The recorded check set at one commit, as a value two reads can be compared on:
+ *  which rows exist and what each one concluded. A row ARRIVING, a conclusion
+ *  CHANGING and a run being superseded all change it, which is exactly the set of
+ *  events that makes an already-written comment stale. */
+function checkSetFingerprint(rows: { id: string; conclusion: string }[]): string {
+  return rows
+    .map((row) => `${row.id}:${row.conclusion}`)
+    .sort()
+    .join('|');
+}
+
+/** The head commit's aggregate verdict read straight from the store — the answer
+ *  when rendering the comment failed. The verdict is about the RECORDED rows, so
+ *  it is knowable whether or not anybody managed to write a sentence about them. */
+async function deriveRecordedCiState(
+  prId: string,
+  workspaceId: string,
+  commitSha: string,
+): Promise<'passing' | 'failing' | null> {
+  const rows = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    return githubCheckRunRepository.listByPrAndSha(prId, commitSha, tx);
+  });
+  return deriveCiState(liveCheckRows(rows).map((r) => r.conclusion));
 }
 
 /** Resolve the stored change request (PR / MR) for a CI event — by the event's
