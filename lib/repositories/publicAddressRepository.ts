@@ -24,6 +24,11 @@ import { HostnameTakenError, isHostnameUniqueViolation } from '@/lib/publicAddre
 export const publicAddressRepository = {
   // ── Reads ────────────────────────────────────────────────────────────────
 
+  /** One address by id, inside the caller's transaction. */
+  async findByIdInTx(id: string, tx: Prisma.TransactionClient): Promise<PublicAddress | null> {
+    return tx.publicAddress.findUnique({ where: { id } });
+  },
+
   /**
    * Resolve a hostname to its address row — the read the public host contract
    * (MOTIR-4217) makes on every request, ANONYMOUSLY.

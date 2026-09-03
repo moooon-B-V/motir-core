@@ -46,12 +46,29 @@ const CERT_TELLS: ReadonlyArray<{ pattern: RegExp; what: string }> = [
 /**
  * The COMPOSITION ROOT — the one file outside the adapter allowed to name it.
  *
- * Empty today, and that is a real statement rather than a placeholder: nothing
- * selects between certificate providers yet, because there is one. When a second
- * lands, a selector goes here and this list gains exactly one entry — which is
- * the claim §6's reversibility rests on, made checkable.
+ * ⚠️ IT FILLED IN WITHIN THE SAME STORY, which is worth reading as evidence
+ * rather than as bookkeeping. This list was written EMPTY, with a comment
+ * predicting that "when a second lands, a selector goes here and this list gains
+ * exactly one entry". MOTIR-4216 landed that second provider — the in-memory
+ * pair the E2E lane binds — and the list gained exactly one entry. The
+ * reversibility claim §6 rests on is now a measured fact rather than an
+ * intention.
+ *
+ * `providers.ts` is a selector, not a leak: it names the Fly adapter to CHOOSE
+ * it (lazily, so the adapter's config is read only on the path that calls Fly),
+ * and it declares the fake it chooses instead under the E2E flag. A selector
+ * that cannot name what it selects is not a selector.
  */
-const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [];
+const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
+  {
+    file: join('lib', 'publicAddresses', 'providers.ts'),
+    tell: /publicAddresses\/adapters\/fly|flyCertificateProvider/,
+    why: 'the composition root — it selects between the Fly adapter and the E2E fake',
+  },
+];
+
+/** The composition root may also DECLARE an implementation: the fake it selects. */
+const IMPLEMENTERS_ALLOWED: readonly string[] = [join('lib', 'publicAddresses', 'providers.ts')];
 
 function walk(dir: string): string[] {
   let entries: string[];
@@ -136,6 +153,8 @@ describe('the certificate port — no provider escapes its adapter', () => {
         // The port file itself DECLARES the interface; declaring is not
         // implementing.
         if (rel === join('lib', 'publicAddresses', 'certificateProvider.ts')) continue;
+        // The composition root declares the fake it selects — see above.
+        if (IMPLEMENTERS_ALLOWED.includes(rel)) continue;
         const source = stripComments(readFileSync(file, 'utf8'));
         if (/:\s*CertificateProvider\b|implements\s+CertificateProvider\b/.test(source)) {
           implementers.push(rel);

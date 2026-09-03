@@ -84,3 +84,43 @@ export interface PublicProjectAddressesDto {
   readonly primary: string;
   readonly alternates: readonly string[];
 }
+
+/** One DNS record a customer must create, as the pane renders it. */
+export interface DnsInstructionDto {
+  readonly type: 'A' | 'AAAA' | 'CNAME' | 'TXT';
+  readonly name: string;
+  readonly value: string;
+}
+
+/**
+ * One customer domain, as the settings pane renders it (MOTIR-4216).
+ *
+ * `status` crosses the wire as the store's enum, TOTAL — the pane draws one row
+ * per value (`design/projects/public-address.mock.html` panel 5), so a value
+ * added here without a drawn meaning is a state a customer meets with no
+ * explanation and no action.
+ */
+export interface PublicAddressDto {
+  readonly id: string;
+  readonly kind: 'workspace_subdomain' | 'workspace_subdomain_alias' | 'custom_domain';
+  readonly hostname: string;
+  readonly status:
+    | 'active'
+    | 'alias'
+    | 'unverified'
+    | 'verifying'
+    | 'pending_certificate'
+    | 'issued'
+    | 'failed'
+    | 'expired'
+    | 'revoked';
+  readonly isPrimary: boolean;
+  /** The ownership `TXT` — null once it no longer needs showing. */
+  readonly verification: { readonly name: string; readonly value: string } | null;
+  /** The records that point the hostname at us. */
+  readonly dns: readonly DnsInstructionDto[];
+  readonly lastCheckedAt: string | null;
+  readonly issuedAt: string | null;
+  /** Always set when `status` is `failed` — a failure with no reason is not actionable. */
+  readonly failureReason: string | null;
+}

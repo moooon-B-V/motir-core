@@ -167,3 +167,50 @@ export class PublicAddressesUnavailableError extends Error {
     this.name = 'PublicAddressesUnavailableError';
   }
 }
+
+// ── The CUSTOMER-DOMAIN lifecycle's errors (MOTIR-4216) ────────────────────
+
+/** The hostname is not a hostname, or carries a scheme / port / path. */
+export class InvalidHostnameError extends Error {
+  readonly code = 'INVALID_HOSTNAME' as const;
+  constructor(readonly hostname: string) {
+    super(`${hostname} is not a valid hostname.`);
+    this.name = 'InvalidHostnameError';
+  }
+}
+
+/**
+ * The hostname is one WE serve — the tenant base domain, anything under it, or
+ * `motir.co` and its subdomains.
+ *
+ * Refused rather than allowed-and-ignored: a customer who "connects"
+ * `acme.motir.site` would be adding a row for an address the wildcard already
+ * serves, and the certificate request for it would either collide with the
+ * wildcard or sit pending for ever. The refusal has its own code so the pane can
+ * say *you already have this address* instead of *that name is taken*.
+ */
+export class NotACustomerDomainError extends Error {
+  readonly code = 'NOT_A_CUSTOMER_DOMAIN' as const;
+  constructor(readonly hostname: string) {
+    super(`${hostname} is a Motir address, not a domain you own.`);
+    this.name = 'NotACustomerDomainError';
+  }
+}
+
+/** An operation legal only on an `issued` address was asked of another status. */
+export class AddressNotIssuedError extends Error {
+  readonly code = 'ADDRESS_NOT_ISSUED' as const;
+  constructor(readonly status: string) {
+    super(`This address is ${status}; only a live address can be made primary.`);
+    this.name = 'AddressNotIssuedError';
+  }
+}
+
+/** The address id does not name a row in this project. */
+export class AddressNotFoundError extends Error {
+  readonly code = 'ADDRESS_NOT_FOUND' as const;
+  constructor() {
+    super('Not found.');
+    this.name = 'AddressNotFoundError';
+  }
+}

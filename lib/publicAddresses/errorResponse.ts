@@ -1,5 +1,17 @@
 import { NextResponse } from 'next/server';
 
+import { EntitlementExceededError } from '@/lib/billing/errors';
+import {
+  AddressNotFoundError,
+  AddressNotIssuedError,
+  InvalidHostnameError,
+  NotACustomerDomainError,
+} from '@/lib/publicAddresses/errors';
+import {
+  CertificateProviderNotConfiguredError,
+  CertificateProviderUnavailableError,
+} from '@/lib/publicAddresses/certificateProvider';
+
 import {
   HostnameTakenError,
   NoSubdomainClaimedError,
@@ -68,4 +80,50 @@ export function mapPublicAddressError(err: unknown): NextResponse | null {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
   }
   return null;
+}
+
+// ── The customer-domain lifecycle's mappings (MOTIR-4216) ──────────────────
+
+/**
+ * The lifecycle routes' mapper. Falls through to {@link mapPublicAddressError}
+ * for everything the subdomain routes already map, so the two surfaces cannot
+ * answer the same typed error two different ways.
+ */
+export function mapCustomDomainError(err: unknown): NextResponse | null {
+  if (err instanceof AddressNotFoundError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  if (err instanceof InvalidHostnameError || err instanceof NotACustomerDomainError) {
+    // 422 — well-formed request, refused by a domain rule. The two carry
+    // different codes so the pane can say *you already have this address*
+    // rather than *that is not a hostname*.
+    return NextResponse.json(
+      { code: err.code, error: err.message, hostname: err.hostname },
+      { status: 422 },
+    );
+  }
+  if (err instanceof AddressNotIssuedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, status: err.status },
+      { status: 409 },
+    );
+  }
+  if (err instanceof EntitlementExceededError) {
+    // ⚠️ THE BILLING SURFACE'S OWN SHAPE, deliberately — 402 with `entitlement`
+    // and `detail`. The pane's upgrade prompt keys off that field, so answering
+    // a cap here in a different shape would mean the same refusal renders one
+    // way from billing and another from this surface.
+    return NextResponse.json(
+      { code: err.code, error: err.message, entitlement: err.entitlement, detail: err.detail },
+      { status: 402 },
+    );
+  }
+  if (err instanceof CertificateProviderUnavailableError) {
+    // 503 — ours to retry, never the caller's to fix.
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
+  }
+  if (err instanceof CertificateProviderNotConfiguredError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
+  }
+  return mapPublicAddressError(err);
 }
