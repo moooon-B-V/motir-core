@@ -6,6 +6,22 @@ import { parseMentionIds } from '@/lib/mentions/parse';
 // malformed-near-token cases (body text, never an error).
 
 describe('parseMentionIds', () => {
+  it('is LINEAR on a body of unclosed openers — the MOTIR-4202 reproduction', () => {
+    // `[^\]]*` scanned to the end of the string from every `[@` and made this
+    // quadratic: 5.2 s at 80k characters. The bound is generous (a CI runner is
+    // ~20× slower than a dev box) and still an order of magnitude under the
+    // defect, so it cannot pass by accident.
+    const body = '[@'.repeat(80_000);
+    const started = Date.now();
+    expect(parseMentionIds(body)).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('still matches a token that follows unclosed openers, and never a name holding `[`', () => {
+    expect(parseMentionIds('[@[@[@Real](mention:id-real)')).toEqual(['id-real']);
+    expect(parseMentionIds('[@a[b](mention:id-x)')).toEqual([]);
+  });
+
   it('extracts the user id from a single token', () => {
     expect(parseMentionIds('Hi [@Bo Philips](mention:user_abc123)!')).toEqual(['user_abc123']);
   });

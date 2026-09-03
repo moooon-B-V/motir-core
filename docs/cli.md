@@ -493,6 +493,16 @@ plan may be about to change.
 Planning sits in the in-progress category, so the card is out of the pickable set
 until you act — nothing re-dispatches it behind your back.
 
+**The plan it submits already knows what is wrong.** The agent composes the WHAT
+as six named fields — what the corrected card should make possible, what it
+expected versus what it found, what it is not asking for, what already binds the
+shape, how the planner will know the corrected card is right, and what it
+concluded that nobody confirmed — and submits them with the same finding it
+commented on the card. The planner reads those instead of opening a conversation
+to ask. One thing to expect: the finding also lands as a turn on the card's
+planning thread, which is the conversation the planning panel shows for that
+card — so a refused card's thread has the agent's turn on it before you open it.
+
 **Filing a bug does not end anything.** The agent reproduces the defect first,
 files a `bug` parented under the in-flight card's own parent, links it back to
 the card it was found on, and then carries on with the work it was given. The bug

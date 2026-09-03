@@ -306,15 +306,21 @@ export interface AgentStep {
   perRepoPr?: { file: string };
   /**
    * Do what the prompt's THE-CARD-IS-WRONG branch tells a real agent to do
-   * (MOTIR-3025): read the key and the transition instruction OUT OF THE PROMPT,
-   * move the card to `planning`, submit the re-plan the prompt spells out, and
+   * (MOTIR-3025, re-pointed by MOTIR-4083): read the key and the transition
+   * instruction OUT OF THE PROMPT, move the card to `planning`, put the finding
+   * on the planning thread and submit it — with the six-field WHAT composed from
+   * the field names the prompt teaches — through the TOOLS the prompt names, and
    * exit 0.
    *
-   * ⚠️ EVERYTHING COMES FROM THE PROMPT — the key, the status and the `motir
-   * plan --detach` line — so an assertion about what the card ends up at is
+   * ⚠️ EVERYTHING COMES FROM THE PROMPT — the key, the status, the two tool
+   * names, the project key, the anchor and the six field names — so an
+   * assertion about what the card ends up at, or what reached the wire, is
    * evidence about the PROMPT, not about this fixture. An agent handed a prompt
-   * with no re-plan branch (the `--disable-replan` case) finds no submit line
-   * and correctly does not submit, which is exactly what that case has to prove.
+   * with no re-plan branch (the `--disable-replan` case) finds no tool step and
+   * correctly appends and submits nothing, which is exactly what that case has
+   * to prove. The `finding` is put VERBATIM into every REQUIRED field and `""`
+   * into every other, so a test can assert the wire carried it untruncated
+   * without this fixture knowing a single field's name.
    */
   refuseCard?: { finding: string };
   /**
@@ -547,17 +553,56 @@ if (step.refuseCard) {
       body: JSON.stringify({ status: 'planning' }),
     });
   }
-  const submit = promptText.match(/motir plan --detach ([A-Z][A-Z0-9]*-\\d+)/);
-  if (submit) {
-    const anchored = submit[1];
-    const project = anchored.split('-')[0];
-    await api('/api/v1/projects/' + project + '/plan-session/turns', {
-      method: 'POST',
-      body: JSON.stringify({ body: step.refuseCard.finding, targetKeys: [anchored] }),
+  // Steps 5 and 6 (MOTIR-4083): the two plan-session TOOLS, exactly as the
+  // prompt spells them — the tool names, the project key, the anchor and the
+  // six field names are all read OUT of the text. A prompt whose policy removed
+  // the branch names no tool, so nothing is appended and nothing is submitted.
+  const appendStep = promptText.match(
+    /with the (append_plan_turn) tool:\\n\\n\\s+projectKey:\\s+(\\S+)\\n\\s+targetKeys:\\s+\\[([A-Z][A-Z0-9]*-\\d+)\\]/,
+  );
+  const submitStep = promptText.match(
+    /with the (submit_plan_session) tool:\\n\\n\\s+projectKey:\\s+(\\S+)\\n\\s+targetKeys:\\s+\\[([A-Z][A-Z0-9]*-\\d+)\\]/,
+  );
+  if (appendStep && submitStep) {
+    // The requirement's fields, in the order the prompt lists them under
+    // requirement: — a name at the block's indent, REQUIRED or not. The
+    // continuation lines sit deeper and the list ends at the first blank line.
+    const fields = [];
+    const from = promptText.indexOf('requirement: six named fields');
+    for (const line of promptText.slice(from).split('\\n').slice(1)) {
+      if (line.trim() === '') break;
+      const m = line.match(/^ {11}([A-Za-z]+) {2,}(REQUIRED)?/);
+      if (m) fields.push({ name: m[1], required: !!m[2] });
+    }
+    const requirement = {};
+    for (const f of fields) requirement[f.name] = f.required ? step.refuseCard.finding : '';
+    // One JSON-RPC call per tool, the way an MCP client makes it — and a
+    // refusal is fatal here, for the same reason as on the v1 calls above.
+    async function tool(name, args) {
+      const res = await api('/api/mcp', {
+        method: 'POST',
+        headers: { accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+      });
+      const text = await res.text();
+      const data = text.split('\\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).pop() ?? text;
+      let parsed;
+      try { parsed = JSON.parse(data); } catch { parsed = { error: { message: text.slice(0, 500) } }; }
+      if (parsed.error || (parsed.result && parsed.result.isError)) {
+        process.stderr.write('fake-agent: ' + name + ' refused: ' + JSON.stringify(parsed).slice(0, 800) + '\\n');
+        process.exit(9);
+      }
+      return parsed.result;
+    }
+    await tool(appendStep[1], {
+      projectKey: appendStep[2],
+      targetKeys: [appendStep[3]],
+      body: step.refuseCard.finding,
     });
-    await api('/api/v1/projects/' + project + '/plan-session/submissions', {
-      method: 'POST',
-      body: JSON.stringify({ targetKeys: [anchored] }),
+    await tool(submitStep[1], {
+      projectKey: submitStep[2],
+      targetKeys: [submitStep[3]],
+      requirement,
     });
   }
 }

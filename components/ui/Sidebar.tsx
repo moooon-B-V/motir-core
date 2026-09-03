@@ -20,8 +20,10 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
  *
  * Two render modes:
  *   - **Expanded** (240px): icon + label rows, section labels visible.
- *   - **Collapsed** (56px): icon-only rows, each wrapped in a `Tooltip`
- *     (`side="right"`) that surfaces the label on hover/focus.
+ *   - **Collapsed** (56px under the default style): icon-only rows, each wrapped
+ *     in a `Tooltip` (`side="right"`) that surfaces the label on hover/focus.
+ *     The rail's width is derived from `--height-control`, so a style with a
+ *     roomier control gets a wider rail rather than a clipped one (MOTIR-4232).
  *
  * The collapsed mode is normally driven by the shared `useSidebarCollapsed`
  * store. Pass the optional `collapsed` prop to override it — `SidebarDrawer`
@@ -314,7 +316,27 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
     >
       {header ? <div className={cn('shrink-0', collapsed ? 'mb-2' : 'mb-3')}>{header}</div> : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      {/*
+        The rail's scroller, and BOTH axes are stated — the same rule
+        `AppLayout`'s `<main>` states for the shell's other scroller, which this
+        one did not follow (MOTIR-4232). Left implicit, `overflow-x` does not
+        stay `visible`: CSS Overflow 3 computes it to `auto` whenever the other
+        axis is non-visible, so a rail one pixel narrower than its rows drew a
+        HORIZONTAL scrollbar inside a 56px column. `<main>` resolves that to
+        `auto` because content wider than the column must stay reachable; a nav
+        row has nothing to reveal sideways, so here the honest value is `hidden`.
+
+        The bar itself is the product's, not the platform's: a classic scrollbar
+        is ~15px of a rail that is 56px wide when collapsed. `thin` costs about a
+        third of that, and the colour comes from the palette so it follows a
+        `data-palette` swap like everything else.
+      */}
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden',
+          '[scrollbar-width:thin] [scrollbar-color:var(--el-border-strong)_transparent]',
+        )}
+      >
         {sections.map((section, index) => (
           <div key={section.id} className="flex flex-col gap-3">
             {/* A DIV separator, not an <hr>: the Hand-Drawn style roughens

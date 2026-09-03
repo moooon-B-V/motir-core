@@ -15,9 +15,12 @@ import { SHORTCUTS } from '@/lib/shortcuts';
  * via `<SidebarToggle variant="hamburger" />` + `<SidebarDrawer>`, both in the
  * `topNav`).
  *
- * The rail column width tracks the shared `useSidebarCollapsed` store —
- * `240px` expanded, `56px` collapsed — so flipping the footer toggle resizes
- * the grid and the `Sidebar` re-renders icon-only in lockstep (same store).
+ * The rail column width tracks the shared `useSidebarCollapsed` store — `240px`
+ * expanded, and COLLAPSED it is derived from `--height-control` rather than
+ * fixed, so it follows the style axis (56px under the default style, wider
+ * under a roomier one; see the comment at the grid). Flipping the footer toggle
+ * resizes the grid and the `Sidebar` re-renders icon-only in lockstep (same
+ * store).
  *
  * The first focusable element is a skip-link to `#main`, so keyboard and
  * screen-reader users can jump past the nav straight to content. `<main>`
@@ -90,6 +93,16 @@ export function AppLayout({ banner, topNav, sidebar, children, className }: AppL
   */
   return (
     <div
+      // The SHELL-CANVAS hook (MOTIR-4230). This root is a full-viewport box with
+      // an opaque `--el-page-bg` fill, so it is the last thing standing between a
+      // style's `body`-level atmosphere and the user: 3D / Immersive painted its
+      // palette-derived depth on `body` and the shell covered it, leaving the
+      // frame flat under a style whose whole identity is a whole-page atmosphere.
+      // The attribute is what lets the stylesheet repaint that canvas HERE — see
+      // the IMMERSIVE BACKGROUND block in `packages/design-system/theme.css`. It
+      // is a hook, not a style: a style that paints no atmosphere is unaffected
+      // and this root keeps the page fill it has always had.
+      data-app-shell=""
       className={cn('relative flex h-dvh flex-col overflow-hidden bg-(--el-page-bg)', className)}
     >
       <a
@@ -111,10 +124,28 @@ export function AppLayout({ banner, topNav, sidebar, children, className }: AppL
 
       <div className="shrink-0">{topNav}</div>
 
+      {/*
+        The COLLAPSED rail column is DERIVED, not a constant (MOTIR-4232). It
+        holds exactly one `--height-control` square — `Sidebar`'s collapsed row
+        is `h-(--height-control) w-(--height-control)` — so a column stated as a
+        raw `56px` is a number that was correct for the one control height that
+        existed when it was written, and stops being correct the moment the
+        style axis moves that token. Two of the eleven registered styles now set
+        it to 40px (`soft-playful`, `3d-immersive`) against a 39px content box,
+        and five more sit at 38px with a single pixel to spare.
+
+        `--width-rail-chrome` is the rail's own chrome (its `px-2` gutters plus
+        its 1px right border); the SUM is composed here rather than stored as a
+        token so that `var(--height-control)` resolves against whatever
+        `[data-style]` is in scope on this element, instead of freezing the
+        value `:root` happened to have.
+      */}
       <div
         className={cn(
           'grid min-h-0 flex-1 grid-cols-1',
-          collapsed ? 'md:grid-cols-[56px_1fr]' : 'md:grid-cols-[240px_1fr]',
+          collapsed
+            ? 'md:grid-cols-[calc(var(--height-control)_+_var(--width-rail-chrome))_1fr]'
+            : 'md:grid-cols-[240px_1fr]',
         )}
       >
         {/* Persistent rail — hidden below md, where the drawer takes over. */}

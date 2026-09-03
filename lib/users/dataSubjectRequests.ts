@@ -22,7 +22,7 @@
  * `docs/decisions/account-deletion-cancel-path.md`).
  *
  * ⚠️ **THIS VALUE IS A PUBLISHED LEGAL PROMISE.**
- * `content/legal/privacy.md` **§6** ("How long we keep it") tells every user:
+ * `motir.co/legal/privacy` **§6** ("How long we keep it") tells every user:
  * _"After you delete it, we erase or anonymise within **30 days**, except where
  * something below applies"_. The erasure runs AT day 30, which is within 30
  * days, so the deadline and the promise are the same number read as the
@@ -129,7 +129,7 @@ export const DATA_PRIVACY_PANE_PATH = '/settings/account/data';
  * Design DECISION 2 sends the export's FAILED state here — the Art. 12(3) path
  * for the case the automated build cannot deliver inside the promised month —
  * and the pane's standing callout names it as the route for a correction, a
- * restriction, an objection, or a question. `content/legal/privacy.md` publishes
+ * restriction, an objection, or a question. `motir.co/legal/privacy` publishes
  * the same address, and `lib/emailTemplates/` and the export archive's own
  * README write it into what they produce.
  *

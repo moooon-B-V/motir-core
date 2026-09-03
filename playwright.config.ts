@@ -384,6 +384,13 @@ export default defineConfig({
         // what lets /api/auth/* POSTs pass the CSRF origin guard on a
         // non-default port.
         MOTIR_BASE_URL: BASE_URL,
+        // The rail's Docs row renders only when the operator has configured
+        // where the documentation is published (MOTIR-4167) — the same shape as
+        // the Legal row. Four specs read the row as the CONTROL for "the bottom
+        // section is on screen", so the lane configures it; the value is
+        // deliberately unreachable and nothing follows it, every assertion
+        // reads visibility or the `href`.
+        MOTIR_DOCS_URL: 'https://public.motir.e2e/docs',
         // PRODECT_FINDINGS #9: Better-Auth buckets /sign-in + /sign-up into one
         // IP-keyed window (10s / max 3). Multi-user specs sign up several users
         // from localhost inside that window and hit 429s. This flag disables the

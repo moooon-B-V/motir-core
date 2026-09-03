@@ -12,7 +12,7 @@ import { type LegalDocument } from '@/lib/legal/documents';
 //
 // Everything here is PURE, so every branch is reachable from plain values and
 // nothing needs a database or a filesystem. What these tests are really pinning
-// down is a clause in a published contract: `content/legal/terms.md` §14
+// down is a clause in a published contract: `motir.co/legal/terms` §14
 // promises that non-material changes "take effect when published", and the
 // semver convention is how the code keeps that promise. A regression here is a
 // broken promise, not a wrong pixel.
@@ -97,7 +97,7 @@ describe('isMaterialChange', () => {
 
 describe('the re-consent set', () => {
   it('is the three documents that make up the agreement, in reading order', () => {
-    // Terms first: it is the contract the other two hang off. `terms.md` §15
+    // Terms first: it is the contract the other two hang off. `motir.co/legal/terms` §15
     // makes the three a single agreement.
     expect([...RECONSENT_DOCUMENT_SLUGS]).toEqual(['terms', 'privacy', 'acceptable-use']);
   });
@@ -110,7 +110,7 @@ describe('the re-consent set', () => {
     }
   });
 
-  it('does not start gating on a document somebody adds to content/legal', () => {
+  it('does not start gating on a document somebody adds to the manifest', () => {
     // The list can only ever ask for LESS, which is why it is closed here while
     // `documents.ts` treats the directory as the registry. A new file ships a
     // published page; it does not hold the whole product.
@@ -224,7 +224,7 @@ describe('outstandingReconsent', () => {
     });
   });
 
-  it('holds nobody on a document that is in the set but not in content/legal', () => {
+  it('holds nobody on a document that is in the set but not in the manifest', () => {
     // The safe direction: a document that cannot be read, linked or agreed to
     // would otherwise be a hold nobody can clear.
     expect(outstandingReconsent([doc({ slug: 'terms', version: '1.0.0' })], [])).toHaveLength(1);

@@ -7095,16 +7095,6 @@
     }
   },
   "legal": {
-    "metaTitle": "法律条款",
-    "metaDescription": "moooon B.V. 运营的 Motir 云服务的条款、政策与披露。",
-    "metaDocDescription": "{title} — 版本 {version}。由 moooon B.V. 为 Motir 云服务发布。",
-    "breadcrumbAria": "法律文件",
-    "allDocuments": "← 全部法律文件",
-    "versionAndEffective": "版本 {version} · 自 {date} 起生效",
-    "versionNotYetEffective": "版本 {version} · 尚未生效",
-    "indexTitle": "法律条款",
-    "indexIntro": "moooon B.V. 就 Motir 云服务发布的全部内容 — 你所同意的条款、我们如何处理你的数据，以及还有谁会接触到它。若你自行部署 Motir，则你是自己的数据控制者，这些文件描述的是我们的服务，而非你的。",
-    "indexContact": "如对以上内容有疑问：legal@motir.co",
     "signUpNotice": "创建Motir账户即表示你同意我们的<terms>服务条款</terms>与<privacy>隐私政策</privacy>。",
     "reconsent": {
       "takesEffect": "{date} 起生效",

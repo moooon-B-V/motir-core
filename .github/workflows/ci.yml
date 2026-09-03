@@ -272,16 +272,26 @@ jobs:
             # anticipated counts as code — the fail-open direction again.
             #
             # ⚠️ `content/` IS APP CODE, AND IT IS NAMED FIRST BECAUSE `case` IS
-            # FIRST-MATCH-WINS (MOTIR-3806). `content/legal/*.md` is not prose
-            # ABOUT the application — it is data the application parses and
-            # renders (`lib/legal/documents.ts`), and its front-matter `version`
-            # drives the re-consent gate. The blanket `*.md` swallowed it, so a
-            # legal-document-only pull request set `app=false` and skipped the
-            # whole Vitest lane — including the seven `tests/legal/` suites that
-            # exist to guard exactly that file class. Observed on PR #2427, the
-            # first-ever revision of a published legal document. Stated as a
-            # positive exception ahead of the exclusion rather than by rewriting
-            # the glob, so the fail-open shape above is left intact.
+            # FIRST-MATCH-WINS (MOTIR-3806). Content under `content/` is not prose
+            # ABOUT the application — it is data the application parses, and the
+            # blanket `*.md` exclusion below swallows it unless this arm is
+            # reached first. Observed on PR #2427: a legal-document-only pull
+            # request set `app=false` and skipped the whole Vitest lane, including
+            # the seven `tests/legal/` suites written to guard exactly that file
+            # class. Stated as a positive exception AHEAD of the exclusion rather
+            # than by rewriting the glob, so the fail-open shape above is intact.
+            #
+            # ⚠️ `content/` IS EMPTY TODAY AND THIS ARM IS KEPT ANYWAY (MOTIR-4103).
+            # The directory it was written for was `content/legal/`, and those
+            # documents left this repository for `motir-marketing`. So the arm
+            # matches nothing right now and looks like residue — which is exactly
+            # what a SUPPRESSOR looks like the moment the thing it suppresses goes
+            # away. Ask what its ABSENCE would do rather than what its presence
+            # does: deleting it changes no current behaviour and silently re-arms
+            # PR #2427's defect for the next `content/*.md` anybody adds, because
+            # `*.md` would then swallow it again with no test in the way. A file
+            # whose whole payload is a negation is not dead when its subject is
+            # gone; it is dead when nothing can come back.
             case "$f" in
               content/*) app=true ;;
               docs/*|design/*|scripts/plan-seed/*|*.md) ;;

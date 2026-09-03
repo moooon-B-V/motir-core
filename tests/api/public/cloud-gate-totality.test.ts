@@ -50,6 +50,18 @@ const PUBLIC_ROOT = join(REPO_ROOT, 'app', 'api', 'public');
  */
 const PUBLIC_REQUESTS_ROOT = join(REPO_ROOT, 'app', 'api', 'public-requests');
 const PUBLIC_CONTRACT_ROUTE = 'app/api/openapi/public.json/route.ts';
+/**
+ * The static PRODUCT-DESCRIPTION documents that stay served off-cloud, and the
+ * card that decided each. `public.json` is MOTIR-4042's disposition; the MCP
+ * tool catalogue (MOTIR-4194) follows it rather than inventing a second policy
+ * for an adjacent route — both describe the software every build ships, neither
+ * publishes a project, and both are `force-static`, so a gate in the handler
+ * would read the BUILDER's flag rather than the deployment's.
+ */
+const STATIC_PRODUCT_DOCUMENTS: ReadonlyArray<[route: string, decidedBy: string]> = [
+  [PUBLIC_CONTRACT_ROUTE, 'MOTIR-4042'],
+  ['app/api/docs/mcp-tools.json/route.ts', 'MOTIR-4194'],
+];
 
 /** The gate's call, as a route source has to spell it. */
 const GATE_CALL = 'publicSurfaceUnavailable()';
@@ -123,18 +135,19 @@ function firstStatement(body: string): string {
 }
 
 describe('every route on the public surface carries the gate', () => {
-  it('deliberately leaves the static product contract available off-cloud', () => {
-    // This route is OUTSIDE PUBLIC_ROOT and therefore outside the derived
-    // population below. Pin the exclusion here so that it is a reviewed product
-    // decision, not a path the filesystem walk happened not to see.
-    const source = stripSourceComments(
-      readFileSync(join(REPO_ROOT, PUBLIC_CONTRACT_ROUTE), 'utf8'),
-    );
+  it.each(STATIC_PRODUCT_DOCUMENTS)(
+    'deliberately leaves the static product document %s available off-cloud (%s)',
+    (route) => {
+      // These routes are OUTSIDE PUBLIC_ROOT and therefore outside the derived
+      // population below. Pin each exclusion here so that it is a reviewed
+      // product decision, not a path the filesystem walk happened not to see.
+      const source = stripSourceComments(readFileSync(join(REPO_ROOT, route), 'utf8'));
 
-    expect(source).toContain("export const dynamic = 'force-static'");
-    expect(source).not.toContain("from '@/lib/publicProjects/cloudGate'");
-    expect(source).not.toContain(GATE_CALL);
-  });
+      expect(source).toContain("export const dynamic = 'force-static'");
+      expect(source).not.toContain("from '@/lib/publicProjects/cloudGate'");
+      expect(source).not.toContain(GATE_CALL);
+    },
+  );
 
   it('finds routes at all — a walk that returned nothing would pass everything below', () => {
     // The vacuous-pass trap of any discovery-based check, asserted first.

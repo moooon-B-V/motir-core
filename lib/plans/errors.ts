@@ -773,3 +773,26 @@ export class PlanRevisionInFlightError extends Error {
     this.name = 'PlanRevisionInFlightError';
   }
 }
+
+/**
+ * A planning run tried to file MORE bugs than its job may (Story MOTIR-4053 ·
+ * MOTIR-4076; the VOLUME axis of `planner-files-tenant-bug.md` §3). Counted on
+ * the job's plan trail under the plan's row lock. → 409 — the request is
+ * well-formed; what it conflicts with is the trail's existing content, the same
+ * reason `DuplicatePlanTargetError` is a 409. Carries the cap and the count so
+ * the caller can report WHICH bound it hit without parsing the sentence.
+ */
+export class PlannerBugCapExceededError extends Error {
+  readonly code = 'PLANNER_BUG_CAP_EXCEEDED' as const;
+  constructor(
+    readonly planId: string,
+    readonly cap: number,
+    readonly filed: number,
+  ) {
+    super(
+      `This planning job has already filed ${filed} bug(s), the most it may file (${cap}). ` +
+        `Report any further defect in the plan's summary instead.`,
+    );
+    this.name = 'PlannerBugCapExceededError';
+  }
+}

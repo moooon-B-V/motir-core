@@ -95,7 +95,7 @@ describe('the findings policy round-trips from a CLI FLAG to the PROMPT TEXT', (
     expect(query).toBeNull();
     expect(prompt).toContain('FOUND A DEFECT');
     expect(prompt).toContain('create_work_item');
-    expect(prompt).toContain('motir plan --detach');
+    expect(prompt).toContain('submit_plan_session');
   });
 
   it('--disable-log-bug → the bug branch is GONE from the text an agent receives', async () => {
@@ -111,7 +111,7 @@ describe('the findings policy round-trips from a CLI FLAG to the PROMPT TEXT', (
     expect(prompt).toContain('Comment the finding on');
     // The other capability is untouched — a switch that took both would pass a
     // one-sided assertion.
-    expect(prompt).toContain('motir plan --detach');
+    expect(prompt).toContain('submit_plan_session');
   });
 
   it('--disable-replan → no submit step, and the card is left In Progress', async () => {
@@ -123,7 +123,7 @@ describe('the findings policy round-trips from a CLI FLAG to the PROMPT TEXT', (
     });
 
     expect(query).toBe('replan');
-    expect(prompt).not.toContain('motir plan --detach');
+    expect(prompt).not.toContain('submit_plan_session');
     expect(prompt).toContain('leave the card In Progress');
     expect(prompt).toContain('create_work_item');
   });
@@ -139,7 +139,7 @@ describe('the findings policy round-trips from a CLI FLAG to the PROMPT TEXT', (
 
     expect(query).toBe('log-bug,replan');
     expect(prompt).not.toContain('create_work_item');
-    expect(prompt).not.toContain('motir plan --detach');
+    expect(prompt).not.toContain('submit_plan_session');
     expect(prompt).toContain('FINISHED — the work is done');
     expect(prompt).toContain('status implemented');
   });

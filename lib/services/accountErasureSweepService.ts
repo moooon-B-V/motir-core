@@ -19,7 +19,7 @@ import { ERASED_USER_NAME, erasedEmailFor, erasureResumeFloor } from '@/lib/user
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 
 // THE ERASURE SWEEP (Story 8.4 · Subtask MOTIR-3702) — the job that actually
-// keeps the promise. `content/legal/privacy.md` §6 tells every user *"we erase
+// keeps the promise. `motir.co/legal/privacy` §6 tells every user *"we erase
 // or anonymise within 30 days"*; MOTIR-3700 writes the request and MOTIR-3699
 // shows them what it will reach. This is the only code in the product that
 // makes the sentence true, and the only code that can make it false in a way

@@ -16,7 +16,7 @@ import { DeleteAccountCard } from '../_components/DeleteAccountCard';
 import { SettingsCallout } from '../_components/SettingsCallout';
 
 // The `Data › Data & privacy` pane (Story 8.4 · Subtask MOTIR-1136) — the
-// account-settings surface `content/legal/privacy.md` §7 points at, in the
+// account-settings surface `motir.co/legal/privacy` §7 points at, in the
 // product's own approved words: *"In your account settings you can export your
 // personal data and request deletion of your account, without asking anyone."*
 // Until this route existed that sentence was a promise the product did not keep.
