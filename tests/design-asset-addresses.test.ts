@@ -260,6 +260,22 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/api-docs',
     why: "The asset's own ⚠️ block recording that these addresses moved twice — the correction MOTIR-2316 was filed about, so it must name the old address.",
   },
+  // ── FORWARD-LOOKING: an asset drawn before its route exists ───────────────
+  // TEMPORARY, and it names the card that deletes it — the distinction the
+  // block below insists on. `design/projects/public-address.mock.html` +
+  // `design-notes.md` (MOTIR-4211) draw the Public address room for Story
+  // MOTIR-3878; the design gate requires the asset BEFORE the page is built, so
+  // the route it names is drawn and not yet mounted.
+  //
+  // ⚠️ DELETE THIS ROW IN MOTIR-4221, the card that mounts
+  // `app/(authed)/settings/project/public-address/page.tsx`. The suite asserts
+  // this table tight in both directions, so leaving it behind fails the lane —
+  // which is the mechanism, not a hazard: the row cannot rot into a mute button.
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/public-address',
+    why: 'Forward-looking. The Public address room is designed (MOTIR-4211) before it is built; MOTIR-4221 mounts the route and DELETES this row.',
+  },
   // ── An address a design asset RECORDED, which the app has since moved ──────
   // A DIFFERENT KIND of row from every other entry in this table, and the
   // difference is worth reading once. Every row above is prose that never was
