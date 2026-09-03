@@ -888,7 +888,11 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     },
     { why: 'a lane restructure', files: ['.github/workflows/acceptance-tests.yml'], run: 'true' },
     { why: 'the Playwright config', files: ['playwright.acceptance.config.ts'], run: 'true' },
-    { why: 'a helper the specs import', files: ['tests/e2e/_helpers/acceptance-video.ts'], run: 'true' },
+    {
+      why: 'a helper the specs import',
+      files: ['tests/e2e/_helpers/acceptance-video.ts'],
+      run: 'true',
+    },
     {
       why: 'a helper the specs import',
       files: ['tests/e2e/_helpers/acceptance-diagnostics.ts'],
