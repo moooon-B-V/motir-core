@@ -764,6 +764,12 @@ jobs:
       # ephemeral Postgres service container.
       - run: pnpm prisma generate
         if: steps.cache-prisma-build.outputs.cache-hit != 'true'
+      # ⚠️ THE PACKAGES' `dist` IS GIT-IGNORED AND BUILT BY THE ROOT `postinstall`,
+      # which the cache-hit `if:` above skips — so on a warm runner this lane
+      # resolves `@motir/*` against a directory that does not exist. It is
+      # UNCONDITIONAL for that exact reason. See `tests/ci-package-build.test.ts`,
+      # which pins this step in every lane that resolves a package at run time.
+      - run: pnpm -r --filter './packages/*' build
       # ⚠️ THE BUILD'S HEAP IS RAISED IN THE `build` SCRIPT, and it is worth
       # knowing why here, because this is the job that goes red. `next build`
       # COMPILES and then runs TypeScript in a build worker, and node's default
@@ -1020,6 +1026,12 @@ jobs:
       - run: pnpm prisma generate
         if: steps.cache-prisma-test.outputs.cache-hit != 'true'
       - run: pnpm prisma migrate deploy
+      # ⚠️ THE PACKAGES' `dist` IS GIT-IGNORED AND BUILT BY THE ROOT `postinstall`,
+      # which the cache-hit `if:` above skips — so on a warm runner this lane
+      # resolves `@motir/*` against a directory that does not exist. It is
+      # UNCONDITIONAL for that exact reason. See `tests/ci-package-build.test.ts`,
+      # which pins this step in every lane that resolves a package at run time.
+      - run: pnpm -r --filter './packages/*' build
       # Run this leg of the test suite, COLLECTING coverage into a per-leg blob
       # report (MOTIR-1711). `--config vitest.collect.config.ts` is the base
       # vitest.config.ts with the per-file thresholds STRIPPED (a leg only

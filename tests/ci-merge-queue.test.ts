@@ -286,6 +286,11 @@ const PUSH_LANE = [
   'design-system',
   'design-guards',
   'cli',
+  // The third package lane (MOTIR-4299), here for the same reason its two
+  // neighbours are: it carries no `if:`, because a package's own suite is not
+  // something a bypassed merge should be able to skip. It measured 1m2s in CI,
+  // so the invariant above is intact — the lane's length is still `lint`'s.
+  'orchestrator',
   'build',
 ];
 /**
