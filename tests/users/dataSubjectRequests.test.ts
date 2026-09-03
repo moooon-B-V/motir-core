@@ -63,10 +63,19 @@ describe('the erasure window is the published promise', () => {
   // this GPL-3.0 repository with MOTIR-3909, so the file the regex read is in
   // `motir-marketing` and no test in this repository can open it.
   //
-  // ⚠️ SO ONE HALF OF THE COUPLING IS UNGUARDED, AND IT IS TRACKED RATHER THAN
-  // ACCEPTED — bug MOTIR-4233, which owes `motir-marketing` the guard that reads
-  // §6 and this file the cross-reference to it. Until that lands, an edit to the
-  // POLICY passes here silently. Do not read the green below as the old guard.
+  // ⚠️ SO ONE HALF OF THE COUPLING IS UNGUARDED HERE, AND IT IS GUARDED THERE —
+  // bug MOTIR-4233 built the policy-side half in the repository that has the
+  // document:
+  //
+  //     motir-marketing  tests/legal/publishedRetentionWindow.test.ts
+  //                      (PUBLISHED_ERASURE_WINDOW_DAYS)
+  //
+  // It reads the window out of §6 and pins it, so an edit to the POLICY goes red
+  // there; the assertion below is the other half, so an edit to the CONSTANT
+  // goes red here. Neither half can see its counterpart — that is the cost of
+  // the documents living in another repository — so each one names the other,
+  // and this comment is that naming. Until MOTIR-4233 merges, a policy edit
+  // still passes silently; do not read the green below as the old guard.
   //
   // What survives is the half this repository can still assert: the constant is
   // pinned to the number the Privacy Policy publishes, quoted, so an edit to
