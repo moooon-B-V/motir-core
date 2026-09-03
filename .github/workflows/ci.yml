@@ -471,7 +471,34 @@ jobs:
       # file took one within a fortnight (`build` at MOTIR-1789, this one at
       # MOTIR-3878). If this lane is ever short of heap again, the answer is
       # another project boundary — not a bigger number.
-      - run: pnpm typecheck
+      #
+      # ── AND THE NUMBER IS NOW READ, WHICH IS THE WHOLE POINT (MOTIR-4294) ────
+      # `assert-typecheck-headroom.mjs` SUBSUMES `pnpm typecheck`: it builds every
+      # project in the solution — one process each, dependencies first, at the
+      # DEFAULT heap — and fails when any reading exceeds **90%** of the heap it
+      # runs under, naming the project and both numbers. Its exit code is this
+      # step's, so a type error still fails the lane exactly as before, with the
+      # compiler's own output.
+      #
+      # ⚠️ 90%, NOT the 80% the card asked for, and the number is DERIVED. 80% was
+      # reasoned in the pre-split world, where one story (MOTIR-3878) moved the
+      # single program by 0.9 GB — 22 points. After the split a story does not do
+      # that: ~50 new test files are 2.7% of the tests project's bodies, about ONE
+      # point. Measured here: ceiling 84.6% (the tests project), run-to-run spread
+      # ~1.5 points, one story ~1 point. 80% is below the floor the tree already
+      # stands on — it would fail on arrival, and a lane that is red before anyone
+      # has done anything is a broken gate, not a warning. 90% clears the spread,
+      # leaves roughly five stories of growth as warning, and still fires with
+      # ~0.4 GB of real heap left. The script's own header carries the derivation
+      # and `tests/ci-typecheck-headroom.test.ts` pins that this step runs it.
+      #
+      # ⚠️ ONE PROCESS PER PROJECT is a measurement decision, not plumbing. A
+      # single `tsc -b tsconfig.solution.json` builds all four in ONE process, so
+      # its later `Memory used` lines carry the earlier projects' retained memory
+      # — 92% on this tree, which is the SUM the split exists to remove rather
+      # than any project's own cost. `pnpm typecheck` still does that (it is one
+      # command and it passes), and this step is what reports the honest number.
+      - run: node scripts/ci/assert-typecheck-headroom.mjs
 
   design-system:
     name: Design-system package
