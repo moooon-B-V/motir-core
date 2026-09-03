@@ -13,11 +13,15 @@ import {
   settleAskJob,
   submitAskTurn,
   submitContextualPlan,
+  attachMidRunTurn,
+  peekMailbox,
+  stopPlanChangeRun,
   submitPlanChange,
   type AskRedirectResponse,
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
+import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -85,6 +89,15 @@ import {
  *  either — a Discard that looked idle mid-POST could be double-fired. */
 export type PlanChangePhase = 'loading' | 'idle' | 'streaming' | 'review' | 'deciding';
 
+/** One turn typed mid-run, and whether the run has taken it yet. */
+export interface QueuedTurn {
+  /** The mailbox entry's id — what the peek is matched against. */
+  id: string;
+  text: string;
+  /** The run consumed it at a phase boundary. */
+  read: boolean;
+}
+
 /** A progress frame the run narrates while the job works. */
 export type PlanChangeProgress =
   | { kind: 'submitted' }
@@ -98,8 +111,28 @@ export type PlanChangeProgress =
   | { kind: 'redirected' }
   | { kind: 'searching' }
   | { kind: 'drilling' }
+  /** A graph LOOKUP the planner made (MOTIR-4069) — `{ tool, family }` over the
+   *  five retrieval families, or the budget-exhausted variant. Emitted on every
+   *  planner read since retrieval shipped, and rendered by nothing until now. */
+  | { kind: 'retrieval'; family: string | null; blocked: boolean }
+  /** A level being laid, and one card being written. */
+  | { kind: 'laying'; target: string | null }
+  | { kind: 'authoring'; title: string | null }
+  /** The planner's OWN prose line for the act it just took. The producer emits
+   *  nothing when the text is blank, so this is never an empty row. */
+  | { kind: 'note'; text: string }
   | { kind: 'proposed'; count: number }
-  | { kind: 'validating' };
+  | { kind: 'validating' }
+  /**
+   * ⚠️ A frame NOBODY HAS DECIDED ABOUT — the LOUD default (MOTIR-4069).
+   *
+   * It carries the raw kind so a developer can see WHICH frame arrived
+   * unaccounted for. This is the arm that covers the future: the frame list is a
+   * snapshot of a sweep, so a kind added upstream tomorrow lands here rather than
+   * disappearing through a `default: return null` the way `retrieval` did for
+   * its whole life.
+   */
+  | { kind: 'unknown'; frame: string };
 
 /** What an approve landed, as the rail says it back — the shared summary every
  *  confirming surface reports (`planReviewClient`), re-exported here because the
@@ -112,6 +145,25 @@ export interface PlanChangeConversationState {
   session: PlanChangeSessionDto | null;
   /** The live narration of the running job (the `aria-live` line). */
   progress: PlanChangeProgress | null;
+  /**
+   * THE ACT RAIL — every act this run has narrated, in order (MOTIR-4069).
+   *
+   * ⚠️ AN ACCUMULATING RECORD, where {@link progress} is a REPLACING line, and
+   * the difference is the point. A run used to say one sentence at a time and
+   * overwrite it, so its whole history was one sentence long. The user is now
+   * making a decision against this — whether to stop it — and a decision needs
+   * the record rather than the latest word
+   * (`design/ai-chat/plan-change-run-live.mock.html` sheet 3).
+   *
+   * `progress` survives as the LIVE line: the newest act, which the pinned
+   * running bar repeats so it is on screen however far the transcript is
+   * scrolled.
+   *
+   * Never re-ordered, never collapsed, never de-duplicated: two `retrieval`
+   * lines in a row mean the planner made two lookups, and folding them into
+   * "2 lookups" turns a record into a summary.
+   */
+  acts: PlanChangeProgress[];
   /**
    * The run's PROPOSALS, read from its Plan — what the canvas draws and what the
    * gate confirms.
@@ -154,12 +206,52 @@ export interface PlanChangeConversationState {
   errorCode: string | null;
   /** The metered-AI refusal — a distinct state, not an error (design panel 6). */
   outOfCredits: boolean;
+  /**
+   * The user has asked for a stop and the walk has not reached its boundary yet
+   * (Story MOTIR-4054 · MOTIR-4068).
+   *
+   * ⚠️ IT IS NOT A TERMINAL STATE, and keeping it separate from {@link stopped}
+   * is the whole point. The click is not the stop: `runWalk` reads the flag at
+   * its NEXT phase boundary, which can be a whole authoring session away, so
+   * there is a real interval in which the run is still narrating and the user has
+   * already asked it to end. A surface that collapses the two claims the run is
+   * over while it is visibly still working, which is worse than a slow stop.
+   */
+  stopping: boolean;
+  /**
+   * What the user typed WHILE the run was working, and whether the run has read
+   * it yet (Story MOTIR-4054 · MOTIR-4274).
+   *
+   * ⚠️ NOT PART OF THE THREAD, and that is the storage talking rather than a
+   * choice. A mid-run turn goes into the boundary MAILBOX, which is a different
+   * table from `plan_change_turn` — so it is not in `session.turns` and cannot be
+   * rendered from there. It joins the transcript's history only if and when a
+   * later run's accumulated intent carries it.
+   *
+   * `read` flips when the run has taken it at a phase boundary. Until then the
+   * surface must say QUEUED: a message that looks delivered and changes nothing
+   * for another thirty seconds reads as a bug, and the boundary can be a whole
+   * authoring session away.
+   */
+  queued: QueuedTurn[];
+  /**
+   * The run ENDED because the user ended it.
+   *
+   * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
+   * one. A stopped run proposes nothing NEW at the moment it ends, which is
+   * exactly the shape the settle path reads as `EMPTY` — so without this flag the
+   * honest outcome of a deliberate act would surface as a failure the user has to
+   * dismiss. `errorCode` stays null and `review` survives: what was proposed
+   * before the stop is worth exactly what it was worth a second earlier.
+   */
+  stopped: boolean;
 }
 
 const INITIAL: PlanChangeConversationState = {
   phase: 'loading',
   session: null,
   progress: null,
+  acts: [],
   review: null,
   decided: null,
   jobId: null,
@@ -167,28 +259,102 @@ const INITIAL: PlanChangeConversationState = {
   approved: null,
   errorCode: null,
   outOfCredits: false,
+  stopping: false,
+  stopped: false,
+  queued: [],
 };
 
 const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits']);
 
+/**
+ * How often the composer asks whether its queued turns have been read
+ * (MOTIR-4274). Three seconds: a phase boundary is minutes apart, so this is
+ * about how quickly the surface stops saying QUEUED, not about catching the
+ * boundary. It only ticks while a run is streaming AND something is unread.
+ */
+const MAILBOX_POLL_MS = 3000;
+
+/**
+ * The FIRST act of a run — the rail's opening line and the live line, one
+ * object (MOTIR-4069). `design/ai-chat/plan-change-run-live.mock.html` sheet 3
+ * draws `submitted` and `reading` as act lines like any other, so a run's record
+ * starts with the act that started it rather than with the first frame the
+ * server happened to send.
+ */
+function firstAct(
+  kind: 'submitted' | 'reading',
+): Pick<PlanChangeConversationState, 'progress' | 'acts'> {
+  const act: PlanChangeProgress = { kind };
+  return { progress: act, acts: [act] };
+}
+
 /** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
   const d = (data ?? {}) as Record<string, unknown>;
-  switch (event) {
-    case 'search':
-      return { kind: 'searching' };
-    case 'drill':
-      return { kind: 'drilling' };
-    case 'level_complete':
-    case 'pass':
-    case 'planned': {
+
+  // ⚠️ THE LOUD DEFAULT, AND IT IS THE FIRST THING RATHER THAN THE LAST.
+  //
+  // The bug this card repairs was not the missing `retrieval` arm — it was the
+  // `default: return null` underneath it, which made EVERY frame kind added
+  // upstream invisible with no signature: nothing threw, nothing logged, the
+  // rail just said less than the run did. Adding one arm would have fixed
+  // today's symptom and left the mechanism, and the next frame would have
+  // reproduced it exactly.
+  //
+  // So an unaccounted kind is now the noisy case. It surfaces on the rail AND in
+  // the console, where a developer sees it.
+  if (!isKnownFrameKind(event)) {
+    console.warn(
+      `[plan-change] unnarrated frame kind "${event}" — add it to PLAN_CHANGE_FRAME_KINDS ` +
+        `and give it a disposition in lib/planning/planChangeFrames.ts`,
+    );
+    return { kind: 'unknown', frame: event };
+  }
+
+  const disposition = FRAME_DISPOSITIONS[event];
+  // QUIET is a DECISION, not a fall-through. The reason is on the map entry, and
+  // this null is the one place a null is legitimate.
+  if ('quiet' in disposition) return null;
+
+  switch (disposition.show) {
+    case 'retrieval': {
+      const family = d['family'];
+      return {
+        kind: 'retrieval',
+        family: typeof family === 'string' ? family : null,
+        blocked: d['blocked'] === true,
+      };
+    }
+    case 'laying': {
+      const target = d['target'];
+      return { kind: 'laying', target: typeof target === 'string' ? target : null };
+    }
+    case 'authoring': {
+      const title = d['title'];
+      return { kind: 'authoring', title: typeof title === 'string' ? title : null };
+    }
+    case 'note': {
+      const text = d['text'];
+      // Defensive on OUR side too: the producer already refuses to emit a blank
+      // note ("a blank line is not a shorter line, it is a line the rail would
+      // render as a hole"), and a hole is exactly what a bad payload would draw.
+      const trimmed = typeof text === 'string' ? text.trim() : '';
+      return trimmed.length === 0 ? null : { kind: 'note', text: trimmed };
+    }
+    case 'proposed': {
       const raw = d['proposed'];
       return { kind: 'proposed', count: typeof raw === 'number' ? raw : 0 };
     }
-    case 'validated':
-    case 'validation_skipped':
+    case 'searching':
+      return { kind: 'searching' };
+    case 'drilling':
+      return { kind: 'drilling' };
+    case 'validating':
       return { kind: 'validating' };
     default:
+      // Unreachable: `show` is a `PlanChangeProgress['kind']` and every one the
+      // map uses is handled above. Kept so a new SHOW value is a visible gap
+      // rather than a silent null — the same mistake, one level in.
       return null;
   }
 }
@@ -255,6 +421,17 @@ export function usePlanChangeConversation({
    *  re-runs THAT turn (no second user turn — ADR §3), and the correction
    *  affordance flips it. Null whenever the last run was a plan-change one. */
   const lastAskTurnRef = useRef<string | null>(null);
+  /**
+   * A stop is IN FLIGHT — the re-entry guard for {@link stop} (MOTIR-4068).
+   *
+   * ⚠️ A REF, NOT `state.stopping`, and the difference is the whole guard.
+   * `stateRef` is written in an EFFECT (see its own comment below), so two clicks
+   * in the SAME tick — which is exactly what a double-click is — both read the
+   * pre-click value and both raise. This is set synchronously, inside the call,
+   * before anything awaits, which is the shape `abortRef` already uses to keep a
+   * second Enter from firing a second turn.
+   */
+  const stoppingRef = useRef(false);
   // A read-only mirror of the latest state, so a callback can read `jobId`/`planId`
   // without listing them as dependencies (which would re-create the callback — and
   // the rail's handlers — on every stream tick).
@@ -377,7 +554,10 @@ export function usePlanChangeConversation({
         (event, data) => {
           if (!mountedRef.current) return;
           const progress = narrateFrame(event, data);
-          if (progress) setState((s) => ({ ...s, progress }));
+          // APPEND to the rail and REPLACE the live line, in one update. A quiet
+          // frame yields null and does neither, which is the decision the
+          // disposition map recorded rather than a frame falling through.
+          if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
         },
       );
       if (failed || !mountedRef.current) return;
@@ -409,7 +589,14 @@ export function usePlanChangeConversation({
           review: pending,
           progress: null,
           errorCode: null,
+          // THE PLAN SURVIVES A STOP. A run stopped after it had appended a level
+          // settles here, with `pending` holding exactly what it proposed before
+          // the stop — so the review block is live and Approve / Discard are both
+          // reachable from the stopped state. That is the card's whole point: if
+          // stopping threw the work away, nobody would stop a run.
+          ...(s.stopping ? { stopping: false, stopped: true } : {}),
         }));
+        stoppingRef.current = false;
       } else {
         // Nothing came back. The thread stays; the previous proposal (if any) too.
         //
@@ -421,8 +608,19 @@ export function usePlanChangeConversation({
           ...s,
           phase: s.review ? 'review' : 'idle',
           progress: null,
-          errorCode: asked ? null : 'EMPTY',
+          // ⚠️ A STOPPED RUN IS THE THIRD REASON NOTHING CAME BACK, and without
+          // this arm it would surface as `EMPTY` — a failure banner on the one
+          // outcome the user chose deliberately (MOTIR-4068). The three are:
+          // the planner ASKED and is waiting (`asked`); the user STOPPED it
+          // (`s.stopping`); or the run genuinely proposed nothing, which is the
+          // only one that is an error.
+          errorCode: asked || s.stopping ? null : 'EMPTY',
+          // The interval closes HERE and only here: the stream has ended, so the
+          // walk reached its boundary and read the flag. Until this moment the
+          // bar says "stopping", which is the honest thing to say.
+          ...(s.stopping ? { stopping: false, stopped: true } : {}),
         }));
+        stoppingRef.current = false;
       }
     },
     [],
@@ -477,10 +675,21 @@ export function usePlanChangeConversation({
           // still awaits a decision on.
           review: s.decided ? null : s.review,
           decided: null,
-          progress: { kind: 'submitted' },
+          ...firstAct('submitted'),
           errorCode: null,
           outOfCredits: false,
+          // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
+          // flags are per-RUN: leaving them set would carry a previous run's
+          // ending onto the one just started, which is the mirror of the bug
+          // this state exists to prevent.
+          stopping: false,
+          stopped: false,
+          // The mailbox is per-RUN, so the queue is too: a new job has an empty
+          // one, and carrying the last run's turns into it would show the user
+          // sentences that can never be read again.
+          queued: [],
         }));
+        stoppingRef.current = false;
 
         await finishPlanRun(jobId, planId, anchor, controller);
       } catch (err) {
@@ -553,10 +762,14 @@ export function usePlanChangeConversation({
             planId: submitted.planId,
             review: s.decided ? null : s.review,
             decided: null,
-            progress: { kind: 'submitted' },
+            ...firstAct('submitted'),
             errorCode: null,
             outOfCredits: false,
+            stopping: false,
+            stopped: false,
+            queued: [],
           }));
+          stoppingRef.current = false;
           await finishPlanRun(submitted.jobId, submitted.planId, null, controller);
           return;
         }
@@ -574,10 +787,21 @@ export function usePlanChangeConversation({
           // and not an abandonment.
           review: s.decided ? null : s.review,
           decided: null,
-          progress: { kind: 'reading' },
+          ...firstAct('reading'),
           errorCode: null,
           outOfCredits: false,
+          // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
+          // flags are per-RUN: leaving them set would carry a previous run's
+          // ending onto the one just started, which is the mirror of the bug
+          // this state exists to prevent.
+          stopping: false,
+          stopped: false,
+          // The mailbox is per-RUN, so the queue is too: a new job has an empty
+          // one, and carrying the last run's turns into it would show the user
+          // sentences that can never be read again.
+          queued: [],
         }));
+        stoppingRef.current = false;
 
         let failed = false;
         await streamAskJob(
@@ -608,7 +832,10 @@ export function usePlanChangeConversation({
             session: settled.session,
             jobId: settled.jobId,
             planId: settled.planId,
+            // The hand-off is an act like any other: it joins the record as well
+            // as replacing the live line (MOTIR-4069).
             progress: { kind: 'redirected' },
+            acts: [...s.acts, { kind: 'redirected' }],
           }));
           await finishPlanRun(settled.jobId, settled.planId, null, controller);
           return;
@@ -655,7 +882,64 @@ export function usePlanChangeConversation({
   const send = useCallback(
     async (text: string, targets?: readonly PlanningTarget[]) => {
       const body = text.trim();
-      if (!body || abortRef.current) return;
+      if (!body) return;
+
+      // ⚠️ THE RUN IS STILL WORKING → THE MAILBOX, NOT THE SUBMIT (MOTIR-4274).
+      //
+      // ⚠️ AND THIS SITS ABOVE THE `abortRef` BAIL DELIBERATELY. That guard —
+      // `if (abortRef.current) return` — is the SECOND place the composer was
+      // locked during a run, and the one that is invisible: the `disabled` prop
+      // is what a reader sees, and this is what actually refused the call. It was
+      // right when a run was a monologue (there was nowhere for the turn to go,
+      // so a second send could only mean a second job) and it is wrong now, for
+      // exactly the same reason the prop was.
+      //
+      // It still guards the SUBMIT path below, which is what it was written for:
+      // a mid-run turn must never start a second job, and that remains true —
+      // the turn goes to the mailbox instead of being dropped.
+      //
+      // One control, two destinations, chosen by the phase — and the user does
+      // not have to know which. Both wrong answers are SILENT: a mid-run turn
+      // sent down the submit path opens a SECOND planning job on a thread that
+      // already has one, and a between-runs turn sent to the mailbox lands in a
+      // box nothing will ever check. So the branch is here, once, before either
+      // door is chosen.
+      //
+      // It starts nothing. The run reads this at its next phase boundary, which
+      // can be a whole authoring session away, so the turn is QUEUED until it
+      // does — and the surface says so rather than looking delivered.
+      if (stateRef.current.phase === 'streaming') {
+        const jobId = stateRef.current.jobId;
+        if (!jobId) return;
+        // Per SEND, never per render: a retry of this click must deliver once,
+        // and the next sentence must not be swallowed as a replay of this one.
+        const idempotencyKey = `turn:${jobId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+        try {
+          const delivery = await attachMidRunTurn(jobId, body, idempotencyKey);
+          if (!mountedRef.current) return;
+          setState((s) => ({
+            ...s,
+            // The door answers with the mailbox AS IT STANDS, so this is the
+            // whole pending set rather than a local append — which keeps the
+            // count right when a turn was consumed between two sends.
+            queued: delivery.turns.map((t) => ({ id: t.id, text: t.text, read: false })),
+          }));
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          if (!mountedRef.current) return;
+          // A LEGIBLE refusal, and the draft is the caller's to keep. The common
+          // one is `PLAN_CHANGE_JOB_NOT_RUNNING` — the run settled between the
+          // render and the click — which is a state conflict rather than a
+          // failure of the thread, so the conversation is untouched.
+          const code = err instanceof PlanEditsClientError ? err.code : null;
+          setState((s) => ({ ...s, errorCode: code ?? 'MAILBOX_FAILED' }));
+        }
+        return;
+      }
+
+      // Below here is the SUBMIT path, which still refuses re-entry: a run is in
+      // flight and starting a second one is the thing the guard exists to stop.
+      if (abortRef.current) return;
 
       // Is this turn the REPLY to a question the planner is waiting on? Derived
       // from the thread the user was actually looking at when they pressed the
@@ -676,10 +960,21 @@ export function usePlanChangeConversation({
         setState((s) => ({
           ...s,
           phase: 'streaming',
-          progress: { kind: 'submitted' },
+          ...firstAct('submitted'),
           errorCode: null,
           outOfCredits: false,
+          // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
+          // flags are per-RUN: leaving them set would carry a previous run's
+          // ending onto the one just started, which is the mirror of the bug
+          // this state exists to prevent.
+          stopping: false,
+          stopped: false,
+          // The mailbox is per-RUN, so the queue is too: a new job has an empty
+          // one, and carrying the last run's turns into it would show the user
+          // sentences that can never be read again.
+          queued: [],
         }));
+        stoppingRef.current = false;
         await run(anchor, (signal) =>
           submitContextualPlan(anchor.anchorId, body, anchor.targetKeys, signal, isAnswer),
         );
@@ -698,10 +993,17 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'streaming',
-        progress: { kind: 'submitted' },
+        ...firstAct('submitted'),
         errorCode: null,
         outOfCredits: false,
+        // Per-RUN, like every other start reducer (MOTIR-4068). The ONE DOOR is
+        // still a new run even though it may turn out to be an ask, so a
+        // previous run's ending must not be painted onto it.
+        stopping: false,
+        stopped: false,
+        queued: [],
       }));
+      stoppingRef.current = false;
       await runAsk((signal) => submitAskTurn(body, signal, isAnswer));
     },
     [run, runAsk],
@@ -749,7 +1051,7 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'streaming',
-        progress: { kind: 'reading' },
+        ...firstAct('reading'),
         errorCode: null,
         outOfCredits: false,
       }));
@@ -854,5 +1156,97 @@ export function usePlanChangeConversation({
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
   }, []);
 
-  return { state, send, retry, correctTurn, approve, discard, dismissError };
+  /**
+   * WATCH the mailbox drain (Story MOTIR-4054 · MOTIR-4274).
+   *
+   * ⚠️ A POLL, AND ONLY BECAUSE THERE IS NOTHING TO PUSH. `motir-ai` consumes a
+   * turn at a phase boundary and emits NO frame for it; the ids it records land
+   * in a `MailboxReport` that never reaches motir-core (the handler returns
+   * `{ planDelta, summary }`). So a turn's ABSENCE from the pending set is the
+   * only evidence the run took it, and asking is the only way to see it.
+   *
+   * ⚠️ IT IS BOUNDED BY ITS OWN CONDITION, which is the thing that makes it
+   * acceptable rather than a background timer nobody remembers. It runs only
+   * while a run is STREAMING and something is UNREAD — so the overwhelmingly
+   * common run, the one where nobody typed anything, makes zero requests, and
+   * the last read stops it rather than a timeout.
+   *
+   * If a `folded` frame ever lands upstream, delete this effect and read the
+   * frame; nothing else here changes.
+   */
+  useEffect(() => {
+    const unread = state.queued.some((t) => !t.read);
+    const jobId = state.jobId;
+    if (state.phase !== 'streaming' || !unread || !jobId) return;
+
+    const controller = new AbortController();
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const delivery = await peekMailbox(jobId, controller.signal);
+          if (!mountedRef.current) return;
+          const stillWaiting = new Set(delivery.turns.map((t) => t.id));
+          setState((s) => ({
+            ...s,
+            // Read = no longer waiting. Nothing is removed: the transcript is a
+            // record, and a turn the run TOOK is exactly the one worth still
+            // seeing — it is why the next level looks the way it does.
+            queued: s.queued.map((t) => (stillWaiting.has(t.id) ? t : { ...t, read: true })),
+          }));
+        } catch {
+          /* a failed peek is not a finding: the next tick asks again, and the
+             run is unaffected either way. */
+        }
+      })();
+    }, MAILBOX_POLL_MS);
+
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [state.phase, state.jobId, state.queued]);
+
+  /**
+   * END the run (Story MOTIR-4054 · MOTIR-4068).
+   *
+   * ⚠️ IT DOES NOT END ANYTHING BY ITSELF, and everything about this callback
+   * follows from that. It raises a flag in the boundary mailbox; `runWalk` reads
+   * it at its NEXT phase boundary and opens no further phase. Between the two the
+   * run is still narrating, so this sets `stopping` and nothing else — the
+   * terminal `stopped` is written by the SETTLE, when the stream actually ends,
+   * which is the only moment the run really is over.
+   *
+   * The optimistic alternative — flipping straight to `stopped` — is the defect
+   * the card names outright: a rail that keeps narrating under a surface that
+   * says the run finished is worse than a slow stop.
+   *
+   * ⚠️ AND IT IS SAFE WHERE THE CLICK IS REDUNDANT. Stopping an already-finished
+   * or already-stopped run is a no-op the server answers cleanly, so a run that
+   * settles between render and click costs nothing. The one thing this guards is
+   * a SECOND raise: `stopping` gates re-entry, and the key is minted per click so
+   * a retry of the same click still delivers once.
+   */
+  const stop = useCallback(async () => {
+    const { jobId, phase } = stateRef.current;
+    // Nothing to stop, or a stop already in flight. Not an error and not
+    // reported as one: the control stays reachable in both states by design.
+    if (!jobId || phase !== 'streaming' || stoppingRef.current) return;
+
+    stoppingRef.current = true;
+    setState((s) => ({ ...s, stopping: true }));
+    try {
+      await stopPlanChangeRun(jobId, `stop:${jobId}`);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!mountedRef.current) return;
+      // The RAISE failed — the run is NOT stopping, and saying so is the honest
+      // answer. Leaving the bar in its stopping state would tell the user their
+      // click landed when it did not, and they would wait instead of clicking
+      // again. The run itself is untouched, so nothing else changes.
+      stoppingRef.current = false;
+      setState((s) => ({ ...s, stopping: false }));
+    }
+  }, []);
+
+  return { state, send, retry, correctTurn, approve, discard, dismissError, stop };
 }

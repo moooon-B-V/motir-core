@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  attachMidRunTurn,
   openPlanChangeSession,
   appendPlanChangeTurn,
+  peekMailbox,
+  stopPlanChangeRun,
   recordPlannerTurn,
   rerunAskTurn,
   resubmitContextualPlan,
@@ -451,5 +454,86 @@ describe('the ask door', () => {
 
     expect(err).toBeInstanceOf(PlanEditsClientError);
     expect((err as PlanEditsClientError).isOutOfCredits).toBe(true);
+  });
+});
+
+// THE BOUNDARY MAILBOX's client half (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068 /
+// MOTIR-4274). Same contract as every door above: an HTTP hop to the shipped
+// route, the exact request shape, the one error type.
+describe('the mailbox doors', () => {
+  const DELIVERY = {
+    turns: [
+      { id: 'm1', text: 'Also drop it.', receivedAt: 'x', disposition: 'fold', target: null },
+    ],
+    stopped: false,
+  };
+
+  it('attaches a mid-run turn — job, body and the PER-SEND idempotency key, nothing else', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(DELIVERY));
+
+    await expect(attachMidRunTurn('job-1', 'Also drop it.', 'turn:job-1:k1')).resolves.toEqual(
+      DELIVERY,
+    );
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/mailbox');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      jobId: 'job-1',
+      body: 'Also drop it.',
+      idempotencyKey: 'turn:job-1:k1',
+    });
+  });
+
+  it('PEEKS the mailbox as a GET keyed on the job — the read the composer polls', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(DELIVERY));
+
+    await expect(peekMailbox('job 1')).resolves.toEqual(DELIVERY);
+
+    const [url, init] = lastCall();
+    // Encoded, so a job id is never a path or query injection.
+    expect(url).toBe('/api/ai/plan-change/session/mailbox?jobId=job%201');
+    expect(init.method).toBeUndefined();
+    expect(init.body).toBeUndefined();
+  });
+
+  it('a failed peek raises the ONE error type, carrying the door’s code', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ code: 'PLAN_CHANGE_JOB_NOT_RUNNING' }, 409));
+
+    const err = await peekMailbox('job-1').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PlanEditsClientError);
+    expect((err as PlanEditsClientError).status).toBe(409);
+    expect((err as PlanEditsClientError).code).toBe('PLAN_CHANGE_JOB_NOT_RUNNING');
+  });
+
+  it('raises a STOP through the same mailbox, keyed per click', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ turns: [], stopped: true }));
+
+    await expect(stopPlanChangeRun('job-1', 'stop:job-1')).resolves.toEqual({
+      turns: [],
+      stopped: true,
+    });
+
+    const [url, init] = lastCall();
+    expect(url).toBe('/api/ai/plan-change/session/mailbox/stop');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      jobId: 'job-1',
+      idempotencyKey: 'stop:job-1',
+    });
+  });
+
+  it('forwards the caller’s abort signal on every door', async () => {
+    // A fresh Response per call: a body reads once.
+    fetchMock.mockImplementation(async () => jsonResponse(DELIVERY));
+    const controller = new AbortController();
+
+    await attachMidRunTurn('job-1', 'x', 'k', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+    await peekMailbox('job-1', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
+    await stopPlanChangeRun('job-1', 'k', controller.signal);
+    expect(lastCall()[1].signal).toBe(controller.signal);
   });
 });

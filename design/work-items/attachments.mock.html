@@ -1018,14 +1018,33 @@
 
       /* ── THE LIGHTBOX (panel 6, for 5.2.6) — Modal, full-screen size ─────── */
       /* Drawn as a bounded stage; in the app it is a full-viewport
-         Dialog.Overlay (bg-black/80 for the lightbox — see design-notes) */
+         Dialog.Overlay (bg-black/80 for the lightbox — see design-notes).
+
+         ⚠️ MOTIR-4277 — the scrim is drawn as the OPAQUE colour `bg-black/80`
+         composites to over this board's own `--el-surface` page
+         (0.8 x #000 over #f6f5f4 = #313131), NOT as `rgba(0, 0, 0, 0.8)`.
+         Identical pixels, and the reason is that the chrome's ink has to be
+         MEASURABLE: `mockStateInkScan` grounds an element on its nearest
+         OPAQUE painted ancestor, so a translucent scrim was skipped and the
+         white chrome was measured against the near-white page behind it —
+         1.07:1, and counted as failing ink, when what it actually sits on is
+         6.90:1 under the hover tint. The 80% is the spec and lives in the
+         line above and in design-notes; this declaration is the render.
+
+         The scrim itself is a BACKDROP — non-semantic decoration that carries
+         no meaning — which is the one grant CLAUDE.md's never-invent-a-colour
+         rule makes for a raw value. Its INK is not, and the ink is white
+         deliberately: the scrim is `bg-black/80` in light AND dark, so an
+         `--el-*` token would wrongly flip with the theme
+         (`AttachmentPreview.tsx`'s colour note states the same decision for
+         the shipped component). */
       .lightbox {
         position: relative;
         width: 100%;
         max-width: 720px;
         height: 430px;
         border-radius: var(--radius-card);
-        background: rgba(0, 0, 0, 0.8);
+        background: #313131;
         overflow: hidden;
         display: flex;
         flex-direction: column;

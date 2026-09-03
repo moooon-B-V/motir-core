@@ -1,8 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, MessageCircleQuestionMark, RefreshCw, Sparkles } from 'lucide-react';
+import {
+  BookOpenText,
+  Ban,
+  Check,
+  CircleQuestionMark,
+  Clock,
+  CornerDownRight,
+  ListTree,
+  MessageCircleQuestionMark,
+  MessageSquareText,
+  PenLine,
+  RefreshCw,
+  ScanSearch,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
@@ -17,7 +34,10 @@ import {
 } from '@/lib/planning/planChangeThread';
 import type { PlanChangeTurnDto, PlanChangeTurnRoleDto } from '@/lib/dto/planChange';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
-import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
+import type {
+  PlanChangeConversationState,
+  PlanChangeProgress,
+} from '@/lib/hooks/usePlanChangeConversation';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -103,6 +123,12 @@ export interface PlanChangeRailProps {
   onCorrectTurn: (turnId: string) => void;
   onApprove: () => void;
   onDiscard: () => void;
+  /**
+   * END the run (Story MOTIR-4054 · MOTIR-4068). Optional so every shipped call
+   * site that does not offer a stop keeps compiling and simply renders no bar —
+   * the rail is presentational and the host owns the conversation.
+   */
+  onStop?: () => void;
 }
 
 export function PlanChangeRail({
@@ -118,6 +144,7 @@ export function PlanChangeRail({
   onCorrectTurn,
   onApprove,
   onDiscard,
+  onStop,
 }: PlanChangeRailProps) {
   const t = useTranslations('planningWorkspace');
   const tc = useTranslations('planningWorkspace.conversation');
@@ -183,6 +210,31 @@ export function PlanChangeRail({
   // the chips on the turn come from the record, not from what is picked now.
   const turnTargetKeys = state.session?.targetKeys ?? [];
 
+  // THE RAIL FOLLOWS THE NEWEST ACT — while the reader has not scrolled away
+  // (MOTIR-4069; `design/ai-chat/plan-change-run-live.mock.html` sheet 5).
+  // Measured: nine act lines fit at the 1366×768 floor after the ordinary
+  // opening, and a real run emits several times that, so the transcript WILL
+  // scroll in its first thirty seconds. Following is what keeps the record
+  // readable; NOT following once the reader has scrolled up is what makes the
+  // pinned running bar (which repeats the live line) the right place to look
+  // instead. `stickRef` is "was the reader at the bottom before this act
+  // arrived", sampled on scroll rather than derived at append time, so an
+  // append that grows the region never counts as the reader leaving.
+  // What the act rail draws. The hook keeps `progress` equal to the newest act,
+  // so the two agree; a caller that hands the rail a live line and no record
+  // (a host that never accumulated one) still gets that line drawn rather than
+  // an empty region — the rail never says LESS than it was told.
+  const acts: PlanChangeProgress[] =
+    state.acts.length > 0 ? state.acts : state.progress ? [state.progress] : [];
+  const logRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  const actCount = acts.length;
+  useEffect(() => {
+    const el = logRef.current;
+    if (!el || !stickRef.current || actCount === 0) return;
+    el.scrollTop = el.scrollHeight;
+  }, [actCount]);
+
   return (
     <aside
       className="flex h-full min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface)"
@@ -198,7 +250,16 @@ export function PlanChangeRail({
         </Pill>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4" role="log">
+      <div
+        ref={logRef}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stickRef.current =
+            el.scrollHeight - el.scrollTop - el.clientHeight <= ACT_FOLLOW_SLACK_PX;
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
+        role="log"
+      >
         {/* The opener — the canvas already shows the plan, so "empty" is never a
             blank screen; only the conversation is empty (design panel 6). */}
         <Bubble role="assistant">
@@ -245,6 +306,93 @@ export function PlanChangeRail({
             correction={latest && turn.id === latest.id ? correctable : null}
           />
         ))}
+
+        {/* The RUN, narrated: the shipped drafting row + a polite live region fed
+            by the job's real progress frames. */}
+        {/* The HAND-OFF (ADR Consequence 3). An ask turn that resolved to a plan
+            change streams twice; naming the re-reading is what keeps the wait
+            from reading as "that failed, it is trying again". The waiting row
+            below never unmounts — only its text changes. */}
+        {state.progress?.kind === 'redirected' ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="plan-change-handoff"
+          >
+            {tc('handoff')}
+          </p>
+        ) : null}
+
+        {/* THE ACT RAIL (MOTIR-4069) — an accumulating record, not a replacing
+            line. Three columns: glyph · mono act label · the line
+            (`design/ai-chat/plan-change-run-live.mock.html` sheet 3).
+
+            ⚠️ THE SKIM AXIS IS THE MIDDLE COLUMN, NOT COLOUR. Every act line is
+            the same ink; what a reader runs their eye down is a fixed-width
+            column of short mono words, with the glyph as a second, non-textual
+            cue. Deliberate: the rail already carries three coloured states
+            (assistant, user, the accent review block) and a fourth hue would
+            compete with them rather than help.
+
+            It keeps the shipped `aria-live="polite"` region and its test id, so
+            the newest act is still announced and nothing that addressed this
+            surface has to change. */}
+        <div aria-live="polite" data-testid="plan-change-progress">
+          {acts.length > 0 ? (
+            <ol
+              data-testid="plan-change-acts"
+              className="flex flex-col gap-1.5 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+            >
+              {acts.map((act, index) => {
+                const live = index === acts.length - 1 && state.phase === 'streaming';
+                return (
+                  <li
+                    key={`${act.kind}-${index}`}
+                    data-testid={`plan-change-act-${act.kind}`}
+                    className={`flex items-start gap-2 text-xs ${
+                      live ? 'text-(--el-text)' : 'text-(--el-text-secondary)'
+                    }`}
+                  >
+                    {live ? (
+                      <Spinner size="sm" aria-hidden="true" />
+                    ) : (
+                      <span className="mt-px shrink-0 text-(--el-text-secondary)">
+                        <ActGlyph act={act} />
+                      </span>
+                    )}
+                    <span className="mt-px w-16 shrink-0 font-mono text-[10px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+                      {tc(`act.${act.kind}`)}
+                    </span>
+                    <span className="min-w-0 flex-1">{actLine(act, tc)}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : null}
+        </div>
+
+        {/* STOPPED — a MARKER, not an alert (MOTIR-4068).
+            It uses the shipped `system`-marker line verbatim: centred,
+            `text-xs`, `--el-text-secondary`. Deliberately NOT the error block
+            below it — no `role="alert"`, no `--el-tint-rose`, no failure glyph,
+            nothing dimmed or struck through. A stopped run is a DECISION, and
+            `design/ai-chat/plan-change-run-live.mock.html` sheet 4 lists the
+            affordances it may not borrow, so a reviewer checks a claim rather
+            than an impression.
+
+            The review block BELOW stays live: what was proposed before the stop
+            is worth exactly what it was worth a second earlier, and Approve /
+            Discard are both reachable from here. That is the whole card.
+            (Sheet 2's state D, top to bottom: the act record, this marker, the
+            surviving proposal — which is why it sits ABOVE the review block
+            since MOTIR-4069 moved the record up.) */}
+        {state.stopped ? (
+          <p
+            className="text-center text-xs text-(--el-text-secondary)"
+            data-testid="plan-change-stopped"
+          >
+            {tc('stopped')}
+          </p>
+        ) : null}
 
         {/* The proposal, said in words — the rail mirrors the canvas bar's counts
             so the numbers are readable without hunting the board.
@@ -313,31 +461,43 @@ export function PlanChangeRail({
           </Bubble>
         ) : null}
 
-        {/* The RUN, narrated: the shipped drafting row + a polite live region fed
-            by the job's real progress frames. */}
-        {/* The HAND-OFF (ADR Consequence 3). An ask turn that resolved to a plan
-            change streams twice; naming the re-reading is what keeps the wait
-            from reading as "that failed, it is trying again". The waiting row
-            below never unmounts — only its text changes. */}
-        {state.progress?.kind === 'redirected' ? (
-          <p
-            className="text-center text-xs text-(--el-text-secondary)"
-            data-testid="plan-change-handoff"
-          >
-            {tc('handoff')}
-          </p>
-        ) : null}
+        {/* QUEUED — what the user typed while the run was working (MOTIR-4274).
+            Rendered from `state.queued` rather than from the thread because a
+            mid-run turn lives in the MAILBOX, a different table from
+            `plan_change_turn`; it is not in `session.turns` and cannot be.
 
-        <div aria-live="polite" data-testid="plan-change-progress">
-          {state.progress ? (
-            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-secondary)">
-              <Spinner size="sm" aria-hidden="true" />
-              {tc(`progress.${state.progress.kind}`, {
-                count: state.progress.kind === 'proposed' ? state.progress.count : 0,
-              })}
-            </div>
-          ) : null}
-        </div>
+            ⚠️ THE BUBBLE IS NOT RE-TINTED, deliberately. The obvious move is a
+            warm tint on the pending turn and it is wrong here:
+            `--el-warning-surface` already carries the planner's ASKING state on
+            this exact surface, and two warm pending-ish states one scroll apart
+            are less legible than one (`design/ai-chat/plan-change-run-live.mock.html`
+            sheet 2). The pending fact is carried by a WORD, a GLYPH and a MARKER
+            instead — and the queued/read distinction by all three changing. */}
+        {state.queued.map((turn) => (
+          <div key={turn.id} className="flex flex-col gap-1">
+            <Bubble
+              role="user"
+              label={
+                turn.read ? (
+                  tc('queuedRead')
+                ) : (
+                  <>
+                    <Clock className="size-3" aria-hidden="true" />
+                    {tc('queuedLabel')}
+                  </>
+                )
+              }
+            >
+              {turn.text}
+            </Bubble>
+            <p
+              className="text-center text-xs text-(--el-text-secondary)"
+              data-testid={turn.read ? 'plan-change-queued-read' : 'plan-change-queued'}
+            >
+              {turn.read ? tc('queuedReadMarker') : tc('queuedMarker')}
+            </p>
+          </div>
+        ))}
 
         {state.errorCode ? (
           <div className="flex flex-col items-start gap-2">
@@ -376,11 +536,36 @@ export function PlanChangeRail({
         onSubmit={onSend}
         placeholder={composerPlaceholder}
         autoFocus={askingForReason}
-        disabled={busy || state.phase === 'loading'}
+        // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
+        // works — that is the whole point of the mailbox, and it is a BEHAVIOUR
+        // change rather than a styling one: `busy` put a real `disabled`
+        // attribute on the `@` trigger, the input AND Send, so a user could not
+        // type at all. What a mid-run send DOES is the hook's branch; what it
+        // may do is here.
+        //
+        // `deciding` still locks it, and correctly: an approve or a discard is a
+        // write against the plan, and a turn sent mid-decision would race it.
+        // `loading` too — there is no thread to append to yet.
+        disabled={state.phase === 'loading' || state.phase === 'deciding'}
         // The pending question travels to the composer, not to a header pill:
         // measured at the rail's real 22rem the header row is already full, and
         // the bar belongs beside the control whose behaviour actually changed.
         awaitingQuestion={question?.question ?? null}
+        // THE RUNNING BAR — present exactly while a run is in flight, and gone
+        // the moment it is not. `onStop` is what makes it offerable: a caller
+        // that does not supply one gets the shipped composer unchanged.
+        running={
+          state.phase === 'streaming' && onStop
+            ? {
+                // The live act's OWN line, so the bar and the rail's newest row
+                // say the same thing — a note repeats the planner's words, a
+                // lookup names its family (MOTIR-4069).
+                line: state.progress ? actLine(state.progress, tc) : tc('progress.submitted'),
+                stopping: state.stopping,
+                onStop,
+              }
+            : null
+        }
         onSeeQuestion={() => {
           // The pending question is the ONE element carrying this id (only one
           // question can be pending), so a lookup is exact — and focusing it,
@@ -655,6 +840,80 @@ const BUBBLE_FILL: Record<'default' | 'asking', string> = {
   default: 'bg-(--el-chat-bubble-ai) text-(--el-text)',
   asking: 'bg-(--el-warning-surface) text-(--el-warning-text)',
 };
+
+/**
+ * How close to the bottom (px) still counts as "reading along" for the
+ * follow-the-newest-act scroll. A line and a half: a reader who nudged the
+ * wheel is still following; one who scrolled up to re-read is not.
+ */
+const ACT_FOLLOW_SLACK_PX = 48;
+
+/** One glyph per act kind — the second, non-textual skim cue (sheet 3).
+ *  Keyed on the KIND so the map is exhaustive by type: a new `PlanChangeProgress`
+ *  member without a glyph does not compile, which is the same discipline the
+ *  frame dispositions use one layer down. */
+const ACT_GLYPH: Record<PlanChangeProgress['kind'], typeof Send> = {
+  submitted: Send,
+  reading: ScanSearch,
+  redirected: CornerDownRight,
+  retrieval: BookOpenText,
+  searching: Search,
+  drilling: ListTree,
+  laying: ListTree,
+  authoring: PenLine,
+  note: MessageSquareText,
+  proposed: Sparkles,
+  validating: ShieldCheck,
+  unknown: CircleQuestionMark,
+};
+
+function ActGlyph({ act }: { act: PlanChangeProgress }) {
+  // The BLOCKED lookup is the one act whose glyph is decided by its payload, not
+  // its kind: sheet 3 gives "out of lookups" the `ban` glyph so the moment the
+  // run stopped being able to read is visible at a skim.
+  const Icon = act.kind === 'retrieval' && act.blocked ? Ban : ACT_GLYPH[act.kind];
+  return <Icon className="size-3.5" aria-hidden="true" />;
+}
+
+/** The five retrieval families the planner reads from (`motir-ai`
+ *  `retrievalTools.ts`), each with a catalog label; anything else renders as the
+ *  raw family name rather than as a hole. */
+const RETRIEVAL_FAMILY_KEY: Record<string, string> = {
+  plan_tree: 'act.family.planTree',
+  code_graph: 'act.family.codeGraph',
+  code_health: 'act.family.codeHealth',
+  web: 'act.family.web',
+  lessons: 'act.family.lessons',
+};
+
+/** The line one act reads as. Every string is a catalog key; the only values
+ *  interpolated are the frame's own data. */
+function actLine(act: PlanChangeProgress, tc: ReturnType<typeof useTranslations>): string {
+  switch (act.kind) {
+    case 'retrieval':
+      // The BLOCKED variant is a different sentence, not a suffix: the run has
+      // stopped being able to look things up, which is worth saying plainly.
+      if (act.blocked) return tc('act.retrievalBlockedLine');
+      if (act.family === null) return tc('act.retrievalLineBare');
+      const familyKey = RETRIEVAL_FAMILY_KEY[act.family];
+      return tc('act.retrievalLine', { family: familyKey ? tc(familyKey) : act.family });
+    case 'laying':
+      return tc('act.layingLine', { target: act.target ?? '' });
+    case 'authoring':
+      return tc('act.authoringLine', { title: act.title ?? '' });
+    // ⚠️ THE PLANNER'S OWN WORDS, rendered verbatim rather than through a
+    // catalog string — it is prose the model wrote about the act it just took,
+    // and there is nothing to translate.
+    case 'note':
+      return act.text;
+    case 'unknown':
+      return tc('act.unknownLine', { frame: act.frame });
+    case 'proposed':
+      return tc('progress.proposed', { count: act.count });
+    default:
+      return tc(`progress.${act.kind}`, { count: 0 });
+  }
+}
 
 function Bubble({
   role,

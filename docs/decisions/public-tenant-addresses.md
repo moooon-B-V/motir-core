@@ -281,7 +281,9 @@ capability is bought for.
 > as the one that needs the customer's DNS to be re-edited if we ever move — and
 > `A`/`AAAA` values are read from `fly ips list` at provisioning, never
 > hardcoded. (`marketing-site-hosting.md` §3's own table already reads them that
-> way.)
+> way.) **The variables they are read INTO are §10's AMENDMENT 1, added by
+> MOTIR-4278 — this paragraph decided the rule and named no carrier, and until
+> it had one the pane could show the customer no pointing record at all.**
 
 ### The decision — how ownership is proven
 
@@ -600,7 +602,44 @@ point of deciding it in a document.
 | `FLY_CERTS_TOKEN`                 | `motir-core`      | **runtime secret**                                          | a Fly API token **scoped to the `motir-marketing` app only** | the certificates adapter, the certificate status job                               |
 | `FLY_CERTS_APP`                   | `motir-core`      | env                                                         | `motir-marketing`                                            | the certificates adapter                                                           |
 
-**Two of those four rows carry a rule rather than a value.**
+**AMENDMENT 1 (2026-09-03, MOTIR-4278) — three rows this table OMITTED, and the
+omission is what §5's table could not be implemented without.**
+
+| variable                            | app          | kind | value                                               | read by                                  |
+| ----------------------------------- | ------------ | ---- | --------------------------------------------------- | ---------------------------------------- |
+| `MOTIR_PUBLIC_ADDRESS_CNAME_TARGET` | `motir-core` | env  | the app's own hostname (`motir-marketing.fly.dev`)  | `lib/publicAddresses/pointingRecords.ts` |
+| `MOTIR_PUBLIC_ADDRESS_A_RECORDS`    | `motir-core` | env  | the app's dedicated IPv4 addresses, comma-separated | the same module                          |
+| `MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS` | `motir-core` | env  | the app's dedicated IPv6 addresses, comma-separated | the same module                          |
+
+**Why they were missing, said plainly.** §5's table decides that a subdomain
+creates a `CNAME` and an apex creates `A` + `AAAA`, and §5's order of operations
+has the customer create that record **at step 2 — before _Verify_**. Both are
+correct and neither is implementable without the VALUES, which this section is
+the only place that names. Nothing caught it: the adapter parses Fly's own
+`dns_requirements`, the DTO's type union allows all three record types, and the
+settings pane renders whatever it is handed — so every layer passed its own tests
+while the array the customer reads carried only the ownership `TXT`
+(MOTIR-4278).
+
+**Three rules on these rows.**
+
+- **They name what the value IS, not who supplies it** — deliberately not
+  `FLY_*`. §6 makes the certificate provider a PORT so Fly is replaceable;
+  deriving the `CNAME` target as `${FLY_CERTS_APP}.fly.dev` inside a service
+  would weld Fly through the service layer and put a Fly name outside the
+  adapter directory, which is the leak `certificatePortBoundary.test.ts` exists
+  to catch.
+- **The values are READ FROM THE PLATFORM at provisioning, never hardcoded** —
+  `fly ips list -a motir-marketing` for the two address rows, the app's own
+  `.fly.dev` hostname for the third. This is §5's own recorded rule ("`A`/`AAAA`
+  values are read from `fly ips list` at provisioning, never hardcoded"), and the
+  address lists are plural because an app may hold more than one of each.
+- **Unset omits the ROW rather than defaulting** — `tenantDomain.ts`'s rule,
+  which applies here for the same reason it applies there: a guessed value would
+  land in DNS instructions a customer follows, pointing a domain they own at
+  something we do not operate.
+
+**Two of the first four rows carry a rule rather than a value.**
 
 - **`NEXT_PUBLIC_MOTIR_TENANT_DOMAIN` is a BUILD ARG, not a Fly secret**, and
   setting it as a secret would silently do nothing. `motir-marketing`'s

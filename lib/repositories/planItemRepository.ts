@@ -1,4 +1,4 @@
-import { Prisma, type PlanItem } from '@/generated/prisma/client';
+import { Prisma, type Plan, type PlanItem, type PlanStatus } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // PlanItem repository — single Prisma operations on the `plan_item` table
@@ -47,6 +47,45 @@ export const planItemRepository = {
     return client.planItem.findMany({
       where: { workItemId, workspaceId, op: { in: ['modify', 'remove'] } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
+   * The UNDECIDED proposals that target a given work item, with the plan each
+   * one belongs to — the work-item page's pending-plan read (bug MOTIR-4197 ·
+   * design MOTIR-4256 §3).
+   *
+   * The same predicate as `findByWorkItemId` above — `{ workItemId, workspaceId,
+   * op ∈ {modify, remove} }`, served by the same `[workItemId, workspaceId]`
+   * reverse index — narrowed to the plans in `statuses` (the caller passes
+   * `WORK_ITEM_PENDING_PLAN_STATUSES`; the SET is the service's decision, not
+   * this method's) and to the plans of `projectId`, so a caller granted browse
+   * on one project cannot read another project's proposals through a work-item
+   * id it happens to know. The plan's `id` / `title` / `status` ride back on the
+   * SAME query — ONE indexed lookup, never a read per row — which is the figure
+   * the item page's tier-two group is allowed to add.
+   *
+   * ⚠️ NO `tx`-less arm: this read runs inside the page's request, and on a card
+   * with no pending plan — nearly every card — it must cost exactly the index
+   * probe and nothing more.
+   */
+  async findPendingByWorkItemId(
+    workItemId: string,
+    workspaceId: string,
+    projectId: string,
+    statuses: readonly PlanStatus[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Array<PlanItem & { plan: Pick<Plan, 'id' | 'title' | 'status'> }>> {
+    const client = tx ?? db;
+    return client.planItem.findMany({
+      where: {
+        workItemId,
+        workspaceId,
+        op: { in: ['modify', 'remove'] },
+        plan: { projectId, status: { in: [...statuses] } },
+      },
+      include: { plan: { select: { id: true, title: true, status: true } } },
+      orderBy: [{ plan: { createdAt: 'asc' } }, { id: 'asc' }],
     });
   },
 

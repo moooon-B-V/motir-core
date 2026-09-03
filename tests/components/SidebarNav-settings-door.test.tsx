@@ -48,9 +48,6 @@ function renderRail(
       settingsPermissions={permissions}
       user={USER}
       workspaceTierRevealed={workspaceTierRevealed}
-      // The Docs row is one of the controls for "the rows below close up", and
-      // since MOTIR-4167 it renders only when configured — so it is configured.
-      docsIndexUrl="https://motir.co/docs"
     />,
   );
 }
@@ -75,7 +72,7 @@ describe('the Project settings door (design panel 1)', () => {
     // footer is simply one row shorter, so the rows below close up.
     expect(screen.queryByText('Settings')).toBeNull();
     expect(screen.getByRole('link', { name: 'Job runs' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Docs' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Git' })).toBeTruthy();
   });
 
   it('a VIEWER gets no door either', () => {

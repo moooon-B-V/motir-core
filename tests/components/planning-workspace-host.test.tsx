@@ -109,6 +109,10 @@ const IDLE: PlanChangeConversationState = {
   approved: null,
   errorCode: null,
   outOfCredits: false,
+  stopping: false,
+  stopped: false,
+  queued: [],
+  acts: [],
 };
 
 afterEach(() => {

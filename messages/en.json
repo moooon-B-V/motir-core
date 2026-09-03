@@ -953,14 +953,12 @@
       "jobRuns": "Job runs",
       "git": "Git",
       "github": "GitHub",
-      "docs": "Docs",
       "backlog": "Backlog",
       "triage": "Triage",
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
       "resumeOnboardingInProgress": "Resume onboarding, in progress",
-      "legal": "Legal",
       "security": "Security"
     },
     "topNav": {
@@ -1016,6 +1014,12 @@
       "platformAdmin": "Platform admin",
       "platformAdminHint": "Operator console · the whole estate",
       "staffOnly": "Staff only"
+    },
+    "help": {
+      "label": "Help",
+      "docs": "Docs",
+      "shortcuts": "Keyboard shortcuts",
+      "legal": "Legal documents"
     },
     "account": {
       "signOut": "Sign out",
@@ -1186,6 +1190,14 @@
     "archivedBannerMeta": "Archived by <strong>{name}</strong> · {date} · It’s hidden from boards and lists but kept with its history.",
     "archivedBannerRestoreTail": "Restore it to bring it back.",
     "archivedByUnknownActor": "a former member",
+    "pendingPlanModifyHeadline": "A plan proposes changes to this item",
+    "pendingPlanRemoveHeadline": "A plan proposes to archive this item",
+    "pendingPlanMeta": "Nothing here has changed yet — the proposal applies only if the plan is approved.",
+    "pendingPlanReview": "Review plan",
+    "pendingPlanReviewAria": "Review the plan that names {key}",
+    "pendingPlanCountHeadline": "{count, plural, other {# pending plans name this item}}",
+    "pendingPlanRowModify": "— proposes changes",
+    "pendingPlanRowRemove": "— proposes to archive it",
     "edit": "Edit",
     "description": "Description",
     "descriptionGloss": "what to do",
@@ -6185,7 +6197,12 @@
         "proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
         "validating": "Checking the proposal against your plan…",
         "reading": "Reading your request…",
-        "redirected": "Working on the proposal…"
+        "redirected": "Working on the proposal…",
+        "retrieval": "Reading the plan…",
+        "laying": "Laying out a level…",
+        "authoring": "Writing a work item…",
+        "note": "Thinking it through…",
+        "unknown": "Working…"
       },
       "error": {
         "body": "That didn't go through. Your conversation is saved — try again, or rephrase the change.",
@@ -6223,7 +6240,42 @@
       "correcting": "Re-reading…",
       "correctedToPlan": "Re-read as a plan change",
       "correctedToAsk": "Re-read as a question",
-      "handoff": "Reading it as a plan change — working on the proposal"
+      "handoff": "Reading it as a plan change — working on the proposal",
+      "stop": "Stop",
+      "stoppingAction": "Stopping…",
+      "stopping": "Stopping — finishing this work item first.",
+      "stopped": "You stopped this run.",
+      "queuedLabel": "queued",
+      "queuedRead": "read",
+      "queuedMarker": "Queued — Motir AI reads this when it finishes the work item it is writing.",
+      "queuedReadMarker": "Read at the boundary — folded into this run.",
+      "act": {
+        "submitted": "submit",
+        "reading": "reading",
+        "redirected": "hand-off",
+        "retrieval": "retrieval",
+        "searching": "search",
+        "drilling": "drill",
+        "laying": "lay",
+        "authoring": "author",
+        "note": "note",
+        "proposed": "proposed",
+        "validating": "validate",
+        "unknown": "frame",
+        "retrievalLine": "Read the {family}",
+        "retrievalBlockedLine": "Out of lookups — carrying on with what it has.",
+        "layingLine": "Laying out {target}",
+        "authoringLine": "Writing {title}",
+        "unknownLine": "frame: {frame}",
+        "retrievalLineBare": "Read from the plan's sources",
+        "family": {
+          "planTree": "plan tree",
+          "codeGraph": "code graph",
+          "codeHealth": "code health",
+          "web": "web",
+          "lessons": "lessons"
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Work items",

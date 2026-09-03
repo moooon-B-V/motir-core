@@ -767,8 +767,32 @@ describe('usePlanChangeConversation — dismissError', () => {
 });
 
 describe('narrateFrame — the frames the augment job really emits', () => {
-  it('ignores an unknown event and a frame with no data', () => {
+  it('⚠️ AMENDED (MOTIR-4069) — an unknown event is now LOUD, and `token` is a decision', () => {
+    // This read `expect(narrateFrame('token', …)).toBeNull()` under the title
+    // "ignores an unknown event". It was not a bug that got fixed — it PINNED
+    // the `default: return null` that MOTIR-4069 removes, and it was correct
+    // while that default was the design.
+    //
+    // Two things changed underneath it, and they are different:
+    //
+    //  · `token` is not unknown. It is one of the 51 kinds `motir-ai` emits, and
+    //    it is now an explicit QUIET disposition with a written reason
+    //    (bookkeeping — it says nothing a reader of the run would act on). Still
+    //    null, but decided rather than fallen through.
+    //  · a genuinely UNKNOWN kind no longer returns null at all. That is the
+    //    whole card: the defect was never the missing arm, it was the silent
+    //    floor beneath it, which made every frame added upstream invisible with
+    //    no signature. `plan-change-frame-totality.test.ts` is where that is
+    //    asserted properly, on the ABSENCE of the silent path.
     expect(narrateFrame('token', { text: 'hi' })).toBeNull();
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(narrateFrame('genuinely_unknown_frame', {})).toEqual({
+      kind: 'unknown',
+      frame: 'genuinely_unknown_frame',
+    });
+    warn.mockRestore();
+
     expect(narrateFrame('search', undefined)).toEqual({ kind: 'searching' });
   });
 
@@ -797,9 +821,16 @@ describe('narrateFrame — the frames the augment job really emits', () => {
 // floor. Each one below is a real thing the hook does and nothing asserted.
 
 describe('usePlanChangeConversation — the quiet arms', () => {
-  it('ignores a job frame it has no narration for', async () => {
-    // `narrateFrame` returns null for anything outside the known set, and the
-    // run must leave `progress` alone rather than clearing the line mid-flight.
+  it('⚠️ AMENDED (MOTIR-4069) — a frame it has no narration for now NARRATES, loudly', async () => {
+    // This read "ignores a job frame it has no narration for", and its comment
+    // said `narrateFrame` "returns null for anything outside the known set". That
+    // was an accurate description of the code and the exact behaviour MOTIR-4069
+    // removes: an unaccounted frame reached this rail and vanished, with no
+    // signature, for the whole life of `retrieval`.
+    //
+    // What is UNCHANGED and still worth asserting is the run itself: an odd frame
+    // must not derail the settle. It reaches `review` either way — which is why
+    // this test survives the amendment rather than being deleted.
     stream.mockImplementationOnce(
       async (
         _jobId: string,
@@ -811,6 +842,7 @@ describe('usePlanChangeConversation — the quiet arms', () => {
         onFrame?.('some_future_frame', { x: 1 });
       },
     );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { result } = await mounted();
 
     await act(async () => {
@@ -818,6 +850,13 @@ describe('usePlanChangeConversation — the quiet arms', () => {
     });
 
     expect(result.current.state.phase).toBe('review');
+    // The frame is on the rail rather than dropped, and it named itself.
+    expect(result.current.state.acts).toContainEqual({
+      kind: 'unknown',
+      frame: 'some_future_frame',
+    });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('DISCARD with nothing to decline still clears the thread’s decision state', async () => {
@@ -1023,5 +1062,66 @@ describe('usePlanChangeConversation — the quiet arms', () => {
     });
 
     expect(result.current.state.decided).toBeNull();
+  });
+});
+
+describe('usePlanChangeConversation — THE ACT RAIL is a record (MOTIR-4069)', () => {
+  it('opens with the act that started the run, adds the hand-off, then every frame IN ORDER, and never de-duplicates', async () => {
+    // Two `retrieval` frames in a row mean the planner made two lookups; a rail
+    // that folded them into "2 lookups" would have turned a record into a
+    // summary (`design/ai-chat/plan-change-run-live.mock.html` sheet 3).
+    stream.mockImplementationOnce(
+      async (
+        _jobId: string,
+        _signal: AbortSignal,
+        _onError: (code: string | null) => void,
+        _onDone: () => void,
+        onFrame?: (event: string, data: unknown) => void,
+      ) => {
+        onFrame?.('retrieval', { tool: 'get_item', family: 'plan_tree' });
+        onFrame?.('retrieval', { tool: 'get_item', family: 'plan_tree' });
+        onFrame?.('token', { text: 'ignored' });
+        onFrame?.('note', { act: 'author', ref: 'MOTIR-1', text: 'billing already owns this' });
+        onFrame?.('planned', { proposed: 2 });
+      },
+    );
+    const { result } = await mounted();
+
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+
+    // The ONE DOOR sends as an ask — whose opening act is `reading` — the ask
+    // settles `redirected`, and the plan run narrates from there. So the record
+    // is: the read, the hand-off, the frames. `token` is a QUIET decision and
+    // leaves no row.
+    expect(result.current.state.acts).toEqual([
+      { kind: 'reading' },
+      { kind: 'redirected' },
+      { kind: 'retrieval', family: 'plan_tree', blocked: false },
+      { kind: 'retrieval', family: 'plan_tree', blocked: false },
+      { kind: 'note', text: 'billing already owns this' },
+      { kind: 'proposed', count: 2 },
+    ]);
+    // Settled: the live line clears, the record does NOT — it is what the review
+    // block underneath it is a decision about.
+    expect(result.current.state.progress).toBeNull();
+    expect(result.current.state.phase).toBe('review');
+  });
+
+  it('a NEW run starts its record from its own opening act', async () => {
+    const { result } = await mounted();
+    await act(async () => {
+      await result.current.send('Add recurring invoices.');
+    });
+    const first = result.current.state.acts.length;
+    expect(first).toBeGreaterThan(0);
+
+    await act(async () => {
+      await result.current.send('And late fees.');
+    });
+    // Not `first + n`: the rail is per-RUN.
+    expect(result.current.state.acts[0]).toEqual({ kind: 'reading' });
+    expect(result.current.state.acts.length).toBeLessThanOrEqual(first);
   });
 });

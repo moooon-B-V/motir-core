@@ -737,6 +737,11 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/expand/[jobId]/stream/route.ts',
     'app/api/ai/explanation/[jobId]/stream/route.ts',
     'app/api/ai/jobs/[jobId]/route.ts',
+    // The boundary MAILBOX (Story MOTIR-4054 · MOTIR-4067 / MOTIR-4068): a turn
+    // or a stop attached to a job that is ALREADY running and already paid for —
+    // one row each, no model job submitted, the `turns` precedent exactly.
+    'app/api/ai/plan-change/session/mailbox/route.ts',
+    'app/api/ai/plan-change/session/mailbox/stop/route.ts',
     'app/api/ai/plan-change/session/planner-turn/route.ts',
     'app/api/ai/plan-change/session/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',

@@ -193,26 +193,36 @@ export async function expectSignUpHasNoLegalNotice(page: Page): Promise<void> {
 }
 
 /**
- * The rail offers a Legal door onto the configured INDEX — derived from the
- * documents' shared base, not a fifth configuration value and not a path on
- * this host.
+ * The Help menu offers a Legal documents door onto the configured INDEX —
+ * derived from the documents' shared base, not a fifth configuration value
+ * and not a path on this host.
+ *
+ * ⚠️ RE-HOMED OFF THE RAIL (MOTIR-4239) — the door opens the shell's Help
+ * menu (rail footer at `≥ md`, the default viewport this lane runs at) and
+ * reads the row from inside it, then closes the menu again so it does not
+ * leak state into whatever the caller does next.
  */
 export async function expectRailLegalRow(page: Page): Promise<void> {
-  const legal = page.getByRole('link', { name: 'Legal', exact: true });
+  await page.getByRole('button', { name: 'Help' }).click();
+  const legal = page.getByRole('link', { name: 'Legal documents', exact: true });
   await expect(legal).toBeVisible();
   await expect(legal).toHaveAttribute('href', E2E_LEGAL_BASE);
+  await page.keyboard.press('Escape');
 }
 
 /**
- * The rail has NO Legal row — with the Docs row beside it as the control.
+ * The Help menu has NO Legal documents row — with Docs beside it as the
+ * control.
  *
  * ⚠️ THE CONTROL IS LOAD-BEARING AND IT IS ALSO CONDITIONAL NOW. `lib/docs/
  * links.ts` resolves the Docs row from an operator's absolute `MOTIR_DOCS_URL`
  * and renders nothing when it is unset, so this helper only works in a lane
  * that configures one. Both lanes that call it do (see either config). Without
- * it, "no Legal row" and "no rail" are the same observation.
+ * it, "no Legal documents row" and "no menu" are the same observation.
  */
 export async function expectNoRailLegalRow(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Help' }).click();
   await expect(page.getByRole('link', { name: 'Docs', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Legal', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Legal documents', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
 }
