@@ -953,14 +953,12 @@
       "jobRuns": "任务运行",
       "git": "Git",
       "github": "GitHub",
-      "docs": "文档",
       "backlog": "待办列表",
       "triage": "分流",
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
       "resumeOnboardingInProgress": "继续引导，进行中",
-      "legal": "法律条款",
       "security": "安全"
     },
     "topNav": {
@@ -1016,6 +1014,12 @@
       "platformAdmin": "平台管理",
       "platformAdminHint": "运维控制台·全部租户",
       "staffOnly": "仅限员工"
+    },
+    "help": {
+      "label": "帮助",
+      "docs": "文档",
+      "shortcuts": "键盘快捷键",
+      "legal": "法律文件"
     },
     "account": {
       "signOut": "退出登录",
@@ -1186,6 +1190,14 @@
     "archivedBannerMeta": "由 <strong>{name}</strong> 于 {date} 归档 · 已从看板和列表中隐藏，但其历史会被保留。",
     "archivedBannerRestoreTail": "恢复即可重新启用。",
     "archivedByUnknownActor": "已离开的成员",
+    "pendingPlanModifyHeadline": "有一个计划提议修改此工作项",
+    "pendingPlanRemoveHeadline": "有一个计划提议归档此工作项",
+    "pendingPlanMeta": "此处尚未发生任何更改——提议仅在计划获批准后才会生效。",
+    "pendingPlanReview": "查看计划",
+    "pendingPlanReviewAria": "查看提及 {key} 的计划",
+    "pendingPlanCountHeadline": "{count, plural, other {# 个待定计划提及此工作项}}",
+    "pendingPlanRowModify": "——提议修改",
+    "pendingPlanRowRemove": "——提议将其归档",
     "edit": "编辑",
     "description": "描述",
     "descriptionGloss": "做什么",
@@ -6181,7 +6193,12 @@
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
         "validating": "正在对照你的计划校验提议…",
         "reading": "正在理解你的请求……",
-        "redirected": "正在生成方案……"
+        "redirected": "正在生成方案……",
+        "retrieval": "正在读取计划…",
+        "laying": "正在铺开层级…",
+        "authoring": "正在撰写工作项…",
+        "note": "正在思考…",
+        "unknown": "进行中…"
       },
       "error": {
         "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
@@ -6219,7 +6236,42 @@
       "correcting": "正在重新理解……",
       "correctedToPlan": "已改按计划变更理解",
       "correctedToAsk": "已改按提问理解",
-      "handoff": "按计划变更理解 — 正在生成方案"
+      "handoff": "按计划变更理解 — 正在生成方案",
+      "stop": "停止",
+      "stoppingAction": "正在停止…",
+      "stopping": "正在停止 —— 先完成当前这个工作项。",
+      "stopped": "你停止了这次运行。",
+      "queuedLabel": "待读",
+      "queuedRead": "已读",
+      "queuedMarker": "已排队 —— Motir AI 写完当前这个工作项后会读到。",
+      "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。",
+      "act": {
+        "submitted": "提交",
+        "reading": "阅读",
+        "redirected": "转交",
+        "retrieval": "检索",
+        "searching": "搜索",
+        "drilling": "下钻",
+        "laying": "铺层",
+        "authoring": "撰写",
+        "note": "说明",
+        "proposed": "提案",
+        "validating": "校验",
+        "unknown": "帧",
+        "retrievalLine": "读取 {family}",
+        "retrievalBlockedLine": "检索额度已用尽 —— 以现有信息继续。",
+        "layingLine": "正在铺开 {target}",
+        "authoringLine": "正在撰写 {title}",
+        "unknownLine": "帧：{frame}",
+        "retrievalLineBare": "读取了计划的来源",
+        "family": {
+          "planTree": "计划树",
+          "codeGraph": "代码图谱",
+          "codeHealth": "代码健康度",
+          "web": "网页",
+          "lessons": "经验教训"
+        }
+      }
     },
     "targets": {
       "sectionLabel": "工作项",

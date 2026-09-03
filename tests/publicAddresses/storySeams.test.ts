@@ -224,6 +224,109 @@ describe('seam (b) — a domain walked to primary reaches the DTO and the crawl 
   });
 });
 
+/* ── seam (e): the CONFIGURED records → the array the pane renders ────────── */
+
+describe('seam (e) — every record a customer must create reaches the payload the pane renders', () => {
+  // ⚠️ THE SEAM NOTHING ASSERTED, AND THE ONE THE STORY SHIPPED BROKEN
+  // (MOTIR-4278). The adapter parsed the pointing records, the DTO's type union
+  // allowed `A` / `AAAA` / `CNAME`, and the pane rendered whatever `dns`
+  // contained — three correct halves with nothing between them, so every suite
+  // passed while `dns[]` carried the ownership `TXT` and nothing else. A
+  // customer could prove they owned a domain and was never told where to point
+  // it. What was missing was not a branch: it was an assertion that the array
+  // the pane renders is ever NON-TRIVIALLY populated.
+
+  beforeEach(() => {
+    process.env['MOTIR_PUBLIC_ADDRESS_CNAME_TARGET'] = 'motir-marketing.fly.dev';
+    process.env['MOTIR_PUBLIC_ADDRESS_A_RECORDS'] = '66.241.125.217';
+    process.env['MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS'] = '2a09:8280:1::17d:93fd:0';
+  });
+
+  afterEach(() => {
+    delete process.env['MOTIR_PUBLIC_ADDRESS_CNAME_TARGET'];
+    delete process.env['MOTIR_PUBLIC_ADDRESS_A_RECORDS'];
+    delete process.env['MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS'];
+  });
+
+  it('a subdomain and an apex each reach `list` with their POINTING record, not only the TXT', async () => {
+    await onAPaidTier();
+    for (const hostname of ['roadmap.acme.test', 'acme-roadmap.test']) {
+      await customDomainService.add({
+        key: 'ACME',
+        hostname,
+        actorUserId: acme.ownerId,
+        ctx: ctx(),
+      });
+    }
+
+    // Through the REAL repository read the pane uses — not the `add` return
+    // value, which is the one path that could have carried a record the stored
+    // row does not produce.
+    const listed = await customDomainService.list({
+      key: 'ACME',
+      actorUserId: acme.ownerId,
+      ctx: ctx(),
+    });
+
+    const subdomain = listed.find((a) => a.hostname === 'roadmap.acme.test');
+    const apex = listed.find((a) => a.hostname === 'acme-roadmap.test');
+
+    // The record set follows the hostname's SHAPE (ADR §5's table), and the
+    // record that makes the address WORK comes first.
+    expect(subdomain?.dns).toEqual([
+      { type: 'CNAME', name: 'roadmap.acme.test', value: 'motir-marketing.fly.dev' },
+      { type: 'TXT', name: '_motir-verify.roadmap.acme.test', value: expect.any(String) },
+    ]);
+    expect(apex?.dns).toEqual([
+      { type: 'A', name: 'acme-roadmap.test', value: '66.241.125.217' },
+      { type: 'AAAA', name: 'acme-roadmap.test', value: '2a09:8280:1::17d:93fd:0' },
+      { type: 'TXT', name: '_motir-verify.acme-roadmap.test', value: expect.any(String) },
+    ]);
+
+    // ⚠️ THE NON-TRIVIALITY ASSERTION ITSELF, stated separately from the tables
+    // above so it survives them being rewritten: an address a customer connects
+    // is never told to create ONLY the record that proves ownership. That
+    // sentence is the whole defect, and it is the one a future edit must break
+    // to re-introduce it.
+    for (const address of [subdomain, apex]) {
+      expect(address?.dns.every((r) => r.type === 'TXT')).toBe(false);
+    }
+  });
+
+  it('a NON-customer address in the list is told to create nothing — the wildcard serves it', async () => {
+    // The mirror arm, and the reason the pointing records are gated on the
+    // address KIND rather than added unconditionally: a name under our own base
+    // is already pointed and already covered by the wildcard (ADR §6), so a
+    // record here would be an instruction to edit DNS the customer does not
+    // control.
+    //
+    // ⚠️ The row is written DIRECTLY, because the guard's whole point is that
+    // nothing structural stops this shape reaching the mapper: `project_id` is
+    // nullable and unconstrained by `kind`, and `listForProjectInTx` filters on
+    // the project alone. The service never mints such a row — which is exactly
+    // why the guard would otherwise be an untested claim about a state the store
+    // can hold.
+    await adminDb.publicAddress.create({
+      data: {
+        workspaceId: acme.workspaceId,
+        projectId: acme.projectId,
+        hostname: `acme.${BASE}`,
+        kind: 'workspace_subdomain',
+        status: 'active',
+      },
+    });
+
+    const listed = await customDomainService.list({
+      key: 'ACME',
+      actorUserId: acme.ownerId,
+      ctx: ctx(),
+    });
+    const subdomain = listed.find((a) => a.hostname === `acme.${BASE}`);
+    expect(subdomain?.kind).toBe('workspace_subdomain');
+    expect(subdomain?.dns).toEqual([]);
+  });
+});
+
 /* ── seam (c): the entitlement cap under REAL concurrency ─────────────────── */
 
 describe('seam (c) — the cap holds when two adds race', () => {

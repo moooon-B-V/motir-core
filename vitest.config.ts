@@ -1801,6 +1801,43 @@ export default defineConfig({
         'app/**/items/\\[key\\]/edit/page.tsx',
         'app/**/code-health/page.tsx',
         'app/**/invite/accept/page.tsx',
+        // Story MOTIR-4237 · Subtask MOTIR-4240 — THE HELP MENU, and the context
+        // the story widened to give it a door. Both were built by MOTIR-4239 and
+        // neither was in this report, so the per-file floor did not reach the
+        // one surface this story actually adds.
+        //
+        // MEASURED FIRST, on this branch, before either was pinned — this list's
+        // own sequence. `pnpm vitest run --coverage` over the fifteen component
+        // specs that reach them:
+        //
+        //   HelpMenu.tsx               100 stmts · 100 branch · 100 fn · 100 lines
+        //   CommandPaletteProvider.tsx 100 stmts · 100 branch · 100 fn · 100 lines
+        //
+        // Both GATED in `thresholds` below, at the 90 floor rather than at the
+        // measured 100, so a later refactor has room without anyone loosening a
+        // gate to make a build pass.
+        'app/**/_components/HelpMenu.tsx',
+        'app/**/_components/CommandPaletteProvider.tsx',
+        // ⚠️ `SidebarNav.tsx` is REPORT-ONLY — it is in `include` and
+        // deliberately NOT in `thresholds`, and the reason is a FINDING rather
+        // than a gap to close later. MEASURED across every component spec that
+        // reaches it (292 files, 3 405 tests, on this branch):
+        //
+        //   SidebarNav.tsx  97.22 stmts · 84 branch · 88.88 fn · 97.22 lines
+        //
+        // The one uncovered function is `SoonChip`, the Automation slot's
+        // placeholder badge. It renders only for a registry entry carrying
+        // `placeholder: true`, and `grep -rn 'placeholder: true' lib/ app/
+        // components/` returns NOTHING — both settings registries have since
+        // flipped every placeholder they reserved into a real entry. So the
+        // function is unreachable from the product, and the only way to a 90%
+        // function figure is to fabricate a registry entry no shipped surface
+        // has, which asserts the fixture rather than the code. A number below
+        // the floor is a finding to state, not a bar to lower, and it is not
+        // MOTIR-4237's to close: this story edited the file by DELETION (the
+        // `Docs` and `Legal` rows left for the Help menu) and added nothing to
+        // it. Filed as its own bug.
+        'app/**/_components/SidebarNav.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3469,6 +3506,26 @@ export default defineConfig({
         // Pinned at the 90 floor rather than at the measured number, so a later
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/github/checkSuites.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-4237 · Subtask MOTIR-4240 — the Help menu and the context
+        // widened to give it a door, both MEASURED at 100 on all four axes
+        // before being pinned (see the `include` block). Pinned at the 90 floor
+        // rather than at the measured 100, so a later refactor has room without
+        // anyone loosening a gate to make a build pass.
+        //
+        // ⚠️ `SidebarNav.tsx` is NOT here, on purpose — it is report-only, for
+        // the reason its `include` entry states.
+        'app/**/_components/HelpMenu.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/CommandPaletteProvider.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
       },
     },
   },

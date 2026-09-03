@@ -938,3 +938,62 @@ export interface PlanOutcomeDto {
   /** The job's state — present ONLY while `status === 'generating'`. */
   job: PlanJobStateDto | null;
 }
+
+/**
+ * The plan statuses the WORK-ITEM PAGE announces — a plan a person still has to
+ * DECIDE about, that proposes to change or archive the card being read
+ * (bug MOTIR-4197 · design MOTIR-4256 §5).
+ *
+ * ⚠️ NOT `AI_PENDING_PLAN_STATUSES`, and deliberately so. That set answers *is a
+ * planning run in flight for this PROJECT?* (saturation, for a prompt) and is
+ * `['generating', 'planned', 'stale']`. This one answers *is a decision pending
+ * about THIS card?*, and the two come apart on exactly one member: a
+ * `generating` plan is still being appended, so a `modify` naming this card may
+ * not survive to `planned` — announcing it announces a claim nobody has finished
+ * making. A predicate is classified by the QUESTION it asks (MOTIR-4129), so the
+ * two are two constants rather than one with a caller-supplied filter.
+ *
+ * `stale` IS a member: the schema says it outright — *"NOT terminal and NOT
+ * decided: the plan is live and awaiting action"* — and it is reachable only
+ * from `planned`, so a plan wearing it has by construction already reached a
+ * reviewer. The indicator shows it the same copy and the same link; whether a
+ * plan has drifted is the PLAN's property, and `/plans` already says so.
+ */
+export const WORK_ITEM_PENDING_PLAN_STATUSES = [
+  'planned',
+  'stale',
+] as const satisfies readonly PlanStatusDto[];
+
+/** The statuses the work-item page says NOTHING for — the not-yet-closed one
+ *  and the decided pair. Written as its own list so the two together are TOTAL
+ *  over `PlanStatusDto`, which `tests/integration/plans/pendingPlanIndicator.test.ts`
+ *  asserts: a sixth status lands in neither list and turns that assertion red
+ *  instead of quietly falling out of the item page's predicate. */
+export const WORK_ITEM_PENDING_PLAN_SILENT_STATUSES = [
+  'generating',
+  'approved',
+  'declined',
+] as const satisfies readonly PlanStatusDto[];
+
+/** A plan status the work-item page announces. */
+export type WorkItemPendingPlanStatusDto = (typeof WORK_ITEM_PENDING_PLAN_STATUSES)[number];
+
+/**
+ * ONE undecided proposal about ONE work item, as the item page reads it
+ * (MOTIR-4197). One row per plan: `PlanItem` is `@@unique([planId, workItemId])`,
+ * so a plan holds at most one `modify` / `remove` naming a given card.
+ *
+ * Deliberately the POINTER and nothing more — the plan's id (the link), its
+ * title (the link's name) and the op (which sentence). The proposed VALUES are
+ * read on the plan-review surfaces; a third surface rendering them is the
+ * defect the card exists to remove, not the fix.
+ */
+export interface WorkItemPendingProposalDto {
+  planId: string;
+  /** `Plan.title` is nullable; the page falls back to `planReview.untitledPlan`. */
+  planTitle: string | null;
+  planStatus: WorkItemPendingPlanStatusDto;
+  /** `add` cannot name an existing card (its `workItemId` is null until
+   *  materialize), so only the two ops that TARGET a card can arrive here. */
+  op: Exclude<PlanItemOpDto, 'add'>;
+}

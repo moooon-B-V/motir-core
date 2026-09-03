@@ -6,67 +6,92 @@
     <title>The plan detail — a LIST beside the canvas — MOTIR-3234</title>
     <style>
       /* ----------------------------------------------------------------------
-         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
-         light theme / warm-editorial / motir palette). This standalone mock uses
-         the same VALUES so it renders without the Tailwind build, exactly as the
-         sibling assets (design/ai-chat/*.mock.html, design/roadmap/*.mock.html) do.
-         Nothing here re-defines shape/colour semantics — it re-states them so a
-         plain browser paints the real palette.
+         Token block — the `--el-*` ELEMENT-token layer, resolved to the LIGHT /
+         warm-editorial / motir values the running app computes, exactly as the
+         sibling asset `plan-revision.mock.html` states them. A plain browser
+         paints the real palette without the Tailwind build.
+
+         ⚠️ MOTIR-4277 — this block USED to alias the same values onto private
+         names (`--muted: #787671`, `--soft: #fafaf9`, …). The values were
+         right and that was the trap: a raw hex does not flip with
+         `data-palette`, does not follow a re-skin, and is invisible to every
+         ink guard in the tree, all of which key on `--el-*`. So
+         a `.prow:hover` painting the local `--soft` alias under a
+         `.chg .from` inked with the local `--muted` one specified 4.34:1 —
+         the pairing `CLAUDE.md`'s measured table forbids — under a green
+         `design-ink-contrast`. Consume the token layer, and the guard can see
+         the asset.
       ---------------------------------------------------------------------- */
       :root {
-        /* text */
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --secondary: #5d5b54;
-        --muted: #787671;
-        --faint: #a4a097;
-        /* surfaces */
-        --page: #f4f3f1;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        /* borders */
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --border-strong: #d3cfc8;
-        /* accent */
-        --accent: #5645d4;
-        --accent-pressed: #4534b3;
-        --accent-soft: #f4f2fd;
-        --highlight: #ff64c8;
-        /* status / intent */
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --danger: #e03131;
-        --info: #0075de;
-        /* tints */
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --mint: #d9f3e1;
-        --lavender: #e6e0f5;
-        --sky: #dcecfa;
-        --danger-surface: #fde0ec;
-        --warning-surface: #ffe8d4;
-        /* work-item type hues */
-        --t-epic: #ff64c8;
-        --t-epic-soft: #ffe3f5;
-        --t-story: #1aae39;
-        --t-story-soft: #d9f3e1;
-        --t-task: #0075de;
-        --t-task-soft: #dcecfa;
-        --t-bug: #e03131;
-        --t-subtask: #2a9d99;
-        --t-subtask-soft: #d6f0ee;
-        /* shape */
-        --r-card: 12px;
-        --r-btn: 10px;
-        --r-control: 8px;
-        --r-pill: 999px;
-        --sh-subtle: 0 1px 2px #0000000d;
-        --sh-card: 0 2px 6px #0000000f;
-        --sh-elev: 0 4px 14px #00000014;
-        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        /* ── Ink ─────────────────────────────────────────────────────────
+           `--el-text-muted` and `--el-text-faint` are DECLARED and not used as
+           active informational ink: muted is 4.12–4.34:1 on every tinted
+           surface and faint clears AA on none (CLAUDE.md's measured table).
+           Declaring them still matters — `mockStateInkScan` resolves a token
+           by planting a probe, and an asset that declares neither reports its
+           faint ink as muted. Faint is used only for the strike-through RULE
+           colour and for the id on an archived `.node.remove`, which is
+           inactive text 1.4.3 exempts. */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-identifier: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        /* ── Surfaces ─────────────────────────────────────────────────── */
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-tabnav-track: #f6f5f4;
+
+        /* ── Borders ──────────────────────────────────────────────────── */
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        /* ── Accent ───────────────────────────────────────────────────── */
+        --el-accent: #5645d4;
+        --el-accent-on-surface: #5645d4;
+        --el-accent-text: #ffffff;
+
+        /* ── Status ───────────────────────────────────────────────────── */
+        --el-success: #1aae39;
+        --el-info: #0075de;
+
+        /* ── Tints + semantic surfaces ────────────────────────────────── */
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-danger-surface: #fde0ec;
+        --el-warning-surface: #ffe8d4;
+
+        /* ── Work-item type hues ──────────────────────────────────────── */
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-subtask: #2a9d99;
+
+        /* ── The accent WASH, palette-DERIVED rather than invented ──────
+           The plan-diff language this asset decided (Part VIII) paints an
+           `add` node and its rail chip in a wash far lighter than
+           `--el-tint-lavender`, and no `--el-*` token exposes one. It is a
+           `color-mix` whose inputs are BOTH tokens — the form CLAUDE.md
+           blesses — so it re-tints with `data-palette` instead of freezing
+           the old `#f4f2fd`. */
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg));
+        --el-accent-wash-border: color-mix(in srgb, var(--el-accent) 12%, var(--el-page-bg));
+
+        /* ── Shape + type (element-semantic names; warm-editorial values) ── */
+        --radius-card: 12px;
+        --radius-btn: 10px;
+        --radius-control: 8px;
+        --radius-badge: 999px;
+        --shadow-subtle: 0 1px 2px #0000000d;
+        --shadow-card: 0 2px 6px #0000000f;
+        --shadow-elevated: 0 4px 14px #00000014;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       * {
@@ -74,8 +99,8 @@
       }
       body {
         margin: 0;
-        background: var(--page);
-        color: var(--text);
+        background: var(--el-surface);
+        color: var(--el-text);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
@@ -91,7 +116,7 @@
       }
       .doc-head p {
         margin: 0;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 14px;
         line-height: 1.5;
         max-width: 70ch;
@@ -103,17 +128,17 @@
         gap: 6px;
       }
       .ref {
-        font: 600 11px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
-        border: 1px solid #e3def8;
-        border-radius: var(--r-pill);
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
+        border: 1px solid var(--el-accent-wash-border);
+        border-radius: var(--radius-badge);
         padding: 3px 9px;
       }
       .ref.muted {
-        color: var(--secondary);
-        background: var(--hub);
-        border-color: var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-color: var(--el-border);
       }
 
       .panel {
@@ -126,9 +151,9 @@
         margin-bottom: 11px;
       }
       .panel-cap .n {
-        font: 700 12px var(--mono);
-        color: #fff;
-        background: var(--accent);
+        font: 700 12px var(--font-mono);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
         border-radius: 6px;
         padding: 2px 7px;
         letter-spacing: 0.02em;
@@ -139,13 +164,13 @@
       }
       .panel-cap span.note {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .frame {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 16px;
-        background: var(--surface);
-        box-shadow: var(--sh-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
         overflow: hidden;
       }
 
@@ -156,17 +181,17 @@
         height: 560px;
       }
       .nav a.on {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent-on-surface);
         font-weight: 600;
       }
       .nav a.on svg {
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
       .nav a .count {
         margin-left: auto;
-        font: 600 11px var(--mono);
-        color: var(--muted);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-secondary);
       }
 
       .main {
@@ -176,7 +201,7 @@
       }
       .topbar {
         height: 50px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--el-border);
         display: flex;
         align-items: center;
         gap: 10px;
@@ -189,7 +214,7 @@
       }
       .topbar .sub {
         font-size: 12.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .topbar .grow {
         margin-left: auto;
@@ -199,7 +224,7 @@
         align-items: center;
         gap: 7px;
         border: 0;
-        border-radius: var(--r-btn);
+        border-radius: var(--radius-btn);
         padding: 8px 13px;
         font-size: 13px;
         font-weight: 600;
@@ -210,17 +235,17 @@
         height: 15px;
       }
       .btn.primary {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .btn.secondary {
         background: transparent;
-        color: var(--strong);
-        border: 1px solid var(--border-strong);
+        color: var(--el-text-strong);
+        border: 1px solid var(--el-border-strong);
       }
       .btn.ghost {
         background: transparent;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       /* ⚠️ `.ghost` is ALSO the canvas's off-level blocker anchor — absolutely
          positioned, danger-dashed, hatched. A `class="btn ghost"` therefore
@@ -230,7 +255,7 @@
          J — MOTIR-3234.) */
       .btn.quiet {
         background: transparent;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .btn.sm {
         padding: 6px 10px;
@@ -247,7 +272,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         padding: 2px 9px;
         font-size: 11.5px;
         font-weight: 600;
@@ -258,24 +283,24 @@
         height: 12px;
       }
       .pill.generating {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       .pill.planned {
-        background: var(--lavender);
-        color: #3a2d8a;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
       }
       .pill.approved {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
       }
       .pill.declined {
-        background: var(--mutedfill);
-        color: var(--muted);
+        background: var(--el-muted);
+        color: var(--el-text-strong);
       }
       .pill.stale {
-        background: var(--warning-surface);
-        color: #8a3d00;
+        background: var(--el-warning-surface);
+        color: var(--el-text-strong);
       }
       .hdrtop .pill {
         align-self: flex-start;
@@ -283,17 +308,17 @@
       }
 
       .pill.count {
-        background: var(--hub);
-        color: var(--secondary);
-        border: 1px solid var(--border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
         font-weight: 600;
       }
       .spin {
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        border: 2px solid #b9d4f2;
-        border-top-color: var(--info);
+        border: 2px solid color-mix(in srgb, var(--el-info) 30%, var(--el-page-bg));
+        border-top-color: var(--el-info);
         display: inline-block;
         animation: sp 0.9s linear infinite;
       }
@@ -305,7 +330,7 @@
       .node .ttl {
         font-size: 13px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         line-height: 1.25;
         margin-top: 1px;
       }
@@ -314,7 +339,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         padding: 2px 8px;
         font-size: 10.5px;
         font-weight: 700;
@@ -326,23 +351,24 @@
 
       /* op treatments */
       .node.add {
-        border: 1.5px dashed var(--accent);
-        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
-        box-shadow: 0 0 0 3px #5645d41a;
+        border: 1.5px dashed var(--el-accent);
+        background:
+          linear-gradient(0deg, var(--el-accent-wash), var(--el-accent-wash)), var(--el-card);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 10%, transparent);
       }
       .opbadge.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .node.modify {
-        border-color: var(--info);
+        border-color: var(--el-info);
         box-shadow:
-          0 0 0 1px var(--info) inset,
-          var(--sh-subtle);
+          0 0 0 1px var(--el-info) inset,
+          var(--shadow-subtle);
       }
       .opbadge.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
          Deliberately NOT red/dashed/hatched — that language is reserved for the
@@ -350,29 +376,29 @@
          shipped canvas language we compose. Archive is reversible, not an error,
          so it reads as greyscale + strike-through, like the cancelled status hue. */
       .node.remove {
-        border: 1px solid var(--border-strong);
-        background: var(--mutedfill);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
         opacity: 0.66;
         filter: grayscale(0.5);
       }
       .node.remove .ttl {
         text-decoration: line-through;
-        text-decoration-color: var(--faint);
-        color: var(--muted);
+        text-decoration-color: var(--el-text-faint);
+        color: var(--el-text-secondary);
       }
       .node.remove .id {
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .opbadge.remove {
-        background: var(--mutedfill);
-        color: var(--secondary);
-        border: 1px solid var(--border-strong);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border-strong);
       }
 
       /* ---- review rail ---- */
       .rail {
-        background: var(--surface);
-        border-left: 1px solid var(--border);
+        background: var(--el-card);
+        border-left: 1px solid var(--el-border);
         display: flex;
         flex-direction: column;
         min-width: 0;
@@ -382,19 +408,19 @@
         align-items: center;
         gap: 8px;
         padding: 13px 16px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .railhead .g {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: var(--success);
+        background: var(--el-success);
       }
       .railhead .lab {
-        font: 600 11px var(--mono);
+        font: 600 11px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: #54514b;
+        color: var(--el-text-secondary);
       }
       .railbody {
         flex: 1;
@@ -405,12 +431,12 @@
         overflow: auto;
       }
       .opc.add {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent-on-surface);
       }
       .opc.rem {
-        background: var(--danger-surface);
-        color: #9b1c4b;
+        background: var(--el-danger-surface);
+        color: var(--el-text-strong);
       }
       .tl .body {
         padding-bottom: 13px;
@@ -418,43 +444,43 @@
       .tl .body .ev {
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .tl .body .at {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-top: 1px;
       }
       .tl.pending .body .ev {
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
 
       /* A NEUTRAL explanatory note (MOTIR-2985) — `.callout` is the warning
          treatment and would read as one. */
       .note-box {
         margin: 14px 18px 4px;
-        border: 1px solid var(--border);
-        background: var(--soft);
-        border-radius: var(--r-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
         padding: 11px 13px;
         font-size: 12.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .note-box b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .note-box code {
-        font: 600 11.5px var(--mono);
-        background: var(--hub);
-        border: 1px solid var(--border);
+        font: 600 11.5px var(--font-mono);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
         border-radius: 5px;
         padding: 1px 5px;
       }
 
       .decide {
         padding: 13px 16px;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -465,7 +491,7 @@
       }
       .decide .hint {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         text-align: center;
       }
       .estate .acts {
@@ -511,27 +537,27 @@
         margin-left: auto;
       }
       .opchip .seg.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .opchip .seg.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       .opchip .seg.remove {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       /* The establish step, composed from its SHIPPED markup (MOTIR-1782).
          Panel H changes its CONTAINER and not one pixel inside it. */
       .estep {
         padding: 20px 22px;
-        background: var(--surface);
+        background: var(--el-card);
       }
       .estep .eyebrow {
-        font: 700 10.5px var(--mono);
+        font: 700 10.5px var(--font-mono);
         letter-spacing: 0.09em;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .estep h3 {
         margin: 8px 0 6px;
@@ -541,7 +567,7 @@
       .estep p {
         margin: 0;
         font-size: 12.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         line-height: 1.55;
       }
       .estep .callout {
@@ -549,21 +575,21 @@
         display: flex;
         gap: 9px;
         padding: 11px 12px;
-        background: var(--soft);
-        border: 1px solid var(--hair);
-        border-radius: var(--r-card);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
         font-size: 12px;
         line-height: 1.5;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .estep .callout svg {
         flex: none;
         width: 15px;
         height: 15px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .estep .callout b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .estep .erow {
         margin-top: 12px;
@@ -574,22 +600,22 @@
       .estep .ebtn {
         display: inline-flex;
         align-items: center;
-        border-radius: var(--r-btn);
+        border-radius: var(--radius-btn);
         padding: 7px 14px;
         font-size: 12.5px;
         font-weight: 600;
       }
       .estep .ebtn-primary {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .estep .ebtn-quiet {
-        color: var(--info);
+        color: var(--el-info);
       }
       /* The BAND: the same step, at the top of the pane, on a hairline. */
       .estep.band {
         padding: 14px 18px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--el-border);
       }
       .estep.band h3 {
         margin: 6px 0 0;
@@ -599,19 +625,20 @@
         margin-top: 10px;
       }
       .mini.add {
-        border-color: var(--accent);
-        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+        border-color: var(--el-accent);
+        background:
+          linear-gradient(0deg, var(--el-accent-wash), var(--el-accent-wash)), var(--el-card);
       }
       .mini.modify {
-        border-color: var(--info);
+        border-color: var(--el-info);
       }
       .mini .mchip i.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .mini .mchip i.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       /* ---- Part VII (MOTIR-3233): the STATUS TAB STRIP ----------------
          The shipped `Segmented` primitive, restated in this mock's local tokens:
@@ -625,9 +652,9 @@
         display: inline-flex;
         align-items: center;
         gap: 2px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-btn);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-tabnav-track);
         padding: 2px;
       }
       .tabs .tab {
@@ -637,9 +664,9 @@
         height: 36px;
         padding: 0 10px;
         border: 0;
-        border-radius: calc(var(--r-btn) - 2px);
+        border-radius: calc(var(--radius-btn) - 2px);
         background: transparent;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 13px;
         font-weight: 500;
         font-family: inherit;
@@ -647,34 +674,34 @@
         cursor: pointer;
       }
       .tabs .tab.on {
-        background: var(--page);
-        color: var(--strong);
-        box-shadow: var(--sh-subtle);
+        background: var(--el-page-bg);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
       }
       .tabs .tab .n {
         font-size: 11px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .tabs .tab.on .n {
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
       /* The per-tab EMPTY state — quieter than the whole-surface one, and with
          no CTA. Composed from the shipped `EmptyState`'s structure at the
          smaller of its two sizes. */
       .tabempty {
-        border: 1px dashed var(--border);
-        border-radius: var(--r-card);
-        background: var(--soft);
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
         padding: 26px 18px;
         text-align: center;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .tabempty h4 {
         margin: 0 0 4px;
         font-size: 13.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .tabempty p {
         margin: 0;
@@ -686,10 +713,10 @@
         gap: 10px;
         align-items: center;
         padding: 0 18px 4px;
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       /* ---- Part VIII (MOTIR-3234): the plan-detail PANE HEADER, the LIST
          body, and the DISCARD door -------------------------------------
@@ -702,8 +729,8 @@
         gap: 10px;
         height: 44px;
         padding: 0 12px;
-        border-bottom: 1px solid var(--border);
-        background: var(--surface);
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-card);
         flex: none;
       }
       .panehead .right {
@@ -720,18 +747,18 @@
         gap: 6px;
         height: 30px;
         padding: 0 10px;
-        border: 1px dashed var(--border-strong);
-        border-radius: var(--r-btn);
-        background: var(--soft);
-        color: var(--secondary);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-btn);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
         font-size: 12.5px;
         font-weight: 500;
       }
       .ixslot .tag {
-        font: 700 9.5px var(--mono);
+        font: 700 9.5px var(--font-mono);
         letter-spacing: 0.04em;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
         border-radius: 4px;
         padding: 1px 4px;
       }
@@ -741,10 +768,10 @@
         overflow: auto;
       }
       .plist .grp {
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         display: flex;
         align-items: center;
         gap: 7px;
@@ -759,16 +786,16 @@
         gap: 10px;
         align-items: start;
         padding: 9px 10px;
-        border-radius: var(--r-control);
+        border-radius: var(--radius-control);
         border: 1px solid transparent;
       }
       .prow:hover {
-        background: var(--soft);
-        border-color: var(--hair);
+        background: var(--el-surface-soft);
+        border-color: var(--el-border-soft);
       }
       .prow .kind {
         margin-top: 1px;
-        color: var(--t-task);
+        color: var(--el-type-task);
       }
       .prow .kind svg {
         width: 15px;
@@ -781,19 +808,19 @@
       .prow .ttl {
         font-size: 13px;
         font-weight: 600;
-        color: var(--text);
+        color: var(--el-text);
         display: flex;
         align-items: baseline;
         gap: 7px;
       }
       .prow .ttl .key {
-        font: 600 11px var(--mono);
-        color: var(--muted);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-identifier);
         flex: none;
       }
       .prow .ttl .nokey {
-        font: 600 11px var(--mono);
-        color: var(--faint);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-secondary);
         flex: none;
       }
       .prow .facts {
@@ -802,10 +829,10 @@
         flex-wrap: wrap;
         gap: 10px;
         font-size: 11.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .prow .facts .where {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .prow .right {
         display: flex;
@@ -815,7 +842,7 @@
       }
       .prow.rem .ttl,
       .prow.rem .facts {
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .prow.rem .ttl span:not(.key) {
         text-decoration: line-through;
@@ -835,29 +862,29 @@
         align-items: baseline;
       }
       .chg .fl {
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .chg .from {
-        color: var(--muted);
+        color: var(--el-text-secondary);
         text-decoration: line-through;
       }
       .chg .to {
-        color: var(--strong);
+        color: var(--el-text-strong);
         font-weight: 600;
       }
       .chg .arrow {
-        color: var(--faint);
+        color: var(--el-text-secondary);
         padding: 0 5px;
       }
       /* The discard door on a still-generating plan (panel J). */
       .railbox {
         width: 352px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
         padding: 14px;
         display: grid;
         gap: 10px;
@@ -865,31 +892,31 @@
       .railbox .lead {
         font-size: 12.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .railbox .hint {
         font-size: 11.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         text-align: center;
       }
       .confirm {
         width: 420px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
-        box-shadow: var(--sh-elev);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
         padding: 16px;
       }
       .confirm h4 {
         margin: 0 0 6px;
         font-size: 14.5px;
-        color: var(--text);
+        color: var(--el-text);
       }
       .confirm p {
         margin: 0;
         font-size: 12.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .confirm .acts {
         margin-top: 14px;
@@ -954,7 +981,7 @@
                   <span class="ixslot"><span class="tag">IX</span>Show changes</span>
                 </div>
               </div>
-              <div class="estep band" style="border-bottom: 1px solid var(--border)">
+              <div class="estep band" style="border-bottom: 1px solid var(--el-border)">
                 <div class="erow">
                   <div>
                     <div class="eyebrow">Next</div>
@@ -969,8 +996,8 @@
                   flex: 1;
                   display: grid;
                   place-items: center;
-                  background: var(--soft);
-                  color: var(--secondary);
+                  background: var(--el-surface-soft);
+                  color: var(--el-text-secondary);
                   font-size: 12.5px;
                   text-align: center;
                   padding: 20px;
@@ -986,7 +1013,7 @@
                 <span class="lab">Marketplace payouts</span>
               </div>
               <div class="railbody">
-                <div style="font-size: 12.5px; color: var(--secondary)">
+                <div style="font-size: 12.5px; color: var(--el-text-secondary)">
                   the review rail, unchanged — its layout, its history timeline and its decision bar
                   are panel B's
                 </div>
@@ -1051,7 +1078,7 @@
               <div class="plist">
                 <div class="grp">Adds <span class="pill count">9</span></div>
                 <div class="prow">
-                  <span class="kind" style="color: var(--t-story)"
+                  <span class="kind" style="color: var(--el-type-story)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -1081,7 +1108,7 @@
                   </div>
                 </div>
                 <div class="prow">
-                  <span class="kind" style="color: var(--t-subtask)"
+                  <span class="kind" style="color: var(--el-type-subtask)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -1114,7 +1141,7 @@
                 </div>
                 <div class="grp">Updates <span class="pill count">4</span></div>
                 <div class="prow">
-                  <span class="kind" style="color: var(--t-task)"
+                  <span class="kind" style="color: var(--el-type-task)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -1162,7 +1189,7 @@
                   </div>
                 </div>
                 <div class="prow">
-                  <span class="kind" style="color: var(--t-task)"
+                  <span class="kind" style="color: var(--el-type-task)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -1200,7 +1227,7 @@
                 </div>
                 <div class="grp">Archives <span class="pill count">1</span></div>
                 <div class="prow rem">
-                  <span class="kind" style="color: var(--t-subtask)"
+                  <span class="kind" style="color: var(--el-type-subtask)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -1310,7 +1337,7 @@
                   <div class="plist" style="padding: 0">
                     <div class="grp">Created <span class="pill count">9</span></div>
                     <div class="prow">
-                      <span class="kind" style="color: var(--t-story)"
+                      <span class="kind" style="color: var(--el-type-story)"
                         ><svg
                           viewBox="0 0 24 24"
                           fill="none"
@@ -1338,7 +1365,7 @@
                     </div>
                     <div class="grp">Updated <span class="pill count">4</span></div>
                     <div class="prow">
-                      <span class="kind" style="color: var(--t-task)"
+                      <span class="kind" style="color: var(--el-type-task)"
                         ><svg
                           viewBox="0 0 24 24"
                           fill="none"

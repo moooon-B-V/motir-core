@@ -217,6 +217,85 @@ sum — are retired by §3's first two bullets respectively.
 `ci-minutes-allowance.md` §J is otherwise untouched: nothing here routes a job anywhere,
 sets `MOTIR_RUNNER`, or changes what `motir-core` runs on.
 
+## §6.1 — THE MEASUREMENT §6 ASKED FOR, taken 2026-09-03 (~28 h after the rule was applied)
+
+The `merge_queue` rule went onto ruleset `17227448` at ~`2026-09-02T14:40Z` with §5's
+parameters exactly. Window: that moment to `2026-09-03T15:16Z`. **78 queue builds over 51
+distinct pull requests, 38 push-to-`main` runs, 39 merges on 2026-09-03.**
+
+### 1. Did `main` go red? **NO — not once.** This is the primary claim and it holds.
+
+| push-to-`main` runs         | success | cancelled | **failure** |
+| --------------------------- | ------- | --------- | ----------- |
+| **Before** the queue (n=35) | 18      | 9         | **8**       |
+| **After** the queue (n=38)  | 37      | 1         | **0**       |
+
+The one remaining `cancelled` is a concurrency eviction, not a red trunk. **The `cancelled`
+column is a second result nobody asked for:** 9-in-35 before, 1-in-38 after. MOTIR-3106's
+starvation window is a function of the push lane's length, and §4 predicted it would shrink
+by roughly half; it shrank further than that.
+
+### 2. Was the CLASS actually caught? **Yes, repeatedly — and this is the finding.**
+
+23 of the 78 queue builds failed. What failed in them is the point:
+
+| failing job, across the 23 | count |
+| -------------------------- | ----- |
+| `TypeScript`               | 17    |
+| `Structural guards`        | 15    |
+| `Playwright E2E` (a leg)   | 5     |
+| `Vitest` (a shard)         | 3     |
+
+**`TypeScript` and `Structural guards` dominate — the cheap, deterministic, composed-tree
+checks**, which is exactly the signature of MOTIR-4050's §1 and nothing like the signature of
+a flake. Verified on four of the ejected pull requests: **#2551, #2562, #2566 and #2546 each
+had a fully green PR lane** (12, 37, 14 and 35 checks passing, **zero failing**) at the moment
+the queue refused them. Two branches, each honestly green, that do not compile together —
+caught BEFORE the merge instead of forty minutes after it.
+
+So the queue is not insurance against a hypothetical. On its first full day it refused
+composed trees roughly **once in every 3.4 builds**.
+
+### 3. Throughput: **not harmed.** 39 merges on 2026-09-03 — above the 25/day median §2 measured, and the highest since 08-28's 54.
+
+### 4. ⛔ EJECTION CHURN AND LATENCY — §4's ESTIMATE WAS WRONG, AND WRONG IN THE OPTIMISTIC DIRECTION
+
+**Churn.** 78 builds for 51 pull requests = **1.53 builds per merged change**, against the
+1.00 §4's table assumed. 15 pull requests were built more than once. The worst is **#2546,
+which burned 7 queue builds and is still open** — its PR lane is green and it fails
+`TypeScript` + `Structural guards` against composed `main` every time, so each attempt is a
+full gate spent re-learning the same true fact.
+
+**Latency, measured as CLICK-to-deployed — the clock §4 predicted at 22–26 minutes:**
+
+|                                     | §J.5 baseline (n=9)                 | measured now (n=12)                      |
+| ----------------------------------- | ----------------------------------- | ---------------------------------------- |
+| merge → deployed (push lane alone)  | median ~34 · best 21.2 · worst 45.2 | **median 18.5 · best 11.4 · worst 32.7** |
+| **click → deployed** (queue + push) | ~34 (click = merge, before)         | **median 40.2 · best 30.7 · worst 55.6** |
+
+The push lane did what §3 said it would — **merge→deployed roughly halved.** But
+click→deployed is **~6 minutes WORSE at the median than the baseline**, not the wash §4
+predicted, and the error is entirely in the queue leg: §4 sized it at the gate's 11–15
+minutes and it measures **14.7–31.4**, because an entry also WAITS behind the entries ahead
+of it. §4 costed a queue build; it did not cost a queue.
+
+**This does not reverse the decision** — §2.3 took the queue for correctness and §7 records
+that it is not a latency fix — but it does correct §4's number, which read as "roughly a
+wash" and is not.
+
+### 5. The lever, and why it is NOT pulled yet
+
+Queue WAIT is the latency driver, and `max_entries_to_build: 3` is what bounds it — raising
+it to 5 would cut the wait. **Do not, while roughly 30% of builds fail.** Higher speculation
+multiplies the cost of an ejection: every entry built on top of a failing one is rebuilt when
+it goes. With a ~1-in-3.4 failure rate, more concurrency buys latency with wasted gates, and
+the measurement above says the gates are not free of consequence.
+
+**The cheaper lever is upstream: stop entries failing.** #2546's seven builds are one pull
+request that needs a rebase, not a queue that needs tuning. Re-measure after a day on which
+the failure rate is below ~10%; if the wait is still the binding complaint then, raise
+`max_entries_to_build` and record the trade here.
+
 ## §8 — References
 
 - `.github/workflows/ci.yml` — the `merge_group` trigger, the lane split, `deploy`'s `needs`

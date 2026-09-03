@@ -1443,9 +1443,9 @@ reads **`MOTIR_DOCS_URL`** — the operator's own ABSOLUTE url — and answers `
 when the value is not an absolute `http(s)` url, because a relative path is precisely the defect: it is
 refused and logged rather than rendered. **When it is `null` the row is absent**, not disabled and not
 dead. `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D is the record;
-`tests/components/SidebarNav-docs-door.test.tsx` pins both arms of the row and
-`tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal — **guards MOTIR-4239 re-homes
-to this menu, since they assert a surface the rail no longer has.**
+`tests/components/HelpMenu.test.tsx` pins both arms of the row (re-homed here from
+`SidebarNav-docs-door.test.tsx` by MOTIR-4239, which built this menu) and
+`tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal.
 
 **Row 2 is the one this story ADDS rather than moves, and it is a button, not a link.**
 `ShortcutsCheatsheet` is a finished, translated dialog enumerating every global shortcut, and at
