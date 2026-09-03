@@ -1,0 +1,19 @@
+{
+  // tsup's view of the package (MOTIR-4299).
+  //
+  // ⚠️ IT EXISTS ONLY TO TURN `composite` OFF. `tsconfig.json` next door is the
+  // project the root solution file references, so it must be composite — and
+  // tsup's declaration build compiles through a SYNTHETIC project of its own,
+  // which a composite config answers with `TS6307: File … is not listed within
+  // the file list of project ''` for every module in the graph. The two readers
+  // want opposite things from one flag, so they get one file each; everything
+  // else is inherited, so they cannot drift on anything that matters.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "emitDeclarationOnly": false,
+    "declarationMap": false,
+    "noEmit": true
+  }
+}

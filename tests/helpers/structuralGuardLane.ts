@@ -116,6 +116,13 @@ export const STRUCTURAL_GUARD_SPECS = [
   // report — and its cost is a function of the tree rather than of what else
   // happens to be running, which is what this lane is for.
   'tests/prisma/typeBoundary.test.ts',
+  // ── tests/packages/ — the package IMPORT-DIRECTION guard (MOTIR-4299) ─────
+  // The same shape once more, over one more root: it walks every
+  // `packages/<name>/src` tree it discovers plus `lib/` + `app/` +
+  // `components/`, comment-stripped, asserting that no package imports the app
+  // and nothing reaches past a package barrel. No database, no render, and it
+  // imports only `node:fs` / `node:path`.
+  'tests/packages/importDirection.test.ts',
   // ── tests/legal/ — the EGRESS-MANIFEST guard (MOTIR-3631 · MOTIR-4008) ────
   // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
   // read against `package.json` and `lib/legal/egressManifest.ts`.

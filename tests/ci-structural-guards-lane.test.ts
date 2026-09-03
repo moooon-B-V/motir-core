@@ -181,6 +181,10 @@ const SELF_WALKING_MEMBERS = [
   // MOTIR-4296. Same shape and the same reason nothing derives it: its own
   // `readdirSync` over `lib/`, `app/` and `components/`, importing no scanner.
   'tests/prisma/typeBoundary.test.ts',
+  // MOTIR-4299. Its own `readdirSync` over the `packages/*` trees it discovers
+  // and over `lib`/`app`/`components`; it imports no scanner, so nothing
+  // derives it.
+  'tests/packages/importDirection.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

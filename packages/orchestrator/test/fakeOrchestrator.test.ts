@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
-import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
-import type { ContainerHandle, ContainerSpec, UsageAttribution } from '@/lib/orchestrator/types';
+import {
+  FLEET_CONTAINER_SIZE,
+  fakeOrchestrator,
+  type ContainerHandle,
+  type ContainerSpec,
+  type UsageAttribution,
+} from '../src/index';
 
 // THE PORT'S CONTRACT, asserted against the `fake` adapter (Story MOTIR-1916 ·
 // MOTIR-1921) — `docs/decisions/ci-runner-fleet.md` §4, rule 2.

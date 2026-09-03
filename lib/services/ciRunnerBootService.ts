@@ -33,22 +33,22 @@ import {
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
+  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
+  OrchestratorImageUnpullableError,
   getOrchestrator,
   isOrchestratorConfigured,
-  OrchestratorImageUnpullableError,
-  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
+  recordContainerUsage,
 } from '@/lib/orchestrator';
-import { flyFleetConfig } from '@/lib/orchestrator/adapters/fly/flyMachines';
-import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
-import { recordContainerUsage } from '@/lib/orchestrator/usageSink';
-import type {
-  ContainerHandle,
-  ContainerOrchestrator,
-  ContainerSpec,
-  ContainerUsage,
-  TeardownReason,
-  UsageAttribution,
-} from '@/lib/orchestrator/types';
+import {
+  FLEET_CONTAINER_SIZE,
+  flyFleetConfig,
+  type ContainerHandle,
+  type ContainerOrchestrator,
+  type ContainerSpec,
+  type ContainerUsage,
+  type TeardownReason,
+  type UsageAttribution,
+} from '@motir/orchestrator';
 
 // THE PROVISIONER (Story MOTIR-1916 · MOTIR-1921) — one provisioning intent
 // becomes exactly one single-use ephemeral runner, and is guaranteed to stop

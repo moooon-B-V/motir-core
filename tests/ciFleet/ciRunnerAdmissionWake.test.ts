@@ -9,7 +9,7 @@ import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositor
 import { withSystemContext } from '@/lib/workspaces/context';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { captureJobEvents, type CapturedJobEvent, spyOnJobDispatch } from '../helpers/jobs';

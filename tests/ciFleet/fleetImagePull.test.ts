@@ -4,7 +4,7 @@ import {
   parseBearerChallenge,
   parseImageReference,
   probeImagePull,
-} from '@/lib/orchestrator/imagePull';
+} from '@motir/orchestrator';
 import {
   OrchestratorImageUnpullableError,
   verifyFleetBootable,

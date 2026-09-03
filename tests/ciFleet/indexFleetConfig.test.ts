@@ -10,7 +10,7 @@ import {
   isFlyIndexerImageConfigured,
   requireFlyIndexerImage,
   INDEXER_IMAGE_ENV_VAR,
-} from '@/lib/orchestrator/adapters/fly/indexImage';
+} from '@motir/orchestrator';
 
 // The INDEX FLEET's config gate (Story MOTIR-1981 · MOTIR-1989).
 //

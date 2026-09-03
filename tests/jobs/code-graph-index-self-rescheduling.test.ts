@@ -11,7 +11,7 @@ import {
   type IndexDispatchInput,
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { isJobRunDefer, type JobRunDefer } from '@/lib/jobs/engine/defer';
 import { inProcessMemoSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import { JobWorker } from '@/lib/jobs/engine/worker';

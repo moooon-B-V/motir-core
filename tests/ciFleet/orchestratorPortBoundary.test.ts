@@ -39,7 +39,7 @@ import { describe, expect, it } from 'vitest';
  * that is why there are two.
  */
 const ADAPTER_DIRS = [
-  join('lib', 'orchestrator', 'adapters', 'fly'),
+  join('packages', 'orchestrator', 'src', 'adapters', 'fly'),
   join('lib', 'publicAddresses', 'adapters', 'fly'),
 ];
 
@@ -54,9 +54,26 @@ const ADAPTER_DIRS = [
  * The guard therefore proves the leak set is {adapter, selector} — nothing else.
  */
 const COMPOSITION_ROOT = join('lib', 'orchestrator', 'index.ts');
+// ⚠️ IT IS STILL THIS FILE AFTER THE EXTRACTION (MOTIR-4299), and that is the
+// point rather than an accident: the port moved to `@motir/orchestrator` and the
+// SELECTOR did not, because choosing an adapter reads this deployment's
+// environment. `docs/decisions/app-shell-over-packages.md` §1 keeps composition
+// in the app for exactly that reason, so §4's "a new file under `adapters/` plus
+// one branch here" still names one file, and it is still this one.
 
-/** Roots that must stay provider-agnostic. */
-const SCANNED_ROOTS = ['lib', 'app', 'components'];
+/**
+ * Roots that must stay provider-agnostic.
+ *
+ * ⚠️ `packages/orchestrator/src` JOINED THIS LIST WHEN THE PORT LEFT `lib/`
+ * (MOTIR-4299), and adding it is the whole reason the move did not silently
+ * retire this guard. The adapter is now under `packages/`, so a scan of
+ * `lib` + `app` + `components` alone would have gone green by having nothing
+ * left to look at — the loudest possible way for a boundary guard to stop
+ * meaning anything. The leak set it proves is still {adapter, selector, the
+ * package's own barrel}, and the barrel is registered below rather than
+ * exempted by path.
+ */
+const SCANNED_ROOTS = ['lib', 'app', 'components', join('packages', 'orchestrator', 'src')];
 
 /**
  * The tells, each one a way Fly leaks that is NOT an import statement.
@@ -145,6 +162,11 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     tell: /publicAddresses\/adapters\/fly/,
     why: "the CERTIFICATE port's composition root — it selects that adapter, not the fleet's",
   },
+  {
+    file: join('packages', 'orchestrator', 'src', 'index.ts'),
+    tell: /adapters\/fly/,
+    why: "the package's BARREL — it re-exports the adapter the app's composition root selects, and a package whose surface cannot name what it exports has no surface (MOTIR-4299)",
+  },
 ];
 
 function walk(dir: string): string[] {
@@ -212,7 +234,11 @@ describe('§4 rule 1 — no `fly` escapes the adapter directory', () => {
     // This proves the tells fire on the strings they exist to catch, so a green
     // run above means "no leak" rather than "no scan".
     const leaks = [
-      "import { flyMachinesClient } from '@/lib/orchestrator/adapters/fly/flyMachines';",
+      // A DEEP import past the package's barrel into its Fly adapter — the shape
+      // this leak takes now that the adapter lives in `packages/orchestrator`
+      // (MOTIR-4299). It is also an import-direction violation, which
+      // `tests/packages/importDirection.test.ts` catches from the other side.
+      "import { flyMachinesClient } from '@motir/orchestrator/src/adapters/fly/flyMachines';",
       "const url = 'https://api.machines.dev/v1/apps';",
       "const token = process.env['FLY_FLEET_API_TOKEN'];",
       'const m: FlyMachine = await read();',

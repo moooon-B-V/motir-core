@@ -6,11 +6,15 @@
   //
   // ⚠️ EVERY `composite` project in the repository belongs on this list, and
   // `tests/typecheck-program.test.ts` asserts exactly that — a project added later
-  // and left off would simply stop being type-checked, silently and greenly.
+  // and left off would simply stop being type-checked, silently and greenly. That
+  // includes a `packages/*` project: `@motir/orchestrator` is here (MOTIR-4299),
+  // and `docs/decisions/app-shell-over-packages.md` §1 makes the reference part of
+  // what a package IS.
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.tests.json" },
-    { "path": "./tsconfig.scripts.json" }
+    { "path": "./tsconfig.scripts.json" },
+    { "path": "./packages/orchestrator" }
   ]
 }

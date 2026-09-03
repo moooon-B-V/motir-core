@@ -5,6 +5,20 @@ project CI on Motir's own ephemeral runner fleet) · **Evidence pinned at:** `mo
 `origin/main` @ `27f2f207`, `motir-ai` `origin/main` (`fly.toml`), `motir-gateway`
 `origin/main` (`fly.toml`) · **Vendor pricing + docs read 2026-08-01** (sources in §12)
 
+**Amended by:** [`app-shell-over-packages.md`](./app-shell-over-packages.md) (MOTIR-4297) and
+**MOTIR-4299**, 2026-09-03 — the port, both adapters and the fake MOVED to
+`packages/orchestrator` and are published as **`@motir/orchestrator`**. §3's reversibility
+claim is what made this the first extraction, and it is unchanged: §4's "a new file under
+`adapters/` plus one branch in the selector" still names one selector, and it is still
+`lib/orchestrator/index.ts` — the SELECTOR did not move, because choosing an adapter reads
+this deployment's environment and that is composition, which lives in the app. Three imports
+were inverted on the way: `FleetWorkloadKind` moved INTO the package (the port's own
+vocabulary; `lib/ciFleet/workloads.ts` re-exports it and keeps the counters), `Prisma.Decimal`
+became `decimal.js` (the same library, so the package carries no Prisma dependency), and
+`ciFleetCostMeterService` became a **`UsageMeter` port** the composition root binds — so §5's
+split between the FIELDS (the port's) and the SCHEMA (the meter's) is now a type rather than
+a convention. `tests/ciFleet/orchestratorPortBoundary.test.ts` moved with it and still bites.
+
 `docs/decisions/ci-minutes-allowance.md` §M fixes what a fleet runner must be _equivalent
 to_ and closes with _"MOTIR-1918 decides what actually runs it."_ This is that decision. It
 fixes **the orchestrator**, **the interface behind it**, **the per-runner cost record**,

@@ -543,6 +543,47 @@ jobs:
       - run: pnpm --filter @motir/cli build
       - run: pnpm --filter @motir/cli test:coverage
 
+  orchestrator:
+    name: Orchestrator package
+    runs-on: ubuntu-latest
+    # No healthy run on record yet — this job is new (MOTIR-4299). Sized on the
+    # `design-system` / `cli` jobs it is modelled on, whose observed range is
+    # 1.1–1.6 min over the same install-then-build-then-vitest shape, and which
+    # both take the 10-minute short-job floor. Re-derive it from this lane's own
+    # runs once there are four, per MOTIR-3569's bar.
+    timeout-minutes: 10
+    # Same gap as the two package jobs above, and the reason `@motir/orchestrator`
+    # needed one the day it was extracted: its suite lives at
+    # `packages/orchestrator/test/**`, which the root Vitest lane does NOT glob
+    # (`vitest.config.ts`'s `include` is `tests/**`), so those three specs — the
+    # rate table and the usage arithmetic, the fake adapter, the Fly adapter's
+    # request shaping and state mapping — would have stopped gating a merge at
+    # the moment they moved out of `tests/ciFleet/`. It also carries the per-FILE
+    # coverage floor those files used to have in the root gate, which is the half
+    # of an extraction that goes missing quietly.
+    #
+    # Pure unit tests: no Postgres, no Next app, no `prisma generate`. The
+    # package has no Prisma dependency at all, which is asserted by
+    # `tests/packages/importDirection.test.ts` and is why this lane needs none of
+    # that setup.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      # No node_modules cache here, for the reason the `cli` job gives: the
+      # shared key covers only the ROOT node_modules, while a filtered run also
+      # needs packages/orchestrator/node_modules, and a cache hit would skip the
+      # install that creates it.
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+      - run: pnpm --filter @motir/orchestrator typecheck
+      - run: pnpm --filter @motir/orchestrator build
+      - run: pnpm --filter @motir/orchestrator test -- --coverage
+
   # ── The design-asset guards (MOTIR-2442) ──────────────────────────────────
   # The one lane in this file with NO branch-prefix `if:`, and that absence is
   # the whole job. Every other skip below reads "a design-only diff has no app
@@ -1818,6 +1859,7 @@ jobs:
         design-system,
         design-guards,
         cli,
+        orchestrator,
         build,
         test,
         coverage,

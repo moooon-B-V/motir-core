@@ -2,7 +2,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
-import type { ContainerOrchestrator } from '@/lib/orchestrator/types';
+import type { ContainerOrchestrator } from '@motir/orchestrator';
 
 // THE RUNNER IMAGE's sources, guarded against drift (MOTIR-1978).
 //
