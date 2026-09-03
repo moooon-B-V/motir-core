@@ -9,6 +9,7 @@ import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { plansService } from '@/lib/services/plansService';
 import { estimationService } from '@/lib/services/estimationService';
 import { componentsService } from '@/lib/services/componentsService';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
@@ -27,6 +28,7 @@ import { Pill } from '@/components/ui/Pill';
 import { formatDate } from '@/lib/utils/datetime';
 import type { Locale } from '@/lib/i18n/locales';
 import { ArchivedBanner } from './_components/ArchivedBanner';
+import { PendingPlanNotice } from './_components/PendingPlanNotice';
 import { CoreFieldsPanel } from './_components/CoreFieldsPanel';
 import { WorkItemDetailActions } from './_components/WorkItemDetailActions';
 import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
@@ -135,6 +137,14 @@ export default async function IssueDetailPage({
   const canArchive = held.has('work_item:archive');
   const canDelete = held.has('work_item:delete');
   const canManageProject = held.has('project:administer');
+  // `canViewPlans` (`ai:view_plan`) — whether the PENDING-PLAN indicator may
+  // render at all (bug MOTIR-4197 AC 4). It is the same key the shell uses to
+  // decide whether to OFFER `/plans` (`lib/settings/projectNavAccess.ts`), so
+  // the indicator can never point at a destination the navigation does not
+  // offer. An actor without it gets no indicator AND no read: an indicator
+  // naming a plan the viewer cannot open is worse than none, and skipping the
+  // query keeps its cost off the actor least able to benefit from it.
+  const canViewPlans = held.has('ai:view_plan');
 
   // The Activity tab (Story 5.5 · 5.5.4): URL-driven via `?activity=`
   // (default Comments — the Jira default); the server fetches ONLY the
@@ -216,6 +226,7 @@ export default async function IssueDetailPage({
     locale,
     workItemRefs,
     todoList,
+    pendingPlans,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -281,6 +292,23 @@ export default async function IssueDetailPage({
     // work IS the list it is what the reader came for. One small ordered read
     // on the same card, so it costs the group nothing and adds no serial await.
     workItemTodosService.listTodos(item.id, ctx),
+    // The UNDECIDED plans that name this card (bug MOTIR-4197 · design
+    // MOTIR-4256 §2–§3). TIER TWO, IN THIS GROUP: the element is the first
+    // child of <main>, so arriving late would push Description down, and it
+    // renders on well under 1% of item pages, so it cannot reserve a box. A
+    // read in this group costs max(), not sum(); a serial await here would
+    // re-introduce exactly the shape MOTIR-3435 removed from this page. ONE
+    // indexed lookup (`plan_item [workItemId, workspaceId]`, the reverse index)
+    // with the plan's id / title / status on the same row — its own read, not
+    // MOTIR-4106's project-scoped boundary seam, which cannot answer *which
+    // plans name THIS card*. CONDITIONAL, like the roll-up: skipped outright
+    // for an actor without `ai:view_plan`.
+    canViewPlans
+      ? plansService.listPendingProposalsForWorkItem(ctx.projectId, item.id, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : null,
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -431,6 +459,15 @@ export default async function IssueDetailPage({
                 archivedAtLabel={archivedAtLabel}
                 canEdit={canEdit}
               />
+            ) : null}
+            {/* MOTIR-4197: the pending-plan indicator — SECOND in the slot,
+              after the archived banner when both render (present before
+              future: what this card IS, then what a plan proposes it BECOME).
+              Nothing renders — no reserved box — when no undecided plan names
+              this card, which is nearly every card, or when the actor lacks
+              `ai:view_plan` (then `pendingPlans` is null: the read was skipped). */}
+            {pendingPlans && pendingPlans.length > 0 ? (
+              <PendingPlanNotice identifier={item.identifier} proposals={pendingPlans} />
             ) : null}
             <ContentSectionCard
               title={t('description')}
