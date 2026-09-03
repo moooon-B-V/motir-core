@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { EntitlementExceededError } from '@/lib/billing/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   AddressNotFoundError,
   AddressNotIssuedError,
@@ -90,6 +91,27 @@ export function mapPublicAddressError(err: unknown): NextResponse | null {
  * answer the same typed error two different ways.
  */
 export function mapCustomDomainError(err: unknown): NextResponse | null {
+  // ⚠️ THE TWO THE GATE ITSELF RAISES, AND THEY WERE MISSING.
+  // `customDomainService` calls `projectAccessService.assertPermission`, which
+  // refuses with `PermissionDeniedError` — an error this mapper did not know, so
+  // every refusal on these four routes fell through to a **500** instead of a
+  // 403. Nothing in the service tests could see it: they exercise the SERVICE,
+  // and only the route knows the mapper. `tests/permissions/storyGate.test.ts`
+  // guard 3 exists for exactly this gap and is what caught it.
+  //
+  // 404 first, and it is the same reasoning the subdomain mapper records:
+  // `assertPermission` raises `ProjectNotFoundError` for a project the actor
+  // cannot see, and that must stay indistinguishable from one that does not
+  // exist. The 403 below is only ever a project the actor CAN see.
+  if (err instanceof ProjectNotFoundError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, permission: err.permission },
+      { status: 403 },
+    );
+  }
   if (err instanceof AddressNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
