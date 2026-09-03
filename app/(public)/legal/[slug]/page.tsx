@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound, permanentRedirect } from 'next/navigation';
-import { getLegalDocument, legalDocumentSlugs } from '@/lib/legal/documents';
+import { getLegalDocument } from '@/lib/legal/documents';
 
 // One published legal document (Story 8.4 · MOTIR-1134) — now a REDIRECT to it
 // (MOTIR-4007).
@@ -24,17 +24,15 @@ import { getLegalDocument, legalDocumentSlugs } from '@/lib/legal/documents';
 // stays reachable on a build whose `MOTIR_PUBLIC_SITE_URL` is unset — with it
 // set, `proxy.ts`'s `PUBLIC_REDIRECT_SEGMENTS` 308s `/legal/*` to the public
 // site before this file is ever reached (MOTIR-3884). So this redirect covers
-// exactly the un-cut-over case, which is the only one that gets here.
+// exactly the un-cut-over case, which is the only one that gets here. It must
+// stay dynamically rendered: the manifest is runtime configuration and is not
+// available to a build-time `generateStaticParams` pass.
 //
 // ── The unconfigured build ─────────────────────────────────────────────────
 // No manifest ⇒ no entries ⇒ `getLegalDocument` returns `null` ⇒ 404, which is
 // correct and is the self-hoster's state: they have published no documents, so
 // there is nothing here and nowhere to send anybody. Nothing renders an empty
 // page, which is the failure this shape exists to avoid.
-
-export async function generateStaticParams() {
-  return legalDocumentSlugs().map((slug) => ({ slug }));
-}
 
 export async function generateMetadata({
   params,

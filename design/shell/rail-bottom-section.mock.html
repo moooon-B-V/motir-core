@@ -18,12 +18,21 @@
   conditional). The primary section above the separator is abbreviated to three
   rows: this asset owns the BOTTOM section, and design/shell/desktop.pen still
   owns the primary one.
+
+  REVISED by MOTIR-4167. The Docs row lost its hard-coded app-relative path — a
+  route this application stopped serving when MOTIR-3932 moved the public
+  reading surface to motir-marketing — and reads MOTIR_DOCS_URL, an absolute url
+  or null, so it is CONDITIONAL now like the Legal row beside it. The complete
+  arms draw it at https://motir.co/docs; the floor arms no longer draw it, so the
+  section's floor is Job runs · Git. Only that section data changed: the rails
+  are still the real Sidebar markup, edited in the two places the generator's
+  data would have moved.
 -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The rail's bottom section — every row it renders (MOTIR-4130)</title>
+    <title>The rail's bottom section — every row it renders (MOTIR-4130 · MOTIR-4167)</title>
     <style>
       /*! tailwindcss v4.3.0 | MIT License | https://tailwindcss.com */
       @layer properties;
@@ -3622,10 +3631,11 @@
       <header>
         <h1>The rail&rsquo;s bottom section &mdash; every row it renders</h1>
         <p class="sub">
-          The authed rail&rsquo;s bottom section carries <b>six</b> rows, three of them conditional.
+          The authed rail&rsquo;s bottom section carries <b>six</b> rows, four of them conditional.
           This asset draws all six at each of the three widths the shell renders &mdash; expanded
           (240px), collapsed (56px) and the mobile drawer (300px) &mdash; and draws each conditional
-          row in <b>both</b> arms, present and absent. Measured at <code>8d80ac8db</code>.
+          row in <b>both</b> arms, present and absent. Measured at <code>8d80ac8db</code>; revised
+          by MOTIR-4167, which made the <b>Docs</b> row conditional.
         </p>
         <p class="sub">
           <b>This asset is the source for this element.</b> <code>desktop.pen</code>,
@@ -3643,11 +3653,11 @@
         </p>
         <p class="panel-n">
           Left: every conditional row present &mdash; the state a workspace admin on a revealed tier
-          sees on a deployment that has configured its legal documents. Right: all three
-          conditionals absent, which is the <b>open product&rsquo;s common case</b>. Nothing marks
-          the gap: the rows simply close up and the section is three shorter. No disabled row, no
-          tooltip, no empty state &mdash; an entry point is a promise about a room, and a disabled
-          row is a promise the product then refuses.
+          sees on a deployment that has configured its legal documents and its documentation url.
+          Right: all four conditionals absent, which is the <b>open product&rsquo;s common case</b>.
+          Nothing marks the gap: the rows simply close up and the section is four shorter. No
+          disabled row, no tooltip, no empty state &mdash; an entry point is a promise about a room,
+          and a disabled row is a promise the product then refuses.
         </p>
         <div class="frames">
           <figure class="frame">
@@ -3863,7 +3873,7 @@
                               <circle cx="6" cy="18" r="3"></circle></svg></span
                           ><span class="flex-1 truncate">Git</span></a
                         ><a
-                          href="/docs"
+                          href="https://motir.co/docs"
                           class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
                           ><span
                             aria-hidden="true"
@@ -3921,8 +3931,8 @@
           </figure>
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Floor &mdash; 3 rows</span
-              ><span class="fc-note">Job runs · Git · Docs</span>
+              <span class="fc-label">Floor &mdash; 2 rows</span
+              ><span class="fc-note">Job runs · Git</span>
             </figcaption>
             <div class="rail" style="width: 240px">
               <nav
@@ -4083,30 +4093,6 @@
                               <circle cx="18" cy="6" r="3"></circle>
                               <circle cx="6" cy="18" r="3"></circle></svg></span
                           ><span class="flex-1 truncate">Git</span></a
-                        ><a
-                          href="/docs"
-                          class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-book-open"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 7v14"></path>
-                              <path
-                                d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-                              ></path></svg></span
-                          ><span class="flex-1 truncate">Docs</span></a
                         >
                       </div>
                     </div>
@@ -4352,7 +4338,7 @@
                               <circle cx="18" cy="6" r="3"></circle>
                               <circle cx="6" cy="18" r="3"></circle></svg></span></a
                         ><a
-                          href="/docs"
+                          href="https://motir.co/docs"
                           aria-label="Docs"
                           class="relative mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) transition-colors hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
                           data-state="closed"
@@ -4412,8 +4398,8 @@
           </figure>
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Floor &mdash; 3 glyphs</span
-              ><span class="fc-note">list-checks · git-branch · book-open</span>
+              <span class="fc-label">Floor &mdash; 2 glyphs</span
+              ><span class="fc-note">list-checks · git-branch</span>
             </figcaption>
             <div class="rail" style="width: 56px">
               <nav
@@ -4580,32 +4566,7 @@
                             >
                               <path d="M15 6a9 9 0 0 0-9 9V3"></path>
                               <circle cx="18" cy="6" r="3"></circle>
-                              <circle cx="6" cy="18" r="3"></circle></svg></span></a
-                        ><a
-                          href="/docs"
-                          aria-label="Docs"
-                          class="relative mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) transition-colors hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                          data-state="closed"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px]"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-book-open"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 7v14"></path>
-                              <path
-                                d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-                              ></path></svg></span
+                              <circle cx="6" cy="18" r="3"></circle></svg></span
                         ></a>
                       </div>
                     </div>
@@ -4871,7 +4832,7 @@
                                   <circle cx="6" cy="18" r="3"></circle></svg></span
                               ><span class="flex-1 truncate">Git</span></a
                             ><a
-                              href="/docs"
+                              href="https://motir.co/docs"
                               class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
                               ><span
                                 aria-hidden="true"
@@ -4931,7 +4892,7 @@
           </figure>
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Floor &mdash; 3 rows</span
+              <span class="fc-label">Floor &mdash; 2 rows</span
               ><span class="fc-note">the open product&rsquo;s common case</span>
             </figcaption>
             <div class="rail" style="width: 300px">
@@ -5122,30 +5083,6 @@
                                   <circle cx="18" cy="6" r="3"></circle>
                                   <circle cx="6" cy="18" r="3"></circle></svg></span
                               ><span class="flex-1 truncate">Git</span></a
-                            ><a
-                              href="/docs"
-                              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                              ><span
-                                aria-hidden="true"
-                                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                                ><svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="24"
-                                  height="24"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  class="lucide lucide-book-open"
-                                  aria-hidden="true"
-                                >
-                                  <path d="M12 7v14"></path>
-                                  <path
-                                    d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-                                  ></path></svg></span
-                              ><span class="flex-1 truncate">Docs</span></a
                             >
                           </div>
                         </div>
@@ -5167,7 +5104,10 @@
           arm has two distinct causes, and the second is easy to miss: an operator who publishes
           their documents at unrelated addresses has no index for the row to point at, so the row is
           absent rather than guessed &mdash; sign-up and the re-consent rows still link each
-          document directly, so nothing becomes unreachable.
+          document directly, so nothing becomes unreachable. The <b>Docs</b> row took the same shape
+          with MOTIR-4167: it used to carry a hard-coded app-relative path to a page this
+          application no longer serves, and it now reads the operator&rsquo;s configured absolute
+          url or does not render.
         </p>
         <table>
           <thead>
@@ -5211,9 +5151,12 @@
             <tr>
               <td><b>Docs</b></td>
               <td><code>book-open</code></td>
-              <td><code>/docs</code></td>
-              <td>always</td>
-              <td>—</td>
+              <td>the operator’s own <b>absolute</b> url — <code>docsIndexUrl()</code></td>
+              <td>CONDITIONAL — <code>docsIndexUrl</code> is non-null</td>
+              <td>
+                <code>MOTIR_DOCS_URL</code> is unset, <b>or</b> is not an absolute
+                <code>http(s)</code> url — a relative path is refused, not rendered
+              </td>
             </tr>
             <tr>
               <td><b>Legal</b></td>

@@ -79,14 +79,21 @@ describe('the map is TOTAL over both surfaces', () => {
     // The onboarding resume row is deliberately outside the map — it is gated on
     // there BEING a session of the actor's own, which is a state, not a permission.
     //
-    // `/docs` (MOTIR-2570) is outside it for a different reason: the map gates
-    // PROJECT-scoped destinations, and only `primaryItems` is filtered through
-    // `canOfferNavDestination`. The Docs row lives in the footer group, which is
-    // not gated at all, and its destination is a `(public)` page readable with no
-    // session — so there is no project permission that could sensibly gate it and
-    // a map entry would be a claim nothing enforces. It is the first footer row
-    // not under `/settings/`, which is the only reason it is named here rather
-    // than swept up by the prefix skip below.
+    // The Docs row (MOTIR-2570) is outside it for a different reason: the map
+    // gates PROJECT-scoped destinations, and only `primaryItems` is filtered
+    // through `canOfferNavDestination`. The Docs row lives in the footer group,
+    // which is not gated at all, and its destination is public documentation
+    // readable with no session — so there is no project permission that could
+    // sensibly gate it and a map entry would be a claim nothing enforces.
+    //
+    // ⚠️ IT IS NOT IN THE SET BELOW EITHER, SINCE MOTIR-4167, for the reason the
+    // legal row gives next: its href is `docsIndexUrl` — a prop, not a literal —
+    // because the documentation left this repository with the public reading
+    // surface (MOTIR-3932) and the row reads the operator's own absolute url.
+    // `hrefsIn` cannot see it, so an exemption keyed on the old path would be a
+    // dead entry, and one that would mask the regression this card fixed: a
+    // future edit that puts a LITERAL app-relative docs path back should fail
+    // this test loudly. The property is pinned directly in the test below.
     //
     // The legal row is exempt for exactly the reasons `/docs` is, and the two
     // stand or fall together: same ungated footer group, same off-shell target,
@@ -105,7 +112,7 @@ describe('the map is TOTAL over both surfaces', () => {
     // the test below, against the shape the row actually has now. Leaving the
     // entry here would also mask a real regression — a future edit that puts a
     // LITERAL `/legal` back into `primaryItems` should fail this test loudly.
-    const exempt = new Set(['/onboarding', '/settings/project', '/settings/workspace', '/docs']);
+    const exempt = new Set(['/onboarding', '/settings/project', '/settings/workspace']);
     for (const href of hrefsIn(SIDEBAR)) {
       if (exempt.has(href) || href.startsWith('/settings/')) continue;
       expect(known.has(href), `SidebarNav offers ${href}, which the map does not carry`).toBe(true);
@@ -128,18 +135,29 @@ describe('the map is TOTAL over both surfaces', () => {
     expect(bottom, 'the footer section marker moved — re-check the public rows').toBeGreaterThan(
       -1,
     );
-    for (const href of ['/docs']) {
-      expect(
-        SIDEBAR.indexOf(`href: '${href}'`),
-        `${href} left the ungated footer group`,
-      ).toBeGreaterThan(bottom);
-      expect(canOfferNavDestination(href, ADMIN)).toBe(false);
-    }
+    // ⚠️ THE DOCS ROW IS PINNED BY ITS PROP, NOT BY A LITERAL (MOTIR-4167). It
+    // used to be asserted here as `href: '/docs'` sitting after the footer
+    // marker; that literal pointed at a route this application stopped serving
+    // (MOTIR-3932), and the row now renders from `docsIndexUrl` exactly as the
+    // legal row renders from its resolver. The property is unchanged: the row
+    // sits AFTER the footer marker, so it is never filtered through
+    // `canOfferNavDestination` — and it is spread in conditionally, so an
+    // unconfigured build gets no row rather than a dead one.
+    const docsHref = SIDEBAR.indexOf('href: docsIndexUrl');
+    expect(docsHref, 'the docs row no longer renders from docsIndexUrl').toBeGreaterThan(-1);
+    expect(docsHref, 'the docs row left the ungated footer group').toBeGreaterThan(bottom);
+    expect(
+      SIDEBAR.slice(bottom),
+      'the docs row is no longer conditional on there being somewhere to point it',
+    ).toContain('...(docsIndexUrl');
+    expect(SIDEBAR, 'a literal app-relative docs path is back in the rail').not.toContain(
+      "href: '/docs'",
+    );
 
     // ⚠️ THE LEGAL ROW IS PINNED SEPARATELY BECAUSE IT NO LONGER HAS A LITERAL
     // HREF (MOTIR-4010), NOT BECAUSE IT IS HELD TO A WEAKER STANDARD. It renders
-    // from `legalIndexUrl`, so the string this loop looks for is gone and the
-    // assertion above would have failed at `indexOf` returning -1 — which is
+    // from `legalIndexUrl`, so a literal-href scan finds nothing, and the loop
+    // that used to stand above failed at `indexOf` returning -1 — which is
     // what it did. The property is unchanged and is what is asserted here: the
     // row sits AFTER the footer marker, so it is never filtered through
     // `canOfferNavDestination` and cannot disappear for some actors and not

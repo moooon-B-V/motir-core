@@ -16,6 +16,21 @@ import {
 // 5.8.2) — the parallel of the user-mention parser (parse.ts). No DB.
 
 describe('parseWorkItemTokenIds', () => {
+  it('is LINEAR on a body of unclosed openers — the MOTIR-4202 reproduction, for both token regexes', () => {
+    // The same quadratic scan the mention parser had (CodeQL alerts #2 and #3):
+    // `[^\]]*` ran to the end of the string from every `[`. Generous bound —
+    // a CI runner is ~20× slower than a dev box — still far under the seconds
+    // the defect took.
+    const body = '['.repeat(80_000);
+    const started = Date.now();
+    expect(parseWorkItemTokenIds(body)).toEqual([]);
+    expect(parseIntraPlanRefIds(body)).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(500);
+    // …and a real token after the noise is still found.
+    expect(parseWorkItemTokenIds('[[[MOTIR-1](motir:cltreal)')).toEqual(['cltreal']);
+    expect(parseIntraPlanRefIds('[[[Story](motir-ref:planItem:pi_real)')).toEqual(['pi_real']);
+  });
+
   it('extracts the id from a motir: token', () => {
     const ids = parseWorkItemTokenIds('See [MOTIR-805](motir:cltabc123) for the engine.');
     expect(ids).toEqual(['cltabc123']);

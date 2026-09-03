@@ -765,27 +765,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/docs',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
   },
-  {
-    file: 'design/shell/design-notes.md',
-    // Same live defect as the asset's entry below: these notes document the
-    // shipped `Docs` row's href and the fact that it resolves to nothing.
-    // Removed with MOTIR-4167.
-    address: '/docs',
-    why: 'The shipped rail row still points at /docs after MOTIR-3932 moved that surface out of motir-core; these notes record the shipped href and the defect, which is filed as MOTIR-4167.',
-  },
-  {
-    file: 'design/shell/rail-bottom-section.mock.html',
-    // ⚠️ NOT a point-in-time record like the entries above — this asset draws
-    // the rail as it ships TODAY, and the shipped `Docs` row still carries a
-    // hard-coded `href: '/docs'` (SidebarNav.tsx) after MOTIR-3932 moved that
-    // surface to motir-marketing. So the dead address is the asset being
-    // FAITHFUL, and the defect is in the row rather than in the drawing. The
-    // `Legal` row beside it took the configured-url treatment (MOTIR-4010) for
-    // exactly this reason and `Docs` did not. Filed as MOTIR-4167; when that
-    // lands, this entry goes with it.
-    address: '/docs',
-    why: 'The shipped rail row still points at /docs after MOTIR-3932 moved that surface out of motir-core; this asset draws the shipped href, and the dead row is filed as MOTIR-4167.',
-  },
   // ── Forward-looking: the Public page room (MOTIR-4205 draws it, MOTIR-4171 builds it) ──
   // The settings room where a project admin edits the public page's tagline,
   // tags and README. The asset is the design MOTIR-4171 builds to, so it names

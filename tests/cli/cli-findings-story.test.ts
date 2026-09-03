@@ -17,6 +17,13 @@ import {
 } from '../helpers/cliHarness';
 import { randomToken } from '../helpers/random';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import { submitJob } from '@/lib/ai/motirAiClient';
+import { COMMAND_CATALOG } from '../../packages/cli/src/commandCatalog';
+import {
+  AI_REQUIREMENT_FIELDS,
+  AI_REQUIREMENT_REQUIRED_NON_EMPTY,
+  satisfiesBuildRequirement,
+} from '../fixtures/settledRequirement';
 
 // motir-ai is the only thing stubbed — it mints the job id a plan and its
 // conversation bind to. Everything else is real.
@@ -30,9 +37,11 @@ vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
 //
 //   built `motir` binary ──HTTP──▶ the real /api/v1 routes ──▶ real Postgres
 //          └─ spawns ──▶ a scripted FAKE AGENT that reads $MOTIR_PROMPT_FILE and
-//                        does what the PROMPT says: the key, the status, the
-//                        `motir plan --detach` line and the bug's parentKey are
-//                        all read OUT of the prompt, never supplied by this file
+//                        does what the PROMPT says: the key, the status, the two
+//                        plan-session TOOL steps (their names, the anchor and the
+//                        six field names of the WHAT — MOTIR-4083) and the bug's
+//                        parentKey are all read OUT of the prompt, never supplied
+//                        by this file
 //
 // ⚠️ THAT LAST CLAUSE IS THE WHOLE DESIGN. Every assertion below is therefore
 // evidence about the PROMPT the server assembled, not about the fixture: an
@@ -157,13 +166,53 @@ async function commentsOn(fx: WorkItemFixture, workItemId: string): Promise<numb
   return adminDb.comment.count({ where: { workItemId } });
 }
 
+/** The comments on a card, verbatim — what a person opening it reads. */
+async function commentBodies(workItemId: string): Promise<string[]> {
+  const rows = await adminDb.comment.findMany({
+    where: { workItemId },
+    orderBy: { createdAt: 'asc' },
+    select: { bodyMd: true },
+  });
+  return rows.map((r) => r.bodyMd);
+}
+
+/** The USER turns on every planning thread in the project, with the thread's anchor. */
+async function userTurnsIn(fx: WorkItemFixture): Promise<{ anchor: string; body: string }[]> {
+  const rows = await adminDb.planChangeTurn.findMany({
+    where: { role: 'user', session: { projectId: fx.projectId } },
+    orderBy: { seq: 'asc' },
+    select: { body: true, session: { select: { scopeKey: true } } },
+  });
+  return rows.map((r) => ({ anchor: r.session.scopeKey, body: r.body }));
+}
+
+/** The `context` bag the ONE planning job went out with — what motir-ai receives. */
+function sentContext(): Record<string, unknown> {
+  expect(vi.mocked(submitJob)).toHaveBeenCalledTimes(1);
+  return vi.mocked(submitJob).mock.calls[0]![2] as unknown as Record<string, unknown>;
+}
+
+/**
+ * A finding LONG enough that a cap clipping it in transit would show, and
+ * carrying every character class a shell-quoted door would have mangled —
+ * which is the difference between a tool argument and the command line it
+ * replaced (MOTIR-4083).
+ */
+const LONG_FINDING = [
+  'The route it names does not exist on origin/main.',
+  '',
+  '`git ls-tree origin/main --name-only app/api/v1/ready/` printed nothing;',
+  'the card says "extend the ready route" and there is no ready route to extend.',
+  "It isn't a rename either — `git log --all -- 'app/api/v1/ready*'` is empty.",
+  '',
+  ...Array.from({ length: 60 }, (_, i) => `evidence line ${i + 1}: ${'x'.repeat(90)}`),
+].join('\n');
+
 describe('a run whose agent REFUSES the card', () => {
   it('leaves it in Planning with the finding on it, and reports a correct outcome', async () => {
     const { fx, agentEnv } = await linkedProject();
     const { item } = await card(fx, 'its premise is false');
-    agent.script([
-      { refuseCard: { finding: 'The route it names does not exist on origin/main.' } },
-    ]);
+    agent.script([{ refuseCard: { finding: LONG_FINDING } }]);
 
     const run = await ws.run(['run', item.identifier, '--agent', agent.command], {
       env: agentEnv,
@@ -180,6 +229,45 @@ describe('a run whose agent REFUSES the card', () => {
     expect(await plansIn(fx)).toHaveLength(1);
   });
 
+  it('composes the WHAT and delivers it TWICE — the comment, the turn, and the six fields on the wire (MOTIR-4083)', async () => {
+    // End to end through the COMPOSED prompt: the fake agent knows no tool
+    // name, no project key, no anchor and no field name — every one of them is
+    // read out of the text the server assembled, and what reaches motir-ai is
+    // therefore evidence about the PROMPT.
+    const { fx, agentEnv } = await linkedProject();
+    const { item } = await card(fx, 'its premise is false, at length');
+    agent.script([{ refuseCard: { finding: LONG_FINDING } }]);
+
+    const run = await ws.run(['run', item.identifier, '--agent', agent.command], {
+      env: agentEnv,
+    });
+    expect(run.exitCode, run.stderr).toBe(0);
+    expect(await statusOf(fx, item.identifier)).toBe('planning');
+
+    // The COMMENT still lands, with the same content — the human-readable trail
+    // is not traded for the machine-readable one.
+    expect(await commentBodies(item.id)).toEqual([LONG_FINDING]);
+
+    // The prose TURN rides append_plan_turn, on the thread anchored at THIS
+    // card — not the project-wide one, which is what a dropped anchor opens.
+    expect(await userTurnsIn(fx)).toEqual([{ anchor: item.identifier, body: LONG_FINDING }]);
+
+    // The composed WHAT reached the wire under motir-ai's OWN names, in its
+    // order, UNTRUNCATED — every required field carries the whole finding and
+    // every optional one carries "", which is how the fixture composes it
+    // without knowing a single name.
+    const requirement = sentContext().requirement as Record<string, string>;
+    expect(Object.keys(requirement)).toEqual([...AI_REQUIREMENT_FIELDS]);
+    for (const field of AI_REQUIREMENT_FIELDS) {
+      const required = (AI_REQUIREMENT_REQUIRED_NON_EMPTY as readonly string[]).includes(field);
+      expect(requirement[field], field).toBe(required ? LONG_FINDING : '');
+    }
+    expect(satisfiesBuildRequirement(requirement)).toBe(true);
+    // …and exactly ONE plan, from exactly ONE submit: the append did not submit,
+    // and the submit was not retried.
+    expect(await plansIn(fx)).toHaveLength(1);
+  });
+
   it('`motir auto` STOPS on it rather than picking up other work', async () => {
     const { fx, agentEnv } = await linkedProject();
     const first = await card(fx, 'the wrong one');
@@ -190,11 +278,63 @@ describe('a run whose agent REFUSES the card', () => {
 
     expect(run.exitCode).toBe(0);
     expect(run.stderr).toContain('refused its work item and submitted a re-plan');
+    // The operator line still describes what is now waiting: a plan the agent
+    // submitted — through the tools now (MOTIR-4083) — sitting in Motir.
+    expect(run.stderr).toContain('review the submitted plan in Motir, then re-run it');
     // The loop stopped: exactly one card was dispatched.
     expect(agent.invocations()).toHaveLength(1);
     expect(await statusOf(fx, second.item.identifier)).toBe('todo');
     void first;
   });
+});
+
+describe('ONE composition, every dispatching path — asserted from the REGISTERED set (MOTIR-4083)', () => {
+  // The instruction is written once, in the server-assembled prompt, and every
+  // command that sends an assembled prompt to an agent fetches that prompt. So
+  // the population here is DERIVED from the command catalog rather than spelled
+  // as a list of four, and a dispatching path added later joins this suite by
+  // registering. The discriminator is `--print-prompt` — the flag that exists
+  // BECAUSE a command sends an assembled prompt ("echo each assembled prompt to
+  // stderr as it is sent"). Not `--agent`: `motir doctor` takes that too, to
+  // CHECK an agent command, and dispatches nothing.
+  const DISPATCHING = COMMAND_CATALOG.filter((entry) =>
+    entry.options.some((option) => option.flags === '--print-prompt'),
+  );
+
+  it('the derived set is not empty, holds the leaf run, and excludes a command that merely takes --agent', () => {
+    expect(DISPATCHING.length).toBeGreaterThan(0);
+    const paths = DISPATCHING.map((e) => e.path);
+    expect(paths).toContain('run');
+    expect(paths).not.toContain('doctor');
+  });
+
+  it.each(DISPATCHING.map((entry) => [entry.path, entry] as const))(
+    '`motir %s` hands its agent the tool-call submit, anchored at the card',
+    async (_path, entry) => {
+      const { fx, agentEnv } = await linkedProject();
+      const { item } = await card(fx, `dispatched through ${entry.path}`);
+      agent.script([{ exit: 0 }]);
+
+      // `--print-prompt` echoes each prompt to stderr AS IT IS SENT, so what is
+      // asserted is the text the agent received on this path.
+      const args = [
+        entry.path,
+        ...(entry.signature.includes('<scope>') ? [item.identifier] : []),
+        '--print-prompt',
+        '--agent',
+        agent.command,
+      ];
+      const run = await ws.run(args, { env: agentEnv });
+
+      expect(run.stderr).toContain('append_plan_turn tool');
+      expect(run.stderr).toContain('submit_plan_session tool');
+      expect(
+        run.stderr.match(new RegExp(`targetKeys:\\s+\\[${item.identifier}\\]`, 'g')),
+      ).toHaveLength(2);
+      expect(run.stderr).toContain('This is your ONLY contribution');
+      expect(run.stderr).not.toContain('motir plan --detach');
+    },
+  );
 });
 
 describe('a run whose agent FILES A BUG', () => {
@@ -280,8 +420,8 @@ describe('the flags SWITCH THE AGENT OFF, and absence is the assertion', () => {
 describe('`motir auto --auto-approve-replan`', () => {
   it('WAITS for the planner, then reports precisely what it was waiting for', async () => {
     // ⚠️ THE SHAPE THIS SUITE CAN PROVE, and it is the one the story got wrong
-    // first. The agent submits with `--detach` — it must not sit on a planner —
-    // and exits within milliseconds, so the loop arrives while motir-ai is still
+    // first. The agent's submit returns at once (`submit_plan_session` never
+    // waits on a planner) and it exits within milliseconds, so the loop arrives while motir-ai is still
     // WRITING the plan. There is no motir-ai here (its client is stubbed to mint
     // a job id and nothing more), so the plan stays `generating` forever, which
     // is the pathological end of the same case: the run waits its bounded
