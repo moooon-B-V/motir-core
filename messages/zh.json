@@ -6048,7 +6048,7 @@
         "redirected": "正在生成方案……",
         "retrieval": "正在读取计划…",
         "laying": "正在铺开层级…",
-        "authoring": "正在撰写卡片…",
+        "authoring": "正在撰写工作项…",
         "note": "正在思考…",
         "unknown": "进行中…"
       },
@@ -6091,11 +6091,11 @@
       "handoff": "按计划变更理解 — 正在生成方案",
       "stop": "停止",
       "stoppingAction": "正在停止…",
-      "stopping": "正在停止 —— 先完成当前这张卡片。",
+      "stopping": "正在停止 —— 先完成当前这个工作项。",
       "stopped": "你停止了这次运行。",
       "queuedLabel": "待读",
       "queuedRead": "已读",
-      "queuedMarker": "已排队 —— Motir AI 写完当前这张卡片后会读到。",
+      "queuedMarker": "已排队 —— Motir AI 写完当前这个工作项后会读到。",
       "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。",
       "act": {
         "submitted": "提交",

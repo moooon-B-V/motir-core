@@ -24,8 +24,8 @@ import { mapPlanChangeError, noActiveProject } from '../../_errors';
 // typed errors. The service owns the row lock, the `seq` allocation and the
 // idempotency gate.
 //
-// NOT rate-limited, on the same reasoning as the sibling `turns` route
-// (MOTIR-2597): this writes one row against a job that is ALREADY running and
+// NOT rate-limited, deliberately — on the same reasoning as the sibling `turns`
+// route (MOTIR-2597): this writes one row against a job that is ALREADY running and
 // already paid for. No model job is submitted and no provider money is spent, so
 // a ceiling here would only cap a database write. The AI ceiling guards the doors
 // that SUBMIT.

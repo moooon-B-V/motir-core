@@ -324,7 +324,7 @@ describe('A QUEUED turn, and the same turn once the run has READ it (MOTIR-4274)
     expect(screen.getByText('Also drop the narration card.')).toBeTruthy();
     const marker = screen.getByTestId('plan-change-queued');
     expect(marker.textContent).toContain('Queued');
-    expect(marker.textContent).toContain('finishes the card it is writing');
+    expect(marker.textContent).toContain('finishes the work item it is writing');
   });
 
   it('⚠️ the READ state changes THREE things, and none of them is colour', () => {

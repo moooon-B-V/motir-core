@@ -27,8 +27,9 @@ import { mapPlanChangeError, noActiveProject } from '../../../_errors';
 // this door is deliberately unlike the TURN door beside it, which refuses.
 //
 // HTTP only (CLAUDE.md 4-layer): parse the body, call ONE service method, map
-// typed errors. Not rate-limited, for the same reason as its siblings: it writes
-// one row against a job that is already running and already paid for.
+// typed errors. NOT rate-limited, deliberately — for the same reason as its
+// siblings (MOTIR-2597): it writes one row against a job that is already running
+// and already paid for; no model job is submitted.
 export async function POST(req: Request): Promise<Response> {
   const gate = await requireCompliantSession();
   if (!gate.ok) return gate.response;

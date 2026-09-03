@@ -6052,7 +6052,7 @@
         "redirected": "Working on the proposal…",
         "retrieval": "Reading the plan…",
         "laying": "Laying out a level…",
-        "authoring": "Writing a card…",
+        "authoring": "Writing a work item…",
         "note": "Thinking it through…",
         "unknown": "Working…"
       },
@@ -6095,11 +6095,11 @@
       "handoff": "Reading it as a plan change — working on the proposal",
       "stop": "Stop",
       "stoppingAction": "Stopping…",
-      "stopping": "Stopping — finishing this card first.",
+      "stopping": "Stopping — finishing this work item first.",
       "stopped": "You stopped this run.",
       "queuedLabel": "queued",
       "queuedRead": "read",
-      "queuedMarker": "Queued — Motir AI reads this when it finishes the card it is writing.",
+      "queuedMarker": "Queued — Motir AI reads this when it finishes the work item it is writing.",
       "queuedReadMarker": "Read at the boundary — folded into this run.",
       "act": {
         "submitted": "submit",

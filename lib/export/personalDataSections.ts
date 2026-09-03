@@ -112,6 +112,7 @@ export type PersonalDataDelegate =
   | 'plan'
   | 'planChangeSession'
   | 'planChangeTurn'
+  | 'planChangeMailboxEntry'
   | 'workItemTodo'
   | 'planRevision';
 
@@ -463,6 +464,17 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     model: 'planChangeTurn',
     tier: 'tenant',
     basis: 'Turns the reader wrote in a plan-change conversation.',
+    where: (userId) => ({ authorId: userId }),
+  },
+  {
+    table: 'plan_change_mailbox_entry',
+    model: 'planChangeMailboxEntry',
+    tier: 'tenant',
+    // What the reader typed at a RUNNING planning job, and the stops they raised
+    // (Story MOTIR-4054 · MOTIR-4067). `body` is the user's own words verbatim,
+    // so it is exported like a turn — the mailbox is a different table from
+    // `plan_change_turn` only because of WHEN it is read, not WHOSE it is.
+    basis: 'Turns and stops the reader sent to a running plan-change job.',
     where: (userId) => ({ authorId: userId }),
   },
   {

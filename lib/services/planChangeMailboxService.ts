@@ -1,6 +1,7 @@
 import { Prisma, type PlanChangeMailboxEntry } from '@/generated/prisma/client';
 
 import type { ProjectContext } from '@/lib/projects';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 /**
  * The tenancy this service needs, and no more.
@@ -251,6 +252,10 @@ export const planChangeMailboxService = {
    */
   async attachTurn(input: AttachTurnInput, pctx: MailboxContext): Promise<MailboxDeliveryDto> {
     const body = input.body.trim();
+    // The same gate every plan-change door carries (`planChangeSessionsService`):
+    // steering or ending a run is a plan-change WRITE, and `ai:plan` is the
+    // decided policy for it (docs/decisions/permission-inventory.md R5).
+    await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
     const { sessionId } = await requireThreadForJob(input.jobId, pctx);
     if (!body) throw new EmptyPlanChangeTurnError();
 
@@ -298,6 +303,10 @@ export const planChangeMailboxService = {
     idempotencyKey: string,
     pctx: MailboxContext,
   ): Promise<MailboxDeliveryDto> {
+    // The same gate every plan-change door carries (`planChangeSessionsService`):
+    // steering or ending a run is a plan-change WRITE, and `ai:plan` is the
+    // decided policy for it (docs/decisions/permission-inventory.md R5).
+    await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
     const { sessionId } = await requireThreadForJob(jobId, pctx);
     // No RUNNING check: stopping an already-finished run is a NO-OP that answers
     // cleanly, not an error. The control is reachable in states where the click
@@ -329,6 +338,10 @@ export const planChangeMailboxService = {
    * lands, this door stops being the composer's only answer and it can go.
    */
   async peekForJob(jobId: string, pctx: MailboxContext): Promise<MailboxDeliveryDto> {
+    // The same gate every plan-change door carries (`planChangeSessionsService`):
+    // steering or ending a run is a plan-change WRITE, and `ai:plan` is the
+    // decided policy for it (docs/decisions/permission-inventory.md R5).
+    await projectAccessService.assertPermission(pctx.projectId, pctx, 'ai:plan');
     const session = await findThreadForJob(jobId, pctx);
     // Same reading as the boundary read: no thread for this job means nothing is
     // waiting, which is true, and is not an error.
