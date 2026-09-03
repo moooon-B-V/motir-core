@@ -21,8 +21,27 @@ import { describe, expect, it } from 'vitest';
 // is imported, and half the ways Fly can leak (a hardcoded API host, an env var,
 // a `state === 'started'` string) are not imports at all.
 
-/** Where Fly may be named. Everything else in `lib/` must not know it exists. */
-const ADAPTER_DIR = join('lib', 'orchestrator', 'adapters', 'fly');
+/**
+ * Where Fly may be named. Everything else in `lib/` must not know it exists.
+ *
+ * ⚠️ TWO directories since MOTIR-4210, and the second is a DIFFERENT PORT rather
+ * than a widening of this one. `lib/publicAddresses/adapters/fly/` speaks to
+ * Fly's CERTIFICATES resource on the `motir-marketing` app, with its own token
+ * (`FLY_CERTS_TOKEN`), for the customer-domain lifecycle — it boots no
+ * container, meters nothing, and imports nothing from `lib/orchestrator/`.
+ *
+ * It is listed here rather than exempted per-file because this guard's REACH is
+ * deliberately all of `lib/` (a boundary narrowed to the directory it protects
+ * is one you evade by moving a file), so a second legitimate adapter has to be
+ * named somewhere. Its own boundary — that the certificate port's callers never
+ * name Fly — is asserted by `tests/publicAddresses/certificatePortBoundary.test.ts`,
+ * which is the same rule one port over. Neither guard covers the other, and
+ * that is why there are two.
+ */
+const ADAPTER_DIRS = [
+  join('lib', 'orchestrator', 'adapters', 'fly'),
+  join('lib', 'publicAddresses', 'adapters', 'fly'),
+];
 
 /**
  * The COMPOSITION ROOT — the one file outside the adapter that must name it.
@@ -147,7 +166,7 @@ function violations(): Array<{ file: string; what: string; line: string }> {
       const rel = relative(root, file);
       // The adapter itself is where Fly lives; the selector is where it is
       // chosen. Those two, and nothing else.
-      if (rel.startsWith(ADAPTER_DIR + sep)) continue;
+      if (ADAPTER_DIRS.some((dir) => rel.startsWith(dir + sep))) continue;
       if (rel === COMPOSITION_ROOT) continue;
       const source = stripComments(readFileSync(file, 'utf8'));
       for (const { pattern, what } of FLY_TELLS) {
