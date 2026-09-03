@@ -185,6 +185,9 @@ const SELF_WALKING_MEMBERS = [
   // and over `lib`/`app`/`components`; it imports no scanner, so nothing
   // derives it.
   'tests/packages/importDirection.test.ts',
+  // MOTIR-4299 / MOTIR-4300. Its own `readdirSync` over four roots; it imports no
+  // scanner, so nothing derives it.
+  'tests/ciFleet/orchestratorPortBoundary.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

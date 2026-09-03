@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+// A plain-node CI script with JSDoc types, imported here so its parser is
+// exercised by the suite rather than only by CI. `allowJs` + `checkJs` off means
+// TypeScript reads its JSDoc and types these four — which is why every reading
+// below has to answer the `| null` the parser really returns.
 import {
   inDependencyOrder,
   overTheLine,
   parseDiagnostics,
   projectsOf,
-  // @ts-expect-error -- a plain-node CI script with JSDoc types, imported here so
-  // its parser is exercised by the suite rather than only by CI. It has no `.d.ts`
-  // and does not want one: it must run under bare `node` with no build step.
 } from '../scripts/ci/assert-typecheck-headroom.mjs';
 
 // Guard for MOTIR-4294 — the heap-headroom tripwire, in three parts:
@@ -112,8 +115,9 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
   it('parses a REAL `--extendedDiagnostics` run at the pinned TypeScript version', () => {
     const scripts = parseDiagnostics(SCRIPTS_CAPTURE);
     const tests = parseDiagnostics(TESTS_CAPTURE);
-    expect(scripts).not.toBeNull();
+    expect(scripts, 'the pinned TypeScript stopped printing `Memory used`').not.toBeNull();
     expect(tests).not.toBeNull();
+    if (!scripts || !tests) throw new Error('unreachable — asserted above');
     // Real numbers from those runs, so a parser that started matching the wrong
     // line (the `Aggregate Memory used` one, say) fails here rather than
     // reporting a plausible number.
@@ -129,7 +133,7 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
     // files); the answer is the second.
     expect(SCRIPTS_CAPTURE.match(/^Memory used:/gm)).toHaveLength(2);
     expect(SCRIPTS_CAPTURE).toContain('Files:                         5511');
-    expect(parseDiagnostics(SCRIPTS_CAPTURE).files).toBe(1998);
+    expect(parseDiagnostics(SCRIPTS_CAPTURE)?.files).toBe(1998);
   });
 
   it('returns null on output that carries no reading at all', () => {
@@ -142,8 +146,8 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
 
   it('fails the reading that is over the line and passes the one that is under', () => {
     const readings = [
-      { project: 'tsconfig.scripts.json', memoryKb: parseDiagnostics(SCRIPTS_CAPTURE).memoryKb },
-      { project: 'tsconfig.tests.json', memoryKb: parseDiagnostics(TESTS_CAPTURE).memoryKb },
+      { project: 'tsconfig.scripts.json', memoryKb: parseDiagnostics(SCRIPTS_CAPTURE)!.memoryKb },
+      { project: 'tsconfig.tests.json', memoryKb: parseDiagnostics(TESTS_CAPTURE)!.memoryKb },
     ];
     const breached = overTheLine(readings, LIMIT_BYTES, 0.9);
     expect(breached.map((b) => b.project)).toEqual(['tsconfig.tests.json']);
@@ -177,6 +181,50 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
     // is not measured twice.
     expect(inDependencyOrder(['c'], (p: string) => refs[p] ?? [])).toEqual(['c']);
   });
+
+  it('parses the diagnostics of an ACTUAL `tsc` run, not only the captured one', () => {
+    // ⚠️ THE SEAM (MOTIR-4300). Every assertion above reads a FIXTURE, and a
+    // fixture is a photograph: it proves the parser reads the format as it was
+    // on the day it was captured, and it will keep proving that after a
+    // TypeScript upgrade changes the format. This is the assertion that goes red
+    // instead — it runs the compiler that `package.json` pins, right now, and
+    // parses what it actually printed.
+    //
+    // The SMALLEST project, into a THROWAWAY outDir: the package is ~3 s cold,
+    // and writing somewhere else means this test neither reads nor invalidates
+    // the `.tsout/` state a concurrent `pnpm typecheck` is using.
+    const out = mkdtempSync(join(tmpdir(), 'typecheck-headroom-'));
+    try {
+      const output = execFileSync(
+        process.execPath,
+        [
+          join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc'),
+          '-p',
+          join(ROOT, 'packages/orchestrator/tsconfig.json'),
+          '--outDir',
+          out,
+          '--tsBuildInfoFile',
+          join(out, 'tsconfig.tsbuildinfo'),
+          '--extendedDiagnostics',
+        ],
+        { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
+      );
+
+      const parsed = parseDiagnostics(output);
+      expect(parsed, 'the pinned TypeScript stopped printing `Memory used`').not.toBeNull();
+      if (!parsed) throw new Error('unreachable — asserted above');
+      // Real numbers, so a parser that matched the wrong line still fails: the
+      // package is small but not empty, and it does allocate.
+      expect(parsed.files).toBeGreaterThan(100);
+      expect(parsed.memoryKb).toBeGreaterThan(50_000);
+      // …and the reading is a plausible fraction of a real heap rather than a
+      // number in the wrong unit, which is the other way a parser goes wrong
+      // quietly (bytes read as kilobytes gates on nothing for ever).
+      expect((parsed.memoryKb * 1024) / 1024 ** 3).toBeLessThan(4);
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   it('parses a tsconfig whose include glob contains `/**/`', () => {
     // The regression this file's own parser hit: a comment-stripping regex turns
