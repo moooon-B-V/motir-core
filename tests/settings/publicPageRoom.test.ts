@@ -50,6 +50,29 @@ describe('the Public page room 404s off-cloud (MOTIR-3908 · MOTIR-4243)', () =>
   });
 });
 
+describe('the room island is mounted on the hero read (MOTIR-4171)', () => {
+  const src = code(PAGE);
+
+  it('renders `PublicPageEditor` with the three fields `getPublicHero` returns as its initial values', () => {
+    // MOTIR-4243 shipped the read and left it unconsumed on purpose; the island
+    // is the consumer, and a page that read the fields and rendered nothing
+    // with them would be the mount without the room.
+    expect(src).toContain("from './_components/PublicPageEditor'");
+    expect(src).toContain('projectsService.getPublicHero(');
+    expect(src).toContain('initial={initialHero}');
+    expect(src).not.toContain('_initialHero');
+  });
+
+  it('threads the access level and the PUBLIC host’s URL, never the app origin', () => {
+    // The not-yet-public band and the head link hang off `accessLevel`; the
+    // link's host comes from `publicProjectUrl` (MOTIR-4242's accessor), which
+    // is a server read the client island cannot make.
+    expect(src).toContain("isPublic={ctx.project.accessLevel === 'public'}");
+    expect(src).toContain('publicPageUrl={publicProjectUrl(ctx.project.identifier)}');
+    expect(src).not.toContain('window.location');
+  });
+});
+
 describe('the destination guard, and the key it is NOT allowed to re-declare', () => {
   const src = code(PAGE);
 
