@@ -1,0 +1,148 @@
+import type { Prisma } from '@/generated/prisma/client';
+import { liveRowsAtLatestSha, type PrCheckRunSlice } from '@/lib/github/prCiState';
+import { liveCheckRows } from '@/lib/github/checkSuites';
+import { readCommitCheckRuns, type ReportedCheckRun } from '@/lib/github/checkRuns';
+import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
+
+// THE RECORDED SET IS NOT THE WHOLE SET (MOTIR-4199).
+//
+// Every verdict Motir forms about a commit — the feedback comment's summary, the
+// aggregate `ciState`, and both promotion edges — is a fold over the check rows
+// RECORDED at the head sha. None of them knew how many checks the commit HAS, so
+// the absence of a pending row was read as "nothing is pending". GitHub delivers
+// check runs one webhook at a time, so the recorded set being a PREFIX of the
+// real one is not an edge case: it is the ordinary state of every pull request
+// for the first minutes of its life. A commit with five jobs whose first three
+// successes were processed before the other two were recorded produced
+// `✅ CI passing — all 3 checks succeeded … This work is verified` and promoted
+// the card to In Review with the repository's whole test suite still running.
+//
+// ── THE SHAPE OF THE FIX: A FACT, NOT AN ABSENCE ────────────────────────────
+// The same shape MOTIR-3823 chose for its own twin of this trap. Terminality is
+// ESTABLISHED by asking the host what check runs the commit has, and the answer
+// is written into the SAME table every derivation already reads — as ordinary
+// rows, with the ordinary conclusions. Nothing downstream learns a new concept:
+// a `pending` row at the head sha already makes `summarizeChecks` render
+// `⏳ CI running — 3 of 5 checks complete`, already makes `derivePrCiState`
+// return `running`, and `running` is already what both promotion edges withhold
+// on. The defect was never in how the folds treat what they see; it was that
+// they could not see two of the rows.
+//
+// ── WHEN THE CALL IS PAID ───────────────────────────────────────────────────
+// Exactly when the recorded set CLAIMS to be complete — no live pending row at
+// the head sha — because that claim is the only thing this module exists to
+// check. In the ordinary case, where the host's `created`/`in_progress`
+// deliveries arrive before the slow lanes finish, pending rows are already there
+// and no call is made at all: a motir-core pull request carrying ~34 checks pays
+// for one round trip on the delivery that would otherwise have asserted a
+// verdict, not for thirty-four.
+//
+// ── WHAT IT DOES NOT ESTABLISH ──────────────────────────────────────────────
+// It reads the runs GitHub has CREATED. A workflow that has not started yet is
+// in no snapshot and cannot be — the window narrows from "however many webhooks
+// have been processed" to "however many runs the host has created", which is the
+// whole of the improvement and the whole of the limit. And a host that cannot be
+// reached answers `null`, which is NOT "no checks": the caller then falls back
+// to the recorded set, i.e. to the behaviour that shipped before this module, so
+// a transient GitHub outage costs the sharper verdict rather than stalling every
+// card behind it for ever. `docs/decisions/ci-verdict-expected-check-set.md`
+// records both, with the alternative that was measured against them.
+
+/**
+ * The commit at which the recorded set ASSERTS that it is the whole set — or
+ * `null` when it asserts nothing.
+ *
+ * A set claims completeness when there is at least one live row at the latest
+ * recorded sha and none of them is `pending`, which is precisely the state in
+ * which the comment writes a terminal verdict and the promotion fires. A set
+ * with a pending row is already interim and already withholding; an empty set
+ * claims nothing at all.
+ *
+ * ⚠️ IT RETURNS THE SHA RATHER THAN A BOOLEAN, and that is not a convenience.
+ * A caller needs both answers — *should I ask the host?* and *about which
+ * commit?* — and deriving the second separately means a second `null` arm the
+ * first has already ruled out: `liveRowsAtLatestSha` is non-empty exactly when
+ * the claim holds, so a companion `latestRecordedSha` helper is a branch that
+ * cannot be taken and cannot be tested. One function answers both, over the SAME
+ * window the verdict is formed at.
+ */
+export function claimedCompleteSha(checkRuns: PrCheckRunSlice[]): string | null {
+  const atHead = liveRowsAtLatestSha(checkRuns);
+  if (atHead.length === 0) return null;
+  return atHead.every((row) => row.conclusion !== 'pending') ? atHead[0]!.commitSha : null;
+}
+
+/** The same question asked about ONE known sha rather than the latest recorded
+ *  one — what the CI-feedback consumer has, since a delivery names its commit. */
+export function shaSetClaimsComplete(
+  rows: { checkName: string; checkSuiteId: string; conclusion: string }[],
+): boolean {
+  const live = liveCheckRows(rows);
+  return live.length > 0 && live.every((row) => row.conclusion !== 'pending');
+}
+
+/**
+ * Read every check run the host holds for one commit — the provider half, split
+ * out so the callers depend on a function rather than on `fetch`.
+ *
+ * Returns `null` when the set could not be established; see the module header
+ * for why that is not the same answer as an empty array.
+ */
+export async function readReportedCheckSet(args: {
+  installationId: string;
+  owner: string;
+  name: string;
+  commitSha: string;
+}): Promise<ReportedCheckRun[] | null> {
+  return readCommitCheckRuns(args.installationId, args.owner, args.name, args.commitSha);
+}
+
+/**
+ * Write a row for every reported check the recorded set is missing.
+ *
+ * ⚠️ IT ONLY EVER CREATES (`createMissing`). The snapshot was taken outside this
+ * transaction, so a delivery about one of these checks may have landed in
+ * between; the unique key is the arbiter, and a row that already exists wins
+ * whatever the snapshot believed about it. That is what lets the reconcile run
+ * without a lock of its own, and it is why a `pending` conclusion written here
+ * can never overwrite a terminal one written by a delivery.
+ *
+ * ⚠️ AND IT WRITES THE HOST'S OWN CONCLUSION, not `pending` for everything it
+ * did not have. The two transports describe the same checks, so a run the
+ * snapshot reports as completed is recorded as completed — which makes the
+ * reconcile SELF-HEALING for a webhook delivery that was dropped, instead of
+ * leaving a card held at Implemented for ever behind a row nothing will refresh.
+ * The webhook's own later delivery upserts the identical value and is a no-op.
+ *
+ * Returns how many rows it created — zero meaning the recorded set was already
+ * whole, which is the answer in the healthy case.
+ */
+export async function reconcileRecordedCheckSet(args: {
+  pullRequestId: string;
+  commitSha: string;
+  reported: ReportedCheckRun[];
+  recorded: { checkName: string; checkSuiteId: string }[];
+  tx: Prisma.TransactionClient;
+}): Promise<number> {
+  const have = new Set(args.recorded.map((row) => identity(row.checkName, row.checkSuiteId)));
+  const missing = args.reported.filter(
+    (run) => !have.has(identity(run.checkName, run.checkSuiteId)),
+  );
+  return githubCheckRunRepository.createMissing(
+    missing.map((run) => ({
+      pullRequestId: args.pullRequestId,
+      commitSha: args.commitSha,
+      checkName: run.checkName,
+      checkSuiteId: run.checkSuiteId,
+      conclusion: run.conclusion,
+    })),
+    args.tx,
+  );
+}
+
+/** The ingestion key's own identity, minus the two members that are fixed for
+ *  one `(pull request, commit)` — kept here so the reconcile cannot drift from
+ *  the unique index it is filling in. */
+function identity(checkName: string, checkSuiteId: string): string {
+  return `${checkSuiteId} ${checkName}`;
+}

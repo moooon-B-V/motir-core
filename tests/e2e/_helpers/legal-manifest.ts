@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import type { APIRequestContext, Page } from '@playwright/test';
 import type { LegalDocument } from '@/lib/legal/documents';
 
@@ -124,4 +125,94 @@ export async function readLegalHealth(
   const request = 'request' in target ? target.request : target;
   const response = await request.get('/api/health/legal');
   return (await response.json()) as LegalManifestReport;
+}
+
+// ── THE SHARED SURFACE ASSERTIONS (Subtask MOTIR-4105) ───────────────────────
+//
+// Two acceptance specs now walk the same three surfaces — `acceptance-legal-
+// manifest.spec.ts` (MOTIR-4015, the manifest arriving) and
+// `acceptance-legal-gone.spec.ts` (MOTIR-4105, the documents leaving) — and a
+// third asserts the self-host arm in the main lane. The assertions themselves
+// are the same sentences about the same DOM, so they live here once.
+//
+// ⚠️ THIS IS NOT TIDINESS, IT IS THE CARD'S OWN CRITERION. MOTIR-4105 asks that
+// the two specs "are not silently divergent copies": copied assertions drift
+// one edit at a time, and the drift is invisible because both files stay green
+// — each is asserting its own copy. Extracted, a change to what the sign-up
+// notice must say reaches every lane that walks it, or fails to compile.
+//
+// What is NOT extracted: the mount checks, the chapter prose, and anything a
+// spec asserts about ITS OWN arm. Those are the parts that are supposed to
+// differ, and folding them in here would hide the difference the specs exist to
+// record.
+
+/**
+ * Sign-up NAMES both documents, and each link leaves this application.
+ *
+ * The element AND the attribute, both — a cross-origin `next/link` renders an
+ * `<a>` that looks identical in a snapshot and behaves differently, and a
+ * pre-manifest build rendered a same-host PATH here that reads the same to
+ * every assertion except this one.
+ */
+export async function expectSignUpNamesTheDocuments(page: Page): Promise<void> {
+  await expect(page.getByText(/you agree to our/i)).toBeVisible();
+  for (const [name, slug] of [
+    [/^Terms of Service/, 'terms'],
+    [/^Privacy Policy/, 'privacy'],
+  ] as const) {
+    const link = page.getByRole('link', { name });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute('href', e2eLegalUrl(slug));
+    expect(await link.evaluate((element) => element.tagName), `${slug} is a plain anchor`).toBe(
+      'A',
+    );
+  }
+}
+
+/**
+ * The notice is ABSENT, not re-flowed (`public-surface-hosts.md` AMENDMENT 2 §D).
+ *
+ * `legal.signUpNotice` is a sentence entirely ABOUT two documents; rendered
+ * without them it is not a weaker notice, it is a FALSE one, so `LegalNotice`
+ * returns null. Asserting only "it carries no anchor" would pass on the exact
+ * fragment the decision exists to avoid, which is why the text assertions come
+ * first and the anchor assertion last.
+ *
+ * The final two assertions are the CONTROL: the card's foot must still read as
+ * a foot. The notice carried the `border-t` and the `pt-4`, so its removal takes
+ * a hairline as well as a sentence, and "the paragraph is gone" and "the page
+ * did not render" are otherwise the same observation.
+ */
+export async function expectSignUpHasNoLegalNotice(page: Page): Promise<void> {
+  await expect(page.getByPlaceholder('Email address')).toBeVisible();
+  await expect(page.getByText(/you agree to our/i)).toHaveCount(0);
+  await expect(page.getByText(/Terms of Service/i)).toHaveCount(0);
+  await expect(page.locator('a[href*="legal"]')).toHaveCount(0);
+  await expect(page.getByText(/Already have an account\?/i)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
+}
+
+/**
+ * The rail offers a Legal door onto the configured INDEX — derived from the
+ * documents' shared base, not a fifth configuration value and not a path on
+ * this host.
+ */
+export async function expectRailLegalRow(page: Page): Promise<void> {
+  const legal = page.getByRole('link', { name: 'Legal', exact: true });
+  await expect(legal).toBeVisible();
+  await expect(legal).toHaveAttribute('href', E2E_LEGAL_BASE);
+}
+
+/**
+ * The rail has NO Legal row — with the Docs row beside it as the control.
+ *
+ * ⚠️ THE CONTROL IS LOAD-BEARING AND IT IS ALSO CONDITIONAL NOW. `lib/docs/
+ * links.ts` resolves the Docs row from an operator's absolute `MOTIR_DOCS_URL`
+ * and renders nothing when it is unset, so this helper only works in a lane
+ * that configures one. Both lanes that call it do (see either config). Without
+ * it, "no Legal row" and "no rail" are the same observation.
+ */
+export async function expectNoRailLegalRow(page: Page): Promise<void> {
+  await expect(page.getByRole('link', { name: 'Docs', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Legal', exact: true })).toHaveCount(0);
 }

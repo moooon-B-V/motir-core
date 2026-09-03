@@ -385,6 +385,21 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * walks deliberately signs the reader out halfway through. The other two are a
  * single navigation each. Re-measure from the first green CI run that includes
  * it.
+ *
+ * ⚠️ `legal-gone-selfhost.spec.ts` (MOTIR-4105) is new, with the same LOCAL
+ * provenance as the three above. Measured on 2026-09-03 against a production
+ * build on port 3000, FOUR consecutive runs, `1 passed` every time: **1.5 s,
+ * 1.1 s, 0.9 s, 1.1 s** of test body. The four are a deliberate no-flake check
+ * the card asked for, not a search for a best case — so the number recorded is
+ * the **COLDEST** (1.5 s), following every spec above, because under-estimating
+ * is the direction that unbalances a bin-packer.
+ *
+ * Recorded as **3.0**: the cold reading plus headroom, and in line with its
+ * nearest neighbour by shape — `billing-selfhost.spec.ts` at 2.7, which is the
+ * same kind of spec (the self-host arm of a capability, driven in the main lane
+ * because `playwright.config.ts` IS that arm). It is cheap because five of its
+ * assertions are bare HTTP reads with no page load; what it pays for is the one
+ * sign-up. Re-measure from the first green CI run that includes it.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // MOTIR-4094 — promoted receipt specs, ESTIMATED for their first main-lane
@@ -459,6 +474,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'jobs-postgres-engine.spec.ts': 24.8,
   'jobs-scheduled-engine.spec.ts': 14.6,
   'labels-components-watch.spec.ts': 28.5,
+  'legal-gone-selfhost.spec.ts': 3.0,
   'link-search-flow.spec.ts': 14.6,
   'member-facing-permissions.spec.ts': 7.7,
   'migrate-index-fleet.spec.ts': 26.7,

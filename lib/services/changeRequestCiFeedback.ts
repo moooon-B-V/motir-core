@@ -6,6 +6,8 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubCiFeedbackCommentRepository } from '@/lib/repositories/githubCiFeedbackCommentRepository';
 import { liveCheckRows } from '@/lib/github/checkSuites';
+import type { ReportedCheckRun } from '@/lib/github/checkRuns';
+import { reconcileRecordedCheckSet, shaSetClaimsComplete } from './checkSetReconcile';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
 import { workItemsService } from './workItemsService';
@@ -102,6 +104,20 @@ export interface CiFeedbackContext {
   installation: GithubInstallation;
   repo: GithubRepo;
   buildChecksUrl: (changeRequestNumber: number) => string;
+  /**
+   * Ask the HOST which check runs a commit actually has (MOTIR-4199) — the one
+   * thing this consumer cannot derive, because every derivation it makes is a
+   * fold over the rows that have been RECORDED and nothing in that path knows
+   * how many rows there will be.
+   *
+   * Optional, and its absence is a real answer: a provider that supplies none
+   * keeps the pre-MOTIR-4199 behaviour, which is to trust the recorded set. It
+   * returns `null` when the set could not be established (unreachable host,
+   * refused permission, an unparseable answer) — NOT the same as an empty array,
+   * which says the commit genuinely has no checks. `lib/services/checkSetReconcile.ts`
+   * carries the whole contract.
+   */
+  readReportedCheckSet?: (commitSha: string) => Promise<ReportedCheckRun[] | null>;
 }
 
 /** What a provider's `resolveContext` returns: the resolved context, or a typed
@@ -216,6 +232,7 @@ export async function applyCiStatusFeedback(
        *  left the generated client with MOTIR-3863, and the comment's identity
        *  is `github_ci_feedback_comment`'s. */
       existing: existing ? { conclusion: existing.conclusion } : null,
+      readReportedCheckSet: ctx.readReportedCheckSet,
       actorUserId: owner?.userId ?? null,
     };
   });
@@ -320,7 +337,12 @@ export async function applyCiStatusFeedback(
   // of it spent waiting for the lock. Recording it FIRST makes the render a side
   // effect of a durable write rather than a condition of it (the post-commit
   // side-effects-are-best-effort rule the promotion below already follows).
-  await withSystemContext(async (tx) => {
+  //
+  // ⚠️ IT ALSO RETURNS THE COMMIT'S RECORDED SET, which costs one indexed read in
+  // a transaction that is already open and saves MOTIR-4199's claim check below
+  // from projecting this delivery into a set read before it: the row is committed
+  // here, so what comes back IS the set the render is about to fold.
+  const recordedAtSha = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, resolved.workspaceId);
     await githubCheckRunRepository.upsert(
       {
@@ -332,7 +354,39 @@ export async function applyCiStatusFeedback(
       },
       tx,
     );
+    return githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx);
   });
+
+  // ── 1b. IS THAT SET THE WHOLE SET? (MOTIR-4199) ──────────────────────────
+  // Everything below folds these rows into a sentence and an action —
+  // `⏳ CI running — 3 of 5` versus `✅ all 3 checks succeeded … This work is
+  // verified`, and In Review versus held at Implemented. Every one of those
+  // derivations reads the RECORDED rows, and none of them knows how many rows the
+  // commit will have: GitHub delivers check runs one webhook at a time, so a
+  // recorded set that is a PREFIX of the real one is the ordinary state of a pull
+  // request's first minutes. The observed instance wrote the verified sentence and
+  // promoted the card on three of five checks with the whole test suite running.
+  //
+  // The round trip is paid ONLY when the set CLAIMS to be whole — no live pending
+  // row at this commit. With one there, the comment is interim and the promotion
+  // withholds already, so there is no claim to check: a pull request carrying ~34
+  // checks pays once, not thirty-four times. `lib/services/checkSetReconcile.ts`
+  // carries the contract, the cost and what a `null` answer means.
+  if (resolved.readReportedCheckSet && shaSetClaimsComplete(recordedAtSha)) {
+    const reported = await resolved.readReportedCheckSet(event.commitSha).catch(() => null);
+    if (reported !== null) {
+      await withSystemContext(async (tx) => {
+        await bindWorkspaceContext(tx, resolved.workspaceId);
+        await reconcileRecordedCheckSet({
+          pullRequestId: resolved.prId,
+          commitSha: event.commitSha,
+          reported,
+          recorded: recordedAtSha,
+          tx,
+        });
+      });
+    }
+  }
 
   // ── 2. RENDER THE FEEDBACK — the FOLD under the lock, the WRITES outside it ──
   // Best-effort by construction (see `renderFeedbackComments`): the row above is
