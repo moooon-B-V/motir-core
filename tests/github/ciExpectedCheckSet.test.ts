@@ -463,6 +463,120 @@ describe('BOTH promotion edges withhold on the same set — asserted separately'
   });
 });
 
+describe('the ARRIVAL edge’s reconcile is best-effort — it never costs the card', () => {
+  it('judges what is recorded when the host answers "could not establish"', async () => {
+    const s = await makeScenario('edge2-null@example.com');
+    const card = await cardWithPr(s, 'the host is down on arrival', 120);
+    await seedRows(
+      120,
+      THE_THREE.map((n) => [n, 'success'] as [string, 'success']),
+    );
+
+    // `null` is "no answer", not "no checks" — so the edge falls back to the
+    // recorded set, which is the behaviour that shipped before this pass.
+    const promoted = await promoteIfCiAlreadyGreen(card.id, s.ctx, async () => null);
+
+    expect(promoted).toBe(true);
+    expect(await statusOf(card.id)).toBe('in_review');
+    expect(await checkRowsAtHead()).toHaveLength(3);
+  });
+
+  it('a reader that THROWS is swallowed — the verdict still gets made', async () => {
+    const s = await makeScenario('edge2-throws@example.com');
+    const card = await cardWithPr(s, 'the reader exploded', 121);
+    await seedRows(
+      121,
+      THE_THREE.map((n) => [n, 'success'] as [string, 'success']),
+    );
+
+    const promoted = await promoteIfCiAlreadyGreen(card.id, s.ctx, async () => {
+      throw new Error('the host refused the connection');
+    });
+
+    expect(promoted).toBe(true);
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('and so is a reader that throws something that is not an Error', async () => {
+    // The log line has to render whatever was thrown; a non-Error throw is the
+    // arm that turns a best-effort pass into a crash if it is not handled.
+    const s = await makeScenario('edge2-throws-string@example.com');
+    const card = await cardWithPr(s, 'the reader threw a string', 122);
+    await seedRows(
+      122,
+      THE_THREE.map((n) => [n, 'success'] as [string, 'success']),
+    );
+
+    const promoted = await promoteIfCiAlreadyGreen(card.id, s.ctx, async () => {
+      throw 'not an Error at all';
+    });
+
+    expect(promoted).toBe(true);
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+
+  it('asks nothing at all for a card that is not at Implemented', async () => {
+    // The pre-pass is there to make the ARRIVAL edge honest, and a card that has
+    // not arrived is not its business — asking the host for one would pay a
+    // round trip for a verdict that is about to be declined anyway.
+    const s = await makeScenario('edge2-not-implemented@example.com');
+    const card = await cardWithPr(s, 'still being worked on', 123);
+    await seedRows(
+      123,
+      THE_THREE.map((n) => [n, 'success'] as [string, 'success']),
+    );
+    await workItemsService.updateStatus(card.id, 'in_progress', s.ctx);
+
+    const asked: string[] = [];
+    const promoted = await promoteIfCiAlreadyGreen(card.id, s.ctx, async (args) => {
+      asked.push(args.commitSha);
+      return [];
+    });
+
+    expect(asked).toEqual([]);
+    expect(promoted).toBe(false);
+    expect(await statusOf(card.id)).toBe('in_progress');
+  });
+
+  it('asks nothing for a member whose recorded set is still PENDING', async () => {
+    const s = await makeScenario('edge2-pending-member@example.com');
+    const card = await cardWithPr(s, 'a lane is still running', 124);
+    await seedRows(124, [
+      [THE_THREE[0]!, 'success'],
+      [THE_OTHER_TWO[0]!, 'pending'],
+    ]);
+
+    const asked: string[] = [];
+    const promoted = await promoteIfCiAlreadyGreen(card.id, s.ctx, async (args) => {
+      asked.push(args.commitSha);
+      return [];
+    });
+
+    expect(asked).toEqual([]);
+    expect(promoted).toBe(false);
+    expect(await statusOf(card.id)).toBe('implemented');
+  });
+
+  it('asks nothing for a card with NO pull request at all', async () => {
+    const s = await makeScenario('edge2-no-pr@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'no pull request' },
+      s.ctx,
+    );
+    await workItemsService.updateStatus(item.id, 'in_progress', s.ctx);
+    await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
+
+    const asked: string[] = [];
+    const promoted = await promoteIfCiAlreadyGreen(item.id, s.ctx, async (args) => {
+      asked.push(args.commitSha);
+      return [];
+    });
+
+    expect(asked).toEqual([]);
+    expect(promoted).toBe(false);
+  });
+});
+
 describe('what the round trip COSTS, and when it is not paid', () => {
   it('is NOT paid while a live PENDING row is recorded at the head sha', async () => {
     // The ordinary case: GitHub's `created` / `in_progress` deliveries arrive
