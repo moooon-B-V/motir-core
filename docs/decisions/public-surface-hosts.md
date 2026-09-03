@@ -1271,8 +1271,11 @@ row 8 went this way.
   parameter, or one per act. **MOTIR-4114**, within §F's constraints.
 - **Whether a self-hoster ever gets public projects.** §5 is unchanged; the two
   newly-gated routes join the capability, they do not re-open it.
-- **Per-tenant addressing and a separate registrable domain.** **MOTIR-3878**,
-  with §4's reversal condition and §G's first bullet as inputs.
+- ~~**Per-tenant addressing and a separate registrable domain.** **MOTIR-3878**,
+  with §4's reversal condition and §G's first bullet as inputs.~~ **DECIDED —
+  AMENDMENT 5 (MOTIR-4206, 2026-09-03):** a separate registrable domain, recorded
+  in `docs/decisions/public-tenant-addresses.md`. §4's reversal condition is
+  closed. What remains under MOTIR-3878 is implementation.
 
 ### Sources
 
@@ -1293,3 +1296,70 @@ row 8 went this way.
   https://support.atlassian.com/statuspage/docs/how-are-subscribers-counted/
 - Notion — https://www.notion.com/help/public-pages-and-web-publishing
 - MOTIR-4166 — the planning bug for §A's two measurement errors
+
+---
+
+## AMENDMENT 5 — §4's reversal condition is CLOSED: tenant addresses move to a separate registrable domain, and the accepted exposure is retired one project at a time (MOTIR-4206, 2026-09-03)
+
+§4 accepted a deviation it named as a deviation — tenant-authored content on
+`motir.co`, the parent domain of the host that holds the session, where every
+mirror puts tenant content on a separate registrable domain. It accepted the
+residual exposure **on a condition** (the session cookie stays host-only) and it
+wrote a reversal condition naming MOTIR-3878 as where the arrangement is
+revisited. **This amendment is that revisit, and it closes the condition.**
+
+### §A — The decision
+
+**Per-tenant addresses hang off a SEPARATE REGISTRABLE DOMAIN, never a subdomain
+of `motir.co`.** `docs/decisions/public-tenant-addresses.md` is the record; §2 of
+it fixes the shape the domain must have and ranks RDAP-checked candidates, and
+MOTIR-4208 buys one.
+
+Both of §4's own reasons are honoured rather than argued with:
+
+1. **The exposure is not multiplied — it is REDUCED, one project at a time.**
+   §4's fear was that _"one origin of user content becomes one per customer, all
+   under the session's registrable domain."_ Under the new record, a tenant
+   origin is `<workspace>.<base>`, which is a different **site** from
+   `app.motir.co` by the browser's own rule, not merely a different origin. And
+   the canonical rule (that record's §7) means that once a project claims an
+   address, **`motir.co/p/<identifier>` for that project becomes a `301`** and
+   serves no tenant content at all. So each claim removes an origin of tenant
+   content from `motir.co` rather than adding one beside it.
+2. **The certificate arithmetic works.** A two-level base gives `acme.<base>`
+   under one wildcard `*.<base>`, which is §4's second reason satisfied exactly.
+
+### §B — What is UNCHANGED
+
+- **The host-only session cookie stays host-only.** It was the condition on which
+  the residual exposure was accepted, and this amendment does not spend it — it
+  removes the thing it was compensating for. MOTIR-3877's test gate stands.
+- **`motir.co/p/*` survives** for every project that has claimed no address,
+  which is the default and stays free. §4's arrangement remains the arrangement
+  for that population; what changes is that it is no longer the _only_ one.
+- **§5's cloud gate is untouched.** A build with no public projects has no
+  addresses; the new surfaces inherit `publicSurfaceUnavailable()` / `isCloud()`
+  rather than re-deciding.
+- **No subprocessor row.** The base domain is registered at Spaceship, which
+  already holds `motir.co`, and the certificates are issued by Fly on the
+  `motir-marketing` app — both already in the stack. `marketing-site-hosting.md`
+  §5's reasoning is what rejects the alternative (Cloudflare for SaaS) that would
+  have added one.
+
+### §C — What §9's entry becomes
+
+§9's bullet _"Per-tenant addressing and a separate registrable domain — MOTIR-3878"_
+is **discharged**. The question is decided here and in
+`public-tenant-addresses.md`; what remains under MOTIR-3878 is implementation,
+not a decision this record is waiting on. §9 is updated in place.
+
+### §D — What this amendment does NOT do
+
+- It does **not** move `app.motir.co` or `motir.co`. Both keep answering exactly
+  what §2 says they answer.
+- It does **not** decide the base domain's string — that is
+  `public-tenant-addresses.md` §2 plus MOTIR-4208, and no code contains it either
+  way.
+- It does **not** depend on the Public Suffix List. §4 already said so —
+  _"A separate domain gets the isolation immediately; PSL listing is a later
+  refinement"_ — and MOTIR-4213 owns the submission.
