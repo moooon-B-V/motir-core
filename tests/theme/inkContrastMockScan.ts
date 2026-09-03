@@ -186,6 +186,19 @@ export interface MockElement {
   attrs: Map<string, string>;
   classes: string[];
   line: number;
+  /**
+   * Byte offset of this element's `<` in the source — MOTIR-4255.
+   *
+   * `line` addresses a finding for a HUMAN; this addresses it for a PROGRAM.
+   * `mockStateInkScan` renders a mock in a real DOM to resolve the surfaces
+   * this file's `stylePaint` abstains on, and a DOM node carries no source
+   * position — so that scanner stamps every opening tag with its own line
+   * before parsing, and needs the offset to know where to write. Recording it
+   * here rather than re-tokenizing the file there keeps ONE tokenizer: two
+   * would be two things to keep in step about which `<` is markup and which is
+   * text inside a `<style>` block.
+   */
+  offset: number;
   /** Index into the flat element list, or -1 at the root. */
   parent: number;
   /** The opening tag, verbatim, for the failure message. */
@@ -288,6 +301,7 @@ export function parseElements(html: string): MockElement[] {
       attrs,
       classes: (attrs.get('class') ?? '').split(/\s+/).filter(Boolean),
       line: lineAt(lt),
+      offset: lt,
       parent: stack.length ? stack[stack.length - 1]! : -1,
       snippet: collapse(html.slice(lt, end + 1)),
       hasText: false,
