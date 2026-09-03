@@ -416,3 +416,60 @@ describe('the ACCEPTANCE lane is gated by the queue, not discovered after it (MO
     expect([...needs].sort()).toEqual(others.sort());
   });
 });
+
+describe('the required context REPORTS on every PR, or it is not a gate (MOTIR-4257)', () => {
+  it('does not paths-filter `pull_request` — a filtered lane never reports', () => {
+    // ⚠️ THE ONE THAT BRICKS THE REPO IF IT REGRESSES. GitHub admits a PR to the
+    // merge queue only once the branch's required checks have passed ON THE PR
+    // itself. A `paths:`-filtered workflow does not run on a PR that matches
+    // nothing, so `Acceptance complete` never reports, and a required context
+    // that never reports is not a passing gate — it is a PR that can never
+    // merge. Restoring `paths:` under `pull_request:` here, while the ruleset
+    // requires this context, blocks every PR that touches no acceptance file.
+    const prBlock = /^ {2}pull_request:\n(?<body>(?: {4}.*\n|\n)*)/m.exec(acceptanceHeader);
+    expect(acceptanceHeader).toMatch(/^ {2}pull_request:\s*$/m);
+    expect(prBlock?.groups?.body ?? '').not.toMatch(/^ {4}paths:/m);
+  });
+
+  it('keeps the paths decision, moved into the gate job the heavy jobs need', () => {
+    // The filter did not vanish — dropping it outright would run a Next build
+    // and the Playwright fan-out on EVERY pull request. It moved into
+    // `membership`, whose `run` output still gates the expensive jobs, so the
+    // cost profile is unchanged and only the cheap gate + aggregate run on a PR
+    // that owns no spec.
+    const gate = codeOf(acceptanceJobs.get('membership') ?? '');
+    expect(gate).toMatch(/pulls\/\$\{PR_NUMBER\}\/files/);
+    // `--paginate`, because the endpoint pages at 30 and a spec on page two
+    // would read as "touches nothing" — a silent false negative.
+    expect(gate).toMatch(/--paginate/);
+    // Compared as plain substrings: the gate holds a grep PATTERN, so its dots
+    // arrive backslash-escaped and a regex written against the bare path cannot
+    // match them. The stems are what carries the meaning.
+    for (const stem of [
+      'tests/e2e/acceptance',
+      'acceptance-tests',
+      'playwright',
+      'acceptance-(video|diagnostics)',
+    ]) {
+      expect(gate).toContain(stem);
+    }
+    // Both heavy jobs stay downstream of the gate — `build` reads its output
+    // directly, `acceptance` inherits the skip through `build` — so a PR that
+    // matches no path pays the gate and the aggregate, and nothing else.
+    // Read off the job text rather than `needsOfIn`, which parses the inline
+    // and block forms — `build` writes the third, a bare scalar `needs:
+    // membership`.
+    for (const heavy of ['build', 'acceptance']) {
+      expect(codeOf(acceptanceJobs.get(heavy) ?? '')).toMatch(
+        /^ {4}needs:\s*(membership$|\[[^\]]*\bmembership\b)/m,
+      );
+    }
+    expect(jobIfIn(acceptance, 'build')).toMatch(/needs\.membership\.outputs\.run/);
+  });
+
+  it('reads the changed list with a token that is granted, not assumed', () => {
+    const gate = codeOf(acceptanceJobs.get('membership') ?? '');
+    expect(gate).toMatch(/GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/);
+    expect(gate).toMatch(/pull-requests:\s*read/);
+  });
+});
