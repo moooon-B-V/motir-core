@@ -120,8 +120,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ key: s
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     // The shared project error mapper — `NotProjectAdminError` → 403,
-    // `ProjectNotFoundError` → 404, the three field errors → 400/422 — so this
-    // route and every other project route answer a given failure identically.
+    // `ProjectNotFoundError` → 404, the three field errors → 422 naming the
+    // `field` (MOTIR-4171; they were unmapped, i.e. a 500, until the room
+    // needed them) — so this route and every other project route answer a
+    // given failure identically.
     const mapped = projectErrorResponse(err);
     if (mapped) return mapped;
     throw err;

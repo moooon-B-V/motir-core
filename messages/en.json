@@ -2149,7 +2149,53 @@
     },
     "publicPage": {
       "title": "Public page",
-      "subtitle": "The tagline, tags and README of <strong>{projectName}</strong> on its public page."
+      "subtitle": "The tagline, tags and README of <strong>{projectName}</strong> on its public page.",
+      "card": {
+        "title": "Hero & README",
+        "subtitle": "Saved together. Live on the public page the moment you save."
+      },
+      "viewPublicPage": "View public page",
+      "tagline": {
+        "label": "Tagline",
+        "placeholder": "One sentence about what this project is",
+        "help": "Shown under the project’s name. Up to {max} characters."
+      },
+      "tags": {
+        "label": "Tags",
+        "help": "Up to {maxCount} tags, {maxLength} characters each.",
+        "count": "{count} / {maxCount} tags",
+        "add": "Add tag",
+        "addPlaceholder": "New tag",
+        "empty": "No tags yet",
+        "remove": "Remove {tag}"
+      },
+      "readme": {
+        "label": "README",
+        "help": "Markdown. Up to {max, number} characters. What you see here is what visitors see.",
+        "emptyHelp": "Nothing written yet. Until you write a README, the public page shows a short automatic introduction."
+      },
+      "footer": {
+        "dirty": "Unsaved changes",
+        "saving": "Saving…",
+        "saved": "Saved",
+        "invalid": "Fix the highlighted fields to save",
+        "save": "Save changes"
+      },
+      "error": {
+        "taglineTooLong": "Too long — {max} characters at most.",
+        "tagsInvalid": "Each tag must be {maxLength} characters or fewer, and there can be at most {maxCount}.",
+        "overviewTooLong": "Too long — {max, number} characters at most.",
+        "saveFailed": "Couldn’t save the public page. Try again."
+      },
+      "notPublic": {
+        "lead": "Not building in public yet.",
+        "body": "What you save here is kept, and goes live the moment you start building in public in <link>Members & access</link>."
+      },
+      "discard": {
+        "title": "Discard unsaved changes?",
+        "keep": "Keep editing",
+        "discard": "Discard"
+      }
     },
     "publicAddress": {
       "title": "Public address",
