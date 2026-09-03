@@ -751,6 +751,17 @@ export const publicProjectsService = {
     actorUserId: string | null,
   ): Promise<{
     project: { identifier: string; name: string };
+    /**
+     * The project's CANONICAL base URL (MOTIR-4222 · ADR §7's rung 1, which says
+     * in terms that the primary "is the address the product itself emits
+     * everywhere", not only what a `<head>` says).
+     *
+     * The feed is built HERE and forwarded byte-for-byte by `motir.co`
+     * (`motir-marketing`'s `changelog.xml` route explains why it must not
+     * re-serialise the document), so this is the only place a feed's links can
+     * learn where the project's canonical lives.
+     */
+    canonicalBase: string;
     entries: PublicChangelogEntryDto[];
   }> {
     const { project, isMember } = await resolvePublicProject(identifier, actorUserId);
@@ -764,8 +775,14 @@ export const publicProjectsService = {
         tx,
       ),
     );
+    const addresses = await publicAddressesService.addressesForProject(
+      project.id,
+      project.workspaceId,
+      project.identifier,
+    );
     return {
       project: { identifier: project.identifier, name: project.name },
+      canonicalBase: addresses.primary,
       entries: rows.map(toPublicChangelogEntryDto),
     };
   },
