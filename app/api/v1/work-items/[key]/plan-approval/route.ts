@@ -11,9 +11,10 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // by `docs/decisions/run-findings-protocol.md` Q2.
 //
 // ── ADDRESSED BY THE CARD, and that IS the bound ────────────────────────────
-// The caller is a loop whose AGENT submitted the plan, in a sandbox, with
-// `motir plan --detach <KEY>`. The plan id came back on that agent's stdout,
-// which the loop streams to the terminal and never captures — so a
+// The caller is a loop whose AGENT submitted the plan, in a sandbox, with the
+// `submit_plan_session` tool anchored at `targetKeys: [<KEY>]` (MOTIR-4083; the
+// retired door was `motir plan --detach <KEY>`). The plan id came back in that
+// agent's tool result, which the loop never sees — so a
 // plan-addressed route would have meant either a second read to discover the id
 // or a scrape of the agent's output, and the anchoring check would have been a
 // check on data the caller supplied. Addressed by the CARD, there is no way to

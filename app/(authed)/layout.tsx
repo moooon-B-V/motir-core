@@ -17,6 +17,7 @@ import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
 import { isCloud, isCloudBilling } from '@/lib/billing/availability';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 import { legalIndexUrl as resolveLegalIndexUrl } from '@/lib/legal/links';
+import { docsIndexUrl as resolveDocsIndexUrl } from '@/lib/docs/links';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
@@ -202,6 +203,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // `SidebarNav` is a client component. It is a synchronous parse of one
   // environment value, so it joins no wave and costs no round trip.
   const legalIndexUrl = resolveLegalIndexUrl();
+  // Where the rail's `Docs` row points — `null` on a deployment that has
+  // configured no documentation url, and then that row does not render either
+  // (MOTIR-4167). The same shape as the line above, for the same reason: the
+  // documentation left this repository with the public reading surface
+  // (MOTIR-3932), so the row reads the operator's configuration, server-side.
+  const docsIndexUrl = resolveDocsIndexUrl();
 
   // Project data — only meaningful when there's an active workspace. Without
   // one the sidebar hides the project header + project-scoped nav, so skip
@@ -388,6 +395,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       user={{ name: session.user.name, email: session.user.email }}
                       workspaceTierRevealed={workspaceTierRevealed}
                       legalIndexUrl={legalIndexUrl}
+                      docsIndexUrl={docsIndexUrl}
                     />
                   }
                 >
@@ -474,6 +482,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     user={{ name: session.user.name, email: session.user.email }}
                     workspaceTierRevealed={workspaceTierRevealed}
                     legalIndexUrl={legalIndexUrl}
+                    docsIndexUrl={docsIndexUrl}
                   />
                 </SidebarDrawer>
 

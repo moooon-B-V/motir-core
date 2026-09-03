@@ -48,6 +48,9 @@ function renderRail(
       settingsPermissions={permissions}
       user={USER}
       workspaceTierRevealed={workspaceTierRevealed}
+      // The Docs row is one of the controls for "the rows below close up", and
+      // since MOTIR-4167 it renders only when configured — so it is configured.
+      docsIndexUrl="https://motir.co/docs"
     />,
   );
 }

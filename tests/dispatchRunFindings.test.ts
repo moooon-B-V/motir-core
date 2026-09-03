@@ -496,8 +496,9 @@ describe('the PLAN a run SUBMITTED — the ask the record could not name', () =>
     const leaf = await seedLeaf();
     const runId = await openRunWithLiveLeg(leaf.key);
 
-    // The shape a `motir plan --detach <KEY>` thread leaves behind: a
-    // plan-change session anchored at exactly that key, whose `lastJobId` is
+    // The shape a dispatched agent's `submit_plan_session` (anchored at
+    // `targetKeys: [<KEY>]`, MOTIR-4083) leaves behind: a plan-change session
+    // anchored at exactly that key, whose `lastJobId` is
     // the plan's `sourceJobId`. This is the chain `approvePlanForWorkItem`
     // walks forward; the recorder walks it back.
     const jobId = `job_${leaf.key.toLowerCase()}`;

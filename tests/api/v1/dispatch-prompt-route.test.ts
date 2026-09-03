@@ -148,7 +148,7 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     const body = await prompt(caller, item.identifier);
 
     expect(body.prompt).toContain('FOUND A DEFECT');
-    expect(body.prompt).toContain('motir plan --detach');
+    expect(body.prompt).toContain('submit_plan_session');
   });
 
   it('removes the branch the policy names, from the prompt itself', async () => {
@@ -162,7 +162,7 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
 
     expect(body.prompt).not.toContain('create_work_item');
     expect(body.prompt).toContain('Comment the finding on');
-    expect(body.prompt).toContain('motir plan --detach');
+    expect(body.prompt).toContain('submit_plan_session');
   });
 
   it('removes both when both are named', async () => {
@@ -172,7 +172,7 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     const body = await prompt(caller, item.identifier, '?findingsPolicy=log-bug,replan');
 
     expect(body.prompt).not.toContain('create_work_item');
-    expect(body.prompt).not.toContain('motir plan --detach');
+    expect(body.prompt).not.toContain('submit_plan_session');
     expect(body.prompt).toContain('leave the card In Progress');
   });
 

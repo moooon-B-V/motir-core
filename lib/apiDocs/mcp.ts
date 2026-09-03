@@ -7,13 +7,27 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 // The MCP server documentation, AS DATA (Story MOTIR-2309 · Subtask MOTIR-2325 ·
 // design `design/mcp-server/` · ADR `public-api-conventions.md` Amendment 13).
 //
+// ── Who READS this module at runtime (MOTIR-4194) ───────────────────────────
+// `app/api/docs/mcp-tools.json/route.ts` — the PUBLISHED tool catalogue, an
+// anonymous, cacheable, unversioned documentation artifact that `motir.co`'s
+// `/docs/mcp/tools` fetches at request time and renders without keeping a copy
+// (`docs/decisions/public-surface-hosts.md` AMENDMENT 5). It serializes
+// {@link mcpToolCatalogueDocument} and nothing else. The in-repo `/docs/mcp*`
+// pages that used to read this module left with MOTIR-3951, and between that
+// and MOTIR-4194 the module had no runtime reader at all — which is how its
+// truth gate could be deleted as collateral without anything noticing
+// (MOTIR-4165). The route is what makes the totality chain below guard
+// something a reader actually receives.
+//
 // ── The dependency-graph rule this file exists to keep ──────────────────────
-// It imports `lib/mcp/scopes.ts` and NOTHING ELSE from `lib/mcp/`, directly or
-// transitively. `scopes.ts` is safe for a public page: its only reference to the
-// registry is `import type { McpToolName }`, erased at build. `registry.ts` is
-// not — it imports all of `lib/mcp/tools/*.ts`, which import the services, which
-// import `@prisma/client` and `lib/db`. None of that belongs in the dependency
-// graph of a page anybody on the internet can request (Amendment 13 Q2).
+// It imports `lib/mcp/toolPermissions.ts` (a LEAF whose only imports are types —
+// it replaced `lib/mcp/scopes.ts` in MOTIR-2574) and NOTHING ELSE from
+// `lib/mcp/`, directly or transitively. That module is safe for a public page:
+// its only reference to the registry is `import type { McpToolName }`, erased at
+// build. `registry.ts` is not — it imports all of `lib/mcp/tools/*.ts`, which
+// import the services, which import `@prisma/client` and `lib/db`. None of that
+// belongs in the dependency graph of a page — or, now, a route — anybody on the
+// internet can request (Amendment 13 Q2).
 //
 // That is also why the tool-name type below is `keyof typeof TOOL_PERMISSIONS` rather
 // than an imported `McpToolName`: the two are the same type — `TOOL_PERMISSIONS` is
@@ -803,6 +817,44 @@ export function mcpToolCount(): number {
 /** The stored fingerprint for one tool, for the gate to compare against. */
 export function mcpToolFingerprint(name: McpCatalogueToolName): string {
   return TOOL_SUMMARIES[name].descriptionFingerprint;
+}
+
+// ── The PUBLISHED catalogue document (MOTIR-4194) ───────────────────────────
+//
+// What `GET /api/docs/mcp-tools.json` serves, built here so that the route is a
+// one-line serialization and the SHAPE is testable without a request. Every
+// field is derived from the catalogue above: the group ORDER is the permission
+// catalog's own (the one authored fact), group MEMBERSHIP is each tool's
+// `TOOL_PERMISSIONS` entry, and the labels are the shipped `permissions.*` copy.
+// The count is computed from the rows, never written.
+//
+// ⚠️ UNVERSIONED, deliberately — `public-surface-hosts.md` AMENDMENT 5 §C. The
+// MCP surface versions itself through `tools/list`, and this document describes
+// that surface for a READER, not for a client that hard-codes it. A consumer may
+// rely on the path and on the field names below; the tool set, the summaries,
+// the labels and the count change whenever the server does, and the consumer
+// must tolerate fields it does not know.
+
+/** The published catalogue: `GET /api/docs/mcp-tools.json`'s body. */
+export interface McpToolCatalogueDocument {
+  /**
+   * Where the tools are CALLED — the live `tools/list` there is the authoritative
+   * surface, and this document is its reader-facing description.
+   */
+  endpoint: string;
+  /** {@link mcpToolCount} — computed from the rows, so it cannot disagree with them. */
+  toolCount: number;
+  /** {@link mcpCatalogue} — grouped by permission, in the catalog's order. */
+  groups: McpCatalogueGroup[];
+}
+
+export function mcpToolCatalogueDocument(): McpToolCatalogueDocument {
+  const groups = mcpCatalogue();
+  return {
+    endpoint: MCP_ENDPOINT_PATH,
+    toolCount: groups.reduce((count, group) => count + group.tools.length, 0),
+    groups,
+  };
 }
 
 // ── What the page hands off ─────────────────────────────────────────────────
