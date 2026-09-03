@@ -874,23 +874,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/docs',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
   },
-  // ── Forward-looking: the Public page room (MOTIR-4205 draws it, MOTIR-4171 builds it) ──
-  // The settings room where a project admin edits the public page's tagline,
-  // tags and README. The asset is the design MOTIR-4171 builds to, so it names
-  // the route before the page exists. Both rows self-destruct: the moment
-  // `app/(authed)/settings/project/public/page.tsx` lands, `carries no KNOWN
-  // entry that has stopped applying` goes red until they are deleted — MOTIR-4171
-  // deletes them in the same commit.
-  {
-    file: 'design/projects/public-page.mock.html',
-    address: '/settings/project/public',
-    why: 'Forward-looking: the Public page room MOTIR-4171 mounts. This asset (MOTIR-4205) is its design; the row dies with the route.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/settings/project/public',
-    why: 'Forward-looking: same route, cited by the notes section that specifies it. Dies with the route.',
-  },
   // ── Historical: the app-host public path the retargets REMOVE ─────────────
   // The same section names `/p/<key>` (and `/p/<key>?edit=1`) as the dead
   // addresses the three Members-room links pointed at until MOTIR-4171 retargets
@@ -1651,14 +1634,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/shell/navigation-pending.mock.html',
     path: 'app/(public)/explore/(square)/loading.tsx',
     why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
-  },
-  // ── Forward-looking: the Public page room's page file (MOTIR-4205 → MOTIR-4171) ──
-  // The notes name the page the registry entry mounts before MOTIR-4171 creates
-  // it. Self-destructing: delete this row in the commit that adds the file.
-  {
-    file: 'design/projects/design-notes.md',
-    path: 'app/(authed)/settings/project/public/page.tsx',
-    why: 'Forward-looking: MOTIR-4171 creates the page this design (MOTIR-4205) specifies; delete the row with the file.',
   },
 ];
 

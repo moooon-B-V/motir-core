@@ -34,6 +34,7 @@ import {
   hasVisibleSettingsArea,
   isProjectSettingsPath,
   isSettingsEntryActive,
+  PROJECT_SETTINGS_NAV,
   PROJECT_SETTINGS_ROOT,
   toSettingsNavPermissions,
   visibleSettingsNav,
@@ -119,6 +120,19 @@ export interface SidebarNavProps {
    */
   workspaceTierRevealed?: boolean;
   /**
+   * Whether public projects exist on this BUILD (`isCloud()`, MOTIR-3908) —
+   * resolved on the server in `app/(authed)/layout.tsx`, where `MOTIR_CLOUD`
+   * lives, and threaded here because this is a client component.
+   *
+   * The settings registry's second axis (MOTIR-4243): it drops every
+   * `cloudOnly` entry — today the **Public page** room — so a self-hosted rail
+   * never offers a row whose route answers 404.
+   *
+   * Defaults FALSE, like `workspaceTierRevealed` above and for the same reason:
+   * a caller that forgets to thread it hides a room rather than promising one.
+   */
+  publicProjectsAvailable?: boolean;
+  /**
    * Where the rail's `Legal` row points, or `null` when the deployment has
    * configured no legal documents (MOTIR-4010).
    *
@@ -175,6 +189,7 @@ export function SidebarNav({
   settingsPermissions,
   user,
   workspaceTierRevealed = false,
+  publicProjectsAvailable = false,
   legalIndexUrl = null,
   docsIndexUrl = null,
 }: SidebarNavProps) {
@@ -195,6 +210,10 @@ export function SidebarNav({
   // the two early returns, so the door and the rows it opens onto can never
   // disagree about what the area contains.
   const held = toSettingsNavPermissions(settingsPermissions);
+  // The registry's SECOND axis (MOTIR-4243) — what this BUILD has, beside what
+  // this actor holds. Built here with `held`, for the same reason: the rail and
+  // the area door must filter on one answer, not two.
+  const availability = { publicProjectsAvailable };
 
   // Account-settings AREA (Subtask 7.8.12): swap the project nav for the
   // registry-driven account-settings nav. Unlike the project area this does NOT
@@ -231,20 +250,20 @@ export function SidebarNav({
 
   // Settings AREA: swap the project nav for the registry-driven settings nav.
   if (activeProject && isProjectSettingsPath(pathname)) {
-    const settingsSections: SidebarSection[] = groupSettingsNav(visibleSettingsNav(held)).map(
-      ({ group, entries }) => ({
-        id: `settings-${group}`,
-        label: ts(`nav.group.${group}`),
-        items: entries.map((entry) => ({
-          icon: <entry.icon />,
-          label: ts(entry.labelKey),
-          href: entry.href,
-          active: isSettingsEntryActive(entry, pathname),
-          disabled: entry.placeholder,
-          badge: entry.placeholder ? <SoonChip label={ts('nav.soon')} /> : undefined,
-        })),
-      }),
-    );
+    const settingsSections: SidebarSection[] = groupSettingsNav(
+      visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability),
+    ).map(({ group, entries }) => ({
+      id: `settings-${group}`,
+      label: ts(`nav.group.${group}`),
+      items: entries.map((entry) => ({
+        icon: <entry.icon />,
+        label: ts(entry.labelKey),
+        href: entry.href,
+        active: isSettingsEntryActive(entry, pathname),
+        disabled: entry.placeholder,
+        badge: entry.placeholder ? <SoonChip label={ts('nav.soon')} /> : undefined,
+      })),
+    }));
     return (
       <Sidebar
         aria-label={ts('nav.eyebrow')}
@@ -426,7 +445,7 @@ export function SidebarNav({
   // ALWAYS rendered: workspace settings are governed by the workspace role,
   // which this epic does not change, and `held` is empty in that state anyway —
   // gating on it would hide a door this story has no business touching.
-  const showSettingsDoor = hasProject ? hasVisibleSettingsArea(held) : true;
+  const showSettingsDoor = hasProject ? hasVisibleSettingsArea(held, availability) : true;
 
   sections.push({
     id: 'bottom',
