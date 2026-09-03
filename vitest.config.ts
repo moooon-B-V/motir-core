@@ -707,6 +707,12 @@ export default defineConfig({
         'app/**/items/_components/fieldChipEditing.ts',
         'app/**/items/_components/customFieldEditing.tsx',
         'app/**/items/_components/IssueQuickViewPanel.tsx',
+        // Story MOTIR-4181 — the proposal peek's own two files. Added to
+        // `include` and deliberately NOT to `thresholds`, by this config's own
+        // rule: the number comes off the first CI run, and pinning a floor
+        // before measuring one is how a gate ends up asserting a guess.
+        'components/planning/ProposalPeek.tsx',
+        'components/workItems/ProposalPeekMarks.tsx',
         'app/**/items/_components/IssueQuickViewController.tsx',
         // …and the SEAM the payload widening landed in. `workItemsService.ts`
         // (the other half) is already included + gated above.
