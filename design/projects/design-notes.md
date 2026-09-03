@@ -2832,3 +2832,202 @@ On chrome — the settings rail and the room grammar — `settings-area.mock.htm
 win; on the editor elements, `design/public-projects/public-projects.mock.html` panels 1c / 1d
 decided them and this asset reuses them by citation. Where this asset and any of those disagree,
 they win and this asset is wrong.
+
+---
+
+# Public address — the room where a workspace claims a subdomain and a customer connects their own domain (Story MOTIR-3878 · Subtask MOTIR-4211 output)
+
+`motir.co/p/<key>` is the only address a public project has ever had. Story MOTIR-3878 gives the
+customer one of their own — first a subdomain of Motir's public namespace, then a domain they own —
+and **no asset drew the room it is configured from.** `access-members.mock.html` draws the access
+level and the share link; `design/public-projects/` Panel 6 draws the share row. Neither depicts a
+subdomain, a domain, a DNS instruction or a certificate state. This section is that room, and it
+gates MOTIR-4221 (pane part 1) and MOTIR-4229 (pane part 2).
+
+## Files
+
+| HTML source (truth)        | PNG export           |
+| -------------------------- | -------------------- |
+| `public-address.mock.html` | `public-address.png` |
+
+A ten-panel board (review EACH — mistake #31), 1200 px viewport, 2× export, 2400 × 13026.
+
+## The surface table
+
+| element                 | primitive                   | colour role                                                      | shape role                                |
+| ----------------------- | --------------------------- | ---------------------------------------------------------------- | ----------------------------------------- |
+| settings card           | `Card`                      | `--el-page-bg` on `--el-border`                                  | `--radius-card`, `--spacing-card-padding` |
+| card heading / sub      | `CardHeader`                | `--el-text` / `--el-text-secondary`                              | —                                         |
+| subdomain field         | `Input` + suffix            | `--el-page-bg`, suffix `--el-surface` + `--el-text-secondary`    | `--radius-input`, `--height-input`        |
+| live preview            | `Input` `helperText`        | `--el-text-secondary`, the address itself `--el-text`            | —                                         |
+| inline refusal          | `Input` `helperText`, error | `--el-danger-on-surface`, border `--el-danger`                   | `--radius-input`                          |
+| address row             | list row                    | `--el-surface-soft` on `--el-border`                             | `--radius-control`, `--height-control`    |
+| state chip              | `Pill`                      | tint bg + `--el-text-strong` (finding #35)                       | `--radius-badge`, `--spacing-chip-*`      |
+| DNS record table        | table                       | `--el-text`, headers `--el-text-secondary`, values `--font-mono` | —                                         |
+| primary picker          | radio card                  | selected `--el-tint-lavender` + `--el-accent` ring               | `--radius-control`                        |
+| consequence / warning   | callout                     | `--el-tint-lavender` / `--el-tint-yellow` + `--el-text-strong`   | `--radius-control`                        |
+| remove confirm          | `Modal` + `Button` danger   | `bg-(--el-danger)` + `--el-danger-text`                          | `--radius-modal`, `--radius-btn`          |
+| disabled-control reason | `Tooltip`                   | `--el-text` fill + `--el-text-inverted`                          | `--radius-control`                        |
+| rail row (composed)     | `SidebarNav` row            | active `--el-tint-lavender` + `--el-text-strong`                 | `--radius-control`, `--height-control`    |
+
+**Chip tones, and why the hue is never the meaning.** `active` / `issued` take mint, `verifying` /
+`pending_certificate` take sky, `unverified` takes yellow, `alias` takes lavender, and **`failed`,
+`expired` and `revoked` all take rose**. Three states sharing one tint is deliberate: they are told
+apart by their words and by the action beside them, the same rule the custom-role chip follows in
+`access-members.mock.html` (§ _Roles & permissions_). A reader who can only see the hue learns
+"something is wrong", which is true of all three.
+
+## The panels
+
+| panel | what it draws                                                                                            |
+| ----- | -------------------------------------------------------------------------------------------------------- |
+| **0** | The access path — ① the rail row, ② the make-public flow's share row gaining _Set up your own address →_ |
+| **1** | No subdomain claimed: the claim field, its live preview, and its two refusals (reserved, taken)          |
+| **2** | Claimed: the address row, the retained alias, the renames-left counter, the rename confirm               |
+| **3** | Custom domains empty · **3b** the same panel on a `free` org — the tier gate                             |
+| **4** | Add a domain: the DNS instruction block in both record shapes (CNAME · A+AAAA), both with the TXT        |
+| **5** | The state set — all nine `PublicAddressStatus` values, one row each, with meaning and action             |
+| **6** | Primary: the radio, the disabled non-issued row with its reason, the consequence line                    |
+| **7** | Remove a domain: the confirm                                                                             |
+| **8** | Non-admin: read-only                                                                                     |
+| **9** | Narrow (390 × 844) · **9b** dark                                                                         |
+
+## The access path — both entrances, and the row that is NOT this asset's to place
+
+**① The rail row.** A registry entry in `lib/settings/projectSettingsNav.ts` and nothing else.
+
+| field        | value                                                                                                            |
+| ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `id`         | `public-address`                                                                                                 |
+| `group`      | `access`                                                                                                         |
+| `href`       | `/settings/project/public-address`                                                                               |
+| `labelKey`   | `nav.publicAddress` — en _Public address_ · zh _公开地址_                                                        |
+| `cloudOnly`  | `true` — the capability is cloud-only (ADR §11), so the row is ABSENT off-cloud, not disabled                    |
+| `permission` | **MOTIR-4221's to READ OFF its own service gate** — see the planning flags below. This asset does not decide it. |
+
+**⚠️ The ORDER differs from what MOTIR-4211's card asked for, and the reason is a card that landed in
+between.** The card says the row goes _"between Members & access and Roles"_. That slot is taken:
+MOTIR-4205 (drawn while it was `in_review`; PR motir-core#2533 has since MERGED to `main`) puts a
+**Public page** room there, `id: 'public-page'`, group `access`, _"directly under Members & access"_. Two public rooms
+either side of the same door is the coherent shape, so this asset draws:
+
+> Members & access → **Public page** → **Public address** → Roles → Code access
+
+The card's intent — _in the `access` group, adjacent to Members & access_ — is honoured; only the
+neighbour changed. **This is a rung-2 reading beating a rung-3 card, not a preference.**
+
+**⚠️ AND `cloudOnly` IS NOT THIS STORY'S TO INVENT — it is MOTIR-4205's, and it does not exist in
+the code yet.** That flag is a new optional field on `SettingsNavEntry`: MOTIR-4205 (merged, design
+only) SPECIFIES it, MOTIR-4171 BUILDS it, and `lib/settings/projectSettingsNav.ts` on `main` still
+carries no such field. This room needs it for exactly the same reason. **MOTIR-4221 must not add it a second time**: two
+cards introducing one registry field is a merge conflict at best and two divergent filters at worst.
+Recorded as a build dependency on MOTIR-4221 rather than drawn.
+
+**② The make-public flow's share row.** `design/public-projects/` Panel 6 gains one line —
+_Set up your own address →_ — under the existing share-link row. This is the door for the person who
+has just made a project public and is looking at its address, which is the moment the question
+occurs to them. Both parent assets are **cited, never amended**: a new surface is a new asset
+(MOTIR-3233).
+
+## What each control is, and which card specifies it
+
+Every row is attributed. A control with no specifying card would be a planning flag, not an
+invention — and there are two, listed after.
+
+| control                            | specified by                                                                                 |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| claim field, grammar, live preview | MOTIR-4215 · ADR §8 (the label grammar, the reserved set)                                    |
+| _reserved_ refusal                 | MOTIR-4215 (`isReservedLabel`) · ADR §8's enumerated set                                     |
+| _taken_ refusal                    | MOTIR-4209 (`hostname` globally unique → `HostnameTakenError`)                               |
+| rename + its warning copy          | MOTIR-4215 · ADR §8 (never released) — the wording is the decision in the customer's words   |
+| renames-left counter               | MOTIR-4215 (`renamesLeft` on `PublicSubdomainDto`) · ADR §8's cap of 5                       |
+| retained alias row                 | MOTIR-4209 (the `alias` kind) · ADR §8                                                       |
+| _Add a domain_ + the tier gate     | MOTIR-4228 (`custom_domains`, `maxCustomDomains`) · ADR §9                                   |
+| the upgrade prompt                 | `design/billing/` (8.1.7 / 8.1.8 `EntitlementExceededError` grammar) — composed              |
+| the DNS instruction block          | ADR §5 (CNAME for a subdomain, A/AAAA for an apex, the `_motir-verify` TXT)                  |
+| _Verify_                           | MOTIR-4216 (step 3 of the add → verify → issue order)                                        |
+| every certificate state            | MOTIR-4209 (`PublicAddressStatus`) · MOTIR-4216 (the transitions) · MOTIR-4219 (the refresh) |
+| `failureReason` on a failed row    | MOTIR-4209 (the column) · MOTIR-4219 (what writes it)                                        |
+| _Make primary_ + the consequence   | MOTIR-4216 · ADR §7 (exactly one primary; every other address 301s)                          |
+| _Remove_                           | MOTIR-4216 (removal + certificate teardown)                                                  |
+| read-only (non-admin)              | the `canManage` shape in `ProjectMembersSettings.tsx`                                        |
+
+### Planning flags — drawn as questions, not answered
+
+1. **The permission key this room asserts is not decided by this asset.** The registry's own rule is
+   that an entry's `permission` is READ OFF its destination's server gate, never inferred from the
+   entry's name. MOTIR-4215 / MOTIR-4216 will assert something (a subdomain is a WORKSPACE-level
+   resource per ADR §3, which is not obviously the same key a project-settings room usually carries)
+   and MOTIR-4221 reads it off them. The neighbouring Public page room resolves
+   `project:administer`. **Flagged rather than drawn.**
+2. **Nothing specifies how a customer learns that a LIVE domain broke.** MOTIR-4219 refreshes
+   `expired` / `revoked` / `failed` from the platform and records `lastCheckedAt`, and this asset
+   draws each of those states in the pane. But a customer whose roadmap stops answering is not
+   sitting in project settings — and no card in the story owns a notification, an email, or a
+   frequency for the job. **Flagged. It is a real gap, not a drawing decision**, and it is named in
+   the sweep below.
+
+## The allocation sweep — GIVES / TAKES per card named
+
+Per gate 8's design-allocation limb: for every card this asset names, what it GIVES that card, and
+what it TAKES from it.
+
+| card                               | GIVES                                                                                                                   | TAKES                                                                                                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4221** (pane part 1)       | The rail row's field table, the pane shell, panels 1 / 2 / 8 / 9 in full, and the composition rules for both parents    | **The `cloudOnly` flag is NOT its to add** — MOTIR-4205 introduces it. **And the permission key is its to read off the service, not to copy from here.** |
+| **MOTIR-4229** (pane part 2)       | Panels 3 / 3b / 4 / 5 / 6 / 7 — the domain list, the DNS block in both shapes, all seven domain states, primary, remove | The narrow-frame reshape of the DNS table (panel 9) is part of its scope, not a later polish card                                                        |
+| **MOTIR-4215** (subdomain service) | The two refusals' copy and the renames-left surface, which tell it what its DTO must expose                             | Nothing structural                                                                                                                                       |
+| **MOTIR-4216** (lifecycle)         | The add → verify → issue order drawn as three visible states; the remove confirm's promises                             | Nothing structural                                                                                                                                       |
+| **MOTIR-4219** (status job)        | Every state it must be able to produce, each with the action the pane offers                                            | **A question it does not currently own** — see planning flag 2                                                                                           |
+| **MOTIR-4228** (entitlement)       | Panel 3b: `free: 0` must refuse the FIRST domain, and the refusal must carry the upgrade prompt                         | Nothing structural                                                                                                                                       |
+| **MOTIR-4211** (this card)         | —                                                                                                                       | —                                                                                                                                                        |
+
+### The re-estimate this sweep implies — MOTIR-4221
+
+**MOTIR-4221 is sized 5 points / 70 minutes and this asset does not grow it.** Counted against what
+is drawn: the rail row (one registry entry), the pane shell, the subdomain card in its two states,
+the rename modal, the read-only arm and the narrow frame — plus `en` + `zh`. That is what the card
+already says it builds. **The two TAKES above REDUCE rather than add**: not inventing `cloudOnly`
+and not choosing the permission key are both work removed from it. No re-estimate is recorded,
+and that is a measurement rather than an omission — it was run because the sweep asks for it,
+and it came back negative.
+
+**MOTIR-4229 is sized 5 points / 70 minutes and this asset is a size question worth flagging.**
+Panels 3, 3b, 4, 5, 6 and 7 are six distinct surfaces, one of which (panel 5) is a nine-row state
+machine each row of which carries an action, and panel 4 has two record shapes. It is drawn as one
+card's worth and it may not be. **Not re-estimated here — the sizing gate belongs to whoever runs
+it, and this note is the input.**
+
+## Composition — what is cited and never redrawn
+
+- `settings-area.mock.html` — the settings shell and its rail. Panel 0 renders the rail rows in
+  their shipped grammar to show WHERE the new row lands; it is not a new rail.
+- `access-members.mock.html` — the settings-card grammar, the confirm-modal grammar, the chip rule.
+- `design/public-projects/` Panel 6 — the share-link row that gains door ②.
+- `design/billing/` — the upgrade prompt (8.1.7 / 8.1.8).
+- `archive-confirm.png` — the destructive-confirm grammar panel 7 follows.
+
+## The base domain is not in this asset
+
+Every address renders `motir.site`. The ADR fixes the SHAPE of the base domain and leaves the string
+to MOTIR-4208 (which buys it) and MOTIR-4214 (which sets `MOTIR_PUBLIC_TENANT_DOMAIN`). The room
+reads that value. **No literal base domain reaches the code**, so read every `motir.site` on the
+board as `<base>`. The Fly IP values in panel 4 are illustrative for the same reason — the real ones
+come from `fly ips list` at provisioning.
+
+## Ink
+
+Secondary copy is `--el-text-secondary` throughout (6.18–6.80:1 on every surface in both themes).
+`--el-text-muted` and `--el-text-faint` are declared in the token block, to mirror `theme.css`, and
+used for **nothing** — muted clears AA only on the white page, and faint clears it nowhere. Danger
+text is `--el-danger-on-surface`; `--el-danger-text` appears once, on the remove button, which is
+the one element that also carries `bg-(--el-danger)`.
+
+**The nested dark scope re-emits the Tier-3 block.** Panel 9b puts `data-theme="dark"` on a `div`,
+so Tier-0 `--color-*` flips but the `:root`-declared `--el-*` would keep resolving against the outer
+palette — the panel would paint the light page background under dark hues.
+`tests/design-dark-parity.test.ts` measured exactly that on the first draft of this asset; the fix
+is a `[data-theme]` block re-declaring the Tier-3 tokens, placed BEFORE the `[data-theme='dark']`
+block (equal specificity, later wins — MOTIR-3712).
+
+`vitest --config vitest.design.config.ts`: **7 files, 90 tests, green.**

@@ -298,7 +298,7 @@ describe('the type-to-confirm gate', () => {
 });
 
 describe('⚠️ the window is INTERPOLATED — no component and no string retypes `30`', () => {
-  // `content/legal/privacy.md` §6 promises erasure *"within 30 days"*, and
+  // `motir.co/legal/privacy` §6 promises erasure *"within 30 days"*, and
   // `ACCOUNT_ERASURE_WINDOW_DAYS` is the one place that number lives so the
   // promise and the behaviour cannot drift. The service source already carries
   // this assertion (`tests/account-deletion-schedule.test.ts`); this is the

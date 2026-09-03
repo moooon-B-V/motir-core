@@ -32,7 +32,7 @@ import { LegalDocumentRow } from './LegalDocumentRow';
  * ⚠️ IT SHOWS THE TERMS, NOT "what was outstanding", and it cannot do otherwise:
  * there is no session here, so there is nothing to look the reader's own
  * acceptance state up against. The Terms are the right single answer —
- * `content/legal/terms.md` §15 makes them the contract the other two documents
+ * `motir.co/legal/terms` §15 makes them the contract the other two documents
  * hang off, and §14 is the clause this whole surface implements.
  *
  * NOT an error state: no `--el-danger`, no `role="alert"`, no `aria-live`.

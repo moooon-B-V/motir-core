@@ -8,7 +8,7 @@ import type { OutstandingDocument } from '@/lib/legal/consent';
 // `design/auth/legal-agreement.mock.html`, panels 5–8).
 //
 // What these assertions are really protecting are clauses, not pixels:
-// `content/legal/terms.md` §14 promises an affirmative act and a stated decline
+// `motir.co/legal/terms` §14 promises an affirmative act and a stated decline
 // consequence, and the design is emphatic that the screen is NOT an error state.
 // Each of those is a thing a later refactor could quietly undo.
 
@@ -78,7 +78,7 @@ describe('the re-consent interstitial', () => {
   });
 
   it('is ONE agreement with ONE control — never a tick-box per document', () => {
-    // `terms.md` §15 makes the three documents a single agreement, so a
+    // `motir.co/legal/terms` §15 makes the three documents a single agreement, so a
     // per-document tick-box would ask for three decisions where the product
     // offers one outcome. The button's own words carry the scope instead.
     renderWithIntl(

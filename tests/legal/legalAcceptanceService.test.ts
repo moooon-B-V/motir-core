@@ -81,7 +81,7 @@ describe('legalAcceptanceService', () => {
   });
 
   it('stamps ONE timestamp across the whole act', async () => {
-    // `terms.md` §15 makes the three documents a single agreement and the
+    // `motir.co/legal/terms` §15 makes the three documents a single agreement and the
     // interstitial offers a single button, so three rows a few milliseconds
     // apart would misrepresent one decision as three.
     const user = await makeUser('one-moment@example.com');
@@ -184,7 +184,7 @@ describe('legalAcceptanceService', () => {
   it('writes nothing, and touches no transaction, for an empty batch', async () => {
     // The early return is not decoration: `createMany` with `data: []` is a
     // pointless round trip, and the ONE caller that can produce an empty batch
-    // is a deployment whose `content/legal/` has no re-consent documents in it.
+    // is a deployment whose configured manifest has no re-consent documents in it.
     const count = await legalAcceptanceRepository.createMany(
       [],
       // Reached only if the guard fails — the point is that it is never used.
