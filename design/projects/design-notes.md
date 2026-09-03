@@ -2520,3 +2520,315 @@ entry, no route, and no rail row was added, for the reason the mock's header rec
 split) and §3a (the trigger surface) own the BEHAVIOUR. When this asset and the ADR disagree, the ADR
 wins and this asset is wrong. On chrome, the settings rail and the card grammar,
 `settings-area.mock.html` and `design/shell` win — this asset composes them.
+
+---
+
+# Public page — the room in project settings where the tagline, tags and README are edited (Story MOTIR-3875 · Task MOTIR-4205 output)
+
+`motir.co/p/<key>` renders three things a project admin wrote — a **tagline**, a set of **tags**
+and a **README** — and since the public page moved to `motir.co` (MOTIR-3877) there has been no
+screen anywhere from which to change a word of them. The only editor ever drawn lived in place on
+the app-hosted public page (`design/public-projects/public-projects.mock.html` panels 1b / 1c / 1d,
+Story 6.16), and that page was deleted by MOTIR-3951; the settings area's own door to it
+(`ProjectMembersSettings.tsx`'s _Edit on the public page →_) points at `/p/<key>?edit=1`, which
+returns 404 on `app.motir.co` today. MOTIR-4171 builds the replacement. This asset draws it.
+
+**The placement is decided, not re-opened here.** MOTIR-4171's _✅ DECISION_ (2026-09-02, rungs
+1–2) puts the overview where the project is configured: a settings room, **Settings › Project ›
+Public page** at `/settings/project/public`, active-project-scoped like every other room, one entry
+in `lib/settings/projectSettingsNav.ts`, saving through
+`PATCH /api/projects/{key}/public-overview` with the active project's key. A project-keyed route
+outside settings was rejected there (no shipped precedent in `app/(authed)/`, a second navigation
+model for one screen, and the case the key-routed service was written for no longer arises once
+the public page hosts no editor). What this section owes is the drawing that makes that decision
+buildable: the doors, the room, and every state a project admin can meet in it.
+
+## Files
+
+| HTML source (truth)     | PNG export        |
+| ----------------------- | ----------------- |
+| `public-page.mock.html` | `public-page.png` |
+
+A four-panel board (review EACH — mistake #31), 1200 px viewport, 2× export:
+
+- **Panel A — the entrance.** Three doors, each a real affordance inside its shipped parent, haloed
+  and numbered: ① the new **Public page** row in the settings rail; ② the Members room's **Hero &
+  overview** row, whose link now opens the room; ③ the Members room's **View public page** link,
+  retargeted to the public host.
+- **Panel B — the room**, inside the settings shell: the rail with the new row active, the page in
+  the shell's content column.
+- **Panel C — states**: empty · unsaved changes · saving · per-field errors · saved · project not
+  yet public. Two arms are stated as ABSENT rather than drawn (below).
+- **Panel D — from motir.co**: the three-moment strip MOTIR-4171's criteria ask for — what a manager
+  arriving from the public page does.
+
+`settings-area.mock.html` (the area's asset of record) and `public-projects.mock.html` stay frozen
+and are cited, never amended — a new surface is a new asset (MOTIR-3233).
+
+## How the render was produced — shipped reality, not the source
+
+The asset is generated, not hand-drawn, so the parents it composes into cannot drift from the app:
+
+1. The real `app/(authed)/_components/SidebarNav.tsx` is rendered in settings mode (pathname
+   `/settings/project/members`, the full `PERMISSIONS` set, inside `OnboardingResumeProvider`); the
+   real `ProjectMembersSettings.tsx` is rendered with `accessLevel: 'public'`, `canManage` and
+   `publicAccessAvailable` true; the real `components/ui/MarkdownEditor.tsx` is rendered at
+   `size="full"` with a sample document; and the shipped `Input`, `Button`, `Pill`, `Card` and
+   `components/settings/SettingsCard.tsx` are rendered in the variants the room uses — all through
+   the repo's own vitest + RTL setup (`tests/helpers/renderWithIntl.tsx`, the real
+   `messages/en.json`), `container.innerHTML` dumped per surface.
+2. Tailwind compiles `app/globals.css`'s layers over the assembled board (`@import 'tailwindcss'
+source(none)` + an `@source` for the board), so the mock's stylesheet is the build's own output
+   rather than a retyped token block; `components/ui/markdown-editor.css` is appended for the
+   editor's document styles.
+3. Only three things are authored: the new rail row (the shipped row markup with `Globe`), the
+   three retargets (anchored string replacements on the dumped cards, each asserted to match
+   exactly once), and the room's composition from the dumped primitives.
+
+The throwaway harness (`vitest.zz4205.config.ts` — happy-dom, the root config's `@` and
+`server-only` aliases, `actEnvironment.ts` as the only setup file; a dump spec under
+`tests/components/`; a postcss script importing `@tailwindcss/postcss` by its pnpm path) was deleted
+before the commit. Reproduce it with:
+
+```ts
+// a throwaway spec beside the component tests  (// @vitest-environment happy-dom)
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/settings/project/members',
+  useRouter: () => ({ push() {}, replace() {}, refresh() {}, prefetch() {} }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+const { container } = renderWithIntl(
+  <OnboardingResumeProvider enabled={false} activeProjectId="p1">
+    <SidebarNav activeProject={project} settingsPermissions={PERMISSIONS} user={user} />
+  </OnboardingResumeProvider>,
+);
+writeFileSync('dumps/rail-settings.html', container.innerHTML);
+// likewise <ToastProvider><ProjectMembersSettings … accessLevel="public" canManage publicAccessAvailable /></ToastProvider>
+// and <MarkdownEditor value={md} onChange={set} label="README" size="full" />
+```
+
+```js
+// build-css.mjs — postcss([tailwind()]).process(`@import 'tailwindcss' source(none);\n@source "<board>";\n` + globals.replace("@import 'tailwindcss';", ''), { from: 'app/globals.css' })
+```
+
+Two board-only overrides, both named in the asset so nobody reads them as design: the state frames
+(Panel C) shorten the editor's `min-h-[22rem]` to `7rem` and keep the footer's button labels on one
+line at the narrower frame width; the shipped room keeps both. Measured at `b2d7798b2`: the shell's
+content column is **672 px** (`max-w-[42rem]`, the Members room's width), the settings card in
+Panel B is **831 px** tall with the editor at its `22rem` floor, a rail row is **36 px**
+(`--height-control`).
+
+## The entrance — three doors, and the registry entry behind the first
+
+**① The rail row** — a registry entry, nothing else (the area's own contract, § _The
+settings-nav registry_ above; the route ↔ registry totality test pairs the page with it):
+
+| field        | value                            | why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`         | `public-page`                    | also the palette action id `settings-public-page` and the `guardSettingsPage('public-page', ctx)` key                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `group`      | `access`                         | the row sits **directly under Members & access** — the room that owns the public concerns (the make-public control, the share link, the Hero & overview door) and the row a reader arrives from                                                                                                                                                                                                                                                                                                        |
+| `href`       | `/settings/project/public`       | the route MOTIR-4171 mounts (`app/(authed)/settings/project/public/page.tsx`)                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `icon`       | `Globe` (lucide)                 | the public-web glyph; **not** `Megaphone`, which is the _Building in public_ STATUS badge — a room and a status must not share a mark                                                                                                                                                                                                                                                                                                                                                                  |
+| `labelKey`   | `nav.publicPage`                 | en _Public page_ · zh _公开页面_                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `permission` | `project:administer`             | **VERIFIED:** `publicProjectsService.setPublicOverview` refuses through `projectAccessService.assertCanManage`, which asserts `project:administer` (`lib/services/projectAccessService.ts:684`); the route asserts nothing of its own. Read off the destination's gate, per the registry's own rule. No read-only view: the 2026-08-08 amendment (§ _Amendment 2026-08-08_ above) supersedes read-only administrative rooms                                                                            |
+| `cloudOnly`  | `true` — **a NEW optional flag** | the row is ABSENT off-cloud (below). The registry is static and `visibleSettingsNav` filters on permission only, so the entry carries the flag and the filter drops it when the layout's already-resolved `publicProjectsAvailable = isCloud()` (`app/(authed)/layout.tsx:282`) is false. The totality test keeps pairing the route with the entry regardless of the flag — the page itself answers `notFound()` off-cloud, the billing page's precedent (`settings/organization/billing/page.tsx:24`) |
+
+**② The Members room's _Hero & overview_ door** (`PublicShareSection`, drawn in Panel A frame ②③):
+the heading stays; the sub-heading, the link and the note change (copy below); `editPath` becomes
+`/settings/project/public`, an in-app link with the shipped `ArrowRight`. It still renders only
+while the project is public, as shipped — the room itself does not depend on that (state C6).
+
+**③ _View public page_** (`BuildInPublicManageRow`): `href` becomes the public host's page,
+`https://motir.co/p/<key>`, and the mono path beside the status badge shows `motir.co/p/<key>`
+rather than the dead `/p/<key>`. **And a third retarget the two-link count missed:** the _Public
+link_ card's share field and its **Copy** button build the value from `window.location.origin` +
+`/p/<key>` — on `app.motir.co` that copies a URL that 404s, and MOTIR-4171's own test (_no `href`
+under `app/(authed)/` points at `/p/`_) cannot see it because it is a copied string, not an `href`.
+The asset draws the field showing `https://motir.co/p/<key>`. **`motir-core` has no public-host
+accessor** — `git grep motir.co lib app/\(authed\)` at `b2d7798b2` finds only the API-docs example
+origins — so the code card adds one (the `MOTIR_PUBLIC_SITE_URL` variable `lib/baseUrl.ts` already
+names, MOTIR-3881) and routes all three through it, rather than spelling the host three times.
+
+## The room (Panel B)
+
+Composition, top to bottom, every element a shipped primitive:
+
+- **Page header** — the settings page grammar kept from every room: `<h1 class="font-serif
+text-3xl font-semibold">` _Public page_ + the muted `text-sm` sub (`settings.publicPage.subtitle`).
+- **One `SettingsCard`** (`components/settings/SettingsCard.tsx` — icon `Globe` in
+  `--el-icon-heading`, title _Hero & README_, subtitle) with a **`View public page`** link in its
+  head (`--el-link`, `ExternalLink` glyph, target `_blank`) — present only while the project is
+  public; absent in C6. Inside, in the card's `gap-5` body:
+  - **Tagline** — the shipped `Input` (label · `data-surface="input"` box · helper). Helper carries
+    the cap. Placeholder _One sentence about what this project is_. Empty saves as `null`.
+  - **Tags** — a labelled group: each tag a neutral `Pill` (`bg-(--el-chip-bg)` /
+    `--el-chip-border` / `--el-text-secondary`) carrying its own remove `<button>` (`X`, `size-4`,
+    a button inside a span — never a nested button); a **two-state Add tag control** exactly as
+    panel 1c decided — at rest a `secondary` `sm` `Button` with `Plus`, on click a small inline
+    input (type, Enter adds, Esc cancels; panel 1d draws that moment and is not redrawn here); a
+    running **`n / 8 tags`** count at the row's end; _No tags yet_ when empty; the helper carries
+    both caps.
+  - **README** — the shipped `MarkdownEditor` at `size="full"` (`min-h-[22rem]`), label _README_.
+    The editor is WYSIWYG (tiptap), so **it is the preview**: no write/preview toggle is drawn and
+    none should be built — the 6.16 "the page IS the preview" decision survives with the editor
+    standing in for the page. The helper carries the cap and says so.
+- **The save bar** — the AI-planning page's footer grammar (`AiPlanningSettingsEditor.tsx:449`):
+  `bg-(--el-surface-soft)` strip, a hint at the left (`--el-text-secondary` — AA on that surface;
+  `--el-text-muted` is not), `Cancel` (`secondary`), `Save changes` (`primary`). One PATCH carries
+  all three fields (the partial-author contract: an absent field is untouched — the room sends
+  all three every time so a cleared tagline arrives as `null`). The success response **is** the
+  confirmation (page-state rule 1: keep the optimistic values, no `router.refresh()` — nothing else
+  on the page re-reads these fields). Navigating away with edits pending asks first, the
+  unsaved-changes guard panel 1d decided (`Discard unsaved changes?` — _Keep editing_ / _Discard_).
+
+**The field rules, read live** (the caps the fields' helpers quote):
+
+| field   | cap                                   | read from                                                                                                                                                                          |
+| ------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| README  | 50,000 characters                     | `PUBLIC_OVERVIEW_MAX_LENGTH = 50_000` (`lib/publicProjects/limits.ts:10`), checked at `projectsService.ts:946` → `ProjectOverviewTooLongError`                                     |
+| Tagline | 500 characters                        | `PUBLIC_TAGLINE_MAX_LENGTH = 500` (`limits.ts:20`), checked at `projectsService.ts:954` → `ProjectTaglineTooLongError` — **not** the 140 the 6.16 panels drew; MOTIR-982 raised it |
+| Tags    | at most 8, each at most 24 characters | `PUBLIC_TAGS_MAX_COUNT = 8` · `PUBLIC_TAG_MAX_LENGTH = 24` (`limits.ts:21–22`), `normalizePublicTags` at `projectsService.ts:105` / `:116` → `ProjectTagsInvalidError`             |
+
+Both authors — `projectsService.setPublicOverview` (`:929`, the active-project author) and
+`publicProjectsService.setPublicOverview` (`:493`, the key-routed one the route calls) — import the
+same constants, so the helpers are right whichever the code card reaches. **The initial values
+are an open seam the design does not decide:** `projectsService.getPublicOverview` returns the body
+only, so the page either widens that read to the three hero fields or reads the public DTO
+(`lib/dto/publicProjects.ts:400` carries `publicTagline`).
+
+## States (Panel C) — and the two arms that are absent by design
+
+| state                 | what is drawn                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C1 · empty            | placeholders; _No tags yet_ + the add control + `0 / 8 tags`; an empty document; the README helper says what the public page shows instead (_a short automatic introduction_ — the `null → auto-intro` fallback the public read documents, `publicProjectsService.ts:454`). Both actions disabled                                                                                                                 |
+| C2 · unsaved changes  | hint _Unsaved changes_; Cancel reverts to the saved baseline; Save live                                                                                                                                                                                                                                                                                                                                           |
+| C3 · saving           | hint _Saving…_ with the spinner; Save in its `loading` state; both actions disabled — one in-flight write, no double submit                                                                                                                                                                                                                                                                                       |
+| C4 · per-field errors | `ProjectTaglineTooLongError` → the tagline's `box` error; `ProjectTagsInvalidError` → the tags' error line; `ProjectOverviewTooLongError` → the editor's border in `--el-danger` + an error line. Hint _Fix the highlighted fields to save_ (the AI-planning page's string). A failed save that is none of those (network, 5xx) is a toast — _Couldn't save the public page. Try again._ — and the edits are kept |
+| C5 · saved            | `Check` + _Saved_ in `--el-success` (the Details card's `SaveStatus`); fields keep their values; clears after a beat                                                                                                                                                                                                                                                                                              |
+| C6 · not yet public   | the room is fully usable; a `--el-tint-sky` band at the top of the card body (the shipped _Public link_ note's grammar: `Info` glyph, `--el-text-strong` ink) says the page is not live and links to Members & access, where that is decided; no _View public page_ link in the head                                                                                                                              |
+
+**Absent, and why:**
+
+- **Non-admin** — no rail row (`visibleSettingsNav` drops the entry: `project:administer` is not
+  held), no room (`guardSettingsPage('public-page', ctx)` refuses the typed URL — MOTIR-2469's
+  destination guard, same key), and **no read-only view** (the 2026-08-08 amendment). The service is
+  the enforcement; the row and the guard are presentation.
+- **Self-hosted** — `MOTIR_CLOUD` unset ⇒ `isCloud()` false ⇒ public projects do not exist
+  (MOTIR-3908, `docs/decisions/billing-tiering.md` § the `MOTIR_CLOUD` flag): the entry is dropped by
+  its `cloudOnly` flag, the page answers `notFound()`, and the route already 404s through
+  `publicSurfaceUnavailable()` (`lib/publicProjects/cloudGate.ts:61`). Nothing renders.
+
+## From motir.co (Panel D)
+
+The public page shows **no edit affordance to anyone**, signed in or not
+(`docs/decisions/public-surface-hosts.md` AMENDMENT 4 row 7 — a cross-origin page cannot know who
+is looking, and a long-form authoring act with a preview and a save belongs where the author already
+signs in). A manager who wants to change what they are reading signs in to `app.motir.co`, picks
+the project, and opens **Settings › Public page**. Moments 1 and 2 are schematic — the public page
+is motir-marketing's (MOTIR-4113) and the sign-in / project tier are `design/auth` and
+`design/shell` — moment 3 is the real rail's Access group with the new row active.
+
+## Copy strings catalog (use verbatim in MOTIR-4171; i18n under `settings`, en + zh)
+
+The product's noun is **work item**; nothing here says otherwise.
+
+| key                                    | en                                                                                                                  | zh                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `nav.publicPage`                       | Public page                                                                                                         | 公开页面                                                                              |
+| `publicPage.title`                     | Public page                                                                                                         | 公开页面                                                                              |
+| `publicPage.subtitle`                  | The tagline, tags and README of **{projectName}** on its public page.                                               | **{projectName}** 公开页面上的标语、标签和 README。                                   |
+| `publicPage.card.title`                | Hero & README                                                                                                       | 横幅与 README                                                                         |
+| `publicPage.card.subtitle`             | Saved together. Live on the public page the moment you save.                                                        | 一起保存。保存后立即在公开页面生效。                                                  |
+| `publicPage.viewPublicPage`            | View public page                                                                                                    | 查看公开页面                                                                          |
+| `publicPage.tagline.label`             | Tagline                                                                                                             | 标语                                                                                  |
+| `publicPage.tagline.placeholder`       | One sentence about what this project is                                                                             | 用一句话介绍这个项目                                                                  |
+| `publicPage.tagline.help`              | Shown under the project’s name. Up to {max} characters.                                                             | 显示在项目名称下方。最多 {max} 个字符。                                               |
+| `publicPage.tags.label`                | Tags                                                                                                                | 标签                                                                                  |
+| `publicPage.tags.help`                 | Up to {maxCount} tags, {maxLength} characters each.                                                                 | 最多 {maxCount} 个标签，每个最多 {maxLength} 个字符。                                 |
+| `publicPage.tags.count`                | {count} / {maxCount} tags                                                                                           | {count} / {maxCount} 个标签                                                           |
+| `publicPage.tags.add`                  | Add tag                                                                                                             | 添加标签                                                                              |
+| `publicPage.tags.addPlaceholder`       | New tag                                                                                                             | 新标签                                                                                |
+| `publicPage.tags.empty`                | No tags yet                                                                                                         | 暂无标签                                                                              |
+| `publicPage.tags.remove`               | Remove {tag}                                                                                                        | 移除{tag}                                                                             |
+| `publicPage.readme.label`              | README                                                                                                              | README                                                                                |
+| `publicPage.readme.help`               | Markdown. Up to {max} characters. What you see here is what visitors see.                                           | Markdown 格式，最多 {max} 个字符。你在这里看到的就是访客看到的。                      |
+| `publicPage.readme.emptyHelp`          | Nothing written yet. Until you write a README, the public page shows a short automatic introduction.                | 尚未撰写。在你写 README 之前，公开页面会显示一段简短的自动介绍。                      |
+| `publicPage.footer.dirty`              | Unsaved changes                                                                                                     | 有未保存的更改                                                                        |
+| `publicPage.footer.saving`             | Saving…                                                                                                             | 正在保存…                                                                             |
+| `publicPage.footer.saved`              | Saved                                                                                                               | 已保存                                                                                |
+| `publicPage.footer.invalid`            | Fix the highlighted fields to save                                                                                  | 请修正标出的字段后再保存                                                              |
+| `publicPage.footer.save`               | Save changes                                                                                                        | 保存更改                                                                              |
+| `common.cancel` (existing)             | Cancel                                                                                                              | 取消                                                                                  |
+| `publicPage.error.taglineTooLong`      | Too long — {max} characters at most.                                                                                | 太长了——最多 {max} 个字符。                                                           |
+| `publicPage.error.tagsInvalid`         | Each tag must be {maxLength} characters or fewer, and there can be at most {maxCount}.                              | 每个标签不能超过 {maxLength} 个字符，且最多 {maxCount} 个。                           |
+| `publicPage.error.overviewTooLong`     | Too long — {max} characters at most.                                                                                | 太长了——最多 {max} 个字符。                                                           |
+| `publicPage.error.saveFailed`          | Couldn’t save the public page. Try again.                                                                           | 无法保存公开页面，请重试。                                                            |
+| `publicPage.notPublic.lead`            | Not building in public yet.                                                                                         | 尚未公开构建。                                                                        |
+| `publicPage.notPublic.body`            | What you save here is kept, and goes live the moment you start building in public in <link>Members & access</link>. | 你在这里保存的内容会被保留，并在你于<link>成员与访问</link>中开始公开构建时立即生效。 |
+| `publicPage.discard.title` (from 1d)   | Discard unsaved changes?                                                                                            | 放弃未保存的更改？                                                                    |
+| `publicPage.discard.keep` (from 1d)    | Keep editing                                                                                                        | 继续编辑                                                                              |
+| `publicPage.discard.discard` (from 1d) | Discard                                                                                                             | 放弃                                                                                  |
+
+The Members room's three strings CHANGE (the retargets):
+
+| key                             | en (was → now)                                                                                                                                                                      | zh                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `public.heroOverviewSubheading` | _Edit the tagline, tags, and README right on the public page — what you change is what visitors see._ → **The tagline, tags and README visitors see on your public page.**          | 访客在你的公开页面上看到的标语、标签和 README。 |
+| `public.editOnPublicPage`       | _Edit on the public page_ → **Edit the public page**                                                                                                                                | 编辑公开页面                                    |
+| `public.heroOverviewNote`       | _Opens the public Overview with the on-page editor. It's hidden while the project isn't public._ → **Opens Settings › Public page. You can write it before the project is public.** | 打开“设置 › 公开页面”。项目公开前也可以先写好。 |
+
+`public.linkNote`'s _To stop sharing, set the access level above…_ and `buildInPublic.*` are
+unchanged.
+
+## Tokens & a11y — no new token, no new shape
+
+Every colour is an `--el-*` role the shipped primitives already paint; every shaped surface is the
+primitive's own shape token. The room adds nothing to the palette.
+
+| element                    | colour                                                                               | shape                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| rail row · active          | `--el-sidebar-item-bg-active` · `--el-text` · glyph `--el-icon-active`               | `--radius-control` · `--height-control`                   |
+| rail row · rest            | `--el-text-secondary` · glyph `--el-icon-muted` · hover `--el-sidebar-item-bg-hover` | same                                                      |
+| settings card              | `--el-card` on `--el-border` · `--shadow-card` · head glyph `--el-icon-heading`      | `--radius-card` · `--spacing-card-padding`                |
+| input box                  | `--el-input-bg` / `--el-input-border` · error `--el-danger` · text `--el-text`       | `--radius-input` · `--height-input` · `--spacing-input-x` |
+| helper / hint              | `--el-text-helper` (fields) · `--el-text-secondary` (footer, on `--el-surface-soft`) | —                                                         |
+| tag chip                   | `--el-chip-bg` / `--el-chip-border` · `--el-text-secondary`                          | `--radius-badge` · `--spacing-chip-x/y`                   |
+| error line / box           | `--el-danger` (line) · `--el-danger-surface` + `--el-danger-surface-text` (box)      | `--radius-control` · `--spacing-tooltip-x/y`              |
+| saved status               | `--el-success`                                                                       | —                                                         |
+| not-yet-public band        | `--el-tint-sky` · `--el-text-strong`                                                 | `--radius-card` · `--spacing-card-padding`                |
+| Save / Cancel              | `--el-accent` + `--el-accent-text` · `--el-button-border`                            | `--radius-btn` · `--height-btn-md` · `--spacing-btn-x`    |
+| board chrome (annotations) | `--el-text` / `--el-text-secondary` only                                             | —                                                         |
+
+State is never colour alone: every error has its text, _Saving…_ has its word, the chips' remove
+control is a labelled button. The footer hint is `--el-text-secondary` on `--el-surface-soft`
+(6.51:1); `--el-text-muted` appears only on the white page/card (the sub-heading, the helpers'
+neighbours), where it clears AA.
+
+## GIVES / TAKES — MOTIR-4171, and its size
+
+| `MOTIR-` key                 | GIVES / TAKES | what                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-4205** (this)        | GIVES         | this section, `public-page.mock.html` / `.png`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **MOTIR-4171** (the builder) | GIVES         | the route `/settings/project/public` + `page.tsx` (guard, cloud `notFound()`, the initial read); the registry entry above **and the new `cloudOnly` flag + its filter**; the room's client island — three fields, the tag-chip control (a small NEW composition: no shipped chip-input primitive exists), the save bar, the unsaved-changes guard, per-field error mapping; the copy above in en **and** zh (~34 new keys, 3 changed); the **three** retargets and a public-host accessor; tests: the href sweep, the seam (`GET /api/public/p/{key}` reflects a save), the partial-author contract, the cloud arm |
+| **MOTIR-4171**               | TAKES         | nothing it had — but its criteria say _two_ `/p/<key>` links and its test sweeps `href`s; the share field's copied value is a third that sweep cannot see (amend the criterion; assert the copied value instead of, or as well as, the `href`)                                                                                                                                                                                                                                                                                                                                                                     |
+| MOTIR-3877 · 3908 · 3951     | GIVES         | cited as the decisions this room is built inside (the host split, the cloud gate, the deletion) — no card changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+
+**Sizing re-check, as the card asked.** MOTIR-4171 stands at **5 SP / 90 min** and already tripped
+`likely-over-gate-sizing` on the minutes arm (disposed as ~55 agent + ~35 CI). Counted against the
+list above the asset adds work the card did not carry when it was sized: the `cloudOnly` registry
+flag and its filter, the initial read of the three hero fields (no shipped read returns all three),
+the tag-chip control, the third retarget plus a host accessor, and the second locale for ~34 keys.
+That does not fit 90 minutes; **8 SP / ~130 min** is the honest figure, and the agent half is over
+the 60-minute ceiling — so the remedy is a SPLIT rather than a larger number: the Members-room
+retargets + the host accessor + the href/copied-value sweep are a clean separate PR with no
+dependency on the room. Recorded on MOTIR-4171 and submitted as a proposal from this run; the
+approver decides.
+
+## Source of truth
+
+MOTIR-4171's _✅ DECISION_ owns the PLACEMENT; `docs/decisions/public-surface-hosts.md` AMENDMENT 4
+row 7 owns the absence of an editor on the public host; `lib/publicProjects/limits.ts` owns the caps.
+On chrome — the settings rail and the room grammar — `settings-area.mock.html` and `design/shell`
+win; on the editor elements, `design/public-projects/public-projects.mock.html` panels 1c / 1d
+decided them and this asset reuses them by citation. Where this asset and any of those disagree,
+they win and this asset is wrong.
