@@ -23,8 +23,9 @@ source-selection, index, or generate UI**; all of that lives downstream in 7.15 
 their own designs (MOTIR-930). Re-drawing it here would duplicate 7.15.
 
 **Asset files (three, shared basename):** `design-notes.md` (this file) · `onboarding-entrance.mock.html`
-(source of truth, standalone — re-states the real `globals.css` `--el-*` values so it renders without
-the Tailwind build, exactly as `design/ai-planning/*.mock.html` does) · `onboarding-entrance.png`
+(source of truth, standalone — re-states the real `globals.css` `--el-*` values, **under the `--el-*`
+names**, so it renders without the Tailwind build, exactly as
+`design/ai-planning/plan-revision.mock.html` does) · `onboarding-entrance.png`
 (full-page export, light theme, `deviceScaleFactor: 2`).
 
 ---
@@ -190,6 +191,42 @@ stroke 2, round caps — matching the shipped hero.
   warm-editorial / motir VALUES). **No invented hues** on any card / pill / state / text — the only raw
   values are non-semantic elevation shadows and the doc-annotation scaffold chrome (panel captions / ref
   chips), which are not product UI.
+
+  > **⚠️ AMENDED 2026-09-03 (MOTIR-4351) — this rule was stated here and NOT held by the asset, in two
+  > ways, and neither was measurable until now.**
+  >
+  > **(a) The names, which are what the guards read.** The mock's `:root` copied the design system's
+  > values onto PRIVATELY-NAMED aliases — `--text`, `--muted`, `--faint`, `--page`, `--hub`, `--soft`,
+  > `--hair` — and painted through those. `tests/theme/inkContrastMockScan.ts` and
+  > `tests/theme/mockStateInkScan.ts` classify ink by reading an `--el-*` name off the declaration AT
+  > THE PAINT SITE, so all 73 paint sites in this asset were outside every ink guard in the tree by
+  > construction, and their greens said nothing about it. The block now declares the real `--el-*`
+  > names and every site consumes them.
+  >
+  > **(b) "No invented hues" was FALSE — there were four**, and the carve-out above was covering one of
+  > them. Each is now a token or a `color-mix()` whose inputs are all tokens:
+  >
+  > | was                                          | is                                                            | note                                                                                                    |
+  > | -------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+  > | `--page: #f4f3f1` (body + `.ob` ground)      | `--el-surface` (`#f6f5f4`)                                    | nearest token by value AND role; a 3-unit shift, and the drawn body/container relationship is unchanged |
+  > | `--border-strong: #d3cfc8` (`.import:hover`) | `--el-border-strong` (`#c8c4be`)                              | the semantic role is exact; the asset's value was an invented intermediate                              |
+  > | `--accent-soft: #f4f2fd` (`.ref` fill)       | `color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg))`  | all-token inputs, so it follows a re-skin                                                               |
+  > | `#e3def8` inline on `.ref`'s border          | `color-mix(in srgb, var(--el-accent) 17%, var(--el-page-bg))` | a raw hex at the point of use, not even routed through an alias                                         |
+  >
+  > **And the swap exposed five sub-AA elements the asset had been carrying unmeasured.** Once the ink
+  > was declared under its real name, `design-ink-contrast` reported `--el-text-muted` at 4.12–4.34:1
+  > on `--el-surface` for three `.note` and two `.hint` elements — under AA, and exactly the pairing
+  > `CLAUDE.md`'s measured table forbids ([MOTIR-2455]). Both rules now take **`--el-text-secondary`**
+  > (6.18–6.80:1 on all four surfaces in both themes). Separately, `--el-text-faint` — which clears AA
+  > on NO surface — carried three active informational labels (`.idea-card .lbl`, the `.or` divider,
+  > `.state .st-cap`); all three now take `--el-text-secondary`, and the `.idea-card` placeholder takes
+  > `--el-text-muted`, which the guard confirms clears AA on the white card it sits in.
+  >
+  > **The composition table below was RIGHT and the mock was wrong** — its "OR divider" row already
+  > specified an `--el-text-secondary` label, and the asset painted a faint alias. The sweep restores
+  > the specification rather than changing it. Nothing else in the drawn design moved: the `.png`
+  > re-export reports `EXACT` at 2560×4866.
+
 - Shape flows through element-semantic tokens (`--radius-card`/`-btn`/`-input`/`-badge`/`-control`,
   `--spacing-card-padding`, `--height-btn-md`) — never a raw `rounded-md`/`p-2`/`h-9`, so a `data-style`
   swap re-shapes it.
