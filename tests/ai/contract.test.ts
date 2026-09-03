@@ -47,10 +47,6 @@ const CANONICAL_JOB_KINDS = [
   'noop',
   'discovery',
   'generate_explanation',
-  'generate_tree',
-  'expand_item',
-  'augment',
-  'replan',
   // `analyze_bug` (Story 7.6 — MOTIR-967 handler / MOTIR-1481 trigger); already
   // in motir-ai's canonical set (motir-ai/tests/contract.test.ts, contract.md §2.3).
   'analyze_bug',
@@ -66,13 +62,26 @@ const CANONICAL_JOB_KINDS = [
   // already in motir-ai's canonical set. Adding it HERE closes the drift that
   // card's envelope documented while this consumer was unbuilt.
   'ask_project',
-  // `revise_plan` (Story MOTIR-3595 — MOTIR-3599 submit / MOTIR-3600 handler).
-  // The FIRST kind whose target is a PLAN rather than a work item. Added to
-  // motir-ai's copy in the same parent run; the two pull requests may merge in
-  // either order, because an unrecognised kind on either side is refused by the
-  // envelope rather than mis-dispatched — this guard exists to make the window
-  // between them visible rather than silent.
-  'revise_plan',
+  // `plan` (Story MOTIR-3943 — MOTIR-4304). THE ONE PLANNING KIND: after ADR
+  // `session-model.md` §6 step 2 all six planning submit sites send it, and
+  // motir-ai resolves what the run is about from the CONTEXT rather than from
+  // the name. Already in motir-ai's canonical set (declared by MOTIR-3940's step
+  // 1, which made it ACCEPTED while motir-core was still sending the five old
+  // kinds); adding it HERE closes that member of the drift.
+  //
+  // ⚠️ THE DRIFT THAT REMAINS IS REAL AND INTENDED, and a reader must be able to
+  // tell it from an oversight: motir-ai's list also carries `code_audit` and
+  // `security_audit`, whose motir-core mirrors land with their own consumer
+  // surfaces — that pair is UNRELATED to this story and predates it.
+  //
+  // ⚠️ THE PLANNING WINDOW IS CLOSED (MOTIR-4308). For two cards the five old
+  // members sat in BOTH lists on purpose — motir-ai kept accepting them until
+  // MOTIR-4306, motir-core kept declaring them until this one — so the sender's
+  // switch stayed revertible on its own. The two lists now agree on the planning
+  // kind again: exactly one, `plan`. Re-read `motir-ai/tests/contract.test.ts`
+  // at the merge base rather than trusting this comment; that list changes
+  // without warning from this side, which is the whole reason this guard exists.
+  'plan',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).
@@ -120,6 +129,23 @@ describe('contract: error taxonomy (§5)', () => {
 describe('contract: jobKind enum (§2.3)', () => {
   it('motir-core JOB_KINDS is EXACTLY the canonical set', () => {
     expect([...JOB_KINDS].sort()).toEqual([...CANONICAL_JOB_KINDS].sort());
+  });
+
+  // ⚠️ EQUALITY ALONE CANNOT SAY THIS (MOTIR-4310). The case above passes if BOTH
+  // lists carry a retired kind — they would still be equal, and the mirror would
+  // still name values motir-ai refuses. This is the half that says what they must
+  // NOT contain.
+  it('neither list carries a RETIRED planning kind — the five are gone from both', () => {
+    for (const kind of ['generate_tree', 'expand_item', 'augment', 'replan', 'revise_plan']) {
+      expect([...JOB_KINDS], `JOB_KINDS still carries ${kind}`).not.toContain(kind);
+      expect([...CANONICAL_JOB_KINDS], `CANONICAL_JOB_KINDS still carries ${kind}`).not.toContain(
+        kind,
+      );
+    }
+    // …and the one that replaced them is in both, so "not containing" cannot be
+    // achieved by emptying the planning half altogether.
+    expect([...JOB_KINDS]).toContain('plan');
+    expect([...CANONICAL_JOB_KINDS]).toContain('plan');
   });
 
   it('ENVELOPE_VERSION matches the canonical version', () => {

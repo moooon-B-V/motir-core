@@ -137,7 +137,7 @@ describe('aiPlanEditsService.submitAugment', () => {
     );
 
     expect(submitJob).toHaveBeenCalledWith(
-      'augment',
+      'plan',
       {
         organizationId: 'org_1',
         isMeta: false,
@@ -168,7 +168,7 @@ describe('aiPlanEditsService.submitAugment', () => {
     await aiPlanEditsService.submitAugment('prompt', ctx);
 
     expect(submitJob).toHaveBeenCalledWith(
-      'augment',
+      'plan',
       expect.objectContaining({ isMeta: true }),
       expect.any(Object),
       expect.any(Object),
@@ -187,7 +187,7 @@ describe('aiPlanEditsService.submitExpand', () => {
 
     expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
     expect(submitJob).toHaveBeenCalledWith(
-      'expand_item',
+      'plan',
       expect.objectContaining({ projectKey: 'MOTIR' }),
       expect.objectContaining({ rootItemKey: 'MOTIR-100' }),
       { userId: 'user_1' },
@@ -237,7 +237,7 @@ describe('aiPlanEditsService.submitReplan', () => {
 
     expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
     expect(submitJob).toHaveBeenCalledWith(
-      'replan',
+      'plan',
       expect.any(Object),
       expect.objectContaining({ rootItemKey: 'MOTIR-100' }),
       { userId: 'user_1' },
@@ -355,7 +355,7 @@ describe("aiPlanEditsService — opens the job's Plan on submit", () => {
     await aiPlanEditsService.submitContextual('split this', ['MOTIR-100', 'MOTIR-101'], ctx);
 
     expect(submitJob).toHaveBeenCalledWith(
-      'augment',
+      'plan',
       expect.objectContaining({ projectKey: 'MOTIR' }),
       expect.objectContaining({
         prompt: 'split this',
@@ -448,22 +448,22 @@ describe('aiPlanEditsService — the generateExplanations opt-in rides every pla
   }> = [
     {
       name: 'submitAugment',
-      kind: 'augment',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitAugment('add a login flow', c),
     },
     {
       name: 'submitContextual',
-      kind: 'augment',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], c),
     },
     {
       name: 'submitExpand',
-      kind: 'expand_item',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
     },
     {
       name: 'submitReplan',
-      kind: 'replan',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
     },
   ];
@@ -589,22 +589,22 @@ describe('aiPlanEditsService — the record-planning-mistakes flag rides every p
   }> = [
     {
       name: 'submitAugment',
-      kind: 'augment',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitAugment('add a login flow', c),
     },
     {
       name: 'submitContextual',
-      kind: 'augment',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], c),
     },
     {
       name: 'submitExpand',
-      kind: 'expand_item',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
     },
     {
       name: 'submitReplan',
-      kind: 'replan',
+      kind: 'plan',
       run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
     },
   ];
@@ -656,5 +656,158 @@ describe('aiPlanEditsService — the record-planning-mistakes flag rides every p
     // constant's VALUE, every assertion above still passes (they read the literal)
     // and this one fails, which is the intended blast radius.
     expect(RECORD_PLANNING_MISTAKES_CONTEXT_FIELD).toBe(WIRE_KEY);
+  });
+});
+
+// ─── ONE PLANNING KIND ON THE WIRE (MOTIR-4304 · ADR §6 step 2) ──────────────
+//
+// Every planning submit in the product sends `plan`. The five old kinds were
+// transport carrying an operation NAME, and after MOTIR-3940 all five routed
+// through one walk on the far side — so the kind was a distinction nothing
+// consumed, and a second place for the answer to drift.
+//
+// What replaces it is the CONTEXT, which is why the second suite below matters
+// as much as the first: motir-ai resolves the target arm from `context.planId`
+// (a plan), `context.rootItemKey` / `context.targetKeys` (a work item), or their
+// ABSENCE (the project). If a site's kind changed and its context quietly
+// changed with it, the run would land on the wrong grounding and report success.
+describe('aiPlanEditsService — every planning submit sends `jobKind: "plan"` (MOTIR-4304)', () => {
+  // The five sites this service owns. `aiGenerationService.startGeneration` is
+  // the sixth and is asserted where it lives — `tests/ai/codeContext.test.ts`,
+  // `tests/ai/projectRepoContext.test.ts` and
+  // `tests/api-ai-plan-generate-route.test.ts` all read its submitted kind.
+  const SITES: Array<{
+    name: string;
+    run: (c: ProjectContext) => Promise<unknown>;
+    /** The target arm motir-ai must resolve from what this site sends. */
+    arm: 'plan' | 'work-item' | 'project';
+  }> = [
+    {
+      name: 'submitAugment',
+      arm: 'project',
+      run: (c) => aiPlanEditsService.submitAugment('add a login flow', c),
+    },
+    {
+      name: 'submitContextual',
+      arm: 'work-item',
+      run: (c) => aiPlanEditsService.submitContextual('split this', ['MOTIR-100'], c),
+    },
+    {
+      name: 'submitExpand',
+      arm: 'work-item',
+      run: (c) => aiPlanEditsService.submitExpand('MOTIR-100', c),
+    },
+    {
+      name: 'submitReplan',
+      arm: 'work-item',
+      run: (c) => aiPlanEditsService.submitReplan('MOTIR-100', c),
+    },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  for (const site of SITES) {
+    it(`${site.name} submits 'plan', and its context still names the ${site.arm} arm`, async () => {
+      mockSubmitJob();
+
+      await site.run(ctx);
+
+      const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
+      expect(kind).toBe('plan');
+
+      // The kind no longer says what the run is about; the context does. Assert
+      // the ARM each site names, because that is what the switch made
+      // load-bearing.
+      const bag = context as JobContextBag & { targetKeys?: unknown };
+      const anchored =
+        typeof bag.rootItemKey === 'string' ||
+        (Array.isArray(bag.targetKeys) && bag.targetKeys.length > 0);
+      expect(anchored).toBe(site.arm === 'work-item');
+    });
+  }
+
+  it('submitRevise submits `plan` AND still sends `context.planId` — the only thing that makes it a revision now', async () => {
+    mockSubmitJob();
+    vi.mocked(plansService.getPlan).mockResolvedValue({
+      id: 'plan_1',
+      projectId: 'pj_1',
+      status: 'planned',
+      items: [],
+    } as unknown as Awaited<ReturnType<typeof plansService.getPlan>>);
+    vi.mocked(plansService.readRevisionLease).mockResolvedValue(null as never);
+    vi.mocked(plansService.acquireRevisionLease).mockResolvedValue(undefined as never);
+
+    await aiPlanEditsService.submitRevise('plan_1', 'split the second story', ctx);
+
+    const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
+    expect(kind).toBe('plan');
+    // ⚠️ WITHOUT THIS FIELD A REVISION IS INDISTINGUISHABLE FROM A PROJECT-WIDE
+    // PLAN. `readerForPlan` reads `context.planId` FIRST (MOTIR-4301); its silent
+    // loss would send the reviewer's correction to `readProjectTarget`, which
+    // would propose a fresh tree and call it a revision.
+    expect((context as JobContextBag & { planId?: string }).planId).toBe('plan_1');
+  });
+});
+
+// ⚠️ THE CONTEXT IS BYTE-IDENTICAL APART FROM THE KIND — asserted, not assumed.
+//
+// The switch is meant to change ONE argument at six call sites. The failure it
+// could hide is a field dropped from the bag in passing: every one of these is
+// read only on the far side, so a missing one produces a run that succeeds with
+// less information, and nothing anywhere goes red. So this pins the WHOLE bag by
+// exact equality rather than `toMatchObject` — an extra key fails it too, which
+// is the half a partial matcher cannot see.
+describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MOTIR-4304)', () => {
+  beforeEach(() => {
+    vi.mocked(workItemRepository.findByIdentifier).mockResolvedValue(
+      mockWorkItem({ identifier: 'MOTIR-100', kind: 'story' }),
+    );
+  });
+
+  it('an expand submit sends exactly the bag it sent before the switch', async () => {
+    mockSubmitJob();
+    vi.mocked(resolveCodeContext).mockResolvedValue({ repos: ['owner/repo'] } as never);
+    vi.mocked(resolveProjectRepoContext).mockResolvedValue({ repositories: [] } as never);
+    vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(false);
+
+    await aiPlanEditsService.submitExpand('MOTIR-100', ctxWithExplanations);
+
+    const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
+    expect(kind).toBe('plan');
+    // The pre-switch shape, recorded verbatim. `toEqual` and not
+    // `toMatchObject`: a field ADDED here crosses the boundary as much as one
+    // removed, and ADR §9 forbids a new wire field in this sequence.
+    expect(context).toEqual({
+      rootItemKey: 'MOTIR-100',
+      generateExplanations: true,
+      recordPlanningMistakes: false,
+      code: { repos: ['owner/repo'] },
+      repositories: { repositories: [] },
+    });
+  });
+
+  it('a contextual submit sends its anchor SET, and nothing else moved', async () => {
+    mockSubmitJob();
+    vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
+    vi.mocked(resolveProjectRepoContext).mockResolvedValue(undefined);
+    vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(true);
+
+    await aiPlanEditsService.submitContextual('split this', ['MOTIR-100', 'MOTIR-101'], ctx);
+
+    const [, , context] = vi.mocked(submitJob).mock.calls[0]!;
+    // `code` and `repositories` are spread CONDITIONALLY — absent means "this
+    // workspace has none" — so their absence here is the shipped behaviour, not
+    // a loss. `generateExplanations` and `recordPlanningMistakes` are never
+    // conditional, for the opposite reason: absence would read as a default.
+    expect(context).toEqual({
+      prompt: 'split this',
+      targetKeys: ['MOTIR-100', 'MOTIR-101'],
+      generateExplanations: false,
+      recordPlanningMistakes: true,
+    });
   });
 });

@@ -5315,6 +5315,7 @@
       "model": "Model",
       "tokens": "Tokens",
       "credits": "Credits",
+      "kindPlan": "Planning",
       "kindGenerate": "Generate plan",
       "kindExpand": "Expand story",
       "kindAugment": "Augment tree",

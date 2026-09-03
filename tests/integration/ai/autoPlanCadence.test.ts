@@ -184,7 +184,7 @@ async function seedItems(
 }
 
 describe('Auto-plan cadence — the opt-in and the drain threshold (MOTIR-916)', () => {
-  it('fires exactly ONE expand_item job for a drained, opted-in project, targeting the nominated stub', async () => {
+  it('fires exactly ONE `plan` job for a drained, opted-in project, targeting the nominated stub — INHERITING the switch (MOTIR-4304)', async () => {
     const { fx, stubKey } = await makeDrainedProject();
 
     const summary = await autoPlanCadenceService.runCadenceSweep();
@@ -196,10 +196,20 @@ describe('Auto-plan cadence — the opt-in and the drain threshold (MOTIR-916)',
       itemKey: stubKey,
       jobId: 'job_cadence_1',
     });
-    // ONE job, and it is the shipped `expand_item` kind aimed at the stub.
+    // ONE job, and it is the ONE planning kind, aimed at the stub.
+    //
+    // ⚠️ THIS IS THE EVIDENCE THAT THE CADENCE TRIGGER NEEDED NO CARD OF ITS OWN
+    // (MOTIR-4304). `autoPlanCadenceService` reaches the wire only through
+    // `deps.submitExpand` and names no job kind anywhere, so it INHERITED the
+    // switch rather than being switched. That is a claim about a file this card
+    // deliberately did not touch, and this assertion is what makes it checkable:
+    // it read `expand_item` before the switch and reads `plan` after it, with
+    // `autoPlanCadenceService.ts` byte-identical across the diff.
     expect(submitJob).toHaveBeenCalledTimes(1);
     const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
-    expect(kind).toBe('expand_item');
+    expect(kind).toBe('plan');
+    // …and the TARGET the cadence names still rides the context, which is what
+    // motir-ai now resolves the anchored arm from.
     expect(context).toMatchObject({ rootItemKey: stubKey });
   });
 
@@ -786,6 +796,13 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
       sourceJobId: 'job_cadence_1',
     });
     expect(summary.outcomes[0]).toMatchObject({ planId: plans[0]!.id });
+    // ⚠️ THE TWO HALVES TOGETHER (MOTIR-4304): the run whose plan is stamped
+    // `origin: 'cadence'` is the same run that submitted `jobKind: 'plan'`. The
+    // switch made the KIND uniform across every planning entrance; `origin` is
+    // what still distinguishes a cadence-fired run from a person clicking Expand,
+    // and it is motir-core's own column rather than anything on the wire — so the
+    // cadence keeps its provenance without keeping a job kind of its own.
+    expect(vi.mocked(submitJob).mock.calls[0]![0]).toBe('plan');
   });
 
   it('records NO requester on a cadence plan — the owner’s credential is not a request (MOTIR-2986)', async () => {

@@ -5315,6 +5315,7 @@
       "model": "模型",
       "tokens": "Token",
       "credits": "额度",
+      "kindPlan": "规划",
       "kindGenerate": "生成计划",
       "kindExpand": "展开故事",
       "kindAugment": "扩充树",

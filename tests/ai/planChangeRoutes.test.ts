@@ -193,7 +193,7 @@ describe('POST /api/ai/plan-change/session/submit', () => {
       unknown,
       { prompt: string },
     ];
-    expect(kind).toBe('augment');
+    expect(kind).toBe('plan');
     expect(payload.prompt).toContain('Add auth to the billing epic');
     expect(payload.prompt).toContain('Make the subtasks smaller');
   });

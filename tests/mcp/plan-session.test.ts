@@ -438,7 +438,7 @@ describe('submit_plan_session — one job for the whole thread', () => {
     // the numbered framing that tells the engine later turns REFINE earlier ones.
     expect(vi.mocked(submitJob)).toHaveBeenCalledTimes(1);
     const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
-    expect(kind).toBe('augment');
+    expect(kind).toBe('plan');
     const prompt = (context as { prompt: string }).prompt;
     expect(prompt).toBe(
       buildAccumulatedIntent([
