@@ -125,6 +125,22 @@ export function arrivalLevel(
  * Walks UP from the container: each PROPOSED ancestor contributes one crumb
  * labelled `<proposedWord> · <title>`; the first COMMITTED one contributes the
  * `parentTrail` any item naming it carries, which is the whole committed chain.
+ *
+ * ⚠️ "PROPOSED" IS `identifier === null`, NOT "in this plan" (bug MOTIR-4266).
+ * Being in `byNodeId` says the plan has something to SAY about the node, not
+ * that the node is new: a `modify` / `remove` keys by the WORK ITEM it targets
+ * (MOTIR-3160's one keying rule) and a materialized `add` re-keys to the card it
+ * became (MOTIR-3161), so all three carry a real `MOTIR-<n>`. Labelling those
+ * `New` inverts the substitution it belongs to — Part IX §1.3 puts the word in
+ * the key's SLOT precisely because an un-materialized `add` has no key *"by
+ * construction"*, and saying it about a card that HAS one asserts, on the one
+ * surface whose promise is that nothing is real until approve, that something
+ * real is not. The design says the same thing from the other side: Part XIII
+ * names a row `<identifier> · <title>` for a `modify` / `remove` and
+ * `New · <title>` for an `add`.
+ *
+ * Same rule as the View door and `heldNodeByPlanItemId` below, in the same
+ * expression: an item carrying an identifier is a committed card.
  */
 function trailTo(
   items: PlanReviewItemDto[],
@@ -164,7 +180,7 @@ function trailTo(
     }
     proposed.unshift({
       id: proposal.nodeId,
-      label: workItemCrumbLabel(proposedWord, proposal.title),
+      label: workItemCrumbLabel(proposal.identifier ?? proposedWord, proposal.title),
     });
     cursor = proposal.parentNodeId;
   }

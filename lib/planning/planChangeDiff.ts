@@ -1,3 +1,4 @@
+import { proposedParentNodeIds } from '@/lib/planning/planShape';
 import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // The PROPOSED-PLAN index behind the in-canvas diff (Subtask MOTIR-1730; design
@@ -137,9 +138,7 @@ export function indexPlanReview(review: PlanReviewDto | null | undefined): PlanC
     hasChildren: false,
   }));
 
-  const withChildren = new Set(
-    adds.map((a) => a.parentNodeId).filter((id): id is string => id !== null),
-  );
+  const withChildren = proposedParentNodeIds(adds);
   for (const add of adds) add.hasChildren = withChildren.has(add.nodeId);
 
   return {
