@@ -122,99 +122,99 @@ model User {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
-  accounts                    Account[]
-  sessions                    Session[]
+  accounts                         Account[]
+  sessions                         Session[]
   // Back-relation for EmailChangeRequest (Subtask 8.8.22). A user may have
   // pending verified-email-change requests (Cascade on the FK: deleting a user
   // removes their pending change tokens — they are short-lived auth substrate,
   // not audit, mirroring the session/account lifecycle).
-  emailChangeRequests         EmailChangeRequest[]
+  emailChangeRequests              EmailChangeRequest[]
   // Back-relation for DeviceCode (Subtask MOTIR-1865). A user may have in-flight
   // `motir login` grants they have claimed but not yet approved (Cascade on the
   // FK: they are short-lived auth substrate, not audit — same lifecycle as
   // emailChangeRequests / sessions).
-  deviceCodes                 DeviceCode[]
-  workspaceMemberships        WorkspaceMembership[]
+  deviceCodes                      DeviceCode[]
+  workspaceMemberships             WorkspaceMembership[]
   // Back-relation for OrganizationMembership (Story 6.10). A user belongs to
   // many organizations (the root tenancy tier) — Cascade on the FK: deleting a
   // user removes their org-membership rows, mirroring workspaceMemberships.
-  organizationMemberships     OrganizationMembership[]
+  organizationMemberships          OrganizationMembership[]
   // Back-relations for WorkItem (Story 1.4). A user reports many work items
   // (reporter — Restrict on the FK: a user with reported issues on record
   // cannot be hard-deleted) and can be assigned many (assignee — SetNull on
   // the FK: deleting an assignee leaves the issue unassigned, never removes
   // it). Named relations because there are two distinct User↔WorkItem edges.
-  reportedWorkItems           WorkItem[]                @relation("WorkItemReporter")
-  assignedWorkItems           WorkItem[]                @relation("WorkItemAssignee")
+  reportedWorkItems                WorkItem[]                @relation("WorkItemReporter")
+  assignedWorkItems                WorkItem[]                @relation("WorkItemAssignee")
   // Back-relation for the triage submitter (Subtask 6.11.4). A user may have
   // submitted many triage items (in-app, or — via 6.12 — as a signed-in
   // non-member). SetNull on the FK: a deleted submitter just loses attribution.
-  submittedTriageItems        WorkItem[]                @relation("WorkItemTriageSubmitter")
+  submittedTriageItems             WorkItem[]                @relation("WorkItemTriageSubmitter")
   // Back-relation for WorkItemLink (Subtask 1.4.3). A user creates many
   // issue-to-issue links (createdBy — Restrict: a user with links on record
   // cannot be hard-deleted, mirroring the reporter pattern).
-  createdWorkItemLinks        WorkItemLink[]            @relation("WorkItemLinkCreatedBy")
+  createdWorkItemLinks             WorkItemLink[]            @relation("WorkItemLinkCreatedBy")
   // Back-relation for WorkItemRevision (Subtask 1.4.6). A user authors many
   // revisions (changedBy — Restrict on the FK: a user with audit history on
   // record cannot be hard-deleted, mirroring the reporter pattern).
-  authoredWorkItemRevisions   WorkItemRevision[]        @relation("WorkItemRevisionAuthor")
+  authoredWorkItemRevisions        WorkItemRevision[]        @relation("WorkItemRevisionAuthor")
   // Back-relation for Attachment (Subtask 2.3.7). A user uploads many
   // attachments (uploader — Cascade on the FK: deleting a user removes their
   // uploaded blobs' audit rows). Modelled to keep the schema graph in sync
   // with the migration-built FK (bug-attachment-fk-migration-drift).
-  uploadedAttachments         Attachment[]
+  uploadedAttachments              Attachment[]
   // Back-relation for AcceptanceEvidence (Story MOTIR-1627 · MOTIR-1629). A user
   // approves many story-acceptance videos; SetNull on the FK (the approval stamp
   // survives the approver's deletion — it's audit, not ownership).
-  approvedAcceptanceEvidences AcceptanceEvidence[]
+  approvedAcceptanceEvidences      AcceptanceEvidence[]
   // Back-relation for ProjectMembership (Subtask 6.4.2). A user holds explicit
   // membership in many projects (Cascade on the FK: deleting a user removes
   // their project-membership rows, mirroring workspaceMemberships).
-  projectMemberships          ProjectMembership[]
+  projectMemberships               ProjectMembership[]
   // Back-relations for Comment + CommentMention (Subtask 5.1.1). A user
   // authors many comments (author — Restrict on the FK: a user with comments
   // on record cannot be hard-deleted silently, mirroring the reporter
   // pattern) and is mentioned in many (Cascade: a mention row is notification
   // substrate, not audit — it goes with the user, mirroring
   // projectMemberships).
-  authoredComments            Comment[]                 @relation("CommentAuthor")
-  commentMentions             CommentMention[]
+  authoredComments                 Comment[]                 @relation("CommentAuthor")
+  commentMentions                  CommentMention[]
   // To-dos this user TICKED (Story MOTIR-3808 · MOTIR-3813). SetNull, NOT
   // Cascade: a departing member must not vaporise the record that a step was
   // completed — the tick survives, its attribution does not. Same reasoning as
   // `Attachment.uploader`'s SetNull one tier over.
-  completedWorkItemTodos      WorkItemTodo[]            @relation("WorkItemTodoCompletedBy")
+  completedWorkItemTodos           WorkItemTodo[]            @relation("WorkItemTodoCompletedBy")
   // Back-relations for Component + Watcher (Subtask 5.4.1). A user is the
   // default assignee of many components (SetNull: a departed user clears the
   // default, never blocks) and watches many issues (Cascade: a watcher row
   // is notification substrate, not audit — it goes with the user, mirroring
   // commentMentions).
-  defaultAssigneeComponents   Component[]               @relation("ComponentDefaultAssignee")
-  watchers                    Watcher[]
+  defaultAssigneeComponents        Component[]               @relation("ComponentDefaultAssignee")
+  watchers                         Watcher[]
   // Back-relation for CustomFieldValue (Subtask 5.3.1). A user can be the
   // VALUE of a `user`-type custom field on many issues (SetNull on the FK:
   // deleting the user clears the field value, never blocks the delete —
   // the assignee semantics, not the reporter ones).
-  customFieldValues           CustomFieldValue[]
+  customFieldValues                CustomFieldValue[]
   // Back-relations for SavedFilter + SavedFilterStar (Subtask 6.2.1). A user
   // owns many saved filters (Cascade — the uploadedAttachments semantics;
   // admins change owner first when a shared filter must survive a departure)
   // and stars many (Cascade: preference substrate, not audit — the watchers
   // pattern).
-  savedFilters                SavedFilter[]             @relation("SavedFilterOwner")
-  savedFilterStars            SavedFilterStar[]         @relation("SavedFilterStarUser")
+  savedFilters                     SavedFilter[]             @relation("SavedFilterOwner")
+  savedFilterStars                 SavedFilterStar[]         @relation("SavedFilterStarUser")
   // Per-user filter subscriptions (Subtask 6.2.5) — emailed-results loop.
   // Cascade: a subscription is preference substrate (the star semantics),
   // not audit, so it dies with the user.
-  savedFilterSubscriptions    SavedFilterSubscription[] @relation("SavedFilterSubscriptionUser")
+  savedFilterSubscriptions         SavedFilterSubscription[] @relation("SavedFilterSubscriptionUser")
   // Automation rules this user owns (Subtask 6.6.1) — the rule actor (the
   // recorded 6.6 deviation: rule actions run as the owner). Cascade with the
   // user, the savedFilters semantics: a departing admin's rules go with them
   // (an admin reassigns the owner first if a rule must survive).
-  automationRules             AutomationRule[]          @relation("AutomationRuleOwner")
+  automationRules                  AutomationRule[]          @relation("AutomationRuleOwner")
   // Dashboards (Story 6.3) — owned grids ride the SavedFilter owner
   // semantics (Cascade; change-owner is the recorded extension).
-  dashboards                  Dashboard[]               @relation("DashboardOwner")
+  dashboards                       Dashboard[]               @relation("DashboardOwner")
   // In-app notifications (Story 5.7 · Subtask 5.7.2). Two distinct User↔
   // Notification edges, so named relations. As the RECIPIENT a user owns many
   // notifications (Cascade: a notification row is per-user notification
@@ -222,65 +222,65 @@ model User {
   // As the ACTOR (who caused it — rendered as the row avatar) a user appears
   // on many (SetNull on the FK: a departed actor leaves the row intact and
   // unattributed, never blocks a delete — the assignee semantics).
-  notifications               Notification[]            @relation("NotificationRecipient")
-  actedNotifications          Notification[]            @relation("NotificationActor")
+  notifications                    Notification[]            @relation("NotificationRecipient")
+  actedNotifications               Notification[]            @relation("NotificationActor")
   // Per-user notification preferences (Story 5.7 · Subtask 5.7.6) — the
   // per-user × event-type × channel toggle matrix that gates BOTH the in-app
   // fan-in (5.7.3) and the DONE email job (5.1.6). Cascade: preferences are
   // personal substrate, they die with the user (the notifications pattern).
-  notificationPreferences     NotificationPreference[]  @relation("UserNotificationPreferences")
+  notificationPreferences          NotificationPreference[]  @relation("UserNotificationPreferences")
   // Personal access tokens (Story 7.8 · Subtask 7.8.1) — the per-user bearer
   // credentials AI agents present to the MCP server. Cascade: a token is
   // personal auth substrate, it dies with the user (the notifications /
   // notificationPreferences pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
-  apiTokens                   ApiToken[]
+  apiTokens                        ApiToken[]
   // CLI runs this person started (Story MOTIR-1789). `SetNull`, NOT cascade: a
   // run is a record of what happened to the PROJECT's work, so deleting the
   // operator must not destroy it — only the attribution.
-  dispatchRuns                DispatchRun[]
+  dispatchRuns                     DispatchRun[]
   // Upvotes the user cast on public requests (Story 6.12 · Subtask 6.12.3) —
   // the demand signal the triage queue sorts by (6.12.6). Cascade: a vote is
   // personal substrate, it dies with the user (the apiTokens pattern). Modelled
   // on both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
-  publicRequestVotes          PublicRequestVote[]
+  publicRequestVotes               PublicRequestVote[]
   // Public projects this account FOLLOWS (Story 8.9 · Subtask 8.9.3) — the
   // account tier of `docs/decisions/public-follow-and-changelog.md` §1. The
   // email-only tier carries no user, which is why the FK is optional on the
   // other side. Cascade: a follow is personal substrate, it dies with the user
   // (the publicRequestVotes / apiTokens pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
-  publicFollows               PublicFollow[]
+  publicFollows                    PublicFollow[]
   // Cross-device appearance preference (Story 7.3 · Subtask 7.3.59) — the 1:1
   // row backing the 3-axis design system's per-user sync. Cascade: it's
   // personal appearance substrate, it dies with the user (the
   // notificationPreferences / apiTokens pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
-  appearancePreference        UserAppearancePreference? @relation("UserAppearancePreference")
+  appearancePreference             UserAppearancePreference? @relation("UserAppearancePreference")
   // The user's GitHub OAuth identity binding (Story 7.10 · MOTIR-1498) — the
   // identity-only grant (0 or 1 per user). Cascade: it's personal auth
   // substrate carrying only an encrypted user token, it dies with the user
   // (the apiTokens pattern). Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
-  githubIdentity              GithubIdentity?
+  githubIdentity                   GithubIdentity?
   // The repositories this user has been invited to as a collaborator on the code
   // Motir made for their team (MOTIR-1910). Cascade: the record is about a person
   // reaching a repository, so it dies with the person (the githubIdentity
   // pattern). Modelled on both sides per the FK-`@relation` rule.
-  projectRepoCollaborators    ProjectRepoCollaborator[]
+  projectRepoCollaborators         ProjectRepoCollaborator[]
   // The user's per-source import OAuth identities (Story 7.16 · MOTIR-1653) —
   // the encrypted token store the per-vendor connect flows (7.16.11–13) and the
   // import routes read/write through (0..N, one per source × workspace).
   // Cascade: personal auth substrate carrying only encrypted vendor tokens, it
   // dies with the user (the githubIdentity pattern). Modelled on both sides per
   // the FK-`@relation` rule so `migrate dev` reports no drift.
-  importSourceIdentities      ImportSourceIdentity[]
+  importSourceIdentities           ImportSourceIdentity[]
   // Per-user canvas node arrangements (Story 7.3 · Subtask 7.3.77) — where the
   // user dragged each node on a project's planning canvas, persisted so a drag
   // survives reload. Cascade: personal layout substrate, it dies with the user
   // (the appearancePreference pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
-  canvasNodePositions         CanvasNodePosition[]
+  canvasNodePositions              CanvasNodePosition[]
   // Back-relation for TwoFactor (Story MOTIR-1213 · Subtask MOTIR-1217) — the
   // Better-Auth `twoFactor` plugin's per-user secret + backup-code row. A LIST,
   // not a `TwoFactor?`, because the plugin's own schema declares `userId`
@@ -291,7 +291,7 @@ model User {
   // it. Cascade: 2FA material is personal auth substrate, it dies with the user
   // (the apiTokens / deviceCodes pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
-  twoFactor                   TwoFactor[]
+  twoFactor                        TwoFactor[]
   // Back-relation for Passkey (Story MOTIR-1214 · Subtask MOTIR-3610) — the
   // Better-Auth `passkey` plugin's per-credential rows. A LIST: a person
   // registers one passkey per device (laptop, phone, hardware key), and telling
@@ -299,49 +299,53 @@ model User {
   // personal auth substrate, they die with the user (the `twoFactor` /
   // `deviceCodes` / `apiTokens` pattern). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
-  passkeys                    Passkey[]
+  passkeys                         Passkey[]
   // Forward relation for the GLOBAL last-active project pointer (Subtask
   // 8.8.27). SetNull on the FK: archiving/deleting the named project clears the
   // pointer, never blocks the delete (the `WorkspaceMembership.activeProject`
   // semantics). Modelled on both sides per the FK-`@relation` rule so
   // `migrate dev` reports no drift.
-  lastActiveProject           Project?                  @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
+  lastActiveProject                Project?                  @relation("LastActiveProject", fields: [lastActiveProjectId], references: [id], onDelete: SetNull)
   // Plans this user has approved/declined (Story 7.21). SetNull on the FK so a
   // deleted decider never blocks the plan's history; modelled both sides.
-  decidedPlans                Plan[]                    @relation("PlanDecidedBy")
+  decidedPlans                     Plan[]                    @relation("PlanDecidedBy")
   // Design results this user has WITHDRAWN (MOTIR-3215). SetNull on the FK so a
   // deleted withdrawer leaves the withdrawal on record, unattributed — the same
   // audit-not-ownership semantics as `approvedAcceptanceEvidences`. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
-  withdrawnDesignEvidences    DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
-  requestedPlans              Plan[]                    @relation("PlanCreatedBy")
+  withdrawnDesignEvidences         DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
+  requestedPlans                   Plan[]                    @relation("PlanCreatedBy")
   // Plan CONTENT mutations this user made (Story MOTIR-3532 · MOTIR-3535) — the
   // append-only trail beside the plan's own three party columns. SetNull on the
   // FK so a departed author leaves the change on record, unattributed: the trail
   // is the plan's history, not the person's, and the same audit-not-ownership
   // semantics `decidedPlans` above uses. Modelled both sides per the
   // FK-`@relation` rule.
-  authoredPlanRevisions       PlanRevision[]            @relation("PlanRevisionAuthor")
+  authoredPlanRevisions            PlanRevision[]            @relation("PlanRevisionAuthor")
   // Issue-import runs this user kicked off (Story 7.16 · MOTIR-939). SetNull on
   // the FK so a deleted initiator never destroys import history; both sides.
-  createdImports              Import[]                  @relation("ImportCreatedBy")
+  createdImports                   Import[]                  @relation("ImportCreatedBy")
   // Plan-change conversations this user opened + the turns they wrote (Story
   // 7.30 · MOTIR-1728). SetNull on both FKs so a departed author leaves the
   // thread intact and unattributed (the `Notification` ACTOR semantics) —
   // the conversation is project history, not personal substrate. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
-  createdPlanChangeSessions   PlanChangeSession[]       @relation("PlanChangeSessionCreatedBy")
-  authoredPlanChangeTurns     PlanChangeTurn[]          @relation("PlanChangeTurnAuthor")
+  createdPlanChangeSessions        PlanChangeSession[]       @relation("PlanChangeSessionCreatedBy")
+  authoredPlanChangeTurns          PlanChangeTurn[]          @relation("PlanChangeTurnAuthor")
+  // Mid-run mailbox entries this user attached to a RUNNING planning job
+  // (Story MOTIR-4054 · MOTIR-4067). SetNull, the same actor semantics as the
+  // turn above — a departed author leaves the record of what was said.
+  authoredPlanChangeMailboxEntries PlanChangeMailboxEntry[]  @relation("PlanChangeMailboxEntryAuthor")
   // Planning-target leases this user's sessions hold (Story MOTIR-2786 ·
   // MOTIR-2787). SetNull — a departed holder leaves the lease for the sweep to
   // expire rather than stranding the item.
-  heldPlanTargetLocks         PlanTargetLock[]          @relation("PlanTargetLockHeldBy")
+  heldPlanTargetLocks              PlanTargetLock[]          @relation("PlanTargetLockHeldBy")
   // Platform-staff actions this user performed against the estate (MOTIR-2896).
   // Restrict on the FK: a user with audit rows on record cannot be hard-deleted
   // (the `WorkItem.reporter` precedent) — the evidence of what an operator did
   // must outlive their account. Modelled on both sides per the FK-`@relation`
   // rule so `migrate dev` reports no drift.
-  platformAuditEntries        PlatformAuditLog[]        @relation("PlatformAuditLogActor")
+  platformAuditEntries             PlatformAuditLog[]        @relation("PlatformAuditLogActor")
   // What this account has agreed to, and when (Story 8.4 · MOTIR-1135). A LIST
   // and append-only: the row set IS the evidence, so an acceptance is never
   // overwritten by the next one. Cascade — the record is about a person's
@@ -350,7 +354,7 @@ model User {
   // `apiTokens` / `passkeys` semantics, not the `platformAuditEntries` one).
   // Modelled on both sides per the FK-`@relation` rule so `migrate dev` reports
   // no drift.
-  legalAcceptances            LegalAcceptance[]
+  legalAcceptances                 LegalAcceptance[]
   // Account-erasure requests this person has raised (Story 8.4 · MOTIR-3698).
   // A LIST rather than an optional one-to-one: at most one may be OPEN at a
   // time (the `account_deletion_request_open_per_user_key` partial unique index
@@ -359,12 +363,12 @@ model User {
   // this account and has no meaning once the account is gone (the
   // `legalAcceptances` / `apiTokens` semantics). Modelled on both sides per the
   // FK-`@relation` rule so `migrate dev` reports no drift.
-  accountDeletionRequests     AccountDeletionRequest[]
+  accountDeletionRequests          AccountDeletionRequest[]
   // Personal-data export requests this person has raised (Story 8.4 ·
   // MOTIR-3698). A LIST for the same reason: each request builds its own
   // archive, and the previous ones remain as history until they expire.
   // Cascade, same semantics.
-  dataExportRequests          DataExportRequest[]
+  dataExportRequests               DataExportRequest[]
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1121,6 +1125,10 @@ model Workspace {
   // Workspace-scoped tenant data — cascade with the workspace.
   planChangeSessions          PlanChangeSession[]
   planChangeTurns             PlanChangeTurn[]
+  // The BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — what a user typed
+  // while a planning job was running, and the stop that ends it.
+  // Workspace-scoped tenant data; cascade with the workspace.
+  planChangeMailboxEntries    PlanChangeMailboxEntry[]
   // The planning-target leases held in this workspace (Story MOTIR-2786 ·
   // MOTIR-2787). Workspace-scoped tenant data — cascade with the workspace.
   planTargetLocks             PlanTargetLock[]
@@ -6223,10 +6231,14 @@ model PlanChangeSession {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy   User?            @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  workspace   Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   turns       PlanChangeTurn[]
+  /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
+  /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
+  /// Cascade: a deleted thread takes its mailbox with it.
+  mailbox     PlanChangeMailboxEntry[]
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
   targetLocks PlanTargetLock[]
@@ -6343,6 +6355,118 @@ model PlanChangeTurn {
   @@index([sessionId, seq])
   @@index([workspaceId])
   @@map("plan_change_turn")
+}
+
+/// THE BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — what the user typed
+/// while a planning job was in flight, and the stop that ends it.
+///
+/// ⚠️ ONE PIPE CARRIES BOTH, and that is the whole reason this is one table
+/// rather than a `stop` column beside a turns table. The consumer half already
+/// merged in `motir-ai` (MOTIR-4060) checks ONE mailbox at ONE phase boundary;
+/// two pipes for one check is how a stop overtakes a turn typed before it, or a
+/// turn is consumed after the run was told to end. Here they share a single
+/// `seq` sequence per job, so the order they were made in is a property of the
+/// row rather than of whichever query ran first.
+///
+/// ⚠️ NOT A SIGNAL — STORAGE THE JOB CHECKS. Nothing here interrupts anything: a
+/// turn that arrives during an `author` sits until that author finishes, because
+/// a card written half under one set of instructions and half under another is
+/// incoherent in a way nothing downstream can detect (`motir-ai`
+/// `src/llm/mailbox.ts`).
+model PlanChangeMailboxEntry {
+  id             String                        @id @default(cuid())
+  workspaceId    String                        @map("workspace_id")
+  sessionId      String                        @map("session_id")
+  /// The motir-ai job this entry is addressed to — an OPAQUE job token, a plain
+  /// scalar and NOT an FK (the `plan_change_session.last_job_id` precedent). The
+  /// mailbox is per-RUN: a thread that submits again starts an empty one, and an
+  /// entry can never be read by a job it was not typed at.
+  jobId          String                        @map("job_id")
+  /// 0-based position in THIS job's mailbox. Allocated under the session row's
+  /// `SELECT … FOR UPDATE` lock with a re-read inside the transaction (the
+  /// lock-before-read-derived-update rule), and `(session_id, job_id, seq)` is
+  /// the DB backstop that turns a lost race into a typed error.
+  ///
+  /// ⚠️ IT IS THE ORDERING, AND `created_at` IS NOT. Two entries written inside
+  /// the same millisecond is reachable and is exactly the case a timestamp sort
+  /// gets wrong; `motir-ai`'s `readDelivery` sorts by `receivedAt` and breaks
+  /// ties on ARRAY ORDER, so the producer's claim about order travels in the
+  /// array — which this column is what builds.
+  seq            Int
+  kind           PlanChangeMailboxKind
+  /// What the user typed, verbatim. Required on a `turn`, null on a `stop`.
+  body           String?                       @db.Text
+  /// What the run should DO with this turn — `fold` (carry on) or `restart`
+  /// (withdraw what was appended and re-plan). Null on a `stop`. An absent or
+  /// unrecognised value reads as `fold` on the consumer side, which is the
+  /// branch that loses least when the two repos disagree about a word.
+  disposition    PlanChangeMailboxDisposition? @map("disposition")
+  /// Where a `restart` RE-ANCHORS the walk — a work-item identifier. Null means
+  /// the target the run is already on.
+  restartTarget  String?                       @map("restart_target")
+  /// The caller's OWN stable key for this delivery. `(session_id, job_id,
+  /// idempotency_key)` is UNIQUE, so a retried submit resolves to the row it
+  /// already wrote instead of delivering the same sentence twice.
+  ///
+  /// ⚠️ This follows the repo's EXISTING idempotency shape rather than inventing
+  /// one — a caller-supplied token on a unique column, as `CiOverageDebitInput`'s
+  /// `externalRef` is. (MOTIR-4067's card names `planningTurnId` as the pattern;
+  /// `lib/ai/types.ts` says in as many words that `externalRef` is deliberately
+  /// NOT one, because `planningTurnId` is AI-TURN-shaped. The shape the card
+  /// meant is the general one, and this is it.)
+  idempotencyKey String                        @map("idempotency_key")
+  /// When a boundary check READ this entry. Null while it is still waiting; the
+  /// read door sets it and never returns a set row again, which is what makes
+  /// "a turn read at one boundary is not read at the next" a stored fact rather
+  /// than an in-process set that a job retry loses.
+  ///
+  /// ⚠️ A `stop` IS STILL DERIVED FROM EXISTENCE, not from this column. Once a
+  /// run has been ended it stays ended, so consuming the stop entry must not
+  /// un-stop the answer.
+  consumedAt     DateTime?                     @map("consumed_at")
+  /// Who typed it (null on a `stop` raised by the system, and cleared when the
+  /// author is deleted — the turn's `authorId` semantics).
+  authorId       String?                       @map("author_id")
+  createdAt      DateTime                      @default(now()) @map("created_at")
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// COMPOSITE FK, for the reason MOTIR-1735 gives on `PlanChangeTurn.session`:
+  /// RLS checks the row's own `workspace_id` and does NOT traverse foreign keys,
+  /// so a single-column FK would let a tenant plant an entry under a FOREIGN
+  /// session — passing `WITH CHECK` while claiming a `(session_id, job_id, seq)`
+  /// slot the victim can never use. Referencing the PAIR makes that row
+  /// nonexistent rather than merely invisible, and unlike a policy it holds for
+  /// BYPASSRLS / superuser connections too.
+  session   PlanChangeSession @relation(fields: [sessionId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  author    User?             @relation("PlanChangeMailboxEntryAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, jobId, seq])
+  @@unique([sessionId, jobId, idempotencyKey])
+  @@index([sessionId, jobId, seq])
+  @@index([workspaceId])
+  @@map("plan_change_mailbox_entry")
+}
+
+/// A mailbox entry is a TURN the user typed or the STOP that ends the run. One
+/// enum because they share one ordered pipe (see the model header).
+enum PlanChangeMailboxKind {
+  turn
+  stop
+
+  @@map("plan_change_mailbox_kind")
+}
+
+/// What the run should do with a folded turn — the two branches `motir-ai`'s
+/// boundary check takes on input (`MailboxDisposition` in `src/llm/mailbox.ts`).
+/// There is deliberately no `stop` member: a stop is a KIND, not a disposition,
+/// because it is not something done WITH a turn.
+enum PlanChangeMailboxDisposition {
+  /// Carry on — the turn joins what every later session of this run reads.
+  fold
+  /// START OVER — withdraw what this pass appended and re-plan, keeping the plan.
+  restart
+
+  @@map("plan_change_mailbox_disposition")
 }
 
 enum PlanChangeTurnRole {
