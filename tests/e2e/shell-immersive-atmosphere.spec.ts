@@ -306,7 +306,14 @@ test.describe('aurora drifts on the shell exactly as it drifts on the page (MOTI
   });
 
   test.describe('under a reduced-motion preference', () => {
-    test.use({ reducedMotion: 'reduce' });
+    // ⚠️ `contextOptions`, NOT a bare `reducedMotion` key. `reducedMotion` is a
+    // `BrowserContextOptions` field, not a top-level Playwright TEST option, and
+    // the bare form fails BOTH ways at once: `tsc` rejects it (TS2353) and the
+    // runner silently ignores the unknown fixture key, so the context runs at
+    // the DEFAULT preference and the test measures the no-preference world while
+    // claiming to measure the reduced one. It went red rather than quietly green
+    // only because the assertions below read `body` as well as the shell.
+    test.use({ contextOptions: { reducedMotion: 'reduce' } });
 
     test('the drift is stilled on both members, never on one', async ({ page }) => {
       await openAppearance(page, 'e2e-shell-aurora-still@example.com');
