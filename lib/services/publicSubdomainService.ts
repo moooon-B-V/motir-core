@@ -57,6 +57,20 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 /** Roles that may change a workspace's public address. */
 const ADDRESS_ADMIN_ROLES = new Set(['owner', 'admin']);
 
+/**
+ * Whether a workspace ROLE may change the address — the predicate the settings
+ * pane's read-only arm asks (MOTIR-4221, design panel 8).
+ *
+ * ⚠️ EXPORTED SO THE RULE HAS ONE HOME. The pane has to decide whether to render
+ * controls at all, and the alternative was a second `['owner', 'admin']` in a
+ * page component — a copy of a security-shaped rule that drifts silently, since
+ * the copy going stale shows up as controls that appear and then refuse. This is
+ * presentation only: {@link assertAddressAdmin} still enforces on every write.
+ */
+export function roleMayManageAddress(role: string): boolean {
+  return ADDRESS_ADMIN_ROLES.has(role);
+}
+
 export const publicSubdomainService = {
   /**
    * The workspace's subdomain, or `null` when it has never claimed one.

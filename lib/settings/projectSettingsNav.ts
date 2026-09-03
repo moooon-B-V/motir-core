@@ -6,6 +6,7 @@ import {
   Gauge,
   Globe,
   KeyRound,
+  Link2,
   Shield,
   SlidersHorizontal,
   Sparkles,
@@ -262,6 +263,59 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     permission: 'project:administer',
     // CLOUD-ONLY (MOTIR-3908). Off-cloud there are no public projects, so this
     // is a room with nothing behind it — the row is absent and the page 404s.
+    cloudOnly: true,
+  },
+  {
+    id: 'public-address',
+    group: 'access',
+    href: '/settings/project/public-address',
+    icon: Link2,
+    labelKey: 'nav.publicAddress',
+    // Story MOTIR-3878 · MOTIR-4221, drawn by MOTIR-4211
+    // (`design/projects/public-address.mock.html` panels 0–2, 8, 9 ·
+    // `design/projects/design-notes.md` § *Public address*). Where a workspace
+    // claims its subdomain and a project connects a domain the customer owns.
+    //
+    // ⚠️ THE ORDER IS THE ASSET'S, NOT THE CARD'S, AND THAT IS A RUNG-2 READING
+    // BEATING A RUNG-3 ONE. MOTIR-4221 says the row goes "between Members &
+    // access and Roles"; that slot was taken by *Public page* (MOTIR-4243) while
+    // this story was in flight. Two public rooms either side of one door is the
+    // coherent shape, so the asset draws — and this is —
+    //   Members & access → Public page → Public address → Roles → Code access
+    // The card's intent (the `access` group, adjacent to Members & access) is
+    // honoured; only the neighbour changed.
+    //
+    // `Link2`, and NOT `Globe` — that glyph is *Public page*, one row up. Two
+    // rooms in the same group sharing a mark is exactly what MOTIR-4243's own
+    // note refuses between a room and a status badge, applied between two rooms.
+    //
+    // VERIFIED, and this key is the one thing the design asset deliberately did
+    // NOT decide (its planning flag 1: "MOTIR-4221's to READ OFF its own service
+    // gate"). The room's writes are `customDomainService.{add,verify,remove,
+    // makePrimary,clearPrimary}`, every one of which asserts
+    // `assertPermission(…, 'project:manage_access')`; its list asserts
+    // `project:browse`. So the key the room's WRITES assert is this one, read off
+    // the destination rather than inferred from the row's name.
+    //
+    // ⚠️ AND `project:browse` WOULD HAVE BEEN THE WRONG READING, though the
+    // subdomain half of the room is readable by any workspace member. No settings
+    // entry is gated on it, so adding the first one would hand every project
+    // VIEWER a settings door — the 2026-08-08 amendment's "no read-only
+    // administrative rooms" refuses that, and the asset's panel 8 says so in
+    // terms: a member who can read but not administer never reaches this row.
+    //
+    // THE READ-ONLY ARM IS THE OTHER CASE, and it is real rather than defensive:
+    // the subdomain's own writes are gated on the WORKSPACE role (owner/admin,
+    // `publicSubdomainService`), which is a different axis from the project
+    // permission above. A project admin who is a workspace *member* holds the
+    // door key and not the write key, so the pane renders the address with every
+    // control ABSENT (panel 8). `roleMayManageAddress` is exported from that
+    // service so the rule has one home.
+    permission: 'project:manage_access',
+    // CLOUD-ONLY (ADR §11): a self-hosted build has no public projects, so this
+    // is a room with nothing behind it. The flag is MOTIR-4243's — this entry
+    // USES it and does not re-introduce it, which the asset flagged as a build
+    // dependency precisely so two cards could not add one field twice.
     cloudOnly: true,
   },
   {
