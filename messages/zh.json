@@ -2183,6 +2183,95 @@
         "cancel": "取消",
         "confirm": "重命名"
       },
+      "domains": {
+        "title": "你自己的域名",
+        "subtitle": "使用你拥有的域名来提供此项目。",
+        "add": "添加域名",
+        "empty": {
+          "title": "尚未连接域名",
+          "body": "添加类似 roadmap.acme.com 的域名，此项目将在其根路径提供访问。你需要创建两条 DNS 记录；证书由 Motir 签发。"
+        },
+        "state": {
+          "unverified": {
+            "label": "未验证",
+            "hint": "已添加，但尚未看到 _motir-verify TXT 记录，也尚未申请证书。"
+          },
+          "verifying": {
+            "label": "检查中…",
+            "hint": "正在查找 TXT 记录。DNS 生效可能需要几分钟。"
+          },
+          "pending_certificate": {
+            "label": "签发中…",
+            "hint": "所有权已验证，证书已申请，通常需要一两分钟。"
+          },
+          "issued": {
+            "label": "已生效",
+            "hint": "证书已签发，该域名正在提供此项目，并会自动续期。"
+          },
+          "failed": {
+            "label": "失败",
+            "hint": "证书签发失败。"
+          },
+          "expired": {
+            "label": "已过期",
+            "hint": "证书已过期且续期未成功——几乎总是因为 DNS 记录发生了更改。该域名当前无法访问。"
+          },
+          "revoked": {
+            "label": "已吊销",
+            "hint": "证书已被吊销。该域名当前无法访问，需要重新申请证书。"
+          },
+          "active": {
+            "label": "使用中",
+            "hint": "工作区子域名可解析并提供此项目。"
+          },
+          "alias": {
+            "label": "重定向",
+            "hint": "被重命名后的子域名。它会永久重定向到当前地址，并且永不释放。"
+          }
+        },
+        "action": {
+          "showDns": "查看 DNS 记录",
+          "checkAgain": "重新检查",
+          "requestAgain": "重新申请",
+          "makePrimary": "设为主地址",
+          "remove": "移除",
+          "copy": "复制值",
+          "copied": "已复制"
+        },
+        "primary": {
+          "badge": "主地址",
+          "consequence": "其他所有地址都会重定向到这里。",
+          "disabledReason": "证书生效后，域名才能设为主地址"
+        },
+        "addModal": {
+          "title": "添加域名",
+          "label": "域名",
+          "helper": "此项目将在该域名的根路径提供访问。",
+          "recordsHeading": "请创建以下 {count} 条记录",
+          "type": "类型",
+          "name": "名称",
+          "value": "值",
+          "apexNote": "根域名会绑定到我们的 IP 地址。子域名则使用 CNAME，若这些地址将来变更也会自动跟随。",
+          "verify": "验证",
+          "later": "稍后再说",
+          "cancel": "取消",
+          "submit": "添加域名"
+        },
+        "removeModal": {
+          "title": "要移除 {hostname} 吗？",
+          "warningTitle": "正在使用该地址的访问者将会看到错误。",
+          "warningBody": "已分享出去的 {hostname} 链接将失效。此项目在其他地址上仍然保持公开。",
+          "cancel": "取消",
+          "confirm": "移除域名"
+        },
+        "upgrade": {
+          "title": "自定义域名属于付费方案。",
+          "body": "工作区子域名在所有方案中都包含，并会继续可用。升级后即可使用你自己的域名提供此项目。",
+          "cta": "查看方案"
+        },
+        "lastChecked": "上次检查：{when}",
+        "error": "操作未成功，请稍后重试。"
+      },
       "error": {
         "reserved": "{label} 是保留名称。Motir 保留了一小组名称，用于自己的主机以及读者可能误认的名称。",
         "structurallyReserved": "{label} 是保留名称。以下划线、xn-- 或 motir- 开头的名称属于 Motir 或 DNS 本身。",

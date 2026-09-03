@@ -191,16 +191,44 @@ describe('the card renders the design, and the refusals come from CODES', () => 
   });
 });
 
-describe('the part-2 slot', () => {
-  it('exists, is typed, and renders nothing', () => {
-    // MOTIR-4229 becomes an ADDITION to this file rather than an edit to the
-    // page. A slot invented later is a slot whose props are guessed by whoever
-    // needs it least.
+describe('the custom-domain half (MOTIR-4229) landed in the slot part 1 left', () => {
+  it('is composed by the page, with its addresses read SERVER-side', () => {
+    // The slot was a typed stub for exactly one commit, which is what made part
+    // 2 an addition to one file rather than an edit to the page's body.
+    const src = code(PAGE);
+    expect(src).toContain('<CustomDomainsSection');
+    expect(src).toContain('customDomainService.list');
+  });
+
+  it('the state map is TOTAL over the enum, subdomain values included', () => {
+    // A `Record<PublicAddressStatus, …>` makes a tenth value a compile error
+    // rather than a row that renders blank. The two subdomain states are NAMED
+    // and excluded rather than omitted — an omission reads as an oversight.
     const src = code(SLOT);
-    expect(src).toContain('projectKey');
-    expect(src).toContain('canManage');
-    expect(src).toContain('return null');
-    expect(code(PAGE)).toContain('<CustomDomainsSection');
+    expect(src).toContain('Record<DomainStatus, StateRow>');
+    for (const status of [
+      'active',
+      'alias',
+      'unverified',
+      'verifying',
+      'pending_certificate',
+      'issued',
+      'failed',
+      'expired',
+      'revoked',
+    ]) {
+      expect(src, `the state map does not name ${status}`).toContain(status);
+    }
+  });
+
+  it('does not read a tier — the cap refusal is what raises the prompt', () => {
+    // `entitlementsService.assertCanAddCustomDomain` records that `free: 0`
+    // exists to make the refusal "the upgrade prompt's trigger instead of an
+    // empty state the pane special-cases". A tier read here would be the second
+    // copy of a billing rule that note exists to prevent.
+    const src = code(SLOT);
+    expect(src).toContain("entitlement === 'custom_domains'");
+    expect(src).not.toMatch(/maxCustomDomains|entitlementsFor|tierFor/);
   });
 });
 

@@ -9,6 +9,7 @@ import {
   publicSubdomainService,
   roleMayManageAddress,
 } from '@/lib/services/publicSubdomainService';
+import { customDomainService } from '@/lib/services/customDomainService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { guardSettingsPage } from '../_guard';
 import { PublicSubdomainCard } from './_components/PublicSubdomainCard';
@@ -103,9 +104,10 @@ export default async function ProjectPublicAddressPage() {
     );
   }
 
-  const [subdomain, membership] = await Promise.all([
+  const [subdomain, membership, addresses] = await Promise.all([
     publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId),
     workspacesService.findMembership(ctx.userId, ctx.workspaceId),
+    customDomainService.list({ key: ctx.project.identifier, actorUserId: ctx.userId, ctx }),
   ]);
 
   return (
@@ -118,10 +120,14 @@ export default async function ProjectPublicAddressPage() {
         subdomain={subdomain}
         canManage={membership ? roleMayManageAddress(membership.role) : false}
       />
-      {/* MOTIR-4229's section, mounted here as a typed stub that renders
-          nothing — so part 2 is an ADDITION to this file's imports and not an
-          edit to its body. The card asks for exactly that. */}
-      <CustomDomainsSection projectKey={ctx.project.identifier} canManage={false} />
+      {/* MOTIR-4229's half. ⚠️ `canManage` IS `true` BY CONSTRUCTION HERE and is
+          passed anyway: the destination guard above already refused anyone
+          without `project:manage_access`, which is the key every one of the
+          section's writes asserts — so on THIS page the two cannot disagree. The
+          prop exists so the section does not inherit its host's gate by
+          assumption. This is a DIFFERENT axis from the subdomain card's, whose
+          writes are gated on the workspace role. */}
+      <CustomDomainsSection projectKey={ctx.project.identifier} canManage addresses={addresses} />
     </div>
   );
 }
