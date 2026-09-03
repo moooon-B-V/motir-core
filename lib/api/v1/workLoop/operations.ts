@@ -11,6 +11,7 @@ import {
   planOutcomeSchema,
   planSchema,
   planSessionSchema,
+  workItemPlanSchema,
   planSessionScopeBodySchema,
   planTurnBodySchema,
   workItemClaimSchema,
@@ -80,6 +81,22 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
           'the unattended-run seed. It never overrides: an item whose dependencies are ' +
           'already integrated, or that is itself integrated, keeps its own branch, so a ' +
           'caller cannot redirect a live lineage.',
+        schema: z.string(),
+      },
+      {
+        name: 'autoApproveReplan',
+        in: 'query',
+        required: false,
+        description:
+          '`1` when THIS run’s loop is willing to approve a submitted re-plan itself and carry ' +
+          'on (`motir auto --auto-approve-replan`). It adds a section telling the agent that ' +
+          'a correction kept to its own card and that card’s siblings may be approved ' +
+          'unattended, while anything wider — anchored at a container, or at nothing — goes to ' +
+          'a person and stops the run, and that BOTH are legitimate. ⚠️ It changes the TEXT ' +
+          'only: the agent’s tools, anchor and single submit are identical either way, and the ' +
+          'bound on what may be approved is the LOOP’s, enforced over the plan that comes ' +
+          'back. Absent means no, and it is ignored when `findingsPolicy` disables `replan` — ' +
+          'approving a plan the agent was told not to submit is not a lane.',
         schema: z.string(),
       },
     ],
@@ -385,6 +402,60 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
   }),
 
   // ── Automatic plan approval (MOTIR-3021 / MOTIR-3023) ───────────────────
+  //
+  // The READ comes first because it is what a caller does first: an unattended
+  // loop looks at the plan, decides whether it is inside the lane it may approve
+  // on its own, and only then POSTs.
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/work-items/{key}/plan-approval',
+    operationId: 'getWorkItemPlan',
+    summary: 'Read the plan this work item produced, without deciding it',
+    description:
+      'READ the plan a work item’s own re-plan produced — the proposals, BEFORE anybody ' +
+      'decides on them. Resolved by exactly the walk `approveWorkItemPlan` uses (the planning ' +
+      'conversation ANCHORED at this key → its last submitted job → that job’s plan), so what ' +
+      'this returns is the plan that POST would approve, and there is no way to name a plan ' +
+      'the item did not produce. ⚠️ It DECIDES NOTHING: no status moves, no proposal ' +
+      'materializes, and the plan is left exactly where it was — a plan still `generating` ' +
+      'comes back with the proposals that have arrived so far. It exists for an unattended ' +
+      'loop that must BOUND what it is about to approve: `motir auto --auto-approve-replan` ' +
+      'reads the proposals, checks that every one of them falls inside the card’s own lane, ' +
+      'and declines to approve one that does not. ⚠️ `plan` IS `null` WHEN NOTHING IS ANCHORED ' +
+      'HERE, which is the ordinary state of almost every card and is an ANSWER rather than an ' +
+      'error — it is how a caller learns that a re-plan was anchored somewhere else, at a ' +
+      'container or at nothing. ⚠️ READING IS `project:browse`, and only DECIDING is ' +
+      '`ai:decide_plan`: the plan inside the wrapper is exactly the document ' +
+      '`GET /api/v1/plans/{planId}` already returns to the same audience, addressed by the card ' +
+      'instead of by an id its caller has no way to learn. The bound worth having is on the ' +
+      'decision, and that one is untouched.',
+    // `project:browse` — the key its service asserts (`plansService.getPlan` →
+    // `assertCanBrowse`), and the answer this API's own operation→permission
+    // table gives for EVERY GET. It is also what the plan read beside it
+    // (`getPlan`) declares, which matters more than the symmetry: two doors onto
+    // one document must not disagree about who may open it.
+    permission: 'project:browse',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item whose plan is read (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: workItemPlanSchema },
+      description:
+        '`plan` carries the plan and its proposals, in the same shape ' +
+        '`GET /api/v1/plans/{planId}` returns — or `null` when no plan is anchored at this card.',
+    },
+    // 404: no such work item, or one in another tenant. NOT 422 for a card with
+    // no plan: that is `plan: null` at 200, because the question was answerable.
+    errorStatuses: [404],
+  }),
+
   defineOperation({
     method: 'POST',
     path: '/api/v1/work-items/{key}/plan-approval',

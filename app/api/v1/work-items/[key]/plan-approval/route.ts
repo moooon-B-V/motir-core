@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
-import { planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
-import { PlanNotInExpectedStatusError } from '@/lib/plans/errors';
+import {
+  planReferenceIds,
+  planTargetKeyResolver,
+  presentPlan,
+  type V1Plan,
+  type V1WorkItemPlan,
+} from '@/lib/api/v1/workLoop/schema';
+import type { PlanWithItemsDto } from '@/lib/dto/plans';
+import { NoPlanForWorkItemError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // POST /api/v1/work-items/{key}/plan-approval (MOTIR-3021 / MOTIR-3023) — the
 // public entrance `motir auto --auto-approve-replan` drives, specified in full
@@ -101,13 +109,85 @@ export const POST = withV1Route<{ key: string }>({ permission: 'ai:decide_plan' 
   // not have to learn a second shape to read what became of it. It also
   // carries the plan's own id, which is how a caller that never knew it can
   // report WHAT it approved.
-  const targetIds = [
-    ...new Set(plan.items.map((item) => item.workItemId).filter((id): id is string => id !== null)),
-  ];
+  return NextResponse.json(await presentResolvedPlan(plan, ctx));
+});
+
+// ── The READ beside the decision (MOTIR-4085) ───────────────────────────────
+//
+// ⚠️ IT IS THE SAME PLAN, RESOLVED BY THE SAME WALK, and that is the whole
+// reason it lives on this path rather than on one of its own.
+// `readPlanForWorkItem` and `approvePlanForWorkItem` share
+// `resolvePlanIdForWorkItem`, so a caller that reads here and then POSTs here
+// is looking at exactly the plan the POST will decide. A read on a different
+// path, resolved a second way, would let a loop check the lane of one plan and
+// approve another — which is the failure the whole lane check exists to stop.
+//
+// ── WHY A LOOP NEEDS IT ────────────────────────────────────────────────────
+// `motir auto --auto-approve-replan` approves a plan its agent submitted while
+// nobody was watching. What bounds that plan is the OPERATOR's loop: it checks
+// that every proposal falls inside the iteration's own lane — the leaf and its
+// siblings — and declines to approve one that does not, naming what fell out.
+// That check needs the proposals BEFORE the approval, and the loop has no other
+// way to reach them: the plan id came back in a sandboxed agent's tool result,
+// which the loop never sees.
+//
+// ── AND IT WIDENS NOTHING, WHICH IS NOT THE SAME AS BEING NARROW ───────────
+// ⚠️ IT DECLARES `project:browse`, AND THAT WAS A CORRECTION. It first shipped in
+// review as `ai:view_plan`, on a reflex — the neighbouring POST is an AI key, so
+// the read beside it looked like one too. Two shipped facts say otherwise, and
+// they agree with each other: this API's operation→permission table answers
+// `project:browse` for EVERY GET before it consults a single path
+// (`tests/api/v1/work-item-story-gate.test.ts`), and `GET /api/v1/plans/{planId}`
+// — which returns THIS EXACT DOCUMENT, by plan id — is `project:browse` already.
+// Two doors onto one document must not disagree about who may open them.
+//
+// So the honest statement of the bound is narrower than the one the first draft
+// made, and it is the true one: **a sandboxed agent CAN read this, and always
+// could.** `CLI_TOKEN_GRANT` carries `project:browse`, and the agent that
+// submitted the plan holds its id from its own `submit_plan_session` result —
+// so `getPlan` was already open to it. Addressing the same document by CARD adds
+// no content and no audience. What an agent cannot do is DECIDE: the POST above
+// is `ai:decide_plan`, which `CLI_TOKEN_GRANT` omits and which no MCP tool
+// asserts at all. That was always the bound worth having, and it is untouched.
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
+  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+  let plan;
+  try {
+    plan = await plansService.readPlanForWorkItem(projectId, identifier, ctx.service);
+  } catch (err) {
+    // ⚠️ NO PLAN IS AN ANSWER, AND IT IS THE COMMON ONE. Almost every card in a
+    // project has never been re-planned, so a refusal here would make the
+    // ordinary state of the tree read as a fault — and would make this the one
+    // GET on the surface that is unanswerable for most valid keys. The POST
+    // keeps its 422 because there the caller asked for something that cannot be
+    // done; a QUERY answering "none" has done exactly what was asked.
+    //
+    // The distinction is not cosmetic for the caller either: a loop reads `null`
+    // as *the agent anchored its re-plan somewhere else*, which is a lane the
+    // dispatch prompt offers and calls legitimate. That is a fact to act on, and
+    // it rides a FIELD rather than a status code so the client is not branching
+    // on prose (`public-api-conventions.md` §8).
+    if (!(err instanceof NoPlanForWorkItemError)) throw err;
+    return NextResponse.json({ plan: null } satisfies V1WorkItemPlan);
+  }
+  return NextResponse.json({ plan: await presentResolvedPlan(plan, ctx) } satisfies V1WorkItemPlan);
+});
+
+/**
+ * A plan on the wire, with every reference it carries resolved to a key.
+ *
+ * Shared by the two handlers because the presentation is the same one — a caller
+ * that read a plan and then approved it must not have to reconcile two shapes of
+ * the same document.
+ */
+async function presentResolvedPlan(
+  plan: PlanWithItemsDto,
+  ctx: { service: ServiceContext },
+): Promise<V1Plan> {
   const refs = await workItemsService.resolveReferenceSummaries(
-    { ids: targetIds, keys: [] },
+    { ids: planReferenceIds(plan), keys: [] },
     plan.projectId,
     ctx.service,
   );
-  return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs)));
-});
+  return presentPlan(plan, planTargetKeyResolver(refs));
+}

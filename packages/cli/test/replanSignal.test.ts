@@ -17,6 +17,7 @@ import {
   v1Plan,
   v1Proposal,
   v1ReadyRow,
+  v1Child,
   type TestServer,
   type V1Reply,
   type V1Request,
@@ -46,6 +47,9 @@ let cwd: string;
 let exitCode: typeof process.exitCode;
 
 const TOKEN = 'pat_replan_token';
+
+/** The container every card in this file sits under (MOTIR-4085's lane frame). */
+const PARENT = 'PROD-1';
 
 /**
  * The default workflow's outgoing edges, keyed by source status — transcribed
@@ -113,6 +117,9 @@ interface Tenant {
   statuses: Map<string, string>;
   /** Every transition the server REFUSED, so a test can say the CLI asked. */
   refused: { key: string; from: string; to: string }[];
+  /** Children an approved plan ADDED under the parent — push a key here and the
+   *  parent's next read reports it, which is what the scoped refresh sees. */
+  extraChildren: string[];
   v1: V1Script;
 }
 
@@ -128,6 +135,9 @@ interface Tenant {
 function tenant(mode: 'per_item_pr' | 'session_lineage', keys: string[] = ['PROD-7']): Tenant {
   const statuses = new Map<string, string>(keys.map((k) => [k, 'todo']));
   const refused: Tenant['refused'] = [];
+  /** The container every card in this tenant sits under — the lane's own frame. */
+  const extraChildren: string[] = [];
+  const children = (): string[] => [...keys, ...extraChildren];
 
   const move = (key: string, to: string): { ok: true } | { ok: false; from: string } => {
     const from = statuses.get(key) ?? 'todo';
@@ -163,9 +173,28 @@ function tenant(mode: 'per_item_pr' | 'session_lineage', keys: string[] = ['PROD
           ),
       ),
     }),
+    // ⚠️ THE CARDS HAVE A PARENT (MOTIR-4085), and that is the honest fixture
+    // rather than a convenience: `motir run <parent>` runs a container as a
+    // SEQUENCE of leaf children, so every iteration of every loop is working a
+    // leaf that sits under one. The auto-approve LANE is defined against that
+    // parent — the leaf and its siblings — so a parentless fixture would
+    // exercise the degenerate arm and call it the normal one.
     'GET /api/v1/work-items/{key}': (req) => {
       const key = String(req.params['key']);
-      return { body: v1Detail(key, { status: statuses.get(key) ?? 'todo' }) };
+      if (key === PARENT) {
+        return {
+          body: v1Detail(PARENT, {
+            kind: 'story',
+            status: 'in_progress',
+            children: children().map((k) =>
+              v1Child(k, { parentKey: PARENT, status: statuses.get(k) ?? 'todo' }),
+            ),
+          }),
+        };
+      }
+      return {
+        body: v1Detail(key, { status: statuses.get(key) ?? 'todo', parentKey: PARENT }),
+      };
     },
     'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => {
       const key = String(req.params['key']);
@@ -173,10 +202,25 @@ function tenant(mode: 'per_item_pr' | 'session_lineage', keys: string[] = ['PROD
       return {
         body: v1DispatchPrompt(key, {
           prompt: `PROMPT ${key}`,
+          parentKey: PARENT,
           targetRepo: 'motir-core',
           workflowMode: mode,
           sessionBranch: mode === 'session_lineage' ? (seed ?? 'motir/auto-run') : null,
         }),
+      };
+    },
+    // The plan READ the lane check makes BEFORE approving anything (MOTIR-4085).
+    // The default is the ordinary correction — a `modify` of the very card that
+    // refused itself — which is in lane by construction, so a tenant that does
+    // not care about lanes behaves exactly as it did before the check existed.
+    'GET /api/v1/work-items/{key}/plan-approval': (req) => {
+      const key = String(req.params['key']);
+      return {
+        body: {
+          plan: v1Plan([v1Proposal('pi_1', { op: 'modify', workItemKey: key })], {
+            id: `plan_for_${key}`,
+          }),
+        },
       };
     },
     // MOTIR-3048 — the ATOMIC claim. Every dispatch path now takes a card
@@ -209,7 +253,7 @@ function tenant(mode: 'per_item_pr' | 'session_lineage', keys: string[] = ['PROD
     },
   };
 
-  return { statuses, refused, v1 };
+  return { statuses, refused, v1, extraChildren };
 }
 
 /**
@@ -673,5 +717,328 @@ describe('motir auto --auto-approve-replan', () => {
     // before the newly-approved work can be reached.
     expect(approvalsRequested()).toHaveLength(1);
     expect(t.statuses.get('PROD-8')).toBe('todo');
+  });
+});
+
+// ── THE TWO LANES (MOTIR-4085) ──────────────────────────────────────────────
+//
+// `--auto-approve-replan` already approved and continued (MOTIR-3023); what it
+// did not have was a BOUND on what it would approve, or a re-read of the queue
+// the approval just changed. The block above is that flag's original behaviour;
+// this one is the lane it now runs inside.
+//
+// ⚠️ EVERY ASSERTION HERE IS ABOUT WHAT THE LOOP DID, not about what it printed
+// alone. A decline changes nothing observable in the tree — that is the point of
+// it — so the evidence is the approval that was NOT made and the second card
+// that was NOT dispatched, which is what distinguishes a real bound from a
+// warning printed beside an approval that happened anyway.
+
+/** Every plan READ the run made before deciding — the lane check's own request. */
+function planReads(): string[] {
+  return server.v1Calls
+    .filter((c) => c.method === 'GET' && c.path.endsWith('/plan-approval'))
+    .map((c) => c.path);
+}
+
+/**
+ * The scripted answer for one route, as a FUNCTION — a script entry may be a
+ * bare reply or a handler, and a test that wraps one has to be able to call it.
+ */
+function asHandler(entry: V1Reply | ((req: V1Request) => V1Reply) | undefined) {
+  return (req: V1Request): V1Reply => (typeof entry === 'function' ? entry(req) : entry!);
+}
+
+/** A two-card tenant whose submitted plan is whatever the test says it is. */
+function laneTenant(proposals: unknown[]): Tenant {
+  const t = tenant('per_item_pr', ['PROD-7', 'PROD-8']);
+  t.v1['GET /api/v1/work-items/{key}/plan-approval'] = () => ({
+    body: { plan: v1Plan(proposals, { id: 'plan_for_PROD-7' }) },
+  });
+  t.v1['POST /api/v1/work-items/{key}/plan-approval'] = () => ({
+    body: v1Plan(proposals, {
+      id: 'plan_for_PROD-7',
+      status: 'approved',
+      decidedAt: '2026-01-01T00:02:00.000Z',
+    }),
+  });
+  return t;
+}
+
+describe('motir auto --auto-approve-replan — THE LANE (MOTIR-4085)', () => {
+  it('READS the plan before approving it, and approves an IN-LANE one', async () => {
+    // The order is the substance: a check that ran after the approval would be a
+    // description of a tree that had already changed.
+    const t = laneTenant([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' })]);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(planReads()).toEqual(['/api/v1/work-items/PROD-7/plan-approval']);
+    expect(approvalsRequested()).toEqual(['/api/v1/work-items/PROD-7/plan-approval']);
+    const read = server.v1Calls.findIndex(
+      (c) => c.method === 'GET' && c.path.endsWith('/plan-approval'),
+    );
+    const approve = server.v1Calls.findIndex(
+      (c) => c.method === 'POST' && c.path.endsWith('/plan-approval'),
+    );
+    expect(read).toBeLessThan(approve);
+    // …and it CONTINUED: the second card ran to its ordinary outcome.
+    expect(t.statuses.get('PROD-8')).toBe('implemented');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('a SPLIT is in lane — one leaf becomes two siblings, and the run carries on', async () => {
+    // The case the flag exists for, end to end: the correction the agent most
+    // often needs is "this card is really two", and a subtask parents nothing,
+    // so the second card can only be a SIBLING.
+    const t = laneTenant([
+      v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' }),
+      v1Proposal('pi_2', { op: 'add', parentRef: 'cm_parent', parentKey: PARENT }),
+    ]);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(approvalsRequested()).toHaveLength(1);
+    expect(t.statuses.get('PROD-8')).toBe('implemented');
+  });
+
+  it('DECLINES an out-of-lane plan, approves NOTHING, and stops', async () => {
+    // ⚠️ THE ASSERTION IS THE ABSENT POST. A run that printed a warning and
+    // approved anyway would pass every other assertion in this file.
+    const t = laneTenant([
+      v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' }),
+      v1Proposal('pi_2', { op: 'modify', workItemKey: PARENT }),
+    ]);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(planReads()).toHaveLength(1);
+    expect(approvalsRequested()).toEqual([]);
+    // The run stopped: the second card was never dispatched, and the card the
+    // agent parked is left exactly where the agent put it.
+    expect(t.statuses.get('PROD-8')).toBe('todo');
+    expect(t.statuses.get('PROD-7')).toBe('planning');
+    // …and a correct decline is not a failed run.
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('reports an out-of-lane decline in the summary, NAMING what fell out', async () => {
+    const t = laneTenant([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-42' })]);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+    const lines: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      lines.push(String(chunk));
+      return true;
+    });
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    const text = lines.join('');
+    expect(text).toContain('NOT auto-approved');
+    expect(text).toContain('PROD-42');
+    // A count with no names is the thing this rule exists to refuse.
+    expect(text).toContain("wider than the card's own lane");
+  });
+
+  it('treats a plan ANCHORED ELSEWHERE as the election it is, not as an error', async () => {
+    // The agent deliberately anchored at the container, so the loop's own
+    // address resolves nothing — which is the normal lane, chosen on purpose.
+    const t = tenant('per_item_pr', ['PROD-7', 'PROD-8']);
+    // ⚠️ `plan: null` AT 200, not a 4xx — nothing is anchored at this card
+    // because the agent anchored its re-plan at a container, which is a lane the
+    // prompt offers. The loop reads the FIELD, never a status code.
+    t.v1['GET /api/v1/work-items/{key}/plan-approval'] = () => ({ body: { plan: null } });
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+    const lines: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      lines.push(String(chunk));
+      return true;
+    });
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(approvalsRequested()).toEqual([]);
+    expect(t.statuses.get('PROD-8')).toBe('todo');
+    const text = lines.join('');
+    expect(text).toContain('elected the lane that goes to a person');
+    // ⚠️ NOT A FAILURE: exit 0, because the agent did exactly what it was told
+    // it could do.
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('WAITS while the plan is still being written, and lane-checks the FINISHED one', async () => {
+    // ⚠️ A LANE CHECK OVER A HALF-WRITTEN PLAN IS WORSE THAN NO CHECK. The
+    // proposals that have not arrived yet are exactly the ones that might be out
+    // of lane, so the read waits for the plan to stop generating before looking.
+    const t = laneTenant([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-42' })]);
+    let reads = 0;
+    t.v1['GET /api/v1/work-items/{key}/plan-approval'] = () => {
+      reads += 1;
+      return reads < 3
+        ? { body: { plan: v1Plan([], { id: 'plan_for_PROD-7', status: 'generating' }) } }
+        : {
+            body: {
+              plan: v1Plan([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-42' })], {
+                id: 'plan_for_PROD-7',
+              }),
+            },
+          };
+    };
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+    const waits: number[] = [];
+
+    await autoCommand(
+      { ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true },
+      {
+        run,
+        sleep: async (ms) => {
+          waits.push(ms);
+        },
+      },
+    );
+
+    expect(reads).toBe(3);
+    expect(waits).toHaveLength(2);
+    // The finished plan was OUT of lane, and the run acted on the finished one.
+    expect(approvalsRequested()).toEqual([]);
+  });
+
+  it('stops rather than approving a plan it could NOT read', async () => {
+    const t = tenant('per_item_pr', ['PROD-7', 'PROD-8']);
+    t.v1['GET /api/v1/work-items/{key}/plan-approval'] = () => ({
+      status: 500,
+      body: { code: 'INTERNAL', error: 'boom' },
+    });
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(approvalsRequested()).toEqual([]);
+    expect(t.statuses.get('PROD-8')).toBe('todo');
+  });
+
+  it('WITHOUT the flag it neither reads nor approves — today’s behaviour, unchanged', async () => {
+    const t = laneTenant([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' })]);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5' }, { run });
+
+    expect(planReads()).toEqual([]);
+    expect(approvalsRequested()).toEqual([]);
+    expect(t.statuses.get('PROD-7')).toBe('planning');
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  it('sends the auto-approve lane to the PROMPT only when the flag is set', async () => {
+    // ⚠️ THE PROMPT IS THE ONLY PLACE THE AGENT LEARNS ITS LANE. A flag the agent
+    // never reads cannot change what it does, so a run that bounded approvals
+    // without telling the agent would get the wider plan every time and decline it.
+    const t = laneTenant([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' })]);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '1', autoApproveReplan: true }, { run });
+    const withFlag = server.v1Calls.filter((c) => c.path.endsWith('/dispatch-prompt'));
+    expect(withFlag).not.toHaveLength(0);
+    expect(withFlag.every((c) => c.query?.get('autoApproveReplan') === '1')).toBe(true);
+
+    server.v1Calls.length = 0;
+    server.scriptV1(laneTenant([]).v1);
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '1' }, { run });
+    const without = server.v1Calls.filter((c) => c.path.endsWith('/dispatch-prompt'));
+    expect(without).not.toHaveLength(0);
+    // ABSENT, not `0`: an omitted parameter is how the request stays
+    // byte-identical to the one this command sent before the lane existed.
+    expect(without.every((c) => c.query?.get('autoApproveReplan') === null)).toBe(true);
+  });
+});
+
+describe('the SCOPED refresh after an approved in-lane plan (MOTIR-4085)', () => {
+  it('holds out a sibling the plan REMOVED — the arm that does damage silently', async () => {
+    // ⚠️ THE REMOVAL IS THE DANGEROUS HALF. An added sibling arrives on its own,
+    // because `next_ready` asks again every iteration; a removed one is work the
+    // plan DELETED, and a loop that executed it would look entirely healthy.
+    const t = laneTenant([
+      v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' }),
+      v1Proposal('pi_2', { op: 'remove', workItemKey: 'PROD-8' }),
+    ]);
+    // The approval takes PROD-8 out of the parent's children, and the ready set
+    // keeps offering it — which is exactly the state the hold-out is for.
+    let approved = false;
+    const post = asHandler(t.v1['POST /api/v1/work-items/{key}/plan-approval']);
+    t.v1['POST /api/v1/work-items/{key}/plan-approval'] = (req) => {
+      approved = true;
+      return post(req);
+    };
+    const detail = asHandler(t.v1['GET /api/v1/work-items/{key}']);
+    t.v1['GET /api/v1/work-items/{key}'] = (req) => {
+      if (approved && String(req.params['key']) === PARENT) {
+        return { body: v1Detail(PARENT, { kind: 'story', status: 'in_progress', children: [] }) };
+      }
+      return detail(req);
+    };
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(approvalsRequested()).toHaveLength(1);
+    // PROD-8 was removed by the plan, so the run did NOT execute it.
+    expect(t.statuses.get('PROD-8')).toBe('todo');
+  });
+
+  it('names what the plan ADDED, and picks it up when it is ready', async () => {
+    const t = laneTenant([
+      v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' }),
+      v1Proposal('pi_2', { op: 'add', parentRef: 'cm_parent', parentKey: PARENT }),
+    ]);
+    let approved = false;
+    const post = asHandler(t.v1['POST /api/v1/work-items/{key}/plan-approval']);
+    t.v1['POST /api/v1/work-items/{key}/plan-approval'] = (req) => {
+      approved = true;
+      // The approval materialized a NEW sibling under the parent.
+      t.extraChildren.push('PROD-9');
+      return post(req);
+    };
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+    const lines: string[] = [];
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      lines.push(String(chunk));
+      return true;
+    });
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    expect(approved).toBe(true);
+    expect(lines.join('')).toContain('the plan added PROD-9');
+  });
+
+  it('re-reads THAT parent and nothing else — the refresh is SCOPED', async () => {
+    // ⚠️ THE SCOPE IS THE DECISION, not an economy. A loop that re-derived more
+    // than the iteration's own container would let one leaf silently re-order
+    // work an operator queued elsewhere.
+    const t = laneTenant([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-7' })]);
+    server.scriptV1(t.v1);
+    const { run } = gitRunner();
+
+    await autoCommand({ ...refusingAgent('PROD-7'), max: '5', autoApproveReplan: true }, { run });
+
+    const parentsRead = server.v1Calls
+      .filter((c) => c.method === 'GET' && /\/work-items\/[^/]+$/.test(c.path))
+      .map((c) => c.path.split('/').pop());
+    // Every container read in the whole run is THIS parent; no other is touched.
+    expect(new Set(parentsRead.filter((k) => k === PARENT)).size).toBe(1);
+    expect(parentsRead.filter((k) => k !== PARENT && k !== 'PROD-7' && k !== 'PROD-8')).toEqual([]);
   });
 });

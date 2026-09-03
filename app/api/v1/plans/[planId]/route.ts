@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
-import { planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
+import { planReferenceIds, planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -28,13 +28,10 @@ export const GET = withV1Route<{ planId: string }>(
   async (ctx) => {
     const plan = await plansService.getPlan(ctx.params.planId, ctx.service);
 
-    const targetIds = [
-      ...new Set(
-        plan.items.map((item) => item.workItemId).filter((id): id is string => id !== null),
-      ),
-    ];
+    // Targets AND parents (MOTIR-4085) — `planReferenceIds` owns which refs are
+    // ids, so the temp-ref form never reaches the read.
     const refs = await workItemsService.resolveReferenceSummaries(
-      { ids: targetIds, keys: [] },
+      { ids: planReferenceIds(plan), keys: [] },
       plan.projectId,
       ctx.service,
     );
