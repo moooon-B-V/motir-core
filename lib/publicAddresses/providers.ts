@@ -100,6 +100,23 @@ export async function certificateProvider(): Promise<CertificateProvider> {
   return flyCertificateProvider;
 }
 
+/**
+ * Is a certificate provider WIRED on this deployment?
+ *
+ * Asked here rather than of the adapter, because "is this configured?" is a
+ * question about the SELECTION, not about Fly: under the E2E fakes the answer is
+ * yes and no Fly variable is set at all. The sweep (MOTIR-4219) calls this to
+ * decide whether to run — and it was reaching into the adapter directly until
+ * the port's boundary guard caught it, which is precisely the leak that guard
+ * exists for.
+ */
+export async function certificatesConfigured(): Promise<boolean> {
+  if (usingFakePublicAddressProviders()) return true;
+  const { isFlyCertsConfigured } =
+    await import('@/lib/publicAddresses/adapters/fly/flyCertificates');
+  return isFlyCertsConfigured();
+}
+
 /** The DNS resolver this deployment should use. */
 export function dnsResolver(): DnsResolver {
   return usingFakePublicAddressProviders() ? fakeDnsResolver : nodeDnsResolver;

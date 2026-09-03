@@ -421,6 +421,8 @@ export interface DataExportRequestedData {
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'system.attachment-gc': SystemScheduledData;
+  /** MOTIR-4219 — the certificate sweep. Cross-tenant, cron-only. */
+  'system.public-address-certificate-refresh': SystemScheduledData;
   'system.rate-limit-sweep': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
   'system.public-follow-digest-tick': SystemScheduledData;

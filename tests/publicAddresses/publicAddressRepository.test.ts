@@ -61,11 +61,15 @@ describe('the policies, read from the catalog', () => {
     `;
     const byName = new Map(rows.map((r) => [r.policyname, r]));
 
-    // Exactly two. A third arm added later without a test is the thing this
-    // assertion is for.
+    // Exactly three, and the list is the point: an arm added later without a
+    // test is the thing this assertion exists for — and it did its job. It read
+    // TWO until MOTIR-4219 added the system arm (20260903020000), which the
+    // cross-tenant certificate sweep needs to WRITE. Without that arm the sweep
+    // read fine through the public arm and updated zero rows, silently.
     expect([...byName.keys()]).toEqual([
       'public_address_active_workspace',
       'public_address_public_read',
+      'public_address_system',
     ]);
 
     // The tenancy gate governs every command, and carries a WITH CHECK — which
@@ -83,6 +87,14 @@ describe('the policies, read from the catalog', () => {
     const publicArm = byName.get('public_address_public_read')!;
     expect(publicArm.cmd).toBe('SELECT');
     expect(publicArm.with_check).toBeNull();
+
+    // The system arm governs every command — the sweep reads AND writes — and
+    // carries a WITH CHECK so it cannot be used to write a row into a state the
+    // USING clause would not admit.
+    const system = byName.get('public_address_system')!;
+    expect(system.cmd).toBe('ALL');
+    expect(system.qual).toContain('app.system_admin');
+    expect(system.with_check).toContain('app.system_admin');
   });
 
   it('has RLS enabled AND forced', async () => {
