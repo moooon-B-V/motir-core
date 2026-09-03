@@ -12,13 +12,22 @@ import { defineConfig } from 'tsup';
 //    money type in the process rather than two.
 //  • node20 target: this package runs in the Next server runtime and in the
 //    worker process, never in a browser.
+//  • BOTH formats, unlike the design system's ESM-only build. This package is
+//    reached from a CommonJS loader as well as from a bundler: Playwright
+//    transpiles `tests/e2e/_helpers/job-registry.ts` to CJS, and that helper
+//    pulls `lib/jobs/registry` → `lib/orchestrator` → this package, so the
+//    barrel is `require`d. With an ESM-only `exports` map Node answers
+//    `No "exports" main defined` — which is what E2E did, on a green
+//    type-check and a green Vitest run, because neither of those loaders uses
+//    the `require` condition. `tests/packages/importDirection.test.ts` holds
+//    the assertion.
 export default defineConfig({
   // NOT `tsconfig.json`: that one is the composite project the root solution
   // file references, and tsup's declaration build compiles through a synthetic
   // project that a composite config refuses (TS6307). See `tsconfig.tsup.json`.
   tsconfig: 'tsconfig.tsup.json',
   entry: ['src/index.ts'],
-  format: ['esm'],
+  format: ['esm', 'cjs'],
   target: 'node20',
   outDir: 'dist',
   dts: true,
