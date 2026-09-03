@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-style="warm-editorial" data-palette="motir">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>motir.co — the not-found room, drawn inside the public chrome · MOTIR-4245</title>
+    <style>
+      /* ----------------------------------------------------------------------
+         TOKEN BLOCK — the RESOLVED values of motir-core's `--el-*` element
+         tokens (light + dark, `warm-editorial` style, `motir` palette). This
+         mock is STANDALONE by the same convention `public-site.mock.html` uses:
+         it RE-STATES the shipped values so a plain browser paints the real
+         palette without a Tailwind build. It re-defines no semantics.
+
+         ⚠️ EVERY VALUE HERE WAS READ OFF THE RUNNING SITE, not copied from a
+         sibling asset: `getComputedStyle(document.documentElement)` on
+         motir-marketing `origin/main` @ `61b9a13`, served at 1440x900 in both
+         themes. Nothing here is an invented hue — every product colour is an
+         `--el-*` token. The only raw values are the doc-annotation scaffold's
+         own fills (the `#f4f3f1` sheet, the `#f4f2fd` ref chip) and the
+         non-semantic elevation shadows, the same scaffold allowance
+         `public-site.mock.html` documents.
+
+         ⚠️ `--el-text-muted` IS DELIBERATELY ABSENT — not merely unused. It is
+         4.54:1 on `--el-page-bg` and 4.34:1 on `--el-surface-soft` in the light
+         `motir` palette, and `theme.css`'s own rule (MOTIR-2455) is that the
+         muted ink belongs inside a card, never on a panel. The room paints on
+         the page and on the bar band, so the token has no legal use here and is
+         not declared, which is the only way it cannot be reached for by
+         accident.
+      ---------------------------------------------------------------------- */
+      :root {
+        color-scheme: light;
+        /* Tier-0 — declared so the Tier-3 layer below has something to be
+           checked AGAINST (MOTIR-3592; see the dark block). */
+        --color-background: #ffffff;
+
+        /* ── page + text ─────────────────────────────────────────────── */
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        /* ── borders ─────────────────────────────────────────────────── */
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+        /* ── accent + link ───────────────────────────────────────────── */
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-accent-on-surface: #5645d4;
+        --el-link: #0070d2;
+        /* ── shape (element-semantic — never a raw radius) ───────────── */
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        /* ── spacing + sizing ────────────────────────────────────────── */
+        --spacing-card-padding: 24px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        /* ── elevation (raw by design — non-semantic) ────────────────── */
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        /* ── type ────────────────────────────────────────────────────── */
+        --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: 'Source Serif 4', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+        --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      /*
+       * The dark half of the SAME layer, restated so a nested dark panel can be
+       * drawn beside a light one in one static file.
+       *
+       * ⚠️ IT IS `[data-theme='dark']`, AND BOTH TIERS ARE RE-DECLARED ON IT.
+       * `tests/design-dark-parity.test.ts` (MOTIR-3592) asks a CSS engine what a
+       * nested dark element actually COMPUTED, and asserts its `--el-page-bg`
+       * equals the `--color-background` that same element declares. A mock that
+       * flips only the Tier-0 half paints a LIGHT panel under a caption reading
+       * "dark theme" — the panel is a CHECK, and that is the check failing. So
+       * `--color-background` and `--el-page-bg` are both written here, and are
+       * the same value on purpose.
+       *
+       * The attribute is also what the site itself uses: `app/layout.tsx` runs
+       * the design system's init script in `<head>`, which stamps `data-theme`
+       * on `<html>` before first paint. Panel 4 is therefore the same switch the
+       * product throws, not a mock-only convention.
+       */
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+
+        --el-page-bg: #0f0f0f;
+        --el-surface: #1a1a1a;
+        --el-surface-soft: #161616;
+        --el-text: #f3f4f6;
+        --el-text-strong: #e5e5e5;
+        --el-text-secondary: #a4a097;
+        --el-border: #2a2a2a;
+        --el-border-strong: #3a3a3a;
+        --el-accent: #6c5cdd;
+        --el-accent-text: #ffffff;
+        /* The shipped dark value is `color-mix(in srgb, #7b6ce5 82%, #f3f4f6)`.
+           Restated here as the RESOLVED colour Chromium computes for it —
+           `getComputedStyle(document.querySelector('.brand-glyph')).color` on
+           the running site — which is byte-identical to what
+           `public-site.mock.html` restates for the same token. Reading it off
+           the element rather than off the property matters: the property's own
+           value is the unresolved `color-mix()` string, and an engine that
+           cannot resolve it silently paints near-black. */
+        --el-accent-on-surface: color(srgb 0.567059 0.519529 0.910039);
+        --el-link: #58a6ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f4f3f1;
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ═══ doc scaffold — ANNOTATION ONLY, never product UI ═══════════ */
+      .sheet {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 36px 28px 72px;
+      }
+      .doc-head h1 {
+        font: 700 26px/1.2 var(--font-serif);
+        margin: 0 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .doc-head p {
+        margin: 0;
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        line-height: 1.55;
+        max-width: 88ch;
+      }
+      .doc-head .refs {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .ref {
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: #f4f2fd;
+        border: 1px solid #e3def8;
+        border-radius: var(--radius-badge);
+        padding: 3px 9px;
+      }
+      .ref.muted {
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-color: var(--el-border);
+      }
+      .panel {
+        margin-top: 38px;
+      }
+      .panel-cap {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+      .panel-cap .n {
+        font: 700 12px var(--font-mono);
+        color: #fff;
+        background: var(--el-accent);
+        border-radius: 6px;
+        padding: 2px 7px;
+        letter-spacing: 0.02em;
+      }
+      .panel-cap h2 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .panel-cap .note {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        max-width: 78ch;
+      }
+      .frame {
+        border: 1px solid var(--el-border);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+      .frame.narrow {
+        width: 390px;
+      }
+      .rule {
+        font: 600 10px var(--font-mono);
+        color: var(--el-text-secondary);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin: 0 0 7px;
+      }
+      .side {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 350px;
+        gap: 22px;
+        align-items: start;
+      }
+      .aside {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 16px 18px;
+      }
+      .aside h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        letter-spacing: 0.01em;
+      }
+      .aside p,
+      .aside li {
+        margin: 0 0 8px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .aside ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .aside .k {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* ═══════════════════════════════════════════════════════════════
+         PRODUCT SURFACE — the chrome, MIRRORED not redrawn.
+
+         Bar: motir-marketing/app/_components/SiteHeader.tsx
+         Footer: motir-marketing/app/_components/SiteFooter.tsx
+         Shell + skip link + `main` landmark:
+           motir-marketing/app/_components/SiteShell.tsx
+
+         Every rule below is a computed value read off the running site
+         (`getComputedStyle`), not an approximation of the Tailwind source.
+         The bar's three nav items are Explore / Docs / Design and NOTHING
+         else — the shipped `navItems` array in full. See the notes'
+         "Two places the drawn chrome has drifted from the shipped one".
+      ═══════════════════════════════════════════════════════════════ */
+      .site {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        display: flex;
+        flex-direction: column;
+        min-height: 560px;
+      }
+      .site.tall {
+        min-height: 660px;
+      }
+
+      /* ── the skip link, revealed ─────────────────────────────────────
+         `sr-only` until focused in the real shell; drawn here in its FOCUSED
+         state because a design asset that draws only the resting state depicts
+         a bypass mechanism nobody can see. Panel 1 shows it revealed. */
+      .skip {
+        position: absolute;
+        top: 12px;
+        left: 16px;
+        z-index: 50;
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+        padding: 8px 16px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        box-shadow: var(--shadow-elevated);
+        outline: 2px solid var(--el-accent-on-surface);
+        outline-offset: 2px;
+        text-decoration: none;
+      }
+      .skip-host {
+        position: relative;
+      }
+
+      /* ── top bar ─────────────────────────────────────────────────── */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px var(--spacing-card-padding);
+        flex: none;
+      }
+      .topbar.narrowbar {
+        padding: 10px 16px;
+      }
+      .brand-lockup {
+        --brand-size: 26px;
+        display: inline-flex;
+        align-items: center;
+        gap: calc(var(--brand-size) * 0.33);
+        text-decoration: none;
+        flex: none;
+      }
+      .brand-glyph {
+        color: var(--el-accent-on-surface);
+        flex: none;
+        display: block;
+      }
+      .brand-word {
+        font-family: var(--font-sans);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        font-size: calc(var(--brand-size) * 0.72);
+        line-height: 1;
+        color: var(--el-text);
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      .nav a {
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .nav a:hover {
+        color: var(--el-text);
+      }
+      .bar-cta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+
+      /* ── buttons — the shipped `Button` variants ──────────────────────
+         `buttonVariants({ size: 'sm' })` in the bar (32px / 12px / px-12);
+         `size: 'md'` in the ROOM (40px / 14px / px-16). Both are the design
+         system's own sizes, not new ones.
+
+         ⚠️ THE GHOST VARIANT HAS NO BORDER, and that is load-bearing rather
+         than incidental: `--el-border` measures 1.28:1 against the page in
+         light and 1.34:1 in dark, so a hairline-outlined button would fail
+         WCAG 1.4.11's 3:1 for a component boundary. The shipped ghost is
+         identified by its LABEL (17.40:1 / 17.42:1) and gains a fill only on
+         hover. Drawing an outlined button here would have invented a control
+         the site does not have AND failed a success criterion. */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-weight: 500;
+        border-radius: var(--radius-btn);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn.sm {
+        height: var(--height-btn-sm);
+        padding: 0 12px;
+        font-size: 12px;
+      }
+      .btn.md {
+        height: var(--height-btn-md);
+        padding: 0 16px;
+        font-size: 14px;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn.ghost:hover {
+        background: var(--el-surface);
+      }
+      .icon {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .btn.md .icon {
+        width: 16px;
+        height: 16px;
+      }
+      .menu-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: var(--height-btn-sm);
+        width: 32px;
+        border-radius: var(--radius-btn);
+        background: transparent;
+        color: var(--el-text);
+        border: 0;
+      }
+
+      /* ── THE ROOM — the only thing this card actually adds ────────────
+         It sits in the `main` landmark, inside the `contentClassName` box the
+         page passes. Measure `max-w-[46rem]` is the SHIPPED one
+         (`motir-marketing/app/legal/page.tsx`), reused rather than re-chosen. */
+      .room {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        width: 100%;
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 64px var(--spacing-card-padding);
+      }
+      .room .code {
+        margin: 0 0 10px;
+        font: 600 12px var(--font-mono);
+        letter-spacing: 0.08em;
+        color: var(--el-text-secondary);
+      }
+      .room h1 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+      }
+      .room .lede {
+        margin: 12px 0 0;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 40rem;
+      }
+      .room .doors {
+        margin-top: 28px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      /* ── footer ──────────────────────────────────────────────────── */
+      .foot {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr 1fr;
+        gap: 32px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 40px var(--spacing-card-padding);
+        flex: none;
+      }
+      .foot.stacked {
+        grid-template-columns: 1fr;
+        gap: 26px;
+        padding: 32px 16px;
+      }
+      .foot .tag {
+        margin: 10px 0 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 30rem;
+      }
+      .foot h2 {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .foot ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .foot a {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .foot a:hover {
+        color: var(--el-link);
+      }
+      .foot .strip {
+        grid-column: 1 / -1;
+        border-top: 1px solid var(--el-border);
+        padding-top: 16px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .menu-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px 16px;
+      }
+      .menu-panel a {
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+
+      /* ── panel 5's arrivals diagram ──────────────────────────────── */
+      .arrivals {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .arrival {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 14px 16px;
+      }
+      .arrival .from {
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-secondary);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        margin: 0 0 6px;
+      }
+      .arrival .addr {
+        font: 500 13px var(--font-mono);
+        color: var(--el-text);
+        margin: 0 0 6px;
+        word-break: break-all;
+      }
+      .arrival .why {
+        margin: 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .arrival .want {
+        margin: 8px 0 0;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text);
+      }
+      .arrival .want b {
+        color: var(--el-accent-on-surface);
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .stock {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: #ffffff;
+        padding: 26px 18px;
+        text-align: center;
+        font-family: system-ui, sans-serif;
+        color: #000000;
+      }
+      .stock .row {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .stock .n404 {
+        font-size: 22px;
+        font-weight: 500;
+        padding-right: 14px;
+        border-right: 1px solid rgba(0, 0, 0, 0.3);
+      }
+      .stock .m {
+        font-size: 13px;
+      }
+      /* The caption is ANNOTATION about the quoted screen, not part of it, so
+         it leaves the quotation and takes the asset's own secondary ink. */
+      .stock .cap {
+        margin: 12px 0 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      table.aa {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+      }
+      table.aa th,
+      table.aa td {
+        border: 1px solid var(--el-border);
+        padding: 6px 9px;
+        text-align: left;
+      }
+      table.aa th {
+        background: var(--el-surface-soft);
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      table.aa td.num {
+        font-family: var(--font-mono);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="sheet">
+      <div class="doc-head">
+        <h1>motir.co — the not-found room, inside the public chrome</h1>
+        <p>
+          Every motir.co surface already wears one chrome; a 404 wears none. This asset draws the
+          ROOM that goes inside it — what a lost visitor is told, and the two doors out — and
+          decides the question the build card deliberately does not answer. The chrome itself is
+          MIRRORED from the shipped components, not redrawn: every measurement below was read off
+          the running site at <code>origin/main</code> <code>61b9a13</code>.
+        </p>
+        <div class="refs">
+          <span class="ref">MOTIR-4245 · design</span>
+          <span class="ref muted">builds: MOTIR-4193</span>
+          <span class="ref muted">chrome: public-site.mock.html</span>
+          <span class="ref muted">precedent: motir-marketing/design/legal/</span>
+        </div>
+      </div>
+
+      <!-- ==========================================================
+           PANEL 1 — the room, desktop light (1440).
+      =========================================================== -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">1</span>
+          <h2>The room, desktop light (1440)</h2>
+          <span class="note"
+            >The full shipped chrome with the 404 room in the <code>main</code> landmark. The skip
+            link is drawn in its FOCUSED state — it is <code>sr-only</code> at rest, and an asset
+            that draws only the resting state depicts a bypass mechanism nobody can see. NO nav item
+            is current: a 404 is not <code>/explore</code> or <code>/docs</code>, so
+            <code>isCurrent()</code> matches nothing and the accent treatment is absent by
+            derivation, not by omission.</span
+          >
+        </div>
+        <div class="frame">
+          <div class="site skip-host">
+            <a class="skip" href="#main">Skip to content</a>
+            <header class="topbar">
+              <a class="brand-lockup" href="/" aria-label="Motir — home">
+                <svg
+                  class="brand-glyph"
+                  viewBox="0 0 24 24"
+                  width="26"
+                  height="26"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span class="brand-word">Motir</span>
+              </a>
+              <nav class="nav" aria-label="Main">
+                <a href="/explore">Explore</a>
+                <a href="/docs">Docs</a>
+                <a href="/design">Design</a>
+              </nav>
+              <div class="bar-cta">
+                <a class="btn sm ghost" href="https://app.motir.co/sign-in">Sign in</a>
+                <a class="btn sm primary" href="https://app.motir.co/sign-up?intent=tracker"
+                  >Start free
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </a>
+              </div>
+            </header>
+
+            <main class="room" id="main" tabindex="-1">
+              <p class="code">404</p>
+              <h1>That page isn’t here</h1>
+              <p class="lede">
+                The address may be mistyped — or the page it pointed to is no longer public.
+              </p>
+              <div class="doors">
+                <a class="btn md primary" href="/explore">Explore projects</a>
+                <a class="btn md ghost" href="/">Go to the homepage</a>
+              </div>
+            </main>
+
+            <footer class="foot" aria-label="Footer">
+              <div>
+                <a
+                  class="brand-lockup"
+                  href="/"
+                  aria-label="Motir — home"
+                  style="--brand-size: 22px"
+                >
+                  <svg
+                    class="brand-glyph"
+                    viewBox="0 0 24 24"
+                    width="22"
+                    height="22"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span class="brand-word">Motir</span>
+                </a>
+                <p class="tag">
+                  The AI planning, project-management and agent orchestration platform.
+                </p>
+                <p class="tag">The project-management core is open source, GPL-3.0.</p>
+              </div>
+              <div>
+                <h2>Product</h2>
+                <ul>
+                  <li><a href="https://app.motir.co/sign-up?intent=tracker">Start free</a></li>
+                  <li><a href="https://app.motir.co/sign-in">Sign in</a></li>
+                </ul>
+              </div>
+              <div>
+                <h2>Resources</h2>
+                <ul>
+                  <li><a href="/explore">Explore projects</a></li>
+                  <li><a href="/docs">Docs</a></li>
+                  <li><a href="https://github.com/moooon-B-V/motir-core">GitHub</a></li>
+                </ul>
+              </div>
+              <div>
+                <h2>Legal</h2>
+                <ul>
+                  <li><a href="/legal/privacy">Privacy Policy</a></li>
+                  <li><a href="/legal/terms">Terms of Service</a></li>
+                  <li><a href="/legal">All legal documents</a></li>
+                </ul>
+              </div>
+              <div class="strip">© 2026 moooon B.V. · Motir is a product of moooon B.V.</div>
+            </footer>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================================
+           PANEL 2 — the doors, close-up, with the decision.
+      =========================================================== -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">2</span>
+          <h2>The doors — TWO, ordered, and why not three</h2>
+          <span class="note"
+            >The decision this card owes, written beside the thing it decides.</span
+          >
+        </div>
+        <div class="side">
+          <div class="stack">
+            <div class="frame">
+              <div class="site" style="min-height: 0">
+                <div class="room" style="padding: 44px var(--spacing-card-padding)">
+                  <p class="code">404</p>
+                  <h1>That page isn’t here</h1>
+                  <p class="lede">
+                    The address may be mistyped — or the page it pointed to is no longer public.
+                  </p>
+                  <div class="doors">
+                    <a class="btn md primary" href="/explore">Explore projects</a>
+                    <a class="btn md ghost" href="/">Go to the homepage</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- ANNOTATION, deliberately OUTSIDE the frame — a spec table drawn
+               inside the product surface reads as product UI, which is the one
+               thing a mock must never blur. -->
+            <div style="margin-top: 14px">
+              <p class="rule">The two doors, in order</p>
+              <table class="aa">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>label</th>
+                    <th>href</th>
+                    <th>treatment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="num">1</td>
+                    <td>Explore projects</td>
+                    <td class="num">/explore</td>
+                    <td><b>primary</b> — <code>Button</code> md, <code>--el-accent</code> fill</td>
+                  </tr>
+                  <tr>
+                    <td class="num">2</td>
+                    <td>Go to the homepage</td>
+                    <td class="num">/</td>
+                    <td>ghost — <code>Button</code> md, no border (see the button block)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="aside">
+            <h3>Why Explore is primary</h3>
+            <p>
+              Three of the four arrivals (panel 5) are people who wanted
+              <span class="k">a public project</span> — a shared
+              <code>/p/&lt;identifier&gt;</code> link whose owner turned public access off, or an
+              unlisted topic. <code>/explore</code> is the only destination that answers them, and
+              it is a reading surface a stranger can use immediately. The landing is a pitch; it
+              answers only the mistyped URL.
+            </p>
+            <h3>Why exactly TWO</h3>
+            <p>
+              Because the chrome already carries the rest. The bar holds Explore, Docs and Design;
+              the footer holds all nine destinations including the whole Legal column. The room's
+              doors are a <span class="k">ranking, not a menu</span> — they name the likeliest
+              intent and let the chrome carry every other one. That is also why the stock screen is
+              bad: it has no chrome, so it would need everything, and it offers nothing.
+            </p>
+            <h3>Why no Docs door</h3>
+            <p>
+              <code>Docs</code> sits in the bar 57px above the room and in the footer below it. A
+              third door would re-list the nav.
+            </p>
+            <h3>Why no search field</h3>
+            <p>
+              motir.co has no site-wide search. The one search input on the site belongs to
+              <code>/explore</code> and is scoped to the project directory
+              (<code>motir-marketing/app/explore/_components/SearchForm.tsx</code>). Drawing a
+              search box here would invent an unshipped control — the design-reference rule's
+              NONE-exists case. The Explore door carries the reader to the surface that
+              <em>has</em> the search.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================================
+           PANEL 3 — narrow (390 x 844).
+      =========================================================== -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">3</span>
+          <h2>Narrow — 390 × 844, the <code>md:hidden</code> menu</h2>
+          <span class="note"
+            >A stale link is at least as likely to be opened on a phone. The nav collapses behind
+            the menu button and <code>Sign in</code> leaves the bar for the panel — the shipped
+            behaviour, rendered and measured, not assumed. The doors STACK: at 390 the two md
+            buttons do not fit on one line, and a wrapped button pair with no explicit order reads
+            as two equal choices.</span
+          >
+        </div>
+        <div class="frame narrow">
+          <div class="site" style="min-height: 700px">
+            <header class="topbar narrowbar">
+              <a class="brand-lockup" href="/" aria-label="Motir — home">
+                <svg
+                  class="brand-glyph"
+                  viewBox="0 0 24 24"
+                  width="26"
+                  height="26"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span class="brand-word">Motir</span>
+              </a>
+              <div class="bar-cta">
+                <a class="btn sm primary" href="https://app.motir.co/sign-up?intent=tracker"
+                  >Start free
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </a>
+                <button class="menu-btn" type="button" aria-label="Menu" aria-expanded="true">
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    style="width: 16px; height: 16px"
+                  >
+                    <path d="M4 5h16" />
+                    <path d="M4 12h16" />
+                    <path d="M4 19h16" />
+                  </svg>
+                </button>
+              </div>
+            </header>
+            <nav class="menu-panel" aria-label="Main">
+              <a href="/explore">Explore</a>
+              <a href="/docs">Docs</a>
+              <a href="/design">Design</a>
+              <a href="https://app.motir.co/sign-in">Sign in</a>
+            </nav>
+
+            <main class="room" id="main" tabindex="-1" style="padding: 44px 16px">
+              <p class="code">404</p>
+              <h1 style="font-size: 26px">That page isn’t here</h1>
+              <p class="lede" style="font-size: 14.5px">
+                The address may be mistyped — or the page it pointed to is no longer public.
+              </p>
+              <div class="doors" style="flex-direction: column; align-items: stretch">
+                <a class="btn md primary" href="/explore">Explore projects</a>
+                <a class="btn md ghost" href="/">Go to the homepage</a>
+              </div>
+            </main>
+
+            <footer class="foot stacked" aria-label="Footer">
+              <div>
+                <h2>Resources</h2>
+                <ul>
+                  <li><a href="/explore">Explore projects</a></li>
+                  <li><a href="/docs">Docs</a></li>
+                </ul>
+              </div>
+              <div class="strip">© 2026 moooon B.V.</div>
+            </footer>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================================
+           PANEL 4 — dark theme.
+      =========================================================== -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">4</span>
+          <h2>Dark theme — <code>data-theme="dark"</code></h2>
+          <span class="note"
+            >One of the three things the stock screen gets wrong: it hard-codes <code>#000</code> on
+            <code>#fff</code> and swaps on <code>prefers-color-scheme</code> alone, so a visitor who
+            chose a theme on <code>/design</code> is served a page that honours none of it. The room
+            inherits the theme because it paints in <code>--el-*</code> tokens and nothing
+            else.</span
+          >
+        </div>
+        <div class="frame" data-theme="dark">
+          <div class="site">
+            <header class="topbar">
+              <a class="brand-lockup" href="/" aria-label="Motir — home">
+                <svg
+                  class="brand-glyph"
+                  viewBox="0 0 24 24"
+                  width="26"
+                  height="26"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span class="brand-word">Motir</span>
+              </a>
+              <nav class="nav" aria-label="Main">
+                <a href="/explore">Explore</a>
+                <a href="/docs">Docs</a>
+                <a href="/design">Design</a>
+              </nav>
+              <div class="bar-cta">
+                <a class="btn sm ghost" href="https://app.motir.co/sign-in">Sign in</a>
+                <a class="btn sm primary" href="https://app.motir.co/sign-up?intent=tracker"
+                  >Start free
+                  <svg
+                    class="icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="m12 5 7 7-7 7" />
+                  </svg>
+                </a>
+              </div>
+            </header>
+
+            <main class="room" id="main" tabindex="-1">
+              <p class="code">404</p>
+              <h1>That page isn’t here</h1>
+              <p class="lede">
+                The address may be mistyped — or the page it pointed to is no longer public.
+              </p>
+              <div class="doors">
+                <a class="btn md primary" href="/explore">Explore projects</a>
+                <a class="btn md ghost" href="/">Go to the homepage</a>
+              </div>
+            </main>
+
+            <footer class="foot" aria-label="Footer">
+              <div>
+                <a
+                  class="brand-lockup"
+                  href="/"
+                  aria-label="Motir — home"
+                  style="--brand-size: 22px"
+                >
+                  <svg
+                    class="brand-glyph"
+                    viewBox="0 0 24 24"
+                    width="22"
+                    height="22"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      d="M0 0Q7 15.5 13 4.1875Q17.5 -4.2969 21.4375 4.3398Q24 9.9606 24 12L24 24Q19 5.125 13 18.5625Q8.5 28.6406 3.4375 19.9102Q0 13.9821 0 12Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span class="brand-word">Motir</span>
+                </a>
+                <p class="tag">
+                  The AI planning, project-management and agent orchestration platform.
+                </p>
+              </div>
+              <div>
+                <h2>Product</h2>
+                <ul>
+                  <li><a href="https://app.motir.co/sign-up?intent=tracker">Start free</a></li>
+                  <li><a href="https://app.motir.co/sign-in">Sign in</a></li>
+                </ul>
+              </div>
+              <div>
+                <h2>Resources</h2>
+                <ul>
+                  <li><a href="/explore">Explore projects</a></li>
+                  <li><a href="/docs">Docs</a></li>
+                  <li><a href="https://github.com/moooon-B-V/motir-core">GitHub</a></li>
+                </ul>
+              </div>
+              <div>
+                <h2>Legal</h2>
+                <ul>
+                  <li><a href="/legal/privacy">Privacy Policy</a></li>
+                  <li><a href="/legal/terms">Terms of Service</a></li>
+                  <li><a href="/legal">All legal documents</a></li>
+                </ul>
+              </div>
+              <div class="strip">© 2026 moooon B.V. · Motir is a product of moooon B.V.</div>
+            </footer>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================================
+           PANEL 5 — the ACCESS PATH, as the four arrivals.
+      =========================================================== -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">5</span>
+          <h2>The access path — the four ways in</h2>
+          <span class="note"
+            >A 404 has no entrance anybody clicks deliberately, so the access path is not a nav
+            affordance — it is the set of ARRIVALS. Every one of these calls
+            <code>notFound()</code> on ordinary input, and the room's one sentence has to be true
+            for all four. That constraint is what produced the copy: not "we couldn't find that
+            document", which is false for three of them.</span
+          >
+        </div>
+        <div class="side">
+          <div class="arrivals">
+            <div class="arrival">
+              <p class="from">Arrival 1 — a link from outside</p>
+              <p class="addr">/p/&lt;identifier&gt;</p>
+              <p class="why">
+                A shared link to a public project whose owner has since turned public access off, or
+                to an item or request that is not public. The routine case, not the exceptional one.
+              </p>
+              <p class="want">Wanted: <b>a public project</b> → Explore</p>
+            </div>
+            <div class="arrival">
+              <p class="from">Arrival 2 — an unlisted topic</p>
+              <p class="addr">/explore/topic/&lt;slug&gt;</p>
+              <p class="why">A topic slug the API does not list.</p>
+              <p class="want">Wanted: <b>to browse</b> → Explore</p>
+            </div>
+            <div class="arrival">
+              <p class="from">Arrival 3 — an unknown document</p>
+              <p class="addr">/legal/&lt;slug&gt;</p>
+              <p class="why">
+                An unknown legal slug. Answered by the footer's Legal column, which is on this very
+                page — which is why it earns no door of its own.
+              </p>
+              <p class="want">Wanted: <b>a document</b> → the footer</p>
+            </div>
+            <div class="arrival">
+              <p class="from">Arrival 4 — a mistyped URL</p>
+              <p class="addr">/anythnig</p>
+              <p class="why">
+                No route matches. The only arrival for which the landing is the right answer.
+              </p>
+              <p class="want">Wanted: <b>the site</b> → the homepage</p>
+            </div>
+          </div>
+          <div class="stack">
+            <div>
+              <p class="rule">What ships today — measured, not described</p>
+              <div class="stock">
+                <div class="row">
+                  <span class="n404">404</span>
+                  <span class="m">This page could not be found.</span>
+                </div>
+                <p class="cap">
+                  Rendered at 1440×900 on <code>origin/main</code> <code>61b9a13</code>. Status 404,
+                  and <code>document.querySelectorAll('main').length === 0</code>. No header, no
+                  footer, no brand, nothing that links anywhere.
+                </p>
+              </div>
+            </div>
+            <div class="aside">
+              <h3>One room, not four</h3>
+              <p>
+                All four arrivals resolve to the SAME boundary. Next resolves
+                <code>notFound()</code> to the nearest <code>not-found.tsx</code> above the route,
+                and motir-marketing has none anywhere — so
+                <span class="k"
+                  >one <code>motir-marketing/app/not-found.tsx</code> serves all four</span
+                >, and a per-route variant would need a per-segment file nobody has asked for.
+              </p>
+              <p>
+                This SUPERSEDES the <code>/legal</code>-specific 404 body drawn as panel 4 of
+                <code>motir-marketing/design/legal/legal.mock.html</code> — see the notes.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

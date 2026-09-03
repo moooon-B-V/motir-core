@@ -249,6 +249,11 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/design',
     why: 'The `Design` showcase nav item, a motir-marketing route (MOTIR-3861) that does not live in motir-core. The unified chrome keeps the shipped nav item; the address resolves on motir.co, not in this repo, so the route inventory cannot resolve it.',
   },
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/design',
+    why: "The same `Design` showcase nav item, in the same chrome — the not-found room is drawn INSIDE that bar (MOTIR-4245), so it carries the bar's three nav items verbatim. Permanent for the same reason as the row above: the route ships, in the other repository.",
+  },
   // ── Prose that names an address without using it ──────────────────────────
   {
     file: 'design/agent-sandbox/design-notes.md',
@@ -749,6 +754,16 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/public-site/public-site.mock.html',
     address: '/explore',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
+  },
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/docs',
+    why: "The public reading surface lives on motir-marketing (MOTIR-3932). The not-found room (MOTIR-4245) draws the shipped motir.co bar and footer around it, so it names that host's addresses; motir-core serves neither.",
+  },
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/explore',
+    why: "The public reading surface lives on motir-marketing (MOTIR-3932). `/explore` is this room's PRIMARY door as well as a nav and footer row (MOTIR-4245) — the destination the asset argues for — and it resolves on motir.co, not in this repo.",
   },
   {
     file: 'design/roadmap/root-non-epic-rows.mock.html',
