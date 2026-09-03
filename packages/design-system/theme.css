@@ -625,6 +625,43 @@
    they are NOT the bare [data-style] token block and never carry a hue token
    there — the disjoint-axis token-block test still passes. ───────────────── */
 
+/* ═══════════════════════════════════════════════════════════════════════
+   ⚠️ A STYLE CANVAS IS PAINTED ON `body` AND ON `[data-app-shell]`, FROM ONE
+   RULE (MOTIR-4230 for 3D / Immersive, MOTIR-4234 for the rest)
+   ═══════════════════════════════════════════════════════════════════════
+   Six of the eleven registered styles express part of their identity as a
+   `body`-level CANVAS: glassmorphism's vibrant wash, cybercore's tech grid,
+   aurora's drifting ribbons, 3D / Immersive's atmosphere, neumorphism's
+   moulded field and retrofuturism's synthwave sky. `body` alone covers the
+   anonymous surfaces — auth, the public site, `/tokens` — where nothing is
+   stacked over the canvas. On a SIGNED-IN route it covers nothing at all: the
+   shell root (`components/ui/AppLayout.tsx`, and the platform-admin
+   `AdminShell`) is a `h-dvh overflow-hidden` box carrying `bg-(--el-page-bg)`,
+   an OPAQUE fill over the whole viewport. The canvas was painted and then
+   hidden, so a user who picked one of these styles got the surface treatment
+   on individual panels and a flat frame around them — and glass is the sharpest
+   case, because the thing its frosted rail was blurring was that flat fill
+   rather than the wash the blur exists to refract.
+
+   So each of those rules names TWO members, `body` and the `data-app-shell`
+   hook both shells carry, and the shell repaints the SAME layers over its own
+   page fill. ONE RULE, TWO SELECTORS, DELIBERATELY — a second rule restating a
+   gradient stack is a copy that drifts on the first tune, and the whole defect
+   was the canvas and the frame disagreeing about what the canvas is. Where the
+   body rule fixes `background-attachment`, both members inherit it from the one
+   declaration, which is what makes the two pixel-identical rather than merely
+   similar: each resolves against the viewport instead of against its own box.
+
+   A style that paints NO canvas of its own (`warm-editorial`, `soft-playful`,
+   `swiss-minimal-flat`, `neo-brutalism`, `hand-drawn-indie`) is untouched by
+   all of this and the shell keeps the `--el-page-bg` fill it has always had:
+   the hook is a hook, not a style.
+
+   `tests/theme/styleShellCanvas.test.ts` pins the pairing for EVERY style that
+   paints a canvas — derived from the stylesheet, not from a list — and
+   `tests/e2e/shell-immersive-atmosphere.spec.ts` is the rendered half.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 /* The canvas: the palette's page bg + three soft corner washes. The hue sources
    are the `--el-*` accent roles (NOT Tier-0 `--color-*`), so the washes re-tint
    with the active palette — the `data-palette` axis (7.3.48 / MOTIR-1065)
@@ -632,7 +669,8 @@
    the glass orthogonal to the palette. The gradient is what the frosted panels
    blur — without it, the blur is invisible. */
 @scope ([data-style='glassmorphism']) to ([data-style]) {
-  body {
+  body,
+  [data-app-shell] {
     background-image:
       radial-gradient(
         85% 80% at 6% -12%,
@@ -891,7 +929,8 @@
    renders on it), keeping AA intact. Dark-first — on the dark theme this reads
    as a Tron grid over the near-black canvas. */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
-  body {
+  body,
+  [data-app-shell] {
     background-image:
       linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
       linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
@@ -995,7 +1034,8 @@
    palette. background-size > 100% gives the gradient room to drift; the whole
    field eases back and forth over `--aurora-drift-duration`. */
 @scope ([data-style='aurora']) to ([data-style]) {
-  body {
+  body,
+  [data-app-shell] {
     background-image:
       radial-gradient(
         58% 75% at 12% 0%,
@@ -1041,10 +1081,14 @@
 }
 
 /* Respect a reduced-motion preference — the aurora settles to a still gradient
-   (the identity holds; only the drift stops). */
+   (the identity holds; only the drift stops). BOTH members, for the reason the
+   canvas has two: the shell now carries the same `animation` declaration, so an
+   arm that stilled only `body` would leave a reduced-motion user with a drifting
+   frame around a still page — the defect inverted rather than fixed. */
 @media (prefers-reduced-motion: reduce) {
   @scope ([data-style='aurora']) to ([data-style]) {
-    body {
+    body,
+    [data-app-shell] {
       animation: none;
     }
   }
@@ -1986,7 +2030,8 @@
    the canvas and the surfaces below share `var(--el-surface)`, which is the whole
    neumorphic illusion. Palette-derived (no hue of its own). */
 @scope ([data-style='neumorphism']) to ([data-style]) {
-  body {
+  body,
+  [data-app-shell] {
     background-color: var(--el-surface);
   }
 }
@@ -2177,7 +2222,8 @@
    to the palette. Painted as the body's own background (always behind content),
    the proven 3D/Immersive atmosphere approach. */
 @scope ([data-style='retrofuturism']) to ([data-style]) {
-  body {
+  body,
+  [data-app-shell] {
     background-image:
       linear-gradient(
         180deg,
@@ -2201,16 +2247,41 @@
   }
 }
 
-/* The Outrun GRID FLOOR — a receding neon grid below the horizon. A separate
-   fixed layer (`body::after`) so it can be perspective-tilted and masked to fade
-   into the horizon; `z-index: -1` keeps it BEHIND all app content (above only the
-   body's own sky background), so it textures the floor without ever covering the
-   UI. Lines are `color-mix()` over `--el-*` accents (palette-derived, no hue of
-   their own); the mask uses the achromatic `black` keyword (no hex). The grid is
-   STATIC depth — like 3D/Immersive's atmosphere it carries the identity, so it is
-   not motion-gated (there is no animation to suppress). */
+/* ⚠️ THE SHELL BECOMES A STACKING CONTEXT — the one place the shell-canvas
+   pairing needs more than a second selector (MOTIR-4234). The grid floor below
+   is `position: fixed; z-index: -1`, and both shell roots are `relative` with
+   `z-index: auto`, so they establish NO stacking context: a negative-z-index
+   descendant of the shell would be painted into the ROOT stacking context, at
+   the step BEFORE positioned elements — i.e. behind the shell's own background,
+   which is exactly where `body::after` already is and exactly why the floor was
+   invisible on every signed-in route. `isolation: isolate` makes the shell its
+   own context, so its `::after` resolves INSIDE it: above the shell canvas
+   (step 1) and below all shell content (step 3 onwards), which is the
+   disposition the floor is designed for.
+
+   Scoped to retrofuturism, because it is the only style with a canvas LAYER
+   below content; the shell is left alone under every other style. It creates no
+   containing block, so the `position: fixed` floor still resolves against the
+   viewport and the shell's `overflow: hidden` does not clip it. */
 @scope ([data-style='retrofuturism']) to ([data-style]) {
-  body::after {
+  [data-app-shell] {
+    isolation: isolate;
+  }
+}
+
+/* The Outrun GRID FLOOR — a receding neon grid below the horizon. A separate
+   fixed layer (`body::after`, and `[data-app-shell]::after` for the signed-in
+   shell — the pairing above) so it can be perspective-tilted and masked to fade
+   into the horizon; `z-index: -1` keeps it BEHIND all app content (above only the
+   sky background of whichever of the two is painting), so it textures the floor
+   without ever covering the UI. Lines are `color-mix()` over `--el-*` accents
+   (palette-derived, no hue of their own); the mask uses the achromatic `black`
+   keyword (no hex). The grid is STATIC depth — like 3D/Immersive's atmosphere it
+   carries the identity, so it is not motion-gated (there is no animation to
+   suppress). */
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  body::after,
+  [data-app-shell]::after {
     content: '';
     position: fixed;
     left: -30%;
