@@ -243,6 +243,32 @@ describe('the stop is SAFE where the click is redundant', () => {
     });
   });
 
+  it('an ABORTED raise leaves `stopping` alone — the unmount path, not a failure', async () => {
+    const release = heldStream();
+    const { result } = await mounted();
+    stopRun.mockRejectedValue(new DOMException('gone', 'AbortError'));
+
+    let running!: Promise<void>;
+    await act(async () => {
+      running = result.current.send('Add a stop control.', TARGETS);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.state.phase).toBe('streaming'));
+
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    // An abort is what a navigation away produces; it is not the raise failing,
+    // so the state is not rewritten to say the click did not land.
+    expect(result.current.state.stopping).toBe(true);
+
+    await act(async () => {
+      release();
+      await running;
+    });
+  });
+
   it('a FAILED raise clears `stopping` — the bar must not claim a click that did not land', async () => {
     const release = heldStream();
     const { result } = await mounted();

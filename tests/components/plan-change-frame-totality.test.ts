@@ -154,6 +154,36 @@ describe('`retrieval` — the frame this card exists for', () => {
   });
 });
 
+describe('`lay` and `author` name what they act on — and survive a thin payload', () => {
+  it('names the target being laid and the title being written', () => {
+    expect(narrateFrame('lay', { target: 'MOTIR-42', depth: 1 })).toEqual({
+      kind: 'laying',
+      target: 'MOTIR-42',
+    });
+    expect(narrateFrame('author', { ref: 'MOTIR-43', kind: 'subtask', title: 'The stop' })).toEqual(
+      {
+        kind: 'authoring',
+        title: 'The stop',
+      },
+    );
+  });
+
+  it('a missing or non-string target / title is null, never the string "undefined"', () => {
+    expect(narrateFrame('lay', {})).toEqual({ kind: 'laying', target: null });
+    expect(narrateFrame('lay', { target: 7 })).toEqual({ kind: 'laying', target: null });
+    expect(narrateFrame('author', { title: null })).toEqual({ kind: 'authoring', title: null });
+    expect(narrateFrame('author', undefined)).toEqual({ kind: 'authoring', title: null });
+  });
+
+  it('`retrieval` reads `blocked` as a strict boolean — a truthy string is not a blocked lookup', () => {
+    expect(narrateFrame('retrieval', { family: 3, blocked: 'yes' })).toEqual({
+      kind: 'retrieval',
+      family: null,
+      blocked: false,
+    });
+  });
+});
+
 describe('the planner’s PROSE line', () => {
   it('renders the text the planner wrote', () => {
     expect(

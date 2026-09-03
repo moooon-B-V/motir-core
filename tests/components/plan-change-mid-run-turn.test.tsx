@@ -411,6 +411,43 @@ describe('QUEUED is not DELIVERED', () => {
 });
 
 describe('A REFUSAL IS LEGIBLE', () => {
+  it('an UNTYPED failure still says something — `MAILBOX_FAILED`, not silence', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    attachMidRunTurn.mockRejectedValue(new Error('network'));
+
+    await act(async () => {
+      await hook.result.current.send('Also drop it.', TARGETS);
+    });
+
+    expect(hook.result.current.state.errorCode).toBe('MAILBOX_FAILED');
+    expect(hook.result.current.state.queued).toEqual([]);
+    expect(hook.result.current.state.phase).toBe('streaming');
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
+  it('an ABORTED send is not an error — nothing is written', async () => {
+    const hook = await mounted();
+    const { release, promise } = await running(hook);
+    attachMidRunTurn.mockRejectedValue(new DOMException('gone', 'AbortError'));
+
+    await act(async () => {
+      await hook.result.current.send('Also drop it.', TARGETS);
+    });
+
+    expect(hook.result.current.state.errorCode).toBeNull();
+    expect(hook.result.current.state.queued).toEqual([]);
+
+    await act(async () => {
+      release();
+      await promise;
+    });
+  });
+
   it('surfaces the door’s typed code when the run settled between render and send', async () => {
     const hook = await mounted();
     const { release, promise } = await running(hook);
