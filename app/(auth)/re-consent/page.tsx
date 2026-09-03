@@ -12,7 +12,7 @@ import { ReconsentDeferred } from './_components/ReconsentDeferred';
  * `design/auth/legal-agreement.mock.html`, panels 5–8).
  *
  * Nobody navigates here — they are HELD on their way somewhere by
- * `lib/legal/reconsentGate.ts`, because `content/legal/terms.md` §14 promises
+ * `lib/legal/reconsentGate.ts`, because `motir.co/legal/terms` §14 promises
  * that we *"will not treat silence as agreement to a material change"*.
  *
  * ⚠️ IT WEARS THE `(auth)` FRAME, NOT THE APP SHELL, and that is the same

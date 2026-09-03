@@ -96,7 +96,7 @@ describe('creating an account records what was agreed', () => {
       expect(row.acceptedAt.getTime()).toBeLessThanOrEqual(Date.now() + 1_000);
     }
 
-    // ONE act, one moment — `terms.md` §15 makes the three documents a single
+    // ONE act, one moment — `motir.co/legal/terms` §15 makes the three documents a single
     // agreement, and three timestamps would misrepresent one decision as three.
     expect(new Set(rows.map((row) => row.acceptedAt.getTime())).size).toBe(1);
   });
@@ -120,7 +120,7 @@ describe('creating an account records what was agreed', () => {
 //
 // `model-providers.md` is a factual roster that changes whenever a gateway
 // channel is enabled (`docs/decisions/legal-document-set.md` §7, amended
-// 2026-08-27), and `content/legal/terms.md` §14 already promises that a change
+// 2026-08-27), and `motir.co/legal/terms` §14 already promises that a change
 // of that kind "takes effect when published". If a bump there prompted, every
 // routing change would ask every user to re-agree — which is both a broken
 // promise and the fastest way to teach people to click through the screen.

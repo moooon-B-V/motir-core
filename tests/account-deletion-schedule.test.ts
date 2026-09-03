@@ -218,7 +218,7 @@ describe('scheduleAccountDeletion — the row and its deadline', () => {
     expect(scheduled.status).toBe('scheduled');
     // ⚠️ THE DEADLINE IS DERIVED, NOT TYPED. Asserted against the vocabulary
     // module's own function rather than against a hand-computed date: if the
-    // published window in `content/legal/privacy.md` §6 ever moves, this test
+    // published window in `motir.co/legal/privacy` §6 ever moves, this test
     // must move WITH the constant, not fail beside it.
     expect(scheduled.erasureDueAt).toBe(
       erasureDueAt(new Date(scheduled.requestedAt)).toISOString(),
@@ -238,7 +238,7 @@ describe('scheduleAccountDeletion — the row and its deadline', () => {
   });
 
   it('⚠️ never retypes the number — the service source carries no bare `30`', () => {
-    // `content/legal/privacy.md` §6 promises erasure "within 30 days" and
+    // `motir.co/legal/privacy` §6 promises erasure "within 30 days" and
     // `ACCOUNT_ERASURE_WINDOW_DAYS` is the one place that number lives, so the
     // promise and the behaviour cannot drift. A second copy in this service
     // would behave identically today and drift silently on the day §6 changes —

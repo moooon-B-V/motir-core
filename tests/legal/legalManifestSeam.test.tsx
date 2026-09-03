@@ -123,7 +123,7 @@ describe('the whole wire, from a configured manifest to a rendered href', () => 
 
   it('a PATCH revision travels the same wire and holds NOBODY', async () => {
     // The other direction of the materiality rule, through the seam rather than
-    // in isolation: `terms.md` §14 promises a clarification takes effect when
+    // in isolation: `motir.co/legal/terms` §14 promises a clarification takes effect when
     // published, so a patch must not reach the row at all.
     restore = setLegalManifest(RECONSENT_FIXTURE);
     const user = await makeUser('patch@example.com');

@@ -15,7 +15,7 @@ import { type LegalDocument } from './documents';
 /**
  * THE RE-CONSENT SET — three of the seven published documents.
  *
- * ⚠️ NOT "every document in `content/legal/`". Comparing all seven asks every
+ * ⚠️ NOT "every document the manifest publishes". Comparing all seven asks every
  * user to re-agree whenever a factual roster is corrected, and four of them are
  * excluded on a ground that is PUBLISHED in a document we are bound by, not on a
  * judgement made here:
@@ -24,7 +24,7 @@ import { type LegalDocument } from './documents';
  *     strictly necessary or a preference the reader set, under the ePrivacy
  *     Art. 5(3) exemption), so there is nothing to re-accept. A future
  *     non-essential cookie brings a BANNER, which that document itself promises.
- *   * **Subprocessors** — `content/legal/terms.md` §14 names *"a new
+ *   * **Subprocessors** — `motir.co/legal/terms` §14 names *"a new
  *     sub-processor already covered by the Privacy Policy"* as its example of a
  *     NON-material change that *"takes effect when published"*. DPA customers get
  *     DPA §6's thirty-day objection window instead: a bilateral notice, not an
@@ -36,19 +36,21 @@ import { type LegalDocument } from './documents';
  *     2026-08-27): a factual roster that varies no commitment and *"carries no
  *     notice period"*.
  *
- * The three that ARE here are the agreement itself. `terms.md` §15 makes the
+ * The three that ARE here are the agreement itself. `motir.co/legal/terms` §15 makes the
  * Terms, the Acceptable Use Policy and the Privacy Policy the whole agreement;
- * `acceptable-use.md`'s own header says it *"forms part of the Terms of
- * Service"*; `privacy.md` §12 promises that *"where the change affects the terms
+ * `motir.co/legal/acceptable-use`'s own header says it *"forms part of the Terms of
+ * Service"*; `motir.co/legal/privacy` §12 promises that *"where the change affects the terms
  * you accepted, you will be asked to review them"*.
  *
  * ⚠️ THIS IS A CLOSED LIST ON PURPOSE, and it is the ONE place in the legal
- * module that enumerates slugs — `documents.ts` treats the directory as the
- * registry precisely so nothing has to. The difference is what the list is FOR:
- * there, a missing slug 404s a published page (a list that can hide a document);
- * here, an unlisted document simply never holds anybody up (a list that can only
- * ask for LESS). Adding a document to `content/legal/` must not silently start
- * gating the whole product on it.
+ * module that enumerates slugs — `documents.ts` treats the CONFIGURED MANIFEST
+ * as the registry precisely so nothing has to (it read the `content/legal/`
+ * directory until MOTIR-4007, and the directory left this repository with
+ * MOTIR-4103; the registry moved, the reason did not). The difference is what
+ * the list is FOR: there, a missing slug is a document the product cannot link
+ * (a list that can hide a document); here, an unlisted document simply never
+ * holds anybody up (a list that can only ask for LESS). Adding a document to the
+ * manifest must not silently start gating the whole product on it.
  */
 export const RECONSENT_DOCUMENT_SLUGS = ['terms', 'privacy', 'acceptable-use'] as const;
 
@@ -84,7 +86,7 @@ export function parseSemanticVersion(raw: string | null | undefined): SemanticVe
 /**
  * ⚠️ THE TRIGGER IS MATERIALITY, NOT A VERSION COMPARISON.
  *
- * `content/legal/terms.md` §14 promises that non-material changes —
+ * `motir.co/legal/terms` §14 promises that non-material changes —
  * *"clarifications, corrections, a new sub-processor already covered by the
  * Privacy Policy"* — **take effect when published**, with no prompt. A bare
  * `current > accepted` over the version string therefore breaks a clause in the
@@ -196,10 +198,13 @@ export function outstandingReconsent(
   const outstanding: OutstandingDocument[] = [];
   for (const slug of RECONSENT_DOCUMENT_SLUGS) {
     const document = documents.find((candidate) => candidate.slug === slug);
-    // A document in the re-consent set that is not in `content/legal/` cannot be
-    // read, linked or agreed to, so it holds nobody. That is the safe direction:
-    // the alternative is a hold nobody can clear. `tests/legal/legalVersionGuard.test.ts`
-    // is what makes the absence loud instead.
+    // A document in the re-consent set that the manifest does not publish cannot
+    // be read, linked or agreed to, so it holds nobody. That is the safe
+    // direction: the alternative is a hold nobody can clear. The guard that makes
+    // the absence LOUD instead of silent is `tests/legal/legalConsent.test.ts`
+    // here, and `motir-marketing`'s `tests/legal/legalMateriality.test.ts` for
+    // the published set (MOTIR-4133 — `legalVersionGuard.test.ts` was this
+    // repository's and went with the documents in MOTIR-4007).
     if (!document) continue;
 
     const accepted = latestBySlug.get(slug) ?? null;

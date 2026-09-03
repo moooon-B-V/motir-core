@@ -58,7 +58,7 @@ describe('resolveReconsentHold', () => {
 
   it('never holds a SELF-HOSTER, whatever they have accepted', async () => {
     // The card's own acceptance criterion: gating keys off the CLOUD document
-    // version, self-hosters set their own. `content/legal/` ships as moooon
+    // version, self-hosters set their own. The configured documents are moooon
     // B.V.'s copy of OUR terms — a self-hoster is their own controller and their
     // own counterparty, so a hold asking them to accept our Terms would be both
     // wrong and unclearable.

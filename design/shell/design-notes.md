@@ -1100,8 +1100,16 @@ for a row (`--height-control`, `--radius-control`, `--spacing-control-x`, `--el-
 `--el-icon-muted` glyph, `--el-sidebar-item-bg-hover`), the `role="separator"` div between sections
 (`--el-sidebar-border`), and the rail itself (`--el-sidebar-bg`, `data-surface="sidebar"` so a
 material style can frost it). The drawer chrome is `components/ui/SidebarDrawer.tsx`'s header row
-verbatim. Widths are the shipped ones: `AppLayout`'s grid column is **240px** expanded and **56px**
-collapsed, and `SidebarDrawer`'s default width is **300px**.
+verbatim. Widths are the shipped ones: `AppLayout`'s grid column is **240px** expanded, and
+`SidebarDrawer`'s default width is **300px**.
+
+**The COLLAPSED column is not a constant (MOTIR-4232).** It is
+`calc(var(--height-control) + var(--width-rail-chrome))` — the one control the collapsed rail holds,
+plus the rail's own gutters, border and slack — so it follows the style axis instead of ignoring it.
+It is **56px under the default style** (36 + 20), which is what this asset draws and what the rail
+has always been; it is 54px under the two densest styles and 60px under `soft-playful` and
+`3d-immersive`, whose 40px control did not fit the old 39px content box at all. A mock drawing the
+collapsed rail draws the default's 56px and says which style it is drawing.
 
 Board chrome routes every colour through `--el-*` and takes `--el-text-secondary` for body ink rather
 than `--el-text-muted`, which fails AA on three of the four surfaces it could land on

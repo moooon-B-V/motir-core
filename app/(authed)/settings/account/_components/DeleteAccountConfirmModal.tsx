@@ -235,7 +235,7 @@ export function DeleteAccountConfirmModal({
             />
           </LedgerGroup>
 
-          {/* NOT counted from the database — `content/legal/privacy.md` §6
+          {/* NOT counted from the database — `motir.co/legal/privacy` §6
               states these as exceptions, so the preview returns KEYS and the
               copy renders them. That is what keeps the pane's list and the
               Privacy Policy's list from drifting into two different lists. */}

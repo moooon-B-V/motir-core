@@ -222,6 +222,21 @@
   --height-input: 44px;
   --height-control: 36px; /* single-line / square small control */
 
+  /* The space the collapsed nav rail puts AROUND its control: its `px-2`
+     gutters (8px a side), its 1px right border, and the 3px of slack the
+     shipped rail has always carried. Not the rail's width — the width is this
+     PLUS one `--height-control` square, composed at the point of use in
+     `components/ui/AppLayout.tsx` so the sum re-resolves under whatever
+     [data-style] is in scope rather than freezing the value `:root` happened
+     to have.
+
+     Calibrated so the DEFAULT style is unchanged: 36px + 20px is the 56px the
+     rail has always been. A denser style now gets a narrower rail and a roomier
+     one a wider rail, which is the density axis working rather than a constant
+     ignoring it. Deliberately NOT overridden per style — a style moves the
+     CONTROL, and the rail follows it (MOTIR-4232). */
+  --width-rail-chrome: 20px;
+
   /* ── Interaction ────────────────────────────────────────────────── */
   --transition-duration: 150ms;
   --transition-fast: 100ms;
@@ -1177,9 +1192,28 @@
    never a raw hue), so the style/palette axes stay disjoint and the material-
    rule test passes: a palette swap re-tints the atmosphere, a style swap leaves
    hues alone. This is what makes the table/list/board pages (no card surfaces of
-   their own) read as immersive too. */
+   their own) read as immersive too.
+
+   ⚠️ IT IS PAINTED ON THE SHELL CANVAS AS WELL AS ON `body`, AND THAT IS WHY THE
+   SELECTOR LIST HAS TWO MEMBERS (MOTIR-4230). `body` alone covers the anonymous
+   surfaces — auth, the public site, `/tokens` — where nothing is stacked over the
+   canvas. On a SIGNED-IN route the shell root (`components/ui/AppLayout.tsx`, and
+   the platform-admin `AdminShell`) is a `h-dvh` box carrying `bg-(--el-page-bg)`,
+   an OPAQUE fill covering the whole viewport: the body's atmosphere was painted
+   and then hidden behind it, so every card had its 3D tokens while the frame they
+   sit in stayed flat — the style did not read as immersive anywhere a user
+   actually works. The shells therefore carry a `data-app-shell` hook and repaint
+   the SAME layers over their own page fill, which is what the body would have
+   shown. `background-attachment: fixed` on both members is what makes the two
+   pixel-identical: each resolves against the viewport, not against its own box.
+
+   ONE RULE, TWO SELECTORS, DELIBERATELY — a second rule restating this gradient
+   stack is a copy that drifts on the first tune, and the whole defect was the
+   canvas and the frame disagreeing about what the canvas is. `tests/theme/
+   immersiveShellAtmosphere.test.ts` pins the pairing and the hook. */
 @scope ([data-style='3d-immersive']) to ([data-style]) {
-  body {
+  body,
+  [data-app-shell] {
     background-image:
       radial-gradient(
         130% 85% at 50% -15%,

@@ -249,6 +249,64 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/design',
     why: 'The `Design` showcase nav item, a motir-marketing route (MOTIR-3861) that does not live in motir-core. The unified chrome keeps the shipped nav item; the address resolves on motir.co, not in this repo, so the route inventory cannot resolve it.',
   },
+  // ── `/legal*` LEFT THIS HOST ENTIRELY (MOTIR-4103) ────────────────────────
+  // Two different reasons wearing one address, and the split matters because
+  // only one of them is history.
+  //
+  //  * `design/public-site/` draws MOTIR.CO. `/legal` and `/legal/*` are that
+  //    host's own routes (MOTIR-4009) and the asset is CORRECT — this repo's
+  //    `app/**` inventory simply cannot see another repository's route tree,
+  //    exactly as it cannot see `/design` above. Permanent, and not a defect
+  //    in either direction.
+  //  * `design/auth/legal-agreement.mock.html` is a POINT-IN-TIME record. Its
+  //    BEFORE panels draw the sign-up notice as it shipped, when `/legal/terms`
+  //    was a page this application served — the asset says so in its own words
+  //    ("Panel 2's links are same-origin: `/legal/terms` is a page this
+  //    application serves"). Its AFTER panels already draw the absolute
+  //    `https://motir.co/legal/*` links the manifest publishes (MOTIR-4010), so
+  //    the asset is not stale; it is a drawing of the change, and a drawing of a
+  //    change has to contain the old state. Correcting it would delete the half
+  //    that makes the panel pair legible.
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/legal',
+    why: "A motir.co route (MOTIR-4009) in the asset that draws motir.co. MOTIR-4103 deleted `app/(public)/legal/` from this repository, so this repo's route inventory cannot resolve it — the address is real on the brand host, as `/design` above is.",
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/legal/privacy',
+    why: 'The same: a document served by motir.co, named in the route table the asset draws for that host. Not an address motir-core serves any more (MOTIR-4103).',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/legal/terms',
+    why: 'The same: a document served by motir.co, named in the route table the asset draws for that host. Not an address motir-core serves any more (MOTIR-4103).',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/legal',
+    why: 'The mock beside those notes, drawing the same motir.co chrome and its footer legal rows. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/legal/privacy',
+    why: 'A footer link in the motir.co chrome the asset draws. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/legal/terms',
+    why: 'A footer link in the motir.co chrome the asset draws. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/auth/legal-agreement.mock.html',
+    address: '/legal/terms',
+    why: "A point-in-time record: the BEFORE panels draw the sign-up notice as it shipped, when this application served `/legal/terms`. The asset's AFTER panels already draw the absolute `https://motir.co/legal/terms` the manifest publishes (MOTIR-4010), so the pair IS the design; deleting the old half would remove what the panels are contrasting.",
+  },
+  {
+    file: 'design/auth/legal-agreement.mock.html',
+    address: '/legal/privacy',
+    why: 'The same panel pair, other document. The BEFORE half is the shipped state the design replaced; the AFTER half already carries the absolute motir.co link.',
+  },
   // ── Prose that names an address without using it ──────────────────────────
   {
     file: 'design/agent-sandbox/design-notes.md',
@@ -259,6 +317,22 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/api-docs/design-notes.md',
     address: '/api-docs',
     why: "The asset's own ⚠️ block recording that these addresses moved twice — the correction MOTIR-2316 was filed about, so it must name the old address.",
+  },
+  // ── FORWARD-LOOKING: an asset drawn before its route exists ───────────────
+  // TEMPORARY, and it names the card that deletes it — the distinction the
+  // block below insists on. `design/projects/public-address.mock.html` +
+  // `design-notes.md` (MOTIR-4211) draw the Public address room for Story
+  // MOTIR-3878; the design gate requires the asset BEFORE the page is built, so
+  // the route it names is drawn and not yet mounted.
+  //
+  // ⚠️ DELETE THIS ROW IN MOTIR-4221, the card that mounts
+  // `app/(authed)/settings/project/public-address/page.tsx`. The suite asserts
+  // this table tight in both directions, so leaving it behind fails the lane —
+  // which is the mechanism, not a hazard: the row cannot rot into a mute button.
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/public-address',
+    why: 'Forward-looking. The Public address room is designed (MOTIR-4211) before it is built; MOTIR-4221 mounts the route and DELETES this row.',
   },
   // ── An address a design asset RECORDED, which the app has since moved ──────
   // A DIFFERENT KIND of row from every other entry in this table, and the
@@ -765,6 +839,33 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/docs',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
   },
+  // ── Forward-looking: the Public page room (MOTIR-4205 draws it, MOTIR-4171 builds it) ──
+  // The settings room where a project admin edits the public page's tagline,
+  // tags and README. The asset is the design MOTIR-4171 builds to, so it names
+  // the route before the page exists. Both rows self-destruct: the moment
+  // `app/(authed)/settings/project/public/page.tsx` lands, `carries no KNOWN
+  // entry that has stopped applying` goes red until they are deleted — MOTIR-4171
+  // deletes them in the same commit.
+  {
+    file: 'design/projects/public-page.mock.html',
+    address: '/settings/project/public',
+    why: 'Forward-looking: the Public page room MOTIR-4171 mounts. This asset (MOTIR-4205) is its design; the row dies with the route.',
+  },
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/public',
+    why: 'Forward-looking: same route, cited by the notes section that specifies it. Dies with the route.',
+  },
+  // ── Historical: the app-host public path the retargets REMOVE ─────────────
+  // The same section names `/p/<key>` (and `/p/<key>?edit=1`) as the dead
+  // addresses the three Members-room links pointed at until MOTIR-4171 retargets
+  // them — quoted as history, never as a destination. Permanent: `app/(public)/p/`
+  // was deleted by MOTIR-3951 and is not coming back to this repo.
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/p',
+    why: 'Historical: the app-hosted /p/<key> path MOTIR-3951 deleted, quoted as the address the retargets replace. Permanent.',
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -1170,6 +1271,18 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'app/(public)/explore/opengraph-image.tsx',
     why: "Two point-in-time citations (the read-but-not-re-rendered list, and Panel 6's section-card label) naming the file MOTIR-1150 lifted the ad-hoc M-tile's inline hexes from, at the path it had when that card drew the asset. MOTIR-3491 moved it into `app/(public)/explore/(square)/` — a metadata image file is resolved for the page in its OWN segment, so when the square's page moved into the route group that scopes its `loading.tsx`, leaving this behind silently dropped every og:image tag from /explore. The asset is history and stays as drawn; correcting it from that bug's branch would also have published the brand mark's design result onto the bug (MOTIR-3130).",
   },
+  // ── A source path this repository no longer has at all (MOTIR-4103) ───────
+  // Not a MOVE like the rows above — a deletion. `app/(public)/legal/` was the
+  // last thing left under `app/(public)`, and it went with `content/legal/`
+  // when the seven documents became motir.co's. The asset citing it is drawing
+  // the motir.co chrome and naming, for a reader comparing the two hosts, where
+  // the equivalent used to live in this repository. That sentence is about
+  // history and is still true; the directory is not coming back.
+  {
+    file: 'design/public-site/design-notes.md',
+    path: 'app/(public)/legal',
+    why: 'The chrome-comparison table names where each surface was served in motir-core before the move. MOTIR-4103 deleted `app/(public)/legal/` — and with it the whole `(public)` route group — so the citation is a point-in-time record of the host this asset exists to move those pages OFF.',
+  },
   // ── A path the design says must NEVER exist (MOTIR-3492) ──────────────────
   // The inverse of every other row here: these are not paths an asset expects
   // to find, they are the files the design forbids. A `loading.tsx` fallback
@@ -1503,6 +1616,14 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/shell/navigation-pending.mock.html',
     path: 'app/(public)/explore/(square)/loading.tsx',
     why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  // ── Forward-looking: the Public page room's page file (MOTIR-4205 → MOTIR-4171) ──
+  // The notes name the page the registry entry mounts before MOTIR-4171 creates
+  // it. Self-destructing: delete this row in the commit that adds the file.
+  {
+    file: 'design/projects/design-notes.md',
+    path: 'app/(authed)/settings/project/public/page.tsx',
+    why: 'Forward-looking: MOTIR-4171 creates the page this design (MOTIR-4205) specifies; delete the row with the file.',
   },
 ];
 
