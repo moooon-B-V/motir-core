@@ -527,6 +527,15 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'shell-context-path.spec.ts': 14.1,
   'shell-empty-projects.spec.ts': 1.8,
   'shell-flows.spec.ts': 41.1,
+  // ⚠️ AN ESTIMATE, not a measurement (MOTIR-4230) — this sandbox has no
+  // Postgres, so the spec could not be run against a production build here. It
+  // is one `signUp`, one `goto`, two appearance-radio clicks each awaited on a
+  // PATCH 200 plus a committed `<html data-*>`, and three computed-style reads.
+  // Sized against `appearance-sync.spec.ts` (7.0 — TWO sign-ups, four axis
+  // changes and two raw server-document reads) and rounded UP, for this file's
+  // standing reason: under-estimating is the direction that unbalances the
+  // bin-packer. RE-MEASURE from the first green CI run that includes it.
+  'shell-immersive-atmosphere.spec.ts': 5.0,
   'shell-keyboard.spec.ts': 0,
   'shell-viewport-floor.spec.ts': 11.4,
   'shell.spec.ts': 2.7,
