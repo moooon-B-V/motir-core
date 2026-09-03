@@ -353,6 +353,23 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
 
   // ── the contract ──────────────────────────────────────────────────────────
 
+  it('RETHROWS a real failure — a 409 is ONE refusal, not a bucket for everything', async () => {
+    // ⚠️ THE NARROWING IS THE POINT, on both verbs. This catch exists for exactly
+    // one typed refusal — the plan is not in a decidable status — and a loop
+    // branches on that 409's `planStatus` to WAIT. Collapsing any failure into it
+    // would tell an unattended run to sit patiently through an outage.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+    vi.spyOn(plansService, 'approvePlanForWorkItem').mockRejectedValueOnce(
+      new Error('the database went away'),
+    );
+
+    const res = await approve(caller, key);
+
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { code?: string }).code).not.toBe('PLAN_NOT_IN_EXPECTED_STATUS');
+  });
+
   it('is DECLARED in the operation registry, with the permission the route enforces', () => {
     const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'approveWorkItemPlan');
     expect(op).toBeDefined();
@@ -466,6 +483,27 @@ describe('GET /api/v1/work-items/{key}/plan-approval', () => {
     const body = (await res.json()) as { plan: V1Plan | null };
     expect(() => workItemPlanSchema.parse(body)).not.toThrow();
     expect(body.plan).toBeNull();
+  });
+
+  it('RETHROWS a real failure instead of laundering it into `plan: null`', async () => {
+    // ⚠️ THE ARM THAT MAKES THE NULL MEAN ANYTHING. `plan: null` is a positive
+    // claim — *nothing is anchored at this card* — and an unattended loop acts on
+    // it: it reports the agent's election and stops. If ANY error collapsed into
+    // that answer, a database blip would reach the operator as a deliberate
+    // choice their agent made — a value accepted and discarded, which is the
+    // exact failure this card exists to stop, one layer down. So the catch is
+    // narrowed to the ONE typed refusal meaning "nothing is here".
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+    vi.spyOn(plansService, 'readPlanForWorkItem').mockRejectedValueOnce(
+      new Error('the database went away'),
+    );
+
+    const res = await readPlan(caller, key);
+
+    expect(res.status).toBe(500);
+    // …and emphatically NOT the "nothing is anchored here" answer.
+    expect(await res.text()).not.toContain('"plan":null');
   });
 
   it('404s an unknown card and another tenant’s card IDENTICALLY', async () => {
