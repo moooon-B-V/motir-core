@@ -756,9 +756,9 @@ export interface paths {
         };
         /**
          * Read the plan this work item produced, without deciding it
-         * @description READ the plan a work item’s own re-plan produced — the proposals, BEFORE anybody decides on them. Resolved by exactly the walk `approveWorkItemPlan` uses (the planning conversation ANCHORED at this key → its last submitted job → that job’s plan), so what this returns is the plan that POST would approve, and there is no way to name a plan the item did not produce. ⚠️ It DECIDES NOTHING: no status moves, no proposal materializes, and the plan is left exactly where it was — a plan still `generating` comes back with the proposals that have arrived so far. It exists for an unattended loop that must BOUND what it is about to approve: `motir auto --auto-approve-replan` reads the proposals, checks that every one of them falls inside the card’s own lane, and declines to approve one that does not. Reading is `ai:view_plan`; deciding stays `ai:decide_plan`.
+         * @description READ the plan a work item’s own re-plan produced — the proposals, BEFORE anybody decides on them. Resolved by exactly the walk `approveWorkItemPlan` uses (the planning conversation ANCHORED at this key → its last submitted job → that job’s plan), so what this returns is the plan that POST would approve, and there is no way to name a plan the item did not produce. ⚠️ It DECIDES NOTHING: no status moves, no proposal materializes, and the plan is left exactly where it was — a plan still `generating` comes back with the proposals that have arrived so far. It exists for an unattended loop that must BOUND what it is about to approve: `motir auto --auto-approve-replan` reads the proposals, checks that every one of them falls inside the card’s own lane, and declines to approve one that does not. ⚠️ `plan` IS `null` WHEN NOTHING IS ANCHORED HERE, which is the ordinary state of almost every card and is an ANSWER rather than an error — it is how a caller learns that a re-plan was anchored somewhere else, at a container or at nothing. ⚠️ READING IS `project:browse`, and only DECIDING is `ai:decide_plan`: the plan inside the wrapper is exactly the document `GET /api/v1/plans/{planId}` already returns to the same audience, addressed by the card instead of by an id its caller has no way to learn. The bound worth having is on the decision, and that one is untouched.
          *
-         *     Requires the `ai:view_plan` permission.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getWorkItemPlan"];
         put?: never;
@@ -8074,7 +8074,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The plan and its proposals, in the same shape `GET /api/v1/plans/{planId}` returns. */
+            /** @description `plan` carries the plan and its proposals, in the same shape `GET /api/v1/plans/{planId}` returns — or `null` when no plan is anchored at this card. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
@@ -8090,7 +8090,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Plan"];
+                    "application/json": {
+                        plan: {
+                            id: string;
+                            /** @enum {string} */
+                            status: "generating" | "planned" | "stale" | "approved" | "declined";
+                            /** @enum {string} */
+                            origin: "user" | "cadence";
+                            title: string | null;
+                            summary: string | null;
+                            sourceJobId: string | null;
+                            proposalCount: number;
+                            createdAt: string;
+                            plannedAt: string | null;
+                            decidedAt: string | null;
+                            proposals: {
+                                id: string;
+                                /** @enum {string} */
+                                op: "add" | "modify" | "remove";
+                                workItemKey: string | null;
+                                proposedFields: {
+                                    title: string;
+                                    kind: string | null;
+                                    type: string | null;
+                                    priority: string | null;
+                                    executor: string | null;
+                                    storyPoints: number | null;
+                                    estimateMinutes: number | null;
+                                    descriptionMd: string | null;
+                                    targetRepo: string | null;
+                                } | null;
+                                patch: {
+                                    [key: string]: unknown;
+                                } | null;
+                                parentRef: string | null;
+                                parentKey: string | null;
+                                blockedByRefs: string[];
+                            }[];
+                        } | null;
+                    };
                 };
             };
             /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */
@@ -8133,25 +8171,6 @@ export interface operations {
             };
             /** @description The resource does not exist, or it is outside the workspace this token is bound to — deliberately the same answer. */
             404: {
-                headers: {
-                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
-                    "X-Request-Id"?: string;
-                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
-                    "X-Motir-Api-Version"?: string;
-                    /** @description The number of requests this token may make in the current window. */
-                    "X-RateLimit-Limit"?: string;
-                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
-                    "X-RateLimit-Remaining"?: string;
-                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. This is the value a client backs off until after a 429 — v1 sends no `Retry-After`, deliberately, because one absolute instant cannot go stale in transit the way a relative duration can. */
-                    "X-RateLimit-Reset"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
-            /** @description The request is malformed in a way the caller can fix: an invalid cursor, an out-of-range `limit`, a failed body validation. */
-            422: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
                     "X-Request-Id"?: string;

@@ -6,9 +6,10 @@ import {
   planTargetKeyResolver,
   presentPlan,
   type V1Plan,
+  type V1WorkItemPlan,
 } from '@/lib/api/v1/workLoop/schema';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
-import { PlanNotInExpectedStatusError } from '@/lib/plans/errors';
+import { NoPlanForWorkItemError, PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -130,15 +131,46 @@ export const POST = withV1Route<{ key: string }>({ permission: 'ai:decide_plan' 
 // way to reach them: the plan id came back in a sandboxed agent's tool result,
 // which the loop never sees.
 //
-// ── AND IT WIDENS NOTHING ABOUT WHAT AN AGENT CAN CAUSE ────────────────────
-// This declares `ai:view_plan` — the AUTHOR/VIEW half MOTIR-3188 split out — and
-// the POST above keeps `ai:decide_plan`. `CLI_TOKEN_GRANT` carries neither, so a
-// sandboxed agent's credential reaches this read no more than it reaches the
-// decision.
-export const GET = withV1Route<{ key: string }>({ permission: 'ai:view_plan' }, async (ctx) => {
+// ── AND IT WIDENS NOTHING, WHICH IS NOT THE SAME AS BEING NARROW ───────────
+// ⚠️ IT DECLARES `project:browse`, AND THAT WAS A CORRECTION. It first shipped in
+// review as `ai:view_plan`, on a reflex — the neighbouring POST is an AI key, so
+// the read beside it looked like one too. Two shipped facts say otherwise, and
+// they agree with each other: this API's operation→permission table answers
+// `project:browse` for EVERY GET before it consults a single path
+// (`tests/api/v1/work-item-story-gate.test.ts`), and `GET /api/v1/plans/{planId}`
+// — which returns THIS EXACT DOCUMENT, by plan id — is `project:browse` already.
+// Two doors onto one document must not disagree about who may open them.
+//
+// So the honest statement of the bound is narrower than the one the first draft
+// made, and it is the true one: **a sandboxed agent CAN read this, and always
+// could.** `CLI_TOKEN_GRANT` carries `project:browse`, and the agent that
+// submitted the plan holds its id from its own `submit_plan_session` result —
+// so `getPlan` was already open to it. Addressing the same document by CARD adds
+// no content and no audience. What an agent cannot do is DECIDE: the POST above
+// is `ai:decide_plan`, which `CLI_TOKEN_GRANT` omits and which no MCP tool
+// asserts at all. That was always the bound worth having, and it is untouched.
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const plan = await plansService.readPlanForWorkItem(projectId, identifier, ctx.service);
-  return NextResponse.json(await presentResolvedPlan(plan, ctx));
+  let plan;
+  try {
+    plan = await plansService.readPlanForWorkItem(projectId, identifier, ctx.service);
+  } catch (err) {
+    // ⚠️ NO PLAN IS AN ANSWER, AND IT IS THE COMMON ONE. Almost every card in a
+    // project has never been re-planned, so a refusal here would make the
+    // ordinary state of the tree read as a fault — and would make this the one
+    // GET on the surface that is unanswerable for most valid keys. The POST
+    // keeps its 422 because there the caller asked for something that cannot be
+    // done; a QUERY answering "none" has done exactly what was asked.
+    //
+    // The distinction is not cosmetic for the caller either: a loop reads `null`
+    // as *the agent anchored its re-plan somewhere else*, which is a lane the
+    // dispatch prompt offers and calls legitimate. That is a fact to act on, and
+    // it rides a FIELD rather than a status code so the client is not branching
+    // on prose (`public-api-conventions.md` §8).
+    if (!(err instanceof NoPlanForWorkItemError)) throw err;
+    return NextResponse.json({ plan: null } satisfies V1WorkItemPlan);
+  }
+  return NextResponse.json({ plan: await presentResolvedPlan(plan, ctx) } satisfies V1WorkItemPlan);
 });
 
 /**

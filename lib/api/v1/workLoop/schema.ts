@@ -881,6 +881,29 @@ export const planSchema = z.object({
   proposals: z.array(planProposalSchema),
 });
 
+/**
+ * The plan anchored at ONE WORK ITEM — or the honest absence of one (MOTIR-4085).
+ *
+ * ⚠️ `plan: null` IS AN ANSWER, NOT AN ERROR, and the wrapper exists to say so.
+ * The question this resource asks is *what plan is anchored at this card?*, and
+ * for almost every card in a project the true answer is *none* — nobody has
+ * re-planned it. A 4xx there would make the ordinary state of the tree read as a
+ * fault, and it would make a GET that is unanswerable for most valid keys, which
+ * nothing else on this surface is.
+ *
+ * It is also the SIGNAL a caller acts on rather than a blank. An unattended loop
+ * reads this to bound a plan before approving it; `null` tells it the agent
+ * anchored its re-plan somewhere else — at a container, or at nothing — which is
+ * a lane the prompt offers and calls legitimate. Reported as data, so the client
+ * branches on a field instead of on a status code
+ * (`public-api-conventions.md` §8).
+ */
+export const workItemPlanSchema = z.object({
+  plan: planSchema.nullable(),
+});
+
+export type V1WorkItemPlan = z.infer<typeof workItemPlanSchema>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The planning conversation (11.7.6)
 // ─────────────────────────────────────────────────────────────────────────────

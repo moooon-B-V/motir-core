@@ -1556,12 +1556,18 @@ export class MotirClient {
       parentKey: string | null;
       parentRef: string | null;
     }[];
-  }> {
+  } | null> {
     const body = await this.v1.request('getWorkItemPlan', { path: { key } });
+    // ⚠️ `null` IS AN ANSWER, and it is the one the loop acts on. Nothing is
+    // anchored at this card, which for a refused card means the agent anchored
+    // its re-plan somewhere else — at a container, or at nothing — the lane the
+    // prompt offers and calls legitimate. A FIELD rather than a status code, so
+    // this branches on data (`public-api-conventions.md` §8).
+    if (body.plan === null) return null;
     return {
-      planId: body.id,
-      status: body.status,
-      proposals: body.proposals.map((p) => ({
+      planId: body.plan.id,
+      status: body.plan.status,
+      proposals: body.plan.proposals.map((p) => ({
         op: p.op,
         workItemKey: p.workItemKey,
         parentKey: p.parentKey,

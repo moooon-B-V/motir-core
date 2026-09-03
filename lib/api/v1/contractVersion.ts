@@ -301,10 +301,13 @@
  *
  *   Additive twice over: one new operation (§8's first allowed change) and one new
  *   nullable field on an existing resource; no declared shape changed and nothing
- *   was removed. The read is gated on `ai:view_plan` and the decision stays on
- *   `ai:decide_plan`; `CLI_TOKEN_GRANT` holds NEITHER, so a sandboxed agent
- *   reaches the new door no more than it reaches the old one — the grant is not
- *   widened, and `work-item-plan-approval-route.test.ts` asserts that from the
+ *   was removed. The read is gated on `project:browse` — the key its service
+ *   asserts, and the same key `getPlan` declares for the IDENTICAL document, so
+ *   two doors onto one plan cannot disagree about who may open them — while the
+ *   DECISION stays on `ai:decide_plan`. So a sandboxed agent may read this (it
+ *   always could: it holds the plan's id from its own submit) and may not decide
+ *   it, which is the bound that was ever worth having;
+ *   `work-item-plan-approval-route.test.ts` asserts both halves from the grant
  *   constant.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, per the rule the 1.22.0 entry

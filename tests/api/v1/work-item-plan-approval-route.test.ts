@@ -18,7 +18,7 @@ import { POST as SESSION_TURN } from '@/app/api/v1/projects/[projectKey]/plan-se
 import { submitJob } from '@/lib/ai/motirAiClient';
 import { DOMAIN_ERROR_STATUS } from '@/lib/api/v1/errors';
 import { WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
-import { planSchema, type V1Plan } from '@/lib/api/v1/workLoop/schema';
+import { planSchema, workItemPlanSchema, type V1Plan } from '@/lib/api/v1/workLoop/schema';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -401,12 +401,12 @@ describe('GET /api/v1/work-items/{key}/plan-approval', () => {
     const res = await readPlan(caller, key);
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as V1Plan;
-    expect(() => planSchema.parse(body)).not.toThrow();
-    expect(body.id).toBe(planId);
-    expect(body.status).toBe('planned');
+    const body = (await res.json()) as { plan: V1Plan | null };
+    expect(() => workItemPlanSchema.parse(body)).not.toThrow();
+    expect(body.plan?.id).toBe(planId);
+    expect(body.plan?.status).toBe('planned');
     // An un-materialized `add` has no key, and that null IS the contract.
-    expect(body.proposals[0]?.workItemKey).toBeNull();
+    expect(body.plan?.proposals[0]?.workItemKey).toBeNull();
   });
 
   it('DECIDES NOTHING — the plan is exactly where it was afterwards', async () => {
@@ -433,31 +433,39 @@ describe('GET /api/v1/work-items/{key}/plan-approval', () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key } = await refusedCardWithPlan(caller, { close: false });
 
-    const body = (await (await readPlan(caller, key)).json()) as V1Plan;
-    expect(body.status).toBe('generating');
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    expect(body.plan?.status).toBe('generating');
   });
 
   it('resolves the SAME plan the approve would decide — asserted by id', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key } = await refusedCardWithPlan(caller);
 
-    const read = (await (await readPlan(caller, key)).json()) as V1Plan;
+    const read = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
     const approved = (await (await approve(caller, key)).json()) as V1Plan;
-    expect(approved.id).toBe(read.id);
+    expect(approved.id).toBe(read.plan?.id);
   });
 
-  it('REFUSES a card with no plan anchored at it — the same bound as the approve', async () => {
-    // ⚠️ THE REFUSAL IS THE ELECTION SEEN FROM THE SERVER. An agent that
-    // deliberately anchored its re-plan at a container has put the plan out of an
-    // unattended loop's reach, and the loop reports that choice rather than an
-    // error — which it can only do because the refusal is typed.
+  it('answers `plan: null` for a card with no plan anchored at it — NOT an error', async () => {
+    // ⚠️ THE COMMON CASE, AND THE REASON IT IS A 200. Almost every card in a
+    // project has never been re-planned, so a refusal would make the ordinary
+    // state of the tree read as a fault — and would make this the one GET on the
+    // surface that is unanswerable for most valid keys. The POST beside it keeps
+    // its 422, because there the caller asked for something that cannot be done;
+    // a QUERY answering "none" has done exactly what was asked.
+    //
+    // It is also the SIGNAL: an unattended loop reads `null` as *the agent
+    // anchored its re-plan somewhere else*, which is a lane the dispatch prompt
+    // offers and calls legitimate.
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const item = await makeItem(caller, 'a card whose plan is anchored elsewhere');
 
     const res = await readPlan(caller, item.identifier);
 
-    expect(res.status).toBe(422);
-    expect(((await res.json()) as { code: string }).code).toBe('NO_PLAN_FOR_WORK_ITEM');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { plan: V1Plan | null };
+    expect(() => workItemPlanSchema.parse(body)).not.toThrow();
+    expect(body.plan).toBeNull();
   });
 
   it('404s an unknown card and another tenant’s card IDENTICALLY', async () => {
@@ -480,23 +488,31 @@ describe('GET /api/v1/work-items/{key}/plan-approval', () => {
     );
   });
 
-  it('403s a token without `ai:view_plan`', async () => {
+  it('403s a token that cannot BROWSE the project', async () => {
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key } = await refusedCardWithPlan(caller);
     const narrowed = await withTokenFor(caller.fixture.owner, caller.fixture.workspace, {
       projectId: caller.fixture.projectId,
-      permissions: ['project:browse', 'work_item:edit'],
+      permissions: ['work_item:edit'],
     });
 
     expect((await readPlan({ ...caller, ...narrowed }, key)).status).toBe(403);
   });
 
-  it('a DISPATCHED AGENT’s grant cannot reach this read either', async () => {
-    // ⚠️ THE POINT OF ASSERTING IT HERE. Adding a read to an approval resource is
-    // exactly the change that could quietly hand a sandboxed agent a view of the
-    // plan pipeline. `CLI_TOKEN_GRANT` omits `ai:view_plan`, and this says so
-    // from the constant rather than from a sentence about it.
-    expect(CLI_TOKEN_GRANT).not.toContain('ai:view_plan');
+  it('a DISPATCHED AGENT CAN read it and CANNOT decide it — the bound is the decision', async () => {
+    // ⚠️ THIS ASSERTION REPLACES ONE THAT CLAIMED THE OPPOSITE, and the
+    // correction is the point rather than an embarrassment. The first draft
+    // gated this read on `ai:view_plan` and asserted a sandboxed agent could not
+    // reach it — a bound that sounded right and bought nothing: the agent that
+    // submitted the plan holds its id from its own tool result, so `get_plan`
+    // answered the identical document for it already. A gate that stops nobody
+    // is worse than no gate, because it is read as protection.
+    //
+    // So the honest pair is asserted instead, from the constant: the agent may
+    // LOOK, exactly as it always could, and may not DECIDE — which is the bound
+    // the whole design rests on, and the one no MCP tool asserts at all.
+    expect(CLI_TOKEN_GRANT).toContain('project:browse');
+    expect(CLI_TOKEN_GRANT).not.toContain('ai:decide_plan');
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key } = await refusedCardWithPlan(caller);
     const agent = await withTokenFor(caller.fixture.owner, caller.fixture.workspace, {
@@ -504,7 +520,8 @@ describe('GET /api/v1/work-items/{key}/plan-approval', () => {
       permissions: [...CLI_TOKEN_GRANT],
     });
 
-    expect((await readPlan({ ...caller, ...agent }, key)).status).toBe(403);
+    expect((await readPlan({ ...caller, ...agent }, key)).status).toBe(200);
+    expect((await approve({ ...caller, ...agent }, key)).status).toBe(403);
   });
 
   it('is DECLARED in the operation registry, with the permission the route enforces', () => {
@@ -512,12 +529,15 @@ describe('GET /api/v1/work-items/{key}/plan-approval', () => {
     expect(op).toBeDefined();
     expect(op?.method).toBe('GET');
     expect(op?.path).toBe('/api/v1/work-items/{key}/plan-approval');
-    // READING is `ai:view_plan`; DECIDING stays `ai:decide_plan` on the POST.
-    expect(op?.permission).toBe('ai:view_plan');
+    // READING is `project:browse` — the key its service asserts, the answer this
+    // API's table gives every GET, and what `getPlan` declares for the identical
+    // document. DECIDING stays `ai:decide_plan` on the POST.
+    expect(op?.permission).toBe('project:browse');
     expect(
       WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'approveWorkItemPlan')?.permission,
     ).toBe('ai:decide_plan');
-    expect(op?.errorStatuses).toEqual(expect.arrayContaining([404, 422]));
+    // NOT 422: a card with no plan is `plan: null` at 200.
+    expect(op?.errorStatuses).toEqual([404]);
   });
 });
 
@@ -542,8 +562,8 @@ describe('a proposal’s parentKey — the resolved parentRef (MOTIR-4085)', () 
     );
     await plansService.markPlanned(planId, caller.ctx);
 
-    const body = (await (await readPlan(caller, key)).json()) as V1Plan;
-    const child = body.proposals.find((p) => p.parentRef === parent.id);
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    const child = body.plan?.proposals.find((p) => p.parentRef === parent.id);
     expect(child?.parentKey).toBe(parent.identifier);
   });
 
@@ -551,9 +571,9 @@ describe('a proposal’s parentKey — the resolved parentRef (MOTIR-4085)', () 
     const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
     const { key } = await refusedCardWithPlan(caller);
 
-    const body = (await (await readPlan(caller, key)).json()) as V1Plan;
-    expect(body.proposals[0]?.parentRef).toBeNull();
-    expect(body.proposals[0]?.parentKey).toBeNull();
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    expect(body.plan?.proposals[0]?.parentRef).toBeNull();
+    expect(body.plan?.proposals[0]?.parentKey).toBeNull();
   });
 
   it('leaves parentKey NULL for an intra-plan temp ref — a proposal has no key', async () => {
@@ -579,8 +599,8 @@ describe('a proposal’s parentKey — the resolved parentRef (MOTIR-4085)', () 
     );
     await plansService.markPlanned(planId, caller.ctx);
 
-    const body = (await (await readPlan(caller, key)).json()) as V1Plan;
-    const child = body.proposals.find((p) => p.parentRef?.startsWith('planItem:'));
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    const child = body.plan?.proposals.find((p) => p.parentRef?.startsWith('planItem:'));
     expect(child).toBeDefined();
     expect(child?.parentKey).toBeNull();
   });

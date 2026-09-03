@@ -3740,6 +3740,12 @@ export const plansService = {
     workItemKey: string,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
+    // The AUTHOR key, kept exactly where it was: this method asserted
+    // `ai:view_plan` before the walk was extracted, and `approvePlan` then
+    // asserts `ai:decide_plan` on top. Moving it out of the shared walk is what
+    // lets the READ beside it be browse-gated without either caller inheriting
+    // the other's key by accident.
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
     const planId = await plansService.resolvePlanIdForWorkItem(projectId, workItemKey, ctx);
     return plansService.approvePlan(planId, ctx);
   },
@@ -3769,6 +3775,19 @@ export const plansService = {
     workItemKey: string,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
+    // ⚠️ BROWSE, NOT THE AUTHOR KEY, and the assertion is here rather than left
+    // to `getPlan` below — which asserts the same thing — so that the ANCHORING
+    // WALK cannot run for a caller who may not browse this project. Without it a
+    // stranger could tell an anchored plan from an unanchored one by which
+    // refusal came back, which is an existence leak the route's own 404 exists to
+    // prevent one layer up.
+    //
+    // ⚠️ IT WAS `ai:view_plan` IN REVIEW, AND THAT WAS WRONG. This hands back the
+    // document `getPlan` hands back, and `getPlan` is browse — so an author key
+    // here would have made one document readable through two doors with two
+    // different answers about who may open it. The key that matters is the one on
+    // `approvePlan`, and it is untouched.
+    await projectAccessService.assertCanBrowse(projectId, ctx);
     const planId = await plansService.resolvePlanIdForWorkItem(projectId, workItemKey, ctx);
     return plansService.getPlan(planId, ctx);
   },
@@ -3788,8 +3807,11 @@ export const plansService = {
     workItemKey: string,
     ctx: ServiceContext,
   ): Promise<string> {
-    await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
-
+    // ⚠️ NO PERMISSION OF ITS OWN, deliberately: this is the RESOLUTION and not
+    // an entrance. Its two callers assert different keys — browse to read,
+    // `ai:view_plan` then `ai:decide_plan` to approve — and a key baked in here
+    // would silently become the floor for both. Every caller asserts BEFORE it
+    // calls this; it is private to the two above and reachable from no route.
     const scope = buildScope([workItemKey]);
     const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planChangeSessionRepository.findByProjectAndScope(

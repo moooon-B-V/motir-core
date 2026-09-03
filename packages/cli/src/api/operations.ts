@@ -236,9 +236,9 @@ export const V1_OPERATIONS = {
   "getWorkItemPlan": {
     method: "GET",
     path: "/api/v1/work-items/{key}/plan-approval",
-    permission: "ai:view_plan",
+    permission: "project:browse",
     successStatus: 200,
-    responseComponent: "Plan",
+    responseComponent: undefined,
   },
   "listProjectRepositories": {
     method: "GET",

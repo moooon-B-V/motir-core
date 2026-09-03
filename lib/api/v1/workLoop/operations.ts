@@ -11,6 +11,7 @@ import {
   planOutcomeSchema,
   planSchema,
   planSessionSchema,
+  workItemPlanSchema,
   planSessionScopeBodySchema,
   planTurnBodySchema,
   workItemClaimSchema,
@@ -420,9 +421,20 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'comes back with the proposals that have arrived so far. It exists for an unattended ' +
       'loop that must BOUND what it is about to approve: `motir auto --auto-approve-replan` ' +
       'reads the proposals, checks that every one of them falls inside the card’s own lane, ' +
-      'and declines to approve one that does not. Reading is `ai:view_plan`; deciding stays ' +
-      '`ai:decide_plan`.',
-    permission: 'ai:view_plan',
+      'and declines to approve one that does not. ⚠️ `plan` IS `null` WHEN NOTHING IS ANCHORED ' +
+      'HERE, which is the ordinary state of almost every card and is an ANSWER rather than an ' +
+      'error — it is how a caller learns that a re-plan was anchored somewhere else, at a ' +
+      'container or at nothing. ⚠️ READING IS `project:browse`, and only DECIDING is ' +
+      '`ai:decide_plan`: the plan inside the wrapper is exactly the document ' +
+      '`GET /api/v1/plans/{planId}` already returns to the same audience, addressed by the card ' +
+      'instead of by an id its caller has no way to learn. The bound worth having is on the ' +
+      'decision, and that one is untouched.',
+    // `project:browse` — the key its service asserts (`plansService.getPlan` →
+    // `assertCanBrowse`), and the answer this API's own operation→permission
+    // table gives for EVERY GET. It is also what the plan read beside it
+    // (`getPlan`) declares, which matters more than the symmetry: two doors onto
+    // one document must not disagree about who may open it.
+    permission: 'project:browse',
     parameters: [
       {
         name: 'key',
@@ -434,13 +446,14 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     ],
     response: {
       status: 200,
-      body: { kind: 'object', schema: planSchema },
+      body: { kind: 'object', schema: workItemPlanSchema },
       description:
-        'The plan and its proposals, in the same shape `GET /api/v1/plans/{planId}` returns.',
+        '`plan` carries the plan and its proposals, in the same shape ' +
+        '`GET /api/v1/plans/{planId}` returns — or `null` when no plan is anchored at this card.',
     },
-    // 404: no such work item, or one in another tenant. 422: no plan anchored to
-    // the card — the same refusal the POST answers, because it is the same walk.
-    errorStatuses: [404, 422],
+    // 404: no such work item, or one in another tenant. NOT 422 for a card with
+    // no plan: that is `plan: null` at 200, because the question was answerable.
+    errorStatuses: [404],
   }),
 
   defineOperation({

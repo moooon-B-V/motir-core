@@ -216,9 +216,11 @@ function tenant(mode: 'per_item_pr' | 'session_lineage', keys: string[] = ['PROD
     'GET /api/v1/work-items/{key}/plan-approval': (req) => {
       const key = String(req.params['key']);
       return {
-        body: v1Plan([v1Proposal('pi_1', { op: 'modify', workItemKey: key })], {
-          id: `plan_for_${key}`,
-        }),
+        body: {
+          plan: v1Plan([v1Proposal('pi_1', { op: 'modify', workItemKey: key })], {
+            id: `plan_for_${key}`,
+          }),
+        },
       };
     },
     // MOTIR-3048 — the ATOMIC claim. Every dispatch path now takes a card
@@ -750,7 +752,7 @@ function asHandler(entry: V1Reply | ((req: V1Request) => V1Reply) | undefined) {
 function laneTenant(proposals: unknown[]): Tenant {
   const t = tenant('per_item_pr', ['PROD-7', 'PROD-8']);
   t.v1['GET /api/v1/work-items/{key}/plan-approval'] = () => ({
-    body: v1Plan(proposals, { id: 'plan_for_PROD-7' }),
+    body: { plan: v1Plan(proposals, { id: 'plan_for_PROD-7' }) },
   });
   t.v1['POST /api/v1/work-items/{key}/plan-approval'] = () => ({
     body: v1Plan(proposals, {
@@ -848,13 +850,10 @@ describe('motir auto --auto-approve-replan — THE LANE (MOTIR-4085)', () => {
     // The agent deliberately anchored at the container, so the loop's own
     // address resolves nothing — which is the normal lane, chosen on purpose.
     const t = tenant('per_item_pr', ['PROD-7', 'PROD-8']);
-    t.v1['GET /api/v1/work-items/{key}/plan-approval'] = (req) => ({
-      status: 422,
-      body: {
-        code: 'NO_PLAN_FOR_WORK_ITEM',
-        error: `No submitted plan is anchored to ${String(req.params['key'])}.`,
-      },
-    });
+    // ⚠️ `plan: null` AT 200, not a 4xx — nothing is anchored at this card
+    // because the agent anchored its re-plan at a container, which is a lane the
+    // prompt offers. The loop reads the FIELD, never a status code.
+    t.v1['GET /api/v1/work-items/{key}/plan-approval'] = () => ({ body: { plan: null } });
     server.scriptV1(t.v1);
     const { run } = gitRunner();
     const lines: string[] = [];
@@ -883,11 +882,13 @@ describe('motir auto --auto-approve-replan — THE LANE (MOTIR-4085)', () => {
     t.v1['GET /api/v1/work-items/{key}/plan-approval'] = () => {
       reads += 1;
       return reads < 3
-        ? { body: v1Plan([], { id: 'plan_for_PROD-7', status: 'generating' }) }
+        ? { body: { plan: v1Plan([], { id: 'plan_for_PROD-7', status: 'generating' }) } }
         : {
-            body: v1Plan([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-42' })], {
-              id: 'plan_for_PROD-7',
-            }),
+            body: {
+              plan: v1Plan([v1Proposal('pi_1', { op: 'modify', workItemKey: 'PROD-42' })], {
+                id: 'plan_for_PROD-7',
+              }),
+            },
           };
     };
     server.scriptV1(t.v1);

@@ -1,9 +1,4 @@
-import {
-  CliError,
-  ContainerHasOpenChildrenError,
-  NoPlanForWorkItemError,
-  PlanNotDecidableError,
-} from '../errors.js';
+import { CliError, ContainerHasOpenChildrenError, PlanNotDecidableError } from '../errors.js';
 import { info } from '../output.js';
 import { createLegLogTee } from '../agentLogTee.js';
 import { parseKinds } from './read.js';
@@ -930,45 +925,51 @@ async function decideLane(
   const waitMs = opts.waitMs ?? APPROVE_WAIT_MS;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
 
-  let plan: Awaited<ReturnType<MotirClient['readWorkItemPlan']>> | null = null;
+  let plan: NonNullable<Awaited<ReturnType<MotirClient['readWorkItemPlan']>>> | null = null;
   for (let attempt = 1; ; attempt += 1) {
     try {
       const read = await client.readWorkItemPlan(key);
+      if (read === null) {
+        // ⚠️ THE ELECTION, NOT AN ERROR. Both halves of the plan-approval
+        // resource resolve through the conversation ANCHORED at this key, so a
+        // plan the agent deliberately anchored at a container — or at nothing,
+        // when what is missing is a precondition no card names yet — is
+        // structurally out of this loop's reach. The prompt offers that lane and
+        // calls it legitimate, so the run reports the CHOICE rather than a
+        // missing plan.
+        const detail = `no plan is anchored at ${key}`;
+        return {
+          kind: 'elsewhere',
+          message: renderElsewhereAnchored(key, detail),
+          planId: null,
+          record: { key, lane: 'anchored_elsewhere', planId: null, continued: false, detail },
+        };
+      }
       if (read.status !== 'generating') {
         plan = read;
         break;
       }
       if (attempt >= attempts) {
+        // `generating` appears by NAME, not as a paraphrase: it is the plan's
+        // own status, it is what the operator will see in Motir, and it is the
+        // one word that tells "the planner has not finished" apart from "somebody
+        // already decided this". The end-to-end test pins it for that reason.
         return unreadable(
           key,
           read.planId,
-          `its plan is still being written after ${attempts} attempts — approve it in Motir once the planner finishes`,
+          `its plan is still generating after ${attempts} attempts — the planner has not finished writing it; approve it in Motir once it has`,
         );
       }
       if (attempt === 1) info(`${key}: its plan is still being written — waiting for the planner.`);
       await sleep(waitMs);
     } catch (err) {
-      // ⚠️ THE ELECTION, NOT AN ERROR. Both halves of the plan-approval resource
-      // resolve through the conversation ANCHORED at this key, so a plan the
-      // agent deliberately anchored at a container — or at nothing — answers
-      // this. The prompt offers that lane and calls it legitimate, so the run
-      // reports the choice rather than a missing plan.
-      if (err instanceof NoPlanForWorkItemError) {
-        const message = renderElsewhereAnchored(key, err.message);
-        return {
-          kind: 'elsewhere',
-          message,
-          planId: null,
-          record: {
-            key,
-            lane: 'anchored_elsewhere',
-            planId: null,
-            continued: false,
-            detail: err.message,
-          },
-        };
-      }
-      return unreadable(key, null, err instanceof Error ? err.message : String(err));
+      // A read that FAILED, which is a different thing from a read that answered
+      // "nothing is anchored here" — that answer arrives as `null` above.
+      return unreadable(
+        key,
+        null,
+        `this run could not read it: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -988,12 +989,26 @@ async function decideLane(
   };
 }
 
+/**
+ * The run could not SEE the plan it was asked to approve.
+ *
+ * ⚠️ IT SAYS "could NOT be approved", AND THAT WORDING IS A CONTRACT RATHER THAN
+ * A CHOICE. The patience for a plan that is still `generating` used to live on
+ * the approval and now lives on the READ (a lane check over a half-written plan
+ * is worse than none), so the STEP that gives up moved — and from the operator's
+ * seat nothing moved at all: the plan was not approved, the run stopped, and the
+ * reason is the planner. `tests/cli/cli-findings-story.test.ts` pins exactly
+ * those two sentences end to end, and it is right to: an internal re-routing
+ * must not change what an unattended run tells the person reading it in the
+ * morning. What the detail adds is WHY, which is new information beside an
+ * unchanged fact.
+ */
 function unreadable(key: string, planId: string | null, detail: string): LaneDecision {
   return {
     kind: 'unreadable',
     message: [
-      `${key}: this run could NOT read the re-plan it was asked to approve — ${detail}.`,
-      'Stopping rather than approving a plan it has not seen.',
+      `${key}: the re-plan could NOT be approved — ${detail}.`,
+      'Stopping rather than continuing against a tree nobody approved.',
     ].join('\n'),
     planId,
     record: { key, lane: 'unreadable', planId, continued: false, detail },
