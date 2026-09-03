@@ -56,6 +56,8 @@ import type { ExecutorDto } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { Locale } from '@/lib/i18n/locales';
 import type { QuickViewData } from '@/lib/dto/quickView';
+import type { PlanProposalPeekDto } from '@/lib/dto/planReview';
+import { ChangedMark, ProposalRailFoot } from '@/components/workItems/ProposalPeekMarks';
 import {
   QuickViewBody,
   QuickViewHeader,
@@ -104,8 +106,79 @@ type IssueQuickViewPanelProps = {
 } & (
   | { state: 'loading'; peekKey: string }
   | { state: 'notfound'; peekKey: string }
-  | { state: 'ready'; data: QuickViewData }
+  | {
+      state: 'ready';
+      data: QuickViewData;
+      /**
+       * PROPOSAL MODE (MOTIR-4184, design Part XIV) — present when this peek is
+       * reading a PLAN's proposal rather than a committed work item.
+       *
+       * ⚠️ An OPTIONAL prop on the existing `ready` variant, not a new state and
+       * not a second component. The six committed hosts — `/items`, `/ready`,
+       * `/boards`, the item page, its edit page and the roadmap canvas — pass
+       * nothing and are unchanged by its existence, which is criterion 6 and the
+       * whole reason `ProposalQuickView` can be deleted at all.
+       */
+      proposal?: PlanProposalPeekDto;
+    }
 );
+
+/**
+ * The op chip — the shipped `Pill` the list row and the canvas node already
+ * speak (`PlanProposalList.tsx`), so no fourth vocabulary for the same three
+ * facts and no new copy key (Part XIV §4).
+ *
+ * `notYetCreated` rather than `opAdd` on the `add` arm: it is the stronger
+ * statement and it is the copy that head already shipped.
+ */
+function ProposalOpChip({ op }: { op: PlanProposalPeekDto['op'] }) {
+  const t = useTranslations('planReview');
+  const label = op === 'add' ? t('notYetCreated') : op === 'remove' ? t('opRemove') : t('opModify');
+  if (op === 'add')
+    return (
+      <Pill severity="info" data-testid="quick-view-op">
+        {label}
+      </Pill>
+    );
+  if (op === 'remove')
+    return (
+      <Pill tone="archived" data-testid="quick-view-op">
+        {label}
+      </Pill>
+    );
+  return (
+    <Pill status="planned" data-testid="quick-view-op">
+      {label}
+    </Pill>
+  );
+}
+
+/**
+ * "Open the work item as it stands →" — the link out in PROPOSAL MODE.
+ *
+ * ⚠️ THE LABEL CARRIES THE TENSE, and that is the whole difference from
+ * `OpenFullPageLink` (Part XIV §7). The destination shows the work item as it
+ * IS: `app/(authed)/items/[key]/page.tsx` has no pending-plan affordance, so a
+ * reviewer reading *"PRIORITY · changed · Highest"* here lands on a page saying
+ * *"High"*, and on a rename the two tabs carry two different names for one work
+ * item. `target="_blank"` keeps this peek open behind it. The page LEARNING
+ * about the plan is MOTIR-4197; the honest label is what this card owes.
+ */
+function OpenTargetLink({ identifier }: { identifier: string }) {
+  const t = useTranslations('planReview');
+  return (
+    <Link
+      href={`/items/${identifier}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-testid="quick-view-open-full"
+      className="inline-flex h-(--height-btn-sm) shrink-0 items-center justify-center gap-1.5 rounded-(--radius-btn) bg-(--el-accent) px-3 font-sans text-xs font-medium text-(--el-accent-text) transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:outline-none"
+    >
+      {t('openTargetAsItStands')}
+      <ArrowRight className="h-[15px] w-[15px]" aria-hidden />
+    </Link>
+  );
+}
 
 /** "Open full page →" — a Next Link styled as the primary Button (size sm). */
 function OpenFullPageLink({ identifier }: { identifier: string }) {
@@ -191,7 +264,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const [showAllCustom, setShowAllCustom] = useState(false);
   // Called above the early returns — hooks cannot be conditional, so the rail's
   // edit state takes a nullable payload and is inert until the peek is `ready`.
-  const edit = useQuickViewRailEdit(props.state === 'ready' ? props.data : null, props.onEdited);
+  // PROPOSAL MODE — resolved before the early returns so the hook order is
+  // stable across states (the loading / notfound arms carry no proposal).
+  const tPlan = useTranslations('planReview');
+  const proposal = props.state === 'ready' ? (props.proposal ?? null) : null;
+  const edit = useQuickViewRailEdit(
+    props.state === 'ready' ? props.data : null,
+    props.onEdited,
+    // Suppress the editors rather than gate them: a proposal is changed by
+    // RE-PLANNING (MOTIR-3084), so a permitted actor must see no affordance.
+    proposal != null,
+  );
   // MOTIR-2566 — the SAME hooks the detail rail's Labels / Components cards use.
   // Called above the early returns (hooks cannot be conditional) and inert until
   // the peek is `ready`. `active` is this surface's own open/closed state, which
@@ -373,6 +456,31 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const ViewTypeGlyph = view.type ? WORK_ITEM_TYPE_META[view.type].icon : null;
   const ViewExecutorGlyph = view.executor ? EXECUTOR_GLYPH[view.executor] : null;
   const sprintEmptyLabel = view.statusCategory === 'done' ? t('none') : t('backlog');
+  // ── PROPOSAL MODE's two derived values (Part XIV §3) ─────────────────────
+  // The marker for one rail row, and the line that reads the SILENCE of the
+  // rest. Both are computed from the envelope the review model already carries
+  // — nothing here re-derives which fields a plan touches.
+  const changed = new Set<string>(proposal?.changedFields ?? []);
+  const markFor = (field: string) =>
+    changed.has(field) ? <ChangedMark label={tPlan('railChangedMark')} /> : undefined;
+  const railChangeCount = proposal
+    ? proposal.settableRailFields.filter((f) => changed.has(f)).length
+    : 0;
+  // Naming the DENOMINATOR is what makes the silence readable: an unmarked row
+  // means EITHER *the plan is not changing this* OR *no plan can change this*,
+  // and a marker cannot separate those without a second marker on every row.
+  const proposalFootLine = !proposal
+    ? null
+    : proposal.op === 'add'
+      ? tPlan('railAddAll')
+      : proposal.op === 'remove'
+        ? tPlan('railRemoveArchives', { key: data.identifier })
+        : railChangeCount === 0
+          ? tPlan('railChangeNone')
+          : tPlan('railChangeCount', {
+              n: railChangeCount,
+              m: proposal.settableRailFields.length,
+            });
   return (
     // MOTIR-2593 — the peek provides its OWN estimation config, from the payload.
     // Only three pages mount `EstimationConfigProvider` and none of them wraps
@@ -381,19 +489,41 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     <EstimationConfigProvider config={data.estimation} canEdit={data.estimation.canEdit}>
       <QuickViewHeader>
         <IssueTypeIcon type={data.kind} className="h-[18px] w-[18px] shrink-0" />
-        <Link
-          href={`/items/${data.identifier}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[13px] font-medium text-(--el-link) hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-        >
-          {data.identifier}
-        </Link>
-        <StatusValue
-          statusKey={data.status}
-          category={data.statusCategory}
-          label={data.statusLabel}
-        />
+        {/* WHICH work item this is. An un-materialized `add` has no key until
+            approve creates one, so it says so in the same mono slot with the
+            word the node crumb and the list row already use — an empty slot in a
+            column of keys reads as a missing value (Part XIV §4). */}
+        {proposal && proposal.identifier == null ? (
+          <span
+            data-testid="quick-view-proposal-new"
+            className="shrink-0 font-mono text-[13px] font-medium text-(--el-text-secondary)"
+          >
+            {tPlan('newItem')}
+          </span>
+        ) : (
+          <Link
+            href={`/items/${data.identifier}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 font-mono text-[13px] font-medium text-(--el-link) hover:underline focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            {data.identifier}
+          </Link>
+        )}
+        {/* WHAT THE PLAN WILL DO, in the slot `/items` puts the status in — a
+            status answers *what state is this work item in*, and on a review
+            surface the question is *what will the plan do to it* (Part XIV §4).
+            The op chip comes FIRST and the target's live status follows, so the
+            header reads *what the plan does* → *where it is now*. An `add` has
+            no status at all, so the two never crowd. */}
+        {proposal ? <ProposalOpChip op={proposal.op} /> : null}
+        {proposal && proposal.identifier == null ? null : (
+          <StatusValue
+            statusKey={data.status}
+            category={data.statusCategory}
+            label={data.statusLabel}
+          />
+        )}
         {/* MOTIR-2050: the "Archived" chip, mirroring the detail page's eyebrow
           chip (2.9.6) — the archived state stays legible after the main column
           (which scrolls independently) is scrolled past the notice below. Neutral
@@ -418,17 +548,33 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           the actor's capability, the archived flag (MOTIR-2050), the status
           CATEGORY, and the kind + children/description the face is picked from —
           all already in the payload. */}
-        <WorkItemPlanEntrance
-          itemKey={data.identifier}
-          hasChildren={data.hasChildren}
-          kind={data.kind}
-          hasDescription={(data.descriptionMd ?? '').trim().length > 0}
-          canPlan={data.canPlan}
-          archived={data.archived != null}
-          statusCategory={data.statusCategory}
-          onActivate={props.onClose}
-        />
-        <OpenFullPageLink identifier={data.identifier} />
+        {/* The Plan / Re-plan entrance opens a planning conversation ON a work
+            item. A proposal is already the output of one, and its target is
+            being re-planned right now — two plans open on one work item is the
+            state this suppresses (Part XIV §5). */}
+        {proposal ? null : (
+          <WorkItemPlanEntrance
+            itemKey={data.identifier}
+            hasChildren={data.hasChildren}
+            kind={data.kind}
+            hasDescription={(data.descriptionMd ?? '').trim().length > 0}
+            canPlan={data.canPlan}
+            archived={data.archived != null}
+            statusCategory={data.statusCategory}
+            onActivate={props.onClose}
+          />
+        )}
+        {/* ABSENT for an un-materialized `add` — there is no route, and a
+            control that navigates nowhere is worse than no control. Present for
+            a `modify` / `remove`, whose target HAS a page and is the only door
+            to the delivery, comments and children this mode suppresses — and
+            LABELLED for the tense, because that page shows the work item as it
+            stands, not as the plan will leave it (Part XIV §7). */}
+        {proposal && proposal.identifier == null ? null : proposal ? (
+          <OpenTargetLink identifier={data.identifier} />
+        ) : (
+          <OpenFullPageLink identifier={data.identifier} />
+        )}
         <QuickViewCloseButton variant="icon" onClose={props.onClose} />
       </QuickViewHeader>
 
@@ -467,7 +613,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               detail page's RelationshipsPanel uses). Each named blocker opens its DETAIL page in
               a NEW TAB (8.8.32 — overrides the 2.5.20 peek-swap), matching the
               new-tab treatment the other quick-view detail links got in 8.8.31. */}
-          {data.readiness &&
+          {/* Readiness answers *can I start this?*, which is moot for something
+              nobody has approved. A proposal's dependency story is the canvas's
+              arrows (Part IX), not this banner (Part XIV §5). */}
+          {!proposal &&
+          data.readiness &&
           showsReadiness({
             statusCategory: data.statusCategory,
             archived: data.archived != null,
@@ -503,48 +653,90 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           ) : (
             <p className="text-sm text-(--el-text-secondary) italic">{t('noDescription')}</p>
           )}
+          {/* THE EXPLANATION, INLINE (Part XIV §6). The shipped peek defers it
+              to the full page; a proposal has no page, and deferring to a thing
+              that does not exist is precisely how `explanationMd` came to be
+              carried, diffed and materialized while nothing displayed it
+              (MOTIR-4134). It scrolls with the description in the main column's
+              own scroller — no clamp, because a clamp needs a destination for
+              the rest and an `add` has none. */}
+          {proposal ? (
+            <>
+              <span className="mt-6 mb-2 block text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+                {tPlan('sectionExplanation')}
+              </span>
+              {data.explanationMd ? (
+                <MarkdownView
+                  value={data.explanationMd}
+                  aria-label={t('issueExplanationAria')}
+                  workItemRefs={data.workItemRefs}
+                />
+              ) : (
+                <p className="text-sm text-(--el-text-secondary) italic">
+                  {tPlan('noExplanation')}
+                </p>
+              )}
+            </>
+          ) : null}
           {/* Development — linked PRs + PR/CI state (Story 7.10 · MOTIR-1579,
               design/github Panels 3 + 4a). Display-only here (the peek's one
               write path stays "Open full page"); the explicit-link affordance
               lives on the detail page (MOTIR-1596, design Panel 5). */}
-          <DevelopmentSection
-            className="mt-6"
-            pullRequests={data.pullRequests}
-            itemIdentifier={data.identifier}
-            // The DELIVERY SET (MOTIR-3660) — the same list the detail page
-            // draws from, so the `Not on trunk` pill and any row the singular
-            // column could not name appear on both surfaces or on neither.
-            deliveries={data.deliveries ?? []}
-            // MOTIR-2415 added this row behind a prop and left the peek's
-            // default empty so its output could not move by accident. This is
-            // the card that turns it on — by DECISION, and the design (2414 Q2)
-            // keeps the same treatment here rather than a reduced second one.
-            // The set goes over VERBATIM: the peek filtering its own copy is
-            // what made it say "No pull request yet" about a repository whose
-            // pull request was on the row above (MOTIR-3036).
-            repoDelivery={data.repoDelivery ?? []}
-          />
-          <p className="mt-6 flex items-center gap-1.5 border-t border-(--el-border-soft) pt-4 text-[13px] text-(--el-text-muted)">
-            {t.rich('quickViewMore', {
-              link: (chunks) => (
-                <Link
-                  href={`/items/${data.identifier}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-(--el-link) hover:underline"
-                >
-                  {chunks}
-                </Link>
-              ),
-            })}
-          </p>
+          {proposal ? null : (
+            <DevelopmentSection
+              className="mt-6"
+              pullRequests={data.pullRequests}
+              itemIdentifier={data.identifier}
+              // The DELIVERY SET (MOTIR-3660) — the same list the detail page
+              // draws from, so the `Not on trunk` pill and any row the singular
+              // column could not name appear on both surfaces or on neither.
+              deliveries={data.deliveries ?? []}
+              // MOTIR-2415 added this row behind a prop and left the peek's
+              // default empty so its output could not move by accident. This is
+              // the card that turns it on — by DECISION, and the design (2414 Q2)
+              // keeps the same treatment here rather than a reduced second one.
+              // The set goes over VERBATIM: the peek filtering its own copy is
+              // what made it say "No pull request yet" about a repository whose
+              // pull request was on the row above (MOTIR-3036).
+              repoDelivery={data.repoDelivery ?? []}
+            />
+          )}
+          {/* The shipped line — *"Explanation, relationships, attachments and
+              the activity feed live on the full page"* — is wrong TWICE in
+              proposal mode: the explanation is right here, and an `add` has no
+              full page. It is REPLACED, not kept (Part XIV §6). */}
+          {proposal ? (
+            <p
+              data-testid="quick-view-proposal-more"
+              className="mt-6 flex items-center gap-1.5 border-t border-(--el-border-soft) pt-4 text-[13px] text-(--el-text-secondary)"
+            >
+              {tPlan('peekNoActivity')}
+            </p>
+          ) : (
+            <p className="mt-6 flex items-center gap-1.5 border-t border-(--el-border-soft) pt-4 text-[13px] text-(--el-text-muted)">
+              {t.rich('quickViewMore', {
+                link: (chunks) => (
+                  <Link
+                    href={`/items/${data.identifier}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-(--el-link) hover:underline"
+                  >
+                    {chunks}
+                  </Link>
+                ),
+              })}
+            </p>
+          )}
         </QuickViewMain>
 
         {/* Rail — the detail page's FULL core-field set (8.8.8), condensed and
             read-only, in detail.png order. The rail scrolls independently inside
             the fixed-height modal; built-in fields always render (muted "None"
             when empty), custom fields split valued / "Show more". */}
-        <QuickViewRail>
+        <QuickViewRail
+          foot={proposal ? <ProposalRailFoot>{proposalFootLine}</ProposalRailFoot> : undefined}
+        >
           {/* Not a field error — the whole payload is behind, so the notice sits
               ABOVE rows that may all have moved (design panel 9). */}
           {edit.stale ? <RailStaleNotice /> : null}
@@ -602,7 +794,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               READ-ONLY here, exactly as on the detail rail: the design chose an
               editable bounded picker for BOTH surfaces, and it ships once, as
               the shared control, rather than twice. */}
-          <QuickViewRailField label={t('repositories')}>
+          <QuickViewRailField label={t('repositories')} marker={markFor('targetRepo')}>
             {/* `?? []` at the DESERIALIZATION boundary, not as blanket
                 defensiveness: this payload arrives over HTTP from
                 `/api/work-items/peek`, and a server that predates MOTIR-2416
@@ -625,6 +817,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <EditableRailField
                 label={t('type')}
                 fieldKey="workItemType"
+                marker={markFor('type')}
                 edit={edit}
                 control={
                   <WorkItemTypePicker
@@ -681,6 +874,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           <EditableRailField
             label={t('priority')}
             fieldKey="priority"
+            marker={markFor('priority')}
             edit={edit}
             control={
               <PriorityPicker
@@ -723,6 +917,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           <EditableRailField
             label={t('parent')}
             fieldKey="parent"
+            marker={markFor('parent')}
             edit={edit}
             control={
               <ParentPicker
@@ -944,7 +1139,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               `PATCH /api/work-items/[id]/estimate` and the project's configured
               scale deck — never a free-text number, which could hold a value the
               scale does not contain. */}
-          <QuickViewRailField label={t('storyPoints')}>
+          <QuickViewRailField label={t('storyPoints')} marker={markFor('storyPoints')}>
             <EstimateBadge
               itemId={view.id}
               storyPoints={view.storyPoints}
@@ -956,6 +1151,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           <EditableRailField
             label={t('estimate')}
             fieldKey="estimate"
+            marker={markFor('estimateMinutes')}
             edit={edit}
             control={
               <Input
@@ -1043,16 +1239,23 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             </>
           ) : null}
 
-          {/* Created / Updated — the quiet audit line at the foot. */}
-          <div className="-mx-1 my-1 h-px bg-(--el-border-soft)" />
-          <div className="flex flex-col gap-1 font-sans text-xs text-(--el-text-secondary)">
-            <span>
-              {t('created')} {formatDate(data.createdAt, locale)}
-            </span>
-            <span>
-              {t('updated')} {formatDate(data.updatedAt, locale)}
-            </span>
-          </div>
+          {/* Created / Updated — the quiet audit line at the foot.
+              REPLACED in proposal mode by the pinned count line: these are
+              instants of the PLAN ROW, not of the work item, and the plan's own
+              timeline carries them better (Part XIV §5). */}
+          {proposal ? null : (
+            <>
+              <div className="-mx-1 my-1 h-px bg-(--el-border-soft)" />
+              <div className="flex flex-col gap-1 font-sans text-xs text-(--el-text-secondary)">
+                <span>
+                  {t('created')} {formatDate(data.createdAt, locale)}
+                </span>
+                <span>
+                  {t('updated')} {formatDate(data.updatedAt, locale)}
+                </span>
+              </div>
+            </>
+          )}
         </QuickViewRail>
       </QuickViewBody>
     </EstimationConfigProvider>

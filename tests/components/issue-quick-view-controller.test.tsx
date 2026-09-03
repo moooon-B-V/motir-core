@@ -40,6 +40,7 @@ const DATA: QuickViewData = {
   statusLabel: 'In Progress',
   statusCategory: 'in_progress',
   descriptionMd: 'Sign in with email and password.',
+  explanationMd: null,
   type: null,
   executor: null,
   assigneeName: 'Marco Ortiz',

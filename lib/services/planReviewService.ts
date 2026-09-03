@@ -24,6 +24,7 @@ import type {
   StaleReason,
 } from '@/lib/dto/plans';
 import type { PlanRevision } from '@/generated/prisma/client';
+import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type {
   PlanHistoryEventDto,
   PlanItemChangeDto,
@@ -671,6 +672,10 @@ export const planReviewService = {
       const proposed = item.proposedFields as PlanItemProposedFields | null;
 
       const targetMissing = item.op !== 'add' && !target;
+      // ONE computation of the diff, read twice: `changes` is the list row's
+      // old→new overlay and `proposal.changedFields` is its key set. Computing
+      // them separately is the drift this card exists to make impossible.
+      const changes = item.op === 'modify' ? buildChanges(item.patch, target, nameParent) : [];
 
       // The COMMITTED parent, when there is one. Two sources now (MOTIR-3191):
       // a `parentRef` naming a real work item — an `add`, saying where it wants
@@ -814,12 +819,32 @@ export const planReviewService = {
         statusLabel: statusByKey.get(target?.status ?? '')?.label ?? null,
         statusCategory: statusByKey.get(target?.status ?? '')?.category ?? null,
         hasChildren: childParentIds.has(nodeId),
-        changes: item.op === 'modify' ? buildChanges(item.patch, target, nameParent) : [],
+        changes,
         // A RECENCY fact, not a second reading of `op` (Part XII §E).
         revised: revisedItemIds.has(item.id),
         stale: reasons.length > 0,
         staleReasons: reasons,
         targetMissing,
+        // WHAT ONLY A PROPOSAL HAS (MOTIR-4183, design Part XIV §2 as amended).
+        //
+        // ⚠️ `changedFields` is the key set of the SAME `changes` array three
+        // lines up — not a second comparison. A marker computed from its own
+        // diff would be right the day it shipped and would drift the first time
+        // a field was added to only one of them, invisibly, because each surface
+        // would stay self-consistent. One source is the criterion (AC 4), and
+        // reading it off `changes` is how that is guaranteed rather than tested.
+        //
+        // ⚠️ NO PAYLOAD IS MERGED IN HERE. A `modify` / `remove` names a real
+        // work item and the shipped peek is already client-fetched by key from
+        // both hosts, so the overlay happens ON OPEN. Merging here would mean
+        // `getQuickView` — ~14 reads — once per proposal, on a read whose header
+        // advertises ONE batched target read and no N+1.
+        proposal: {
+          op: item.op,
+          identifier: target?.identifier ?? null,
+          changedFields: changes.map((c) => c.field as PlanItemChangeField),
+          settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+        },
       };
     });
 
