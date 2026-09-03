@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MUTED_TOKEN } from './theme/inkContrastMockScan';
+import { contrast } from './theme/colorMetrics';
 import {
   AA_SMALL_TEXT,
   STATE_PSEUDO_CLASSES,
@@ -207,6 +208,115 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
     ).findings;
     expect(found).toHaveLength(1);
     expect(found[0]!.surface).toBe('#ebebeb');
+  });
+
+  it('composites a TRANSLUCENT ANCESTOR into the ground, rather than walking past it', () => {
+    // MOTIR-4317, the shape verbatim: white chrome inside a lightbox whose
+    // 80%-black scrim sits on the board's own light page. `restingBackground`
+    // walked THROUGH the scrim — `toHex` returns null for any alpha under 1,
+    // and the walk read that as *this element paints nothing* — so the ground
+    // was the page the scrim hides, and the hover tint composited over THAT.
+    //
+    // ⚠️ The white ink is the element the defect was measured on and it is not
+    // the one that can READ the surface: correctly grounded it clears AA, and a
+    // passing pair produces no finding to assert against. So the button carries
+    // a muted-token label as well — the same pixels, the same host, and the arm
+    // rules on it — and the white ink is then checked against the surface the
+    // scanner itself resolved.
+    const found = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #f6f5f4; }` +
+        `.lightbox { background: rgba(0, 0, 0, 0.8); }` +
+        `.lb-btn { color: #ffffff; }` +
+        `.lb-btn:hover { background: rgba(255, 255, 255, 0.2); }` +
+        `.lb-name { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="lightbox">` +
+        `<button class="lb-btn">Download<span class="lb-name">report-v2.pdf</span></button>` +
+        `</div></body></html>`,
+    ).findings;
+
+    expect(found).toHaveLength(1);
+    // 0.8 x #000 over #f6f5f4 = #313131 — the scrim's real pixels. Pre-fix this
+    // read #f6f5f4, the page the scrim covers.
+    expect(found[0]!.restingSurface).toBe('#313131');
+    // and the hover tint over THAT ground, not over the page: pre-fix #f8f7f6.
+    expect(found[0]!.surface).toBe('#5a5a5a');
+    // The number the card was filed on. Against the pre-fix #f8f7f6 the same
+    // white measured 1.07:1 — 6.4x wrong, in the direction that manufactures a
+    // finding.
+    expect(Number(contrast('#ffffff', found[0]!.surface).toFixed(2))).toBe(6.9);
+    expect(contrast('#ffffff', found[0]!.surface)).toBeGreaterThanOrEqual(AA_SMALL_TEXT);
+  });
+
+  it('folds a STACK of translucent ancestors, in paint order', () => {
+    // Two scrims over one page. The fold has to run bottom-up — the layer
+    // nearest the ground is painted first — and a walk that stops at the first
+    // translucent layer, or folds them the other way round, gets a different
+    // colour rather than an error.
+    const found = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #ffffff; }` +
+        `.outer { background: rgba(0, 0, 0, 0.5); }` +
+        `.inner { background: rgba(0, 0, 0, 0.5); }` +
+        `.row:hover { background: rgba(255, 255, 255, 0.2); }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="outer"><div class="inner">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></div></body></html>`,
+    ).findings;
+
+    // #ffffff -> 0.5 black -> #808080 -> 0.5 black -> #404040.
+    expect(found.map((f) => f.restingSurface)).toEqual(['#404040']);
+  });
+
+  it('still ABSTAINS where the chain is translucent all the way to the document', () => {
+    // AC 3, and the half the fix must NOT change: with no opaque ground
+    // anywhere above the element there is nothing to composite over, and the
+    // honest answer is still nothing. A fabricated ground here would be the
+    // same defect wearing the fix.
+    const scanned = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `.scrim { background: rgba(0, 0, 0, 0.8); }` +
+        `.row:hover { background: rgba(255, 255, 255, 0.2); }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="scrim">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></body></html>`,
+    );
+    expect(scanned.findings).toEqual([]);
+    expect(scanned.abstentions.map((a) => a.reason)).toEqual([
+      'the state background "rgba(255, 255, 255, 0.2)" resolved to "rgba(255, 255, 255, 0.2)", ' +
+        'which is translucent over no opaque ground',
+    ]);
+  });
+
+  it('reports a NULL control where only the CONTROL is ungrounded', () => {
+    // The same ungrounded chain under an OPAQUE state tint. The surface is
+    // knowable, so the pair is ruled on — and `restingSurface` is null, which
+    // is what `formatStateInkFinding` renders as *nothing opaque grounds it at
+    // rest*. That sentence has to stay reachable: it is the one honest answer
+    // when the ground is unknown, and it is the thing a fabricated ground would
+    // replace.
+    const found = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; --el-surface: #f6f5f4; }` +
+        `.scrim { background: rgba(0, 0, 0, 0.8); }` +
+        `.row:hover { background: var(--el-surface); }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="scrim">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></body></html>`,
+    ).findings;
+    expect(found.map((f) => [f.surface, f.restingSurface, f.restingRatio])).toEqual([
+      ['#f6f5f4', null, null],
+    ]);
   });
 
   it('treats `background: transparent` as a resolved answer, not an abstention', () => {

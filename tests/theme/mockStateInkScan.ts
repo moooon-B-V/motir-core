@@ -93,6 +93,33 @@ import { MUTED_TOKEN, parseElements } from './inkContrastMockScan';
 //     would mean deciding, per attribute, which it is — which is a judgement,
 //     not a measurement.
 //
+// ── The GROUND is composited, not the nearest opaque thing (MOTIR-4317) ─────
+// Two colours in this file carry an alpha and only one of them used to be
+// measured. A state rule's own translucent tint was composited over the ground
+// beneath it, deliberately and with its reason written on `composite`. An
+// ANCESTOR's translucent background was not: `restingBackground` asked `toHex`,
+// which refuses any alpha under 1, and read that refusal as *this element
+// paints nothing* — so the walk continued past a modal scrim, a frosted panel
+// or a glass `data-surface` to the page underneath. The asymmetry was the whole
+// bug: one translucent layer was composited because the code reached it through
+// `composite`, the other was dropped because the code reached it through
+// `toHex`.
+//
+// It reached both readers of that walk — the state SURFACE a finding is
+// measured against, and `restingSurface` / `restingRatio`, the CONTROL that
+// says whether a pair already fails at rest (the resting arm's finding, a
+// duplicate) or only under the tint (this arm's discovery). A control measured
+// against a ground the walk never composited is arbitrary in the REASSURING
+// direction: it reads *fine at rest*, which makes every finding look like a
+// discovery. Measured on the shape it was found in, a lightbox's white chrome
+// inside an 80%-black scrim read 1.07:1 where it is 6.90:1.
+//
+// `restingBackground` now folds the translucent stack over the first opaque
+// ground with the same `composite`. `toHex` keeps its alpha refusal — it is
+// what TELLS the walk a layer is translucent — and the subtree walk's opaque-only
+// question is unchanged, because a translucent element background correctly does
+// NOT re-ground the subtree beneath it.
+//
 // ── The SECOND boundary is GONE, with its subject (MOTIR-4277) ──────────────
 // This file shipped a second decline and a second counter, `unTokenisedInkCount`:
 // ink that names NO `--el-*` token at all — a raw hex, or a local `:root` alias
@@ -242,6 +269,20 @@ function alphaOf(raw: string): number {
 }
 
 /**
+ * The alpha carried by a resolved colour, for the one question its callers ask:
+ * does this paint any pixels at all? A form that declares no alpha reads 1,
+ * which is every opaque spelling — and also every form this file cannot parse,
+ * where the answer is *something is painted here* and how much is decided
+ * downstream (`restingBackground` abstains rather than guessing).
+ */
+function alphaIn(value: string): number {
+  const rgba = /^rgba?\(\s*[\d.]+[\s,]+[\d.]+[\s,]+[\d.]+\s*[,/]\s*([\d.]+%?)\s*\)$/i.exec(
+    value.trim(),
+  );
+  return rgba ? alphaOf(rgba[1]!) : 1;
+}
+
+/**
  * Composite a possibly-translucent colour over an opaque ground, or return it
  * unchanged when it is already opaque.
  *
@@ -341,20 +382,119 @@ function resolveAt(window: Window, host: El, value: string): string | null {
   return toHex(resolved) === SENTINEL ? null : resolved;
 }
 
-/** The element's own painted background, or null when it paints none. */
-function ownBackground(window: Window, element: El): string | null {
+/**
+ * The spellings this engine hands back for *no background COLOUR is painted
+ * here*. Enumerated by MEASUREMENT over the asset tree, not assumed:
+ * `background: none` computes to `"none"`, and a `background:` shorthand
+ * carrying only a gradient computes to `"initial"` — the shorthand set no
+ * colour, and `background-color` is the only half this walk reads. The
+ * remaining CSS-wide keywords are the same answer in the same position.
+ *
+ * ⚠️ The pre-MOTIR-4317 walk got all of these right BY ACCIDENT. It asked
+ * `toHex`, which refuses everything it cannot parse, so *paints no colour* and
+ * *paints a translucent colour* arrived as one indistinguishable null — and
+ * skipping was the correct handling of one of them. Compositing the translucent
+ * layers makes the two answers different for the first time, which is why this
+ * set has to be written down rather than left to a parse failure.
+ */
+const PAINTS_NO_COLOUR = new Set([
+  'transparent',
+  'none',
+  'initial',
+  'unset',
+  'revert',
+  'revert-layer',
+]);
+
+/**
+ * The background an element paints ITSELF, verbatim, or null when it paints
+ * nothing at all — no declaration, one of the spellings above, or a zero-alpha
+ * colour, which are all one answer.
+ *
+ * ⚠️ This does NOT decide whether the colour is opaque. That is the caller's
+ * question and the two callers want opposite things from it — see
+ * `ownBackground` and `restingBackground` directly below.
+ */
+function paintedBackground(window: Window, element: El): string | null {
   const value = window.getComputedStyle(element).getPropertyValue('background-color').trim();
-  if (!value || value === 'transparent') return null;
-  return toHex(value);
+  if (!value || PAINTS_NO_COLOUR.has(value.toLowerCase())) return null;
+  return alphaIn(value) <= 0 ? null : value;
 }
 
-/** The opaque surface an element sits on at REST — the nearest painted ancestor. */
+/**
+ * The element's own OPAQUE background, or null when it paints none or paints a
+ * translucent one.
+ *
+ * The subtree walk in `scanMockStateInk` is the caller this shape is for: an
+ * element painting an opaque background RE-GROUNDS everything beneath it, so
+ * the state tint above does not reach that subtree; a translucent one neither
+ * re-grounds it nor stops the tint reaching it, and reading null for that case
+ * is correct there.
+ */
+function ownBackground(window: Window, element: El): string | null {
+  const value = paintedBackground(window, element);
+  return value === null ? null : toHex(value);
+}
+
+/**
+ * The surface an element sits on at REST — the nearest OPAQUE ancestor, with
+ * every TRANSLUCENT layer between the element and that ground composited back
+ * over it, in paint order.
+ *
+ * ⚠️ MOTIR-4317 — the walk used to STOP being interested in a translucent
+ * ancestor rather than composite it, because it asked `toHex`, which returns
+ * null for any alpha under 1. So a modal scrim, a frosted panel or a glass
+ * `data-surface` was read as painting NOTHING, and the ground came back as the
+ * page it covers. Measured: a lightbox's white chrome inside an 80%-black scrim
+ * reported 1.07:1 against the board's light page, where it is 6.90:1 — 6.4x
+ * wrong, in the direction that manufactures a finding.
+ *
+ * The asymmetry was the bug, and `composite`'s own header had already settled
+ * the principle for the other half: *"a hover tint written `rgba(0, 0, 0, 0.08)`
+ * paints REAL pixels, and declining to measure it because it carries an alpha
+ * would be an abstention with no warrant."* That is as true of an ancestor's
+ * background as of a state rule's. `toHex` keeps its alpha refusal — it is what
+ * TELLS this walk a layer is translucent — and this is the one place that knows
+ * what to do with the answer.
+ *
+ * Where the chain reaches the document with no opaque ground anywhere, there is
+ * nothing to composite over and the honest answer is still null; both callers
+ * already handle it (an abstention naming the site, and the CONTROL's *nothing
+ * opaque grounds it at rest*). A layer this cannot READ takes the same answer,
+ * and that is the one branch with no site in the tree today: an unknown ground
+ * is not a ground to claim, and skipping such a layer would be this very defect
+ * one colour form further out.
+ *
+ * ⚠️ Those two nulls are DIFFERENT ANSWERS sharing one return value, and the
+ * caller's abstention says *translucent over no opaque ground* for both. There
+ * is no site in the tree that reaches the second one, which is why it is a note
+ * rather than a second return shape — but `toHex` reads neither an 8-digit
+ * `#rrggbbaa` nor `currentcolor`, and both appear on real assets, so a state
+ * rule written near one will get the wrong reason before it gets a wrong
+ * number. MOTIR-4342 carries that gap; it is a `toHex` parser widening, not a
+ * grounding one.
+ */
 function restingBackground(window: Window, element: El): string | null {
+  const layers: string[] = []; // translucent, nearest the element first
+  let ground: string | null = null;
   for (let node: El | null = element; node; node = node.parentElement as El | null) {
-    const own = ownBackground(window, node);
-    if (own) return own;
+    const value = paintedBackground(window, node);
+    if (value === null) continue;
+    const opaque = toHex(value);
+    if (opaque !== null) {
+      ground = opaque;
+      break;
+    }
+    layers.push(value);
   }
-  return null;
+  if (ground === null) return null;
+  // Bottom up: the layer nearest the ground is painted first, and folding the
+  // other way round produces a different colour rather than an error.
+  for (let index = layers.length - 1; index >= 0; index -= 1) {
+    ground = composite(layers[index]!, ground);
+    if (ground === null) return null;
+  }
+  return ground;
 }
 
 /** The two 1.4.3 grants, read exactly as the resting scanner reads them. */
