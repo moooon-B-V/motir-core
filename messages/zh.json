@@ -2271,9 +2271,9 @@
       "copyError": "无法复制链接。",
       "linkNote": "任何人都可以无需登录打开此链接，页面也可被搜索引擎抓取。访客仅在提交、点赞或评论时才需要登录。若要停止分享，请将上方的访问级别设为“公开构建”以外的任意级别。",
       "heroOverviewHeading": "横幅与概览",
-      "heroOverviewSubheading": "直接在公开页面上编辑标语、标签和 README——你编辑的内容就是访客看到的内容。",
-      "editOnPublicPage": "在公开页面上编辑",
-      "heroOverviewNote": "在公开“概览”页打开页内编辑器。项目未公开时将隐藏。"
+      "heroOverviewSubheading": "访客在你的公开页面上看到的标语、标签和 README。",
+      "editOnPublicPage": "编辑公开页面",
+      "heroOverviewNote": "打开“设置 › 公开页面”。项目公开前也可以先写好。"
     },
     "jobs": {
       "title": "任务运行",
