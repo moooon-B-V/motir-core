@@ -233,13 +233,32 @@ name: Acceptance tests
 # Read together: a change to what the specs LOOK AT does not run the lane (run it
 # yourself, per the bullet above); a change to the MACHINERY does.
 on:
+  # ⚠️ NO `paths:` HERE ANY MORE, AND THAT IS THE POINT (MOTIR-4257).
+  # The filter did not disappear — it MOVED, verbatim, into the `membership` gate
+  # below, which now answers the same question for `pull_request` that it already
+  # answered for `push`. The heavy jobs are gated exactly as before; what changed
+  # is that the workflow is TRIGGERED on every PR, so `Acceptance complete`
+  # REPORTS on every PR.
+  #
+  # It has to. GitHub's merge queue admits a pull request only once the branch's
+  # required checks have passed ON THE PULL REQUEST — the queue is what it enters
+  # afterwards, not a way around that gate. A `paths:`-filtered workflow does not
+  # run at all on a PR that matches nothing, so its context never reports, and a
+  # required context that never reports is not a gate that passes: it is a PR
+  # that can never be merged. Requiring `Acceptance complete` while this filter
+  # stood here would have bricked every PR in the repo that does not happen to
+  # touch an acceptance file — which is nearly all of them.
+  #
+  # ⚠️ THIS REVERSES MOTIR-1949, KNOWINGLY. That card removed the greyed
+  # `Skipped` check from PRs with no spec, and the section below still records
+  # why the separate file was the only mechanism that could. The property is now
+  # GIVEN UP: on a PR that touches none of the paths listed in the gate, this
+  # lane shows a skipped `Next.js build (acceptance)`, a skipped
+  # `Playwright E2E (acceptance)` and a green `Acceptance complete`. That is a
+  # cosmetic cost, and it buys the thing MOTIR-4257 is about — `main` cannot go
+  # red through a merge nobody checked. A tidy checks list is worth less than a
+  # trunk that is green, so when the two conflict the checks list loses.
   pull_request:
-    paths:
-      - 'tests/e2e/acceptance*.spec.ts'
-      - '.github/workflows/acceptance-tests.yml'
-      - 'playwright.acceptance.config.ts'
-      - 'tests/e2e/_helpers/acceptance-video.ts'
-      - 'tests/e2e/_helpers/acceptance-diagnostics.ts'
   # The MAIN BASELINE (MOTIR-2760). Deliberately NOT `paths:`-filtered: while the
   # lane holds a spec, ANY merge could be the one that breaks it, and which
   # sources it reads is precisely what the filter cannot know. The `membership`
@@ -331,18 +350,33 @@ jobs:
   # merge instead of the 18 machine-minutes the full fan-out costs to run zero
   # tests (measured: run 31740853229).
   #
-  # ⚠️ On `pull_request` this is unconditionally `true`, and that is not a
-  # shortcut. The `paths:` filter has ALREADY decided that a triggered PR run
-  # should happen, and MOTIR-2600 deliberately wants a PR that only restructures
-  # the lane to run against an empty membership. Returning anything but `true`
-  # here would reintroduce the greyed skipping check MOTIR-1949 removed.
-  # The gate exists for `push`, where no filter has spoken and no PR is watching.
+  # ⚠️ ON `pull_request` THIS JOB NOW OWNS THE PATHS DECISION (MOTIR-4257).
+  # It used to return `true` unconditionally, because the `on: paths:` filter had
+  # already decided. That filter is gone — see the long note on the trigger — so
+  # the decision it made is made HERE instead, against the same five paths, and
+  # the heavy jobs downstream are gated exactly as they were. What is no longer
+  # true is the second half of the old note: this DOES return `false` sometimes
+  # on a PR, and that does reintroduce the greyed `Skipped` check MOTIR-1949
+  # removed. Deliberate, and argued on the trigger.
+  #
+  # MOTIR-2600's intent is preserved exactly: a PR that only restructures the
+  # lane matches `.github/workflows/acceptance-tests.yml` or the config, so it
+  # still runs against whatever membership it leaves behind, empty or not.
+  #
+  # `merge_group` and `push` are untouched and fall through to the membership
+  # count: in the queue the lane runs whenever it holds a spec, with no paths
+  # filter anywhere near it, which is the whole gate MOTIR-4257 adds.
   membership:
     name: Does the lane hold a spec?
     runs-on: ubuntu-latest
     # Observed 0.3–0.6 min → 10 (~17x, the short-job floor). It only reads
     # the changed-file list and decides whether the lane holds a spec.
     timeout-minutes: 10
+    # Reads the PR's changed-file list through the API (`pull-requests: read`);
+    # everything else this lane does needs nothing.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       run: ${{ steps.gate.outputs.run }}
       count: ${{ steps.gate.outputs.count }}
@@ -356,6 +390,8 @@ jobs:
       - id: gate
         env:
           EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
           # The lane's membership is whatever `playwright.acceptance.config.ts`
@@ -365,8 +401,26 @@ jobs:
           COUNT=$(find tests/e2e -maxdepth 1 -name 'acceptance*.spec.ts' -type f | wc -l | tr -d ' ')
           echo "acceptance specs in the lane: ${COUNT}"
           if [ "${EVENT_NAME}" = 'pull_request' ]; then
-            # The paths filter already decided; a triggered PR run always runs.
-            RUN=true
+            # THE PATHS FILTER, moved here from `on:` (MOTIR-4257). Same five
+            # entries, same meaning: a spec in the lane, the lane's workflow, its
+            # Playwright config, or either helper the specs import. Matched as
+            # anchored basenames/prefixes so a path that merely CONTAINS one of
+            # these names does not count.
+            #
+            # `--paginate` matters: the endpoint returns 30 files a page, and a
+            # PR whose acceptance spec sorts onto page two would otherwise read
+            # as touching nothing — a silent false negative, which is exactly the
+            # failure mode this card exists to remove.
+            CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+              --paginate -q '.[].path')
+            if printf '%s\n' "${CHANGED}" | grep -qE \
+              '^tests/e2e/acceptance[^/]*\.spec\.ts$|^\.github/workflows/acceptance-tests\.yml$|^playwright\.acceptance\.config\.ts$|^tests/e2e/_helpers/acceptance-(video|diagnostics)\.ts$'
+            then
+              RUN=true
+            else
+              RUN=false
+            fi
+            echo "changed files: $(printf '%s\n' "${CHANGED}" | grep -c . || true)"
           elif [ "${COUNT}" -gt 0 ]; then
             RUN=true
           else
@@ -408,7 +462,14 @@ jobs:
             if [ "${RUN}" = 'true' ]; then
               echo "- shard legs: **${LEGS}** (one per spec, capped at ${MAX_LEGS})"
             fi
-            if [ "${RUN}" = 'false' ]; then
+            if [ "${RUN}" = 'false' ] && [ "${EVENT_NAME}" = 'pull_request' ]; then
+              echo ""
+              echo "This PR touches no acceptance spec, the lane's workflow, its"
+              echo "Playwright config or either helper, so the fan-out was"
+              echo "skipped (MOTIR-4257). \`Acceptance complete\` still reports —"
+              echo "it is a required check — and the full lane runs against the"
+              echo "MERGED result when this PR enters the merge queue."
+            elif [ "${RUN}" = 'false' ]; then
               echo ""
               echo "The lane is empty, so this baseline stopped here rather than"
               echo "spending machine-minutes to run zero tests (MOTIR-2760)."
