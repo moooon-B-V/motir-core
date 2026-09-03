@@ -6045,7 +6045,12 @@
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
         "validating": "正在对照你的计划校验提议…",
         "reading": "正在理解你的请求……",
-        "redirected": "正在生成方案……"
+        "redirected": "正在生成方案……",
+        "retrieval": "正在读取计划…",
+        "laying": "正在铺开层级…",
+        "authoring": "正在撰写卡片…",
+        "note": "正在思考…",
+        "unknown": "进行中…"
       },
       "error": {
         "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
@@ -6091,7 +6096,34 @@
       "queuedLabel": "待读",
       "queuedRead": "已读",
       "queuedMarker": "已排队 —— Motir AI 写完当前这张卡片后会读到。",
-      "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。"
+      "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。",
+      "act": {
+        "submitted": "提交",
+        "reading": "阅读",
+        "redirected": "转交",
+        "retrieval": "检索",
+        "searching": "搜索",
+        "drilling": "下钻",
+        "laying": "铺层",
+        "authoring": "撰写",
+        "note": "说明",
+        "proposed": "提案",
+        "validating": "校验",
+        "unknown": "帧",
+        "retrievalLine": "读取 {family}",
+        "retrievalBlockedLine": "检索额度已用尽 —— 以现有信息继续。",
+        "layingLine": "正在铺开 {target}",
+        "authoringLine": "正在撰写 {title}",
+        "unknownLine": "帧：{frame}",
+        "retrievalLineBare": "读取了计划的来源",
+        "family": {
+          "planTree": "计划树",
+          "codeGraph": "代码图谱",
+          "codeHealth": "代码健康度",
+          "web": "网页",
+          "lessons": "经验教训"
+        }
+      }
     },
     "targets": {
       "sectionLabel": "工作项",

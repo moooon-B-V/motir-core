@@ -112,6 +112,7 @@ const IDLE: PlanChangeConversationState = {
   stopping: false,
   stopped: false,
   queued: [],
+  acts: [],
 };
 
 afterEach(() => {

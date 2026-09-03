@@ -403,7 +403,13 @@ describe('usePlanChangeConversation — a turn', () => {
     // narration is derived, not invented.
     expect(narrateFrame('search', {})).toEqual({ kind: 'searching' });
     expect(narrateFrame('planned', { proposed: 2 })).toEqual({ kind: 'proposed', count: 2 });
-    expect(narrateFrame('tokens', {})).toBeNull();
+    // ⚠️ AMENDED (MOTIR-4069): this read `narrateFrame('tokens', {})` — a kind the
+    // producer never emits — and asserted null, which pinned the silent
+    // `default: return null` that card removes. `token` (the kind motir-ai does
+    // emit, per keystroke) is still null, now as a written QUIET decision in
+    // `lib/planning/planChangeFrames.ts`; a kind nobody has decided about is
+    // LOUD instead (`plan-change-frame-totality.test.ts`).
+    expect(narrateFrame('token', {})).toBeNull();
 
     await act(async () => {
       await result.current.send('Add recurring invoices.');

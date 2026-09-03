@@ -21,6 +21,7 @@ import {
   type AskSubmitResponse,
 } from '@/lib/planning/planChangeClient';
 import { pendingQuestion } from '@/lib/planning/planChangeThread';
+import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -110,8 +111,28 @@ export type PlanChangeProgress =
   | { kind: 'redirected' }
   | { kind: 'searching' }
   | { kind: 'drilling' }
+  /** A graph LOOKUP the planner made (MOTIR-4069) — `{ tool, family }` over the
+   *  five retrieval families, or the budget-exhausted variant. Emitted on every
+   *  planner read since retrieval shipped, and rendered by nothing until now. */
+  | { kind: 'retrieval'; family: string | null; blocked: boolean }
+  /** A level being laid, and one card being written. */
+  | { kind: 'laying'; target: string | null }
+  | { kind: 'authoring'; title: string | null }
+  /** The planner's OWN prose line for the act it just took. The producer emits
+   *  nothing when the text is blank, so this is never an empty row. */
+  | { kind: 'note'; text: string }
   | { kind: 'proposed'; count: number }
-  | { kind: 'validating' };
+  | { kind: 'validating' }
+  /**
+   * ⚠️ A frame NOBODY HAS DECIDED ABOUT — the LOUD default (MOTIR-4069).
+   *
+   * It carries the raw kind so a developer can see WHICH frame arrived
+   * unaccounted for. This is the arm that covers the future: the frame list is a
+   * snapshot of a sweep, so a kind added upstream tomorrow lands here rather than
+   * disappearing through a `default: return null` the way `retrieval` did for
+   * its whole life.
+   */
+  | { kind: 'unknown'; frame: string };
 
 /** What an approve landed, as the rail says it back — the shared summary every
  *  confirming surface reports (`planReviewClient`), re-exported here because the
@@ -124,6 +145,25 @@ export interface PlanChangeConversationState {
   session: PlanChangeSessionDto | null;
   /** The live narration of the running job (the `aria-live` line). */
   progress: PlanChangeProgress | null;
+  /**
+   * THE ACT RAIL — every act this run has narrated, in order (MOTIR-4069).
+   *
+   * ⚠️ AN ACCUMULATING RECORD, where {@link progress} is a REPLACING line, and
+   * the difference is the point. A run used to say one sentence at a time and
+   * overwrite it, so its whole history was one sentence long. The user is now
+   * making a decision against this — whether to stop it — and a decision needs
+   * the record rather than the latest word
+   * (`design/ai-chat/plan-change-run-live.mock.html` sheet 3).
+   *
+   * `progress` survives as the LIVE line: the newest act, which the pinned
+   * running bar repeats so it is on screen however far the transcript is
+   * scrolled.
+   *
+   * Never re-ordered, never collapsed, never de-duplicated: two `retrieval`
+   * lines in a row mean the planner made two lookups, and folding them into
+   * "2 lookups" turns a record into a summary.
+   */
+  acts: PlanChangeProgress[];
   /**
    * The run's PROPOSALS, read from its Plan — what the canvas draws and what the
    * gate confirms.
@@ -211,6 +251,7 @@ const INITIAL: PlanChangeConversationState = {
   phase: 'loading',
   session: null,
   progress: null,
+  acts: [],
   review: null,
   decided: null,
   jobId: null,
@@ -233,24 +274,87 @@ const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits
  */
 const MAILBOX_POLL_MS = 3000;
 
+/**
+ * The FIRST act of a run — the rail's opening line and the live line, one
+ * object (MOTIR-4069). `design/ai-chat/plan-change-run-live.mock.html` sheet 3
+ * draws `submitted` and `reading` as act lines like any other, so a run's record
+ * starts with the act that started it rather than with the first frame the
+ * server happened to send.
+ */
+function firstAct(
+  kind: 'submitted' | 'reading',
+): Pick<PlanChangeConversationState, 'progress' | 'acts'> {
+  const act: PlanChangeProgress = { kind };
+  return { progress: act, acts: [act] };
+}
+
 /** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
   const d = (data ?? {}) as Record<string, unknown>;
-  switch (event) {
-    case 'search':
-      return { kind: 'searching' };
-    case 'drill':
-      return { kind: 'drilling' };
-    case 'level_complete':
-    case 'pass':
-    case 'planned': {
+
+  // ⚠️ THE LOUD DEFAULT, AND IT IS THE FIRST THING RATHER THAN THE LAST.
+  //
+  // The bug this card repairs was not the missing `retrieval` arm — it was the
+  // `default: return null` underneath it, which made EVERY frame kind added
+  // upstream invisible with no signature: nothing threw, nothing logged, the
+  // rail just said less than the run did. Adding one arm would have fixed
+  // today's symptom and left the mechanism, and the next frame would have
+  // reproduced it exactly.
+  //
+  // So an unaccounted kind is now the noisy case. It surfaces on the rail AND in
+  // the console, where a developer sees it.
+  if (!isKnownFrameKind(event)) {
+    console.warn(
+      `[plan-change] unnarrated frame kind "${event}" — add it to PLAN_CHANGE_FRAME_KINDS ` +
+        `and give it a disposition in lib/planning/planChangeFrames.ts`,
+    );
+    return { kind: 'unknown', frame: event };
+  }
+
+  const disposition = FRAME_DISPOSITIONS[event];
+  // QUIET is a DECISION, not a fall-through. The reason is on the map entry, and
+  // this null is the one place a null is legitimate.
+  if ('quiet' in disposition) return null;
+
+  switch (disposition.show) {
+    case 'retrieval': {
+      const family = d['family'];
+      return {
+        kind: 'retrieval',
+        family: typeof family === 'string' ? family : null,
+        blocked: d['blocked'] === true,
+      };
+    }
+    case 'laying': {
+      const target = d['target'];
+      return { kind: 'laying', target: typeof target === 'string' ? target : null };
+    }
+    case 'authoring': {
+      const title = d['title'];
+      return { kind: 'authoring', title: typeof title === 'string' ? title : null };
+    }
+    case 'note': {
+      const text = d['text'];
+      // Defensive on OUR side too: the producer already refuses to emit a blank
+      // note ("a blank line is not a shorter line, it is a line the rail would
+      // render as a hole"), and a hole is exactly what a bad payload would draw.
+      const trimmed = typeof text === 'string' ? text.trim() : '';
+      return trimmed.length === 0 ? null : { kind: 'note', text: trimmed };
+    }
+    case 'proposed': {
       const raw = d['proposed'];
       return { kind: 'proposed', count: typeof raw === 'number' ? raw : 0 };
     }
-    case 'validated':
-    case 'validation_skipped':
+    case 'searching':
+      return { kind: 'searching' };
+    case 'drilling':
+      return { kind: 'drilling' };
+    case 'validating':
       return { kind: 'validating' };
     default:
+      // Unreachable: `show` is a `PlanChangeProgress['kind']` and every one the
+      // map uses is handled above. Kept so a new SHOW value is a visible gap
+      // rather than a silent null — the same mistake, one level in.
       return null;
   }
 }
@@ -450,7 +554,10 @@ export function usePlanChangeConversation({
         (event, data) => {
           if (!mountedRef.current) return;
           const progress = narrateFrame(event, data);
-          if (progress) setState((s) => ({ ...s, progress }));
+          // APPEND to the rail and REPLACE the live line, in one update. A quiet
+          // frame yields null and does neither, which is the decision the
+          // disposition map recorded rather than a frame falling through.
+          if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
         },
       );
       if (failed || !mountedRef.current) return;
@@ -568,7 +675,7 @@ export function usePlanChangeConversation({
           // still awaits a decision on.
           review: s.decided ? null : s.review,
           decided: null,
-          progress: { kind: 'submitted' },
+          ...firstAct('submitted'),
           errorCode: null,
           outOfCredits: false,
           // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
@@ -655,7 +762,7 @@ export function usePlanChangeConversation({
             planId: submitted.planId,
             review: s.decided ? null : s.review,
             decided: null,
-            progress: { kind: 'submitted' },
+            ...firstAct('submitted'),
             errorCode: null,
             outOfCredits: false,
             stopping: false,
@@ -680,7 +787,7 @@ export function usePlanChangeConversation({
           // and not an abandonment.
           review: s.decided ? null : s.review,
           decided: null,
-          progress: { kind: 'reading' },
+          ...firstAct('reading'),
           errorCode: null,
           outOfCredits: false,
           // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
@@ -725,7 +832,10 @@ export function usePlanChangeConversation({
             session: settled.session,
             jobId: settled.jobId,
             planId: settled.planId,
+            // The hand-off is an act like any other: it joins the record as well
+            // as replacing the live line (MOTIR-4069).
             progress: { kind: 'redirected' },
+            acts: [...s.acts, { kind: 'redirected' }],
           }));
           await finishPlanRun(settled.jobId, settled.planId, null, controller);
           return;
@@ -850,7 +960,7 @@ export function usePlanChangeConversation({
         setState((s) => ({
           ...s,
           phase: 'streaming',
-          progress: { kind: 'submitted' },
+          ...firstAct('submitted'),
           errorCode: null,
           outOfCredits: false,
           // A NEW run is not stopped, and neither is a retry (MOTIR-4068). Both
@@ -883,7 +993,7 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'streaming',
-        progress: { kind: 'submitted' },
+        ...firstAct('submitted'),
         errorCode: null,
         outOfCredits: false,
         // Per-RUN, like every other start reducer (MOTIR-4068). The ONE DOOR is
@@ -941,7 +1051,7 @@ export function usePlanChangeConversation({
       setState((s) => ({
         ...s,
         phase: 'streaming',
-        progress: { kind: 'reading' },
+        ...firstAct('reading'),
         errorCode: null,
         outOfCredits: false,
       }));

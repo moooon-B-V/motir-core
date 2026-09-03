@@ -92,6 +92,7 @@ function renderRail(turns: PlanChangeTurnDto[], refs: PlanChangeSessionDto['work
     stopping: false,
     stopped: false,
     queued: [],
+    acts: [],
   };
   return renderWithIntl(
     <PlanChangeRail
@@ -228,6 +229,7 @@ describe('state B — the question changes the composer', () => {
       stopping: false,
       stopped: false,
       queued: [],
+      acts: [],
     };
     renderWithIntl(
       <PlanChangeRail

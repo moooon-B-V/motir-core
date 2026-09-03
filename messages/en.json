@@ -6049,7 +6049,12 @@
         "proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
         "validating": "Checking the proposal against your plan…",
         "reading": "Reading your request…",
-        "redirected": "Working on the proposal…"
+        "redirected": "Working on the proposal…",
+        "retrieval": "Reading the plan…",
+        "laying": "Laying out a level…",
+        "authoring": "Writing a card…",
+        "note": "Thinking it through…",
+        "unknown": "Working…"
       },
       "error": {
         "body": "That didn't go through. Your conversation is saved — try again, or rephrase the change.",
@@ -6095,7 +6100,34 @@
       "queuedLabel": "queued",
       "queuedRead": "read",
       "queuedMarker": "Queued — Motir AI reads this when it finishes the card it is writing.",
-      "queuedReadMarker": "Read at the boundary — folded into this run."
+      "queuedReadMarker": "Read at the boundary — folded into this run.",
+      "act": {
+        "submitted": "submit",
+        "reading": "reading",
+        "redirected": "hand-off",
+        "retrieval": "retrieval",
+        "searching": "search",
+        "drilling": "drill",
+        "laying": "lay",
+        "authoring": "author",
+        "note": "note",
+        "proposed": "proposed",
+        "validating": "validate",
+        "unknown": "frame",
+        "retrievalLine": "Read the {family}",
+        "retrievalBlockedLine": "Out of lookups — carrying on with what it has.",
+        "layingLine": "Laying out {target}",
+        "authoringLine": "Writing {title}",
+        "unknownLine": "frame: {frame}",
+        "retrievalLineBare": "Read from the plan's sources",
+        "family": {
+          "planTree": "plan tree",
+          "codeGraph": "code graph",
+          "codeHealth": "code health",
+          "web": "web",
+          "lessons": "lessons"
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Work items",

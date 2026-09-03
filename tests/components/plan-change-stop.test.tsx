@@ -67,6 +67,7 @@ const BASE: PlanChangeConversationState = {
   stopping: false,
   stopped: false,
   queued: [],
+  acts: [],
 };
 
 function renderRail(
