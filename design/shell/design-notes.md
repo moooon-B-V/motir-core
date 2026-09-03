@@ -1211,6 +1211,33 @@ still gets a Help menu, because **Keyboard shortcuts** is unconditional. Nothing
 rows close up and the menu is shorter, with no disabled row, no tooltip and no empty state — the same line
 the rail draws for the same reason.
 
+### Why each conditional row is absent — MOVED here with the rows
+
+Both paragraphs below came from § _The rail's bottom section_, which owned them while the rows lived
+there. They are **moved, not copied**: the reasoning describes the ROW, so it belongs wherever the row
+is, and a second copy left behind is exactly what this area's divergence ledger exists to prevent.
+MOTIR-4254 removes them from that section; until it lands they appear twice, and the copy there is the
+stale one.
+
+**The `Legal` row's absent arm has TWO causes, and the second is easy to miss.** `legalIndexUrl()`
+derives the index from the configured documents' own urls: if every one is `<base>/<slug>` the index is
+`<base>`. An operator publishing at unrelated addresses (`acme.com/terms-of-service`,
+`legal.acme.com/privacy`) has no index for the row to point at, so **the row is absent rather than
+guessed** — sign-up and the re-consent rows still link each document directly, so nothing becomes
+unreachable. A row pointing at the base of SOME of the documents would be worse than no row.
+
+**The `Docs` row reads configuration, and it is the same shape (MOTIR-4167).** The row used to carry a
+hard-coded app-relative path to a documentation index that left this repository when MOTIR-3932 moved
+the public reading surface to `motir-marketing` — so `app.motir.co/docs` answered **404** while
+`motir.co/docs` answered **200**. It was rebuilt around `lib/docs/links.ts`'s `docsIndexUrl()`, which
+reads **`MOTIR_DOCS_URL`** — the operator's own ABSOLUTE url — and answers `null` when it is unset, or
+when the value is not an absolute `http(s)` url, because a relative path is precisely the defect: it is
+refused and logged rather than rendered. **When it is `null` the row is absent**, not disabled and not
+dead. `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D is the record;
+`tests/components/SidebarNav-docs-door.test.tsx` pins both arms of the row and
+`tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal — **guards MOTIR-4239 re-homes
+to this menu, since they assert a surface the rail no longer has.**
+
 **Row 2 is the one this story ADDS rather than moves, and it is a button, not a link.**
 `ShortcutsCheatsheet` is a finished, translated dialog enumerating every global shortcut, and at
 `847d44ec9` the only way to open it is to press `?` — a key you find out about by opening the cheatsheet.
