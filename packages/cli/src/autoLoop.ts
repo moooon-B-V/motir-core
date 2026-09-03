@@ -161,6 +161,67 @@ export interface ApprovalRecord {
   proposalCount: number;
 }
 
+/**
+ * What happened to ONE submitted re-plan under `--auto-approve-replan`
+ * (MOTIR-4085) — which lane it went down, and what the run then did.
+ *
+ * ⚠️ ONE ROW PER ITERATION THAT SUBMITTED A RE-PLAN, including the ones that
+ * were NOT approved — which is the half a summary is most tempted to drop.
+ * {@link ApprovalRecord} says what the run changed; this says what it DECIDED,
+ * and a decline is a decision. An operator reading only the approvals cannot
+ * tell "the agent never refused anything" from "the agent refused three cards
+ * and the loop declined every one of them", and those want opposite responses.
+ */
+export interface ReplanLaneRecord {
+  /** The card whose agent submitted the re-plan. */
+  key: string;
+  /**
+   * Which lane it turned out to be in.
+   *
+   * - `auto_approved` — every proposal fell inside the card's own lane, so the
+   *   run approved it and carried on.
+   * - `declined_out_of_lane` — the plan is valid and reaches wider than this
+   *   card and its siblings, so a person decides it. NOT a failure.
+   * - `anchored_elsewhere` — the agent anchored its plan at something other than
+   *   this card, which is the normal lane ELECTED. Also not a failure.
+   * - `unreadable` — the plan could not be read at all (still being written when
+   *   the run's patience ran out, or the read was refused). The run stops rather
+   *   than approving something it has not seen.
+   */
+  lane: 'auto_approved' | 'declined_out_of_lane' | 'anchored_elsewhere' | 'unreadable';
+  /** The plan, when the run got far enough to learn its id. */
+  planId: string | null;
+  /** For `declined_out_of_lane`: one line per proposal that fell outside, each
+   *  naming what it would have touched. A count alone is not actionable. */
+  outOfLane?: string[];
+  /** What the run did next — the fact the other fields exist to explain. */
+  continued: boolean;
+  /** For `auto_approved`: the SCOPED refresh (below), so the operator can see
+   *  which sibling work the run then skipped and which it picked up. */
+  refresh?: ReplanRefresh;
+  /** The server's own sentence, for the two arms that have one. */
+  detail?: string;
+}
+
+/**
+ * The queue REFRESH an approved in-lane plan forces (MOTIR-4085).
+ *
+ * ⚠️ SCOPED TO ONE PARENT, and the scope is the substantive claim. An in-lane
+ * plan changes the children of exactly one container, so re-deriving anything
+ * wider would let one leaf silently re-order work the operator queued elsewhere.
+ * The record names that parent so the bound is visible rather than asserted.
+ */
+export interface ReplanRefresh {
+  /** The container whose children were re-read; `null` for a top-level card. */
+  parentKey: string | null;
+  /** Children that were there before the approval and are gone after it — the
+   *  plan removed them, and the run must not execute work a plan deleted. */
+  removed: string[];
+  /** Children the approval created. They join the ready set on their own merits;
+   *  naming them is how an operator knows the run's remaining work grew. */
+  added: string[];
+}
+
 /** One repo the run touched: its session branch and the items carried on it. */
 export interface RepoSession {
   repoName: string | null;
@@ -218,6 +279,16 @@ export interface AutoSummary {
   /** The plans `--auto-approve-replan` approved. Empty without the flag, and
    *  empty with it when no agent refused a card. */
   approvals: ApprovalRecord[];
+  /**
+   * Every re-plan this run made a LANE DECISION about (MOTIR-4085) — approved,
+   * declined, elected away, or unreadable. A superset of {@link approvals}:
+   * every approval has a row here, and so does every refusal.
+   *
+   * Empty without `--auto-approve-replan`, because without it there is no
+   * decision to make — the loop stops on any re-plan, which the `replanned`
+   * block already reports.
+   */
+  lanes: ReplanLaneRecord[];
   stopReason: StopReason;
 }
 
@@ -488,6 +559,8 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
     );
   }
 
+  blocks.push(...renderLaneBlocks(summary.lanes));
+
   const replanned = summary.records.filter((r) => r.outcome === 'replanned');
   if (replanned.length > 0) {
     blocks.push(
@@ -513,6 +586,90 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
     blocks.push(['Pull requests:', ...summary.prs.map(prLine)].join('\n'));
   }
   return blocks.join('\n\n');
+}
+
+/**
+ * The LANE section (MOTIR-4085): which lane each submitted re-plan went down,
+ * whether it was approved, what fell out when it was not, and what the run then
+ * did.
+ *
+ * ⚠️ THE DECLINES ARE WHY THIS BLOCK EXISTS. An approval already has a block of
+ * its own — the tree changed, and that is the loudest thing a run can do
+ * unattended. A DECLINE changes nothing, which is exactly why it would otherwise
+ * be invisible: an operator would read a run that stopped with no approvals and
+ * no explanation, and could not tell a loop that was never asked from a loop that
+ * was asked and said no.
+ *
+ * ⚠️ AND IT SAYS "NOT A FAILURE" IN THE HEADING, not in a footnote. A declined
+ * lane and an elected one are both the bound working — the plan is submitted,
+ * intact and waiting for a person. An operator who reads them as errors learns to
+ * distrust the one signal the flag depends on.
+ */
+function renderLaneBlocks(lanes: ReplanLaneRecord[]): string[] {
+  if (lanes.length === 0) return [];
+  const blocks: string[] = [];
+
+  const declined = lanes.filter((l) => l.lane === 'declined_out_of_lane');
+  if (declined.length > 0) {
+    const lines = [
+      `Re-plans NOT auto-approved — wider than the card's own lane, so a person decides` +
+        ` (${declined.length}). Not a failure:`,
+    ];
+    for (const record of declined) {
+      lines.push(`  ${record.key}${record.planId ? ` — plan ${record.planId}` : ''}`);
+      for (const out of record.outOfLane ?? []) lines.push(`      ${out}`);
+    }
+    lines.push('  Review each plan in Motir, then re-run the card if the corrected one survives.');
+    blocks.push(lines.join('\n'));
+  }
+
+  const elsewhere = lanes.filter((l) => l.lane === 'anchored_elsewhere');
+  if (elsewhere.length > 0) {
+    blocks.push(
+      [
+        `Re-plans anchored ELSEWHERE — the agent elected the lane that goes to a person` +
+          ` (${elsewhere.length}). Not a failure:`,
+        ...elsewhere.map((r) => `  ${r.key} — ${r.detail ?? 'no plan is anchored at this card'}`),
+        '  The plan is about a container, or about a precondition no card names yet.',
+      ].join('\n'),
+    );
+  }
+
+  const unreadable = lanes.filter((l) => l.lane === 'unreadable');
+  if (unreadable.length > 0) {
+    blocks.push(
+      [
+        // ⚠️ THIS ONE IS NOT REASSURED. The run stopped because it could not SEE
+        // what it was being asked to approve, which is the one arm where the
+        // operator has something to check rather than something to read.
+        `Re-plans this run could NOT read, so it approved nothing (${unreadable.length}):`,
+        ...unreadable.map((r) => `  ${r.key} — ${r.detail ?? 'the plan could not be read'}`),
+      ].join('\n'),
+    );
+  }
+
+  // The refresh rides the APPROVAL rows, beside the approvals block rather than
+  // inside it: that block is about the tree, this is about the run's own queue.
+  const refreshed = lanes.filter((l) => l.refresh && !isEmptyRefresh(l.refresh));
+  if (refreshed.length > 0) {
+    const lines = [`Queue refreshed after an approved re-plan (${refreshed.length}):`];
+    for (const record of refreshed) {
+      const refresh = record.refresh as ReplanRefresh;
+      lines.push(`  ${record.key} — re-read ${refresh.parentKey ?? 'no parent'}'s children`);
+      if (refresh.removed.length > 0) {
+        lines.push(`      removed by the plan, NOT run: ${refresh.removed.join(', ')}`);
+      }
+      if (refresh.added.length > 0) {
+        lines.push(`      added by the plan, run when ready: ${refresh.added.join(', ')}`);
+      }
+    }
+    blocks.push(lines.join('\n'));
+  }
+  return blocks;
+}
+
+function isEmptyRefresh(refresh: ReplanRefresh): boolean {
+  return refresh.removed.length === 0 && refresh.added.length === 0;
 }
 
 /**

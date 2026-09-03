@@ -105,6 +105,31 @@ export interface FindingsPolicy {
   logBug: boolean;
   /** May the agent SUBMIT A RE-PLAN when its own card's premise is false? */
   replan: boolean;
+  /**
+   * Is this run's loop willing to APPROVE a re-plan itself and carry on
+   * (`motir auto --auto-approve-replan`) — MOTIR-4085.
+   *
+   * ⚠️ THE ODD ONE OUT, in two ways worth stating rather than inferring.
+   *
+   * It switches something ON, where the other two switch a capability OFF; and
+   * it is not a capability of the AGENT at all. Nothing the agent may do changes
+   * with it — the same two tools, the same anchor, the same one shot. What
+   * changes is what happens to what it submits, which the agent cannot cause and
+   * could not find out any other way.
+   *
+   * It is here because the prompt is the whole contract with a sandboxed agent,
+   * and an agent that does not know its plan may be approved unattended cannot
+   * make the one choice this policy leaves it: keep the plan inside its own
+   * card's lane and the loop may approve it, or deliberately reach beyond that
+   * lane — a container, a sibling story — and the plan goes to a person. Both are
+   * legitimate, and an agent that believes a person will read every plan will
+   * write the second kind when the first would do.
+   *
+   * ⚠️ AND IT IS NOT THE BOUND. The bound is the LOOP's: it reads the returned
+   * plan, checks the lane, and approves or does not. This flag makes the choice
+   * legible to the agent; it does not make the agent trusted.
+   */
+  autoApproveReplan: boolean;
 }
 
 /**
@@ -118,7 +143,17 @@ export interface FindingsPolicy {
  * this trades is narrower: an operator may now spend that property deliberately,
  * per run, and nothing spends it for them.
  */
-export const FULL_FINDINGS_POLICY: FindingsPolicy = { logBug: true, replan: true };
+export const FULL_FINDINGS_POLICY: FindingsPolicy = {
+  logBug: true,
+  replan: true,
+  // ⚠️ FALSE IS THE COMPLETE PROTOCOL HERE, and it is the one field of the three
+  // where the default is not "everything on". The other two default ON because
+  // the full contract is what an omitted policy renders; this one defaults OFF
+  // because an omitted policy means nobody asked for automatic approval, and a
+  // prompt that told an agent its plan might be approved unattended when no loop
+  // will approve it would be a lie in the direction that matters.
+  autoApproveReplan: false,
+};
 
 /**
  * The wire vocabulary of {@link FindingsPolicy}: the tokens a caller may name to
@@ -147,9 +182,21 @@ export type FindingsPolicyToken = (typeof FINDINGS_POLICY_TOKENS)[number];
  */
 export function parseFindingsPolicy(
   raw: string | null | undefined,
+  /**
+   * The auto-approve lane (MOTIR-4085), which rides its OWN parameter rather
+   * than this token list — deliberately, and the reason is the list's own
+   * documented meaning: it is *what this run switches OFF*. A token that turned
+   * something ON inside it would make the list two things at once, and the next
+   * reader would have to know which tokens go which way. Defaults to `false`, so
+   * every existing caller parses to exactly the policy it parsed to before.
+   */
+  opts: { autoApproveReplan?: boolean } = {},
 ): { policy: FindingsPolicy; unknown: null } | { policy: null; unknown: string } {
+  const autoApproveReplan = opts.autoApproveReplan === true;
   const value = (raw ?? '').trim();
-  if (value === '') return { policy: FULL_FINDINGS_POLICY, unknown: null };
+  if (value === '') {
+    return { policy: { ...FULL_FINDINGS_POLICY, autoApproveReplan }, unknown: null };
+  }
 
   const disabled = new Set<string>();
   for (const part of value.split(',')) {
@@ -161,7 +208,16 @@ export function parseFindingsPolicy(
     disabled.add(token);
   }
   return {
-    policy: { logBug: !disabled.has('log-bug'), replan: !disabled.has('replan') },
+    policy: {
+      logBug: !disabled.has('log-bug'),
+      replan: !disabled.has('replan'),
+      // ⚠️ CONTRADICTORY BY CONSTRUCTION, so it is resolved here rather than
+      // left to each transport: approving a re-plan the agent was told not to
+      // submit is not a lane, it is a nonsense. The CLI refuses the two flags
+      // together at parse time (`contradictoryReplanFlags`); this is the same
+      // rule for every other caller, and it fails to the SAFE side — no lane.
+      autoApproveReplan: autoApproveReplan && !disabled.has('replan'),
+    },
     unknown: null,
   };
 }
@@ -1241,6 +1297,7 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     category, which is what actually takes the card out of the pickable set',
     '     — the card is not stuck on a dependency, it is being re-planned, and it',
     '     must not be handed out again until a human has acted on the plan.',
+    ...twoLanes(src, policy),
     '  5. Put the finding on the planning thread with the append_plan_turn tool:',
     '',
     `         projectKey: ${src.projectKey}`,
@@ -1279,6 +1336,80 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     nothing happened — no job was created and no credits were spent — so',
     '     re-submit once, WITHOUT the requirement. That is the only retry there is.',
     '  8. Stop. Do not pick up other work.',
+  ];
+}
+
+/**
+ * THE TWO LANES a re-plan can go down, when this run has one (MOTIR-4085).
+ *
+ * Renders NOTHING without `--auto-approve-replan`, which is what keeps the
+ * default prompt byte-identical to the one that shipped: a run with no loop to
+ * continue into has one lane, and describing two would be describing a choice
+ * that does not exist.
+ *
+ * ── IT IS INFORMATION, NOT PRESSURE, and the difference is the whole design ──
+ * An agent that is FORCED down the fast lane has an incentive to invent a local
+ * fix it does not believe in — papering over a mis-planned story so the run can
+ * continue — which buys continuity by spending plan quality. So the block says
+ * both lanes are legitimate, says the normal one is always available, and says
+ * out loud that stopping is a correct outcome. The one thing it must never
+ * suggest is that a wider finding should be narrowed to fit.
+ *
+ * ── IT IS NOT THE BOUND EITHER ──────────────────────────────────────────────
+ * Nothing here is trusted. The LOOP reads the plan that comes back, checks the
+ * lane itself, and approves or does not — so an agent that ignores every word of
+ * this cannot cause an approval, and one that misjudges the lane is stopped by
+ * name rather than obeyed. What the block buys is that the agent knows which
+ * choice it is making, and that a deliberate reach beyond the lane is a decision
+ * rather than an accident.
+ *
+ * ── THE ANCHOR IS THE ELECTION ──────────────────────────────────────────────
+ * `approveWorkItemPlan` resolves the plan through the conversation anchored at
+ * THIS card's key and nothing else, so a plan anchored anywhere else is
+ * structurally out of the loop's reach: the run stops and a person decides. That
+ * is a property of the shipped resolution rather than a rule this text invents,
+ * which is why the block can state it as a fact.
+ */
+function twoLanes(src: DispatchPromptSource, policy: FindingsPolicy): string[] {
+  if (!policy.autoApproveReplan) return [];
+  const parent = src.parent?.key ?? null;
+  const siblingLevel = parent
+    ? `${src.key} and its siblings under ${parent}`
+    : `${src.key} itself — it has no parent, so it has no sibling level either`;
+  return [
+    '',
+    '  ── TWO LANES, and WHICH ONE is yours to choose ─────────────────────────',
+    '',
+    '  This run was launched with --auto-approve-replan: its loop may approve a',
+    '  re-plan itself and carry on, instead of stopping for a person. It approves',
+    '  inside ONE lane, and it checks that lane over the plan that comes back — so',
+    '  you cannot ask for automatic approval and you cannot be given it by',
+    '  accident. Nothing below changes what you may do; it tells you what happens',
+    '  to what you submit, which you have no other way to find out.',
+    '',
+    `    THE CARD'S OWN LANE — the correction is ${siblingLevel}:`,
+    '    a rewrite, a split into two siblings, an added sibling, a sibling that',
+    '    should not exist. Keep targetKeys at the value steps 5 and 6 show and the',
+    '    loop may approve it, then carry on with the corrected work.',
+    '',
+    '    THE NORMAL LANE — everything wider, and it is ALWAYS available, including',
+    '    right now. Put the CONTAINER’s key in targetKeys instead — in BOTH calls,',
+    parent
+      ? `    steps 5 and 6, e.g. [${parent}] — when the mis-planning is bigger than`
+      : '    steps 5 and 6 — when the mis-planning is bigger than',
+    '    this one card; or omit targetKeys entirely when what is missing is a',
+    '    precondition no card names yet, and the planner will settle a new one.',
+    '    A person reviews the plan, and this run stops.',
+    '',
+    '  CHOOSE THE LANE THAT IS TRUE. If the whole story is mis-planned, say so and',
+    '  let the run stop — a stop a person can act on beats a local fix you do not',
+    '  believe in. You are not being asked to keep the run going.',
+    '',
+    `  And if you anchor here but propose beyond ${parent ? `${parent}'s children` : "this card's own level"},`,
+    '  the loop does not approve it: it names what fell outside and stops, and the',
+    '  plan waits for a person. That is a correct outcome — it is',
+    '  not a rejection of your finding, and nothing you wrote is lost.',
+    '',
   ];
 }
 

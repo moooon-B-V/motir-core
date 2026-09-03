@@ -82,9 +82,32 @@ function parseSessionBranch(req: Request): string | null {
  * believe is narrowed and an agent that was told otherwise — the precise class of
  * lie the parameter exists to remove.
  */
+/**
+ * Read the optional `?autoApproveReplan=` — whether THIS run's loop is willing
+ * to approve a submitted re-plan itself and carry on (MOTIR-4085).
+ *
+ * ⚠️ ITS OWN PARAMETER, NOT A `findingsPolicy` TOKEN, and the reason is that
+ * parameter's own documented meaning: a comma-separated list of what this run
+ * switches OFF. This switches something on, and it is not a capability of the
+ * agent at all — the agent's tools, anchor and one shot are identical either
+ * way. Folding it in would make one list mean two opposite things.
+ *
+ * Absent, empty and `0` / `false` all mean NO, which is the safe direction: a
+ * prompt that told an agent its plan might be approved unattended when no loop
+ * will approve it is a lie the agent cannot check.
+ */
+function parseAutoApproveReplan(req: Request): boolean {
+  const raw = new URL(req.url).searchParams.get('autoApproveReplan');
+  if (raw === null) return false;
+  const value = raw.trim().toLowerCase();
+  return value === '1' || value === 'true';
+}
+
 function parsePolicy(req: Request): FindingsPolicy {
   const raw = new URL(req.url).searchParams.get('findingsPolicy');
-  const parsed = parseFindingsPolicy(raw);
+  const parsed = parseFindingsPolicy(raw, {
+    autoApproveReplan: parseAutoApproveReplan(req),
+  });
   if (parsed.policy === null) {
     throw new InvalidRequestError(
       'INVALID_FINDINGS_POLICY',
