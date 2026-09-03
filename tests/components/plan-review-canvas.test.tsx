@@ -347,6 +347,16 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
         fetchMock.mock.calls.some(([u]) => String(u).includes('/api/work-items/peek?key=MOTIR-7')),
       ).toBe(true),
     );
+
+    // ⚠️ AND NO PROPOSAL CHROME (MOTIR-4185 AC 3) — the arm the routing change
+    // could silently break. The canvas draws committed neighbours BESIDE
+    // proposals, and those neighbours are ordinary work items this plan says
+    // nothing about. Routing *everything on the plan canvas* through proposal
+    // mode would satisfy every criterion about proposals and quietly tell a
+    // reviewer that a work item is being changed when it is not — the same class
+    // of false statement as the defect being fixed, pointed the other way.
+    expect(screen.queryByTestId('proposal-peek')).toBeNull();
+    expect(screen.queryByTestId('quick-view-op')).toBeNull();
   });
 
   // ── The PROPOSED half of the same contract ────────────────────────────────
