@@ -516,6 +516,83 @@ whoever signs up first.
 > `_motir-verify` and `_acme-challenge` are covered by rule 3 rather than by being
 > listed, because rule 3 is total over the underscore space and a list is not.
 
+### ⚠️ AMENDMENT 1 (2026-09-03, Bug MOTIR-4366) — a WORKSPACE DELETE released every name this section reserves
+
+**What §8 decided is unchanged. What it relied on was incomplete, and the gap ran
+on the one path nobody drives by hand.**
+
+The never-released rule was implemented with no machinery of its own: the
+`public_address.hostname` unique index holds a name for as long as its row
+exists, so _"a retired label keeps its row, the row keeps the name"_.
+`public_address.workspace_id` is `onDelete: Cascade`. **So deleting a workspace
+deleted the rows, and the live subdomain plus every retained alias fell back into
+the global namespace for anyone to claim** — and the sole owner requesting
+account erasure is exactly the person whose published address a stranger would
+then inherit, along with every README, post and bookmark still pointing at it.
+`accountErasureSweepService` routes a sole-membership workspace through
+`workspacesService.deleteWorkspace` on a scheduled job, so this needed no
+operator, raised nothing and logged nothing unusual.
+
+**The root cause is worth recording, because the precedent this section cites is
+what hid it.** §8 grounds the rule in `ProjectKeyAlias`, and that precedent is
+sound _at its own level_: its uniqueness is `@@unique([workspaceId, identifier])`,
+so its slot is scoped BY the tenant and cascading it away with the tenant costs
+nothing. `PublicAddress.hostname` is `@unique` **globally**. The pattern was
+lifted one level up and kept every visible property of its precedent except the
+one that made the cascade safe.
+
+#### The shape chosen: a separate reservation table, holding a HASH
+
+`PublicHostnameReservation(hostname_hash @unique, retired_from_workspace_id,
+retired_at)`. `workspacesService.deleteWorkspace` writes one row per
+subdomain-kind address **inside the same transaction as the delete**, and a claim
+refuses a hostname whose digest is present.
+
+**Rejected: tombstoning the `PublicAddress` row in place** (nulling its tenancy,
+clearing `verification_token`, keeping the name). Rejected on the erasure half
+rather than the schema half — the value it retains is the literal hostname, which
+is the thing the erasure was asked to remove — and secondarily because
+`workspace_id` is the RLS tenancy key every policy on that table compares
+against, so making it nullable would turn every one of those policies into a NULL
+comparison and every `workspaceId: string` in the codebase into a lie. Keeping
+`PublicAddress` cascading leaves erasure simple and complete.
+
+#### What happens when the hostname IS the personal datum
+
+`jane-smith.<base>` is a hostname and a name. **"Hold the reservation for ever"
+and "erase on request" are reconciled by never retaining the hostname:** what is
+stored is a SHA-256 digest under a versioned domain-separation prefix
+(`lib/publicAddresses/hostnameReservation.ts`). The reservation is never read
+back, only TESTED against a candidate a claimant supplies — which is the only
+operation this rule has ever needed. `retired_from_workspace_id` is retained
+alongside it and is an opaque, orphaned identifier: the workspace it names no
+longer exists, nothing joins to it, and it exists so the RLS `WITH CHECK` has a
+column to compare against.
+
+**No pepper, stated as a decision with its residual.** A keyed hash resists an
+offline dictionary attack better, and it also means the whole namespace silently
+reopens the day the key is lost or rotated — a reservation whose promise is _for
+ever_ is the wrong place for a rotatable secret. The residual is that somebody
+holding a database dump can confirm a hostname they had already guessed; that is
+accepted, because these hostnames were served on the public internet by the
+person who chose them.
+
+#### A CUSTOMER domain is NOT reserved
+
+The rule is about **Motir's own namespace**. We hand out `<label>.<base>` from a
+space we own, so releasing a label lets a stranger inherit someone's links.
+`docs.acme.com` is the customer's property whatever becomes of their Motir
+account, and reserving it for ever would lock its rightful owner out of
+re-connecting it. Holding a name we do not own is not a protection.
+
+#### Two limits, stated rather than discovered
+
+- **No backfill.** Workspaces deleted before this amendment have already released
+  their labels and left no record to reserve. Nothing can recover them.
+- **A reservation is released only by an operator**, under `app.system_admin`.
+  The table has no tenant `UPDATE` or `DELETE` arm and the repository has no
+  remove method, so releasing a name is a deliberate act with a person behind it.
+
 ---
 
 ## §9 — Q8: the tier gate

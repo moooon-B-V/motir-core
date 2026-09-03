@@ -11,9 +11,11 @@ import {
   SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
+import { hostnameReservationHash } from '@/lib/publicAddresses/hostnameReservation';
 import { MAX_SUBDOMAIN_RENAMES, refuseLabel } from '@/lib/publicAddresses/reservedNames';
 import { tenantBaseDomain, tenantHostname } from '@/lib/publicAddresses/tenantDomain';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
+import { publicHostnameReservationRepository } from '@/lib/repositories/publicHostnameReservationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -114,10 +116,9 @@ export const publicSubdomainService = {
         // into the other would spend a rename from the cap without saying so.
         throw new HostnameTakenError(live.hostname);
       }
-      await publicAddressRepository.createSubdomain(
-        { workspaceId, hostname: tenantHostname(label) },
-        tx,
-      );
+      const hostname = tenantHostname(label);
+      await publicAddressRepository.createSubdomain({ workspaceId, hostname }, tx);
+      await assertNotReserved(hostname, tx);
       const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
       return toDto(addresses)!;
     });
@@ -161,6 +162,7 @@ export const publicSubdomainService = {
       // `findLiveSubdomainForWorkspace` resolves arbitrarily.
       await publicAddressRepository.retireSubdomainToAlias(live.id, tx);
       await publicAddressRepository.createSubdomain({ workspaceId, hostname }, tx);
+      await assertNotReserved(hostname, tx);
 
       const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
       return toDto(addresses)!;
@@ -190,6 +192,40 @@ async function assertAddressAdmin(workspaceId: string, actorUserId: string): Pro
 function assertLabelClaimable(label: string): void {
   const refusal = refuseLabel(label);
   if (refusal) throw new ReservedLabelError(label, refusal);
+}
+
+/**
+ * Refuse a hostname a DELETED workspace retired — the second half of ADR §8's
+ * never-released rule (Bug MOTIR-4366).
+ *
+ * The first half is the `public_address.hostname` unique index, which holds a
+ * name for as long as its row exists. This is the half that holds it once the
+ * row is gone: `workspacesService.deleteWorkspace` writes a digest into
+ * `public_hostname_reservation` before the cascade takes the addresses, and this
+ * is what reads it back.
+ *
+ * ⚠️ CALLED AFTER THE INSERT, NOT BEFORE IT, AND THE ORDER IS THE RACE
+ * ARGUMENT. Checked BEFORE, this would be a count-then-write — the exact shape
+ * the model's own comment says the global unique exists to avoid — with a real
+ * window: a workspace delete committing between the check and the insert frees
+ * a name we have already decided is free. Checked AFTER, the window closes by
+ * construction. Our insert holds the `hostname` slot, so no other row carried
+ * that hostname at insert time; any deletion that could reserve it must
+ * therefore have removed its own row BEFORE our insert, hence committed before
+ * it, hence is visible to this read under READ COMMITTED. Throwing rolls the
+ * whole transaction back, so the refusal costs the caller nothing.
+ *
+ * `HostnameTakenError`, not a fourth error: `errors.ts` is explicit that the
+ * situations behind a taken hostname are deliberately NOT distinguished, and
+ * "held by a workspace that no longer exists" is the one a claimer has least
+ * business being told about.
+ */
+async function assertNotReserved(hostname: string, tx: Prisma.TransactionClient): Promise<void> {
+  const reserved = await publicHostnameReservationRepository.isReservedInTx(
+    hostnameReservationHash(hostname),
+    tx,
+  );
+  if (reserved) throw new HostnameTakenError(hostname);
 }
 
 /**
