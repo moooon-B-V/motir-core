@@ -1662,11 +1662,17 @@ light theme, `deviceScaleFactor: 2`).
 > **Declaring the ink under its real name made it measurable, and it was carrying EIGHTEEN sub-AA
 > elements:** thirteen on `--el-text-faint`, which clears AA on **no** surface at all (2.37–2.61:1),
 > and five on `--el-text-muted` at 4.12–4.34:1 on `--el-surface`. All eighteen now take
-> **`--el-text-secondary`** (6.18–6.80:1 on all four surfaces, both themes) — the rules `.panel-cap
-.note`, `.col-cap`, `.state .st-cap`, `.closeup .cu-cap`, `.forkref .fr-cap`, and the two inline
-> sites in the "No project" empty state. `.rail .navitem.dim` KEEPS `--el-text-faint`: a dimmed nav
-> item is inactive text, which WCAG 1.4.3 exempts and the guard agrees with. The `.inp` placeholder
-> takes `--el-text-muted`, which the guard confirms clears AA on the white card it sits in.
+> **`--el-text-secondary`** (6.18–6.80:1 on all four surfaces, both themes). The rules re-inked:
+>
+> - `.panel-cap` → `.note`
+> - `.col-cap`
+> - `.state` → `.st-cap`
+> - `.closeup` → `.cu-cap`
+> - `.forkref` → `.fr-cap`
+> - the two inline sites in the "No project" empty state
+>   `.rail .navitem.dim` KEEPS `--el-text-faint`: a dimmed nav
+>   item is inactive text, which WCAG 1.4.3 exempts and the guard agrees with. The `.inp` placeholder
+>   takes `--el-text-muted`, which the guard confirms clears AA on the white card it sits in.
 >
 > **`.helper.err` was painting `--el-danger` as page text — the MOTIR-3663 defect, 1.00:1 in every
 > palette's light theme**, where the ink and the page are the same white. It now takes
@@ -1682,12 +1688,15 @@ light theme, `deviceScaleFactor: 2`).
 > | `--accent-soft: #f4f2fd`   | `color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg))` | all-token inputs                                          |
 > | `--danger-soft: #fdecec`   | _deleted_                                                    | declared and never used                                   |
 >
-> Four raw literals at points of use went with them: `#e3def8` on `.ref`'s border → a 17% accent
-> `color-mix()`; `#1a1a1a26` on the `.canvas.dim` scrim → `color-mix(in srgb, var(--el-text) 15%,
-transparent)`; `#ffffff66` and `#fff` on `.spin` and the primary button → `--el-accent-text` and a
-> 40% mix of it. Nine dead aliases were deleted rather than translated. Shape and type aliases carry
-> no colour and are untouched. The `.png` re-export reports `EXACT` at 2560×5316 — the drawn design
-> did not move.
+> Four raw literals at points of use went with them, each now an all-token `color-mix()` or a token:
+>
+> - `#e3def8` on the `.ref` border → a 17% accent mix over `--el-page-bg`
+> - `#1a1a1a26` on the `.canvas.dim` scrim → a 15% `--el-text` mix over `transparent`
+> - `#ffffff66` on `.spin` → a 40% `--el-accent-text` mix over `transparent`
+> - `#fff` on the accent fills → `--el-accent-text`
+>   Nine dead aliases were deleted rather than translated. Shape and type aliases carry
+>   no colour and are untouched. The `.png` re-export reports `EXACT` at 2560×5316 — the drawn design
+>   did not move.
 
 The **IN-APP door** to Journey 1 (create a project → plan it with AI). The first-login / marketing
 door already exists (MOTIR-1457: root → `/sign-in` → "Plan with AI" → `/onboarding`). This card draws
