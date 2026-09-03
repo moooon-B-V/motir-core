@@ -2,7 +2,8 @@
 
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { AtSign, MessageCircleQuestionMark, Send } from 'lucide-react';
+import { AtSign, CircleStop, MessageCircleQuestionMark, Send } from 'lucide-react';
+import { Spinner } from '@/components/ui/Spinner';
 import { Button } from '@/components/ui/Button';
 import { PlanningTargetChip } from '@/components/planning/PlanningTargetChip';
 import { TargetSearchListbox } from '@/components/planning/TargetSearchListbox';
@@ -40,6 +41,23 @@ import type { WorkItemMentionCandidate } from '@/components/ui/markdownEditorMen
 const LISTBOX_ID = 'planning-target-listbox';
 const OPTION_PREFIX = 'planning-target-option';
 
+/**
+ * What the pinned bar says while a run is in flight, and what its control does.
+ *
+ * ⚠️ `stopping` IS NOT `stopped`, and the distinction is the point (MOTIR-4068).
+ * The click is not the stop: the walk reads the flag at its NEXT phase boundary,
+ * which can be a whole authoring session away, so between the two the surface
+ * says the run is **stopping**. A run that keeps narrating after the UI called it
+ * over is worse than a slow stop.
+ */
+export interface RunningBar {
+  /** The current narration line — the same text the transcript's live region shows. */
+  line: string;
+  /** The user has asked for a stop and the walk has not reached its boundary yet. */
+  stopping: boolean;
+  onStop: () => void;
+}
+
 export interface PlanChangeComposerProps {
   draft: string;
   onDraftChange: (value: string) => void;
@@ -71,6 +89,23 @@ export interface PlanChangeComposerProps {
   /** Jump to the pending question in the transcript. */
   onSeeQuestion?: () => void;
   /**
+   * The RUNNING BAR (Story MOTIR-4054 · MOTIR-4068) — the live narration line
+   * while a run works, and the **Stop** beside it. `null` when no run is in
+   * flight, which is the state this component has always been in.
+   *
+   * ⚠️ IT TAKES THE ANSWER BAR'S SLOT, and that is a decision rather than a
+   * convenience. `design/ai-chat/plan-change-run-live.mock.html` sheet 1: the
+   * transcript is the only region that scrolls, so the pinned footer is the one
+   * place always on screen — and the moment a stop is wanted is the moment the
+   * run is visibly going wrong, which is exactly when a control on hover or below
+   * a scroll does not exist. MOTIR-2225 measured the header full at `22rem`
+   * (status dot + `Motir AI` + mode chip) and put the answer bar here for the
+   * same reason.
+   *
+   * The two never coexist: awaiting an answer means the run is NOT running.
+   */
+  running?: RunningBar | null;
+  /**
    * Offer the `@` TARGET picker. Default `true` — every shipped call site is a
    * planning turn anchored at committed work items, and none of them passes this.
    *
@@ -101,6 +136,7 @@ export function PlanChangeComposer({
   disabled = false,
   awaitingQuestion = null,
   onSeeQuestion,
+  running = null,
   mentions = true,
 }: PlanChangeComposerProps) {
   const t = useTranslations('planningWorkspace.targets');
@@ -218,6 +254,40 @@ export function PlanChangeComposer({
 
   return (
     <form onSubmit={submit} className="relative border-t border-(--el-border) px-3 py-3">
+      {/* THE RUNNING BAR — the live line and the STOP, in the pinned footer.
+          NOT an alert and NOT a warning tint: nothing has failed, a run is simply
+          working. It reuses `--el-surface-soft`, which is the fill the shipped
+          progress row already carries, so this is that row moved into the region
+          that never scrolls and given a control — composition, not a new
+          treatment (`design/ai-chat/plan-change-run-live.mock.html` sheet 4's
+          token map). */}
+      {running !== null ? (
+        <div
+          data-testid="plan-change-running-bar"
+          className="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2"
+        >
+          <Spinner size="sm" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)">
+            {running.stopping ? tc('stopping') : running.line}
+          </span>
+          {/* SECONDARY, never destructive. A stop is a DECISION, and the whole
+              card turns on it not reading as one: if stopping looks like throwing
+              work away, people wait runs out instead and the control is
+              decorative. So no `--el-danger`, and the label is a word rather than
+              an icon alone. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={running.onStop}
+            disabled={running.stopping}
+            leftIcon={<CircleStop className="size-4" aria-hidden="true" />}
+            data-testid="plan-change-stop"
+          >
+            {running.stopping ? tc('stoppingAction') : tc('stop')}
+          </Button>
+        </div>
+      ) : null}
+
       {/* THE ANSWER BAR — a sibling above the input, where the target tray sits.
           Not an alert: nothing failed, the planner is simply waiting. Its copy
           names the state in words, so the live region announces it when the log

@@ -137,7 +137,7 @@ export function PlanningWorkspaceHost({
     setTreeVersion((v) => v + 1);
     router.refresh();
   }, [router]);
-  const { state, send, retry, correctTurn, approve, discard } = usePlanChangeConversation({
+  const { state, send, retry, correctTurn, approve, discard, stop } = usePlanChangeConversation({
     onApproved,
     anchorId,
   });
@@ -299,6 +299,7 @@ export function PlanningWorkspaceHost({
           onCorrectTurn={correctTurn}
           onApprove={approve}
           onDiscard={discard}
+          onStop={stop}
         />
       }
     />
