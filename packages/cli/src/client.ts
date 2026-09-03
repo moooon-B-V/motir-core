@@ -1499,9 +1499,10 @@ export class MotirClient {
    * (MOTIR-3023). The entrance `motir auto --auto-approve-replan` drives.
    *
    * ⚠️ ADDRESSED BY THE CARD, which is what makes this callable at all. The plan
-   * was submitted by the AGENT with `motir plan --detach <KEY>`, in a sandbox,
-   * and the id came back on its stdout — which this process streams straight to
-   * the terminal and never captures. There is no plan id to send, and the
+   * was submitted by the AGENT, in a sandbox, with the `submit_plan_session`
+   * tool anchored at `targetKeys: [<KEY>]` (MOTIR-4083; the retired door was
+   * `motir plan --detach <KEY>`), and the id came back in its tool result — which
+   * this process never sees. There is no plan id to send, and the
    * server does not want one: it derives the plan from the conversation anchored
    * at this key, so a caller cannot name a plan the card did not produce.
    *

@@ -11,6 +11,10 @@ import {
 import { splitPlanBody } from '@/lib/markdown/planBody';
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import type { WorkItemTypeDto } from '@/lib/dto/workItems';
+import {
+  AI_REQUIREMENT_FIELDS,
+  AI_REQUIREMENT_REQUIRED_NON_EMPTY,
+} from '../fixtures/settledRequirement';
 
 // PURE unit suite for the dispatch-prompt GRAMMAR (Story 7.9 · MOTIR-1802). No
 // DB — the assembler reads nothing, which is the property that makes the prompt
@@ -749,14 +753,19 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     }
   });
 
-  it('names the exact `motir plan` invocation, key substituted', () => {
+  it('names the exact submit, key substituted — the TOOL, anchored at this card', () => {
     // Verbatim, because an agent told to "submit your findings for re-planning"
     // will invent an invocation — and the likely invention is an unanchored
     // thread, which produces a project-wide plan about one card's defect.
+    // ⚠️ THE INVOCATION CHANGED (MOTIR-4083): the door is `submit_plan_session`
+    // with `targetKeys: [<KEY>]`, not `motir plan --detach <KEY>`. The full
+    // contract of the two tool steps is the MOTIR-4083 block below; this keeps
+    // the original claim — the anchor is spelled out, with the key in it.
     const outcome = outcomeSection(assembleDispatchPrompt(source({ key: 'PROD-99' })).prompt);
-    expect(outcome).toContain('motir plan --detach PROD-99 "<what you found>"');
+    expect(outcome).toContain('submit_plan_session tool');
+    expect(outcome).toMatch(/targetKeys:\s+\[PROD-99\]/);
     expect(outcome).toContain('anchors the thread to this card');
-    expect(outcome).toContain('`--detach`');
+    expect(outcome).not.toContain('motir plan');
   });
 
   it('bans RESTRUCTURING the plan, and no longer bans creation at all', () => {
@@ -1142,7 +1151,7 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
   it('renders the FULL protocol when no policy is supplied', () => {
     const { prompt } = assembleDispatchPrompt(source());
     expect(prompt).toContain('FOUND A DEFECT');
-    expect(prompt).toContain('motir plan --detach PROD-7');
+    expect(prompt).toMatch(/submit_plan_session[\s\S]*targetKeys:\s+\[PROD-7\]/);
   });
 
   it('renders the FULL protocol for an explicitly-permissive policy, identically', () => {
@@ -1170,14 +1179,15 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
       expect(prompt).toContain('without bug filing');
       expect(prompt).toContain('Comment the finding on PROD-7 instead');
       // The other switch is untouched.
-      expect(prompt).toContain('motir plan --detach PROD-7');
+      expect(prompt).toMatch(/submit_plan_session[\s\S]*targetKeys:\s+\[PROD-7\]/);
     });
 
     it('with re-planning DISABLED renders no submit step, and leaves the card in progress', () => {
       const { prompt } = assembleDispatchPrompt(
         source({ ...over, findingsPolicy: { logBug: true, replan: false } }),
       );
-      expect(prompt).not.toContain('motir plan --detach');
+      expect(prompt).not.toContain('submit_plan_session');
+      expect(prompt).not.toContain('append_plan_turn');
       expect(prompt).not.toContain('status planning');
       expect(prompt).toContain('leave the card In Progress');
       expect(prompt).toContain('without re-planning');
@@ -1192,7 +1202,7 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
       expect(prompt).toContain('FINISHED — the work is done');
       expect(prompt).toContain('status implemented');
       expect(prompt).not.toContain('create_work_item');
-      expect(prompt).not.toContain('motir plan --detach');
+      expect(prompt).not.toContain('submit_plan_session');
     });
   });
 
@@ -1207,6 +1217,219 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
     expect(assembleDispatchPrompt(full).prompt).toBe(assembleDispatchPrompt(full).prompt);
     expect(assembleDispatchPrompt(none).prompt).toBe(assembleDispatchPrompt(none).prompt);
     expect(assembleDispatchPrompt(full).prompt).not.toBe(assembleDispatchPrompt(none).prompt);
+  });
+});
+
+describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-session TOOLS (MOTIR-4083)', () => {
+  // The submit used to be one shell command that sent a KEY and nothing else;
+  // the evidence went into a comment a person reads, and the first thing a
+  // triggered re-plan did was open a conversation to ask what was wrong. Now
+  // the agent appends the finding as a turn, composes motir-ai's six-field
+  // requirement, and submits both — through the tools it was already holding.
+  //
+  // ⚠️ EVERY ASSERTION HERE IS ON THE COMPOSED PROMPT — the artifact the agent
+  // receives — never on the template source. And the field names are read
+  // against the fixture that mirrors motir-ai's OWN list, because this seam
+  // already failed once with both halves green (MOTIR-4168): a prompt asserted
+  // only against itself is what let it.
+
+  /** The card-is-wrong branch alone: from its heading to the third branch. */
+  function replanArm(prompt: string): string {
+    const section = cardOutcomeBranches(prompt);
+    const at = section.indexOf('THE CARD IS WRONG');
+    expect(at, 'the prompt carries THE CARD IS WRONG').toBeGreaterThan(-1);
+    return section.slice(at);
+  }
+
+  /**
+   * The two tool steps, sliced by their own numbering, so an assertion about
+   * one call cannot be satisfied by text belonging to the other.
+   */
+  function toolSteps(arm: string): { append: string; submit: string } {
+    const append = arm.indexOf('5. Put the finding on the planning thread');
+    const submit = arm.indexOf('6. Compose the WHAT');
+    const once = arm.indexOf('7. SUBMITTING IS THE ACT THAT SPENDS');
+    expect(append, 'step 5 is the append').toBeGreaterThan(-1);
+    expect(submit, 'step 6 is the submit').toBeGreaterThan(append);
+    expect(once, 'step 7 is the once rule').toBeGreaterThan(submit);
+    return { append: arm.slice(append, submit), submit: arm.slice(submit, once) };
+  }
+
+  /** One field's entry under `requirement:` — its name line plus the deeper-indented continuation lines. */
+  function fieldEntry(submit: string, field: string): string {
+    const lines = submit.split('\n');
+    const start = lines.findIndex((l) => new RegExp(`^\\s+${field}\\s{2,}`).test(l));
+    expect(start, `${field} is taught`).toBeGreaterThan(-1);
+    let end = start + 1;
+    while (end < lines.length && /^\s{20,}\S/.test(lines[end]!)) end++;
+    return lines.slice(start, end).join('\n');
+  }
+
+  it('step 5 names the TOOLS — append, then submit — after the Planning transition, and the shell-out is GONE', () => {
+    const { prompt } = assembleDispatchPrompt(source({ key: 'PROD-99' }));
+    const arm = replanArm(prompt);
+    const at = (needle: string) => arm.indexOf(needle);
+    expect(at('status planning')).toBeGreaterThan(-1);
+    expect(at('append_plan_turn tool')).toBeGreaterThan(at('status planning'));
+    expect(at('submit_plan_session tool')).toBeGreaterThan(at('append_plan_turn tool'));
+    expect(at('Stop. Do not pick up other work')).toBeGreaterThan(at('submit_plan_session tool'));
+    // ABSENCE, on the WHOLE prompt: a composed prompt still naming the retired
+    // door fails here, whatever else it says.
+    expect(prompt).not.toContain('motir plan');
+    expect(prompt).not.toContain('--detach');
+  });
+
+  it('carries `targetKeys: [<KEY>]` on BOTH calls — the anchor is an argument now, and two calls are two chances to drop it', () => {
+    const { prompt } = assembleDispatchPrompt(source({ key: 'PROD-99' }));
+    const { append, submit } = toolSteps(replanArm(prompt));
+    expect(append).toMatch(/targetKeys:\s+\[PROD-99\]/);
+    expect(submit).toMatch(/targetKeys:\s+\[PROD-99\]/);
+    expect(append).toMatch(/projectKey:\s+PROD\b/);
+    expect(submit).toMatch(/projectKey:\s+PROD\b/);
+    // …and it says WHY at the first call, and that both carry it at the second.
+    expect(append).toContain('anchors the thread to this card');
+    expect(append).toContain('PROJECT-WIDE thread');
+    expect(submit).toContain('Both calls carry targetKeys');
+  });
+
+  it('teaches the six FIELD NAMES the wire and the validator use, in CANONICAL ORDER — read against motir-ai’s list', () => {
+    // A rename on any of the three sides — the prompt, `submit_plan_session`'s
+    // schema, motir-ai's `REQUIREMENT_FIELDS` (mirrored by the fixture) — fails
+    // here rather than at a planning run in production.
+    const { submit } = toolSteps(replanArm(assembleDispatchPrompt(source()).prompt));
+    expect(submit).toContain('six named fields, in this order');
+    let last = -1;
+    for (const field of AI_REQUIREMENT_FIELDS) {
+      const at = submit.search(new RegExp(`^\\s+${field}\\s{2,}`, 'm'));
+      expect(at, `${field} is taught, after the field before it`).toBeGreaterThan(last);
+      last = at;
+    }
+    // Exactly six — no seventh field invented, none dropped.
+    const taught = submit.split('\n').filter((l) => /^ {11}[A-Za-z]+ {2,}/.test(l));
+    expect(taught).toHaveLength(AI_REQUIREMENT_FIELDS.length);
+  });
+
+  it('marks exactly the REQUIRED three, and says "" is an ANSWER for the other three', () => {
+    const { submit } = toolSteps(replanArm(assembleDispatchPrompt(source()).prompt));
+    for (const field of AI_REQUIREMENT_FIELDS) {
+      const required = (AI_REQUIREMENT_REQUIRED_NON_EMPTY as readonly string[]).includes(field);
+      const entry = fieldEntry(submit, field);
+      if (required) {
+        expect(entry, `${field} is marked required`).toContain('REQUIRED');
+        expect(entry, `${field} does not offer ""`).not.toContain('""');
+      } else {
+        expect(entry, `${field} is not marked required`).not.toContain('REQUIRED');
+        expect(entry, `${field} says "" is an answer`).toContain('""');
+      }
+    }
+    expect(submit).toContain('three REQUIRED fields must be non-empty');
+    expect(submit).toContain('which is an answer, not a blank to skip');
+  });
+
+  it('states the SELF-CONTAINED bar, and names the pointer as insufficient', () => {
+    // "See my comment" satisfies "pass your evidence" and supplies nothing — it
+    // is the answer a vaguer instruction gets, so the prompt names it.
+    const { submit } = toolSteps(replanArm(assembleDispatchPrompt(source()).prompt));
+    expect(submit).toContain('SELF-CONTAINED');
+    expect(submit).toContain('"see my comment on the card"');
+    expect(submit).toContain('supplies nothing');
+    expect(submit).toContain('put the content in the field');
+  });
+
+  it('says the turn is the agent’s ONLY contribution — a brief, not a note', () => {
+    const { submit } = toolSteps(replanArm(assembleDispatchPrompt(source()).prompt));
+    expect(submit).toContain('This is your ONLY contribution');
+    expect(submit).toContain('nothing will come back and ask you');
+    expect(submit).toMatch(/Write a brief, not a\s+note/);
+  });
+
+  it('says APPENDING IS NOT SUBMITTING, and that submitting is the act that spends', () => {
+    // "Run it once" has two parts now, and this is the one the split makes easy
+    // to get wrong: an agent that thinks its append submitted stops having done
+    // nothing. Stated in the prompt's own voice, not left to the tool text.
+    const arm = replanArm(assembleDispatchPrompt(source()).prompt);
+    const { append } = toolSteps(arm);
+    expect(append).toContain('APPENDING IS NOT SUBMITTING');
+    expect(append).toMatch(/costs nothing and\s+starts no job/);
+    expect(append).toContain('Nothing has reached the planner until step 6');
+    expect(arm).toContain("SUBMITTING IS THE ACT THAT SPENDS the token owner's AI credits");
+  });
+
+  it('the one legitimate retry is its OWN sentence, apart from *submit ONCE*', () => {
+    // Two distinct sentences, because collapsing them is how "never retry"
+    // becomes "retry freely". A schema-rejected requirement spent nothing, so
+    // that ONE case is re-submitted — without the requirement.
+    const arm = replanArm(assembleDispatchPrompt(source()).prompt);
+    const once = arm.indexOf('do it exactly ONCE. Never retry it, even on a timeout');
+    const exception = arm.indexOf('REJECTS your arguments');
+    expect(once).toBeGreaterThan(-1);
+    expect(exception).toBeGreaterThan(once);
+    expect(arm).toMatch(/nothing happened — no job was created and no credits were spent/);
+    expect(arm).toMatch(/re-submit once, WITHOUT the requirement/);
+    expect(arm).toContain('That is the only retry there is');
+  });
+
+  it('does NOT ask the agent to diagnose the planning rules — asserted by absence', () => {
+    // That is the fix phase's work, and an agent asked to classify invents.
+    const { prompt } = assembleDispatchPrompt(source());
+    for (const forbidden of [
+      'planning rule',
+      'planning bug',
+      'log_planning_bug',
+      'MOTIR-1465',
+      'which rule',
+      'lesson',
+    ]) {
+      expect(prompt.toLowerCase(), `no "${forbidden}"`).not.toContain(forbidden.toLowerCase());
+    }
+    const arm = replanArm(prompt);
+    expect(arm).toContain('you are not asked to classify the');
+    expect(arm).toMatch(/what is wrong with the\s+CARD, not why it was planned that way/);
+  });
+
+  it('a refusal with NO composed WHAT is still SENT', () => {
+    // Refusing must never become conditional on writing well — the consumer
+    // falls back to opening a conversation (MOTIR-4082), and the tool forwards a
+    // partial or absent requirement unchanged (MOTIR-4172).
+    const { submit } = toolSteps(replanArm(assembleDispatchPrompt(source()).prompt));
+    expect(submit).toMatch(/submit anyway, WITHOUT\s+requirement/);
+    expect(submit).toContain('must never wait on writing well');
+  });
+
+  it('the comment STAYS, and the turn carries the SAME content', () => {
+    // Composed once, delivered twice: the human-readable trail is not traded
+    // for the machine-readable one.
+    const arm = replanArm(assembleDispatchPrompt(source()).prompt);
+    expect(arm).toContain('3. Comment the finding on PROD-7');
+    expect(toolSteps(arm).append).toContain('the SAME text as your step-3 comment');
+  });
+
+  it('is ONE text in both workflow variants — the arm does not vary by lineage', () => {
+    // The composition is decided by the run's POLICY and the card, never by
+    // which git workflow the item was dispatched under.
+    const per = replanArm(assembleDispatchPrompt(source({ sessionBranch: null })).prompt);
+    const lineage = replanArm(
+      assembleDispatchPrompt(source({ sessionBranch: 'session/PROD-2-run' })).prompt,
+    );
+    expect(lineage).toBe(per);
+  });
+
+  it('with re-planning DISABLED, neither tool is named and nothing is composed', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ findingsPolicy: { logBug: true, replan: false } }),
+    );
+    const outcome = outcomeSection(prompt);
+    for (const gone of [
+      'append_plan_turn',
+      'submit_plan_session',
+      'targetKeys',
+      'requirement',
+      'ONLY contribution',
+      'SUBMITTING IS THE ACT',
+    ]) {
+      expect(outcome, `no "${gone}"`).not.toContain(gone);
+    }
+    expect(outcome).toContain('leave the card In Progress');
   });
 });
 

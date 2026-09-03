@@ -1390,9 +1390,9 @@ function closeOutRepo(
  * found), abandoning work that has nothing to do with this plan.
  *
  * ⚠️ IT SENDS NO PLAN ID, and cannot. The plan was submitted by the AGENT, in a
- * sandbox, with `motir plan --detach <KEY>`; its id came back on that agent's
- * stdout, which this process streams straight to the terminal and never
- * captures. The card IS the address, and the server derives the plan from the
+ * sandbox, with the `submit_plan_session` tool anchored at `targetKeys: [<KEY>]`
+ * (MOTIR-4083; the retired door was `motir plan --detach <KEY>`); its id came
+ * back in that agent's tool result, which this process never sees. The card IS the address, and the server derives the plan from the
  * conversation anchored at it — so the run cannot approve a plan the card did
  * not produce even by mistake.
  */
