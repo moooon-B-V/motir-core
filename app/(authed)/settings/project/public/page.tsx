@@ -6,6 +6,8 @@ import { isCloud } from '@/lib/billing/availability';
 import { projectsService } from '@/lib/services/projectsService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { guardSettingsPage } from '../_guard';
+import { publicProjectUrl } from '@/lib/publicProjects/urls';
+import { PublicPageEditor } from './_components/PublicPageEditor';
 
 // THE PUBLIC PAGE ROOM (Story MOTIR-3875 · MOTIR-4243) — where a project admin
 // edits the tagline, tags and README that `motir.co/p/<key>` renders. Drawn by
@@ -13,12 +15,10 @@ import { guardSettingsPage } from '../_guard';
 // `design/projects/design-notes.md` § *Public page — the room in project
 // settings*.
 //
-// This card is the MOUNT — the door, the page and the read. The room's client
-// island (the card, the three fields, the save bar and its six states) is
-// MOTIR-4171, which is blocked on this. Until it lands, the page renders its
-// HEADER ALONE: an admin-only room, on cloud only, for the window between two
-// pull requests in one sprint. That is the card's own stated ordering, not an
-// oversight.
+// MOTIR-4243 was the MOUNT — the door, the page and the read. MOTIR-4171 is the
+// room's client island (`_components/PublicPageEditor.tsx` — the card, the
+// three fields, the save bar and its six states), rendered under the header
+// below with the three hero fields the read returns as its initial values.
 //
 // ── THREE GATES, IN THIS ORDER, AND THE ORDER IS THE POINT ─────────────────
 //
@@ -57,14 +57,11 @@ export default async function ProjectPublicPagePage() {
   const refused = await guardSettingsPage('public-page', ctx);
   if (refused) return refused;
 
-  // THE ISLAND'S INITIAL VALUES (MOTIR-4171). The room's client island mounts
-  // below this header and takes these three fields as its initial state; this
-  // card ships the read that produces them, MOTIR-4171 ships the island that
-  // renders them. Deliberately not consumed yet — hence the leading underscore
-  // the lint config reserves for exactly that. Dropping the call until the
-  // island exists would leave MOTIR-4171 to find out whether the widened read
-  // works, on the card that can least afford it.
-  const _initialHero = await projectsService.getPublicHero({
+  // THE ISLAND'S INITIAL VALUES — the three hero fields, read once here
+  // (MOTIR-4243's widened read) and handed to the island as its committed
+  // baseline. The island never re-reads them: the save's success response is
+  // its confirmation (CLAUDE.md § page state, rule 1).
+  const initialHero = await projectsService.getPublicHero({
     key: ctx.project.identifier,
     ctx,
   });
@@ -82,6 +79,19 @@ export default async function ProjectPublicPagePage() {
           })}
         </p>
       </header>
+
+      <PublicPageEditor
+        projectKey={ctx.project.identifier}
+        initial={initialHero}
+        // The not-yet-public band and the head's *View public page* link hang
+        // off the access level (Panel C6): the room is usable before the
+        // project is public — an overview is written before it is shown.
+        isPublic={ctx.project.accessLevel === 'public'}
+        // The page ON THE PUBLIC HOST, resolved by the one module that owns
+        // that question (`publicSiteOrigin()` → `MOTIR_PUBLIC_SITE_URL`); a
+        // server value threaded to the island, as the Members room does.
+        publicPageUrl={publicProjectUrl(ctx.project.identifier)}
+      />
     </div>
   );
 }

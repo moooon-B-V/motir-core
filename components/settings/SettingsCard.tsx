@@ -16,6 +16,7 @@ export function SettingsCard({
   icon,
   title,
   subtitle,
+  action,
   footer,
   testId,
   children,
@@ -23,6 +24,14 @@ export function SettingsCard({
   icon: ReactNode;
   title: string;
   subtitle: string;
+  /**
+   * Optional affordance at the head's trailing edge — a link or a small button
+   * that belongs to the card as a whole rather than to one field (the Public
+   * page room's *View public page*, `design/projects/public-page.mock.html`
+   * Panel B). The title block yields to it (`min-w-0 flex-1`) so a long
+   * subtitle wraps instead of pushing it off the row.
+   */
+  action?: ReactNode;
   footer?: ReactNode;
   /** Optional `data-testid` on the section — the E2E's stable handle. */
   testId?: string;
@@ -36,10 +45,11 @@ export function SettingsCard({
     >
       <div className="border-(--el-border-soft) flex items-start gap-2.5 border-b px-(--spacing-card-padding) py-4">
         <span className="text-(--el-icon-heading) mt-px shrink-0">{icon}</span>
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-(--el-text)">{title}</h2>
           <p className="text-(--el-text-muted) mt-0.5 max-w-[58ch] text-xs">{subtitle}</p>
         </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       <div className="flex flex-col gap-5 px-(--spacing-card-padding) py-5">{children}</div>
       {footer}
