@@ -432,6 +432,31 @@ jobs:
       # Prisma client is generated, not committed — typecheck needs it.
       - run: pnpm prisma generate
         if: steps.cache-prisma-typecheck.outputs.cache-hit != 'true'
+      # ⚠️ THE WORKSPACE PACKAGES ARE BUILT HERE, UNCONDITIONALLY, AND THE
+      # `if:` TWO STEPS UP IS WHY (MOTIR-4292, 2026-09-03).
+      #
+      # `components/ui/*` and `components/brand/*` are four-line re-export shims
+      # over `@motir/design-system` / `@motir/brand` (MOTIR-1527), and a workspace
+      # link resolves to `packages/<pkg>`, whose `exports` point at `./dist`.
+      # `dist` is git-ignored, so a fresh checkout has none: it is built by the
+      # ROOT `postinstall`. On a node_modules CACHE HIT the install above is
+      # skipped, the postinstall never runs, and the type-check then answers
+      # `TS2305: Module '"@/components/ui/Button"' has no exported member
+      # 'Button'` — dozens of times, across app files the diff never touched.
+      # It reads exactly like a broken tree and is a missing build step.
+      #
+      # Measured on this pull request's first run: install skipped on a cache
+      # hit, and the same errors reproduce locally by moving
+      # `packages/design-system/dist` aside. The `design-system` and `cli` jobs
+      # have always avoided this by carrying NO node_modules cache at all — their
+      # comments give the same reason — and this job keeps the cache and pays 25 s
+      # for the build instead.
+      #
+      # `-r --filter './packages/*'` rather than three named packages: a fourth
+      # workspace package is then covered without anybody remembering this step
+      # exists, and `-r` skips a package that declares no `build`.
+      # `tests/ci-typecheck-headroom.test.ts` pins that this step is here.
+      - run: pnpm -r --filter './packages/*' build
       # ⚠️ THE HEAP BUMP IS GONE FROM THIS LANE (MOTIR-4293, 2026-09-03), AND
       # THAT IS THE MEASUREMENT — a split that still needed the bump would have
       # proven nothing. `pnpm typecheck` is now `tsc -b tsconfig.solution.json`:

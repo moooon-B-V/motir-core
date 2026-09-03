@@ -90,6 +90,32 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
     );
   });
 
+  it('builds the workspace packages before type-checking anything', () => {
+    // ⚠️ THE STEP THIS PINS IS THE ONE THIS PULL REQUEST'S FIRST CI RUN WENT RED
+    // WITHOUT. `components/ui/*` are re-export shims over `@motir/design-system`,
+    // whose `exports` point at a git-ignored `dist` built by the ROOT
+    // `postinstall` — and the install step above is skipped on a node_modules
+    // cache hit. The type-check then reports `TS2305: … has no exported member
+    // 'Button'` across app files the diff never touched, which reads as a broken
+    // tree and is a missing build.
+    //
+    // It is pinned as a REGEX over the filter rather than as a literal command so
+    // the step can be spelled differently, and NOT as three named packages so a
+    // fourth needs no edit here.
+    const job = typecheckJob();
+    expect(job, 'the typecheck job must build `packages/*` before it type-checks').toMatch(
+      /pnpm .*--filter\s+'?\.\/packages\/\*'?\s+build/,
+    );
+    // …and it must be UNCONDITIONAL. An `if:` on it is the same defect one step
+    // over: the build would be skipped in exactly the case that needs it.
+    const buildLine = job.split('\n').findIndex((l) => /--filter.*packages.*build/.test(l));
+    expect(buildLine).toBeGreaterThan(-1);
+    expect(
+      job.split('\n')[buildLine + 1] ?? '',
+      'the package build must carry no `if:`',
+    ).not.toMatch(/^\s*if:/);
+  });
+
   it('BITES on a workflow whose typecheck job runs a bare `pnpm typecheck`', () => {
     // The mutation case for the workflow half: the predicate is two `toContain`s,
     // and a predicate never watched to fail may be matching nothing.
