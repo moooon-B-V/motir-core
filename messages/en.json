@@ -2271,9 +2271,9 @@
       "copyError": "Couldn't copy the link.",
       "linkNote": "Anyone can open this link with no sign-in, and the page is crawlable by search engines. Visitors sign in only to submit, upvote, or comment. To stop sharing, set the access level above to anything other than Building in public.",
       "heroOverviewHeading": "Hero & overview",
-      "heroOverviewSubheading": "Edit the tagline, tags, and README right on the public page — what you change is what visitors see.",
-      "editOnPublicPage": "Edit on the public page",
-      "heroOverviewNote": "Opens the public Overview with the on-page editor. It's hidden while the project isn't public."
+      "heroOverviewSubheading": "The tagline, tags and README visitors see on your public page.",
+      "editOnPublicPage": "Edit the public page",
+      "heroOverviewNote": "Opens Settings › Public page. You can write it before the project is public."
     },
     "jobs": {
       "title": "Job runs",
