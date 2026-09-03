@@ -24,6 +24,11 @@ const { createTestWorkspace } = await import('../fixtures');
 
 const BASE = 'motir.example';
 const HOST = 'roadmap.acme.test';
+/** An APEX customer domain — two labels, so it cannot take a CNAME (ADR §5). */
+const APEX = 'acme-roadmap.test';
+const CNAME_TARGET = 'motir-marketing.fly.dev';
+const A_RECORD = '66.241.125.217';
+const AAAA_RECORD = '2a09:8280:1::17d:93fd:0';
 
 let ctx: { workspaceId: string };
 let actorUserId: string;
@@ -42,6 +47,13 @@ beforeEach(async () => {
   process.env['MOTIR_CLOUD'] = 'true';
   process.env['MOTIR_PUBLIC_TENANT_DOMAIN'] = BASE;
   process.env['MOTIR_PUBLIC_SITE_URL'] = 'https://motir.co';
+  // ⚠️ SET, because a CONFIGURED deployment is the production path (MOTIR-4278,
+  // ADR §10 AMENDMENT 1). This suite ran with them absent — necessarily, since
+  // they did not exist — and every assertion about `dns` was therefore an
+  // assertion about the unconfigured arm while reading as one about the feature.
+  process.env['MOTIR_PUBLIC_ADDRESS_CNAME_TARGET'] = CNAME_TARGET;
+  process.env['MOTIR_PUBLIC_ADDRESS_A_RECORDS'] = A_RECORD;
+  process.env['MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS'] = AAAA_RECORD;
   trace = [];
   txtRecords = [];
   onRequest = async () => ({ issued: false });
@@ -90,6 +102,9 @@ afterEach(() => {
   delete process.env['MOTIR_CLOUD'];
   delete process.env['MOTIR_PUBLIC_TENANT_DOMAIN'];
   delete process.env['MOTIR_PUBLIC_SITE_URL'];
+  delete process.env['MOTIR_PUBLIC_ADDRESS_CNAME_TARGET'];
+  delete process.env['MOTIR_PUBLIC_ADDRESS_A_RECORDS'];
+  delete process.env['MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS'];
   vi.restoreAllMocks();
 });
 
@@ -126,8 +141,40 @@ describe('add', () => {
     expect(dto).toMatchObject({ hostname: HOST, status: 'unverified', isPrimary: false });
     expect(dto.verification?.name).toBe(`_motir-verify.${HOST}`);
     expect(dto.verification?.value).toMatch(/^motir-verify-/);
+    // ⚠️ BOTH RECORDS, AND THE POINTING ONE FIRST (MOTIR-4278). This assertion
+    // read `[TXT]` and passed for as long as the pointing record did not exist —
+    // a customer could prove they owned a domain and was never told where to
+    // point it. ADR §5's order of operations has them create BOTH at step 2,
+    // before *Verify*, so both have to be on the payload the pane renders from
+    // the moment the address is created.
     expect(dto.dns).toEqual([
+      { type: 'CNAME', name: HOST, value: CNAME_TARGET },
       { type: 'TXT', name: `_motir-verify.${HOST}`, value: dto.verification!.value },
+    ]);
+  });
+
+  it('an APEX is given A + AAAA instead — it cannot take a CNAME (RFC 1034 §3.6.2)', async () => {
+    const dto = await addDomain(APEX);
+    expect(dto.dns).toEqual([
+      { type: 'A', name: APEX, value: A_RECORD },
+      { type: 'AAAA', name: APEX, value: AAAA_RECORD },
+      { type: 'TXT', name: `_motir-verify.${APEX}`, value: dto.verification!.value },
+    ]);
+    // The pane draws its apex caveat off the presence of an address record, so
+    // this is also what makes that note appear for exactly the right customers.
+    expect(dto.dns.some((r) => r.type === 'CNAME')).toBe(false);
+  });
+
+  it('an UNCONFIGURED deployment shows the ownership record ALONE, never a guess', async () => {
+    // The honest degraded state, and the one production was in until the
+    // variables were provisioned: a value copied into a customer's own zone must
+    // never be invented (`tenantDomain.ts`'s rule).
+    delete process.env['MOTIR_PUBLIC_ADDRESS_CNAME_TARGET'];
+    delete process.env['MOTIR_PUBLIC_ADDRESS_A_RECORDS'];
+    delete process.env['MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS'];
+    const dto = await addDomain('unconfigured.acme.test');
+    expect(dto.dns).toEqual([
+      { type: 'TXT', name: '_motir-verify.unconfigured.acme.test', value: dto.verification!.value },
     ]);
   });
 
@@ -180,6 +227,12 @@ describe('verify — the side effects happen OUTSIDE any transaction, in order',
     expect(after.issuedAt).not.toBeNull();
     // The ownership record stops being shown once it is no longer owed.
     expect(after.verification).toBeNull();
+    // ⚠️ THE POINTING RECORD DOES NOT (MOTIR-4278). The two are dropped on
+    // opposite rules: the TXT is a task the customer has finished, and the CNAME
+    // is the live configuration — deleting it from their zone would take the
+    // address down, so it stays on the payload for the customer auditing their
+    // records months later.
+    expect(after.dns).toEqual([{ type: 'CNAME', name: HOST, value: CNAME_TARGET }]);
   });
 
   it('a MISSING record leaves it unverified with an actionable reason', async () => {
