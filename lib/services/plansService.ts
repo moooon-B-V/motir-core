@@ -107,8 +107,11 @@ import type {
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
+  PlanItemOpDto,
+  WorkItemPendingPlanStatusDto,
+  WorkItemPendingProposalDto,
 } from '@/lib/dto/plans';
-import { PLAN_STATUS_DTO_VALUES } from '@/lib/dto/plans';
+import { PLAN_STATUS_DTO_VALUES, WORK_ITEM_PENDING_PLAN_STATUSES } from '@/lib/dto/plans';
 import { toPlanDto, toPlanItemDto, toPlanWithItemsDto } from '@/lib/mappers/planMappers';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
@@ -3790,6 +3793,55 @@ export const plansService = {
     await projectAccessService.assertCanBrowse(projectId, ctx);
     const planId = await plansService.resolvePlanIdForWorkItem(projectId, workItemKey, ctx);
     return plansService.getPlan(planId, ctx);
+  },
+
+  /**
+   * The UNDECIDED proposals that name ONE work item — what the work-item detail
+   * page announces about the plan that is about to change it (bug MOTIR-4197 ·
+   * design MOTIR-4256).
+   *
+   * ⚠️ ITS OWN READ, NOT `aiBoundaryService.readPendingPlans`. That seam is
+   * PROJECT-scoped, returns `itemCount` and never the proposals, caps at ten,
+   * and lives behind `/api/internal/ai/*` for a prompt — it cannot answer *which
+   * plans name THIS card*. This is `planItemRepository.findPendingByWorkItemId`,
+   * the drift listener's own first question narrowed to the undecided statuses,
+   * with the plan's id / title / status on the same row: ONE indexed lookup.
+   *
+   * ⚠️ THE STATUS SET IS DECIDED HERE — `WORK_ITEM_PENDING_PLAN_STATUSES`
+   * (`planned` + `stale`), never `AI_PENDING_PLAN_STATUSES`, which admits
+   * `generating` because it answers a different question. A caller cannot ask
+   * for a decided plan: the signature has nowhere to put a status.
+   *
+   * Browse-gated like every other plan read; the page that calls it has already
+   * resolved the same permission set and skips the call entirely for an actor
+   * without `ai:view_plan` (an indicator naming a plan the viewer cannot open is
+   * worse than none — MOTIR-4197 AC 4).
+   */
+  async listPendingProposalsForWorkItem(
+    projectId: string,
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<WorkItemPendingProposalDto[]> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findPendingByWorkItemId(
+        workItemId,
+        ctx.workspaceId,
+        projectId,
+        WORK_ITEM_PENDING_PLAN_STATUSES,
+        tx,
+      ),
+    );
+    return rows.map((row) => ({
+      planId: row.plan.id,
+      planTitle: row.plan.title,
+      // The repository filtered on exactly this set, so the narrowing is a
+      // restatement of the predicate rather than a second decision.
+      planStatus: row.plan.status as WorkItemPendingPlanStatusDto,
+      // `add` is excluded by the repository's `op` predicate — the same reason
+      // an `add` can never be the target of a reverse lookup at all.
+      op: row.op as Exclude<PlanItemOpDto, 'add'>,
+    }));
   },
 
   /**
