@@ -67,7 +67,9 @@ keeps dependency context while editing.
   **Blocked by · Blocks · Relates to · Duplicates · Clones**. Each group =
   a `SectionLabel` header + a mono count + a list of rows.
 - **Row** (mirrors the 2.4.3 `ChildList` row): `IssueTypeIcon` (lucide glyph in
-  the type's `--el-type-*` hue) · identifier (mono, muted) · title (truncates) ·
+  the type's `--el-type-*` hue) · identifier (mono, `--el-text-identifier` —
+  MOTIR-4255; it was `--el-text-muted`, which is 4.17:1 once the row takes its
+  own `:hover` tint) · title (truncates) ·
   status `Pill`. The whole row is a link to that issue's detail page. An **open
   blocker** (non-terminal, in the Blocked-by group) carries a small
   `--color-warning` dot before its icon so the banner's named blockers are
@@ -1155,8 +1157,10 @@ time** (12px `--el-text-muted`; absolute timestamp on hover via `title`) ·
 the **"· Edited" tag** (12px muted; only when `editedAt` is set — latest
 version only, no history; its `title` carries the edit timestamp). The body
 renders through **`MarkdownView`** prose (14px / 1.6) with inline mention
-chips. Below, the **quiet action row**: 12px text buttons (`--el-text-muted`,
-hover `--el-text` on `--el-surface`; Delete hovers `--el-danger` on
+chips. Below, the **quiet action row**: 12px text buttons
+(`--el-text-secondary` — MOTIR-4255; it was `--el-text-muted`, which the row's
+own hover tint takes to 4.17:1, and the hover state is the only one these
+buttons are ever read in), hover `--el-text` on `--el-surface`; Delete hovers `--el-danger` on
 `--el-tint-rose` — the `RemoveLinkButton` trigger grammar), separated by faint
 `·` dots.
 

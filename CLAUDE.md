@@ -706,6 +706,20 @@ tree, over both layers a mock paints in, and it resolves descendant / child /
 compound selectors as well as bare ones (MOTIR-3122) — a rule nested two levels
 deep is as visible to it as a top-level class.
 
+**⚠️ That arm rules on the RESTING state ONLY, and its green is not a claim about
+a hovered row (MOTIR-4255).** Its scanner abstains, deliberately and correctly,
+on every selector carrying a pseudo-class: a static walk cannot know whether a
+state obtains, so it may neither clear an ink on one nor claim a tint from one.
+The consequence is that `.lt-row:hover { background: var(--el-surface) }` with a
+`--el-text-muted` key inside it was invisible to a guard enforced at ZERO — 216
+such elements across 22 assets. **`tests/design-state-ink-contrast.test.ts` is
+the arm that measures them**: it renders each mock in happy-dom and resolves the
+state surface from the TREE rather than from the selector text. So when you
+write a `:hover` / `:focus` / `:active` tint into a mock, the ink inside it is
+ruled on — reach for `--el-text-secondary`, or `--el-text-identifier` for a
+monospace item key, and note that most mocks must DECLARE the latter in their own
+token block (it is newer than they are).
+
 ---
 
 ## ⚠️ E2E tests wait on the AUTHORITATIVE signal — never race optimistic / async UI

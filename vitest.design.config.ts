@@ -81,6 +81,16 @@ export default defineConfig({
       // happy-dom, already a devDependency — no browser, so the lane stays in the
       // cost class this config's header promises.
       'tests/design-dark-parity.test.ts',
+      // `design-state-ink-contrast` (MOTIR-4255) is the STATE arm of the ink
+      // guard: `inkContrastMockScan`'s `stylePaint` abstains on every selector
+      // carrying a pseudo-class, so `design-ink-contrast` enforces the muted arm
+      // at zero over the RESTING tree only — every `:hover` tint was unmeasured
+      // by construction. This spec renders each mock in happy-dom and resolves
+      // the state surface from the tree instead of from the selector text. Same
+      // engine and the same cost class as its neighbour above; it reads
+      // `design/**` and nothing else, so a design PR is both the only thing that
+      // can break it and the only thing that can fix it.
+      'tests/design-state-ink-contrast.test.ts',
     ],
   },
   resolve: {
