@@ -202,7 +202,20 @@ export const publicAddressesService = {
         urls.push(url);
         if (project?.primaryAddressId === a.id) promoted = url;
       } else if (a.kind === 'workspace_subdomain') {
-        subdomainUrl = `https://${a.hostname}${publicProjectPath(identifier)}`;
+        // ⚠️ `/<identifier>`, NOT `/p/<identifier>` — and the difference is the
+        // whole point of the address. A workspace subdomain serves the project
+        // at the FIRST path segment (`acme.motir.site/PROD`); `/p/` is the
+        // shape `motir.co` uses because that host also carries a landing, an
+        // /explore and a /docs that a bare key would collide with.
+        //
+        // Corrected against the renderer, which is the authority on what a
+        // path means: `motir-marketing`'s router (MOTIR-4220) rewrites
+        // `/<identifier>` on a subdomain onto its `/p/[identifier]` tree. It
+        // also serves `/p/<identifier>` there — it has to, because it sees its
+        // own rewrite — so the old value was not BROKEN. It was a canonical
+        // pointing at the duplicate rather than at the address, which is
+        // exactly the failure `<link rel="canonical">` exists to prevent.
+        subdomainUrl = `https://${a.hostname}/${encodeURIComponent(identifier)}`;
         urls.push(subdomainUrl);
       }
       // An ALIAS is deliberately not listed. It is a redirect, not an address

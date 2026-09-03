@@ -202,13 +202,20 @@ describe('addressesForProject — the ADR §7 default rule', () => {
   });
 
   it('a subdomain claimed → the subdomain PATH is primary, motir.co becomes an alternate', async () => {
+    // ⚠️ `/ACME`, NOT `/p/ACME`. The ADR's Q2 and §3 spell the address
+    // `acme.<base>/<identifier>` and the renderer's router serves it there
+    // (MOTIR-4220); `/p/` is `motir.co`'s shape, because that host also carries
+    // a landing, an /explore and a /docs a bare key would collide with. This
+    // assertion carried the wrong shape until the router was built against it —
+    // the URL still RESOLVED, which is why nothing else caught it, so what was
+    // shipped was a canonical naming the duplicate instead of the address.
     await seedSubdomain(host, `acme.${BASE}`);
     const a = await publicAddressesService.addressesForProject(
       host.projectId,
       host.workspaceId,
       'ACME',
     );
-    expect(a.primary).toBe(`https://acme.${BASE}/p/ACME`);
+    expect(a.primary).toBe(`https://acme.${BASE}/ACME`);
     expect(a.alternates.some((u) => u.includes('/p/ACME'))).toBe(true);
     expect(a.alternates).not.toContain(a.primary);
   });
@@ -227,7 +234,7 @@ describe('addressesForProject — the ADR §7 default rule', () => {
     );
     expect(a.primary).toBe('https://roadmap.acme.test');
     // Both the subdomain path and the motir.co URL are alternates that redirect.
-    expect(a.alternates).toContain(`https://acme.${BASE}/p/ACME`);
+    expect(a.alternates).toContain(`https://acme.${BASE}/ACME`);
   });
 
   it('an ADDED-but-not-issued custom domain is neither primary nor an alternate', async () => {
