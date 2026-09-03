@@ -65,6 +65,9 @@ export function toQuickViewData(
     statusLabel: status?.label ?? item.status,
     statusCategory: status?.category ?? null,
     descriptionMd: item.descriptionMd,
+    // The WHY — carried so PROPOSAL mode can render it inline (MOTIR-4183).
+    // `/items` still defers it to the full page; this only makes it AVAILABLE.
+    explanationMd: item.explanationMd,
     type: item.type,
     executor: item.executor,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,

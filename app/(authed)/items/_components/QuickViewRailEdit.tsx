@@ -110,11 +110,23 @@ export interface QuickViewRailEdit {
 export function useQuickViewRailEdit(
   data: QuickViewData | null,
   onEdited?: () => void,
+  /**
+   * PROPOSAL MODE (MOTIR-4184, design Part XIV §5) — suppress every editor,
+   * whatever the actor may do.
+   *
+   * ⚠️ It forces `canEdit` FALSE rather than adding a second gate beside it, and
+   * that is the point: the rail already has one read-only path — the one an
+   * actor without `work_item:edit` takes — and this reuses it rather than
+   * introducing a second way to be non-editable. A proposal is changed by
+   * RE-PLANNING (MOTIR-3084); there is nothing here for an editor to write to,
+   * so a permitted actor must see no affordance either.
+   */
+  suppressEditing = false,
 ): QuickViewRailEdit {
   // MOTIR-2473 — the key this control's own write asserts:
   // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
   const { can } = useProjectAccess();
-  const canEdit = can('work_item:edit');
+  const canEdit = !suppressEditing && can('work_item:edit');
   // Only for the REJECTION message below — every other string on this rail is
   // rendered by the components, and a refusal arrives already translated from
   // the action.
@@ -238,6 +250,7 @@ export function EditableRailField({
   fieldKey,
   edit,
   control,
+  marker,
   children,
 }: {
   label: string;
@@ -245,6 +258,13 @@ export function EditableRailField({
   edit: QuickViewRailEdit;
   /** The control to swap the value for while this row is open. */
   control?: ReactNode;
+  /**
+   * The CHANGED chip, when a plan is moving this row (MOTIR-4184, Part XIV §3).
+   * It renders INSIDE the `<dt>`, so a screen reader announces it as part of the
+   * row's own term — *"Priority changed"* — rather than as a loose chip a reader
+   * has to associate by position.
+   */
+  marker?: ReactNode;
   children: ReactNode;
 }) {
   const t = useTranslations('issueViews');
@@ -266,6 +286,7 @@ export function EditableRailField({
     <div className="flex min-w-0 flex-col gap-1.5" ref={boxRef}>
       <dt className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {label}
+        {marker}
         {edit.confirmed === fieldKey ? (
           <span className="inline-flex text-(--el-success)">
             <Check className="h-3.5 w-3.5" aria-hidden />
