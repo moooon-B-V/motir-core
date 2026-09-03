@@ -124,6 +124,30 @@ export interface ShapeFour {
   longTitle: string;
 }
 
+/**
+ * SHAPE FIVE — one plan carrying ALL THREE ops, each with real bodies
+ * (MOTIR-4187, story MOTIR-4181).
+ *
+ * Every other shape here is about the CANVAS's arrival behaviour, so none of
+ * them has ever needed a `remove`: `grep -c "op: 'remove'"` over this file
+ * returned 0 before this shape. The peek's acceptance walk reads all three, so
+ * the shape is added to the shipped seed rather than seeded bespoke in the spec
+ * — which is the criterion, and the reason this comment exists rather than a
+ * second seeding mechanism next door.
+ */
+export interface ShapeFive {
+  planId: string;
+  epic: CommittedRef;
+  /** The `modify`'s target — it carries both bodies and rail values, so the peek
+   *  has something to render and something to mark. */
+  modified: CommittedRef;
+  /** The `remove`'s target: what approving will archive. */
+  removed: CommittedRef;
+  /** The proposed titles, in append order. */
+  addedTitle: string;
+  modifiedTitle: string;
+}
+
 export interface PlansShapesSeed {
   email: string;
   password: string;
@@ -133,6 +157,7 @@ export interface PlansShapesSeed {
   two: ShapeTwo;
   three: ShapeThree;
   four: ShapeFour;
+  five: ShapeFive;
 }
 
 async function makeTenant(email: string): Promise<{ ctx: ServiceContext; projectId: string }> {
@@ -313,6 +338,60 @@ export async function seedPlanShapes(email: string): Promise<PlansShapesSeed> {
   );
   await plansService.markPlanned(fourPlan.id, ctx);
 
+  // ── SHAPE FIVE ────────────────────────────────────────────────────────────
+  // One plan, three ops, real bodies. The `modify` moves two RAIL rows
+  // (`priority`, `storyPoints`) so the peek's changed markers have something to
+  // mark and its count line has a non-zero numerator.
+  const fiveEpic = await commit('epic', 'Plan review surfaces');
+  const fiveModified = await workItemsService.createWorkItem(
+    {
+      projectId,
+      kind: 'story',
+      title: 'One peek for a proposal',
+      parentId: fiveEpic.id,
+      descriptionMd: 'The body this work item carries today, before the plan is approved.',
+      explanationMd: 'The rationale it carries today.',
+      priority: 'high',
+      storyPoints: 3,
+    },
+    ctx,
+  );
+  const fiveRemoved = await commit('story', 'The retired proposal surface', fiveEpic.id);
+  const fiveAddedTitle = 'The review model emits a peek-shaped proposal';
+  const fiveModifiedTitle = 'One peek for a PROPOSAL — both doors, one surface';
+  const fivePlan = await plansService.createPlan(projectId, { title: 'Peek collapse plan' }, ctx);
+  await plansService.addProposals(
+    fivePlan.id,
+    [
+      {
+        op: 'add',
+        proposedFields: {
+          title: fiveAddedTitle,
+          kind: 'story',
+          descriptionMd: 'What approval will create.',
+          explanationMd: 'Why this one matters.',
+          priority: 'high',
+          storyPoints: 5,
+        },
+        parentRef: fiveEpic.id,
+      },
+      {
+        op: 'modify',
+        workItemId: fiveModified.id,
+        patch: {
+          title: fiveModifiedTitle,
+          descriptionMd: 'The body approval will write in its place.',
+          explanationMd: 'The rationale approval will write in its place.',
+          priority: 'highest',
+          storyPoints: 8,
+        },
+      },
+      { op: 'remove', workItemId: fiveRemoved.id },
+    ],
+    ctx,
+  );
+  await plansService.markPlanned(fivePlan.id, ctx);
+
   return {
     email,
     password: PLANS_SHAPES_PASSWORD,
@@ -349,6 +428,19 @@ export async function seedPlanShapes(email: string): Promise<PlansShapesSeed> {
       addedSubtaskTitles: threeSubtaskTitles,
       addedStoryTitle: threeStoryTitle,
       story: threeStory,
+    },
+    five: {
+      planId: fivePlan.id,
+      epic: fiveEpic,
+      modified: {
+        id: fiveModified.id,
+        identifier: fiveModified.identifier,
+        title: fiveModified.title,
+        crumb: `${fiveModified.identifier} · ${fiveModified.title}`,
+      },
+      removed: fiveRemoved,
+      addedTitle: fiveAddedTitle,
+      modifiedTitle: fiveModifiedTitle,
     },
   };
 }
