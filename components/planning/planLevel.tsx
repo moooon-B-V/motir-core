@@ -1,5 +1,6 @@
 import { PlanItemNode, type PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { ProjectCanvasDep, ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
+import { proposedParentNodeIds } from '@/lib/planning/planShape';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // One LEVEL of the plan-detail canvas (MOTIR-3083, redrawing 7.4.5 / MOTIR-847).
@@ -63,13 +64,30 @@ export function mergePlanLevel(
   const atLevel = proposalsAtLevel(items, parentId);
   const pending = new Map(atLevel.map((i) => [i.nodeId, i]));
 
+  // ⚠️ A COMMITTED CARD THE PLAN PUTS WORK UNDER BECOMES DRILLABLE (bug
+  // MOTIR-4266). `buildWorkItemLevel` takes `drillable` from the ROADMAP read,
+  // which counts COMMITTED children only — so a story with nothing under it yet
+  // arrived `drillable: false` however many subtasks this plan proposes beneath
+  // it, the canvas drew View and no Open pill, and the expansion the plan is
+  // ABOUT was unreachable from the level the story lives on. Expanding an
+  // existing story is the commonest thing a planning pass does, and the
+  // plan-change canvas has had this rule since MOTIR-1730; the review canvas —
+  // the surface the plan is approved from — never got it.
+  //
+  // The whole plan is read, not `atLevel`: the question is what sits UNDER each
+  // node here, which is a level DOWN. Every op counts, because `parentNodeId` is
+  // where the proposal SITS, including a `modify` that re-parents a card onto
+  // this node (MOTIR-3859).
+  const gainsChildren = proposedParentNodeIds(items);
+
   // The committed children, in the order the read gave them, with a `modify` /
   // `remove` re-skinned in place.
   const nodes: ProjectCanvasNode[] = committed.nodes.map((node) => {
+    const drillable = node.drillable || gainsChildren.has(node.id);
     const proposal = pending.get(node.id);
-    if (!proposal) return node;
+    if (!proposal) return drillable === node.drillable ? node : { ...node, drillable };
     pending.delete(node.id);
-    return { ...node, content: <PlanItemNode item={proposal} outcome={outcome} /> };
+    return { ...node, drillable, content: <PlanItemNode item={proposal} outcome={outcome} /> };
   });
 
   // Whatever is left is proposed and has no committed node yet: every `add`, plus
