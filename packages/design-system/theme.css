@@ -222,6 +222,21 @@
   --height-input: 44px;
   --height-control: 36px; /* single-line / square small control */
 
+  /* The space the collapsed nav rail puts AROUND its control: its `px-2`
+     gutters (8px a side), its 1px right border, and the 3px of slack the
+     shipped rail has always carried. Not the rail's width — the width is this
+     PLUS one `--height-control` square, composed at the point of use in
+     `components/ui/AppLayout.tsx` so the sum re-resolves under whatever
+     [data-style] is in scope rather than freezing the value `:root` happened
+     to have.
+
+     Calibrated so the DEFAULT style is unchanged: 36px + 20px is the 56px the
+     rail has always been. A denser style now gets a narrower rail and a roomier
+     one a wider rail, which is the density axis working rather than a constant
+     ignoring it. Deliberately NOT overridden per style — a style moves the
+     CONTROL, and the rail follows it (MOTIR-4232). */
+  --width-rail-chrome: 20px;
+
   /* ── Interaction ────────────────────────────────────────────────── */
   --transition-duration: 150ms;
   --transition-fast: 100ms;
