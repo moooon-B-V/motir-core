@@ -5,6 +5,7 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { organizationsService } from '@/lib/services/organizationsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { plansService } from '@/lib/services/plansService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import {
   toPlanTreeSkeleton,
@@ -30,6 +31,7 @@ import {
   type SubtreeResponse,
   type BlockingClosureResponse,
   type PendingPlansResponse,
+  type TerminalStatusesResponse,
   type SearchWorkItemsResponse,
   type SemanticSearchResponse,
   type SimilarWorkItemsResponse,
@@ -148,6 +150,40 @@ export const aiBoundaryService = {
       plans: toPendingPlanRows(page.plans),
       truncated: page.nextCursor !== null,
     };
+  },
+
+  // GET /api/internal/ai/terminal-statuses (MOTIR-4158) — the project's TERMINAL
+  // status keys: every status whose category is `done`.
+  //
+  // ⚠️ THE POINT IS THE DERIVATION, NOT THE ANSWER. The consumer this exists for
+  // was asking the question with a hardcoded `'done'`, which misses `cancelled`
+  // — a status the DEFAULT workflow ships — and misses whatever else a customer
+  // has configured as terminal. `workflowsService.getTerminalStatusKeys` derives
+  // the set from `category = 'done'`, and it is the SAME call
+  // `lib/plans/validateProposals.ts` step 4 makes to refuse a `modify` /
+  // `remove` against finished work. Reading it from one service is what makes it
+  // impossible for the persistence guard and a caller across the boundary to
+  // hold two different notions of *terminal*.
+  //
+  // ⚠️ THE ACCESS GATE IS LOAD-BEARING AND CANNOT BE INFERRED FROM THE ANSWER.
+  // `getTerminalStatusKeys` returns an EMPTY SET for a project outside the
+  // workspace rather than throwing — a perfectly reasonable shape for a
+  // predicate helper, and a leak-shaped 200 on a boundary. So the browse gate
+  // runs FIRST and its refusal is the response: `assertCanBrowse` raises
+  // `ProjectNotFoundError` for a cross-tenant project and for a token whose
+  // `tokenProjectId` is not this one, and `ProjectAccessDeniedError('browse')`
+  // for a project this user cannot see — both 404 at the route, so an empty
+  // workflow and a project you may not read are never the same answer. This is
+  // the gate `findSimilarWorkItems` uses, for the same reason it states.
+  async readTerminalStatuses(
+    projectId: string,
+    ctx: ServiceContext,
+  ): Promise<TerminalStatusesResponse> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const keys = await workflowsService.getTerminalStatusKeys(projectId, ctx.workspaceId);
+    // Sorted so the wire shape is a function of the workflow and not of row
+    // order — two reads of an unchanged project are byte-identical.
+    return { terminalStatusKeys: [...keys].sort() };
   },
 
   // ── Story 7.5 — the plan-tree GRAPH-TRAVERSAL read family ────────────────
