@@ -84,7 +84,8 @@ A ready row composes the EXACT shipped vocabulary — **no new card primitive**:
   square-check-big / bug = bug / subtask = list-checks). 18px. Decorative
   (`aria-hidden`); the key + title carry the accessible name.
 - **Key** — the mono identifier `PROD-<n>` in `font-mono text-xs
-text-(--el-text-muted)`.
+text-(--el-text-identifier)` (MOTIR-4255; it was `--el-text-muted`, which the
+  row's own `:hover` tint takes to 4.17:1).
 - **Title** — `text-sm text-(--el-text)`, single-line truncate.
 - **Priority `Pill`** — the shared `PRIORITY_META` chip (`PriorityValue` from
   `issueCellPrimitives`): a tone plus a direction icon. Highest is rose
