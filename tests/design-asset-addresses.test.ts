@@ -249,6 +249,64 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/design',
     why: 'The `Design` showcase nav item, a motir-marketing route (MOTIR-3861) that does not live in motir-core. The unified chrome keeps the shipped nav item; the address resolves on motir.co, not in this repo, so the route inventory cannot resolve it.',
   },
+  // ── `/legal*` LEFT THIS HOST ENTIRELY (MOTIR-4103) ────────────────────────
+  // Two different reasons wearing one address, and the split matters because
+  // only one of them is history.
+  //
+  //  * `design/public-site/` draws MOTIR.CO. `/legal` and `/legal/*` are that
+  //    host's own routes (MOTIR-4009) and the asset is CORRECT — this repo's
+  //    `app/**` inventory simply cannot see another repository's route tree,
+  //    exactly as it cannot see `/design` above. Permanent, and not a defect
+  //    in either direction.
+  //  * `design/auth/legal-agreement.mock.html` is a POINT-IN-TIME record. Its
+  //    BEFORE panels draw the sign-up notice as it shipped, when `/legal/terms`
+  //    was a page this application served — the asset says so in its own words
+  //    ("Panel 2's links are same-origin: `/legal/terms` is a page this
+  //    application serves"). Its AFTER panels already draw the absolute
+  //    `https://motir.co/legal/*` links the manifest publishes (MOTIR-4010), so
+  //    the asset is not stale; it is a drawing of the change, and a drawing of a
+  //    change has to contain the old state. Correcting it would delete the half
+  //    that makes the panel pair legible.
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/legal',
+    why: "A motir.co route (MOTIR-4009) in the asset that draws motir.co. MOTIR-4103 deleted `app/(public)/legal/` from this repository, so this repo's route inventory cannot resolve it — the address is real on the brand host, as `/design` above is.",
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/legal/privacy',
+    why: 'The same: a document served by motir.co, named in the route table the asset draws for that host. Not an address motir-core serves any more (MOTIR-4103).',
+  },
+  {
+    file: 'design/public-site/design-notes.md',
+    address: '/legal/terms',
+    why: 'The same: a document served by motir.co, named in the route table the asset draws for that host. Not an address motir-core serves any more (MOTIR-4103).',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/legal',
+    why: 'The mock beside those notes, drawing the same motir.co chrome and its footer legal rows. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/legal/privacy',
+    why: 'A footer link in the motir.co chrome the asset draws. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/public-site/public-site.mock.html',
+    address: '/legal/terms',
+    why: 'A footer link in the motir.co chrome the asset draws. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/auth/legal-agreement.mock.html',
+    address: '/legal/terms',
+    why: "A point-in-time record: the BEFORE panels draw the sign-up notice as it shipped, when this application served `/legal/terms`. The asset's AFTER panels already draw the absolute `https://motir.co/legal/terms` the manifest publishes (MOTIR-4010), so the pair IS the design; deleting the old half would remove what the panels are contrasting.",
+  },
+  {
+    file: 'design/auth/legal-agreement.mock.html',
+    address: '/legal/privacy',
+    why: 'The same panel pair, other document. The BEFORE half is the shipped state the design replaced; the AFTER half already carries the absolute motir.co link.',
+  },
   // ── Prose that names an address without using it ──────────────────────────
   {
     file: 'design/agent-sandbox/design-notes.md',
@@ -1212,6 +1270,18 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/brand/brand-mark.mock.html',
     path: 'app/(public)/explore/opengraph-image.tsx',
     why: "Two point-in-time citations (the read-but-not-re-rendered list, and Panel 6's section-card label) naming the file MOTIR-1150 lifted the ad-hoc M-tile's inline hexes from, at the path it had when that card drew the asset. MOTIR-3491 moved it into `app/(public)/explore/(square)/` — a metadata image file is resolved for the page in its OWN segment, so when the square's page moved into the route group that scopes its `loading.tsx`, leaving this behind silently dropped every og:image tag from /explore. The asset is history and stays as drawn; correcting it from that bug's branch would also have published the brand mark's design result onto the bug (MOTIR-3130).",
+  },
+  // ── A source path this repository no longer has at all (MOTIR-4103) ───────
+  // Not a MOVE like the rows above — a deletion. `app/(public)/legal/` was the
+  // last thing left under `app/(public)`, and it went with `content/legal/`
+  // when the seven documents became motir.co's. The asset citing it is drawing
+  // the motir.co chrome and naming, for a reader comparing the two hosts, where
+  // the equivalent used to live in this repository. That sentence is about
+  // history and is still true; the directory is not coming back.
+  {
+    file: 'design/public-site/design-notes.md',
+    path: 'app/(public)/legal',
+    why: 'The chrome-comparison table names where each surface was served in motir-core before the move. MOTIR-4103 deleted `app/(public)/legal/` — and with it the whole `(public)` route group — so the citation is a point-in-time record of the host this asset exists to move those pages OFF.',
   },
   // ── A path the design says must NEVER exist (MOTIR-3492) ──────────────────
   // The inverse of every other row here: these are not paths an asset expects

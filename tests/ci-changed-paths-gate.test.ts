@@ -205,23 +205,33 @@ describe('the changed-paths gate (MOTIR-3148)', () => {
       expect(appArms.some((arm) => !arm.setsApp)).toBe(true);
     });
 
-    it('runs the app lanes for a content/legal/*.md-only change', () => {
-      // The defect. `content/legal/*.md` is not documentation — it is data the
-      // app parses and renders (`lib/legal/documents.ts`), and its front-matter
-      // `version` drives the re-consent gate. The blanket `*.md` exclusion
-      // swallowed it, so PR #2427 — the first-ever revision of a published
-      // legal document — skipped the entire Vitest lane, including the seven
-      // `tests/legal/` suites that exist to guard exactly that file class.
-      for (const path of ['content/legal/privacy.md', 'content/legal/terms.md']) {
+    it('runs the app lanes for a `content/**/*.md`-only change', () => {
+      // The defect. Markdown under `content/` is not documentation — it is data
+      // the app parses, and the blanket `*.md` exclusion swallowed it: PR #2427
+      // — a revision of a published legal document, back when `content/legal/`
+      // held those documents — skipped the entire Vitest lane, including the
+      // seven `tests/legal/` suites written to guard exactly that file class.
+      //
+      // ⚠️ `content/` IS EMPTY TODAY (MOTIR-4103 — the legal documents moved to
+      // `motir-marketing`), which is WHY these paths are written as a shape
+      // rather than as the two filenames the defect was observed on. The arm is
+      // a SUPPRESSOR: it protects whatever lands under `content/` next, and a
+      // sample that names a deleted file reads as a stale assertion somebody
+      // should delete. Neither path below needs to exist — `classifiesAsApp` is
+      // a pure reading of the `case` in `ci.yml`, and that is the point: the
+      // guard survives the directory being empty.
+      for (const path of ['content/anything.md', 'content/nested/whatever.md']) {
         expect(classifiesAsApp(path), path).toBe(true);
       }
     });
 
     it('places the content arm BEFORE the `*.md` exclusion — the order IS the fix', () => {
-      // `content/legal/privacy.md` matches BOTH arms, so the answer is decided
+      // `content/anything.md` matches BOTH arms, so the answer is decided
       // entirely by which one the shell reaches first. Move the content arm
       // below the exclusion and the assertion above goes red; this one says why
-      // in one line, at the place a reader tidying the `case` would land.
+      // in one line, at the place a reader tidying the `case` would land — and
+      // that reader now arrives at an EMPTY `content/`, which is exactly when
+      // an arm like this looks like residue and is not.
       const contentArm = appArms.findIndex((arm) => arm.patterns.includes('content/*'));
       const excludeArm = appArms.findIndex((arm) => arm.patterns.includes('*.md'));
       expect(contentArm, 'a content/* arm exists').toBeGreaterThanOrEqual(0);

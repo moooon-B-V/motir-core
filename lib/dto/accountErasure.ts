@@ -13,7 +13,7 @@
 //                work items they reported or were assigned in a SHARED
 //                workspace. The name comes off; the row stays.
 //   kept       — what erasure does not reach. NOT counted from the database:
-//                `content/legal/privacy.md` §6 states these as exceptions
+//                `motir.co/legal/privacy` §6 states these as exceptions
 //                ("generally seven years", "data present only in a backup"), so
 //                the preview NAMES them and the copy renders them.
 //
@@ -143,7 +143,7 @@ export type AccountDeletionStatusDTO = 'scheduled' | 'cancelled' | 'completed';
  *
  * ⚠️ `erasureDueAt` IS THE POINT OF THE SHAPE, not a timestamp that came along
  * for the ride. DECISION 4 makes the window a published promise
- * (`content/legal/privacy.md` §6), and the copy that states it interpolates
+ * (`motir.co/legal/privacy` §6), and the copy that states it interpolates
  * THIS value rather than recomputing `now + 30 days` — a reader who scheduled
  * on Monday and opens the banner on Thursday must be told Monday's deadline.
  * Persisted at create for the same reason, so a later change to the constant

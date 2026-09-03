@@ -5,7 +5,7 @@ import manifest from './egress-manifest.json';
 // availability, as a committed artifact this application SERVES.
 //
 // ── ⚠️ WHY THIS FILE EXISTS AT ALL ─────────────────────────────────────────
-// `content/legal/subprocessors.md` is a published legal representation, and it
+// `motir.co/legal/subprocessors` is a published legal representation, and it
 // was held honest by `tests/legal/subprocessor-list-guard.test.ts`, which read
 // TWO things: the rows we DISCLOSE, and the EVIDENCE that a vendor receives
 // anything — this repository's `package.json` and the outbound hosts in `lib/`

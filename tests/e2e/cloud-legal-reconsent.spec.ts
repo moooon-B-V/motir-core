@@ -36,9 +36,11 @@ import { RECONSENT_DOCUMENT_SLUGS } from '@/lib/legal/consent';
 //
 // **That a `model-providers.md` version bump prompts nobody.** It is the card's
 // clause and it is covered — in `tests/legal/legalConsentJourney.test.ts`, where
-// a version can actually be bumped. Driving it here would mean writing to
-// `content/legal/` while the webServer serves it, which is a mutation of shared
-// state under a lane that runs specs in one process against one deployment. The
+// a version can actually be bumped. Driving it here would mean rewriting the
+// webServer's own `MOTIR_LEGAL_DOCUMENTS` while it serves, which is a mutation
+// of shared state under a lane that runs specs in one process against one
+// deployment. (It named `content/legal/` while the documents were files in this
+// repository; the shared state moved with them, the objection did not.) The
 // evidence is stronger at the integration tier anyway: there the bump is applied
 // to the loader's REAL output and the exclusion is asserted over every document
 // outside the set, not over one named file.
