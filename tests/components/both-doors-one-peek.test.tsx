@@ -241,3 +241,52 @@ describe('both plan-review doors open ONE peek (MOTIR-4185)', () => {
     expect(screen.getAllByText('highest').length).toBeGreaterThan(0);
   });
 });
+
+describe('the target fetch has a TERMINAL state in every direction (MOTIR-4185)', () => {
+  it('renders the shipped NOT-FOUND panel when the target is gone, never a stuck skeleton', async () => {
+    // ⚠️ THE REGRESSION THIS PINS. The first implementation rendered the
+    // proposal's own values while the target's payload was in flight and swapped
+    // when it landed — which made the two doors render DIFFERENTLY under load
+    // (CI caught it: the canvas peek was missing the REPORTER row the list's
+    // had). Rendering the shipped skeleton instead fixed that and introduced a
+    // second hole: a fetch that FAILS never settles, so the dialog sat on the
+    // skeleton for ever.
+    //
+    // A 404 here is not an edge case — it is `targetMissing`, a `remove` or a
+    // drifted `modify` whose live target is archived or hard-deleted, and Part
+    // XIV §8 specifies the shipped not-found panel for it. Falling back to the
+    // proposal's own fields would render a work item that may no longer exist as
+    // though it did.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 404 }) as unknown as Response),
+    );
+    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    fireEvent.click(screen.getByRole('button', { name: /Open / }));
+
+    expect(await screen.findByTestId('proposal-peek-missing')).toBeTruthy();
+    // Neither the stuck skeleton nor a half-filled peek.
+    expect(screen.queryByTestId('proposal-peek')).toBeNull();
+    expect(screen.queryByTestId('proposal-peek-loading')).toBeNull();
+  });
+
+  it('an `add` needs no fetch at all — no key, so nothing to be missing', async () => {
+    // The arm that must NOT reach either new state: an un-materialized `add` has
+    // no target, so it renders its own values immediately and a broken network
+    // changes nothing about it.
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 500 }) as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    const add = planReviewItem({
+      planItemId: 'pi_add',
+      op: 'add',
+      identifier: null,
+      title: 'A proposed work item',
+      proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
+    });
+    render(<PlanProposalList items={[add]} decided={false} />);
+    fireEvent.click(screen.getByRole('button', { name: /Open / }));
+
+    expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

@@ -153,7 +153,19 @@ export function ProposalPeek({
   item: PlanReviewItemDto | null;
   onClose: () => void;
 }) {
-  const [fetched, setFetched] = useState<{ key: string; data: QuickViewData } | null>(null);
+  // THREE states, not two (MOTIR-4185). `pending` renders the shipped skeleton;
+  // `ready` renders the peek; `notfound` renders the shipped not-found panel.
+  //
+  // ⚠️ THE THIRD ONE IS NOT DEFENSIVENESS — it is the state Part XIV §8 already
+  // specifies: a `remove` (or a drifted `modify`) whose live target is archived
+  // or hard-deleted is exactly a peek fetch that 404s, and the design says to
+  // show *"the peek's shipped NOT-FOUND panel rather than an empty proposal —
+  // the state `IssueQuickViewPanel state='notfound'` already draws, reused
+  // rather than re-invented."* Without it a failed fetch has no terminal state
+  // and the dialog sits on the skeleton for ever.
+  const [fetched, setFetched] = useState<
+    { key: string; data: QuickViewData } | { key: string; missing: true } | null
+  >(null);
   const targetKey = item?.proposal.identifier ?? null;
   const abort = useRef<AbortController | null>(null);
 
@@ -169,12 +181,20 @@ export function ProposalPeek({
         const res = await fetch(`/api/work-items/peek?key=${encodeURIComponent(targetKey)}`, {
           signal: controller.signal,
         });
-        if (!res.ok) return; // fall back to the proposal's own values below
+        if (!res.ok) {
+          // 404 is the DOCUMENTED case, not an edge: the target is archived or
+          // hard-deleted, which the review model also reports as `targetMissing`.
+          setFetched({ key: targetKey, missing: true });
+          return;
+        }
         setFetched({ key: targetKey, data: (await res.json()) as QuickViewData });
       } catch {
-        // An aborted fetch (the peek closed or swapped) is expected; a real
-        // failure falls back to the proposed values rather than blanking the
-        // dialog, because the proposal's own fields are always available.
+        // An aborted fetch (the peek closed or swapped) is EXPECTED and must not
+        // land a terminal state on a peek that is no longer open — the abort
+        // fires on unmount. Anything else is a real failure and reads as
+        // not-found, which is the honest answer: the proposal's own fields would
+        // render a work item that may no longer exist as though it did.
+        if (!controller.signal.aborted) setFetched({ key: targetKey, missing: true });
       }
     })();
     return () => controller.abort();
@@ -182,17 +202,75 @@ export function ProposalPeek({
 
   if (!item) return null;
 
+  // ⚠️ THE TARGET'S PAYLOAD IS STILL IN FLIGHT — RENDER THE SHIPPED SKELETON,
+  // NOT A HALF-FILLED RAIL (found by the acceptance walk in CI, MOTIR-4187).
+  //
+  // The first draft rendered `proposedPayload` immediately and swapped when the
+  // fetch landed. Locally the fetch always won the race; in CI it did not, and
+  // the two doors rendered DIFFERENTLY — the canvas's peek was missing the
+  // `REPORTER` row the list's had, because it was showing the proposal-only
+  // payload for a beat.
+  //
+  // That is a REAL defect and the test caught it, not a test-timing artefact: a
+  // reader opening a `modify` would see a rail missing Assignee, Reporter,
+  // Labels, Components, Due date and Sprint, and then watch them appear. A
+  // loading state rendered as though it were data is the same class of quiet
+  // untruth this whole story exists to remove.
+  //
+  // The shipped peek already owns the answer — `state="loading"` is its own
+  // skeleton, sized to hold the expanded rail's height so the modal does not
+  // resize when the fields land — and `WorkItemQuickView` uses exactly this.
+  // An `add` never reaches here: it has no key, so there is nothing in flight.
+  const settled = fetched && fetched.key === targetKey ? fetched : null;
+
+  // The TARGET IS GONE — the shipped not-found panel, which is what the design
+  // asks for and what the sibling host (`WorkItemQuickView`) already renders on
+  // the same signal.
+  if (targetKey && settled && 'missing' in settled) {
+    return (
+      <Modal
+        open
+        onOpenChange={(next) => (next ? undefined : onClose())}
+        srTitle={item.title}
+        size="xl"
+        hideClose
+        className="h-[680px] max-h-[82vh] w-[90vw] p-0"
+      >
+        <div className="flex h-full flex-col" data-testid="proposal-peek-missing">
+          <IssueQuickViewPanel state="notfound" peekKey={targetKey} onClose={onClose} />
+        </div>
+      </Modal>
+    );
+  }
+
+  if (targetKey && !settled) {
+    return (
+      <Modal
+        open
+        onOpenChange={(next) => (next ? undefined : onClose())}
+        srTitle={item.title}
+        size="xl"
+        hideClose
+        className="h-[680px] max-h-[82vh] w-[90vw] p-0"
+      >
+        <div className="flex h-full flex-col" data-testid="proposal-peek-loading">
+          <IssueQuickViewPanel state="loading" peekKey={targetKey} onClose={onClose} />
+        </div>
+      </Modal>
+    );
+  }
+
   // The OVERLAY (Part XIV §2). The target's payload is the base — so a `modify`
   // keeps `Assignee`, `Reporter`, `Labels`, `Components`, `Due date`, `Sprint`
   // and the custom fields the canvas door shows today — and the proposal's own
   // fields are laid over it, so every marked row reads the value approval will
   // WRITE rather than the one it is replacing.
+  // Past the guard above, a keyed proposal ALWAYS has its target's payload; the
+  // proposed one is the `add` arm, which has no target to fetch.
   const base =
-    fetched && fetched.key === targetKey
-      ? fetched.data
-      : proposedPayload(item, prefixOf(item.identifier));
+    settled && 'data' in settled ? settled.data : proposedPayload(item, prefixOf(item.identifier));
   const data: QuickViewData =
-    fetched && fetched.key === targetKey
+    settled && 'data' in settled
       ? {
           ...base,
           title: item.title,

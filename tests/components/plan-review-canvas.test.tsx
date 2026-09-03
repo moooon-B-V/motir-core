@@ -427,8 +427,13 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
         ),
       ).toBe(true),
     );
-    // …and the surface is the proposal peek, which is what changed.
-    expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
+    // …and the surface is the PROPOSAL's, which is what changed. This harness
+    // 404s `/api/work-items/peek` (see `stubRoadmap`), and a 404 on a `modify`'s
+    // target is the DOCUMENTED case — the live target is archived or
+    // hard-deleted, which the review model also reports as `targetMissing`. Part
+    // XIV §8 says that shows the peek's shipped NOT-FOUND panel rather than an
+    // empty proposal, so THAT is what a drifted modify lands on here.
+    expect(await screen.findByTestId('proposal-peek-missing')).toBeTruthy();
   });
 
   // ── MOTIR-3161 (bug MOTIR-3154) — the DOOR must open what the label claims ──
