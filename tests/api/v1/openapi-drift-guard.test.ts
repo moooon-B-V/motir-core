@@ -715,6 +715,15 @@ describe('every operation’s REAL response validates against its declared schem
       caller.ctx,
     );
     await plansService.markPlanned(anchoredPlanId, caller.ctx);
+    // MOTIR-4085 — the READ comes first, because it is what a caller does first:
+    // look at the plan, decide whether it may be approved unattended, and only
+    // then POST. Driven on the SAME card, so the two really do resolve one plan.
+    await drive(
+      'getWorkItemPlan',
+      () => import('@/app/api/v1/work-items/[key]/plan-approval/route'),
+      get(`/api/v1/work-items/${key}/plan-approval`),
+      { key },
+    );
     await drive(
       'approveWorkItemPlan',
       () => import('@/app/api/v1/work-items/[key]/plan-approval/route'),

@@ -64,6 +64,14 @@ const inputSchema = {
   // MOTIR-3020 — the SAME parameter the `/api/v1` route takes, parsed by the
   // SAME function (`parseFindingsPolicy`), so the two transports cannot disagree
   // about what a token means. Omitted renders the complete protocol.
+  //
+  // ⚠️ THE ROUTE'S OTHER PROMPT PARAMETER IS DELIBERATELY NOT HERE (MOTIR-4085).
+  // `?autoApproveReplan=1` tells the agent that an unattended loop may approve
+  // its re-plan, and MCP is the AGENT's surface: exposing it would let the party
+  // whose plan is being bounded compose the prompt that describes the bound.
+  // `parseFindingsPolicy` defaults it to `false`, so this tool renders the lane
+  // that is true for every caller who reaches the plan through MCP — nobody is
+  // going to approve it unattended.
   findingsPolicy: z
     .string()
     .trim()

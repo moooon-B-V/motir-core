@@ -450,16 +450,17 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
   });
 
-  it('every one of the 48 declarations names a GRANTABLE permission', () => {
-    // 48: 41, plus MOTIR-2961's `POST …/work-items/{key}/claim`, MOTIR-3017's
+  it('every one of the 49 declarations names a GRANTABLE permission', () => {
+    // 49: 41, plus MOTIR-2961's `POST …/work-items/{key}/claim`, MOTIR-3017's
     // `POST …/work-items/{key}/plan-approval`, MOTIR-3049's
     // `POST …/scope-claims`, MOTIR-3586's
-    // `GET …/projects/{projectKey}/repositories`, and MOTIR-1792's THREE
+    // `GET …/projects/{projectKey}/repositories`, MOTIR-1792's THREE
     // dispatch-run ingest operations (`POST …/dispatch-runs`, `…/{id}/events`,
-    // `…/{id}/close`). FIVE branches independently wrote the count for their own
-    // addition alone, which is exactly what this number exists to catch — read
-    // it on `origin/main` before merging, exactly as `V1_CONTRACT_VERSION` is.
-    expect(V1_OPERATIONS.length).toBe(48);
+    // `…/{id}/close`), and MOTIR-4085's `GET …/work-items/{key}/plan-approval`.
+    // SIX branches independently wrote the count for their own addition alone,
+    // which is exactly what this number exists to catch — read it on
+    // `origin/main` before merging, exactly as `V1_CONTRACT_VERSION` is.
+    expect(V1_OPERATIONS.length).toBe(49);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),
