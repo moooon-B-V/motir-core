@@ -90,6 +90,16 @@ export function AppLayout({ banner, topNav, sidebar, children, className }: AppL
   */
   return (
     <div
+      // The SHELL-CANVAS hook (MOTIR-4230). This root is a full-viewport box with
+      // an opaque `--el-page-bg` fill, so it is the last thing standing between a
+      // style's `body`-level atmosphere and the user: 3D / Immersive painted its
+      // palette-derived depth on `body` and the shell covered it, leaving the
+      // frame flat under a style whose whole identity is a whole-page atmosphere.
+      // The attribute is what lets the stylesheet repaint that canvas HERE — see
+      // the IMMERSIVE BACKGROUND block in `packages/design-system/theme.css`. It
+      // is a hook, not a style: a style that paints no atmosphere is unaffected
+      // and this root keeps the page fill it has always had.
+      data-app-shell=""
       className={cn('relative flex h-dvh flex-col overflow-hidden bg-(--el-page-bg)', className)}
     >
       <a
