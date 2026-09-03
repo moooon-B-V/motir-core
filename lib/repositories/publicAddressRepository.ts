@@ -72,6 +72,27 @@ export const publicAddressRepository = {
   },
 
   /**
+   * The same list INSIDE the caller's transaction.
+   *
+   * ⚠️ NOT an optional `tx` on {@link listForWorkspace}, and not a convenience.
+   * The singleton read is a DIFFERENT CONNECTION: called from inside a
+   * transaction it cannot see that transaction's uncommitted writes, and it
+   * carries none of the transaction's GUCs, so under the non-bypass app role RLS
+   * hides every row. A service that writes and then reads back to build its DTO
+   * needs this one — using the other returns `null` for a claim that just
+   * succeeded, which is exactly how this method came to exist.
+   */
+  async listForWorkspaceInTx(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PublicAddress[]> {
+    return tx.publicAddress.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: 'asc' },
+    });
+  },
+
+  /**
    * The workspace's LIVE subdomain, or `null` if it has never claimed one.
    *
    * `findFirst`, not `findUnique`: "exactly one live subdomain per workspace" is

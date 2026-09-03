@@ -92,3 +92,78 @@ export function isHostnameUniqueViolation(err: unknown): boolean {
   // is about.
   return true;
 }
+
+// ── The SERVICE tier's errors (MOTIR-4215) ─────────────────────────────────
+//
+// The route layer maps each `code` to a status. They are separate types rather
+// than one error with a discriminator because the route's mapper is a series of
+// `instanceof` branches, and a single type would make every branch a nested
+// switch on a field.
+
+/** A rename was asked for on a workspace that has never claimed a subdomain. */
+export class NoSubdomainClaimedError extends Error {
+  readonly code = 'NO_SUBDOMAIN_CLAIMED' as const;
+  constructor() {
+    super('This workspace has not claimed a subdomain yet.');
+    this.name = 'NoSubdomainClaimedError';
+  }
+}
+
+/**
+ * The workspace has renamed its subdomain as many times as the ADR §8 cap
+ * allows.
+ *
+ * The cap exists because every rename permanently burns a name in a shared
+ * namespace — a retired label is never released — so it is a namespace
+ * protection rather than a UX limit, and the error says how many were used.
+ */
+export class SubdomainRenameCapReachedError extends Error {
+  readonly code = 'SUBDOMAIN_RENAME_CAP_REACHED' as const;
+  constructor(
+    readonly used: number,
+    readonly cap: number,
+  ) {
+    super(`This workspace has used all ${cap} subdomain renames.`);
+    this.name = 'SubdomainRenameCapReachedError';
+  }
+}
+
+/**
+ * The actor may see the workspace but may not change its address.
+ *
+ * DISTINCT from "not a member", which answers 404: a member can see that the
+ * workspace exists, so telling them the address is admin-only leaks nothing and
+ * is the answer they need. A non-member gets the no-existence-leak 404 the rest
+ * of the tenancy boundary gives.
+ */
+export class SubdomainForbiddenError extends Error {
+  readonly code = 'SUBDOMAIN_FORBIDDEN' as const;
+  constructor() {
+    super('Only a workspace owner or admin can change the public address.');
+    this.name = 'SubdomainForbiddenError';
+  }
+}
+
+/** The actor is not a member of this workspace — answered as a 404. */
+export class WorkspaceNotVisibleError extends Error {
+  readonly code = 'NOT_FOUND' as const;
+  constructor() {
+    super('Not found.');
+    this.name = 'WorkspaceNotVisibleError';
+  }
+}
+
+/**
+ * Public addresses are a CLOUD capability (ADR §11).
+ *
+ * ABSENT, not hidden — the same posture `lib/publicProjects/cloudGate.ts` takes
+ * and for the same reason: a 403 says *this exists and you may not see it*,
+ * which is a false statement about a self-hosted build. There is no door.
+ */
+export class PublicAddressesUnavailableError extends Error {
+  readonly code = 'NOT_FOUND' as const;
+  constructor() {
+    super('Not found.');
+    this.name = 'PublicAddressesUnavailableError';
+  }
+}
