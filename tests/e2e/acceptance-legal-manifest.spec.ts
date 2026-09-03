@@ -3,9 +3,12 @@ import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signUp, startSignedOut, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { RECONSENT_DOCUMENT_SLUGS } from '@/lib/legal/consent';
 import {
-  E2E_LEGAL_BASE,
   E2E_LEGAL_DOCUMENTS,
   e2eLegalUrl,
+  expectNoRailLegalRow,
+  expectRailLegalRow,
+  expectSignUpHasNoLegalNotice,
+  expectSignUpNamesTheDocuments,
   readLegalHealth,
   setLegalManifest,
 } from './_helpers/legal-manifest';
@@ -151,26 +154,13 @@ test('the legal documents come from configuration — absent when none is set, l
     await startSignedOut(page);
     await page.goto('/sign-up');
 
-    // The card is really on screen — otherwise every absence below is the
-    // absence of the whole page.
-    await expect(page.getByPlaceholder('Email address')).toBeVisible();
-
-    // ── THE PARAGRAPH IS ABSENT, NOT UNLINKED ───────────────────────────────
-    // `legal.signUpNotice` is *"By creating a Motir account you agree to our
-    // Terms of Service and Privacy Policy."* — a sentence entirely ABOUT two
-    // documents. Rendered without them it is not a weaker notice, it is a FALSE
-    // one, so `LegalNotice` returns null (AMENDMENT 2 §D). Asserting only "it
-    // carries no anchor" would pass on the fragment this story exists to avoid.
-    await expect(page.getByText(/you agree to our/i)).toHaveCount(0);
-    await expect(page.getByText(/Terms of Service/i)).toHaveCount(0);
-    await expect(page.locator('a[href*="legal"]')).toHaveCount(0);
-
-    // ── AND THE CARD'S FOOT STILL READS AS A FOOT ───────────────────────────
-    // The notice carried the `border-t` and the `pt-4`, so its removal takes a
-    // hairline as well as a sentence. What must remain is the sign-in door as
-    // the card's last line.
-    await expect(page.getByText(/Already have an account\?/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
+    // The card is on screen, the paragraph is ABSENT rather than unlinked, and
+    // the card's foot still reads as a foot. ⚠️ SHARED WITH
+    // `acceptance-legal-gone.spec.ts` (MOTIR-4105) — these sentences are about
+    // the same DOM in two lanes, and copied assertions drift one edit at a time
+    // while both files stay green, each asserting its own copy. The helper's own
+    // header carries the reasoning each assertion encodes.
+    await expectSignUpHasNoLegalNotice(page);
     await beat();
   });
 
@@ -178,11 +168,9 @@ test('the legal documents come from configuration — absent when none is set, l
     await signUp(page, SELF_HOST_EMAIL);
     await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
 
-    // The CONTROL for the absence: the bottom section of the rail is on screen
-    // and rendering its other off-shell door. Without this, "no Legal row" and
-    // "no rail" are the same observation.
-    await expect(page.getByRole('link', { name: 'Docs', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Legal', exact: true })).toHaveCount(0);
+    // The CONTROL for the absence is the Docs row beside it — shared with
+    // MOTIR-4105's specs, see the helper.
+    await expectNoRailLegalRow(page);
     await beat();
   });
 
@@ -205,22 +193,9 @@ test('the legal documents come from configuration — absent when none is set, l
   await chapter('Sign-up names the documents, and the links leave the application', async () => {
     await startSignedOut(page);
     await page.goto('/sign-up');
-    await expect(page.getByText(/you agree to our/i)).toBeVisible();
-
-    for (const [name, slug] of [
-      [/^Terms of Service/, 'terms'],
-      [/^Privacy Policy/, 'privacy'],
-    ] as const) {
-      const link = page.getByRole('link', { name });
-      await expect(link).toBeVisible();
-      // ⚠️ THE ELEMENT AND THE ATTRIBUTE, BOTH. The href must be the operator's
-      // ABSOLUTE url, not a path this application would serve — a path is what
-      // the pre-MOTIR-3909 build rendered and it looks identical in a snapshot.
-      await expect(link).toHaveAttribute('href', e2eLegalUrl(slug));
-      expect(await link.evaluate((element) => element.tagName), `${slug} is a plain anchor`).toBe(
-        'A',
-      );
-    }
+    // ⚠️ THE ELEMENT AND THE ATTRIBUTE, BOTH — shared with MOTIR-4105's specs,
+    // see the helper for why each half is load-bearing.
+    await expectSignUpNamesTheDocuments(page);
 
     // ── THE ERROR STATE, AND IT IS THE ONE THAT ACTUALLY HAPPENS ────────────
     // `public.motir.e2e` resolves NOWHERE — that is deliberate, and it is why
@@ -237,11 +212,10 @@ test('the legal documents come from configuration — absent when none is set, l
     await signUp(page, HOSTED_EMAIL);
     await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
 
-    const legal = page.getByRole('link', { name: 'Legal', exact: true });
-    await expect(legal).toBeVisible();
     // The INDEX, derived from the documents' shared base — not a fifth
-    // configuration value, and not a path on this host.
-    await expect(legal).toHaveAttribute('href', E2E_LEGAL_BASE);
+    // configuration value, and not a path on this host. Shared with MOTIR-4105's
+    // spec, see the helper.
+    await expectRailLegalRow(page);
     await beat();
   });
 
