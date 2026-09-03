@@ -76,14 +76,14 @@ import { MUTED_TOKEN, parseElements } from './inkContrastMockScan';
 //      string `var(--color-muted-foreground)` on an asset where the plain
 //      `var(--el-text-muted)` resolves to `#787671`.
 //
-// ── What this rules on, and the two boundaries it declares ──────────────────
+// ── What this rules on, and the boundary it declares ────────────────────────
 // RULED ON: `--el-text-muted`, on text it paints inside an element whose
 // background is painted by an INTERACTION-STATE rule, at under 4.5:1. Same ink,
 // same threshold and the same two 1.4.3 grants as the resting arm — only the
 // surface's provenance differs.
 //
-// DECLINED, both with their count reported by the spec so neither can outlive
-// its reason quietly:
+// DECLINED, with its count reported by the spec so it cannot outlive its reason
+// quietly:
 //
 //   • ATTRIBUTE selectors (`[data-state='open']`, `[data-theme='dark']`). The
 //     resting scanner abstains on these in the same breath as the pseudo-classes,
@@ -92,13 +92,22 @@ import { MUTED_TOKEN, parseElements } from './inkContrastMockScan';
 //     and `design-dark-parity` already rules on. Ruling on both from one arm
 //     would mean deciding, per attribute, which it is — which is a judgement,
 //     not a measurement.
-//   • Ink that names NO `--el-*` token at all — a raw hex, or a local `:root`
-//     alias like `--muted: #787671`. Fifteen assets in this tree are written
-//     that way. Such an element can fail the same pairing in the same pixels,
-//     but the remedy here is a token SWAP and there is no token to swap: it is
-//     outside the token layer, which is the never-invent-a-colour rule's
-//     subject, not this arm's. `unTokenisedInkCount` reports the population so
-//     the decline cannot outlive it quietly.
+//
+// ── The SECOND boundary is GONE, with its subject (MOTIR-4277) ──────────────
+// This file shipped a second decline and a second counter, `unTokenisedInkCount`:
+// ink that names NO `--el-*` token at all — a raw hex, or a local `:root` alias
+// like `--muted: #787671` — could fail the same pairing in the same pixels, and
+// the remedy this arm applies is a token SWAP with no token to swap. It reported
+// 18 such elements across 2 assets, and the spec asserted the number non-zero so
+// the decline could not go quiet while its subject was still there.
+//
+// MOTIR-4277 re-pointed both assets at the token layer, which took the count to
+// **0 across all 167 mocks**. The counter and its assertion are deleted rather
+// than reworded — the precedent is MOTIR-3068, which deleted a decline with its
+// subject. What is NOT a boundary and needs no counter is the scope sentence
+// above: this arm rules on `--el-text-muted`, so ink naming a different token,
+// or none, is simply not its subject. An ink outside the token layer is the
+// never-invent-a-colour rule's subject (`CLAUDE.md`), and it is enforced there.
 
 /** The interaction states this arm resolves. Ordered as written, for the report. */
 export const STATE_PSEUDO_CLASSES = [
@@ -186,12 +195,6 @@ export interface MockStateScan {
   stateBackgroundRules: number;
   /** Rules declaring a background from an ATTRIBUTE selector — declined, counted. */
   attributeBackgroundRules: number;
-  /**
-   * Elements under a state surface whose ink fails 4.5:1 and names NO `--el-*`
-   * token — the second declared boundary. Not a finding here; counted so the
-   * class cannot go unnoticed.
-   */
-  unTokenisedInkCount: number;
 }
 
 /* ─────────────────────────── addressing a DOM node ─────────────────────────
@@ -472,7 +475,6 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
   const seen = new Set<unknown>();
   let stateBackgroundRules = 0;
   let attributeBackgroundRules = 0;
-  let unTokenisedInkCount = 0;
 
   try {
     const { document } = window;
@@ -560,18 +562,7 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
           const source = inkSource(window, rules, element, ink);
           // The TOKEN is read off the declaration, never off the pixel — see
           // `inkSource`'s header for the false positives the other way round.
-          if (!source.values.some((value) => value.includes(MUTED_TOKEN))) {
-            // Ink that names no `--el-*` token at all is the second declared
-            // boundary: it can fail the same pairing in the same pixels, and
-            // the remedy here is a token SWAP with no token to swap.
-            if (
-              contrast(ink, surface) < AA_SMALL_TEXT &&
-              !source.values.some((value) => value.includes('--el-'))
-            ) {
-              unTokenisedInkCount += 1;
-            }
-            continue;
-          }
+          if (!source.values.some((value) => value.includes(MUTED_TOKEN))) continue;
           const ratio = contrast(ink, surface);
           if (ratio >= AA_SMALL_TEXT) continue;
           if (seen.has(element)) continue;
@@ -610,7 +601,6 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
     abstentions,
     stateBackgroundRules,
     attributeBackgroundRules,
-    unTokenisedInkCount,
   };
 }
 

@@ -26,8 +26,8 @@ import {
 // COVERAGE, and at zero it looked like coverage twice over. The remedy is the
 // instrument that has the answer: a real DOM, a real cascade, and the
 // containment question asked of the tree. `mockStateInkScan`'s header carries
-// the mechanics, the two engine behaviours it is written around, and the two
-// boundaries it declares.
+// the mechanics, the two engine behaviours it is written around, and the
+// boundary it declares.
 //
 // ── The measurement this shipped with ───────────────────────────────────────
 // Taken on `origin/main` @ 802f1edfc, over all 165 mocks in the tree:
@@ -40,11 +40,18 @@ import {
 // spec you are reading: `pnpm vitest run --config vitest.design.config.ts
 // tests/design-state-ink-contrast.test.ts`.
 //
-// The two DECLINED populations, measured the same way and asserted non-empty
-// below so neither boundary can outlive its subject: 75 attribute-selector
-// background rules across 48 assets, and 18 elements whose failing ink names no
-// `--el-*` token at all, across 2 assets (filed as its own bug — it is the
-// never-invent-a-colour rule's subject, and there is no token to swap).
+// The DECLINED population, measured the same way and asserted non-empty below so
+// the boundary cannot outlive its subject: 75 attribute-selector background rules
+// across 48 assets.
+//
+// ⚠️ There was a SECOND declined population, and MOTIR-4277 emptied it. This spec
+// shipped asserting `unTokenisedInkCount` non-zero — 18 elements across 2 assets
+// whose failing ink named no `--el-*` token at all, so the remedy this arm
+// applies (a token SWAP) had no token to swap. Both assets now consume the token
+// layer and the count is 0 across all 167 mocks, so the assertion and the counter
+// behind it are DELETED with their subject rather than reworded (the precedent is
+// MOTIR-3068). The scanner still rules only on `--el-text-muted`; ink outside the
+// token layer is the never-invent-a-colour rule's subject and is enforced there.
 //
 // ── This spec belongs to the `design/*` lane ────────────────────────────────
 // It reads `design/**` and nothing else, so a `design/*` branch — where the
@@ -225,11 +232,13 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
     ]);
   });
 
-  it('does NOT claim an ink written as a raw colour — it COUNTS it', () => {
-    // The second declared boundary. Fifteen assets in this tree alias raw hexes
-    // on `:root` instead of using the token layer; the pixels can fail exactly
-    // the same pairing, and the remedy here is a token swap with no token to
-    // swap.
+  it('does NOT claim an ink written as a raw colour', () => {
+    // The arm rules on `--el-text-muted`, read off the DECLARATION — so an ink
+    // aliased to a raw hex on a local `:root` is not its subject, however the
+    // pixels measure. MOTIR-4277 emptied that population from the tree and
+    // retired the counter that reported it; what stays is this negative case,
+    // because a guard whose negative case is never exercised is a guard nobody
+    // knows is running.
     const scanned = scanMockStateInk(
       'fixture.mock.html',
       `<!doctype html><html><head><style>` +
@@ -238,7 +247,6 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
         `</style></head><body><div class="row"><span class="id">PROD-12</span></div></body></html>`,
     );
     expect(scanned.findings).toEqual([]);
-    expect(scanned.unTokenisedInkCount).toBe(1);
   });
 
   it('does NOT claim a DIFFERENT token that resolves to the same colour', () => {
@@ -255,7 +263,6 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
         `</style></head><body><div class="row"><span class="id">PROD-12</span></div></body></html>`,
     );
     expect(scanned.findings).toEqual([]);
-    expect(scanned.unTokenisedInkCount).toBe(0);
   });
 
   it('addresses every finding by its own source line', () => {
@@ -283,17 +290,19 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
   });
 });
 
-describe('design state-ink — the two declared boundaries still have subjects', () => {
+describe('design state-ink — the declared boundary still has a subject', () => {
   // A decline that outlives its reason is how the next reader re-derives it.
-  // Both of these are counted rather than ruled on, and both are asserted
-  // non-empty so the boundary cannot go quiet while the population is still
-  // there. `mockStateInkScan`'s header carries the reason for each.
+  // This one is counted rather than ruled on, and asserted non-empty so the
+  // boundary cannot go quiet while the population is still there.
+  // `mockStateInkScan`'s header carries the reason.
+  //
+  // ⚠️ There were TWO. The other — ink naming no `--el-*` token at all — was
+  // emptied tree-wide by MOTIR-4277, and its assertion and its counter were
+  // deleted with it rather than reworded (MOTIR-3068's precedent). That is what
+  // this describe is FOR: a decline is kept honest by an assertion that its
+  // population is still real, and when the population goes, so does the decline.
   it('still declines a real population of ATTRIBUTE-painted surfaces', () => {
     expect(sum((scan) => scan.attributeBackgroundRules)).toBeGreaterThan(0);
-  });
-
-  it('still declines a real population of ink written as a raw colour', () => {
-    expect(sum((scan) => scan.unTokenisedInkCount)).toBeGreaterThan(0);
   });
 });
 

@@ -1424,6 +1424,25 @@ complexity for nothing"). Full Modal a11y contract: focus trap, Esc closes,
 focus returns to the opening card, dialog labelled by the filename, the
 image carries the filename as alt.
 
+**⚠️ The chrome's ink is literal WHITE, deliberately, and the mock now draws the
+scrim OPAQUE so that ink can be measured (MOTIR-4277).** The scrim is
+`bg-black/80` in the LIGHT theme and in the DARK one — it is theme-INVARIANT —
+so an `--el-*` ink token would wrongly flip with the theme and turn the header
+near-black on a black scrim in dark. `AttachmentPreview.tsx` states the same
+decision for the shipped component, and this asset is where it was decided; the
+white is not an un-swept raw hue. The scrim ITSELF is a BACKDROP that carries no
+meaning, which is the one grant `CLAUDE.md`'s never-invent-a-colour rule makes
+for a raw value. What DID change is only how the mock renders it: it declares
+the opaque colour `bg-black/80` composites to over this board's own page
+(`0.8 × #000` over `--el-surface` `#f6f5f4` = `#313131`) instead of the
+translucent `rgba(0, 0, 0, 0.8)`. Identical pixels — the `.png` re-exported at
+byte-identical dimensions — and the reason is measurement:
+`tests/theme/mockStateInkScan.ts` grounds an element on its nearest OPAQUE
+painted ancestor, so a translucent scrim was skipped and the header's white was
+measured against the near-white page BEHIND the lightbox — **1.07:1**, counted as
+failing ink, where what it actually sits on under the `.lb-btn:hover` tint is
+**6.90:1**. The `80%` is still the spec and is stated in the paragraph above.
+
 ### Viewer / read-only (panel 7)
 
 A project `viewer` sees the panel and can preview + download; every mutating

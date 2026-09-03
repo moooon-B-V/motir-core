@@ -110,3 +110,50 @@ export class PlanChangeTurnNotFoundError extends Error {
     this.name = 'PlanChangeTurnNotFoundError';
   }
 }
+
+// ── The BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) ────────────────────
+
+/**
+ * A turn was addressed to a planning job that is no longer RUNNING — it
+ * succeeded, failed or was cancelled before the turn arrived. → 409: a state
+ * conflict, and the one the card names outright, because the alternative is
+ * worse than an error. A mailbox nobody will ever check accepts the turn, hands
+ * the user a delivered-looking message, and then changes nothing for ever; the
+ * refusal is what lets the composer say so.
+ *
+ * It NAMES the status, deliberately. "That run is over" leaves the client
+ * guessing whether to resubmit as a new turn (succeeded / stopped) or to surface
+ * a failure (failed), and those are opposite next steps.
+ */
+export class PlanChangeJobNotRunningError extends Error {
+  readonly code = 'PLAN_CHANGE_JOB_NOT_RUNNING' as const;
+  constructor(
+    readonly jobId: string,
+    readonly status: string,
+  ) {
+    super(
+      `Planning job ${jobId} is ${status}, not running — there is no boundary left for this turn to be read at.`,
+    );
+    this.name = 'PlanChangeJobNotRunningError';
+  }
+}
+
+/**
+ * A turn was addressed to a job that is not the one THIS thread is running. →
+ * 404, the no-existence-leak posture the rest of this file takes: from the
+ * caller's side the job simply is not on their conversation.
+ *
+ * The check is not ceremony. `job_id` is an opaque motir-ai token and the
+ * mailbox is keyed by `(session, job)`, so without it a caller who learned any
+ * job id could attach a turn under their OWN session addressed at somebody
+ * else's run — invisible to them, and read by nobody, but a row that exists.
+ * Binding the turn to the thread's own `last_job_id` is what makes the address
+ * derivable rather than asserted.
+ */
+export class PlanChangeMailboxJobMismatchError extends Error {
+  readonly code = 'PLAN_CHANGE_MAILBOX_JOB_MISMATCH' as const;
+  constructor(readonly jobId: string) {
+    super(`Job ${jobId} is not the run this plan-change conversation is on.`);
+    this.name = 'PlanChangeMailboxJobMismatchError';
+  }
+}

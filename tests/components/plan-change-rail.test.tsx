@@ -96,6 +96,10 @@ const BASE: PlanChangeConversationState = {
   approved: null,
   errorCode: null,
   outOfCredits: false,
+  stopping: false,
+  stopped: false,
+  queued: [],
+  acts: [],
 };
 
 const handlers = {
@@ -242,7 +246,7 @@ describe('PlanChangeRail — the turn shows what it was TARGETED at (MOTIR-1491)
 });
 
 describe('PlanChangeRail — streaming', () => {
-  it('narrates the run into a polite live region and locks the composer until it settles', () => {
+  it('narrates the run into a polite live region, and LEAVES THE COMPOSER LIVE', () => {
     renderRail({
       phase: 'streaming',
       session: session([turn(0, 'Add recurring invoices.')]),
@@ -252,7 +256,18 @@ describe('PlanChangeRail — streaming', () => {
     const live = screen.getByTestId('plan-change-progress');
     expect(live.getAttribute('aria-live')).toBe('polite');
     expect(live.textContent).toContain('2 items proposed so far…');
-    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(true);
+
+    // ⚠️ AMENDED BY MOTIR-4274, and the old assertion is not a bug that was
+    // fixed — it pinned the behaviour this card deliberately removes.
+    //
+    // It read `…disabled).toBe(true)` under the title "locks the composer until
+    // it settles", which was correct for as long as a run was a MONOLOGUE: there
+    // was nowhere for a mid-run turn to go, so locking the input was the honest
+    // thing to do. MOTIR-4067 built the boundary mailbox and this composer now
+    // sends into it, so the lock is the feature's opposite. The narration half of
+    // this test is untouched — only the claim about the input changed, and it
+    // changed because the product did.
+    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(false);
   });
 });
 

@@ -242,6 +242,13 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
     'app/api/ai/plan-change/session/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',
     'app/api/ai/plan-change/session/submit/route.ts',
+    // The BOUNDARY MAILBOX's two doors (Story MOTIR-4054 · MOTIR-4067) — the
+    // INGEST a session posts a mid-run turn to, and the READ DOOR motir-ai
+    // consumes at a phase boundary. Listed here rather than left implicit: the
+    // read door WRITES (it stamps what it returns as consumed), which is exactly
+    // the shape most likely to grow a `$transaction` in the route.
+    'app/api/ai/plan-change/session/mailbox/route.ts',
+    'app/api/internal/ai/plan-change-mailbox/route.ts',
   ];
 
   it.each(STORY_ROUTES)('%s calls no db.* and opens no $transaction', (rel) => {
@@ -265,10 +272,16 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
   it('the transaction lives in the SERVICE, and every repository write requires a tx', () => {
     const service = read(join(ROOT, 'lib/services/planChangeSessionsService.ts'));
     expect(service).toMatch(/withWorkspaceContext/);
+    // Same for the mailbox's service (MOTIR-4067): the `seq` allocation is
+    // read-derived, so its transaction and its row lock live here or nowhere.
+    const mailbox = read(join(ROOT, 'lib/services/planChangeMailboxService.ts'));
+    expect(mailbox).toMatch(/withWorkspaceContext/);
+    expect(mailbox).toMatch(/lockById/);
 
     for (const rel of [
       'lib/repositories/planChangeSessionRepository.ts',
       'lib/repositories/planChangeTurnRepository.ts',
+      'lib/repositories/planChangeMailboxRepository.ts',
     ]) {
       const repo = read(join(ROOT, rel));
       // No optional `tx?` on a write — the compile-time guarantee the 4-layer
