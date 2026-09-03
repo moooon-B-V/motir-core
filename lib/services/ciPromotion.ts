@@ -1,6 +1,12 @@
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import type { GithubCheckRun, Prisma } from '@/generated/prisma/client';
 import { derivePrCiState } from '@/lib/github/prCiState';
+import {
+  readReportedCheckSet,
+  recordedSetClaimsComplete,
+  reconcileRecordedCheckSet,
+} from './checkSetReconcile';
+import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import {
   deliverySetIsGreen,
@@ -80,6 +86,28 @@ const SOURCE_STATUS = 'implemented';
 /** The status CI green moves it to. */
 const TARGET_STATUS = 'in_review';
 
+/** Every pull request that delivers this card, by id, with the check rows the
+ *  verdict is derived from — the union the doc block below explains, extracted
+ *  (MOTIR-4199) so the check-set reconcile can address exactly the same members
+ *  the judgement will. */
+async function collectDeliveries(
+  item: { id: string; sessionBranch: string | null },
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>> {
+  const [deliveries, linked, onBranch] = await Promise.all([
+    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+    githubPullRequestRepository.listByWorkItemWithContext(item.id, tx),
+    item.sessionBranch
+      ? githubPullRequestRepository.listByHeadRefWithChecks(item.sessionBranch, tx)
+      : Promise.resolve([]),
+  ]);
+
+  const byId = new Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>();
+  for (const delivery of deliveries) byId.set(delivery.githubPullRequestId, delivery.pullRequest);
+  for (const pr of [...linked, ...onBranch]) byId.set(pr.id, pr);
+  return byId;
+}
+
 /**
  * IS EVERY PULL REQUEST DELIVERING THIS CARD GREEN? (Story MOTIR-3655 ·
  * MOTIR-3685.)
@@ -120,17 +148,7 @@ async function everyDeliveryIsGreen(
   item: { id: string; sessionBranch: string | null },
   tx: Prisma.TransactionClient,
 ): Promise<boolean> {
-  const [deliveries, linked, onBranch] = await Promise.all([
-    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
-    githubPullRequestRepository.listByWorkItemWithContext(item.id, tx),
-    item.sessionBranch
-      ? githubPullRequestRepository.listByHeadRefWithChecks(item.sessionBranch, tx)
-      : Promise.resolve([]),
-  ]);
-
-  const byId = new Map<string, { repoId: string; checkRuns: GithubCheckRun[] }>();
-  for (const delivery of deliveries) byId.set(delivery.githubPullRequestId, delivery.pullRequest);
-  for (const pr of [...linked, ...onBranch]) byId.set(pr.id, pr);
+  const byId = await collectDeliveries(item, tx);
 
   const members = [...byId.values()].map((pr) => ({
     repoId: pr.repoId,
@@ -241,7 +259,27 @@ export async function promoteDeliveredCardsOnGreen(args: {
 export async function promoteIfCiAlreadyGreen(
   workItemId: string,
   ctx: { userId: string; workspaceId: string },
+  /** The host reader, injectable for the same reason `applyCiStatusFeedback`
+   *  takes its `resolveContext`: this edge has no delivery behind it, so there
+   *  is no payload to carry a provider seam in, and a test that cannot supply
+   *  one cannot exercise the partial-set case at all. Defaults to the real
+   *  read; production callers pass nothing. */
+  readCheckSet: typeof readReportedCheckSet = readReportedCheckSet,
 ): Promise<boolean> {
+  // ⚠️ THE OTHER DOOR INTO THE PARTIAL-SET DEFECT (MOTIR-4199). Edge 1 reaches
+  // this module through the CI-feedback consumer, which has already reconciled
+  // the commit's check set against the host before it forms a verdict. Edge 2
+  // has no delivery behind it at all — it fires because a card ARRIVED at
+  // `implemented`, which the run does moments after `gh pr create`, when the
+  // recorded set is at its most partial. Left alone it would read three
+  // successes as five and promote for exactly the reason edge 1 no longer does.
+  //
+  // So it asks the same question, of the same set, before it judges — and it is
+  // paid for on the same terms: only the delivering pull requests whose recorded
+  // set CLAIMS to be complete are asked about, so the ordinary card (one pull
+  // request, checks still reporting pending rows) pays nothing.
+  await reconcileClaimedCompleteDeliveries(workItemId, ctx, readCheckSet);
+
   const shouldPromote = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, ctx.workspaceId);
     const item = await workItemRepository.findById(workItemId, tx);
@@ -259,6 +297,90 @@ export async function promoteIfCiAlreadyGreen(
   if (!shouldPromote) return false;
   const promoted = await promoteEach([workItemId], ctx);
   return promoted.length > 0;
+}
+
+/**
+ * Bring the recorded check set of every pull request delivering this card in
+ * line with the host's, for the members that claim to be complete (MOTIR-4199).
+ *
+ * ⚠️ THE NETWORK READ IS OUTSIDE THE TRANSACTION, deliberately and structurally:
+ * it is three phases — read the members, ask the host, write what is missing —
+ * rather than one, because a round trip inside `withSystemContext` would hold a
+ * connection open on GitHub's latency for every card arriving at Implemented.
+ *
+ * Best-effort in the same sense the promotion itself is: this runs before a
+ * verdict, and an unreachable host must cost the sharper answer rather than the
+ * card. Anything that throws leaves the recorded set exactly as it was, which is
+ * the behaviour that shipped before this pass existed.
+ */
+async function reconcileClaimedCompleteDeliveries(
+  workItemId: string,
+  ctx: { userId: string; workspaceId: string },
+  readCheckSet: typeof readReportedCheckSet,
+): Promise<void> {
+  try {
+    const candidates = await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, ctx.workspaceId);
+      const item = await workItemRepository.findById(workItemId, tx);
+      if (!item || item.status !== SOURCE_STATUS) return [];
+      const byId = await collectDeliveries(item, tx);
+      // Only the members whose own recorded set asserts it is whole. A member
+      // with a live pending row is already `running` and already withholds, so
+      // there is no claim to check.
+      return [...byId.entries()]
+        .filter(([, pr]) => recordedSetClaimsComplete(pr.checkRuns))
+        .map(([id]) => id);
+    });
+
+    for (const pullRequestId of candidates) {
+      const subject = await withSystemContext(async (tx) => {
+        await bindWorkspaceContext(tx, ctx.workspaceId);
+        return githubPullRequestRepository.findByIdWithInstallation(pullRequestId, tx);
+      });
+      if (!subject) continue;
+      // The sha the verdict is formed at — the newest recorded row's, which is
+      // what `derivePrCiState` picks. A member with no rows at all never reaches
+      // here (`recordedSetClaimsComplete` is false for an empty set).
+      const commitSha = latestRecordedSha(subject.checkRuns);
+      if (!commitSha) continue;
+
+      const reported = await readCheckSet({
+        installationId: subject.repo.installation.installationId,
+        owner: subject.repo.owner,
+        name: subject.repo.name,
+        commitSha,
+      });
+      if (reported === null) continue;
+
+      await withSystemContext(async (tx) => {
+        await bindWorkspaceContext(tx, ctx.workspaceId);
+        const recorded = await githubCheckRunRepository.listByPrAndSha(
+          pullRequestId,
+          commitSha,
+          tx,
+        );
+        await reconcileRecordedCheckSet({
+          pullRequestId,
+          commitSha,
+          reported,
+          recorded,
+          tx,
+        });
+      });
+    }
+  } catch (err) {
+    console.warn('[ciPromotion] could not reconcile the check set; judging what is recorded', {
+      workItemId,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+}
+
+/** The commit `derivePrCiState` judges at — the newest-CREATED row's sha, by the
+ *  same rule, so the reconcile fills in the window the verdict reads. */
+function latestRecordedSha(checkRuns: GithubCheckRun[]): string | null {
+  if (checkRuns.length === 0) return null;
+  return checkRuns.reduce((a, b) => (b.createdAt > a.createdAt ? b : a)).commitSha;
 }
 
 /**

@@ -6,6 +6,8 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
 import { githubCiFeedbackCommentRepository } from '@/lib/repositories/githubCiFeedbackCommentRepository';
 import { liveCheckRows } from '@/lib/github/checkSuites';
+import type { ReportedCheckRun } from '@/lib/github/checkRuns';
+import { reconcileRecordedCheckSet, shaSetClaimsComplete } from './checkSetReconcile';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { commentsService } from './commentsService';
 import { workItemsService } from './workItemsService';
@@ -102,6 +104,20 @@ export interface CiFeedbackContext {
   installation: GithubInstallation;
   repo: GithubRepo;
   buildChecksUrl: (changeRequestNumber: number) => string;
+  /**
+   * Ask the HOST which check runs a commit actually has (MOTIR-4199) — the one
+   * thing this consumer cannot derive, because every derivation it makes is a
+   * fold over the rows that have been RECORDED and nothing in that path knows
+   * how many rows there will be.
+   *
+   * Optional, and its absence is a real answer: a provider that supplies none
+   * keeps the pre-MOTIR-4199 behaviour, which is to trust the recorded set. It
+   * returns `null` when the set could not be established (unreachable host,
+   * refused permission, an unparseable answer) — NOT the same as an empty array,
+   * which says the commit genuinely has no checks. `lib/services/checkSetReconcile.ts`
+   * carries the whole contract.
+   */
+  readReportedCheckSet?: (commitSha: string) => Promise<ReportedCheckRun[] | null>;
 }
 
 /** What a provider's `resolveContext` returns: the resolved context, or a typed
@@ -189,6 +205,12 @@ export async function applyCiStatusFeedback(
       suiteId,
       tx,
     );
+    // The rows already recorded at THIS delivery's commit (MOTIR-4199). Read
+    // here, outside the lock, because the only thing they are used for before
+    // the lock is deciding whether to ASK THE HOST how many checks the commit
+    // has — and that question costs a network round trip, which must not be
+    // made while holding a row lock.
+    const recordedAtSha = await githubCheckRunRepository.listByPrAndSha(cr.id, event.commitSha, tx);
     // WHICH delivered cards already carry this commit's feedback comment
     // (MOTIR-3770) — read here because the idempotency guard below needs it, and
     // that guard used to answer the question off the legacy scalar, which names
@@ -216,6 +238,14 @@ export async function applyCiStatusFeedback(
        *  left the generated client with MOTIR-3863, and the comment's identity
        *  is `github_ci_feedback_comment`'s. */
       existing: existing ? { conclusion: existing.conclusion } : null,
+      /** Every row at this commit as it stood before this delivery — the input
+       *  to the check-set claim below, and nothing else. */
+      recordedAtSha: recordedAtSha.map((row) => ({
+        checkName: row.checkName,
+        checkSuiteId: row.checkSuiteId,
+        conclusion: row.conclusion,
+      })),
+      readReportedCheckSet: ctx.readReportedCheckSet,
       actorUserId: owner?.userId ?? null,
     };
   });
@@ -305,6 +335,39 @@ export async function applyCiStatusFeedback(
   const actorCtx = { userId: resolved.actorUserId, workspaceId: resolved.workspaceId };
   const noun = changeRequestNoun(resolved.provider);
 
+  // ── IS THE RECORDED SET THE WHOLE SET? (MOTIR-4199) ─────────────────────
+  // Every line below this one folds the rows at this commit into a sentence and
+  // an action — `⏳ CI running — 3 of 5` vs `✅ all 3 checks succeeded … This
+  // work is verified`, and In Review vs held at Implemented. All of them read
+  // the RECORDED rows, and none of them knew how many rows the commit will
+  // have: GitHub delivers check runs one webhook at a time, so a recorded set
+  // that is a PREFIX of the real one is the ordinary state of a pull request's
+  // first minutes. The observed instance wrote the verified sentence and
+  // promoted the card on three of five checks, with the repository's whole test
+  // suite still running.
+  //
+  // ⚠️ THE CLAIM IS EVALUATED OVER THE SET *INCLUDING THIS DELIVERY*, which is
+  // the whole reason it is computed here rather than off `recordedAtSha`. This
+  // delivery is terminal (`pending` returned above, `neutral` at the top), so a
+  // commit whose FIRST check has just gone green has an empty recorded set and a
+  // projected set of exactly one success — it claims completeness precisely when
+  // nothing was recorded to contradict it, which is the worst case, not the
+  // safe one.
+  const projectedAtSha = [
+    ...resolved.recordedAtSha.filter(
+      (row) => !(row.checkName === event.context && row.checkSuiteId === suiteId),
+    ),
+    { checkName: event.context, checkSuiteId: suiteId, conclusion: event.conclusion },
+  ];
+  // The round trip is paid ONLY when the set claims to be whole. With a live
+  // pending row at this commit the comment is interim and the promotion
+  // withholds already, so there is no claim to check and nothing to buy: a
+  // pull request carrying ~34 checks pays once, not thirty-four times.
+  const reported =
+    resolved.readReportedCheckSet && shaSetClaimsComplete(projectedAtSha)
+      ? await resolved.readReportedCheckSet(event.commitSha).catch(() => null)
+      : null;
+
   // Record this check's row and write THE feedback comment for
   // `(changeRequest, headSha)` ON EVERY DELIVERED CARD — under a row lock on the
   // change request, because the comment body is DERIVED from every check row at
@@ -367,7 +430,32 @@ export async function applyCiStatusFeedback(
     // rather than in the query is deliberate: the query's own answer is the whole
     // set, and `liveCheckRows` is the one place that decides which of them still
     // votes.
-    const rows = liveCheckRows([...siblings.filter((r) => r.id !== recorded.id), recorded]);
+    // ⚠️ AND FILL IN WHAT THE HOST REPORTS AND WE HAVE NOT RECORDED (MOTIR-4199),
+    // BEFORE the fold. The rows go into the SAME table every derivation already
+    // reads, with the host's own conclusions, so nothing downstream learns a new
+    // concept: a `pending` row makes `summarizeChecks` render `3 of 5`, makes
+    // `deriveCiState` withhold nothing it did not already withhold, and makes
+    // `derivePrCiState` — which BOTH promotion edges ask — return `running`.
+    // The write only ever CREATES, so a delivery that landed while the snapshot
+    // was in flight keeps its own answer.
+    const created =
+      reported === null
+        ? 0
+        : await reconcileRecordedCheckSet({
+            pullRequestId: resolved.prId,
+            commitSha: event.commitSha,
+            reported,
+            recorded: [...siblings, recorded],
+            tx,
+          });
+    // Re-read only when something was actually filled in — zero is the answer in
+    // the healthy case, and then the set in hand is already whole.
+    const atSha =
+      created > 0
+        ? await githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx)
+        : [...siblings.filter((r) => r.id !== recorded.id), recorded];
+
+    const rows = liveCheckRows(atSha);
     const bodyMd = feedbackCommentBody(summarizeChecks(rows), resolved.checksUrl, noun);
 
     // ONE COMMENT PER DELIVERED CARD (MOTIR-3770). The first terminal conclusion
