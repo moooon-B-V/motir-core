@@ -77,8 +77,18 @@ import { truncateAuthTables } from '../../helpers/db';
 
 const REPO_ROOT = process.cwd();
 
-/** The routes this story added, discovered rather than listed. */
-const WORK_LOOP_PATHS = WORK_LOOP_OPERATIONS.map((op) => op.path);
+/**
+ * The routes this story added, discovered rather than listed.
+ *
+ * ⚠️ A SET, because a PATH is not an OPERATION. It was a bare `map` while every
+ * work-loop path happened to carry exactly one verb, which made the two counts
+ * identical by coincidence rather than by meaning — and MOTIR-4085's read landed
+ * a GET beside the existing POST on `…/plan-approval`, so the list gained a
+ * duplicate and the route-file walk below started comparing files against verbs.
+ * The question this constant answers is *which route files does this story own*,
+ * and that has always been one entry per path.
+ */
+const WORK_LOOP_PATHS = [...new Set(WORK_LOOP_OPERATIONS.map((op) => op.path))];
 
 /**
  * The operation → MCP tool correspondence, as the story's own audit table states
@@ -145,6 +155,19 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'and held AUTHOR and DECIDE at once; the route followed its service, as the rule requires. ' +
     'This is the ONE work-loop operation whose key no MCP tool asserts, and deliberately so — ' +
     'a tool would hand approval to the very credential the bound above exists to keep out.',
+  getWorkItemPlan:
+    'MOTIR-4085 — the READ beside the approval, addressed by the CARD rather than by a plan id. ' +
+    'It has no MCP counterpart and wants none, and the reason is the opposite of its ' +
+    'neighbour’s: not that an agent must be kept out, but that an agent has no use for it. ' +
+    'The agent that submitted the plan already holds its id — its own `submit_plan_session` ' +
+    'result returned it — so `get_plan` answers the same document for it today. Addressing it ' +
+    'by card exists for the OPERATOR’s loop, which never learns that id because the tool result ' +
+    'went to a sandbox it does not read, and which speaks /api/v1. It takes `project:browse` — ' +
+    'the key `plansService.getPlan` asserts, and the same key `getPlan` declares for the very ' +
+    'same document — so no permission is invented and the two doors onto one plan cannot ' +
+    'disagree about who may open them. ⚠️ It is NOT gated like the POST it shares a path with: ' +
+    'reading is browse, deciding is `ai:decide_plan`, and conflating the two would have made a ' +
+    'browse-readable document look like an AI capability.',
   openDispatchRun:
     'MOTIR-1789 · MOTIR-1792 — the DISPATCH RUN ingest reports what a CLI invocation DID, and ' +
     'its only writers are dispatch processes: `packages/cli` today, 9.1.7’s hosted orchestrator ' +
@@ -214,7 +237,10 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // is the subject of a run rather than its reporter. Each still argues its
     // case in `WORK_LOOP_UNMIRRORED` and each still mirrors a real permission.
     expect(Object.keys(MIRRORS)).toHaveLength(11);
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(17);
+    // 18 since MOTIR-4085 added the plan READ beside the approval — the SEVENTH
+    // operation with no MCP counterpart, and the first whose reason is that an
+    // agent has no USE for it rather than that it must be kept away from one.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(18);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

@@ -53,6 +53,38 @@ export const githubCiFeedbackCommentRepository = {
     });
   },
 
+  /** CLAIM the row for one `(change request, head commit, card)` with the comment
+   *  just posted, and answer whichever row now stands — ours, or the one that was
+   *  already there.
+   *
+   *  ⚠️ THIS IS THE ARBITER THE ROW LOCK USED TO BE (MOTIR-4264). The comment
+   *  writes no longer happen under the change request's `FOR UPDATE`, because
+   *  holding it across `commentsService` — a different connection, several round
+   *  trips — is what made every other check finishing at that commit queue behind
+   *  them until Prisma's transaction budget expired. So the CREATE is arbitrated
+   *  here instead, by the `(pull_request_id, commit_sha, work_item_id)` UNIQUE
+   *  index: the insert that lands owns the card's comment, a second one is skipped
+   *  rather than raising, and the caller reads the winner back and compares ids.
+   *
+   *  Distinct from `upsert` on purpose: `upsert` OVERWRITES `comment_id`, which is
+   *  what the adopt path wants and what a create race must never do — the loser
+   *  would point the row at a comment it is about to delete. */
+  async claim(
+    input: UpsertGithubCiFeedbackCommentInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubCiFeedbackComment> {
+    const { pullRequestId, commitSha, workItemId, commentId } = input;
+    await tx.githubCiFeedbackComment.createMany({
+      data: [{ pullRequestId, commitSha, workItemId, commentId }],
+      skipDuplicates: true,
+    });
+    return tx.githubCiFeedbackComment.findUniqueOrThrow({
+      where: {
+        pullRequestId_commitSha_workItemId: { pullRequestId, commitSha, workItemId },
+      },
+    });
+  },
+
   /** Create-or-refresh the row for one `(change request, head commit, card)`.
    *
    *  An UPSERT rather than a create because two paths reach it with the same key:

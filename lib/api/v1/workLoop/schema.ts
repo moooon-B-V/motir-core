@@ -846,6 +846,23 @@ export const planProposalSchema = z.object({
   proposedFields: planProposalFieldsSchema.nullable(),
   patch: z.record(z.string(), z.unknown()).nullable(),
   parentRef: z.string().nullable(),
+  /**
+   * The `MOTIR-<n>` {@link planProposalSchema.shape.parentRef} names, when it
+   * names a COMMITTED work item (MOTIR-4085).
+   *
+   * ⚠️ ADDITIVE, and `parentRef` is untouched beside it. A ref is one of three
+   * things — a work-item cuid, a `planItem:<id>` naming another `add` in this
+   * same plan, or absent — and only the first has a key. So this is `null` for a
+   * temp-ref, for a parent this caller may not browse, and for a proposal that
+   * names no parent, exactly as `workItemKey` degrades.
+   *
+   * It exists because a client asking *where is this proposal putting a child?*
+   * cannot answer it from `parentRef`: §7 forbids the cuid on the wire, so the
+   * ref it receives is opaque to it. `motir auto --auto-approve-replan` is that
+   * client — the lane check it runs before approving is a comparison against the
+   * iteration's own parent key, and it has no way to turn a cuid into one.
+   */
+  parentKey: workItemKeySchema.nullable(),
   blockedByRefs: z.array(z.string()),
 });
 
@@ -863,6 +880,29 @@ export const planSchema = z.object({
   decidedAt: z.string().nullable(),
   proposals: z.array(planProposalSchema),
 });
+
+/**
+ * The plan anchored at ONE WORK ITEM — or the honest absence of one (MOTIR-4085).
+ *
+ * ⚠️ `plan: null` IS AN ANSWER, NOT AN ERROR, and the wrapper exists to say so.
+ * The question this resource asks is *what plan is anchored at this card?*, and
+ * for almost every card in a project the true answer is *none* — nobody has
+ * re-planned it. A 4xx there would make the ordinary state of the tree read as a
+ * fault, and it would make a GET that is unanswerable for most valid keys, which
+ * nothing else on this surface is.
+ *
+ * It is also the SIGNAL a caller acts on rather than a blank. An unattended loop
+ * reads this to bound a plan before approving it; `null` tells it the agent
+ * anchored its re-plan somewhere else — at a container, or at nothing — which is
+ * a lane the prompt offers and calls legitimate. Reported as data, so the client
+ * branches on a field instead of on a status code
+ * (`public-api-conventions.md` §8).
+ */
+export const workItemPlanSchema = z.object({
+  plan: planSchema.nullable(),
+});
+
+export type V1WorkItemPlan = z.infer<typeof workItemPlanSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The planning conversation (11.7.6)
@@ -1236,9 +1276,46 @@ export function presentPlan(
         item.proposedFields === null ? null : presentProposedFields(item.proposedFields),
       patch: item.patch === null ? null : { ...item.patch },
       parentRef: item.parentRef,
+      // The same resolver, over the same id space — a temp-ref is not an id and
+      // resolves to null, which is the honest answer rather than a guess.
+      parentKey:
+        committedRefId(item.parentRef) === null ? null : (keyOfId(item.parentRef!) ?? null),
       blockedByRefs: item.blockedByRefs,
     })),
   };
+}
+
+/** The intra-plan temp-ref prefix — a ref naming another `add` on THIS plan
+ *  rather than a committed work item. */
+const PLAN_ITEM_REF_PREFIX = 'planItem:';
+
+/**
+ * A ref that names a COMMITTED work item, or `null`.
+ *
+ * The one place the three shapes of a ref are told apart, so the presenter and
+ * the routes that pre-resolve ids cannot disagree about which of them is an id.
+ */
+function committedRefId(ref: string | null): string | null {
+  if (ref === null || ref === '') return null;
+  return ref.startsWith(PLAN_ITEM_REF_PREFIX) ? null : ref;
+}
+
+/**
+ * Every work-item id a plan's proposals REFERENCE — targets and parents both.
+ *
+ * The batched, view-gated `resolveReferenceSummaries` read each plan-returning
+ * route makes takes this list, so the three of them resolve the same id space
+ * rather than each collecting its own (MOTIR-4085 added the parent half, and a
+ * per-route copy is how one route would keep the old one).
+ */
+export function planReferenceIds(plan: PlanWithItemsDto): string[] {
+  const ids = new Set<string>();
+  for (const item of plan.items) {
+    if (item.workItemId !== null) ids.add(item.workItemId);
+    const parent = committedRefId(item.parentRef);
+    if (parent !== null) ids.add(parent);
+  }
+  return [...ids];
 }
 
 /** An `add`'s proposed values — shaped explicitly, so a field the planner starts

@@ -310,6 +310,20 @@ export function v1Ref(key: string, over: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * One CHILD row of the detail aggregate — a {@link v1Ref} plus the sibling
+ * dependency block the detail attaches (MOTIR-1848).
+ *
+ * ⚠️ A BARE `v1Ref` IS NOT A CHILD, and the generated client is right to refuse
+ * one: `workItemChildSchema` extends the ref with `dependencies`, so a fixture
+ * that hands back refs produces a body the client rejects — and a caller that
+ * catches its own read failure (MOTIR-4085's lane resolution does) then sees an
+ * EMPTY child set and behaves plausibly for the wrong reason.
+ */
+export function v1Child(key: string, over: Record<string, unknown> = {}) {
+  return { ...v1Ref(key, over), dependencies: v1Edges() };
+}
+
 /** The v1 work-item DETAIL aggregate. */
 export function v1Detail(key: string, over: Record<string, unknown> = {}) {
   return {
@@ -550,6 +564,10 @@ export function v1Proposal(id: string, over: Record<string, unknown> = {}) {
     },
     patch: null,
     parentRef: null,
+    // MOTIR-4085 — the `MOTIR-<n>` `parentRef` resolves to when it names a
+    // COMMITTED work item; `null` for a `planItem:` temp-ref and for a proposal
+    // that names no parent, which is what the default here is.
+    parentKey: null,
     blockedByRefs: [],
     ...over,
   };

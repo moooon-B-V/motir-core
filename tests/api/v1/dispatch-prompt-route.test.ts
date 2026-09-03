@@ -234,6 +234,88 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     expect(JSON.stringify(result.content)).toContain('nonsense');
   });
 
+  // ── ?autoApproveReplan (MOTIR-4085) ─────────────────────────────────────
+  //
+  // The OTHER prompt parameter, and it is a different KIND of thing from the one
+  // above: it switches nothing off for the agent — the tools, the anchor and the
+  // one shot are identical either way — it tells the agent what will happen to
+  // what it submits. Its own parameter, so `findingsPolicy`'s documented meaning
+  // (a list of what is OFF) keeps meaning one thing.
+
+  it('renders NO lane section by default — the request is unchanged without it', async () => {
+    // ⚠️ THE ABSENCE IS THE IMPORTANT ARM. A section rendered unconditionally
+    // would tell every agent on every run that its plan might be approved
+    // unattended, which is false for every run without an approving loop — and
+    // false in the direction the agent cannot check.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'no lane');
+
+    expect((await prompt(caller, item.identifier)).prompt).not.toContain('TWO LANES');
+  });
+
+  it('renders the lane section for `?autoApproveReplan=1`', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'two lanes');
+
+    const body = await prompt(caller, item.identifier, '?autoApproveReplan=1');
+
+    expect(body.prompt).toContain('TWO LANES');
+    expect(body.prompt).toContain('--auto-approve-replan');
+    expect(body.prompt).toContain('ALWAYS available');
+  });
+
+  it('IGNORES it when `replan` is disabled — approving what was never submitted is nonsense', async () => {
+    // Resolved to the SAFE side, in the shared parser rather than per transport.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'contradiction');
+
+    const body = await prompt(
+      caller,
+      item.identifier,
+      '?findingsPolicy=replan&autoApproveReplan=1',
+    );
+
+    expect(body.prompt).not.toContain('TWO LANES');
+    expect(body.prompt).toContain('leave the card In Progress');
+  });
+
+  it('treats every other value as NO — the safe direction for a claim an agent cannot check', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'falsey');
+
+    for (const query of ['?autoApproveReplan=', '?autoApproveReplan=0', '?autoApproveReplan=yes']) {
+      expect((await prompt(caller, item.identifier, query)).prompt).not.toContain('TWO LANES');
+    }
+  });
+
+  it('stays a READ under the lane parameter — the row is untouched', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'still a read, with a lane');
+    const before = await stateOf(caller, item.id);
+
+    await prompt(caller, item.identifier, '?autoApproveReplan=1');
+
+    expect(await stateOf(caller, item.id)).toEqual(before);
+  });
+
+  it('the MCP tool does NOT expose it — the agent may not compose its own lane', async () => {
+    // ⚠️ A DELIBERATE NON-WIDENING, asserted rather than left as an omission
+    // nobody reads. MCP is the AGENT's surface; a tool parameter here would let
+    // the party whose plan is being bounded write the prompt that describes the
+    // bound. The tool therefore renders the lane that is true for every caller
+    // who reaches a prompt through it: nobody is going to approve it unattended.
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'mcp has no lane');
+
+    const viaMcp = await runDispatchPrompt({ key: item.identifier }, caller.ctx);
+    const payload = viaMcp.structuredContent as { prompt: string };
+
+    expect(payload.prompt).not.toContain('TWO LANES');
+    // …and it is the SAME prompt the HTTP door renders without the parameter,
+    // so the two transports still cannot disagree about the default.
+    expect(payload.prompt).toBe((await prompt(caller, item.identifier)).prompt);
+  });
+
   it('treats an EMPTY `sessionBranch` as no seed rather than as a bad request', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
     const item = await makeItem(caller, 'no seed');

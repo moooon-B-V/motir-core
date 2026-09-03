@@ -293,7 +293,7 @@ export function IssueTreeTable({
             if (!isTree) return null; // synthetic rows render only in the tree column
             if (node.kind === 'loading') {
               return (
-                <span className="flex items-center gap-2 text-(--el-text-muted)">
+                <span className="flex items-center gap-2 text-(--el-text-secondary)">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                   Loading children…
                 </span>

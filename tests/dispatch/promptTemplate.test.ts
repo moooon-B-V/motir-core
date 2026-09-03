@@ -3,6 +3,7 @@ import {
   assembleDispatchPrompt,
   branchSlug,
   FINDINGS_POLICY_TOKENS,
+  FULL_FINDINGS_POLICY,
   LINKING_RATIONALE,
   NO_INJECTIONS,
   parseFindingsPolicy,
@@ -1160,7 +1161,7 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
     // second implementation of the same claim.
     const omitted = assembleDispatchPrompt(source()).prompt;
     const explicit = assembleDispatchPrompt(
-      source({ findingsPolicy: { logBug: true, replan: true } }),
+      source({ findingsPolicy: { logBug: true, replan: true, autoApproveReplan: false } }),
     ).prompt;
     expect(explicit).toBe(omitted);
   });
@@ -1168,7 +1169,10 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
   describe.each(VARIANTS)('on $name', ({ over }) => {
     it('with bug filing DISABLED renders no branch at all, and says comment instead', () => {
       const { prompt } = assembleDispatchPrompt(
-        source({ ...over, findingsPolicy: { logBug: false, replan: true } }),
+        source({
+          ...over,
+          findingsPolicy: { logBug: false, replan: true, autoApproveReplan: false },
+        }),
       );
       // Empty in, nothing out: no instructions, no `create_work_item`, no trace.
       expect(prompt).not.toContain('create_work_item');
@@ -1184,7 +1188,10 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
 
     it('with re-planning DISABLED renders no submit step, and leaves the card in progress', () => {
       const { prompt } = assembleDispatchPrompt(
-        source({ ...over, findingsPolicy: { logBug: true, replan: false } }),
+        source({
+          ...over,
+          findingsPolicy: { logBug: true, replan: false, autoApproveReplan: false },
+        }),
       );
       expect(prompt).not.toContain('submit_plan_session');
       expect(prompt).not.toContain('append_plan_turn');
@@ -1197,7 +1204,10 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
 
     it('with BOTH disabled keeps the FINISHED branch whole', () => {
       const { prompt } = assembleDispatchPrompt(
-        source({ ...over, findingsPolicy: { logBug: false, replan: false } }),
+        source({
+          ...over,
+          findingsPolicy: { logBug: false, replan: false, autoApproveReplan: false },
+        }),
       );
       expect(prompt).toContain('FINISHED — the work is done');
       expect(prompt).toContain('status implemented');
@@ -1212,8 +1222,12 @@ describe('assembleDispatchPrompt — the per-run findings policy', () => {
     // only the first half would pass just as well against a switch that renders
     // the same text whatever it is handed, and every disabled-branch assertion
     // above would then be vacuous.
-    const full = source({ findingsPolicy: { logBug: true, replan: true } });
-    const none = source({ findingsPolicy: { logBug: false, replan: false } });
+    const full = source({
+      findingsPolicy: { logBug: true, replan: true, autoApproveReplan: false },
+    });
+    const none = source({
+      findingsPolicy: { logBug: false, replan: false, autoApproveReplan: false },
+    });
     expect(assembleDispatchPrompt(full).prompt).toBe(assembleDispatchPrompt(full).prompt);
     expect(assembleDispatchPrompt(none).prompt).toBe(assembleDispatchPrompt(none).prompt);
     expect(assembleDispatchPrompt(full).prompt).not.toBe(assembleDispatchPrompt(none).prompt);
@@ -1416,7 +1430,7 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
 
   it('with re-planning DISABLED, neither tool is named and nothing is composed', () => {
     const { prompt } = assembleDispatchPrompt(
-      source({ findingsPolicy: { logBug: true, replan: false } }),
+      source({ findingsPolicy: { logBug: true, replan: false, autoApproveReplan: false } }),
     );
     const outcome = outcomeSection(prompt);
     for (const gone of [
@@ -1436,17 +1450,17 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
 describe('parseFindingsPolicy — the shared wire vocabulary', () => {
   it.each([undefined, null, '', '   '])('%o means the full protocol', (raw) => {
     expect(parseFindingsPolicy(raw)).toEqual({
-      policy: { logBug: true, replan: true },
+      policy: { logBug: true, replan: true, autoApproveReplan: false },
       unknown: null,
     });
   });
 
   it.each([
-    ['log-bug', { logBug: false, replan: true }],
-    ['replan', { logBug: true, replan: false }],
-    ['log-bug,replan', { logBug: false, replan: false }],
-    [' replan , log-bug ', { logBug: false, replan: false }],
-    ['log-bug,,replan', { logBug: false, replan: false }],
+    ['log-bug', { logBug: false, replan: true, autoApproveReplan: false }],
+    ['replan', { logBug: true, replan: false, autoApproveReplan: false }],
+    ['log-bug,replan', { logBug: false, replan: false, autoApproveReplan: false }],
+    [' replan , log-bug ', { logBug: false, replan: false, autoApproveReplan: false }],
+    ['log-bug,,replan', { logBug: false, replan: false, autoApproveReplan: false }],
   ])('%s disables what it names', (raw, expected) => {
     expect(parseFindingsPolicy(raw)).toEqual({ policy: expected, unknown: null });
   });
@@ -1461,5 +1475,155 @@ describe('parseFindingsPolicy — the shared wire vocabulary', () => {
 
   it('names both capabilities in the vocabulary it publishes', () => {
     expect([...FINDINGS_POLICY_TOKENS]).toEqual(['log-bug', 'replan']);
+  });
+});
+
+// ── THE TWO LANES a re-plan can go down (MOTIR-4085) ────────────────────────
+//
+// `--auto-approve-replan` lets an unattended loop approve a re-plan itself and
+// carry on. The BOUND on what it may approve is the loop's, enforced over the
+// plan that comes back — nothing here is trusted. What the prompt buys is that
+// the agent KNOWS which choice it is making: keep the correction to its own card
+// and its siblings and the loop may act on it, or reach wider on purpose and a
+// person decides.
+//
+// ⚠️ THE TESTS THAT MATTER MOST ARE THE ABSENCE ONES. A section rendered
+// unconditionally would tell every agent on every run that its plan might be
+// approved unattended, which is false for every run without the flag — and false
+// in the direction an agent cannot check.
+describe('THE CARD IS WRONG — the two lanes (MOTIR-4085)', () => {
+  const withLane = (over: Partial<DispatchPromptSource> = {}) =>
+    assembleDispatchPrompt(
+      source({
+        ...over,
+        findingsPolicy: { logBug: true, replan: true, autoApproveReplan: true },
+      }),
+    ).prompt;
+
+  it('renders NOTHING without the flag — the default prompt is byte-identical', () => {
+    // The whole no-regression claim in one assertion: a run with no
+    // auto-approving loop must send the prompt it sent before this existed.
+    const before = assembleDispatchPrompt(
+      source({ findingsPolicy: { logBug: true, replan: true, autoApproveReplan: false } }),
+    ).prompt;
+    expect(before).toBe(assembleDispatchPrompt(source()).prompt);
+    expect(before).not.toContain('TWO LANES');
+  });
+
+  it('names BOTH lanes, and the card and container each is anchored at', () => {
+    const prompt = withLane();
+    expect(prompt).toContain('TWO LANES');
+    expect(prompt).toContain('--auto-approve-replan');
+    // The card's own lane is the leaf plus its siblings under its parent…
+    expect(prompt).toContain('PROD-7 and its siblings under PROD-2');
+    // …and the normal lane is the container, by key, in BOTH calls.
+    expect(prompt).toContain('[PROD-2]');
+    expect(prompt).toContain('in BOTH calls');
+  });
+
+  it('says the normal lane is ALWAYS available, and that stopping is correct', () => {
+    // ⚠️ THE ANTI-INCENTIVE HALF. An agent that believes it must keep the run
+    // going has a reason to invent a local fix it does not believe in — which
+    // buys continuity by spending plan quality. So the text has to say, in
+    // words, that it is not being asked to keep the run going.
+    const prompt = withLane();
+    expect(prompt).toContain('ALWAYS available');
+    expect(prompt).toContain('CHOOSE THE LANE THAT IS TRUE');
+    expect(prompt).toContain('You are not being asked to keep the run going');
+  });
+
+  it('says a plan anchored here but wider is NOT approved, and is not a rejection', () => {
+    const prompt = withLane();
+    expect(prompt).toContain('the loop does not approve it');
+    expect(prompt).toContain('names what fell outside');
+    expect(prompt).toContain('not a rejection of your finding');
+  });
+
+  it('offers the anchorless lane for a missing PRECONDITION', () => {
+    // The case with no card to name: nothing that exists is the target, so the
+    // planner settles a new one. Omitting targetKeys is how that is expressed.
+    expect(withLane()).toContain('omit targetKeys entirely');
+  });
+
+  it('degrades honestly for a PARENTLESS card — no sibling level to offer', () => {
+    const prompt = withLane({ parent: null });
+    expect(prompt).toContain('it has no parent, so it has no sibling level either');
+    // …and it must not invent a container key it does not have.
+    expect(prompt).not.toMatch(/siblings under (?!PROD-2)/);
+  });
+
+  it('renders nothing when re-planning is DISABLED — there is no plan to approve', () => {
+    // Contradictory by construction, and `parseFindingsPolicy` resolves it to
+    // the safe side. This asserts the template does not describe a lane for a
+    // submission the same prompt has just forbidden.
+    const prompt = assembleDispatchPrompt(
+      source({ findingsPolicy: { logBug: true, replan: false, autoApproveReplan: true } }),
+    ).prompt;
+    expect(prompt).not.toContain('TWO LANES');
+    expect(prompt).toContain('without re-planning');
+  });
+
+  it('leaves the submit steps and their anchor UNCHANGED', () => {
+    // The lane block is added BESIDE the protocol, not woven into it: the two
+    // calls, the requirement fields and the one-shot rule are what they were.
+    const prompt = withLane();
+    expect(prompt).toMatch(/append_plan_turn[\s\S]*targetKeys:\s+\[PROD-7\]/);
+    expect(prompt).toMatch(/submit_plan_session[\s\S]*targetKeys:\s+\[PROD-7\]/);
+    expect(prompt).toContain('SUBMITTING IS THE ACT THAT SPENDS');
+  });
+
+  it('is DETERMINISTIC, and the two policies differ — so the switch is not inert', () => {
+    const on = source({ findingsPolicy: { logBug: true, replan: true, autoApproveReplan: true } });
+    const off = source({
+      findingsPolicy: { logBug: true, replan: true, autoApproveReplan: false },
+    });
+    expect(assembleDispatchPrompt(on).prompt).toBe(assembleDispatchPrompt(on).prompt);
+    expect(assembleDispatchPrompt(on).prompt).not.toBe(assembleDispatchPrompt(off).prompt);
+  });
+
+  describe.each(VARIANTS)('on $name', ({ over }) => {
+    it('renders the lane block in both git workflows', () => {
+      // The election is about the PLAN, not about the branch, so it must not
+      // vary with the workflow the run happens to be in.
+      expect(withLane(over)).toContain('TWO LANES');
+    });
+  });
+});
+
+describe('parseFindingsPolicy — the auto-approve lane rides its own parameter', () => {
+  it('defaults to FALSE, so every existing caller parses to what it always did', () => {
+    expect(parseFindingsPolicy(undefined).policy).toEqual(FULL_FINDINGS_POLICY);
+    expect(parseFindingsPolicy('').policy?.autoApproveReplan).toBe(false);
+    expect(parseFindingsPolicy('log-bug').policy?.autoApproveReplan).toBe(false);
+  });
+
+  it('carries the flag through an empty and a non-empty disable list alike', () => {
+    expect(parseFindingsPolicy('', { autoApproveReplan: true }).policy).toEqual({
+      logBug: true,
+      replan: true,
+      autoApproveReplan: true,
+    });
+    expect(parseFindingsPolicy('log-bug', { autoApproveReplan: true }).policy).toEqual({
+      logBug: false,
+      replan: true,
+      autoApproveReplan: true,
+    });
+  });
+
+  it('RESOLVES the contradiction to the safe side — no re-plan means no lane', () => {
+    // Approving a re-plan the agent was told not to submit is not a lane, it is
+    // a nonsense. The CLI refuses the two flags at parse time; this is the same
+    // rule for every other caller, and it fails to NO LANE rather than to one.
+    expect(parseFindingsPolicy('replan', { autoApproveReplan: true }).policy).toEqual({
+      logBug: true,
+      replan: false,
+      autoApproveReplan: false,
+    });
+  });
+
+  it('still refuses an unknown token, whatever the flag says', () => {
+    const parsed = parseFindingsPolicy('no-log-bug', { autoApproveReplan: true });
+    expect(parsed.policy).toBeNull();
+    expect(parsed.unknown).toBe('no-log-bug');
   });
 });
