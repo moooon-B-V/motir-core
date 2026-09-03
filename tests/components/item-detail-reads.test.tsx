@@ -112,6 +112,13 @@ vi.mock('@/lib/services/assignableMembersService', () => ({
 vi.mock('@/lib/services/sprintsService', () => ({
   sprintsService: { listByProject: deferred('sprints', []) },
 }));
+// The PENDING-PLAN read (MOTIR-4197): tier two, in the group, CONDITIONAL on
+// `ai:view_plan` — the one member whose condition is a PERMISSION rather than
+// the item's shape, so both arms are asserted below.
+const pendingPlans = deferred('pendingPlans', []);
+vi.mock('@/lib/services/plansService', () => ({
+  plansService: { listPendingProposalsForWorkItem: () => pendingPlans() },
+}));
 vi.mock('@/lib/services/workItemTodosService', () => ({
   workItemTodosService: {
     listTodos: deferred('todoList', { items: [], progress: { done: 0, total: 0 } }),
@@ -206,6 +213,7 @@ beforeEach(() => {
   rollupForParent.mockClear();
   acceptanceResolve.mockClear();
   acceptanceEvidence.mockClear();
+  pendingPlans.mockClear();
 });
 afterEach(() => {
   release?.();
@@ -261,7 +269,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     getSession.mockResolvedValue({ user: { id: 'u1' } });
     getActiveProject.mockResolvedValue(PROJECT);
     getIssueDetail.mockResolvedValue(detailFor());
-    getPermissions.mockResolvedValue(new Set(['work_item:edit']));
+    getPermissions.mockResolvedValue(new Set(['work_item:edit', 'ai:view_plan']));
 
     const pending = callPage();
     // A real macrotask, not a fixed number of microtask ticks: the gate's own
@@ -287,6 +295,11 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       // card has a list, even when it is empty, so this read is never skipped
       // and must not be the one that gets serialised back out of the group.
       'todoList',
+      // The pending-plan read (MOTIR-4197) is a tier-two member for an actor
+      // holding `ai:view_plan`: it sits at the TOP of <main>, so it cannot be
+      // late, and it costs the group max() rather than sum() only while it is
+      // IN the group — a serial await here is the shape MOTIR-3435 removed.
+      'pendingPlans',
     ]) {
       expect(started, `${name} should already be in flight`).toContain(name);
     }
@@ -313,6 +326,28 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     // No children → no recursive-CTE roll-up. Parallelising this instead of
     // skipping it would make every leaf page pay for it.
     expect(rollupForParent).not.toHaveBeenCalled();
+    // No `ai:view_plan` → no pending-plan read AT ALL (MOTIR-4197 AC 4): an
+    // indicator naming a plan the viewer cannot open is worse than none, and
+    // the query is skipped rather than run-and-discarded, so the actor least
+    // able to benefit from it never pays for it.
+    expect(pendingPlans).not.toHaveBeenCalled();
+
+    release?.();
+    await pending.catch(() => undefined);
+  });
+
+  it('runs the pending-plan read for an actor holding `ai:view_plan`, and only then', async () => {
+    getSession.mockResolvedValue({ user: { id: 'u1' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set(['ai:view_plan']));
+
+    const pending = callPage();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(pendingPlans).toHaveBeenCalledTimes(1);
+    // It is IN the group: in flight while the deferred members are unresolved.
+    expect(started).toContain('pendingPlans');
 
     release?.();
     await pending.catch(() => undefined);
