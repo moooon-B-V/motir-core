@@ -12,7 +12,6 @@ import {
   InlinePriorityCell,
   InlineEstimateCell,
 } from './IssueInlineEdit';
-import { WorkItemRowActions } from './WorkItemRowActions';
 import type { IssueRowData } from './issueRows';
 
 // A next-intl global translator (from `useTranslations()` with no namespace), so
@@ -29,6 +28,11 @@ type Translator = ReturnType<typeof useTranslations>;
 // table re-declares the cells; the columns are Title · Type · Priority ·
 // Assignee · Reporter · Est. · Points · Status (Due is intentionally not a
 // list/tree column — see the note where it used to sit).
+//
+// Status is the LAST column. MOTIR-4258 removed the trailing 76px row-actions
+// cell that used to follow it: the row's own click already opens the quick-view
+// peek (`usePeekRowClick`, MOTIR-1306) and the peek carries the item's doors, so
+// the ⋯ menu was a second, narrower entrance to what the row already offers.
 
 // The STATUS_TONE map, the row `Avatar`, and the status/assignee cell VALUE
 // renderers now live in the leaf `issueCellPrimitives` module, so the inline-edit
@@ -42,8 +46,10 @@ type Translator = ReturnType<typeof useTranslations>;
  * the List header sorts by when clicked (the Tree ignores it). The flexible
  * Title column has no `width` (it takes the remaining space) and sorts by the
  * issue `key` — the mono identifier leading the cell, the canonical order. A
- * column with NO `sortColumn` is non-sortable (the trailing row-actions cell):
- * both tables render its header as a screen-reader-only label, not a sort button.
+ * column with NO `sortColumn` is non-sortable: both tables render its header as
+ * a screen-reader-only label, not a sort button. NO column declares one today —
+ * the trailing row-actions cell was the only member and MOTIR-4258 removed it —
+ * so that branch is kept for a future non-sortable column, not for a live one.
  */
 export interface IssueColumn {
   key: string;
@@ -181,18 +187,6 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
       // Inline-editable inside an IssueInlineEditProvider (2.5.5); read-only Pill
       // otherwise. The cell owns its own category→tone rendering.
       cell: (r) => <InlineStatusCell row={r} />,
-    },
-    {
-      // The trailing row-actions cell (Subtask 2.5.19 + 2.8.4) — shared by Tree +
-      // List: the quick-view eye PLUS the ⋯ actions menu (Edit/Copy/Archive/
-      // Delete). Non-sortable (no sortColumn); its header is a screen-reader-only
-      // "Actions" label. Both controls are SIBLINGS of the row's stretched link,
-      // raised above it so they never nest inside the link.
-      key: 'actions',
-      header: t('issues.columns.actions'),
-      width: 76,
-      align: 'end',
-      cell: (r) => <WorkItemRowActions row={r} />,
     },
   ];
 }

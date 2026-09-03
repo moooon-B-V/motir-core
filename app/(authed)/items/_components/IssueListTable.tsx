@@ -71,7 +71,7 @@ export function IssueListTable({
   // ISSUE_TITLE_MIN_TRACK so it can't collapse onto the Type chip under width
   // pressure — bug MOTIR-1307), the rest take their fixed widths (Type 116 ·
   // Priority 120 · Assignee 150 · Reporter 150 · Est. 72 · Points 80 · Status
-  // 108 · Actions 76).
+  // 108). Status is the last track: MOTIR-4258 removed the 76px Actions column.
   const gridTemplate = [
     `minmax(${ISSUE_TITLE_MIN_TRACK},1fr)`,
     ...columns.slice(1).map((c) => (c.width ? `${c.width}px` : 'max-content')),
@@ -117,8 +117,10 @@ export function IssueListTable({
             style={{ gridTemplateColumns: gridTemplate, height: 40 }}
           >
             {columns.map((col) => {
-              // The non-sortable trailing actions column (2.5.19): a plain
-              // columnheader with a screen-reader-only label, no sort button.
+              // A column with no sortColumn renders a plain columnheader with a
+              // screen-reader-only label and no sort button. Every shipped
+              // column declares one since MOTIR-4258 took the trailing actions
+              // cell out, so this branch is kept for a future one.
               if (!col.sortColumn) {
                 return (
                   <div

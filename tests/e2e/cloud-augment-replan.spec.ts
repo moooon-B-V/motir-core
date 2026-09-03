@@ -4,12 +4,13 @@
 // CI acceptance-video lane records a chaptered clip; the uploader resolves the
 // subtask key up to the parent story MOTIR-811 via authorizeAcceptancePublish.
 //
-// Drives the operation surfaces from the user's seat in a real browser:
-// expand (click on stub → review → approve) and replan (completion-aware →
-// locked items → approve). Each operation is submitted, reviewed in the
-// diff-review dock, and approved; the tree reflects each change. The nudge
-// smoke (test 3) drives the ready set low and asserts the expansion-nudge
-// banner appears and the inline review opens.
+// ⚠️ REDUCED TO ONE LEG BY MOTIR-4258 — see the block above the surviving test
+// for what went and why. It used to drive three: expand and replan from the
+// `/items` row's ⋯ menu, plus the nudge smoke. The ⋯ is gone, so the two
+// menu-driven legs had no entrance to drive and were retired with it; the nudge
+// smoke is what remains, and it still covers the EXPAND job end-to-end from
+// `/ready` — the ready set is driven low, the expansion-nudge banner appears,
+// the inline review opens and the approve writes real rows.
 //
 // The one-shot "Augment from prompt" leg was RETIRED by MOTIR-1731 along with
 // the button it drove — changing a plan is a CONVERSATION, so that flow's
@@ -38,7 +39,6 @@ import {
   seedAiAugmentReplan,
   seedPlanChangeProposal,
   EXPAND_JOB_ID,
-  REPLAN_JOB_ID,
 } from './_helpers/ai-augment-replan-seed';
 
 test.describe.configure({ timeout: 180_000 });
@@ -73,68 +73,6 @@ async function stubAiAccess(page: Page): Promise<void> {
   });
 }
 
-/** Stub both job-submit + SSE endpoints (shared by the expand/replan tests).
- *  The submit echoes the `planId` of the Plan the run's proposals were seeded
- *  into — the same `{ jobId, planId }` pair the real submit returns since
- *  MOTIR-1743, and what the dock addresses its review + confirm to. */
-async function stubEditsJobs(
-  page: Page,
-  plans: { expand?: string; replan?: string },
-): Promise<void> {
-  // Expand
-  await page.route('**/api/ai/expand', async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ jobId: EXPAND_JOB_ID, planId: plans.expand }),
-    });
-  });
-  await page.route(`**/api/ai/expand/${EXPAND_JOB_ID}/stream`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream',
-      body: doneSse(),
-    });
-  });
-
-  // Replan
-  await page.route('**/api/ai/replan', async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ jobId: REPLAN_JOB_ID, planId: plans.replan }),
-    });
-  });
-  await page.route(`**/api/ai/replan/${REPLAN_JOB_ID}/stream`, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'text/event-stream',
-      body: doneSse(),
-    });
-  });
-}
-
-// ── Locator helpers ──────────────────────────────────────────────────────────
-
-const reviewHeader = 'h2:has-text("Review proposed changes")';
-const doneTitle = 'h3:has-text("Work items updated")';
-
-/** Open the actions menu on a table row identified by its item key, then click a menuitem. */
-async function clickRowAction(page: Page, itemKey: string, actionLabel: string): Promise<void> {
-  const row = page.getByRole('row', { name: new RegExp(itemKey) });
-  // The trigger is the ⋯ button with aria-label "Actions for {key}".
-  await row.getByLabel(`Actions for ${itemKey}`).click();
-  await page.getByRole('menuitem', { name: actionLabel }).click();
-}
-
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 test.beforeEach(async () => {
@@ -145,164 +83,30 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-// The expand leg is the recorded happy path (it carries the chapter markers the
-// acceptance video's timeline is built from — the augment leg used to, until
-// MOTIR-1731 retired it).
-test('expand — click Expand on childless stub, review, approve, children appear', async ({
-  page,
-  chapter,
-  beat,
-  acceptanceStory,
-}) => {
-  acceptanceStory('MOTIR-811');
-  const seed = await seedAiAugmentReplan(`ai-expand-${Date.now()}@example.com`);
-  await stubAiAccess(page);
-  // What the expand run PROPOSED: the stub's children, seeded as the real Plan
-  // the handler would have appended them to.
-  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
-    jobId: EXPAND_JOB_ID,
-    title: 'Expand Notifications',
-    adds: ['In-app notifications', 'Email notifications', 'Push notifications'],
-    addShape: { kind: 'task', type: 'code', parentRef: seed.notifId },
-  });
-  await stubEditsJobs(page, { expand: planId });
-
-  await signIn(page, seed.email, seed.password);
-  await page.goto('/items');
-
-  // PACED FOR A HUMAN (MOTIR-1905). This spec was chaptered but never paced —
-  // 2 chapters, zero `beat()` — so it recorded a ~9.5s clip, under the 15s
-  // watchable floor MOTIR-1772 introduced. The three chapters below are the
-  // three things a reviewer needs to SEE, and each user-visible action gets a
-  // beat. Pacing only; every assertion is unchanged and every wait is still an
-  // authoritative signal (see the note at CHAPTER_HOLD_MS).
-  await chapter('Expand a childless stub', async () => {
-    // Let the tree be read before anything is clicked — the reviewer needs to
-    // see that "Notifications" has no children to expand FROM.
-    await beat();
-
-    // Find the "Notifications" stub row and click Expand in its actions menu.
-    await clickRowAction(page, seed.notifKey, 'Expand');
-    await beat();
-
-    // The review dock appears — with stubs the entire job life cycle completes
-    // in one tick, so wait for the authoritative signal directly.
-    await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
-    await beat();
-  });
-
-  await chapter('Review what it proposes', async () => {
-    // Assert all three children are proposed (page-level search — the delta
-    // sits in a sibling of the header, not inside it).
-    for (const title of ['In-app notifications', 'Email notifications', 'Push notifications']) {
-      await expect(page.getByText(title)).toHaveCount(1);
-    }
-    // The proposal is the whole point of the review step — hold it long enough
-    // to actually read the three titles.
-    await beat();
-    await beat();
-  });
-
-  await chapter('Approve — the children are real', async () => {
-    // Approve — the REAL plan approve route (materialize), the one write path.
-    const approveResponse = page.waitForResponse(
-      (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: /Approve — add/ }).click();
-    expect((await approveResponse).status()).toBe(200);
-
-    await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
-    await beat();
-
-    // Assert DB: the three children were created.
-    const children = await db.workItem.findMany({
-      where: {
-        projectId: seed.projectId,
-        parentId: { not: null },
-        title: { in: ['In-app notifications', 'Email notifications', 'Push notifications'] },
-      },
-    });
-    expect(children).toHaveLength(3);
-    for (const c of children) expect(c.kind).toBe('task');
-    await beat();
-
-    // NOT re-asserted on `/items`. Showing the three children back in the tree
-    // would be the better receipt — the DB assertion above is invisible on a
-    // video — but they land UNDER the "Notifications" stub, whose tree row
-    // renders collapsed, so a bare `goto('/items')` + text assertion finds
-    // nothing (measured: it fails at 20s). Revealing them means driving the
-    // disclosure, which is new interaction surface this card has no business
-    // adding. The clip ends on the shipped confirmation, as it did before.
-  });
-});
-
-test('re-plan — completion-aware: done leaves locked, not-done portion changes', async ({
-  page,
-  acceptanceStory,
-}) => {
-  acceptanceStory('MOTIR-811');
-  const seed = await seedAiAugmentReplan(`ai-replan-${Date.now()}@example.com`);
-  await stubAiAccess(page);
-  const planId = await seedPlanChangeProposal(seed.ctx, seed.projectId, {
-    jobId: REPLAN_JOB_ID,
-    title: 'Re-plan Settings',
-    adds: ['Billing plans', 'API management'],
-    addShape: { parentRef: seed.settingsEpicId },
-  });
-  await stubEditsJobs(page, { replan: planId });
-
-  // Snapshot the done leaves so we can assert byte-identity after approve.
-  const doneItemsBefore = await db.workItem.findMany({
-    where: { projectId: seed.projectId, identifier: { in: [seed.themeKey, seed.profileKey] } },
-    orderBy: { identifier: 'asc' },
-  });
-
-  await signIn(page, seed.email, seed.password);
-  await page.goto('/items');
-
-  // Find the "Settings" epic row and click Re-plan.
-  await clickRowAction(page, seed.settingsEpicKey, 'Re-plan');
-
-  // The review dock appears — with stubs the entire job life cycle completes
-  // in one tick, so wait for the authoritative signal directly.
-  await expect(page.locator(reviewHeader)).toBeVisible({ timeout: 15_000 });
-
-  // Assert the new stories for the not-done portion are proposed.
-  await expect(page.getByText('Billing plans')).toHaveCount(1);
-  await expect(page.getByText('API management')).toHaveCount(1);
-
-  // The run MUST NOT propose changes to done (terminal) items — no `modify`
-  // proposals targeting Theme toggle or Profile page. Assert no "Change" chip.
-  await expect(page.getByText('Change', { exact: true })).toHaveCount(0);
-
-  // Approve — the REAL plan approve route (materialize), the one write path.
-  const approveResponse = page.waitForResponse(
-    (r) => r.url().includes(`/api/plans/${planId}/approve`) && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: /Approve — add/ }).click();
-  expect((await approveResponse).status()).toBe(200);
-
-  await expect(page.locator(doneTitle)).toBeVisible({ timeout: 10_000 });
-
-  // Assert DB: done items are byte-identical.
-  const doneItemsAfter = await db.workItem.findMany({
-    where: { projectId: seed.projectId, identifier: { in: [seed.themeKey, seed.profileKey] } },
-    orderBy: { identifier: 'asc' },
-  });
-  expect(doneItemsAfter).toHaveLength(2);
-  for (let i = 0; i < doneItemsBefore.length; i++) {
-    expect(doneItemsAfter[i]!.title).toBe(doneItemsBefore[i]!.title);
-    expect(doneItemsAfter[i]!.status).toBe('done');
-    expect(doneItemsAfter[i]!.kind).toBe(doneItemsBefore[i]!.kind);
-  }
-
-  // Assert DB: new items created under Settings.
-  const newItems = await db.workItem.findMany({
-    where: { projectId: seed.projectId, title: { in: ['Billing plans', 'API management'] } },
-  });
-  expect(newItems).toHaveLength(2);
-  for (const item of newItems) expect(item.kind).toBe('story');
-});
+// ⚠️ THE `expand` AND `re-plan` LEGS ARE RETIRED (MOTIR-4258).
+//
+// Both drove the `/items` row's ⋯ menu — `Actions for <key>` → `Expand` /
+// `Re-plan` → the in-place plan-edits dock. MOTIR-4258 removed that menu (the
+// row's own click already opens the quick view, which carries the item's
+// doors), and it was the ONLY mount passing `planEdits` to
+// `WorkItemActionsMenu`, so the flow those two legs drove has no entrance in
+// the product any more. A spec cannot be re-pointed at a door that does not
+// exist, and leaving them here to fail on a missing locator would report a
+// broken app rather than a retired one.
+//
+// WHAT STILL HAS COVERAGE, and what does not:
+//   * EXPAND — covered end-to-end by the nudge leg below, which is a DIFFERENT
+//     entrance to the same job (`/ready`'s ExpansionNudgeBanner calls
+//     `submitExpandJob` directly, MOTIR-904) and asserts real DB state through
+//     the real `POST /api/plans/:id/approve`.
+//   * RE-PLAN — covered NOWHERE. `submitReplanJob` / `streamReplanJob` have no
+//     caller left. That is a product question, not a test one, and it is
+//     MOTIR-4261: retire the in-place replan, or give it an entrance. Do not
+//     write a replacement leg here until that card decides which.
+//
+// The acceptance VIDEO consequence is named on MOTIR-4261 too — this spec runs
+// under playwright.acceptance.config.ts and publishes story MOTIR-811's clip,
+// which loses two of its three chapters until that card lands.
 
 test('nudge — near-drained project shows expansion-nudge banner and opens inline review', async ({
   page,
