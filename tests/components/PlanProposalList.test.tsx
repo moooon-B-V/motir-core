@@ -412,10 +412,10 @@ describe('the row opens its proposal', () => {
 
   it('opens the SAME quick view the canvas’s View pill opens, and closes again', async () => {
     renderWithIntl(<PlanProposalList items={[add()]} decided={false} />);
-    expect(screen.queryByTestId('proposal-quick-view')).toBeNull();
+    expect(screen.queryByTestId('proposal-peek')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open New · A proposed story' }));
-    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+    expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
 
     // ⚠️ ONE close affordance. The shipped modal rendered TWO controls named
     // `Close` — the base `Modal`'s corner x beside the header's own button — and
@@ -466,7 +466,7 @@ describe('every item shape opens the same read view', () => {
       renderWithIntl(<PlanProposalList items={[item]} decided={false} />);
       const row = screen.getByRole('button', { name: /^Open / });
       fireEvent.click(row);
-      expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+      expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
       // One close, on every shape — not only on the one the fix was written for.
       const dialog = screen.getByRole('dialog');
       expect(within(dialog).getAllByRole('button', { name: /close/i })).toHaveLength(1);
@@ -489,7 +489,7 @@ describe('closing the quick view', () => {
 
     row.focus();
     fireEvent.click(row);
-    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+    expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
 
     const dialog = screen.getByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: /close/i }));
@@ -513,7 +513,7 @@ describe('closing the quick view', () => {
 
     const second = screen.getByRole('button', { name: /^Open MOTIR-812/ });
     fireEvent.click(second);
-    expect(await screen.findByTestId('proposal-quick-view')).toBeTruthy();
+    expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /close/i }));
     await act(async () => {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

@@ -255,8 +255,9 @@ export function IssueTreeTable({
     () =>
       buildIssueColumns(t).map((col, idx) => {
         const isTree = idx === 0;
-        // The trailing actions column (2.5.19) has no sortColumn → a plain
-        // screen-reader-only header (no sort button, no aria-sort).
+        // A column with no sortColumn gets a plain screen-reader-only header
+        // (no sort button, no aria-sort). None declares that today — MOTIR-4258
+        // removed the trailing actions column, which was the only one.
         const sortCol = col.sortColumn;
         const active = sortCol ? sort.column === sortCol : false;
         const ariaSort: 'ascending' | 'descending' | 'none' | undefined = sortCol

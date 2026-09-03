@@ -81,6 +81,19 @@ export interface QuickViewData {
   statusCategory: StatusCategoryDto | null;
   descriptionMd: string | null;
   /**
+   * The WHY (MOTIR-4183, story MOTIR-4181, design Part XIV §6).
+   *
+   * ⚠️ The shipped peek DEFERS this to the full page — *"Explanation,
+   * relationships, attachments, and the activity feed live on the full page"* —
+   * and that is right for a work item and impossible for a PROPOSAL, which has
+   * no page. Deferring to a thing that does not exist is precisely how
+   * `explanationMd` came to be carried, diffed and materialized while nothing in
+   * the review surface ever read it (MOTIR-4134). It rides the payload so
+   * proposal mode can render it INLINE; the committed peek's own body is
+   * unchanged by its presence, and `/items` keeps deferring.
+   */
+  explanationMd: string | null;
+  /**
    * Resolved `motir:` references in `descriptionMd` (Subtask 5.8.6) — keyed by
    * id, so the peek's description renders the live internal-link chip.
    */

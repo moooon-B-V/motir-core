@@ -76,6 +76,7 @@ const DATA: QuickViewData = {
   statusLabel: 'In Review',
   statusCategory: 'in_progress',
   descriptionMd: null,
+  explanationMd: null,
   type: 'code',
   executor: 'coding_agent',
   assigneeName: null,

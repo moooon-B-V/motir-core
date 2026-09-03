@@ -40,7 +40,7 @@ import type { ArchivedRowData } from './archivedRows';
 //     (MOTIR-3629; it was `work_item:delete` while the two were one key).
 //   • Delete  — a danger `Delete…` row inside a per-row `⋯` overflow menu, gated
 //     `canDelete` (read from `useProjectAccess()`, not a server prop — the
-//     `WorkItemRowActions` pattern). The `⋯` is PURELY the Delete affordance.
+//     shared-menu pattern). The `⋯` is PURELY the Delete affordance.
 // When NEITHER gate is met the whole actions column is dropped (the view-only
 // state). Both keys come from the provider mounted in the authed layout, and the
 // three states are now all reachable: a member sees Restore alone, an admin sees
@@ -73,7 +73,7 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
   const pathname = usePathname();
   // Delete is project-admin (canDelete) — the same gate the server enforces
   // (`deleteWorkItem` → `assertPermission('work_item:delete')`). Read from the
-  // provider mounted in the authed layout (the WorkItemRowActions pattern), so
+  // provider mounted in the authed layout (the shared-menu pattern), so
   // no new server prop has to thread through the page.
   //
   // MOTIR-2473 collapsed this island onto ONE key, because `unarchiveWorkItem`

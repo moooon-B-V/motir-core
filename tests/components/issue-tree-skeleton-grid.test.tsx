@@ -18,7 +18,11 @@ import type { TreeTableRow } from '@/components/ui/TreeTable';
 // while it was false. A sentence addressed to a future author is not a
 // mechanism; this file is. It renders the fallback and the real table into one
 // document and compares the two `grid-template-columns` strings directly, so a
-// tenth column added to the registry and not to the skeleton fails here.
+// column added to the registry and not to the skeleton fails here — and so does
+// one REMOVED from it, which is how MOTIR-4258 landed: the Actions column went,
+// and the only thing that needed changing in this file was the assertion that
+// had been written about Actions BY NAME. The comparisons are safe in both
+// directions precisely because they name no column.
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -146,7 +150,7 @@ describe('IssueTreeSkeleton — the fallback holds the table’s shape', () => {
     expect(titleCell(tree)?.children.length).toBe((titleCell(flat)?.children.length ?? 0) + 1);
   });
 
-  it('renders the same header labels, in the same order, as the real table — Actions sr-only', () => {
+  it('renders the same header labels, in the same order, as the real table', () => {
     const table = render(<IssueTreeStaticTable rows={TREE_ROWS} />).container;
     const skeleton = render(<IssueTreeSkeleton />).container;
 
@@ -154,9 +158,17 @@ describe('IssueTreeSkeleton — the fallback holds the table’s shape', () => {
     const actual = headerTexts(gridRows(skeletonRoot(skeleton))[0] as Element);
 
     expect(actual).toEqual(expected);
-    // The trailing actions column has no visible caption in either surface.
-    const last = (gridRows(skeletonRoot(skeleton))[0] as Element).lastElementChild;
-    expect(last?.querySelector('.sr-only')?.textContent).toBe('Actions');
+
+    // This used to end by asserting the LAST header carried a screen-reader-only
+    // "Actions" caption — the one column with no visible label. MOTIR-4258
+    // removed that column, so the invariant worth pinning is the one underneath
+    // it: the skeleton grows no trailing header the real table does not have,
+    // which is what a silently-added shimmer track would look like. Read off
+    // both surfaces rather than named, so it survives the next column too.
+    const lastOf = (r: Element) => headerTexts(r).at(-1);
+    expect(lastOf(gridRows(skeletonRoot(skeleton))[0] as Element)).toBe(
+      lastOf(table.querySelector('[role="row"]') as Element),
+    );
   });
 
   it('gives every shimmer row exactly one cell per track', () => {

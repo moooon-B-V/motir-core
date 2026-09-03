@@ -57,12 +57,32 @@ export function QuickViewMain({ children }: { children: ReactNode }) {
   return <div className="min-w-0 overflow-y-auto px-7 pt-6 pb-7">{children}</div>;
 }
 
-/** The core-fields rail beside the main column. */
-export function QuickViewRail({ children }: { children: ReactNode }) {
-  return (
-    <dl className="flex min-w-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface-soft) px-5 py-6">
+/**
+ * The core-fields rail beside the main column.
+ *
+ * `foot` is PINNED beneath the scroller rather than appended inside it
+ * (MOTIR-4184, design Part XIV §3): proposal mode's count line is a statement
+ * ABOUT the rows above it, and the rail overflows its track on an ordinary card
+ * — measured 832px of content in 613 — so a line at the bottom of the scroll
+ * space is a line most readers never reach. Without it the markup is exactly
+ * what it always was: a bare `<dl>`, unchanged for the six committed hosts.
+ */
+export function QuickViewRail({ children, foot }: { children: ReactNode; foot?: ReactNode }) {
+  const list = (
+    <dl
+      className={`flex min-w-0 flex-col gap-4 overflow-y-auto px-5 py-6 ${
+        foot ? 'flex-1' : 'border-l border-(--el-border) bg-(--el-surface-soft)'
+      }`}
+    >
       {children}
     </dl>
+  );
+  if (!foot) return list;
+  return (
+    <div className="flex min-h-0 flex-col border-l border-(--el-border) bg-(--el-surface-soft)">
+      {list}
+      {foot}
+    </div>
   );
 }
 
@@ -84,11 +104,22 @@ export function QuickViewSectionLabel({
 }
 
 /** A rail field — uppercase caption over its value. */
-export function QuickViewRailField({ label, children }: { label: string; children: ReactNode }) {
+export function QuickViewRailField({
+  label,
+  marker,
+  children,
+}: {
+  label: string;
+  /** The CHANGED chip, when a plan is moving this row (MOTIR-4184, Part XIV §3).
+   *  Inside the `<dt>` so it is announced as part of the row's own term. */
+  marker?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <dt className="text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+      <dt className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {label}
+        {marker}
       </dt>
       <dd className="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)">
         {children}

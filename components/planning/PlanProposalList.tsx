@@ -7,7 +7,7 @@ import { AlertTriangle, RotateCw } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { StatusPill } from '@/components/issues/StatusPill';
-import { ProposalQuickView } from '@/components/planning/ProposalQuickView';
+import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOpDto } from '@/lib/dto/plans';
@@ -351,7 +351,10 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
           </section>
         );
       })}
-      <ProposalQuickView item={peeked} onClose={closePeek} />
+      {/* The SHIPPED peek, in proposal mode (MOTIR-4185). The list gains no
+          second read view — it now opens the SAME one the canvas's View pill
+          does, which is the property Part XIII §7 named and Part XIV delivers. */}
+      <ProposalPeek item={peeked} onClose={closePeek} />
     </div>
   );
 }

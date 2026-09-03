@@ -1140,3 +1140,209 @@ so every rail is still the real `Sidebar` output; `prettier --write` then
 The **primary** section (`desktop.pen` still owns it — the four rows above the separator are
 abbreviated context, not a specification), the rail **head** (`context-row.mock.html`), the collapse
 **toggle** in the footer, and the drawer's **utility strip** (`top-bar.mock.html` Panel D, MOTIR-2374).
+
+---
+
+## The account menu — every row it renders (MOTIR-4248)
+
+`account-menu.mock.html` / `.png` is **the design of record for the avatar popover in the authed top
+bar**: its trigger drawn inside the bar at each of the bar's own three states, the menu open, every
+row the component can render, and both arms of every conditional one.
+
+### Why the area owed this
+
+The rail's bottom section owed an asset because it grew a row at a time and nobody owned the list.
+The account menu owed one for the opposite reason: **it never grew at all, so nobody ever had a
+reason to draw it** — and then the first card to reach for it found there was nothing to reach for.
+
+**Neither drawing was a mistake, and that is the point.** Each of the two below was correct about the
+journey it was explaining, and neither was trying to describe the menu. A door drawn in another
+area's asset is evidence that the ROOM is required, not evidence that it is designed — so
+`design/shell/` becomes the design of record for this surface, the way it already is for the rail's
+bottom section.
+
+### The measurement, at `origin/main` `ee8dd322d`
+
+**The population.** Twelve files under `design/` name the string:
+
+```
+git grep -l 'Account settings' origin/main -- 'design/'      # → 12 files
+```
+
+Ten of the twelve are the account-settings **area label**, a different thing entirely — eight in
+`design/settings/` (seven mocks and its `design-notes.md`), plus `design/cli-connect/design-notes.md`
+and `design/platform-admin/design-notes.md`, which describe their own panels. **Exactly two DRAW the
+menu open.**
+
+**⚠️ The count was re-taken under a stricter predicate, because a `git grep` is line-oriented and
+prettier wraps these assets.** `>Account settings<` is written across two lines in both of the assets
+that matter, so a single-line pattern under-reads them — which is exactly how the row inventory below
+was first got wrong (see _Corrections_). Re-run over file CONTENT rather than lines, the file count
+is unchanged at twelve:
+
+```
+git ls-tree -r --name-only origin/main design/ \
+  | xargs -I{} sh -c 'git show origin/main:{} | tr "\n" " " | grep -q "Account  *settings" && echo {}'
+```
+
+**And the PREDICATE was widened as well as the ref**, because the claim quantifies over _assets that
+draw this menu_ while the command enumerates _files naming one of its rows_. Searching `design/` for
+**any** of the four row labels returns fifteen files: the twelve above plus `design/shell/cmd-k.pen`
+(a _Sign out_ row in the command palette's **Account** group, beside _Toggle theme_ — a different
+surface, correctly owned by that asset) and `design/workspaces/design-notes.md` /
+`settings.pen` (_Workspace settings_ as a page name). **The two-asset finding survives the wider
+predicate.**
+
+### What the two passing-through assets actually draw
+
+| Asset                                             | The rows it draws                                                                                           | Why it drew them                                         |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `design/cli-connect/cli-connect.mock.html`        | identity block · Account settings · Workspace settings · Sign out                                           | Panel 0's access path — _avatar menu → Account settings_ |
+| `design/platform-admin/console.mock.html` Panel 1 | an _Account_ head label + the email · Account settings · **Your organizations** · Platform admin · Sign out | the staff-only door into `/admin`                        |
+
+**They disagree with each other, and both disagree with the shipped component — in three separate
+ways, only one of which is an omission:**
+
+1. **Rows that are missing.** `cli-connect` draws no _Platform admin_; `console` draws no
+   _Workspace settings_.
+2. **A row that does not exist.** `console` draws **_Your organizations_** with a `users` glyph.
+   `UserMenu.tsx` has never rendered such a row. A reader taking that asset as the answer to _what is
+   in this menu_ would build a row the product does not have.
+3. **A glyph that is wrong.** `console` gives _Account settings_ the `settings` glyph; the component
+   uses `user-cog`, and `settings` is _Workspace settings_'s glyph — so the one asset that draws
+   neither of those rows correctly is also the one that swaps their icons.
+
+Both are drawn as **hand-built stand-in markup** rather than as the component's own output, which is
+why they could drift without anything noticing. This asset cannot: every menu in it is rendered.
+
+### What the menu actually carries
+
+Declaration order, from `app/(authed)/_components/UserMenu.tsx`:
+
+| #   | Row                    | Glyph      | Destination                                       | Rendered                                             |
+| --- | ---------------------- | ---------- | ------------------------------------------------- | ---------------------------------------------------- |
+| —   | **Identity block**     | —          | — (the name, and the email beneath it when set)   | always                                               |
+| 1   | **Account settings**   | `user-cog` | `/settings/account`                               | always                                               |
+| 2   | **Workspace settings** | `settings` | `/settings/workspace`                             | CONDITIONAL — `workspaceTierRevealed`                |
+| 3   | **Platform admin**     | `shield`   | `/admin`                                          | CONDITIONAL — `platformStaff`, a separator each side |
+| 4   | **Sign out**           | `log-out`  | — (a button; signs out and bounces to `/sign-in`) | always                                               |
+
+**Two of the four are conditional and the menu's FLOOR is two rows** — _Account settings_ ·
+_Sign out_, the pair every session gets. Nothing marks an absent row: the rows close up and the menu
+is shorter, with no disabled row, no tooltip and no empty state. That is the same line the rail draws
+for the same reason — _an entry point is a promise about a room, and a disabled row is a promise the
+product then refuses_ — and here it is load-bearing twice over, because the component's own prop
+documentation makes it so: an absent _Platform admin_ is half of the 404-not-403 posture for `/admin`
+(`docs/decisions/platform-staff-auth.md` §2 / §4), and an absent _Workspace settings_ is the whole of
+the tier disclosure (`docs/decisions/organization-tier.md` §6d). A present-but-dimmed row would
+defeat both.
+
+**Both `role="separator"` rules belong to the staff row and leave with it.** They bracket
+_Platform admin_ rather than dividing the menu, so the two non-staff arms carry none — which is why
+the asset draws four combinations rather than two. **The identity block's bottom border is not one of
+them**: it is a `border-b` on the block, not a `role="separator"`.
+
+### The access path
+
+**Drawn, not described** — Panel A puts the avatar trigger inside the top bar at all three of the
+bar's own states, because a door in this menu is only a door at the widths it survives:
+
+| Bar state         | What the bar draws                                     | Where the avatar is       |
+| ----------------- | ------------------------------------------------------ | ------------------------- |
+| `≥ lg` (1024px)   | all eight controls, labelled                           | last in the right cluster |
+| `md`–`lg` (768px) | all eight, icon-only; the brand replaced the hamburger | last in the right cluster |
+| `< md` (375px)    | **four** controls — palette · create · bell · avatar   | **SLOT 4 of four**        |
+
+At `< md` the rail has folded into a drawer behind the hamburger and the avatar has not moved: it is
+still on screen, holding the last of the four slots `top-bar.mock.html` Panel B's budget allows. **A
+row added to this menu costs no slot at any width** — the menu's own length is not budgeted, only the
+bar's control count is — and that is the whole of this asset's claim on the bar. The budget itself is
+`top-bar.mock.html`'s and is not re-derived here.
+
+### The divergence ledger — which source wins for this surface
+
+| #   | The other assets say                                                                                                                                                                               | This asset says                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Since      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | `cli-connect/cli-connect.mock.html` draws three rows (no _Platform admin_); `platform-admin/console.mock.html` Panel 1 draws four, one of which (_Your organizations_) the product does not render | **Four rows plus the identity block, two of them conditional. This asset WINS for this surface.** Those two are point-in-time records of their own access paths and are **not edited** — the same call `design/shell/` already made for its three `.pen` sources.                                                                                                                                                                                                                                 | MOTIR-4248 |
+| 2   | Both of those draw the menu as hand-built stand-in markup, and one swaps the `user-cog` and `settings` glyphs                                                                                      | **Every menu here is the real `UserMenu`, rendered and opened**, so it cannot drift from the component. A reader asking _what is in this menu_ reads THIS asset.                                                                                                                                                                                                                                                                                                                                  | MOTIR-4248 |
+| 3   | `top-bar.mock.html` draws the avatar trigger at `h-9 w-9` — a FIXED 36px                                                                                                                           | **The trigger is `--height-control` square**, which is what ships (MOTIR-2373 moved it off the fixed size). The two agree at 36px under the default style and under `warm-editorial` and `neo-brutalism`, and **diverge under the other nine of the eleven shipped `[data-style]` values**, where `--height-control` is 34, 38 or 40px. **`top-bar.mock.html` still wins for the bar's COMPOSITION and its control budget**; this asset wins for the avatar's own box and for the menu behind it. | MOTIR-4248 |
+
+### Primitives and tokens
+
+The asset composes **no new primitive and no new token**. The menu is `components/ui/Popover.tsx`
+(`data-surface="popover"`, so a material style can frost it) at `UserMenu`'s own `width={240}`; every
+row is `UserMenu.tsx`'s own treatment — `--radius-control`, `--el-text` ink, `--el-text-muted` glyph,
+`--el-surface` hover/focus field — the rules are `role="separator"` on `--el-border`, the staff row's
+glyph is `--el-info` and its hint line `--el-text-secondary`, its chip is the shipped `Pill`
+(`tone="neutral"`), and the trigger is an `--el-text` circle with `--el-text-inverted` ink at
+`--height-control` square.
+
+Board chrome routes every colour through `--el-*` and takes `--el-text-secondary` for body ink rather
+than `--el-text-muted`, which fails AA on three of the four surfaces it could land on
+(`docs/decisions/design-board-chrome-aa.md`).
+
+### How the render was produced
+
+Generated, not hand-drawn, so it cannot drift from the app:
+
+1. The real `UserMenu` is rendered through the repo's own vitest setup (happy-dom + the real `en`
+   catalog via `renderWithIntl`) and the menu is **OPENED**, so what the asset carries is Radix's own
+   portal output. **Only the STATE is authored** — which of the two conditionals are on — in the
+   four combinations they have between them. The attributes Radix writes at RUNTIME (generated ids,
+   the focus trap's `tabindex`, the popper's inline custom properties, and the `data-side` /
+   `data-align` its collision detector resolved against a zero-size test viewport) are stripped, so
+   the asset is a drawing of the component rather than a snapshot of one mount.
+2. The three top bars in Panel A are **lifted from `top-bar.mock.html`**, which owns the bar's
+   composition — this asset draws the access path and composes that asset rather than re-specifying
+   it. The one substitution is the avatar BUTTON, for the reason ledger row 3 gives; the generator
+   asserts the freshly rendered trigger's `--height-control` box appears in all three bars before
+   lifting them, so the bars cannot be a stale drawing of a trigger that has moved.
+3. `tailwindcss`'s own `compile()` API runs `app/globals.css` (with its two package imports resolved
+   through node's resolver) over the assembled markup, so the stylesheet is the build's output rather
+   than a retyped token block.
+4. **Each bar renders at its own width inside one document**, so the compiled `@media (width >= …)`
+   blocks are re-emitted scoped to `[data-vw="W"]` — the same rules, resolved per frame. That is
+   `top-bar.mock.html`'s own mechanism, reproduced here because this asset lifts that asset's bars;
+   it is a property of the BOARD, not of the app.
+5. **The frames are measured after rendering, in a browser**, and the measurement is what makes the
+   panels' claims checkable rather than captioned: every drawn row's box is asserted inside its own
+   popover and inside its frame, the avatar is asserted square in each bar, and the `< md` bar's
+   right cluster is asserted to hold **exactly four** controls with the avatar last. The measure
+   separates _not drawn at this width_ (a control the bar's breakpoints correctly hide — a zero box)
+   from _clipped_ (a drawn box outside its frame); conflating the two is what made an earlier pass on
+   the rail asset report false failures on a correct render.
+
+The generator and the measurement script were temporary harnesses and are **deleted with this card's
+run**, as the design lane's own rule requires.
+
+**Three caption sentences were amended after generation, without re-running the generator**, and the
+distinction is the one that matters: they are authored prose in `<p class="panel-n">` /
+`<p class="legend">`, never rendered markup, so every menu and every bar in the asset is still
+component output untouched by hand. Two of them carried an argument belonging to the story this
+asset's work was originally cut from (a row being moved into this menu, which is not happening here);
+the third claimed Panel C's Glyph column renders the `lucide-react` element, when it names it and
+Panel B renders it. `prettier --write` and then `scripts/render-design-mock.mjs` re-exported the
+`.png`, and the browser measurement was re-run against the file that ships.
+
+### Corrections
+
+**The card that commissioned this asset (MOTIR-4248) got one cell of its evidence table wrong, and
+the correction is recorded here rather than only on the card**, because the table is what a later
+reader will copy. It said `platform-admin/console.mock.html` Panel 1 draws _"identity block · Account
+settings · Platform admin"_ and that it _"omits Workspace settings and Sign out"_. It draws **Sign
+out**, and it draws a fifth row — **Your organizations** — that the shipped component has never
+rendered. The under-read has one cause and it is worth naming: the inventory was taken with a
+line-oriented `grep` for `>Account settings<`, and prettier wraps these assets so that the label and
+its closing tag sit on different lines. **A row inventory over a formatted HTML asset is taken over
+file CONTENT, not over lines.** Both corrections make the card's finding stronger rather than weaker,
+which is why the asset ships: the two drawings disagree with the component more than the card claimed,
+not less.
+
+### What this asset does NOT draw
+
+The **top bar's own composition** and its control budget (`top-bar.mock.html` owns both; Panel A
+composes that asset), the **drawer's utility strip** (`top-bar.mock.html` Panel D), the destinations
+behind any of the rows (`design/settings/`, `design/platform-admin/`), the **rail** in any form
+(`rail-bottom-section.mock.html`, `desktop.pen`, `context-row.mock.html`), and the **command
+palette's own Account group** (`cmd-k.pen`), which carries a _Sign out_ row of its own on a different
+surface.
