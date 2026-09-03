@@ -1346,3 +1346,171 @@ behind any of the rows (`design/settings/`, `design/platform-admin/`), the **rai
 (`rail-bottom-section.mock.html`, `desktop.pen`, `context-row.mock.html`), and the **command
 palette's own Account group** (`cmd-k.pen`), which carries a _Sign out_ row of its own on a different
 surface.
+
+---
+
+## The Help menu — its two homes, and the three doors it holds (MOTIR-4238)
+
+`help-menu.mock.html` / `.png` is **the design of record for the shell's Help menu**: a control in the
+rail's footer at `≥ md` and in the drawer's utility strip below it, opening a popover with three rows.
+
+### Why the shell owes this surface
+
+The rail's bottom section carried `Docs` and `Legal`, and `SidebarNav.tsx`'s own comment said why:
+_"It sits HERE rather than in a footer because the authed shell has no footer to put it in."_ That is an
+honest note about a missing slot, not an argument for the rail — and it had been standing in for a
+decision ever since. **This asset draws the slot.**
+
+**The mirror, read from source rather than recalled** (rung 1 of the decision-authority ladder — a
+citation from memory is not a check):
+
+| product        | where these doors live                                                                                     | read from                                                                                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **GitLab**     | the **Help menu** in the super-sidebar — `GitLab documentation`, `Keyboard shortcuts`, `Terms and privacy` | [`help_center.vue`](https://github.com/gitlabhq/gitlabhq/blob/master/app/assets/javascripts/super_sidebar/components/help_center.vue)                  |
+| **Sentry**     | the **Help menu** in the primary nav — a `Legal` submenu over `Privacy Policy` / `Terms of Use`            | [`helpMenu.tsx`](https://github.com/getsentry/sentry/blob/master/static/app/views/navigation/primary/helpMenu.tsx)                                     |
+| **Plane**      | a **help menu in the sidebar** — Documentation · Contact sales · Keyboard shortcuts · What's new · Forum   | [`help-section/root.tsx`](https://github.com/makeplane/plane/blob/preview/apps/web/core/components/workspace/sidebar/help-section/root.tsx)            |
+| **Mattermost** | the auth footer + the **About** dialog                                                                     | [`about_build_modal.tsx`](https://github.com/mattermost/mattermost/blob/master/webapp/channels/src/components/about_build_modal/about_build_modal.tsx) |
+
+**Two things are unanimous.** None puts these doors in the product navigation, and none puts them in
+the account menu — all four keep that surface for _acts on your account_. Three of the four put help in
+the **sidebar**; not one puts it in a top bar.
+
+### Where the control lives, and why there
+
+**At `≥ md`: the rail's FOOTER** — `Sidebar`'s `footer` slot, which holds
+`<SidebarToggle variant="footer" />` alone today (`SidebarNav.tsx:226 · 253 · 572`). The footer is
+**chrome, not a destination list**, which is the whole distinction: the rail answers _where inside this
+project can I go today_, and none of these three doors is a daily-work destination.
+
+**Below `md`: the DRAWER'S UTILITY STRIP.** `SidebarNav` passes `footer={isDrawer ? undefined : …}`, so
+**the drawer renders no footer at all** and a footer-only control would vanish at phone width — the
+exact failure this story exists to remove, not to repeat. The strip (`SidebarDrawer`'s own `footer`,
+rendered at `app/(authed)/layout.tsx:455`) is the shipped home for a displaced control: MOTIR-2373 moved
+the build-in-public slot, the report button and the theme toggle there when the top bar's budget closed,
+and its rule is that the displaced control lands there **drawn, not cited**. This asset draws it.
+
+**NOT a new top-bar control.** The below-`md` bar is closed at four slots and this would be the ninth
+(`top-bar.mock.html` Panel B). That ceiling is arithmetic, not taste.
+
+### The two widths need two arrangements, and both are drawn
+
+The footer is the one region that survives the collapse, and it now holds two controls rather than one.
+
+- **Expanded (240px)** — a row: Help leading, the collapse toggle keeping the trailing edge it has today.
+- **Collapsed (56px)** — **stacked and centred.** 56px minus the rail's own gutters leaves about 32px of
+  content box, and two `--height-control` controls cannot sit side by side in it. The collapsed toggle
+  already centres itself (`mx-auto w-9 px-0`); Help sits above it on the same axis.
+
+**The trigger takes each container's OWN grammar rather than one shared shape.** In the footer it is a
+ghost `Button` with a `h-4 w-4` glyph — what `SidebarToggle variant="footer"` is — so the two controls
+beside each other read as one pair. In the strip it is the `ICON_BTN` box `ReportButton` and
+`ThemeToggle` use (`--height-control` square, `h-5 w-5` glyph, `--el-text-muted` ink). Making both homes
+identical would have made one of them wrong.
+
+### What the menu carries
+
+| #   | Row                    | Glyph       | What it does                                            | Rendered                                  |
+| --- | ---------------------- | ----------- | ------------------------------------------------------- | ----------------------------------------- |
+| 1   | **Docs**               | `book-open` | anchor — the operator's ABSOLUTE url, `docsIndexUrl()`  | CONDITIONAL — `docsIndexUrl` is non-null  |
+| 2   | **Keyboard shortcuts** | `keyboard`  | **button** — opens `ShortcutsCheatsheet`, as `?` does   | always                                    |
+| 3   | **Legal documents**    | `scale`     | anchor — the operator's ABSOLUTE url, `legalIndexUrl()` | CONDITIONAL — `legalIndexUrl` is non-null |
+
+**Two of the three are conditional and the FLOOR is one row** — and that floor is the reason the menu is
+worth building rather than a reason to doubt it. A self-hosted deployment that has configured neither url
+still gets a Help menu, because **Keyboard shortcuts** is unconditional. Nothing marks an absent row: the
+rows close up and the menu is shorter, with no disabled row, no tooltip and no empty state — the same line
+the rail draws for the same reason.
+
+### Why each conditional row is absent — MOVED here with the rows
+
+Both paragraphs below came from § _The rail's bottom section_, which owned them while the rows lived
+there. They are **moved, not copied**: the reasoning describes the ROW, so it belongs wherever the row
+is, and a second copy left behind is exactly what this area's divergence ledger exists to prevent.
+MOTIR-4254 landed first and removed them from that section, so they stand here and nowhere else.
+
+**The `Legal` row's absent arm has TWO causes, and the second is easy to miss.** `legalIndexUrl()`
+derives the index from the configured documents' own urls: if every one is `<base>/<slug>` the index is
+`<base>`. An operator publishing at unrelated addresses (`acme.com/terms-of-service`,
+`legal.acme.com/privacy`) has no index for the row to point at, so **the row is absent rather than
+guessed** — sign-up and the re-consent rows still link each document directly, so nothing becomes
+unreachable. A row pointing at the base of SOME of the documents would be worse than no row.
+
+**The `Docs` row reads configuration, and it is the same shape (MOTIR-4167).** The row used to carry a
+hard-coded app-relative path to a documentation index that left this repository when MOTIR-3932 moved
+the public reading surface to `motir-marketing` — so `app.motir.co/docs` answered **404** while
+`motir.co/docs` answered **200**. It was rebuilt around `lib/docs/links.ts`'s `docsIndexUrl()`, which
+reads **`MOTIR_DOCS_URL`** — the operator's own ABSOLUTE url — and answers `null` when it is unset, or
+when the value is not an absolute `http(s)` url, because a relative path is precisely the defect: it is
+refused and logged rather than rendered. **When it is `null` the row is absent**, not disabled and not
+dead. `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D is the record;
+`tests/components/SidebarNav-docs-door.test.tsx` pins both arms of the row and
+`tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal — **guards MOTIR-4239 re-homes
+to this menu, since they assert a surface the rail no longer has.**
+
+**Row 2 is the one this story ADDS rather than moves, and it is a button, not a link.**
+`ShortcutsCheatsheet` is a finished, translated dialog enumerating every global shortcut, and at
+`847d44ec9` the only way to open it is to press `?` — a key you find out about by opening the cheatsheet.
+It is worse than undiscoverable: `CommandPaletteContextValue` is `{ open, setOpen, openCommandPalette }`
+and `cheatsheetOpen` / `setCheatsheetOpen` are local state, so **no surface _could_ offer the door**
+without widening that context first. Both GitLab and Plane carry the same row in their help menus.
+
+**Rows 1 and 3 are off-shell targets** — ordinary anchors to absolute urls, **no `active` arm** (this menu
+is never on screen at the destination, so `pathname` can never match), no external-link glyph and no
+`target`. That is the treatment the rail rows carry today, moved rather than redesigned.
+
+**The label is `Legal documents`, not `Legal`.** `labels.workItemType.legal` is already the string `Legal`
+in the same English catalog — the work-item type, meaning _legal work to be done_ — and it renders on
+`WorkItemTypeChip`, the type picker and the quick-view panel to the same signed-in user. One word, two
+senses; and inside a menu called **Help** the bare noun reads as an offer of legal help. The `zh` catalog
+already separates them (`法务` for the work, `法律条款` for the documents); English never did. The
+collision itself is filed separately — this asset only stops adding to it.
+
+### The divergence ledger — which source wins for this element
+
+| #   | The other assets say                                                                               | This asset says                                                                                                                                                                                                                          | Since      |
+| --- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | `rail-bottom-section.mock.html`'s revisions before MOTIR-4254 drew `Docs` and `Legal` as rail rows | **Both rows live here now**, and their absent-arm reasoning arrived with them. MOTIR-4254 landed first and removed both from that section; its own ledger row 4 records the move from the other side. **This asset wins for the doors.** | MOTIR-4238 |
+| 2   | `top-bar.mock.html` Panel D draws the drawer's utility strip with three controls                   | **Four.** Help leads them. That asset still wins for the drawer's composition and for the bar's control budget; this one wins for the strip's membership.                                                                                | MOTIR-4238 |
+| 3   | `desktop.pen` / `desktop-collapsed.pen` draw a footer holding the collapse toggle alone            | **Two controls**, arranged differently at the two widths. Those `.pen` sources cannot be re-exported and are not edited — the same call this area already made for them.                                                                 | MOTIR-4238 |
+
+### Primitives and tokens
+
+**No new primitive and no new token.** The menu is `components/ui/Popover.tsx` (`data-surface="popover"`)
+at its own `width={240}`; every row is `UserMenu.tsx`'s treatment — `--radius-control`, `--el-text` ink,
+`--el-text-muted` glyph, `--el-surface` hover/focus field. The footer trigger is `components/ui/Button.tsx`
+`variant="ghost" size="sm"`; the strip trigger is the `ICON_BTN` string `ReportButton` defines. The rails
+are `components/ui/Sidebar.tsx` unchanged. Board chrome routes every colour through `--el-*` and takes
+`--el-text-secondary` for body ink rather than `--el-text-muted`, which fails AA on three of the four
+surfaces it could land on (`docs/decisions/design-board-chrome-aa.md`).
+
+### How the render was produced
+
+Generated, not hand-drawn, so it cannot drift from the app:
+
+1. The real `Sidebar` is rendered through the repo's own vitest setup at both widths, with the bottom
+   section already down to its four remaining rows and the two-control footer in place. The primary
+   section is abbreviated context with its real glyphs — `desktop.pen` owns it.
+2. The popover shell is Radix's own output, taken from the shipped `UserMenu` opened in the same setup.
+3. **The one thing composed rather than rendered is the menu's three rows**, because the component that
+   will render them is MOTIR-4239's. They are not hand-written either: each is a rendered `UserMenu` row
+   **cloned**, with its href, label and glyph swapped for a real `lucide-react` element. Every row in
+   `UserMenu` carries one identical class string, so the clone IS the row treatment.
+4. The strip is `SidebarDrawer`'s footer geometry verbatim, holding buttons built from `ReportButton`'s
+   own `ICON_BTN` constant.
+5. `tailwindcss`'s own `compile()` runs `app/globals.css` (with its two package imports resolved through
+   node's resolver) over the assembled markup, so the stylesheet is the build's output.
+6. Each frame renders at its own width in one document, so the compiled `@media (width >= …)` blocks are
+   re-emitted scoped to `[data-vw="W"]` — `top-bar.mock.html`'s mechanism, a property of the board.
+7. **The frames are measured in a browser**, which is what makes the panels' claims checkable rather than
+   captioned: every drawn row's box inside its frame, the rail footer asserted to hold **two** controls at
+   both widths, and the strip asserted to hold **four** slots with Help leading the three icon buttons.
+
+The generator was a temporary harness and is **deleted with this card's run**.
+
+### What this asset does NOT draw
+
+The **rail's bottom section as a specification** (`rail-bottom-section.mock.html` owns it; the rails here
+show it as context, as it stands after MOTIR-4254), the **drawer** itself (`top-bar.mock.html` Panel D), the
+**top bar** and its control budget, the **rail head** (`context-row.mock.html`), the **account menu**
+(`account-menu.mock.html`), and the `ShortcutsCheatsheet` dialog that row 2 opens — which ships today and
+is unchanged by this story.
