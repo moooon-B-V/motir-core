@@ -20,6 +20,18 @@ import { deliverySetShortfall } from '@/lib/workItems/deliverySet';
 //
 // The host supplies its own chrome — the detail page's `FieldCard`, the peek's
 // `RailField` — exactly as `DevelopmentSectionBody` is shared under two headers.
+//
+// ⚠️ AND BECAUSE THE HOST SUPPLIES THE CHROME, THIS COMPONENT CANNOT KNOW WHICH
+// SURFACE IT LANDS ON — so every ink here is one that is legal on ALL of them
+// (MOTIR-4196). `--el-text-muted` is 4.54:1 on the white page/card and
+// 4.12–4.34:1 on `--el-surface` / `--el-surface-soft` / `--el-muted`; the peek's
+// `QuickViewRail` paints `--el-surface-soft`, so every caption and empty value
+// below shipped at 4.34:1, under AA. `--el-text-secondary` is 6.18–6.80:1 on all
+// four in both themes, which is why the fix does not need to know the host.
+// `tests/theme/inkContrastLint.test.ts`'s muted arm cannot rule on this by
+// construction — the tint is painted in another module and it ABSTAINS — so the
+// binding guard is `tests/components/quick-view-rail-ink.test.tsx`, which
+// resolves each site's real surface from the rendered DOM.
 
 /** State → glyph. The three states carry their own SHAPE as well as their own
  *  hue, so the field never rides colour alone (the AA rule), and each row's
@@ -94,9 +106,9 @@ export function RepositorySetField({
   if (delivery.length === 0) {
     return (
       <div>
-        <span className="text-(--el-text-muted)">{t('none')}</span>
+        <span className="text-(--el-text-secondary)">{t('none')}</span>
         {compact ? null : (
-          <p className="mt-2 font-sans text-xs text-(--el-text-muted)">
+          <p className="mt-2 font-sans text-xs text-(--el-text-secondary)">
             {t('repositoriesOptional')}
           </p>
         )}
@@ -169,7 +181,7 @@ export function RepositorySetField({
           );
         })}
         {overflow > 0 ? (
-          <li className="py-1 font-sans text-xs text-(--el-text-muted)">
+          <li className="py-1 font-sans text-xs text-(--el-text-secondary)">
             {t('repositoriesMore', { count: overflow })}
           </li>
         ) : null}
@@ -281,5 +293,5 @@ function RepositoryCountCaption({
 /** The caption's one line, so every branch above renders the same element rather
  *  than four copies of one className that can drift apart. */
 function CaptionLine({ text }: { text: string }) {
-  return <p className="mt-2 font-sans text-xs text-(--el-text-muted)">{text}</p>;
+  return <p className="mt-2 font-sans text-xs text-(--el-text-secondary)">{text}</p>;
 }

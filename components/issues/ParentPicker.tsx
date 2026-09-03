@@ -150,7 +150,7 @@ export function ParentPicker({
           {error}
         </p>
       ) : notice ? (
-        <p className="text-(--el-text-muted) text-xs">{notice}</p>
+        <p className="text-(--el-text-secondary) text-xs">{notice}</p>
       ) : null}
     </div>
   );

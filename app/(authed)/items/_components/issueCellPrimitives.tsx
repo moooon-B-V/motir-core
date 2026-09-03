@@ -60,7 +60,7 @@ export function AssigneeValue({ name }: { name: string | null }) {
       <span className="truncate text-(--el-text-secondary)">{name}</span>
     </span>
   ) : (
-    <span className="text-(--el-text-muted)">{t('columns.unassigned')}</span>
+    <span className="text-(--el-text-secondary)">{t('columns.unassigned')}</span>
   );
 }
 
@@ -116,7 +116,7 @@ function useDueUrgency(iso: string | null | undefined): 'overdue' | 'due-soon' |
  */
 export function DueValue({ label, iso }: { label: string | null; iso?: string | null }) {
   const urgency = useDueUrgency(iso);
-  if (!label) return <span className="text-(--el-text-muted)">—</span>;
+  if (!label) return <span className="text-(--el-text-secondary)">—</span>;
   return (
     <span
       className={cn(
@@ -138,6 +138,6 @@ export function EstimateValue({ label }: { label: string | null }) {
   return label ? (
     <span className="truncate text-(--el-text-secondary)">{label}</span>
   ) : (
-    <span className="text-(--el-text-muted)">—</span>
+    <span className="text-(--el-text-secondary)">—</span>
   );
 }
