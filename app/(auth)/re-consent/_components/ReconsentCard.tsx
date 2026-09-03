@@ -19,12 +19,12 @@ import { acceptCurrentLegalDocumentsAction } from '../_actions';
  * ⚠️ AN AFFIRMATIVE ACT, NOT A PASSIVE STATEMENT — the exact opposite of the
  * sign-up notice, and the asymmetry IS the argument. At sign-up there is another
  * act to attach the agreement to (creating the account, Art. 6(1)(b)), so the
- * notice is a paragraph. Here there is none, and `content/legal/terms.md` §14
+ * notice is a paragraph. Here there is none, and `motir.co/legal/terms` §14
  * promises outright that we *"will not treat silence as agreement to a material
  * change"* — a passive line on a hold screen would be exactly the silence that
  * clause disclaims. So this screen has a real primary button.
  *
- * ⚠️ ONE AGREEMENT, ONE CONTROL. `terms.md` §15 makes the Terms, the Acceptable
+ * ⚠️ ONE AGREEMENT, ONE CONTROL. `motir.co/legal/terms` §15 makes the Terms, the Acceptable
  * Use Policy and the Privacy Policy a single agreement, so a per-document
  * tick-box would ask for three decisions where the product offers one outcome,
  * and each would need its own label. The button's own words carry the scope
@@ -242,7 +242,7 @@ function ChangedDocumentRow({ document }: { document: OutstandingDocument }) {
  * notifications, appearance and language, and nothing that exports or closes an
  * account. Two cards linking to a page that 404s would be worse than the honest
  * form, and worse than the fallback the design itself supplies for this screen —
- * **legal@motir.co**, which is `content/legal/terms.md` §15's own notice address
+ * **legal@motir.co**, which is `motir.co/legal/terms` §15's own notice address
  * and a route a person can actually use today. When MOTIR-1136 lands, the two
  * cards mount above the contact line.
  */

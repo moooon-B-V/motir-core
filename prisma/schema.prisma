@@ -7913,7 +7913,7 @@ model CodeGraphOffboarding {
 /// instead of stamping a fresh timestamp over a real one.
 ///
 /// ⚠️ IT IS NOT ONE ROW PER ACCEPTANCE ACT — it is one row per DOCUMENT.
-/// `content/legal/terms.md` §15 makes the Terms, the Acceptable Use Policy and
+/// `motir.co/legal/terms` §15 makes the Terms, the Acceptable Use Policy and
 /// the Privacy Policy a single agreement, and the interstitial offers a single
 /// button for all of them (`design/auth/design-notes.md`, *One agreement, one
 /// control*). One act therefore writes up to three rows sharing an
@@ -7931,13 +7931,16 @@ model LegalAcceptance {
 
   userId String @map("user_id")
 
-  /// The document's slug — its filename in `content/legal/` without the
-  /// extension, which is also its `/legal/<slug>` URL. A plain string rather
-  /// than an enum: `lib/legal/documents.ts` treats THE DIRECTORY as the
-  /// registry (nothing enumerates slugs, so a document ships by existing), and
-  /// an enum here would re-introduce exactly the hardcoded list that module's
-  /// docstring records as a shipped defect. A slug that no longer names a file
-  /// is a historical row, which is correct: the agreement happened.
+  /// The document's slug — its key in the CONFIGURED manifest
+  /// (`MOTIR_LEGAL_DOCUMENTS`), which is also the last segment of the `url` that
+  /// manifest entry publishes. A plain string rather than an enum:
+  /// `lib/legal/documents.ts` treats THE MANIFEST as the registry (nothing
+  /// enumerates slugs, so a document ships by being configured), and an enum
+  /// here would re-introduce exactly the hardcoded list that module's docstring
+  /// records as a shipped defect. A slug the manifest no longer publishes is a
+  /// historical row, which is correct: the agreement happened. (It was a
+  /// filename under `content/legal/` until MOTIR-4007 made the source
+  /// configuration; the column's contents and this reasoning are unchanged.)
   documentSlug String @map("document_slug")
 
   /// The version string as it stood in that document's front matter when the
@@ -8024,7 +8027,7 @@ enum DataExportStatus {
 ///
 /// ⚠️ `erasureDueAt` IS COMPUTED, NEVER TYPED. `lib/account/dataSubjectRequests.ts`
 /// derives it from `ACCOUNT_ERASURE_WINDOW_DAYS`, which is the number
-/// `content/legal/privacy.md` §6 publishes as a promise to users. A literal `30`
+/// `motir.co/legal/privacy` §6 publishes as a promise to users. A literal `30`
 /// in a service or a migration is how a published legal promise and shipped
 /// behaviour quietly diverge — and here the divergence would be about when
 /// somebody's account is erased.

@@ -8,7 +8,7 @@ import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 //
 // A signed-in person whose accepted version of the Terms, the Privacy Policy or
 // the Acceptable Use Policy is materially behind what is published is held at
-// `/re-consent` until they say yes — because `content/legal/terms.md` §14
+// `/re-consent` until they say yes — because `motir.co/legal/terms` §14
 // promises outright that we *"will not treat silence as agreement to a material
 // change"*, and carrying on into the product IS silence.
 //
@@ -75,11 +75,15 @@ const CURRENT_PATH_HEADER = 'x-current-path';
  *
  * ⚠️ A SELF-HOSTER IS NEVER HELD, and that is the card's own acceptance
  * criterion (*"gating keys off the cloud document version — self-hosters set
- * their own"*). `content/legal/` ships as moooon B.V.'s copy of OUR terms for
- * the hosted service; a self-hoster is their own controller and their own
- * counterparty, so holding their users at a screen asking them to accept our
- * Terms would be both wrong and unclearable. `/legal` still renders for them —
- * it describes our service, which is what its own index copy already says.
+ * their own"*). The documents this gate reads are moooon B.V.'s copy of OUR
+ * terms for the hosted service; a self-hoster is their own controller and their
+ * own counterparty, so holding their users at a screen asking them to accept our
+ * Terms would be both wrong and unclearable. And a self-hoster configures no
+ * manifest, so `listLegalDocuments()` answers `[]` and this gate holds nobody by
+ * construction — which is the same outcome the old sentence described, now
+ * reached by configuration rather than by a route. (`/legal` no longer renders
+ * here for anybody: the pages left with MOTIR-4103 and the documents are served
+ * from `motir.co`.)
  *
  * Deliberately NOT `isCloudBilling()`: that function answers *"does this build
  * have a commercial layer?"*, this one answers *"is moooon B.V. the counterparty

@@ -236,14 +236,14 @@ ABSENT, not hidden.** Self-hosting is a team doing project management for
 itself — single-tenant, with no directory of anybody else's work and nothing
 published to strangers.
 
-| path                     | self-hosted build (`MOTIR_CLOUD` unset)                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/explore`, `/p/*`       | **not served by `motir-core` at all** — the rendering lives in `motir-marketing`, which is moooon's site and is not shipped to self-hosters |
-| `app/api/public/*`       | **absent.** The routes do not answer. This is the capability gate, and MOTIR-3908 owns it                                                   |
-| the publish affordance   | **absent.** A project cannot be made public                                                                                                 |
-| `/legal`                 | gone from the repository; `motir-core` renders legal links from configuration, unset by default                                             |
-| `/docs`                  | **present.** It describes the software, and a self-hoster needs documentation for their own build                                           |
-| everything authenticated | unchanged                                                                                                                                   |
+| path                     | self-hosted build (`MOTIR_CLOUD` unset)                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/explore`, `/p/*`       | **not served by `motir-core` at all** — the rendering lives in `motir-marketing`, which is moooon's site and is not shipped to self-hosters                                                                                                                                                                                                                                                   |
+| `app/api/public/*`       | **absent.** The routes do not answer. This is the capability gate, and MOTIR-3908 owns it                                                                                                                                                                                                                                                                                                     |
+| the publish affordance   | **absent.** A project cannot be made public                                                                                                                                                                                                                                                                                                                                                   |
+| `/legal`                 | gone from the repository; `motir-core` renders legal links from configuration, unset by default                                                                                                                                                                                                                                                                                               |
+| `/docs`                  | ~~**present.** It describes the software, and a self-hoster needs documentation for their own build~~ **⚠️ AMENDED 2026-09-02 (MOTIR-4167): the route is GONE** (MOTIR-3951 deleted `app/(public)`), and the rail's `Docs` row renders from configuration — `MOTIR_DOCS_URL`, an absolute url, unset by default — exactly as the `/legal` row above does. AMENDMENT 2 §D carries the decision |
+| everything authenticated | unchanged                                                                                                                                                                                                                                                                                                                                                                                     |
 
 `MOTIR_CLOUD` already exists (`lib/billing/availability.ts`), is explicit and
 defaults to `false`, and `billing-tiering.md` §6 records why it is deliberately
@@ -719,6 +719,41 @@ in reality. `lib/legal/links.ts`'s `legalIndexUrl()` is the implementation, and
 | **Point the row at the first document**             | It is a door to the SET. Landing a reader on the Terms when they asked for _Legal_ is a wrong answer wearing a right one.                                                                                                                                                                                                            |
 | **Keep the row pointing at the old `/legal` route** | That route is deleted by the story after this one, so the row would 404 by design.                                                                                                                                                                                                                                                   |
 | **Drop the rail row entirely**                      | It is a shipped affordance and the hosted arrangement has a perfectly good index. Removing it for every operator to avoid deriving it for some is the wrong trade.                                                                                                                                                                   |
+
+**⚠️ AMENDED 2026-09-02 (MOTIR-4167) — the rail's `Docs` row, which lost its
+destination to the same split and was left pointing at it.** `/docs` left this
+repository with MOTIR-3951 and is rendered on `motir.co` by `motir-marketing`
+(MOTIR-4046); the rail row beside `Legal` kept a hard-coded app-relative path, so
+a signed-in reader who clicked **Docs** got a 404. Measured 2026-09-02:
+`app.motir.co/docs` → **404**, `motir.co/docs` → **200**. The `Legal` row had
+already been rebuilt around a nullable resolver (above), and this row takes the
+same shape — found by drawing the section (MOTIR-4130), when the address guard
+refused the row's own href.
+
+**DECIDED: the row reads `MOTIR_DOCS_URL` — ONE environment variable holding the
+ABSOLUTE url of the published documentation — through `lib/docs/links.ts`'s
+`docsIndexUrl()`, and it is ABSENT when that is unset or is not an absolute
+`http(s)` url.** It is the contract §C gives every legal document's `url`, one
+surface over: absolute, because it is no longer a page this application serves;
+operator-supplied, because where the documentation is published is the
+operator's arrangement and not this repository's; nullable, with `null` the
+unconfigured build and the row absent rather than dead. The hosted deployment
+sets it to `https://motir.co/docs`; a self-hoster may point it at that same public
+documentation, at a mirror of their own, or leave it unset and have no row. A
+relative value is REFUSED and logged at error level naming the variable, never
+rendered, because a relative path is precisely the defect this amendment
+removes. `tests/docs/docsLinks.test.ts` pins both arms and the refusal;
+`tests/components/SidebarNav-docs-door.test.tsx` pins the row;
+`design/shell/rail-bottom-section.mock.html` draws both arms.
+
+| Alternative                                                                 | Why rejected                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Derive it from `MOTIR_PUBLIC_SITE_URL`** (`publicSiteOrigin()` + `/docs`) | Three reasons, any one sufficient. That accessor FALLS BACK to the application origin while unset — its ordering guarantee (MOTIR-3881) — so on today's production it would answer `https://app.motir.co/docs`, the very 404 being removed. It must stay unset until THE CUTOVER (MOTIR-3910), so the row would stay absent for as long as that takes while `motir.co/docs` is live. And `tests/hosting/appUrlSeam.test.ts` asserts that variable has exactly ONE reader. |
+| **Derive it from `MOTIR_MARKETING_ORIGIN`**                                 | It is a CORS allowlist for one POST receiver — comma-separated, possibly several origins — answering _who may call `/api/idea-draft`_. One variable per question is this repository's own rule (`lib/publicProjects/urls.ts`); reading a navigation target out of a security setting couples the two for ever.                                                                                                                                                            |
+| **Hard-code `https://motir.co/docs`**                                       | §B's finding, one surface over: the open product would send every self-hoster's users to moooon's site as if it were theirs. The `Legal` row rejected the same default above (_Default the manifest to moooon's published URLs_).                                                                                                                                                                                                                                         |
+| **Keep the app-relative path and add a redirect**                           | The redirect off `app.motir.co` is MOTIR-3910's, and the row would still be a door that works only by bouncing; the _keep the old route_ alternative above applies verbatim.                                                                                                                                                                                                                                                                                              |
+| **Put the documentation url in the legal manifest**                         | The manifest is a per-DOCUMENT array of legal documents; documentation is not one, and the `indexUrl` alternative above already rejected widening it for a set-level value.                                                                                                                                                                                                                                                                                               |
+| **Drop the row**                                                            | The same trade the `Legal` row refused: a shipped affordance with a perfectly good hosted destination, removed for every operator to avoid configuring it for some.                                                                                                                                                                                                                                                                                                       |
 
 **⚠️ The sign-up notice is ABSENT rather than re-flowed, and this reverses the
 form MOTIR-3909 was authored with.** The string is
@@ -1299,7 +1334,194 @@ row 8 went this way.
 
 ---
 
-## AMENDMENT 5 — §4's reversal condition is CLOSED: tenant addresses move to a separate registrable domain, and the accepted exposure is retired one project at a time (MOTIR-4206, 2026-09-03)
+## AMENDMENT 5 — the MCP tool catalogue is PUBLISHED as an anonymous, UNVERSIONED documentation artifact at `/api/docs/mcp-tools.json`, outside both contracts (MOTIR-4194, 2026-09-02)
+
+§8's third cost — _"`/docs` is the sharpest cost and the least settled"_ — names
+two registries `motir.co` must consume across the repository boundary:
+`lib/apiDocs/reference` reads the OpenAPI spec, and `lib/apiDocs/mcp` reads the
+tool catalogue. MOTIR-4046 settled the mechanism for the first: `/docs/api`
+fetches `/api/openapi/v1.json` at request time and keeps no copy. **It did not
+settle the second**, and what happened in the gap is the fixture for why the
+mechanism has to be the same one: `motir.co/docs/mcp/tools` shipped a
+hand-copied subset — 24 of 55 tools in five groups that matched no permission —
+with nothing in that repository able to check it (MOTIR-4180), and the copy was
+then removed rather than repaired, leaving the product with **no tool catalogue
+published anywhere**. This amendment supplies the artifact that lets the page
+come back the way `/docs/api` already works.
+
+> **⚠️ AN ADR ORDINAL IS A SERIALIZED RESOURCE** — AMENDMENT 4's own warning,
+> honoured: this section was written against `origin/main` `ac5f9ac16`, whose
+> last heading is AMENDMENT 4. Re-read the last heading after merging
+> `origin/main` and renumber if a sibling has taken `5`.
+
+### §A — The measurement this amendment is built on
+
+Read on `origin/main` `ac5f9ac16`, 2026-09-02:
+
+| reading                                                     | value                                                                                                                                                                                                                       |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TOOL_PERMISSIONS` keys (`lib/mcp/toolPermissions.ts`)      | **55**, one permission per tool, typed `Record<McpToolName, PermissionKey>` — total by construction                                                                                                                         |
+| `TOOL_SUMMARIES` (`lib/apiDocs/mcp.ts`)                     | key-equal to the map above by typecheck; `mcpCatalogue()` already DERIVES the grouping from each tool's permission and the labels from the shipped `permissions.*` copy — the only authored thing is the order              |
+| runtime readers of `lib/apiDocs/mcp.ts`                     | **none.** `git grep -l 'apiDocs/mcp\|TOOL_SUMMARIES'` returns the module, its fingerprint module, two tests, a design build script and three documents — no route and no component, since MOTIR-3951 deleted `app/(public)` |
+| `POST /api/mcp` `tools/list` with no `Authorization` header | **401** — `withMcpAuth(…, { required: true })` refuses before a tool runs                                                                                                                                                   |
+| `motir.co/docs/mcp/tools`                                   | renders **no tool** since MOTIR-4180; `tests/docs/docs.test.ts` there asserts the page source names none                                                                                                                    |
+
+The first two rows are why nothing here is invented: the derivation this
+amendment publishes already exists, enforced by the type system. The third is
+why it was invisible — a registry with no reader is one whose truth gate can be
+deleted as collateral and go unnoticed for a day (MOTIR-4165). The fourth is why
+the answer is a published artifact rather than a consumer reading the live
+surface.
+
+### §B — The decision
+
+**`motir-core` serves the derived catalogue as JSON at
+`GET /api/docs/mcp-tools.json` — anonymous, `force-static`, cacheable — and
+`motir.co/docs/mcp/tools` (MOTIR-4195) fetches it at request time and keeps no
+copy, exactly as `/docs/api` consumes `/api/openapi/v1.json`.**
+
+The document is `mcpToolCatalogueDocument()` in `lib/apiDocs/mcp.ts`:
+
+| field                                                          | source                                                                           | kind                                                                                                                      |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`                                                     | `MCP_ENDPOINT_PATH` — where the tools are called                                 | derived                                                                                                                   |
+| `toolCount`                                                    | the length of the rows                                                           | derived, never a literal                                                                                                  |
+| `groups[]` — one per permission that gates at least one tool   | `GRANTABLE_PERMISSIONS`, filtered                                                | **order AUTHORED** (the catalog's own); membership derived                                                                |
+| `groups[].permission` · `label` · `gates` · `grantedByDefault` | the permission key; the shipped `permissions.<slug>` copy; `DEFAULT_TOKEN_GRANT` | derived                                                                                                                   |
+| `groups[].tools[]` — `name` · `permission` · `summary`         | `TOOL_PERMISSIONS`; the authored one-line summary                                | names and permissions derived; summaries authored and fingerprint-pinned (Amendment 13 Q2 of `public-api-conventions.md`) |
+
+The route composes no wrapper, authenticates nothing, reads no database, takes
+no user input and spends no rate-limit budget — the four properties both
+OpenAPI routes already hold, asserted against the file's source by
+`tests/api/docs/mcp-tools-route.test.ts`. The same file asserts **totality**:
+every `TOOL_PERMISSIONS` key reaches the served document, compared as sets and
+proved to fire by removing one entry from a served document inside the test.
+Typecheck holds the summary map key-equal to the permission map; it cannot see
+whether a serialization dropped one, which is the gap that test closes.
+
+### §C — The VERSIONING POSTURE: an UNVERSIONED documentation artifact, not part of `v1` and not part of the public read contract
+
+**Decided: the document carries no version, sits under no deprecation policy,
+and is not an operation of either published contract.** The reasoning, so it is
+on the record rather than inherited from whichever path the route happens to
+sit under:
+
+- **The MCP surface already versions itself through `tools/list`.**
+  `public-api-conventions.md` Amendment 7 explicitly licenses that surface to
+  churn — _"rewording a description or renaming an argument is how an agent's
+  behaviour is tuned"_ — and the published fork table tells a reader as much.
+  A documentation feed FOR that surface cannot promise more stability than the
+  surface it documents, and a number that changed on every reworded summary
+  would be noise.
+- **A version is a promise, and this document has no reader who needs one.**
+  AMENDMENT 1 §D's policy exists because a visitor finds an empty page when a
+  field is removed. The consumer here is one page in `motir-marketing`, in the
+  same organisation, deployed by the same people; a shape change is a
+  two-repository event either way, and the contract test §3 asks for lives in
+  the producing repository (`mcp-tools-route.test.ts`) — which is the guard
+  worth having. Putting the feed under the `1.x.y` policy would buy a standing
+  obligation — alongside-not-in-place majors, announced windows, a MINOR bump on
+  every additive change — without buying a reader.
+- **It is not a `v1` operation** for the three grounds AMENDMENT 1 §B gives: the
+  wrapper authenticates by construction, the envelope differs, and the version
+  would lie. **And it is not a public-contract operation** because it is not the
+  public-projects capability: the contract describes `app/api/public/*`, is
+  gated with it, and its totality guard would demand a declaration for a
+  document about a different surface.
+
+**What a consumer MAY rely on:** the path `/api/docs/mcp-tools.json`, that it
+answers with no credential, and the field names in §B's table with their types.
+**What may change without notice:** the tool set, every summary, every label,
+group membership, the count, the order (it follows the permission catalog), and
+the appearance of new fields — a consumer MUST tolerate keys it does not know,
+the same obligation AMENDMENT 1 §D puts on the public contract's consumer.
+**What a consumer MUST NOT do:** commit a copy. MOTIR-4195's own criterion says
+so in its own words, and the reason is §A's fourth row: a copy that renders only
+when the truth is unreachable is stale exactly when it is displayed.
+
+**If a versioned feed is ever needed** — a third-party reader that hard-codes
+the shape — it arrives ALONGSIDE at its own path, and this one keeps answering;
+that is AMENDMENT 1 §D's alongside-not-in-place rule, applied in advance.
+
+### §D — What a SELF-HOSTED build serves: the same answer as `/api/openapi/public.json`
+
+**Served, unconditionally — MOTIR-4042's disposition, applied rather than
+re-decided.** §5's table makes `/docs` present off-cloud because _"it describes
+the software, and a self-hoster needs documentation for their own build"_; the
+MCP server ships in every build, so its catalogue is that documentation. The
+route is `force-static`, so a gate in the handler would capture the BUILDER's
+flag rather than the deployment's, and making it dynamic would discard the cache
+for no capability or data exposure. `tests/api/public/cloud-gate-totality.test.ts`
+now pins BOTH static product documents as deliberate exclusions from the gate,
+naming the card that decided each — one policy, two routes, no second rule.
+
+### §E — Why `/api/docs/`, and not the three obvious neighbours
+
+| candidate                 | why not                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/v1/…`               | authenticated by construction and audited: `v1RouteAudit` raises `bypasses-wrapper` for a handler not wrapped in `withV1Route`. The reason both OpenAPI documents sit outside it, unchanged; the test runs the counterfactual                                                                                                                                                                   |
+| `/api/openapi/…`          | names a FORMAT, and this is not an OpenAPI document. A reader who finds it there looks for `paths` and `components`; a generator pointed at it errors                                                                                                                                                                                                                                           |
+| `/api/mcp/…`              | the authenticated endpoint the catalogue DESCRIBES. An anonymous sibling beside the one path where every request must carry a token invites the wrong reading in both directions                                                                                                                                                                                                                |
+| **`/api/docs/…`** (taken) | the neutral home for a documentation artifact that is neither an OpenAPI document nor part of a versioned contract. No guard walks it (`app/api/v1`, `app/api/public`, `app/api/public-requests` are the audited roots), so it needs no exemption from any of them; the proxy's `PUBLIC_REDIRECT_SEGMENTS` keys on the FIRST segment (`api`), so `/docs` moving to `motir.co` does not catch it |
+
+### §F — Rejected alternatives
+
+| Alternative                                                                | Why rejected                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`motir.co` reads the live `tools/list`**                                 | It cannot, anonymously (§A). Making it possible means a workspace token in a marketing site's CI, a rotation owner, and a guard that goes red the day it expires — a credential added to a seam that needs none. A published artifact removes the credential from the seam entirely |
+| **Move `TOOL_SUMMARIES` to `motir-marketing`**                             | Breaks the totality chain at its first link: a tool added to `MCP_TOOL_NAMES` widens `TOOL_PERMISSIONS`, which makes the summary map incomplete, which fails typecheck — HERE. In another repository nothing fails                                                                  |
+| **Let `motir.co` transcribe the catalogue** (the state MOTIR-4180 removed) | Breaks the chain at its last link, and was measured: 24 of 55, five invented groups, no guard able to notice                                                                                                                                                                        |
+| **A build-time artifact published as a package**                           | A generated file to keep in sync, a build step, and a new way to be stale — Amendment 13 Q2's own rejection of the same shape, for a fact a request-time read hands over with no install                                                                                            |
+| **Put it under the `v1` contract or the public contract, versioned**       | §C. A standing obligation without a reader, on a surface licensed to churn                                                                                                                                                                                                          |
+| **Serve the per-tool input tables too**                                    | Amendment 13 Q3 keeps them in `docs/mcp.md` deliberately — the highest-churn facts, one click away in the file beside the code. Unchanged                                                                                                                                           |
+
+### §G — What this amendment changes about §7, §8 and §9
+
+- **§8's cost 3** named the two registries and assigned the mechanism to
+  MOTIR-3932. The OpenAPI half was settled by MOTIR-4046; **the catalogue half is
+  settled here**, by the same mechanism: a request-time read of a published
+  artifact, no copy.
+- **§7 gains two rows.** **MOTIR-4194** — BOUND by this amendment: serves the
+  artifact, records this posture, pins the off-cloud exclusion. **MOTIR-4195** —
+  BOUND by §C's consumer half: fetches at request time, throws when unreachable,
+  commits no list.
+- **§9 is unchanged.** The `/docs` publication mechanism it listed was already
+  decided for the spec; this closes the remaining half of that entry rather than
+  adding one.
+
+### §H — What this amendment deliberately does NOT decide
+
+- **The fingerprint truth gate.** MOTIR-4165 restores the test that recomputes
+  each summary's pin from a live `tools/list`. Independent of this artifact and
+  shippable now: that gate proves each SUMMARY still matches the tool text it was
+  written against; this amendment proves the catalogue REACHES a reader. Neither
+  substitutes for the other.
+- **Whether `/api/docs/` ever carries a second artifact.** The CLI's command
+  catalogue (`lib/apiDocs/cli.ts`) is the obvious candidate and is nobody's card.
+- **The rendering.** What the page looks like is MOTIR-4195's, within
+  `motir-marketing`'s own design system.
+
+### Sources
+
+- `motir-core` `origin/main` `ac5f9ac16`, 2026-09-02 — `lib/mcp/toolPermissions.ts`
+  (`TOOL_PERMISSIONS`, 55 keys), `lib/apiDocs/mcp.ts` (`TOOL_SUMMARIES`,
+  `mcpCatalogue`), `lib/tokens/grant.ts` (`GRANTABLE_PERMISSIONS`, catalog
+  order), `app/api/mcp/route.ts:87` (`withMcpAuth(…, { required: true })`),
+  `app/api/openapi/{v1,public}.json/route.ts` (the two sibling documents and
+  their headers), `tests/api/public/cloud-gate-totality.test.ts`, `proxy.ts`
+  (`PUBLIC_REDIRECT_SEGMENTS`, `config.matcher`)
+- `docs/decisions/public-api-conventions.md` — §8 (stability), Amendment 4 Q3
+  (where a spec is served, and why not inside `/api/v1`), Amendment 7 (the MCP
+  surface's licence to churn), Amendment 13 Q2 (the derived / authored split)
+- AMENDMENT 1 §B–§D above — the three grounds against folding into `v1`, and
+  the deprecation policy this document deliberately stays outside
+- MOTIR-4042 (PR #2494) — the off-cloud disposition of `/api/openapi/public.json`
+- MOTIR-4180 — the hand-copy this artifact replaces; MOTIR-4165 — the truth gate
+  this artifact does not restore
+
+---
+
+## AMENDMENT 6 — §4's reversal condition is CLOSED: tenant addresses move to a separate registrable domain, and the accepted exposure is retired one project at a time (MOTIR-4206, 2026-09-03)
 
 §4 accepted a deviation it named as a deviation — tenant-authored content on
 `motir.co`, the parent domain of the host that holds the session, where every

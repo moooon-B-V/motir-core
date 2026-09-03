@@ -162,7 +162,12 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
     // a clipping box that is not a containing block does not clip an `absolute`
     // descendant that anchors to the INITIAL containing block, and such a
     // descendant lengthens the DOCUMENT instead. Same shell shape, same gap.
-    <div className="relative flex h-dvh overflow-hidden bg-(--el-page-bg)">
+    //
+    // `data-app-shell` for the same reason one level over (MOTIR-4230): this is
+    // the second full-viewport opaque canvas in the tree, so it masks a style's
+    // `body`-level atmosphere exactly as the signed-in shell did. Same shell
+    // shape, same hook — a shell that opts out is a shell that goes flat.
+    <div data-app-shell="" className="relative flex h-dvh overflow-hidden bg-(--el-page-bg)">
       <a
         href="#admin-main"
         className="sr-only z-[100] focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:rounded-(--radius-control) focus:bg-(--el-page-bg) focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:text-(--el-text) focus:shadow-(--shadow-elevated) focus:outline-none focus:ring-2 focus:ring-(--focus-ring-color)"

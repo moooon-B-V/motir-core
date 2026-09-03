@@ -99,6 +99,14 @@ export const STRUCTURAL_GUARD_SPECS = [
   // database, renders nothing, and imports only `tests/helpers/importGraph`, so
   // it carries no coverage into the merged report.
   'tests/theme/namedMaxWidthUtilities.test.ts',
+  // ── tests/theme/ — the shell-canvas guard (MOTIR-4230) ───────────────────
+  // The third of this shape in a row, and it walks the same three roots as its
+  // two neighbours for the same reason: the shell roots are DERIVED from the
+  // tree (a class literal stating `h-dvh` + `overflow-hidden`) rather than
+  // listed, so a third shell joins the guard without anyone remembering to.
+  // It opens no database, renders nothing, and imports only `node:fs` /
+  // `node:path`, so it carries no coverage into the merged report.
+  'tests/theme/immersiveShellAtmosphere.test.ts',
   // ── tests/legal/ — the EGRESS-MANIFEST guard (MOTIR-3631 · MOTIR-4008) ────
   // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
   // read against `package.json` and `lib/legal/egressManifest.ts`.

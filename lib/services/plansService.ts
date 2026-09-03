@@ -3100,8 +3100,9 @@ export const plansService = {
     // `approvePlanForWorkItem` already walks — in reverse. The plan's source job
     // identifies the plan-change session; the session's `scopeKey` IS its anchor
     // set (`buildScope` joins the sorted keys, so it reads straight back). A
-    // `motir plan --detach <KEY>` thread is anchored at exactly one key, and
-    // that is the only shape recorded: the project-wide scope is empty and a
+    // dispatched agent's `submit_plan_session` thread (`targetKeys: [<KEY>]`,
+    // MOTIR-4083) is anchored at exactly one key, and that is the only shape
+    // recorded: the project-wide scope is empty and a
     // multi-anchor thread names no single leg, so both are skipped rather than
     // attributed to whichever member happened to sort first.
     //
@@ -3706,9 +3707,10 @@ export const plansService = {
    *
    * ⚠️ IT IS ADDRESSED BY THE CARD, NOT BY A PLAN ID, and that is not
    * convenience — it is what makes the bound structural. The caller is a loop
-   * whose AGENT ran `motir plan --detach <KEY>` in a sandbox; the plan id came
-   * back on that agent's stdout, which the loop streams straight to the terminal
-   * and never captures. So a plan-addressed entrance would have forced either a
+   * whose AGENT submitted the plan in a sandbox — `submit_plan_session` anchored
+   * at `targetKeys: [<KEY>]` (MOTIR-4083; before that, `motir plan --detach
+   * <KEY>`); the plan id came back in that agent's tool result, which the loop
+   * never sees. So a plan-addressed entrance would have forced either a
    * second read to discover the id or a scrape of the agent's output, and the
    * anchoring check would have been a check on caller-supplied data. Addressed
    * by the card, there is no way to NAME a plan that is not the card's.
@@ -3718,8 +3720,9 @@ export const plansService = {
    *   the card's key → `buildScope([key])` → the plan-change session for that
    *   anchor set → its `lastJobId` → the plan that job produced.
    *
-   * A `motir plan --detach <KEY>` thread is anchored at exactly that scope, so
-   * this resolves the plan that card's refusal caused and nothing else.
+   * A thread anchored at `targetKeys: [<KEY>]` — which is what the prompt tells
+   * the agent to submit on — sits at exactly that scope, so this resolves the
+   * plan that card's refusal caused and nothing else.
    *
    * ⚠️ NO CONVERSATION MEANS NO. A cadence plan, an onboarding generation and a
    * plan submitted from the project-wide panel all have no session at this

@@ -226,7 +226,15 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
     [locale],
   );
-  const mutedNone = <span className="text-(--el-text-muted)">{t('none')}</span>;
+  // MOTIR-4196 — `--el-text-secondary`, not `--el-text-muted`. This value is
+  // rendered by `CustomRailRow` INSIDE `QuickViewRail`, which paints
+  // `bg-(--el-surface-soft)` from another module: muted ink measures 4.34:1
+  // there (AA needs 4.50) and 4.54:1 on the white page/card, so the ink was
+  // legal on the surface this panel does NOT render on. Secondary is 6.18-6.80:1
+  // on all four surfaces in both themes. `tests/theme/inkContrastLint.test.ts`'s
+  // muted arm ABSTAINS on exactly this shape — the tint is painted elsewhere —
+  // so `tests/components/quick-view-rail-ink.test.tsx` is what holds it.
+  const noneValue = <span className="text-(--el-text-secondary)">{t('none')}</span>;
 
   // Read-only custom-field value (8.8.8) — the detail rail's per-type value
   // grammar (CustomFieldsSection.renderValue, 5.3.7), condensed and WITHOUT any
@@ -234,7 +242,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // arrive resolved from the server, so this never re-derives a label from an id.
   const renderCustomValue = (field: CustomFieldWithValueDto): ReactNode => {
     const v = field.value;
-    if (!v) return mutedNone;
+    if (!v) return noneValue;
     switch (field.fieldType) {
       case 'text':
         return (
@@ -243,7 +251,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </span>
         );
       case 'number':
-        return v.number != null ? numberFormat.format(v.number) : mutedNone;
+        return v.number != null ? numberFormat.format(v.number) : noneValue;
       case 'date':
         return v.date ? (
           <>
@@ -251,7 +259,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             <span className="truncate">{formatDate(v.date, locale)}</span>
           </>
         ) : (
-          mutedNone
+          noneValue
         );
       case 'select':
         return v.option ? (
@@ -265,7 +273,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             ) : null}
           </span>
         ) : (
-          mutedNone
+          noneValue
         );
       case 'user':
         return v.user ? (
@@ -274,7 +282,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             <span className="truncate">{v.user.name}</span>
           </>
         ) : (
-          mutedNone
+          noneValue
         );
     }
   };

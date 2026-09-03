@@ -128,6 +128,17 @@ export interface SidebarNavProps {
    * which is the honest failure: a door pointing nowhere is worse than no door.
    */
   legalIndexUrl?: string | null;
+  /**
+   * Where the rail's `Docs` row points, or `null` when the deployment has
+   * configured no documentation url (MOTIR-4167).
+   *
+   * The same shape as `legalIndexUrl`, for the same reason: the documentation
+   * left this repository with the public reading surface (MOTIR-3932), so the
+   * row reads the operator's own ABSOLUTE url — `MOTIR_DOCS_URL`, resolved on the
+   * SERVER by `app/(authed)/layout.tsx` via `lib/docs/links.ts` — and **defaults
+   * `null`**: an omitted prop draws no row rather than a link to a 404.
+   */
+  docsIndexUrl?: string | null;
 }
 
 function isActive(pathname: string, match: string): boolean {
@@ -165,6 +176,7 @@ export function SidebarNav({
   user,
   workspaceTierRevealed = false,
   legalIndexUrl = null,
+  docsIndexUrl = null,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -492,22 +504,32 @@ export function SidebarNav({
           isActive(pathname, '/settings/workspace/github') ||
           isActive(pathname, '/settings/workspace/gitlab'),
       },
-      {
-        // The documentation area's front door (MOTIR-2570) — `/docs`, not
-        // `/docs/api`: the index IS the area, and pointing the rail at the REST
-        // reference is the defect the index story exists to fix. This row used
-        // to escape to the GitHub README on the premise that there was no
-        // in-app docs route; there has been one since `/docs/api` shipped.
-        //
-        // No `active` arm, deliberately: `/docs` renders in the `(public)`
-        // route group OUTSIDE this shell, so the rail is never on screen there
-        // and `pathname` can never match.
-        icon: <BookOpen />,
-        label: t('nav.docs'),
-        href: '/docs',
-      },
+      // THE DOCUMENTATION DOOR (MOTIR-2570), now CONDITIONAL (MOTIR-4167). The
+      // documentation index used to be a page this application served and the
+      // row carried its app-relative path; MOTIR-3932 moved the public reading
+      // surface to motir-marketing and the row was left pointing at a route
+      // nothing here serves, so a signed-in reader who clicked it got a 404.
+      //
+      // It renders from `docsIndexUrl` now — the operator's own ABSOLUTE url
+      // (`MOTIR_DOCS_URL`, resolved server-side by `lib/docs/links.ts` and
+      // threaded from `app/(authed)/layout.tsx`) — and when that is `null` the
+      // row does not render at all. Absent, not disabled and not dead: the same
+      // shape, for the same reason, as the `Legal` row directly below it, which
+      // lost its destination to the same split and was repaired first.
+      //
+      // No `active` arm, deliberately, as before: the destination is off-shell,
+      // so this rail is never on screen there and `pathname` can never match.
+      ...(docsIndexUrl
+        ? [
+            {
+              icon: <BookOpen />,
+              label: t('nav.docs'),
+              href: docsIndexUrl,
+            },
+          ]
+        : []),
       // The legal set (MOTIR-1134), now CONDITIONAL (MOTIR-4010). Same shape as
-      // the `/docs` row above and for the same reasons: an off-shell target, so
+      // the `Docs` row above and for the same reasons: an off-shell target, so
       // it takes no `active` arm — this rail is never on screen at the legal
       // documents and `pathname` can never match.
       //

@@ -111,7 +111,11 @@ never more.
 The permissions a token can hold, and the tools each one gates, are listed on
 the [tool catalogue](https://app.motir.co/docs/mcp/tools), which is **generated
 from the shipped map** rather than transcribed — so it cannot go stale the day
-someone adds a tool. Each tool's own entry below names its permission too.
+someone adds a tool. Each tool's own entry below names its permission too. The
+same catalogue is PUBLISHED as JSON at
+[`/api/docs/mcp-tools.json`](https://app.motir.co/api/docs/mcp-tools.json) —
+anonymous, cacheable and deliberately unversioned — which is what that page
+renders at request time (`docs/decisions/public-surface-hosts.md` AMENDMENT 5).
 
 **Default grant.** A token minted without an explicit choice gets **every
 grantable permission EXCEPT `work_item:delete`** — the one irreversible key. So a

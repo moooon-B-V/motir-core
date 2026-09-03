@@ -48,6 +48,10 @@ function renderRail(legalIndexUrl?: string | null) {
       settingsPermissions={ADMIN}
       user={USER}
       legalIndexUrl={legalIndexUrl}
+      // The Docs row is the CONTROL for the last case below, and since MOTIR-4167
+      // it is conditional too — configured here so its presence is a fact about
+      // the Legal row's absence and not about its own.
+      docsIndexUrl="https://motir.co/docs"
     />,
   );
 }
@@ -89,6 +93,7 @@ describe('the Legal door in the app shell rail', () => {
     // neighbouring doors keep their targets, which is what panel 14 draws by
     // putting the two rails side by side.
     renderRail(null);
-    expect(docsRow()?.getAttribute('href')).toBe('/docs');
+    expect(docsRow()?.getAttribute('href')).toBe('https://motir.co/docs');
+    expect(screen.getByRole('link', { name: 'Git' })).toBeTruthy();
   });
 });

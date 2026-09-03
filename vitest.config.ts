@@ -215,7 +215,7 @@ export default defineConfig({
         // than an aspiration.
         //
         // The surface earns a gate because what it enforces is a CLAUSE, not a
-        // feature: `content/legal/terms.md` §14 promises that non-material
+        // feature: `motir.co/legal/terms` §14 promises that non-material
         // changes take effect when published with no prompt, and `consent.ts`'s
         // MAJOR/MINOR-vs-PATCH rule is the whole of how that promise is kept. A
         // regression there is a broken published promise that no other test in
@@ -263,7 +263,7 @@ export default defineConfig({
         // 100/100/100/100 on this branch before being pinned, per the note at
         // the top of this block. Gated for a reason stronger than the two above
         // it: this is the only code in the product that makes
-        // `content/legal/privacy.md` §6's *"we erase or anonymise within 30
+        // `motir.co/legal/privacy` §6's *"we erase or anonymise within 30
         // days"* true, and the arms a regression would take out silently — the
         // status re-read under the lock that makes a day-29 cancel stick, the
         // per-account catch that stops one failure holding the queue, the
@@ -1313,6 +1313,13 @@ export default defineConfig({
         'lib/api/public/openapi/emit.ts',
         'app/api/openapi/public.json/route.ts',
         'app/api/public/p/[identifier]/route.ts',
+        // Story MOTIR-3932 · Subtask MOTIR-4194 — the PUBLISHED MCP tool
+        // catalogue, the anonymous document `motir.co/docs/mcp/tools` renders
+        // (`public-surface-hosts.md` AMENDMENT 5). `lib/apiDocs/mcp.ts` regained
+        // a runtime reader with it; the route is a one-line serialization and
+        // the shape lives in the module. MEASURED FIRST at 100/100/100 on
+        // `tests/api/docs/mcp-tools-route.test.ts`, then pinned at the floor.
+        'app/api/docs/mcp-tools.json/route.ts',
         // Story MOTIR-3877 · Subtask MOTIR-4120 — the reads and the act path
         // this story added, joining the subject route above under the same rule.
         //
@@ -2378,6 +2385,8 @@ export default defineConfig({
         'lib/api/public/openapi/emit.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/openapi/public.json/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/public/p/[identifier]/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3932 · Subtask MOTIR-4194 — the published tool catalogue.
+        'app/api/docs/mcp-tools.json/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-3877 · Subtask MOTIR-4120 — the reads and the act path
         // (the include block above carries the finding: they were outside this
         // report entirely, because the sibling entry is a LITERAL path).

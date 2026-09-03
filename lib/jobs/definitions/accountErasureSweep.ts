@@ -1,7 +1,7 @@
 import { defineJob } from '../defineJob';
 
 // THE ACCOUNT-ERASURE SWEEP (Story 8.4 · Subtask MOTIR-3702) — the clock behind
-// `content/legal/privacy.md` §6's *"we erase or anonymise within 30 days"*.
+// `motir.co/legal/privacy` §6's *"we erase or anonymise within 30 days"*.
 //
 // MOTIR-3700 writes the request and starts the grace period; this is what runs
 // when it expires. The policy — the three DECISION 3 groups, the lock and

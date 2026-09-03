@@ -216,7 +216,7 @@ export const accountErasureService = {
         comments: sum(shared.map((i) => i.authoredComments)),
         workItems: sum(shared.map((i) => i.attributedWorkItems)),
       },
-      // NOT counted from the database, deliberately. `content/legal/privacy.md`
+      // NOT counted from the database, deliberately. `motir.co/legal/privacy`
       // §6 states these as exceptions in approved copy — invoices and tax records
       // for "generally seven years", and data still in an unrotated backup — and
       // the ledger's job is to NAME them. Article 17 erasure is not absolute, and

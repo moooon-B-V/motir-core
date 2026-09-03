@@ -4,7 +4,7 @@
 - **Story / Subtask:** MOTIR-3878 (Customer-owned addresses for a public project) ·
   Subtask MOTIR-4206
 - **Supersedes / superseded by:** none. It **closes** `public-surface-hosts.md`
-  §4's reversal condition (AMENDMENT 5 of that record, written by this card) and
+  §4's reversal condition (AMENDMENT 6 of that record, written by this card) and
   is the record `public-surface-hosts.md` §9 named as owning per-tenant and
   custom domains.
 - **Consumed by:** MOTIR-4208 (buy the base domain), MOTIR-4209 (the address

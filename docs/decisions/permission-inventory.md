@@ -630,6 +630,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/internal/ai/work-items`                | POST                  | `aiWorkItemsService.fileBug` (transitive)                         | —          | no-gate  | R29 |
 | `/api/internal/billing/ai-included-seat`     | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
 | `/api/internal/billing/scaled-tracker-state` | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
+| `/api/docs/mcp-tools.json`                   | GET                   | — none —                                                          | —          | no-gate  | R32 |
 | `/api/openapi/v1.json`                       | GET                   | — none —                                                          | —          | no-gate  | R32 |
 | `/api/openapi/public.json`                   | GET                   | — none —                                                          | —          | no-gate  | R32 |
 | `/api/resend/webhook`                        | POST                  | — none —                                                          | —          | no-gate  | R6  |
