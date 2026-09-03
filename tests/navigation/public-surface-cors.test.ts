@@ -2,6 +2,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
+// ⚠️ MOTIR-4218 — the CORS allow-list is now a SET backed by the address store,
+// with a 60s in-process cache. That cache is MODULE-level, so it outlives a test
+// FILE inside a vitest worker: a verdict this suite never asked for can be
+// waiting for it, cached by a suite that ran before it in the same process.
+// Resetting is the cheap half of the coupling; naming it here is the half that
+// stops the next reader debugging a phantom.
+import { resetAllowedOriginCache } from '@/lib/publicAddresses/allowedOrigins';
 import { proxy } from '@/proxy';
 
 // CROSS-ORIGIN ACCESS TO THE PUBLIC READ SURFACE (MOTIR-4114 ·
@@ -29,6 +36,7 @@ const request = (path: string, init?: { origin?: string; method?: string }) =>
 
 let previous: string | undefined;
 beforeEach(() => {
+  resetAllowedOriginCache();
   previous = process.env['MOTIR_PUBLIC_SITE_URL'];
   process.env['MOTIR_PUBLIC_SITE_URL'] = PUBLIC_ORIGIN;
 });
@@ -38,8 +46,8 @@ afterEach(() => {
 });
 
 describe('a request from the public site', () => {
-  it('is allowed, named exactly, and varies on Origin', () => {
-    const res = proxy(request('/api/public/p/ACME/items', { origin: PUBLIC_ORIGIN }));
+  it('is allowed, named exactly, and varies on Origin', async () => {
+    const res = await proxy(request('/api/public/p/ACME/items', { origin: PUBLIC_ORIGIN }));
 
     expect(res.headers.get('access-control-allow-origin')).toBe(PUBLIC_ORIGIN);
     // Without Vary, a shared cache can hand one origin's allow header to another.
@@ -47,8 +55,8 @@ describe('a request from the public site', () => {
     expect(res.headers.get('access-control-allow-credentials')).toBeNull();
   });
 
-  it('gets its PREFLIGHT answered here, without reaching a handler', () => {
-    const res = proxy(
+  it('gets its PREFLIGHT answered here, without reaching a handler', async () => {
+    const res = await proxy(
       request('/api/public/p/ACME/subscribe', { origin: PUBLIC_ORIGIN, method: 'OPTIONS' }),
     );
 
@@ -62,30 +70,30 @@ describe('a request from the public site', () => {
 });
 
 describe('any other origin', () => {
-  it("gets NO cors headers — refusal is the browser's job, not ours", () => {
+  it("gets NO cors headers — refusal is the browser's job, not ours", async () => {
     // Answering an explicit denial would be theatre: CORS is enforced in the
     // browser, and a non-browser caller sending no Origin is entitled to the
     // same public data.
-    const res = proxy(request('/api/public/explore', { origin: 'https://evil.example' }));
+    const res = await proxy(request('/api/public/explore', { origin: 'https://evil.example' }));
 
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
     expect(res.headers.get('access-control-allow-credentials')).toBeNull();
   });
 
-  it('a near-miss origin is refused — the check is equality, not a prefix', () => {
+  it('a near-miss origin is refused — the check is equality, not a prefix', async () => {
     for (const origin of [
       'https://motir.co.evil.test',
       'http://motir.co',
       'https://sub.motir.co',
       'https://motir.co:8443',
     ]) {
-      const res = proxy(request('/api/public/explore', { origin }));
+      const res = await proxy(request('/api/public/explore', { origin }));
       expect(res.headers.get('access-control-allow-origin')).toBeNull();
     }
   });
 
-  it('a preflight from a disallowed origin answers 204 with nothing to allow', () => {
-    const res = proxy(
+  it('a preflight from a disallowed origin answers 204 with nothing to allow', async () => {
+    const res = await proxy(
       request('/api/public/explore', { origin: 'https://evil.example', method: 'OPTIONS' }),
     );
 
@@ -94,8 +102,8 @@ describe('any other origin', () => {
     expect(res.headers.get('access-control-allow-methods')).toBeNull();
   });
 
-  it('a caller with NO Origin at all is untouched — curl, a crawler, a feed reader', () => {
-    const res = proxy(request('/api/public/p/ACME/changelog.xml'));
+  it('a caller with NO Origin at all is untouched — curl, a crawler, a feed reader', async () => {
+    const res = await proxy(request('/api/public/p/ACME/changelog.xml'));
 
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
     expect(res.status).toBe(200);
@@ -103,18 +111,21 @@ describe('any other origin', () => {
 });
 
 describe('what the CORS entry must NOT reach', () => {
-  it('does not put the sign-in bounce in front of any /api path', () => {
+  it('does not put the sign-in bounce in front of any /api path', async () => {
     // The hazard the matcher entry creates. Every other /api route answers its
     // own callers — the CLI, the MCP surface, the webhooks — and a 307 to a
     // sign-in page is not something any of them can read.
-    const res = proxy(request('/api/public/explore'));
+    const res = await proxy(request('/api/public/explore'));
 
     expect(res.status).toBe(200);
     expect(res.headers.get('location')).toBeNull();
   });
 
-  it('the CORS branch runs BEFORE the moved-surface redirect and the session bounce', () => {
-    const corsAt = proxySrc.indexOf('const cors = publicSurfaceCors(request)');
+  it('the CORS branch runs BEFORE the moved-surface redirect and the session bounce', async () => {
+    // `await` since MOTIR-4218 — the allow-list became a set read from the
+    // address store, so the branch is async. The ORDER is what this asserts and
+    // it is unchanged.
+    const corsAt = proxySrc.indexOf('const cors = await publicSurfaceCors(request)');
     const movedAt = proxySrc.indexOf('const moved = publicSiteRedirect(request)');
     const cookieAt = proxySrc.indexOf('const sessionCookie = getSessionCookie(request)');
 
@@ -129,7 +140,7 @@ describe('§4 — the session cookie is not widened, and this card did not widen
   // asserted HERE as well as in the auth suite: this is the card where the
   // pressure to widen arrives, because it is the card making a button work from
   // a page that cannot see the session.
-  it('the session cookie carries no Domain', () => {
+  it('the session cookie carries no Domain', async () => {
     const attributes = authSrc.slice(
       authSrc.indexOf('session_token:'),
       authSrc.indexOf('session_token:') + 600,
@@ -140,12 +151,12 @@ describe('§4 — the session cookie is not widened, and this card did not widen
     expect(attributes).not.toMatch(/\bdomain\s*:/i);
   });
 
-  it('nothing in the auth configuration enables cross-subdomain cookies', () => {
+  it('nothing in the auth configuration enables cross-subdomain cookies', async () => {
     expect(authSrc).not.toContain('crossSubDomainCookies');
     expect(authSrc).not.toMatch(/domain:\s*['"`]\./);
   });
 
-  it("and `sameSite: 'lax'` is what makes the hand-off necessary — not a preference", () => {
+  it("and `sameSite: 'lax'` is what makes the hand-off necessary — not a preference", async () => {
     // If this ever reads 'none', the hand-off in app/act/route.ts stops being
     // the only option and somebody will notice that a direct call now works.
     expect(authSrc).not.toContain("sameSite: 'none'");

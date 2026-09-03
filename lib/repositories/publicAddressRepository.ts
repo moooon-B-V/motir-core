@@ -85,9 +85,19 @@ export const publicAddressRepository = {
     });
   },
 
-  /** Every address belonging to one project (its customer domains). */
-  async listForProject(projectId: string): Promise<PublicAddress[]> {
-    return db.publicAddress.findMany({
+  /**
+   * Every address belonging to one project (its customer domains).
+   *
+   * Takes the caller's `tx`. Its consumer is the customer-domain lifecycle
+   * (MOTIR-4216), which always runs inside a bound workspace context — so this
+   * is a tenant read, not an anonymous one, and binding it is what makes the
+   * tenancy policy do the scoping instead of the `where` clause.
+   */
+  async listForProjectInTx(
+    projectId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<PublicAddress[]> {
+    return tx.publicAddress.findMany({
       where: { projectId },
       orderBy: { createdAt: 'asc' },
     });
@@ -181,13 +191,19 @@ export const publicAddressRepository = {
    * A NULL `last_checked_at` — never checked — sorts FIRST under Postgres's
    * `NULLS FIRST` for ascending order, which is what the job wants: a row nobody
    * has ever asked the platform about is the most urgent, not the least.
+   *
+   * Takes a `tx`: the sweep runs ACROSS tenants, so the job binds a system
+   * context for it. Left on the `db` singleton it would be an unbound read that
+   * the public arm silently narrows to public projects only — returning a
+   * plausible, wrong subset rather than failing.
    */
   async listByStatusOlderThan(
     status: PublicAddressStatus,
     before: Date,
     limit: number,
+    tx: Prisma.TransactionClient,
   ): Promise<PublicAddress[]> {
-    return db.publicAddress.findMany({
+    return tx.publicAddress.findMany({
       where: { status, OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lt: before } }] },
       orderBy: { lastCheckedAt: { sort: 'asc', nulls: 'first' } },
       take: limit,

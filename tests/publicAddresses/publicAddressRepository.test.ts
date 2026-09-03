@@ -294,10 +294,11 @@ describe('the job sweep read', () => {
       data: { lastCheckedAt: new Date(Date.now() - 60_000) },
     });
 
-    const due = await publicAddressRepository.listByStatusOlderThan(
-      'pending_certificate',
-      new Date(),
-      10,
+    // Bound: the sweep is cross-tenant, so the job binds a system context for
+    // it rather than reading unbound (where the public arm would silently
+    // narrow it to public projects and return a plausible, wrong subset).
+    const due = await db.$transaction((tx) =>
+      publicAddressRepository.listByStatusOlderThan('pending_certificate', new Date(), 10, tx),
     );
     expect(due.map((a) => a.hostname)).toEqual(['never.acme.example', 'old.acme.example']);
     expect(due[0]!.id).toBe(never.id);

@@ -88,7 +88,7 @@ export async function GET(req: Request) {
   // The destination is resolved BEFORE the session check, so that the sign-in
   // round trip cannot lose it and so that a hostile value is refused whether or
   // not the visitor happens to be signed in.
-  const returnTo = resolveHandoffDestination(url.searchParams.get('return') ?? undefined);
+  const returnTo = await resolveHandoffDestination(url.searchParams.get('return') ?? undefined);
 
   if (!isIntent(intent) || subject === null || subject.length === 0) {
     // A malformed hand-off is a person with a broken link, not an API client:

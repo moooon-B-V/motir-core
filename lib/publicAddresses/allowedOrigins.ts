@@ -1,5 +1,4 @@
 import { publicSiteOrigin } from '@/lib/publicProjects/urls';
-import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 
 // WHICH ORIGINS MAY ACT ON THE PUBLIC SURFACE — Story MOTIR-3878 · MOTIR-4218.
 //
@@ -89,6 +88,22 @@ async function computeAllowed(origin: string): Promise<boolean> {
   if (parsed.port !== '') return false;
   if (parsed.origin !== origin) return false;
 
+  // ⚠️ IMPORTED LAZILY, AND THIS IS A DESIGN CONSTRAINT RATHER THAN A STYLE
+  // CHOICE. The only caller of `publicCorsHeaders` is `proxy.ts` — Next's
+  // proxy, which runs on EVERY request the matcher covers. A static import of
+  // the repository puts the Prisma client in the proxy's import graph, so it is
+  // loaded on the hot path whether or not any origin is ever checked, and a
+  // process with no `DATABASE_URL` cannot even IMPORT the proxy.
+  //
+  // That is not hypothetical: `vitest.guards.config.ts` runs the matcher guard
+  // with no database on purpose, and a static import turned it from a passing
+  // structural check into `DATABASE_URL is not set` at import time. The lane
+  // caught the coupling before production did.
+  //
+  // Deferring it here costs one dynamic import on a CACHE MISS — the cold path,
+  // at most once per origin per minute — and keeps the database out of the
+  // proxy entirely for the configured-site case, which is every request today.
+  const { publicAddressRepository } = await import('@/lib/repositories/publicAddressRepository');
   const address = await publicAddressRepository.findByHostname(parsed.hostname);
   if (!address) return false;
   if (address.kind === 'workspace_subdomain') return true;
