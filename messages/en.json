@@ -953,14 +953,12 @@
       "jobRuns": "Job runs",
       "git": "Git",
       "github": "GitHub",
-      "docs": "Docs",
       "backlog": "Backlog",
       "triage": "Triage",
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
       "resumeOnboardingInProgress": "Resume onboarding, in progress",
-      "legal": "Legal",
       "security": "Security"
     },
     "topNav": {
@@ -1016,6 +1014,12 @@
       "platformAdmin": "Platform admin",
       "platformAdminHint": "Operator console · the whole estate",
       "staffOnly": "Staff only"
+    },
+    "help": {
+      "label": "Help",
+      "docs": "Docs",
+      "shortcuts": "Keyboard shortcuts",
+      "legal": "Legal documents"
     },
     "account": {
       "signOut": "Sign out",

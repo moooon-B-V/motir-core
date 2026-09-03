@@ -743,8 +743,9 @@ documentation, at a mirror of their own, or leave it unset and have no row. A
 relative value is REFUSED and logged at error level naming the variable, never
 rendered, because a relative path is precisely the defect this amendment
 removes. `tests/docs/docsLinks.test.ts` pins both arms and the refusal;
-`tests/components/SidebarNav-docs-door.test.tsx` pins the row;
-`design/shell/rail-bottom-section.mock.html` draws both arms.
+`tests/components/HelpMenu.test.tsx` pins the row (re-homed off the rail into
+the Help menu by MOTIR-4239); `design/shell/help-menu.mock.html` draws both
+arms.
 
 | Alternative                                                                 | Why rejected                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
