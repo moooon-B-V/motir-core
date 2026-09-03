@@ -152,7 +152,14 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // MERGE of the two resolved cleanly to a number that was wrong for both.
     // The count is derivable — `grep -c '^    cron:' lib/jobs/definitions/*.ts`
     // — so derive it rather than adding one to whatever the branch said.
-    expect(jobSchedules().length).toBe(20);
+    //
+    // 21 since `system.public-address-certificate-refresh` (MOTIR-4219), at
+    // `0,30 * * * *`. It is the first job to take BOTH clustered minutes, and it
+    // costs no new wake for exactly that reason. Its card asked for a
+    // five-minute cadence; §21's clustering does not sell one, and the job's own
+    // header records the trade it made instead (a thirty-minute backstop, with
+    // the pane's own *Check again* covering the customer who is watching).
+    expect(jobSchedules().length).toBe(21);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

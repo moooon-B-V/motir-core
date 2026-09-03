@@ -15,6 +15,7 @@ import type {
   PublicWorkItemListItemDto,
   PublicWorkItemTreeRowDto,
 } from '@/lib/dto/publicProjects';
+import type { PublicProjectAddressesDto } from '@/lib/dto/publicAddresses';
 import type {
   PublicChangelogRow,
   PublicRequestMatchRow,
@@ -141,6 +142,7 @@ export function toPublicProjectOverviewDto(
   workspaceName: string,
   stats: PublicProjectStatsDto,
   viewerCanManage: boolean,
+  addresses: PublicProjectAddressesDto,
 ): PublicProjectOverviewDto {
   return {
     id: project.id,
@@ -153,6 +155,10 @@ export function toPublicProjectOverviewDto(
     stats,
     links: toPublicProjectLinksDto(project),
     viewerCanManage,
+    // The canonical address and its alternates (Story MOTIR-3878 · the ADR §7).
+    // Resolved by the service — a project's addresses are rows in another table,
+    // not columns on this one, so the mapper stays a pure field-selector.
+    addresses,
   };
 }
 

@@ -18,9 +18,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Postgres in this same directory; this one owns none.
 
 const listPublicIndexPage = vi.hoisted(() => vi.fn());
+// MOTIR-4217 — each row now carries the HOST its canonical lives on, so the
+// service consults the address store. Mocked EMPTY here on purpose: this suite
+// owns the pager's arithmetic, and a project with no claimed address is the
+// case where `primaryHost` falls back to the default public host. The host
+// RULE itself is proved against a real Postgres in
+// `tests/publicAddresses/publicHostResolution.test.ts`.
+const listForWorkspaces = vi.hoisted(() => vi.fn(async () => []));
+const listPrimaryAddressIds = vi.hoisted(() => vi.fn(async () => new Map()));
 
 vi.mock('@/lib/repositories/projectRepository', () => ({
-  projectRepository: { listPublicIndexPage },
+  projectRepository: { listPublicIndexPage, listPrimaryAddressIds },
+}));
+vi.mock('@/lib/repositories/publicAddressRepository', () => ({
+  publicAddressRepository: { listForWorkspaces },
 }));
 
 const { publicProjectsService } = await import('@/lib/services/publicProjectsService');
@@ -32,6 +43,9 @@ const row = (n: number) => ({
   id: `cmt_${String(n).padStart(4, '0')}`,
   identifier: `P${n}`,
   updatedAt: new Date('2026-08-30T00:00:00.000Z'),
+  // MOTIR-4217 — the row carries its workspace so the canonical host can be
+  // resolved; a subdomain belongs to the workspace, not to the project.
+  workspaceId: 'ws_1',
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -58,6 +72,9 @@ describe('listPublicIndex', () => {
     expect(page.projects[0]).toEqual({
       identifier: 'P1',
       updatedAt: '2026-08-30T00:00:00.000Z',
+      // With no claimed address the canonical stays on the default public host,
+      // which is the ADR §7 rule's third branch.
+      primaryHost: 'localhost:3000',
     });
   });
 
@@ -116,6 +133,13 @@ describe('listPublicIndex', () => {
 
     const page = await publicProjectsService.listPublicIndex();
 
-    expect(Object.keys(page.projects[0] ?? {}).sort()).toEqual(['identifier', 'updatedAt']);
+    // Still the point: `id` is the CURSOR, never a field. `primaryHost` joins
+    // the row (MOTIR-4217) and `workspaceId` deliberately does NOT — it is an
+    // internal join key the crawl surface has no use for.
+    expect(Object.keys(page.projects[0] ?? {}).sort()).toEqual([
+      'identifier',
+      'primaryHost',
+      'updatedAt',
+    ]);
   });
 });

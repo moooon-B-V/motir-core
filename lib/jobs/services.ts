@@ -9,6 +9,7 @@ import { mentionNotificationsService } from '@/lib/services/mentionNotifications
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
 import { notificationFanInService } from '@/lib/services/notificationFanInService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
+import { publicAddressCertificatesService } from '@/lib/services/publicAddressCertificatesService';
 import { rateLimitService } from '@/lib/services/rateLimitService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { publicFollowDigestService } from '@/lib/services/publicFollowDigestService';
@@ -59,6 +60,7 @@ export const jobServices = {
   watcherNotifications: watcherNotificationsService,
   notificationFanIn: notificationFanInService,
   attachments: attachmentsService,
+  publicAddressCertificates: publicAddressCertificatesService,
   rateLimit: rateLimitService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
   publicFollowDigest: publicFollowDigestService,

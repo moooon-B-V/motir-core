@@ -262,7 +262,15 @@ describe("each new read's real response validates against the SERVED document", 
 
   it('GET /api/public/projects', async () => {
     listPublicIndex.mockResolvedValue({
-      projects: [{ identifier: 'ACME', updatedAt: '2026-08-30T00:00:00.000Z' }],
+      projects: [
+        {
+          identifier: 'ACME',
+          updatedAt: '2026-08-30T00:00:00.000Z',
+          // MOTIR-4217 — the canonical HOST per row. Required by the served
+          // document, so a fixture without it no longer validates.
+          primaryHost: 'motir.co',
+        },
+      ],
       nextCursor: null,
     });
 

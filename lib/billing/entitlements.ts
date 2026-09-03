@@ -35,7 +35,12 @@ export type EntitlementKind =
   | 'workspaces'
   | 'organizations'
   | 'file_size'
-  | 'storage';
+  | 'storage'
+  /** A customer-owned domain for a public project (Story MOTIR-3878 ·
+   *  `docs/decisions/public-tenant-addresses.md` §9). The TENANT SUBDOMAIN is
+   *  free on every tier and has no kind here — only the customer domain is
+   *  gated, which is what every mirror in the category does. */
+  | 'custom_domains';
 
 /** One tier's §4 caps. `null` = unlimited (the cap does not apply). */
 export interface PmEntitlements {
@@ -51,6 +56,11 @@ export interface PmEntitlements {
   /** Total org storage in bytes — SUM(Attachment.sizeBytes) (§4.3b). `null` =
    *  unlimited (enterprise custom). */
   maxTotalStorageBytes: number | null;
+  /** Max CUSTOM DOMAINS across the org (`public-tenant-addresses.md` §9).
+   *  `null` = unlimited. `0` is a real value and the free tier's: the assert
+   *  refuses the FIRST domain, which is what makes the refusal the upgrade
+   *  prompt's trigger rather than a special-cased empty state. */
+  maxCustomDomains: number | null;
 }
 
 const MB = 1024 * 1024;
@@ -70,6 +80,9 @@ export const PM_ENTITLEMENTS: Record<PmTier, PmEntitlements> = {
     maxWorkspaces: 1,
     maxUploadBytes: 10 * MB,
     maxTotalStorageBytes: 2 * GB,
+    // Seed policy owned by `billing-tiering.md` §4 — the ADR's provisional
+    // value. Zero, so the first custom domain is the one that prompts.
+    maxCustomDomains: 0,
   },
   scaled: {
     maxWorkItems: null,
@@ -77,6 +90,8 @@ export const PM_ENTITLEMENTS: Record<PmTier, PmEntitlements> = {
     maxWorkspaces: null,
     maxUploadBytes: 100 * MB,
     maxTotalStorageBytes: 100 * GB,
+    // Seed policy owned by `billing-tiering.md` §4 — the ADR's provisional value.
+    maxCustomDomains: 5,
   },
   enterprise: {
     maxWorkItems: null,
@@ -84,6 +99,8 @@ export const PM_ENTITLEMENTS: Record<PmTier, PmEntitlements> = {
     maxWorkspaces: null,
     maxUploadBytes: 100 * MB,
     maxTotalStorageBytes: null,
+    // Seed policy owned by `billing-tiering.md` §4 — the ADR's provisional value.
+    maxCustomDomains: null,
   },
   // The INTERNAL dogfood tier (moooon B.V., the meta org) — every cap lifted.
   // Kept as its OWN row (not an alias of `enterprise`) so the two can diverge:
@@ -97,6 +114,8 @@ export const PM_ENTITLEMENTS: Record<PmTier, PmEntitlements> = {
     maxWorkspaces: null,
     maxUploadBytes: 100 * MB,
     maxTotalStorageBytes: null,
+    // Seed policy owned by `billing-tiering.md` §4 — the ADR's provisional value.
+    maxCustomDomains: null,
   },
 };
 

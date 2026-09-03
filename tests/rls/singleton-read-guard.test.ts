@@ -107,6 +107,61 @@ type Verdict =
 // ceiling below survives at 0 as the runtime half of the same guarantee.
 
 const VERDICTS: Record<string, readonly [Verdict, string]> = {
+  // ── the PUBLIC ADDRESS surface (Story MOTIR-3878) ─────────────────────────
+  // Eight unbound reads, all on the ANONYMOUS host-resolution path, and every
+  // one of them earns the `public` verdict the hard way: the policy exists AND a
+  // test has watched it work with no GUC bound.
+  //
+  // The policies: `public_address_public_read` (20260903010000_add_public_address)
+  // admits an address row only when what it POINTS AT is public — its own
+  // project for a custom domain, or a workspace holding at least one public
+  // project for a subdomain. `project_public_read` (20260811230000) and
+  // `workspace_public_project_read` (20260815200000) admit the two rows it then
+  // joins to. All three are SELECT-only arms gated on an UNSET `app.workspace_id`,
+  // so none of them widens an ordinary bound tenant read.
+  //
+  // The tests that watched them: `tests/publicAddresses/publicAddressRepository.test.ts`
+  // (the arm proved in BOTH directions under `SET LOCAL ROLE motir_app` —
+  // admits a public project's address, refuses a private one's, and follows the
+  // project when its access level changes) and
+  // `tests/publicAddresses/publicHostResolution.test.ts` (the same properties
+  // through the service, including a workspace with no public project).
+  //
+  // ⚠️ These reads are unbound BECAUSE binding would presume the answer: the
+  // whole question host resolution asks is WHICH TENANT a hostname belongs to.
+  'publicAddressRepository.ts#findByHostname': [
+    'public',
+    'public_address_public_read (20260903010000) · publicAddressRepository.test "the public read arm" (5 cases, both directions under SET LOCAL ROLE motir_app) + publicHostResolution.test',
+  ],
+  'publicAddressRepository.ts#findLiveSubdomainForWorkspacePublic': [
+    'public',
+    'public_address_public_read (20260903010000) · publicHostResolution.test "a retired subdomain reports where to redirect" — the alias hop',
+  ],
+  'publicAddressRepository.ts#listForWorkspace': [
+    'public',
+    'public_address_public_read (20260903010000) · publicHostResolution.test "addressesForProject — the ADR §7 default rule" (6 cases)',
+  ],
+  'publicAddressRepository.ts#listForWorkspaces': [
+    'public',
+    'public_address_public_read (20260903010000) · publicHostResolution.test "primaryHostsForProjects — the batched crawl read" (3 cases)',
+  ],
+  'projectRepository.ts#listPublicByWorkspace': [
+    'public',
+    'project_public_read (20260811230000) · publicHostResolution.test "a workspace subdomain lists that workspace\u2019s public projects" + "a subdomain whose workspace holds NO public project"',
+  ],
+  'projectRepository.ts#findPublicByIdInternal': [
+    'public',
+    'project_public_read (20260811230000) · publicHostResolution.test "a customer domain whose project is not public" — the policy supplies the accessLevel filter this read deliberately omits',
+  ],
+  'projectRepository.ts#findWorkspaceNameForPublic': [
+    'public',
+    'workspace_public_project_read (20260815200000) · publicHostResolution.test "a subdomain whose workspace holds NO public project"',
+  ],
+  'projectRepository.ts#listPrimaryAddressIds': [
+    'public',
+    'project_public_read (20260811230000) · publicHostResolution.test "primaryHostsForProjects … agrees with addressesForProject"',
+  ],
+
   // ── pre-auth: the shared rate limiter ─────────────────────────────────────
   // The surfaces it protects — sign-in, sign-up, password reset, public writes —
   // are limited BEFORE any workspace is known, which is why the table is in

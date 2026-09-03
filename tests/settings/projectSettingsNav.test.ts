@@ -134,7 +134,14 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
       .entries.map((e) => e.id);
     // MOTIR-4243 seats **Public page** directly under Members & access — the
     // room that owns the public concerns and the row a reader arrives from.
-    expect(accessIds).toEqual(['members', 'public-page', 'roles', 'code-access']);
+    //
+    // MOTIR-4221 seats **Public address** directly under THAT, which is the
+    // order `design/projects/design-notes.md` § *Public address* draws and NOT
+    // the one its own card asked for: the card says "between Members & access
+    // and Roles", and that slot was taken by Public page while the story was in
+    // flight. Two public rooms either side of one door is the coherent shape,
+    // and the asset reading beats the card text.
+    expect(accessIds).toEqual(['members', 'public-page', 'public-address', 'roles', 'code-access']);
   });
 
   it('has no duplicate hrefs and no duplicate ids', () => {
@@ -480,6 +487,16 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
   automation: {
     permission: 'automation:manage',
     source: 'lib/services/automationRulesService.ts',
+    gate: 'assertPermission',
+  },
+  // MOTIR-4221 — the Public address room. Its writes live in the customer-domain
+  // lifecycle, which asserts `project:manage_access` on add / verify / remove /
+  // makePrimary / clearPrimary. The room's OTHER half (the workspace subdomain)
+  // is gated on the workspace ROLE, an axis the registry cannot express — see the
+  // entry's own comment for why the project key is the honest one for the rail.
+  'public-address': {
+    permission: 'project:manage_access',
+    source: 'lib/services/customDomainService.ts',
     gate: 'assertPermission',
   },
 };

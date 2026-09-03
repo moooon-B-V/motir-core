@@ -14,6 +14,7 @@ import {
   publicRequestResultSchema,
   publicAtomDocumentSchema,
   publicBoardSchema,
+  publicHostResolutionSchema,
   publicProjectIndexPageSchema,
   publicRequestDetailSchema,
   publicRoadmapColumnPageSchema,
@@ -238,6 +239,36 @@ export const PUBLIC_OPERATIONS: readonly PublicOperation[] = [
       },
     ],
     response: publicProjectIndexPageSchema,
+    errors: [],
+  },
+  {
+    method: 'GET',
+    path: '/api/public/hosts/{host}',
+    operationId: 'resolvePublicHost',
+    summary: 'Resolve a HOST to the tenant content served at it',
+    description:
+      'Turns a `Host` header into what should be rendered at it — the one read a renderer makes ' +
+      'before a page exists. Answers one of three shapes: a WORKSPACE subdomain (its public ' +
+      "projects, listed at the root), an ALIAS (a renamed-away-from subdomain, to be 301'd), or " +
+      'a customer DOMAIN serving one project at its root. ' +
+      '**Every other case is the same 404** — an unknown host, a customer domain whose ' +
+      'certificate has not issued, the base domain itself, and `motir.co`. That is deliberate: a ' +
+      'caller must not be able to tell "no such tenant" from "a tenant exists but is not serving ' +
+      'yet", because that difference is what would make walking hostnames worth doing. ' +
+      'Anonymous, and no session could change the answer — every address it can resolve points ' +
+      "at a public project by the read's own row-level filter (MOTIR-4217).",
+    parameters: [
+      {
+        name: 'host',
+        in: 'path',
+        required: true,
+        description:
+          'The bare hostname, e.g. `acme.motir.site`. A port is stripped; a value carrying a ' +
+          'scheme, a path or credentials is refused rather than repaired.',
+        schema: z.string(),
+      },
+    ],
+    response: publicHostResolutionSchema,
     errors: [],
   },
   {

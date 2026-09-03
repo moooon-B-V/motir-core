@@ -1066,6 +1066,11 @@ model Workspace {
   // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
   // Cascade with the workspace (a deleted workspace frees its keys).
   projectKeyAliases           ProjectKeyAlias[]
+  /// Every public address in this workspace (Story MOTIR-3878) — its subdomain,
+  /// its retained aliases, and every customer domain of every project under it.
+  /// `workspaceId` is denormalized onto every row so the RLS tenancy gate is a
+  /// direct comparison with no join, the same pattern `project_key_alias` uses.
+  publicAddresses             PublicAddress[]
   comments                    Comment[]
   // Work-item to-do rows (Story MOTIR-3808 · MOTIR-3813). Tenanted on the ROW,
   // the `comments` shape — a direct child of `work_item` carries its own
@@ -1547,9 +1552,37 @@ model Project {
   /// a run's whole meaning is the cards it worked, which go with the project.
   dispatchRuns                DispatchRun[]
 
+  /// The addresses this project answers on, and which one is CANONICAL
+  /// (Story MOTIR-3878 · `docs/decisions/public-tenant-addresses.md`).
+  ///
+  /// `publicAddresses` are the project's OWN addresses — customer domains, each
+  /// serving this project at its root (ADR §4). A WORKSPACE subdomain is not
+  /// here: it belongs to the workspace and every public project under it answers
+  /// beneath it, so its row hangs off `Workspace` with a null `projectId`.
+  ///
+  /// `primaryAddress` is the ADR §7 canonical rule expressed as a CONSTRAINT
+  /// rather than a convention: one nullable FK cannot point at two rows, so
+  /// "exactly one primary" is unrepresentable-otherwise instead of enforced by a
+  /// check somebody has to remember to write. NULL means the default rule
+  /// applies — the workspace subdomain path when one is claimed, else
+  /// `motir.co/p/<identifier>`.
+  ///
+  /// `SetNull` on the primary, `Cascade` on the list: removing the address a
+  /// project is canonical at must NOT delete the project, it must fall back to
+  /// the default; deleting the project takes its addresses with it.
+  primaryAddressId String?         @map("primary_address_id")
+  primaryAddress   PublicAddress?  @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
+  publicAddresses  PublicAddress[] @relation("ProjectPublicAddresses")
+
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
+  /// `public_address.id` is SET NULL when the address is removed, so the delete
+  /// scans `project` for referencing rows. Declared here as well as in the
+  /// migration because a database index the datamodel does not carry is exactly
+  /// the drift `CLAUDE.md`'s migration rules describe — the `build` job's
+  /// `prisma migrate diff` assertion caught this one before it shipped.
+  @@index([primaryAddressId])
   // pg_trgm GIN over the public-project DIRECTORY's free-text contains-match
   // columns (Story 6.13 · Subtask 6.13.3, finding #57): the project-square
   // search compiles to ILIKE '%…%' over the project `name` + the public
@@ -8596,4 +8629,132 @@ enum DispatchEventKind {
   plan_submitted
 
   @@map("dispatch_event_kind")
+}
+
+/// ═══════════════════════════════════════════════════════════════════════════
+/// PUBLIC ADDRESSES — Story MOTIR-3878 · Subtask MOTIR-4209
+/// `docs/decisions/public-tenant-addresses.md` is the record; this model is its
+/// §3 / §4 / §7 / §8 answers expressed as a table.
+/// ═══════════════════════════════════════════════════════════════════════════
+
+/// WHAT an address is. The ADR gives an address exactly two shapes (§3, §4), and
+/// the alias is the third row-kind the never-released rename needs (§8):
+///
+///   * `workspace_subdomain`       — `<label>.<base>`, owned by the WORKSPACE.
+///                                   Every public project under it answers at
+///                                   `<label>.<base>/<identifier>`. Exactly one
+///                                   live per workspace; `projectId` is NULL.
+///   * `workspace_subdomain_alias` — a label renamed away from. Kept FOR EVER,
+///                                   always a redirect, never released (§8).
+///                                   Also owned by the workspace.
+///   * `custom_domain`             — a hostname the customer owns, serving ONE
+///                                   project at its root (§4). `projectId` set.
+///
+/// The two owning shapes are why `projectId` is nullable and `workspaceId` is
+/// not: a subdomain has no project, and every row has a workspace.
+enum PublicAddressKind {
+  workspace_subdomain
+  workspace_subdomain_alias
+  custom_domain
+}
+
+/// WHERE an address is in its life. This enum IS the state checklist every later
+/// card works from — the certificates adapter (MOTIR-4210) maps Fly's `check`
+/// response onto it, the lifecycle (MOTIR-4216) drives the transitions, the job
+/// (MOTIR-4219) refreshes it from the platform, and the pane (MOTIR-4229) draws
+/// one row per value. **Add nothing the ADR did not name, and drop nothing** —
+/// `design/projects/public-address.mock.html` panel 5 draws all nine, and a
+/// tenth value would ship a state with no drawn meaning and no offered action.
+///
+/// Two are subdomain states and seven are customer-domain states; nothing
+/// enforces that split in the type, so the repository's create methods are what
+/// keep a subdomain out of `pending_certificate`.
+enum PublicAddressStatus {
+  /// A workspace subdomain that resolves and serves. Covered by the wildcard
+  /// `*.<base>` certificate (ADR §6), so claiming one issues nothing.
+  active
+  /// A retired subdomain label. Redirects to the live one, permanently.
+  alias
+  /// Added; the `_motir-verify` TXT has not been seen. No certificate requested
+  /// — the ADR §5 order is strict about this, and it is a security property
+  /// rather than a nicety: a certificate must never be requested for a hostname
+  /// whose owner has not proven write access to the zone.
+  unverified
+  /// The TXT lookup is in flight.
+  verifying
+  /// Ownership proven; the certificate has been requested from Fly.
+  pending_certificate
+  /// The certificate is live and the domain serves. Fly renews it; we surface it.
+  issued
+  /// Issuance failed. `failureReason` is ALWAYS set alongside — a `failed` with
+  /// no reason is not something a customer can act on.
+  failed
+  /// The certificate lapsed and renewal did not succeed.
+  expired
+  /// The certificate was withdrawn.
+  revoked
+}
+
+/// ONE address, of either shape (ADR §3, §4). A project has many; a workspace
+/// has many.
+///
+/// ── `hostname` is GLOBALLY unique, and that is the whole concurrency story ──
+///
+/// Not `@@unique([workspaceId, hostname])`: a hostname resolves to exactly one
+/// owner on the public internet, so two workspaces claiming one name is not a
+/// tenancy question, it is an impossibility. The global unique is therefore both
+/// the correctness constraint AND the race arbiter — two concurrent claims of
+/// one label produce one winner and one `P2002`, which the repository rethrows
+/// as a typed `HostnameTakenError` (the `IdentifierTakenError` precedent in
+/// `projectsService.changeKey`). There is no count-then-write to lose.
+///
+/// It is also what makes §8's never-released rule hold with no extra machinery:
+/// a retired label keeps its row, the row keeps the name, and nobody else can
+/// take it. Exactly the shape `ProjectKeyAlias` uses one level down, where
+/// `@@unique([workspaceId, identifier])` reserves a retired project key against
+/// the live namespace.
+///
+/// ── `workspaceId` is denormalized, deliberately ──
+///
+/// Every row carries it, including a `custom_domain` whose project already
+/// implies it, so the RLS tenancy gate is a direct
+/// `workspace_id = app.workspace_id` comparison with no join — the pattern
+/// `project_membership`, `work_item` and `project_key_alias` all use.
+model PublicAddress {
+  id                String              @id @default(cuid())
+  workspaceId       String              @map("workspace_id")
+  /// NULL for a subdomain (it names the workspace); set for a customer domain
+  /// (it names one project).
+  projectId         String?             @map("project_id")
+  hostname          String              @unique
+  kind              PublicAddressKind
+  status            PublicAddressStatus
+  /// The `_motir-verify.<host>` TXT value. Custom domains only — a subdomain of
+  /// our own base needs no ownership proof.
+  verificationToken String?             @map("verification_token")
+  /// When the platform was last asked about this address (MOTIR-4219). Also the
+  /// job's sweep cursor, which is why it is half of an index.
+  lastCheckedAt     DateTime?           @map("last_checked_at")
+  issuedAt          DateTime?           @map("issued_at")
+  /// Always set when `status` is `failed` — see the enum's note.
+  failureReason     String?             @map("failure_reason")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?  @relation("ProjectPublicAddresses", fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// The back-relation of `Project.primaryAddress`. Modelled on BOTH sides per
+  /// the FK-`@relation` rule in `CLAUDE.md`: a raw-SQL-only FK puts the schema
+  /// graph and the migration-built database in permanent drift, and every later
+  /// `migrate dev` then re-proposes dropping it.
+  primaryOf Project[] @relation("ProjectPrimaryAddress")
+
+  @@index([workspaceId])
+  @@index([projectId])
+  /// The certificate job's sweep (MOTIR-4219): "every address in state X not
+  /// checked since T". Both columns, in that order, because the job filters on
+  /// the state and orders on the clock.
+  @@index([status, lastCheckedAt])
+  @@map("public_address")
 }

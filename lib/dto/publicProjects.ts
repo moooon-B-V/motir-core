@@ -1,3 +1,4 @@
+import type { PublicProjectAddressesDto } from '@/lib/dto/publicAddresses';
 // DTOs for the PUBLIC project surfaces (Story 6.12).
 //
 // Two concerns live here, both wire-safe (no Prisma row crosses the boundary;
@@ -82,6 +83,16 @@ export interface PublicProjectIndexEntryDto {
   identifier: string;
   /** ISO 8601 — the sitemap's `<lastmod>`. */
   updatedAt: string;
+  /**
+   * The HOST this project's canonical address lives on (Story MOTIR-3878).
+   *
+   * A sitemap may list only URLs on its own host, so `motir.co`'s sitemap omits
+   * a project whose canonical has moved to a tenant or customer host, and that
+   * host's own sitemap lists it instead. Without this the crawl surface would
+   * either duplicate every relocated project across two sitemaps or drop it
+   * from both.
+   */
+  primaryHost: string;
 }
 
 /** One page of the public-project index. `nextCursor` is null on the last page. */
@@ -414,6 +425,15 @@ export interface PublicProjectOverviewDto {
    * the edit ability never leaks to a non-admin.
    */
   viewerCanManage: boolean;
+  /**
+   * The project's canonical address and every alternate (Story MOTIR-3878 · the
+   * ADR §7). `primary` is what the renderer names in its canonical, `og:url`,
+   * JSON-LD `@id`, sitemap entry and feed; each `alternates` entry 301s to it.
+   *
+   * Always present, and `primary` is never empty: a project that has claimed no
+   * address still has `motir.co/p/<identifier>`.
+   */
+  addresses: PublicProjectAddressesDto;
 }
 
 // --- Public REQUEST DETAIL (6.12.12) ---------------------------------------

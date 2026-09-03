@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { renderAtomFeed } from '@/lib/publicProjects/atomFeed';
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 
@@ -66,7 +65,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ identif
     throw err;
   }
 
-  const base = publicProjectUrl(feed.project.identifier);
+  // ⚠️ THE PROJECT'S PRIMARY ADDRESS, NOT `publicProjectUrl()` (MOTIR-4222).
+  // Once a project's canonical lives on a customer domain, a feed whose every
+  // link named `motir.co/p/<id>` would advertise the address that redirects
+  // rather than the one that serves — in the one document that outlives every
+  // redirect, because it is copied into a reader and polled for years. The ADR
+  // §7 rung-1 note is explicit that the primary is "the address the product
+  // itself emits everywhere", and a feed is the product emitting addresses.
+  //
+  // `canonicalBase` never varies by host: the document is built once and
+  // `motir.co` forwards its bytes unchanged, so `rel="self"` is one stable URL
+  // whichever address a reader fetched it from — which is what lets a reader
+  // dedupe two subscriptions to one feed.
+  const base = feed.canonicalBase;
   const body = renderAtomFeed({
     projectIdentifier: feed.project.identifier,
     projectName: feed.project.name,

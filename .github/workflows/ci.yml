@@ -423,6 +423,19 @@ jobs:
       # Prisma client is generated, not committed — typecheck needs it.
       - run: pnpm prisma generate
         if: steps.cache-prisma-typecheck.outputs.cache-hit != 'true'
+      # ⚠️ THE HEAP IS RAISED IN THE `typecheck` SCRIPT (MOTIR-3878, 2026-09-03),
+      # for the reason the `build` job's comment below gives for `next build`,
+      # and this job crossed the same edge a story later. Measured on one box,
+      # same toolchain, same node_modules, `tsc --noEmit --extendedDiagnostics`
+      # used 4.19GB on `main` — node's default old-space is ~4.1GB — and 5.08GB
+      # with MOTIR-3878 on top: ONE Prisma model and 52 files, whose own check
+      # time is 1.7s of 98s. The tree had grown to the edge; the next story to
+      # add a model would have crossed it whichever one that was. The failure
+      # reads `Ineffective mark-compacts near heap limit` with no file named —
+      # a real type error prints the file and the diagnostic. Set in the script
+      # rather than as `env:` here so a local `pnpm typecheck` gets it too;
+      # package.json cannot carry a comment, which is why the reasoning lives
+      # at this call site.
       - run: pnpm typecheck
 
   design-system:
@@ -636,12 +649,15 @@ jobs:
       # 54 added files. The tree had simply grown to the edge, and the next story
       # to land would have crossed it whichever one that was.
       #
-      # The `typecheck` job above is the tell: it runs the SAME `tsc --noEmit`
-      # and passes, because it pays for the type check alone. Only the build pays
-      # for both, so only the build needed the ceiling raised. It is set in the
-      # `build` script rather than as `env:` here so that Vercel — which runs
-      # that script too — gets it as well; package.json cannot carry a comment,
-      # which is why the reasoning lives at this call site.
+      # The `typecheck` job above WAS the tell: it runs the SAME `tsc --noEmit`
+      # and passed, because it pays for the type check alone. Only the build
+      # paid for both, so only the build needed the ceiling raised — until
+      # MOTIR-3878 (2026-09-03), when the check alone reached the default heap
+      # and that job's script took the same ceiling; its comment carries the
+      # numbers. It is set in the `build` script rather than as `env:` here so
+      # that Vercel — which runs that script too — gets it as well;
+      # package.json cannot carry a comment, which is why the reasoning lives
+      # at this call site.
       - run: pnpm build
       # MOTIR-3219 — the WHOLE-PROJECT-TRACE gate. Turbopack traces each server
       # entry's files into a `*.nft.json`, and `copyTracedFiles` ships exactly

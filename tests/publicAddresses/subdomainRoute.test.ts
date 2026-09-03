@@ -1,0 +1,161 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  HostnameTakenError,
+  NoSubdomainClaimedError,
+  ReservedLabelError,
+  SubdomainForbiddenError,
+  SubdomainRenameCapReachedError,
+  WorkspaceNotVisibleError,
+} from '@/lib/publicAddresses/errors';
+import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDomain';
+
+// THE SUBDOMAIN ROUTE (Story MOTIR-3878 · MOTIR-4223, over MOTIR-4215's route).
+//
+// ⚠️ ANOTHER FILE AT 0%. The gate's coverage pass found this route untested
+// alongside the four lifecycle ones — and it is the one carrying the story's
+// most unusual decision: ONE verb that CLAIMS or RENAMES depending on server
+// state. That branch cannot be tested from the service, which keeps the two
+// acts distinct internally; only the route decides which one a `PUT` becomes.
+
+const getForWorkspace = vi.fn();
+const claim = vi.fn();
+const rename = vi.fn();
+vi.mock('@/lib/services/publicSubdomainService', () => ({
+  publicSubdomainService: { getForWorkspace, claim, rename },
+  roleMayManageAddress: () => true,
+}));
+
+const getWorkspaceContext = vi.fn();
+vi.mock('@/lib/workspaces', () => ({ getWorkspaceContext }));
+
+const refuseIfNonCompliant = vi.fn();
+vi.mock('@/lib/auth/requireCompliantSession', () => ({ refuseIfNonCompliant }));
+
+const { GET, PUT } = await import('@/app/api/workspaces/[workspaceId]/public-subdomain/route');
+
+const CTX = { userId: 'u_1', workspaceId: 'ws_1' };
+const params = { params: Promise.resolve({ workspaceId: 'ws_1' }) };
+const put = (body?: unknown) =>
+  new Request('https://app.motir.co/x', {
+    method: 'PUT',
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+
+const DTO = {
+  label: 'acme',
+  hostname: 'acme.motir.site',
+  url: 'https://acme.motir.site',
+  claimedAt: '2026-09-01T00:00:00.000Z',
+  aliases: [],
+  renamesLeft: 5,
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  getWorkspaceContext.mockResolvedValue(CTX);
+  refuseIfNonCompliant.mockResolvedValue(null);
+});
+
+describe('GET', () => {
+  it('answers the DTO, and `null` for a workspace that has never claimed one', async () => {
+    // ⚠️ `null` IS AN ANSWER, NOT AN ABSENCE. The pane renders its unclaimed
+    // state from it; a 404 here would make "no subdomain yet" look like "no such
+    // workspace", which is a different thing with a different next action.
+    getForWorkspace.mockResolvedValue(null);
+    const res = await GET(new Request('https://app.motir.co/x'), params);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toBeNull();
+  });
+
+  it('401s with no session and asks the service nothing', async () => {
+    getWorkspaceContext.mockResolvedValue(null);
+    expect((await GET(new Request('https://app.motir.co/x'), params)).status).toBe(401);
+    expect(getForWorkspace).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT — ONE verb, two acts, decided by server state', () => {
+  it('CLAIMS with 201 when the workspace has none', async () => {
+    getForWorkspace.mockResolvedValue(null);
+    claim.mockResolvedValue(DTO);
+
+    const res = await PUT(put({ label: 'acme' }), params);
+
+    expect(res.status).toBe(201);
+    expect(claim).toHaveBeenCalledWith('ws_1', 'acme', 'u_1');
+    expect(rename).not.toHaveBeenCalled();
+  });
+
+  it('RENAMES with 200 when it already has one', async () => {
+    // The status code is the observable difference, and it is the honest one: a
+    // rename creates nothing.
+    getForWorkspace.mockResolvedValue(DTO);
+    rename.mockResolvedValue({ ...DTO, label: 'acme-inc' });
+
+    const res = await PUT(put({ label: 'acme-inc' }), params);
+
+    expect(res.status).toBe(200);
+    expect(rename).toHaveBeenCalledWith('ws_1', 'acme-inc', 'u_1');
+    expect(claim).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body with no label before deciding anything', async () => {
+    for (const body of [{}, { label: 42 }, 'nope']) {
+      expect((await PUT(put(body), params)).status).toBe(400);
+    }
+    expect(
+      (await PUT(new Request('https://app.motir.co/x', { method: 'PUT', body: '{' }), params))
+        .status,
+    ).toBe(400);
+    expect(getForWorkspace).not.toHaveBeenCalled();
+  });
+
+  it('is held by the compliance gate before it reads anything', async () => {
+    refuseIfNonCompliant.mockResolvedValue(new Response(null, { status: 451 }));
+    expect((await PUT(put({ label: 'acme' }), params)).status).toBe(451);
+    expect(getForWorkspace).not.toHaveBeenCalled();
+  });
+});
+
+describe('the mapper, on this surface', () => {
+  it.each([
+    [new WorkspaceNotVisibleError(), 404],
+    [new SubdomainForbiddenError(), 403],
+    [new HostnameTakenError('acme.motir.site'), 409],
+    [new NoSubdomainClaimedError(), 409],
+    [new ReservedLabelError('admin', 'reserved'), 422],
+    [new SubdomainRenameCapReachedError(5, 5), 422],
+    // An OPERATOR problem, never the caller's — and the one case here where
+    // retrying later may work.
+    [new TenantDomainNotConfiguredError(), 503],
+  ])('%s', async (error, status) => {
+    getForWorkspace.mockRejectedValue(error);
+    const res = await GET(new Request('https://app.motir.co/x'), params);
+    expect(res.status).toBe(status);
+    expect(await res.json()).toHaveProperty('code');
+  });
+
+  it('carries the REFUSAL DISCRIMINATOR out to the caller', async () => {
+    // The pane maps `refusal` to completely different copy — telling someone
+    // `Admin` is "reserved" sends them looking for a name they do not need.
+    // Dropping it at the route would make the wire honest and the pane wrong.
+    getForWorkspace.mockRejectedValue(new ReservedLabelError('Admin', 'bad_grammar'));
+    const res = await GET(new Request('https://app.motir.co/x'), params);
+    expect(await res.json()).toMatchObject({ code: 'RESERVED_LABEL', refusal: 'bad_grammar' });
+  });
+
+  it('and the CAP refusal carries the numbers the pane shows', async () => {
+    getForWorkspace.mockRejectedValue(new SubdomainRenameCapReachedError(5, 5));
+    expect(await (await GET(new Request('https://app.motir.co/x'), params)).json()).toMatchObject({
+      used: 5,
+      cap: 5,
+    });
+  });
+
+  it('rethrows what it does not know, so a real fault is a real 500', async () => {
+    getForWorkspace.mockRejectedValue(new Error('the database fell over'));
+    await expect(GET(new Request('https://app.motir.co/x'), params)).rejects.toThrow(
+      'the database fell over',
+    );
+  });
+});

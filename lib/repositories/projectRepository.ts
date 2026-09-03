@@ -312,6 +312,74 @@ export const projectRepository = {
    * Ordered by `updatedAt` desc so the freshest public projects lead the
    * sitemap. Returns only the columns the sitemap needs.
    */
+  /**
+   * Every PUBLIC, non-archived project in ONE workspace — what a workspace
+   * subdomain's root lists (MOTIR-4217; the ADR §3 rule that
+   * `<workspace>.<base>/` lists that workspace's public projects).
+   *
+   * Anonymous: the `db` singleton with no workspace bound, admitted by
+   * `project_public_read`. A workspace whose projects are all private answers
+   * with an EMPTY list rather than an error — which is the honest answer and is
+   * also what keeps the host resolution from leaking whether the workspace
+   * exists.
+   */
+  /**
+   * One project by id, for a path that has ALREADY established the caller may
+   * see it — host resolution (MOTIR-4217), which got here by resolving a
+   * `public_address` row that RLS admitted only because the project is public.
+   *
+   * ⚠️ It carries no `accessLevel` filter of its own, and that is why the name
+   * says `Internal`. It is not a public-by-key lookup: the gate ran one step
+   * earlier, on the address. Do not reach for this from a path that has not
+   * already passed one — `findPublicByIdentifier` is the gated read.
+   */
+  async findPublicByIdInternal(
+    id: string,
+  ): Promise<Pick<Project, 'identifier' | 'name' | 'primaryAddressId'> | null> {
+    return db.project.findFirst({
+      where: { id, archivedAt: null },
+      select: { identifier: true, name: true, primaryAddressId: true },
+    });
+  },
+
+  /**
+   * The workspace's display NAME, for a subdomain root that lists its projects.
+   * Anonymous — admitted by `workspace_public_project_read`, which requires the
+   * workspace to hold at least one public project, so a workspace with none
+   * answers `null` and the host 404s.
+   */
+  /**
+   * `primaryAddressId` for several projects at once — the batch companion to
+   * {@link findPublicByIdInternal}, for the crawl index (MOTIR-4217). Absent
+   * keys mean the project has promoted no custom domain.
+   */
+  async listPrimaryAddressIds(ids: readonly string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await db.project.findMany({
+      where: { id: { in: [...ids] }, primaryAddressId: { not: null } },
+      select: { id: true, primaryAddressId: true },
+    });
+    return new Map(rows.map((r) => [r.id, r.primaryAddressId as string]));
+  },
+
+  async findWorkspaceNameForPublic(workspaceId: string): Promise<string | null> {
+    const row = await db.workspace.findFirst({
+      where: { id: workspaceId },
+      select: { name: true },
+    });
+    return row?.name ?? null;
+  },
+
+  async listPublicByWorkspace(
+    workspaceId: string,
+  ): Promise<Array<Pick<Project, 'identifier' | 'name'>>> {
+    return db.project.findMany({
+      where: { workspaceId, accessLevel: 'public', archivedAt: null },
+      select: { identifier: true, name: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+  },
+
   async listPublic(): Promise<Array<Pick<Project, 'identifier' | 'updatedAt'>>> {
     return db.project.findMany({
       where: { accessLevel: 'public', archivedAt: null },
@@ -341,11 +409,14 @@ export const projectRepository = {
   async listPublicIndexPage(options: {
     take: number;
     cursor?: string | undefined;
-  }): Promise<Array<Pick<Project, 'id' | 'identifier' | 'updatedAt'>>> {
+  }): Promise<Array<Pick<Project, 'id' | 'identifier' | 'updatedAt' | 'workspaceId'>>> {
     const { take, cursor } = options;
     return db.project.findMany({
       where: { accessLevel: 'public', archivedAt: null },
-      select: { id: true, identifier: true, updatedAt: true },
+      // `workspaceId` rides along for MOTIR-4217's per-row canonical HOST: a
+      // subdomain belongs to the workspace, so the host cannot be derived from
+      // the project alone.
+      select: { id: true, identifier: true, updatedAt: true, workspaceId: true },
       orderBy: { id: 'asc' },
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

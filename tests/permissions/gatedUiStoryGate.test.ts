@@ -66,6 +66,13 @@ const SERVICE_OF: Record<string, string> = {
   repositories: 'lib/services/projectRepoSetService.ts',
   members: 'lib/services/projectMembersService.ts',
   'public-page': 'lib/services/projectsService.ts',
+  // MOTIR-4221. The room's WRITES are the customer-domain lifecycle's —
+  // add / verify / remove / makePrimary / clearPrimary — every one of which
+  // asserts `project:manage_access`. The subdomain half of the same room is
+  // gated on the WORKSPACE role instead (`publicSubdomainService`), which is a
+  // different axis and not expressible as a project permission at all; the
+  // rail names the project key its destination checks, which is this one.
+  'public-address': 'lib/services/customDomainService.ts',
   roles: 'lib/services/projectMembersService.ts',
   'code-access': 'lib/services/projectRepoAccessService.ts',
   workflow: 'lib/services/workflowsService.ts',
