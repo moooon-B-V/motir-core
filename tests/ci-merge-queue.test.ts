@@ -426,9 +426,12 @@ describe('the required context REPORTS on every PR, or it is not a gate (MOTIR-4
     // that never reports is not a passing gate — it is a PR that can never
     // merge. Restoring `paths:` under `pull_request:` here, while the ruleset
     // requires this context, blocks every PR that touches no acceptance file.
-    const prBlock = /^ {2}pull_request:\n(?<body>(?: {4}.*\n|\n)*)/m.exec(acceptanceHeader);
+    // A NUMBERED group, not a named one: this repo's `target` predates ES2018,
+    // and `(?<name>…)` is a compile error under it (TS1503) — green locally in
+    // vitest, red in `pnpm typecheck`.
+    const prBlock = /^ {2}pull_request:\n((?: {4}.*\n|\n)*)/m.exec(acceptanceHeader);
     expect(acceptanceHeader).toMatch(/^ {2}pull_request:\s*$/m);
-    expect(prBlock?.groups?.body ?? '').not.toMatch(/^ {4}paths:/m);
+    expect(prBlock?.[1] ?? '').not.toMatch(/^ {4}paths:/m);
   });
 
   it('keeps the paths decision, moved into the gate job the heavy jobs need', () => {

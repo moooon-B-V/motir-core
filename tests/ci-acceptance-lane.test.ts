@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -250,22 +251,45 @@ describe('the acceptance lane is story-scoped (MOTIR-1949)', () => {
     expect(codeOf(acceptanceWorkflow)).toContain(ACCEPTANCE_CONFIG);
   });
 
-  it('is triggered by a `paths:` filter, not by a job-level `if:`', () => {
-    // THE mechanism. A `paths:`-filtered workflow that does not match is never
-    // triggered, so no check appears. A job-level `if:` would still report a
-    // greyed `Skipped` — the thing this card exists to remove.
-    expect(acceptanceWorkflow).toMatch(
-      /on:\s*\n\s*pull_request:\s*\n\s*paths:\s*\n\s*- ['"]tests\/e2e\/acceptance\*\.spec\.ts['"]/,
+  it('gates on the changed paths in the GATE JOB, not an `on: paths:` filter', () => {
+    // ⚠️ MOTIR-1949'S MECHANISM WAS REVERSED BY MOTIR-4257, DELIBERATELY, and
+    // this test records the new one rather than being deleted.
+    //
+    // The old mechanism was an `on: paths:` filter: a workflow that does not
+    // match is never triggered, so no check appears — the greyed `Skipped` this
+    // card removed. That property is INCOMPATIBLE with gating the merge queue on
+    // this lane. GitHub admits a PR to the queue only once the branch's required
+    // checks have passed ON THE PULL REQUEST, and a workflow that never runs
+    // never reports `Acceptance complete`; a required context that never reports
+    // is not a gate that passes, it is a PR that can never merge.
+    //
+    // So the filter MOVED into the `membership` gate, which already owned this
+    // decision for `push`. The trade: a PR with no spec shows a skipped build and
+    // a skipped shard again, and `main` cannot go red through a merge nobody
+    // checked. A tidy checks list is worth less than a green trunk.
+    const prBlock = /^ {2}pull_request:\n(?:(?! {2}\S)[^\n]*\n)*/m.exec(acceptanceWorkflow);
+    expect(prBlock).not.toBeNull();
+    expect(prBlock![0]).not.toMatch(/^ {4}paths:/m);
+    // The decision still EXISTS — dropping it outright would run a Next build and
+    // the whole fan-out on every PR in the repo.
+    expect(codeOf(jobsOf(acceptanceWorkflow).get('membership') ?? '')).toMatch(
+      /pulls\/\$\{PR_NUMBER\}\/files/,
     );
     // …and the lane's OWN definition is a trigger too (MOTIR-2600), or a PR that
     // restructures the lane changes no spec and never runs it. An ordinary
     // feature PR still matches nothing here, so MOTIR-1949's requirement holds.
-    for (const path of [
-      '.github/workflows/acceptance-tests.yml',
-      'playwright.acceptance.config.ts',
-      'tests/e2e/_helpers/acceptance-video.ts',
+    // …and the lane's OWN definition is still one of the paths (MOTIR-2600), or a
+    // PR that restructures the lane changes no spec and never runs it. They live
+    // in the gate's regex now rather than in a YAML list, so they are asserted as
+    // the stems that carry the meaning — the regex escapes its own dots.
+    const gate = codeOf(jobsOf(acceptanceWorkflow).get('membership') ?? '');
+    for (const stem of [
+      'tests/e2e/acceptance',
+      'acceptance-tests',
+      'playwright',
+      'acceptance-(video|diagnostics)',
     ]) {
-      expect(acceptanceWorkflow).toContain(`      - '${path}'`);
+      expect(gate).toContain(stem);
     }
     // A JOB-level key sits at exactly four spaces (`jobs:` → id → keys); the
     // step-level `if: success()` / `if: always()` below are at eight and fine.
@@ -701,10 +725,44 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     return body.join('\n');
   })();
 
-  /** Run the shipped gate over a lane holding `specCount` members. */
-  function runGate(specCount: number, eventName: 'pull_request' | 'push') {
+  /**
+   * Run the shipped gate over a lane holding `specCount` members.
+   *
+   * Since MOTIR-4257 the `pull_request` arm also reads the PR's CHANGED FILES,
+   * so the harness stubs `gh` on PATH with a script that prints `changedFiles`.
+   * That is the whole of the API contact: `gh api … -q '.[].path'` emits one
+   * path per line, which is what the stub emits. Without it the gate exits
+   * non-zero under `set -e` and every case below fails for the wrong reason.
+   *
+   * `changedFiles` defaults to a lane member, so the existing sizing cases keep
+   * asking what they always asked — how many legs — rather than accidentally
+   * testing the new filter.
+   */
+  function runGate(
+    specCount: number,
+    eventName: 'pull_request' | 'push' | 'merge_group',
+    changedFiles: readonly string[] = ['tests/e2e/acceptance-story-1.spec.ts'],
+  ) {
     const dir = mkdtempSync(join(tmpdir(), 'acceptance-gate-'));
     try {
+      const binDir = join(dir, 'stub-bin');
+      mkdirSync(binDir, { recursive: true });
+      // The stub PAGES like the real endpoint: `pulls/N/files` returns 30 entries
+      // and only yields the rest when asked to follow the pages. Emitting the
+      // whole list unconditionally would make the pagination case below pass
+      // whether or not the gate says `--paginate` — a test of nothing.
+      writeFileSync(
+        join(binDir, 'gh'),
+        [
+          '#!/bin/sh',
+          'for a in "$@"; do [ "$a" = "--paginate" ] && all=1; done',
+          `cat <<'EOF' | { [ -n "\${all:-}" ] && cat || head -30; }`,
+          changedFiles.join('\n'),
+          'EOF',
+          '',
+        ].join('\n'),
+      );
+      chmodSync(join(binDir, 'gh'), 0o755);
       mkdirSync(join(dir, 'tests/e2e'), { recursive: true });
       for (let i = 1; i <= specCount; i++) {
         writeFileSync(join(dir, `tests/e2e/acceptance-story-${i}.spec.ts`), '');
@@ -721,6 +779,9 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
         cwd: dir,
         env: {
           ...process.env,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          GITHUB_REPOSITORY: 'moooon-B-V/motir-core',
+          PR_NUMBER: '1',
           EVENT_NAME: eventName,
           GITHUB_OUTPUT: outPath,
           GITHUB_STEP_SUMMARY: summaryPath,
@@ -807,6 +868,60 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     // one-spec lane to two legs — and hold the `push` baseline permanently on.
     expect(runGate(0, 'push').count).toBe('0');
     expect(runGate(1, 'pull_request').count).toBe('1');
+  });
+
+  // ── The PATHS decision, executed (MOTIR-4257) ──────────────────────────────
+  //
+  // These run the shipped gate over a fabricated changed-file list. The arm that
+  // says `false` is the one no PR touching this workflow can ever exercise on
+  // itself — a PR that edits `acceptance-tests.yml` matches by definition — so
+  // it is only ever checked here.
+  it.each([
+    { why: 'an ordinary feature PR', files: ['components/x.tsx', 'lib/dto/y.ts'], run: 'false' },
+    { why: 'a main-lane spec', files: ['tests/e2e/epic2-acceptance.spec.ts'], run: 'false' },
+    { why: 'a nested lookalike', files: ['tests/e2e/sub/acceptance-x.spec.ts'], run: 'false' },
+    { why: 'a docs lookalike', files: ['docs/acceptance-tests.yml'], run: 'false' },
+    {
+      why: 'a PR that owns a spec',
+      files: ['components/x.tsx', 'tests/e2e/acceptance-story-1.spec.ts'],
+      run: 'true',
+    },
+    { why: 'a lane restructure', files: ['.github/workflows/acceptance-tests.yml'], run: 'true' },
+    { why: 'the Playwright config', files: ['playwright.acceptance.config.ts'], run: 'true' },
+    { why: 'a helper the specs import', files: ['tests/e2e/_helpers/acceptance-video.ts'], run: 'true' },
+    {
+      why: 'a helper the specs import',
+      files: ['tests/e2e/_helpers/acceptance-diagnostics.ts'],
+      run: 'true',
+    },
+  ])('$why → run=$run', ({ files, run }) => {
+    expect(runGate(1, 'pull_request', files).run).toBe(run);
+  });
+
+  it('sees a spec that sorts past the API\u2019s first page', () => {
+    // ⚠️ WHY `--paginate` IS LOAD-BEARING. `pulls/N/files` returns 30 entries a
+    // page. A PR whose only acceptance spec sorts onto page two would read as
+    // touching nothing, skip the lane, and merge unchecked — the exact silent
+    // false negative MOTIR-4257 exists to remove, reappearing through the fix.
+    const buried = [
+      ...Array.from({ length: 40 }, (_, i) => `src/f${i}.ts`),
+      'tests/e2e/acceptance-story-1.spec.ts',
+    ];
+    expect(runGate(1, 'pull_request', buried).run).toBe('true');
+  });
+
+  it('lets NO changed-file list speak for the queue or the baseline', () => {
+    // The gate MOTIR-4257 adds. `merge_group` and `push` never consult the paths
+    // at all — they run whenever the lane holds a spec — so a merge that touches
+    // nothing acceptance-shaped is still checked against the MERGED result. That
+    // is what `e055b6b23` slipped through, and what a paths filter can never
+    // catch: this lane's specs read the whole app.
+    const untouched = ['components/planning/ProposalPeek.tsx'];
+    expect(runGate(1, 'merge_group', untouched).run).toBe('true');
+    expect(runGate(1, 'push', untouched).run).toBe('true');
+    // …and an EMPTY lane still stops early on both, which is MOTIR-2760 intact.
+    expect(runGate(0, 'merge_group', untouched).run).toBe('false');
+    expect(runGate(0, 'push', untouched).run).toBe('false');
   });
 });
 
