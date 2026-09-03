@@ -236,14 +236,14 @@ ABSENT, not hidden.** Self-hosting is a team doing project management for
 itself — single-tenant, with no directory of anybody else's work and nothing
 published to strangers.
 
-| path                     | self-hosted build (`MOTIR_CLOUD` unset)                                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/explore`, `/p/*`       | **not served by `motir-core` at all** — the rendering lives in `motir-marketing`, which is moooon's site and is not shipped to self-hosters |
-| `app/api/public/*`       | **absent.** The routes do not answer. This is the capability gate, and MOTIR-3908 owns it                                                   |
-| the publish affordance   | **absent.** A project cannot be made public                                                                                                 |
-| `/legal`                 | gone from the repository; `motir-core` renders legal links from configuration, unset by default                                             |
-| `/docs`                  | **present.** It describes the software, and a self-hoster needs documentation for their own build                                           |
-| everything authenticated | unchanged                                                                                                                                   |
+| path                     | self-hosted build (`MOTIR_CLOUD` unset)                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/explore`, `/p/*`       | **not served by `motir-core` at all** — the rendering lives in `motir-marketing`, which is moooon's site and is not shipped to self-hosters                                                                                                                                                                                                                                                   |
+| `app/api/public/*`       | **absent.** The routes do not answer. This is the capability gate, and MOTIR-3908 owns it                                                                                                                                                                                                                                                                                                     |
+| the publish affordance   | **absent.** A project cannot be made public                                                                                                                                                                                                                                                                                                                                                   |
+| `/legal`                 | gone from the repository; `motir-core` renders legal links from configuration, unset by default                                                                                                                                                                                                                                                                                               |
+| `/docs`                  | ~~**present.** It describes the software, and a self-hoster needs documentation for their own build~~ **⚠️ AMENDED 2026-09-02 (MOTIR-4167): the route is GONE** (MOTIR-3951 deleted `app/(public)`), and the rail's `Docs` row renders from configuration — `MOTIR_DOCS_URL`, an absolute url, unset by default — exactly as the `/legal` row above does. AMENDMENT 2 §D carries the decision |
+| everything authenticated | unchanged                                                                                                                                                                                                                                                                                                                                                                                     |
 
 `MOTIR_CLOUD` already exists (`lib/billing/availability.ts`), is explicit and
 defaults to `false`, and `billing-tiering.md` §6 records why it is deliberately
@@ -719,6 +719,41 @@ in reality. `lib/legal/links.ts`'s `legalIndexUrl()` is the implementation, and
 | **Point the row at the first document**             | It is a door to the SET. Landing a reader on the Terms when they asked for _Legal_ is a wrong answer wearing a right one.                                                                                                                                                                                                            |
 | **Keep the row pointing at the old `/legal` route** | That route is deleted by the story after this one, so the row would 404 by design.                                                                                                                                                                                                                                                   |
 | **Drop the rail row entirely**                      | It is a shipped affordance and the hosted arrangement has a perfectly good index. Removing it for every operator to avoid deriving it for some is the wrong trade.                                                                                                                                                                   |
+
+**⚠️ AMENDED 2026-09-02 (MOTIR-4167) — the rail's `Docs` row, which lost its
+destination to the same split and was left pointing at it.** `/docs` left this
+repository with MOTIR-3951 and is rendered on `motir.co` by `motir-marketing`
+(MOTIR-4046); the rail row beside `Legal` kept a hard-coded app-relative path, so
+a signed-in reader who clicked **Docs** got a 404. Measured 2026-09-02:
+`app.motir.co/docs` → **404**, `motir.co/docs` → **200**. The `Legal` row had
+already been rebuilt around a nullable resolver (above), and this row takes the
+same shape — found by drawing the section (MOTIR-4130), when the address guard
+refused the row's own href.
+
+**DECIDED: the row reads `MOTIR_DOCS_URL` — ONE environment variable holding the
+ABSOLUTE url of the published documentation — through `lib/docs/links.ts`'s
+`docsIndexUrl()`, and it is ABSENT when that is unset or is not an absolute
+`http(s)` url.** It is the contract §C gives every legal document's `url`, one
+surface over: absolute, because it is no longer a page this application serves;
+operator-supplied, because where the documentation is published is the
+operator's arrangement and not this repository's; nullable, with `null` the
+unconfigured build and the row absent rather than dead. The hosted deployment
+sets it to `https://motir.co/docs`; a self-hoster may point it at that same public
+documentation, at a mirror of their own, or leave it unset and have no row. A
+relative value is REFUSED and logged at error level naming the variable, never
+rendered, because a relative path is precisely the defect this amendment
+removes. `tests/docs/docsLinks.test.ts` pins both arms and the refusal;
+`tests/components/SidebarNav-docs-door.test.tsx` pins the row;
+`design/shell/rail-bottom-section.mock.html` draws both arms.
+
+| Alternative                                                                 | Why rejected                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Derive it from `MOTIR_PUBLIC_SITE_URL`** (`publicSiteOrigin()` + `/docs`) | Three reasons, any one sufficient. That accessor FALLS BACK to the application origin while unset — its ordering guarantee (MOTIR-3881) — so on today's production it would answer `https://app.motir.co/docs`, the very 404 being removed. It must stay unset until THE CUTOVER (MOTIR-3910), so the row would stay absent for as long as that takes while `motir.co/docs` is live. And `tests/hosting/appUrlSeam.test.ts` asserts that variable has exactly ONE reader. |
+| **Derive it from `MOTIR_MARKETING_ORIGIN`**                                 | It is a CORS allowlist for one POST receiver — comma-separated, possibly several origins — answering _who may call `/api/idea-draft`_. One variable per question is this repository's own rule (`lib/publicProjects/urls.ts`); reading a navigation target out of a security setting couples the two for ever.                                                                                                                                                            |
+| **Hard-code `https://motir.co/docs`**                                       | §B's finding, one surface over: the open product would send every self-hoster's users to moooon's site as if it were theirs. The `Legal` row rejected the same default above (_Default the manifest to moooon's published URLs_).                                                                                                                                                                                                                                         |
+| **Keep the app-relative path and add a redirect**                           | The redirect off `app.motir.co` is MOTIR-3910's, and the row would still be a door that works only by bouncing; the _keep the old route_ alternative above applies verbatim.                                                                                                                                                                                                                                                                                              |
+| **Put the documentation url in the legal manifest**                         | The manifest is a per-DOCUMENT array of legal documents; documentation is not one, and the `indexUrl` alternative above already rejected widening it for a set-level value.                                                                                                                                                                                                                                                                                               |
+| **Drop the row**                                                            | The same trade the `Legal` row refused: a shipped affordance with a perfectly good hosted destination, removed for every operator to avoid configuring it for some.                                                                                                                                                                                                                                                                                                       |
 
 **⚠️ The sign-up notice is ABSENT rather than re-flowed, and this reverses the
 form MOTIR-3909 was authored with.** The string is

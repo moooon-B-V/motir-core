@@ -4,17 +4,17 @@ The authed shell: the top bar, the persistent sidebar rail, the off-canvas drawe
 overlays the bar summons. This is the area's first `design-notes.md`; the five `.pen` assets beside it
 predate the three-file convention and are indexed below rather than rewritten.
 
-| Surface                                    | Asset                                                           | Card             | State                                                                                                |
-| ------------------------------------------ | --------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                                          | MOTIR-53 (1.5.1) | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
-| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                                | MOTIR-53         | Same                                                                                                 |
-| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                                    | MOTIR-53         | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
-| ⌘K command palette                         | `cmd-k.pen` / `.png`                                            | MOTIR-53         | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
-| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                                        | MOTIR-53         | Current                                                                                              |
-| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**                         | **MOTIR-2374**   | **The design of record for what the bar carries at each width**                                      |
-| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`**                 | **MOTIR-2555**   | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
-| **The navigation-pending grammar**         | **`navigation-pending.mock.html` / `navigation-pending.png`**   | **MOTIR-3431**   | **The design of record for what the content area shows between the click and the arrival**           |
-| **The rail's BOTTOM section**              | **`rail-bottom-section.mock.html` / `rail-bottom-section.png`** | **MOTIR-4130**   | **The design of record for every row that section renders, at all three widths, in both arms**       |
+| Surface                                    | Asset                                                           | Card                        | State                                                                                                |
+| ------------------------------------------ | --------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                                          | MOTIR-53 (1.5.1)            | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
+| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                                | MOTIR-53                    | Same                                                                                                 |
+| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                                    | MOTIR-53                    | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
+| ⌘K command palette                         | `cmd-k.pen` / `.png`                                            | MOTIR-53                    | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
+| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                                        | MOTIR-53                    | Current                                                                                              |
+| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**                         | **MOTIR-2374**              | **The design of record for what the bar carries at each width**                                      |
+| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`**                 | **MOTIR-2555**              | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
+| **The navigation-pending grammar**         | **`navigation-pending.mock.html` / `navigation-pending.png`**   | **MOTIR-3431**              | **The design of record for what the content area shows between the click and the arrival**           |
+| **The rail's BOTTOM section**              | **`rail-bottom-section.mock.html` / `rail-bottom-section.png`** | **MOTIR-4130** · MOTIR-4167 | **The design of record for every row that section renders, at all three widths, in both arms**       |
 
 ---
 
@@ -1017,12 +1017,13 @@ Declaration order, from `app/(authed)/_components/SidebarNav.tsx`'s `sections.pu
 | 2   | **Security** | `shield-check` | `/settings/workspace/security`                      | CONDITIONAL — `workspaceTierRevealed`     |
 | 3   | **Job runs** | `list-checks`  | `/settings/workspace/jobs`                          | always                                    |
 | 4   | **Git**      | `git-branch`   | `/settings/workspace/github`                        | always                                    |
-| 5   | **Docs**     | `book-open`    | `/docs` — ⚠️ **dead, see below**                    | always                                    |
+| 5   | **Docs**     | `book-open`    | the operator's own ABSOLUTE url — `docsIndexUrl()`  | CONDITIONAL — `docsIndexUrl` is non-null  |
 | 6   | **Legal**    | `scale`        | the operator's own ABSOLUTE url — `legalIndexUrl()` | CONDITIONAL — `legalIndexUrl` is non-null |
 
-**Three of the six are conditional, and the section's FLOOR is three rows** — Job runs · Git · Docs.
-That floor is the open product's common case, not an edge state, which is why the asset draws it
-beside the complete arm at every width rather than describing it.
+**Four of the six are conditional, and the section's FLOOR is two rows** — Job runs · Git. That
+floor is the open product's common case, not an edge state, which is why the asset draws it beside
+the complete arm at every width rather than describing it. (It was three rows in this asset's first
+revision, when the `Docs` row was unconditional and dead — see MOTIR-4167 below.)
 
 **Nothing marks an absent row.** The rows close up and the section is shorter; there is no disabled
 row, no tooltip and no empty state. `SidebarNav.tsx`'s own comment carries the reason and it is the
@@ -1036,19 +1037,34 @@ is `<base>`. An operator publishing at unrelated addresses (`acme.com/terms-of-s
 guessed** — sign-up and the re-consent rows still link each document directly, so nothing becomes
 unreachable. A row pointing at the base of SOME of the documents would be worse than no row.
 
-### ⚠️ The `Docs` row's destination does not exist — MOTIR-4167
+### The `Docs` row reads configuration — MOTIR-4167
 
-`/docs` left this repository when MOTIR-3932 moved the public reading surface to `motir-marketing`,
-and the rail row was not moved with it. Verified at `8d80ac8db`: no route under `app/**`, no
-`source: '/docs'` in `next.config.ts` (`DOCS_REDIRECTS` makes `/docs` a DESTINATION, never a source),
-no `rewrites()`, nothing in `middleware.ts`.
+The row used to carry a hard-coded app-relative path to the documentation index, and that page left
+this repository when MOTIR-3932 moved the public reading surface to `motir-marketing`; the row was
+not moved with it. Verified at `8d80ac8db`: no route under `app/**`, no redirect source for the docs
+path in `next.config.ts` (`DOCS_REDIRECTS` makes it a DESTINATION, never a source), no `rewrites()`,
+nothing in `middleware.ts` — so `app.motir.co/docs` answered **404** while `motir.co/docs` answered
+**200**. This asset's first revision drew the dead href anyway, because it is the design of record
+for what the rail DOES, and parked the address in `tests/design-asset-addresses.test.ts`'s `KNOWN`
+table with a reason naming the defect — distinct from that table's seven other entries for the same
+address, which are point-in-time records of assets drawn before the move and are left alone.
 
-**The asset draws the shipped href anyway**, because it is the design of record for what the rail
-DOES, and it carries a `KNOWN` entry in `tests/design-asset-addresses.test.ts` saying exactly that —
-distinct from that table's seven other `/docs` entries, which are point-in-time records of assets
-drawn before the move. **The row beside it is the fix**: `Legal` lost its destination to the same
-split and was rebuilt around a resolver returning `string | null`. MOTIR-4167 carries that work, and
-removes this asset's `KNOWN` entry when it lands.
+**The row beside it was the fix, and it is now the same row.** `Legal` lost its destination to the
+same split and was rebuilt around `legalIndexUrl()` — a resolver returning `string | null`, resolved
+in `app/(authed)/layout.tsx` and threaded to the client component as a prop, with the row spread in
+conditionally. `Docs` takes exactly that shape: `lib/docs/links.ts`'s `docsIndexUrl()` reads
+**`MOTIR_DOCS_URL`**, the operator's own ABSOLUTE url of the published documentation
+(`https://motir.co/docs` on the hosted deployment), and answers `null` when it is unset — or when the
+value is not an absolute `http(s)` url, because a relative path is precisely the defect, so it is
+refused and logged rather than rendered. **When it is `null` the row is absent**, not disabled and not
+dead. `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D (its MOTIR-4167 amendment) is the
+record, with the alternatives it rejected; `tests/components/SidebarNav-docs-door.test.tsx` pins both
+arms of the row and `tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal.
+
+**So the floor moved.** With four conditional rows the section's floor is **two** — Job runs · Git —
+and that is what the floor arms now draw at all three widths; the complete arms draw the row at its
+configured absolute url. The two `KNOWN` entries this asset and these notes carried for the dead
+address went with the defect.
 
 ### The divergence ledger — which source wins for this element
 
@@ -1101,6 +1117,13 @@ Generated, not hand-drawn, so it cannot drift from the app:
 
 One board property, named here so nobody reads it as design: the frames give the rail a fixed height
 so all ten rows fit, where the real rail is `h-full` in a viewport-height grid column.
+
+**Revised by MOTIR-4167 without re-running the generator.** The generator was a temporary harness
+(deleted with MOTIR-4130's run, as the design lane's own rule requires), and the revision changes
+only the SECTION DATA it would have been fed: the `Docs` row's `href` in the three complete arms, and
+the row's absence from the three floor arms. Those are the two edits made to the generated markup,
+so every rail is still the real `Sidebar` output; `prettier --write` then
+`scripts/render-design-mock.mjs` re-exported the `.png`.
 
 ### What this asset does NOT draw
 

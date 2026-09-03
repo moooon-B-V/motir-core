@@ -198,6 +198,11 @@ export default defineConfig({
         // deliberately unreachable: every assertion reads the `href`, none
         // follows it.
         MOTIR_LEGAL_DOCUMENTS: E2E_LEGAL_DOCUMENTS_JSON,
+        // The rail's Docs row is conditional too (MOTIR-4167), and
+        // `acceptance-legal-manifest.spec.ts` reads it as the CONTROL for the
+        // Legal row's absence — so it is configured, under the same synthetic
+        // public origin as the legal urls above.
+        MOTIR_DOCS_URL: 'https://public.motir.e2e/docs',
         // ── The prod-build harness (MOTIR-1682) ──
         // `next start` forces NODE_ENV=production; this re-relaxes ONLY the test
         // seams (Secure cookies / the `/api/_test` 404 gate / 'file' email — see
