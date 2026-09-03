@@ -9,50 +9,49 @@
     </title>
     <style>
       /* ----------------------------------------------------------------------
-         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
-         light theme / warm-editorial / motir palette). This standalone mock
-         re-states the same VALUES so a plain browser paints the real palette
-         without the Tailwind build — exactly as the sibling assets do
-         (design/onboarding-entrance/*.mock.html, design/ai-planning/*.mock.html).
-         Nothing here re-defines colour/shape semantics; it re-states them.
+         Token block — the `--el-*` ELEMENT TOKEN layer, light values resolved
+         (the form `design/ai-planning/plan-revision.mock.html` is the copy of
+         record for). A standalone mock cannot run the Tailwind build, so it
+         re-states the light values rather than aliasing Tier-0 — but it states
+         them under the REAL token names, and that is what makes the asset
+         MEASURABLE: `tests/theme/inkContrastMockScan.ts` and
+         `tests/theme/mockStateInkScan.ts` both classify ink by reading an
+         `--el-*` name off the declaration AT THE PAINT SITE, so a privately
+         named alias is invisible to them however faithfully its value is
+         copied. Swept onto this layer by MOTIR-4352 (2026-09-03).
       ---------------------------------------------------------------------- */
       :root {
         /* text */
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --secondary: #5d5b54;
-        --muted: #787671;
-        --faint: #a4a097;
-        --inverted: #ffffff;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
         /* surfaces */
-        --page: #f4f3f1;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
         /* borders */
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --border-strong: #d3cfc8;
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
         /* accent */
-        --accent: #5645d4;
-        --accent-pressed: #4534b3;
-        --accent-soft: #f4f2fd;
-        --highlight: #ff64c8;
-        /* status / intent */
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --danger: #e03131;
-        --danger-soft: #fdecec;
-        --info: #0075de;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        /* status */
+        --el-danger: #e03131;
+        /* danger ink ON a page is the MOTIR-3663 trap: raw --el-danger is
+           1.00:1 there. This is the derived token, inputs all tokens. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: #0075de;
         /* feature tints */
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --mint: #d9f3e1;
-        --lavender: #e6e0f5;
-        --sky: #dcecfa;
-        --yellow: #fef7d6;
-        /* shape */
+        --el-tint-peach: #ffe8d4;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        /* shape + type — these carry no colour, so they are outside this
+           card's scope and are left exactly as they were */
         --r-card: 12px;
         --r-modal: 14px;
         --r-btn: 8px;
@@ -64,7 +63,6 @@
         --sh-card: 0 2px 6px #0000000f;
         --sh-elev: 0 8px 26px -10px #0000001f;
         --sh-modal: 0 24px 60px -18px #00000033;
-        --focus: #5645d4;
         --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
         --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
       }
@@ -74,8 +72,8 @@
       }
       body {
         margin: 0;
-        background: var(--page);
-        color: var(--text);
+        background: var(--el-surface);
+        color: var(--el-text);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
@@ -93,7 +91,7 @@
       }
       .doc-head p {
         margin: 0;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 14px;
         line-height: 1.55;
         max-width: 82ch;
@@ -106,16 +104,16 @@
       }
       .ref {
         font: 600 11px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
-        border: 1px solid #e3def8;
+        color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg));
+        border: 1px solid color-mix(in srgb, var(--el-accent) 17%, var(--el-page-bg));
         border-radius: var(--r-pill);
         padding: 3px 9px;
       }
       .ref.muted {
-        color: var(--secondary);
-        background: var(--hub);
-        border-color: var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-color: var(--el-border);
       }
       .panel {
         margin-top: 34px;
@@ -129,8 +127,8 @@
       }
       .panel-cap .n {
         font: 700 12px var(--mono);
-        color: #fff;
-        background: var(--accent);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
         border-radius: 6px;
         padding: 2px 7px;
         letter-spacing: 0.02em;
@@ -141,7 +139,7 @@
       }
       .panel-cap .note {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
 
       /* ================================================================
@@ -153,10 +151,10 @@
 
       .stage {
         position: relative;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         overflow: hidden;
-        background: var(--page);
+        background: var(--el-surface);
         box-shadow: var(--sh-card);
         min-height: 460px;
         display: flex;
@@ -164,8 +162,8 @@
       .rail {
         width: 240px;
         flex: none;
-        background: var(--hub);
-        border-right: 1px solid var(--border);
+        background: var(--el-surface);
+        border-right: 1px solid var(--el-border);
         padding: 14px 12px;
         display: flex;
         flex-direction: column;
@@ -177,15 +175,15 @@
         gap: 8px;
         font-weight: 600;
         font-size: 14px;
-        color: var(--text);
+        color: var(--el-text);
         padding: 6px 8px;
       }
       .rail .ws .logo {
         width: 24px;
         height: 24px;
         border-radius: var(--r-control);
-        background: var(--lavender);
-        color: var(--strong);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
         display: grid;
         place-items: center;
       }
@@ -199,21 +197,21 @@
         border: 1px solid transparent;
         background: transparent;
         font: inherit;
-        color: var(--text);
+        color: var(--el-text);
         cursor: pointer;
         text-align: left;
       }
       .psw.open {
-        background: var(--surface);
-        border-color: var(--accent);
+        background: var(--el-page-bg);
+        border-color: var(--el-accent);
       }
       .psw .pav {
         width: 22px;
         height: 22px;
         flex: none;
         border-radius: var(--r-control);
-        background: var(--mint);
-        color: var(--strong);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
         display: grid;
         place-items: center;
         font: 700 10px var(--mono);
@@ -228,16 +226,16 @@
         font-size: 14px;
       }
       .psw .chev {
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .rail .navitem {
         padding: 7px 10px;
         border-radius: var(--r-control);
         font-size: 13.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .rail .navitem.dim {
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .canvas {
         flex: 1;
@@ -250,7 +248,7 @@
         content: '';
         position: absolute;
         inset: 0;
-        background: #1a1a1a26;
+        background: color-mix(in srgb, var(--el-text) 15%, transparent);
       }
 
       /* ---------- MODAL (shipped Create project — unchanged) ---------- */
@@ -261,8 +259,8 @@
         max-width: 460px;
       }
       .modal {
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: var(--r-modal);
         box-shadow: var(--sh-modal);
         overflow: hidden;
@@ -280,7 +278,7 @@
       }
       .modal-head .x {
         margin-left: auto;
-        color: var(--muted);
+        color: var(--el-text-muted);
         width: 28px;
         height: 28px;
         display: grid;
@@ -296,7 +294,7 @@
         justify-content: flex-end;
         gap: 8px;
         padding: 16px 20px 18px;
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
         margin-top: 14px;
       }
 
@@ -308,19 +306,19 @@
         display: block;
         font-size: 13px;
         font-weight: 600;
-        color: var(--text);
+        color: var(--el-text);
         margin-bottom: 6px;
       }
       .inp {
         width: 100%;
         height: 40px;
-        border: 1px solid var(--border-strong);
+        border: 1px solid var(--el-border-strong);
         border-radius: var(--r-input);
         padding: 0 12px;
         font: inherit;
         font-size: 14px;
-        color: var(--text);
-        background: var(--surface);
+        color: var(--el-text);
+        background: var(--el-page-bg);
       }
       .inp.mono {
         font-family: var(--mono);
@@ -328,24 +326,24 @@
         letter-spacing: 0.04em;
       }
       .inp.err {
-        border-color: var(--danger);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent);
+        border-color: var(--el-danger);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-danger) 16%, transparent);
       }
       .inp::placeholder {
-        color: var(--faint);
+        color: var(--el-text-muted);
       }
       .helper {
         margin: 6px 0 0;
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         line-height: 1.45;
       }
       .helper .key {
         font-family: var(--mono);
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .helper.err {
-        color: var(--danger);
+        color: var(--el-danger-on-surface);
         font-weight: 500;
       }
 
@@ -367,20 +365,20 @@
         height: 16px;
       }
       .btn.primary {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .btn.ghost {
         background: transparent;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .btn.ghost:hover {
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .btn.secondary {
         background: transparent;
-        color: var(--text);
-        border-color: var(--border-strong);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
       }
       .btn.block {
         width: 100%;
@@ -393,15 +391,15 @@
         width: 15px;
         height: 15px;
         border-radius: 50%;
-        border: 2px solid #ffffff66;
-        border-top-color: #fff;
+        border: 2px solid color-mix(in srgb, var(--el-accent-text) 40%, transparent);
+        border-top-color: var(--el-accent-text);
       }
 
       /* ---------- switcher popover ---------- */
       .pop {
         width: 320px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: var(--r-card);
         box-shadow: var(--sh-elev);
         padding: 4px 0;
@@ -412,7 +410,7 @@
         font: 600 11px var(--mono);
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .pop .prow {
         display: flex;
@@ -422,14 +420,14 @@
         margin: 0 4px;
         border-radius: var(--r-control);
         font-size: 14px;
-        color: var(--text);
+        color: var(--el-text);
         cursor: pointer;
       }
       .pop .prow:hover {
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .pop .prow.active {
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .pop .prow.active .lbl {
         font-weight: 600;
@@ -442,7 +440,7 @@
         display: grid;
         place-items: center;
         font: 700 10px var(--mono);
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .pop .prow .lbl {
         flex: 1;
@@ -452,12 +450,12 @@
         white-space: nowrap;
       }
       .pop .prow .ck {
-        color: var(--accent);
+        color: var(--el-accent);
         flex: none;
       }
       .pop .div {
         height: 1px;
-        background: var(--border);
+        background: var(--el-border);
         margin: 5px 0;
       }
       .pop .crow {
@@ -471,7 +469,7 @@
         cursor: pointer;
       }
       .pop .crow:hover {
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .pop .crow .cic {
         width: 24px;
@@ -481,17 +479,17 @@
         place-items: center;
       }
       .pop .crow.ai {
-        color: var(--accent);
+        color: var(--el-accent);
         font-weight: 600;
       }
       .pop .crow.ai .cic {
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .pop .crow.manual {
-        color: var(--text);
+        color: var(--el-text);
       }
       .pop .crow.manual .cic {
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
 
       /* ---------- empty state ---------- */
@@ -506,15 +504,15 @@
         width: 60px;
         height: 60px;
         border-radius: 16px;
-        background: var(--lavender);
-        color: var(--strong);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
         display: grid;
         place-items: center;
         margin-bottom: 18px;
       }
       .empty .eicn.neutral {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .empty h3 {
         font: 700 22px/1.2 var(--serif);
@@ -525,7 +523,7 @@
         margin: 0 0 20px;
         font-size: 14px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .empty .ebtns {
         display: flex;
@@ -548,19 +546,19 @@
         gap: 5px;
         font-size: 11.5px;
         font-weight: 500;
-        color: var(--secondary);
-        background: var(--hub);
-        border: 1px solid var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
         border-radius: var(--r-pill);
         padding: 3px 9px;
       }
       .step svg {
         width: 12px;
         height: 12px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .sep {
-        color: var(--faint);
+        color: var(--el-text-faint);
         display: inline-flex;
       }
       .sep svg {
@@ -576,18 +574,18 @@
         align-items: center;
       }
       .door {
-        border: 1px solid var(--accent);
+        border: 1px solid var(--el-accent);
         border-radius: var(--r-card);
-        background: var(--surface);
-        box-shadow: 0 0 0 1px var(--accent);
+        background: var(--el-page-bg);
+        box-shadow: 0 0 0 1px var(--el-accent);
         padding: 16px;
       }
       .door .d-eyebrow {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--lavender);
-        color: var(--strong);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
         font: 600 11px var(--mono);
         border-radius: var(--r-badge);
         padding: 3px 9px;
@@ -601,13 +599,13 @@
       .door .d-sub {
         margin: 0;
         font-size: 12.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         line-height: 1.45;
       }
       .route .arrow {
         display: grid;
         place-items: center;
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .route .arrow svg {
         width: 22px;
@@ -615,16 +613,16 @@
       }
       /* reference-only schematic of the shipped fork (NOT a redraw) */
       .forkref {
-        border: 1px dashed var(--border-strong);
+        border: 1px dashed var(--el-border-strong);
         border-radius: var(--r-card);
-        background: var(--soft);
+        background: var(--el-surface-soft);
         padding: 14px 16px;
       }
       .forkref .fr-cap {
         font: 600 10.5px var(--mono);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         margin-bottom: 10px;
         display: flex;
         align-items: center;
@@ -636,8 +634,8 @@
         gap: 10px;
       }
       .fr-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: var(--r-input);
         padding: 11px 12px;
       }
@@ -647,14 +645,14 @@
         border-radius: var(--r-control);
         display: grid;
         place-items: center;
-        color: var(--strong);
+        color: var(--el-text-strong);
         margin-bottom: 8px;
       }
       .fr-card.a .fc-icn {
-        background: var(--lavender);
+        background: var(--el-tint-lavender);
       }
       .fr-card.b .fc-icn {
-        background: var(--sky);
+        background: var(--el-tint-sky);
       }
       .fr-card .fc-t {
         font-size: 12.5px;
@@ -663,7 +661,7 @@
       }
       .fr-card .fc-s {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         line-height: 1.4;
         margin: 0;
       }
@@ -675,8 +673,8 @@
         gap: 18px;
       }
       .state {
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: var(--r-card);
         padding: 16px 18px;
       }
@@ -684,26 +682,26 @@
         font: 600 11px var(--mono);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         margin-bottom: 10px;
       }
       .callout {
         display: flex;
         gap: 10px;
         align-items: flex-start;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: var(--r-input);
-        background: var(--soft);
+        background: var(--el-surface-soft);
         padding: 11px 13px;
         font-size: 13px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         line-height: 1.5;
       }
       .callout + .callout {
         margin-top: 10px;
       }
       .callout .ic {
-        color: var(--info);
+        color: var(--el-info);
         flex: none;
         margin-top: 1px;
       }
@@ -714,8 +712,8 @@
       .callout code {
         font-family: var(--mono);
         font-size: 12px;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg));
         border-radius: 4px;
         padding: 1px 5px;
       }
@@ -729,14 +727,14 @@
         font: 600 11px var(--mono);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         margin: 0 0 10px;
       }
       .closeup {
-        border: 1px dashed var(--border-strong);
+        border: 1px dashed var(--el-border-strong);
         border-radius: var(--r-card);
         padding: 14px;
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .closeup + .closeup {
         margin-top: 14px;
@@ -745,7 +743,7 @@
         font: 600 10.5px var(--mono);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         margin-bottom: 9px;
       }
     </style>
@@ -829,7 +827,7 @@
             <div class="pop" style="margin-top: 2px">
               <div class="ph">Projects</div>
               <div class="prow active">
-                <span class="pav" style="background: var(--mint)">MO</span>
+                <span class="pav" style="background: var(--el-tint-mint)">MO</span>
                 <span class="lbl">Motir</span>
                 <span class="ck" aria-hidden="true"
                   ><svg
@@ -846,12 +844,12 @@
                 ></span>
               </div>
               <div class="prow">
-                <span class="pav" style="background: var(--sky)">MB</span>
+                <span class="pav" style="background: var(--el-tint-sky)">MB</span>
                 <span class="lbl">Mobile App</span>
                 <span style="width: 16px"></span>
               </div>
               <div class="prow">
-                <span class="pav" style="background: var(--peach)">WS</span>
+                <span class="pav" style="background: var(--el-tint-peach)">WS</span>
                 <span class="lbl">Website</span>
                 <span style="width: 16px"></span>
               </div>
@@ -961,10 +959,12 @@
                   moooon
                 </div>
                 <button class="psw" type="button">
-                  <span class="pav" style="background: var(--mutedfill); color: var(--faint)"
+                  <span
+                    class="pav"
+                    style="background: var(--el-muted); color: var(--el-text-secondary)"
                     >—</span
                   >
-                  <span class="pn" style="color: var(--faint)">No project</span>
+                  <span class="pn" style="color: var(--el-text-secondary)">No project</span>
                   <span class="chev" aria-hidden="true"
                     ><svg
                       viewBox="0 0 24 24"
@@ -1066,7 +1066,7 @@
                   moooon
                 </div>
                 <button class="psw" type="button">
-                  <span class="pav" style="background: var(--sky)">MB</span>
+                  <span class="pav" style="background: var(--el-tint-sky)">MB</span>
                   <span class="pn">Mobile App</span>
                   <span class="chev" aria-hidden="true"
                     ><svg
@@ -1299,7 +1299,7 @@
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style="color: var(--faint)"
+                style="color: var(--el-text-faint)"
               >
                 <path d="M15 3h6v6" />
                 <path d="M10 14 21 3" />
