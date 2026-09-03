@@ -12,6 +12,7 @@ import {
   AuthError,
   CliError,
   ContainerHasOpenChildrenError,
+  NoPlanForWorkItemError,
   PlanNotDecidableError,
   IncompatibleServerError,
   NotFoundError,
@@ -446,6 +447,17 @@ export class V1Transport {
       // — and the code is data, which is exactly what §8 asks a client to read.
       if (envelope.code === 'CONTAINER_HAS_OPEN_CHILDREN') {
         return new ContainerHasOpenChildrenError(envelope.error);
+      }
+      // ⚠️ THE FOURTH TYPED REFUSAL, and it is the one that is usually not a
+      // failure at all (MOTIR-4085). Both halves of `…/work-items/{key}/plan-
+      // approval` resolve through the planning conversation ANCHORED at that
+      // key, so a re-plan an agent deliberately anchored somewhere else — a
+      // mis-planned container, or nothing at all — answers this. The dispatch
+      // prompt offers that lane as a legitimate choice, so an unattended loop
+      // has to tell it apart from every other 422 in order to REPORT the
+      // election rather than an error. Code alone, no enrichment to read.
+      if (envelope.code === 'NO_PLAN_FOR_WORK_ITEM') {
+        return new NoPlanForWorkItemError(envelope.error);
       }
       const allowed = readAllowedTransitions(parsed);
       return new CliError(allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error);

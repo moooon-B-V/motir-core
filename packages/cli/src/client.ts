@@ -1475,7 +1475,19 @@ export class MotirClient {
    */
   async dispatchPrompt(
     key: string,
-    opts: { sessionBranch?: string | null; findingsPolicy?: string | undefined } = {},
+    opts: {
+      sessionBranch?: string | null;
+      findingsPolicy?: string | undefined;
+      /**
+       * `--auto-approve-replan` (MOTIR-4085) — whether THIS run's loop may
+       * approve a submitted re-plan itself and carry on. It changes the prompt
+       * TEXT only, adding the section that tells the agent which lane its
+       * correction will go down and that BOTH are legitimate. Omitted, and the
+       * request is byte-identical to the one this method sent before the
+       * parameter existed.
+       */
+      autoApproveReplan?: boolean;
+    } = {},
   ): Promise<DispatchPrompt> {
     // A GET, which is what a pure read should have looked like all along: the
     // MCP tool took a POST-shaped call because that is the only shape MCP has.
@@ -1487,6 +1499,9 @@ export class MotirClient {
         // how the server is told to render the COMPLETE protocol, so a run with
         // no flags sends the request it sent before the flag existed.
         ...(opts.findingsPolicy ? { findingsPolicy: opts.findingsPolicy } : {}),
+        // Same rule, same reason (MOTIR-4085): absent means no, so only the one
+        // lane that HAS an auto-approving loop ever sends it.
+        ...(opts.autoApproveReplan ? { autoApproveReplan: '1' } : {}),
       },
     });
     return toDispatchPrompt(body);
@@ -1512,6 +1527,47 @@ export class MotirClient {
   async approveWorkItemPlan(key: string): Promise<{ planId: string; proposalCount: number }> {
     const body = await this.v1.request('approveWorkItemPlan', { path: { key } });
     return { planId: body.id, proposalCount: body.proposals.length };
+  }
+
+  /**
+   * READ the plan a refused card produced, WITHOUT deciding it (MOTIR-4085).
+   *
+   * ⚠️ THE SAME ADDRESS AS THE APPROVE, and that is the point rather than a
+   * convenience: both halves of `…/work-items/{key}/plan-approval` resolve
+   * through the planning conversation anchored at this key, so what this returns
+   * is the plan {@link approveWorkItemPlan} would approve. A read resolved a
+   * second way would let a loop check the lane of one plan and approve another.
+   *
+   * ⚠️ IT EXISTS BECAUSE THE BOUND IS THE LOOP'S. `--auto-approve-replan` decides
+   * a plan while nobody is watching, and what keeps that safe is that the loop
+   * checks the proposals against the card's own lane FIRST. There is no other way
+   * to reach them: the plan's id came back in a sandboxed agent's tool result,
+   * which this process never sees.
+   *
+   * Returns the proposals in the shape `inLane` reads, plus the plan's id so a
+   * decline can name what it declined.
+   */
+  async readWorkItemPlan(key: string): Promise<{
+    planId: string;
+    status: string;
+    proposals: {
+      op: 'add' | 'modify' | 'remove';
+      workItemKey: string | null;
+      parentKey: string | null;
+      parentRef: string | null;
+    }[];
+  }> {
+    const body = await this.v1.request('getWorkItemPlan', { path: { key } });
+    return {
+      planId: body.id,
+      status: body.status,
+      proposals: body.proposals.map((p) => ({
+        op: p.op,
+        workItemKey: p.workItemKey,
+        parentKey: p.parentKey,
+        parentRef: p.parentRef,
+      })),
+    };
   }
 
   async markIntegrated(args: {

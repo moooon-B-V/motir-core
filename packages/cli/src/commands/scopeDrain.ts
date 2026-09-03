@@ -265,6 +265,9 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
     repos: repos.touched(),
     prs: [],
     approvals: [],
+    // A scoped run REFUSES `--auto-approve-replan` (`autoOnlyFlagError`), so it
+    // never makes a lane decision — there is nothing here that could fill this.
+    lanes: [],
     stopReason,
   };
 }

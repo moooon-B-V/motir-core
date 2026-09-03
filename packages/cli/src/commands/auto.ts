@@ -1,4 +1,9 @@
-import { CliError, ContainerHasOpenChildrenError, PlanNotDecidableError } from '../errors.js';
+import {
+  CliError,
+  ContainerHasOpenChildrenError,
+  NoPlanForWorkItemError,
+  PlanNotDecidableError,
+} from '../errors.js';
 import { info } from '../output.js';
 import { createLegLogTee } from '../agentLogTee.js';
 import { parseKinds } from './read.js';
@@ -50,9 +55,12 @@ import {
   type PlanningRecord,
   type PrReport,
   type RepoSession,
+  type ReplanLaneRecord,
+  type ReplanRefresh,
   type SkipRecord,
   type StopReason,
 } from '../autoLoop.js';
+import { inLane, renderElsewhereAnchored, renderLaneDecline, type Lane } from '../replanLane.js';
 import {
   ensureSessionBranchOnOrigin,
   execCommand,
@@ -484,6 +492,9 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   const planning: PlanningRecord[] = [];
   /** What `--auto-approve-replan` approved (MOTIR-3023). */
   const approvals: ApprovalRecord[] = [];
+  /** Every lane DECISION the run made about a submitted re-plan (MOTIR-4085) —
+   *  a superset of `approvals`, because a decline is a decision too. */
+  const lanes: ReplanLaneRecord[] = [];
   const repos = new RepoSessions(branch, run);
 
   let interrupted = false;
@@ -591,6 +602,13 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       let dispatch = await client.dispatchPrompt(item.key, {
         sessionBranch: branch,
         findingsPolicy: findingsPolicyOf(opts),
+        // ⚠️ THE PROMPT IS THE ONLY PLACE THE AGENT LEARNS ITS LANE (MOTIR-4085).
+        // A flag the agent never reads cannot change what it does, and this one
+        // has to reach it: without the section this renders, an agent believes a
+        // person will read every plan it submits, and writes the wider kind when
+        // the narrower one would have done — and the narrower one is the only one
+        // this loop can act on.
+        ...(opts.autoApproveReplan ? { autoApproveReplan: true } : {}),
       });
       // One target per repository the card ships in (MOTIR-3133), primary first.
       // An older server sends no set, and the empty array falls back to the
@@ -643,6 +661,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         // request buys correctness on a path that was already the exception.
         dispatch = await client.dispatchPrompt(item.key, {
           findingsPolicy: findingsPolicyOf(opts),
+          ...(opts.autoApproveReplan ? { autoApproveReplan: true } : {}),
         });
       }
 
@@ -731,6 +750,36 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         addExclude(serverUrl, projectKey, { key: item.key });
         excludedKeys.add(item.key.toUpperCase());
 
+        // ── TWO CHECKS, TWO JOBS, IN ORDER (MOTIR-4085) ──────────────────
+        //
+        // 1. VALIDITY — may this plan become rows at all? Already answered, and
+        //    not by anything here: `validateCandidatePlan` runs on every
+        //    finished plan, and `approvePlan` re-validates the whole proposal
+        //    set — the kind matrix, the intra-plan ref graph, done-work
+        //    immutability — before a single write. An invalid plan is refused
+        //    whatever lane it is in, and the refusal arrives below as a failed
+        //    approval. This loop CONSUMES that verdict; it adds no validation.
+        //
+        // 2. THE LANE — who approves it? Only a valid plan gets this far in
+        //    practice, and keeping the two apart is what lets the lane check
+        //    stay a comparison of keys with no opinion about structure.
+        const lane = await resolveLane(client, item.key, dispatch.parentKey);
+        const decision = await decideLane(client, item.key, lane, {
+          ...(input.sleep ? { sleep: input.sleep } : {}),
+        });
+        if (decision.kind !== 'in_lane') {
+          // ⚠️ NONE OF THESE IS A FAILURE, and two of them are the bound
+          // WORKING: a plan wider than the card's lane, and a plan the agent
+          // deliberately anchored elsewhere, both belong to a person. The third
+          // — a plan this run could not read — stops for the opposite reason,
+          // and the record says which so the summary can too.
+          info('');
+          info(decision.message);
+          lanes.push(decision.record);
+          stopReason = 'replanned';
+          break;
+        }
+
         const approved = await approveSubmittedPlan(client, item.key, {
           ...(input.sleep ? { sleep: input.sleep } : {}),
         });
@@ -738,19 +787,47 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
           // ⚠️ A REFUSED APPROVAL STOPS THE RUN, with the SERVER's own message.
           // Continuing would dispatch against a tree the operator has not agreed
           // to — and the server's refusals are exactly the bounds that say so
-          // (no plan of this card's own, a plan already decided, a scope the
-          // token lacks). None of them is a reason to carry on regardless.
+          // (a plan already decided, a proposal the confirmation gate rejected,
+          // a scope the token lacks). None of them is a reason to carry on.
           info('');
           info(`${item.key}: the re-plan could NOT be approved — ${approved.message}`);
           info('Stopping rather than continuing against a tree nobody approved.');
+          lanes.push({
+            key: item.key,
+            lane: 'unreadable',
+            planId: decision.planId,
+            continued: false,
+            detail: approved.message,
+          });
           stopReason = 'replanned';
           break;
         }
         approvals.push({ key: item.key, ...approved.plan });
+
+        // ⚠️ THE REFRESH IS THE PRECONDITION FOR CONTINUING, not a courtesy.
+        // An in-lane plan changes the very children the loop is about to work
+        // through, and `autoLoop.ts`'s `replanned` stop reason refuses to run
+        // past exactly that. Re-reading is what answers it: without this the
+        // loop would go on against a queue that no longer exists, which is
+        // strictly worse than today's stop.
+        const refresh = await refreshParent(client, lane, {
+          exclude: (key) => {
+            addExclude(serverUrl, projectKey, { key });
+            excludedKeys.add(key.toUpperCase());
+          },
+        });
+        lanes.push({
+          key: item.key,
+          lane: 'auto_approved',
+          planId: approved.plan.planId,
+          continued: true,
+          refresh,
+        });
         info(
-          `${item.key}: its re-plan was APPROVED (plan ${approved.plan.planId}, ` +
+          `${item.key}: its re-plan was IN LANE and APPROVED (plan ${approved.plan.planId}, ` +
             `${approved.plan.proposalCount} proposal(s) materialized). Continuing.`,
         );
+        for (const line of renderRefresh(refresh)) info(line);
         continue;
       }
 
@@ -782,8 +859,202 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
     repos: repos.touched(),
     prs: [],
     approvals,
+    lanes,
     stopReason,
   };
+}
+
+// ── THE LANE: what an unattended loop may approve on its own (MOTIR-4085) ────
+
+/**
+ * The lane this iteration is working in: the leaf, its parent, and the parent's
+ * children AS THEY STAND RIGHT NOW.
+ *
+ * ⚠️ RE-READ, NEVER REMEMBERED. The sibling set is what the lane check tests
+ * membership against, and the run has been executing this container for a while
+ * — a sibling may have been filed since it started. A stale set would refuse a
+ * correction to a card that is genuinely a sibling, which is the direction that
+ * looks like the check working.
+ *
+ * A parentless leaf has no sibling level (its kind cannot parent anything, so
+ * there is nowhere for a correction to go but wider), and that is reported
+ * honestly as an empty set rather than papered over: `inLane` then declines
+ * every `add`, and names why.
+ *
+ * A failed read yields the NARROWEST lane — the leaf alone. Failing open here
+ * would make the bound disappear exactly when the run cannot see the tree.
+ */
+async function resolveLane(
+  client: MotirClient,
+  leafKey: string,
+  parentKey: string | null,
+): Promise<Lane> {
+  if (parentKey === null) return { leafKey, parentKey: null, siblingKeys: [] };
+  try {
+    const detail = await client.getWorkItem(parentKey);
+    return { leafKey, parentKey, siblingKeys: detail.children.map((c) => c.identifier) };
+  } catch {
+    return { leafKey, parentKey, siblingKeys: [] };
+  }
+}
+
+/** What the loop decided about one submitted re-plan, before approving anything. */
+type LaneDecision =
+  | { kind: 'in_lane'; planId: string }
+  | {
+      kind: 'declined' | 'elsewhere' | 'unreadable';
+      message: string;
+      planId: string | null;
+      record: ReplanLaneRecord;
+    };
+
+/**
+ * Read the submitted plan and decide whether this run may approve it.
+ *
+ * ⚠️ THE READ CARRIES THE PATIENCE, and it moved here from the approval on
+ * purpose. An agent submits and exits within milliseconds, so the loop routinely
+ * arrives while motir-ai is still writing — and a lane check over a HALF-WRITTEN
+ * plan is worse than no check at all: the proposals that have not arrived yet are
+ * exactly the ones that might be out of lane, and a plan checked at proposal
+ * three and approved at proposal nine has been approved unread. So this waits for
+ * the plan to STOP GENERATING before it looks, with the same budget the approval
+ * used to spend, and gives up by name rather than by guessing.
+ */
+async function decideLane(
+  client: MotirClient,
+  key: string,
+  lane: Lane,
+  opts: { attempts?: number; waitMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<LaneDecision> {
+  const attempts = opts.attempts ?? APPROVE_ATTEMPTS;
+  const waitMs = opts.waitMs ?? APPROVE_WAIT_MS;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+
+  let plan: Awaited<ReturnType<MotirClient['readWorkItemPlan']>> | null = null;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const read = await client.readWorkItemPlan(key);
+      if (read.status !== 'generating') {
+        plan = read;
+        break;
+      }
+      if (attempt >= attempts) {
+        return unreadable(
+          key,
+          read.planId,
+          `its plan is still being written after ${attempts} attempts — approve it in Motir once the planner finishes`,
+        );
+      }
+      if (attempt === 1) info(`${key}: its plan is still being written — waiting for the planner.`);
+      await sleep(waitMs);
+    } catch (err) {
+      // ⚠️ THE ELECTION, NOT AN ERROR. Both halves of the plan-approval resource
+      // resolve through the conversation ANCHORED at this key, so a plan the
+      // agent deliberately anchored at a container — or at nothing — answers
+      // this. The prompt offers that lane and calls it legitimate, so the run
+      // reports the choice rather than a missing plan.
+      if (err instanceof NoPlanForWorkItemError) {
+        const message = renderElsewhereAnchored(key, err.message);
+        return {
+          kind: 'elsewhere',
+          message,
+          planId: null,
+          record: {
+            key,
+            lane: 'anchored_elsewhere',
+            planId: null,
+            continued: false,
+            detail: err.message,
+          },
+        };
+      }
+      return unreadable(key, null, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const verdict = inLane(plan, lane);
+  if (verdict.ok) return { kind: 'in_lane', planId: plan.planId };
+  return {
+    kind: 'declined',
+    message: renderLaneDecline(key, verdict),
+    planId: plan.planId,
+    record: {
+      key,
+      lane: 'declined_out_of_lane',
+      planId: plan.planId,
+      continued: false,
+      outOfLane: verdict.outOfLane.map((p) => `${p.op} ${p.affects} — ${p.reason}`),
+    },
+  };
+}
+
+function unreadable(key: string, planId: string | null, detail: string): LaneDecision {
+  return {
+    kind: 'unreadable',
+    message: [
+      `${key}: this run could NOT read the re-plan it was asked to approve — ${detail}.`,
+      'Stopping rather than approving a plan it has not seen.',
+    ].join('\n'),
+    planId,
+    record: { key, lane: 'unreadable', planId, continued: false, detail },
+  };
+}
+
+/**
+ * RE-READ the iteration's parent after an approved in-lane plan, and hold out
+ * what the plan removed (MOTIR-4085).
+ *
+ * ⚠️ SCOPED TO THAT PARENT, and the scope is a decision rather than an economy.
+ * An in-lane plan changes the children of exactly one container; re-deriving
+ * anything wider would let one leaf silently re-order work an operator queued
+ * elsewhere. Nothing else in the run's state is touched.
+ *
+ * ⚠️ THE REMOVAL IS THE ARM THAT DOES DAMAGE SILENTLY. An added sibling arrives
+ * on its own — `next_ready` asks again every iteration, so a new card that is
+ * ready is offered without anybody doing anything. A REMOVED one is the opposite:
+ * `remove` archives, and an archived card should never be offered — but if
+ * anything ever offers one, the run would build work a plan deleted and nothing
+ * would look wrong. So the removals go on the exclude list, which is the same
+ * mechanism the loop already trusts to keep a card out of its own hands.
+ */
+async function refreshParent(
+  client: MotirClient,
+  lane: Lane,
+  opts: { exclude: (key: string) => void },
+): Promise<ReplanRefresh> {
+  const before = new Set(lane.siblingKeys.map((k) => k.toUpperCase()));
+  if (lane.parentKey === null) {
+    return { parentKey: null, removed: [], added: [] };
+  }
+  let after: string[];
+  try {
+    after = (await client.getWorkItem(lane.parentKey)).children.map((c) => c.identifier);
+  } catch {
+    // A failed re-read is reported as "nothing observed" rather than as an empty
+    // child set — treating it as emptiness would name every sibling as removed
+    // and exclude the lot.
+    return { parentKey: lane.parentKey, removed: [], added: [] };
+  }
+  const afterSet = new Set(after.map((k) => k.toUpperCase()));
+  const removed = lane.siblingKeys.filter((k) => !afterSet.has(k.toUpperCase()));
+  const added = after.filter((k) => !before.has(k.toUpperCase()));
+  for (const key of removed) opts.exclude(key);
+  return { parentKey: lane.parentKey, removed, added };
+}
+
+/** The per-iteration lines the operator reads about a refresh, or nothing when
+ *  the approved plan left the sibling level as it found it. */
+function renderRefresh(refresh: ReplanRefresh): string[] {
+  const lines: string[] = [];
+  if (refresh.removed.length > 0) {
+    lines.push(
+      `   the plan removed ${refresh.removed.join(', ')} — held out of the rest of this run.`,
+    );
+  }
+  if (refresh.added.length > 0) {
+    lines.push(`   the plan added ${refresh.added.join(', ')} — picked up when they are ready.`);
+  }
+  return lines;
 }
 
 /**

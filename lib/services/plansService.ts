@@ -3740,6 +3740,54 @@ export const plansService = {
     workItemKey: string,
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
+    const planId = await plansService.resolvePlanIdForWorkItem(projectId, workItemKey, ctx);
+    return plansService.approvePlan(planId, ctx);
+  },
+
+  /**
+   * READ the plan a card produced, WITHOUT deciding it (MOTIR-4085).
+   *
+   * ⚠️ IT IS THE APPROVE'S OWN RESOLUTION, MINUS THE DECISION — same anchoring
+   * walk, same key, same refusal when there is no conversation at this scope. The
+   * two share {@link plansService.resolvePlanIdForWorkItem} rather than each
+   * spelling the walk out, because a read that resolved a DIFFERENT plan from the
+   * one the approve would take is worse than no read at all: an operator's loop
+   * would check the lane of one plan and approve another.
+   *
+   * ⚠️ WHY IT EXISTS. `--auto-approve-replan` approves a plan an agent submitted
+   * while nobody was watching, and the bound on WHAT that plan may touch is the
+   * operator's loop to enforce — the agent cannot be trusted with its own bound,
+   * and the server cannot know which card an unattended iteration is on. So the
+   * loop needs the proposals BEFORE the approval; every other read it has is
+   * addressed by a plan id it never learns (the id came back in the sandboxed
+   * agent's tool result). Reading is `ai:view_plan`; DECIDING stays
+   * `ai:decide_plan`, which no MCP tool asserts at all — so this widens what a
+   * loop can look at and nothing about what an agent can cause.
+   */
+  async readPlanForWorkItem(
+    projectId: string,
+    workItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    const planId = await plansService.resolvePlanIdForWorkItem(projectId, workItemKey, ctx);
+    return plansService.getPlan(planId, ctx);
+  },
+
+  /**
+   * The ANCHORING walk, in one place: the card's key → `buildScope([key])` → the
+   * plan-change session at that anchor set → its `lastJobId` → the plan that job
+   * produced. Throws {@link NoPlanForWorkItemError} when any hop is missing.
+   *
+   * ⚠️ NO CONVERSATION MEANS NO, and that is the bound both callers inherit. A
+   * cadence plan, an onboarding generation and a plan submitted from the
+   * project-wide panel all sit at no anchor set, and every one of them is a plan a
+   * person is expected to decide on.
+   */
+  async resolvePlanIdForWorkItem(
+    projectId: string,
+    workItemKey: string,
+    ctx: ServiceContext,
+  ): Promise<string> {
     await projectAccessService.assertPermission(projectId, ctx, 'ai:view_plan');
 
     const scope = buildScope([workItemKey]);
@@ -3755,8 +3803,7 @@ export const plansService = {
       ? await plansService.findPlanIdForJob(session.lastJobId, ctx)
       : null;
     if (!planId) throw new NoPlanForWorkItemError(workItemKey);
-
-    return plansService.approvePlan(planId, ctx);
+    return planId;
   },
 
   /**

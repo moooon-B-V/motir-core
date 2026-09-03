@@ -191,3 +191,31 @@ export class ContainerHasOpenChildrenError extends CliError {
     this.name = 'ContainerHasOpenChildrenError';
   }
 }
+
+/**
+ * 422 `NO_PLAN_FOR_WORK_ITEM` — nothing the loop may decide is anchored at this
+ * card (MOTIR-4085; server-side the error is `lib/plans/errors.ts`'s).
+ *
+ * ⚠️ IT EXISTS BECAUSE THE REFUSAL IS OFTEN THE ELECTION, NOT AN ERROR.
+ * `approveWorkItemPlan` and its READ both resolve through the planning
+ * conversation ANCHORED at this card's key and nothing else, so an agent that
+ * deliberately anchored its re-plan at a container — or at nothing, when what is
+ * missing is a precondition no card names yet — has put its plan structurally
+ * out of an unattended loop's reach. The dispatch prompt tells it that lane is
+ * always available and legitimate, so the run has to be able to REPORT the
+ * outcome the agent chose rather than print a generic 422 about a plan it could
+ * not find.
+ *
+ * Typed on the CODE alone, like `CONTAINER_HAS_OPEN_CHILDREN`: there is no
+ * enrichment to read, and a client must branch on data rather than on the
+ * sentence (`public-api-conventions.md` §8).
+ */
+export class NoPlanForWorkItemError extends CliError {
+  constructor(message: string) {
+    super(message, {
+      exitCode: 1,
+      hint: 'Review the submitted plan in Motir — an unattended run decides only a plan anchored at the card it ran.',
+    });
+    this.name = 'NoPlanForWorkItemError';
+  }
+}

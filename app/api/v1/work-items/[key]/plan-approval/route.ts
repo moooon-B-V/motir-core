@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { resolveWorkItemKey } from '@/lib/api/v1/workItems/resolveKey';
-import { planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
+import {
+  planReferenceIds,
+  planTargetKeyResolver,
+  presentPlan,
+  type V1Plan,
+} from '@/lib/api/v1/workLoop/schema';
+import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import { PlanNotInExpectedStatusError } from '@/lib/plans/errors';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // POST /api/v1/work-items/{key}/plan-approval (MOTIR-3021 / MOTIR-3023) — the
 // public entrance `motir auto --auto-approve-replan` drives, specified in full
@@ -101,13 +108,54 @@ export const POST = withV1Route<{ key: string }>({ permission: 'ai:decide_plan' 
   // not have to learn a second shape to read what became of it. It also
   // carries the plan's own id, which is how a caller that never knew it can
   // report WHAT it approved.
-  const targetIds = [
-    ...new Set(plan.items.map((item) => item.workItemId).filter((id): id is string => id !== null)),
-  ];
+  return NextResponse.json(await presentResolvedPlan(plan, ctx));
+});
+
+// ── The READ beside the decision (MOTIR-4085) ───────────────────────────────
+//
+// ⚠️ IT IS THE SAME PLAN, RESOLVED BY THE SAME WALK, and that is the whole
+// reason it lives on this path rather than on one of its own.
+// `readPlanForWorkItem` and `approvePlanForWorkItem` share
+// `resolvePlanIdForWorkItem`, so a caller that reads here and then POSTs here
+// is looking at exactly the plan the POST will decide. A read on a different
+// path, resolved a second way, would let a loop check the lane of one plan and
+// approve another — which is the failure the whole lane check exists to stop.
+//
+// ── WHY A LOOP NEEDS IT ────────────────────────────────────────────────────
+// `motir auto --auto-approve-replan` approves a plan its agent submitted while
+// nobody was watching. What bounds that plan is the OPERATOR's loop: it checks
+// that every proposal falls inside the iteration's own lane — the leaf and its
+// siblings — and declines to approve one that does not, naming what fell out.
+// That check needs the proposals BEFORE the approval, and the loop has no other
+// way to reach them: the plan id came back in a sandboxed agent's tool result,
+// which the loop never sees.
+//
+// ── AND IT WIDENS NOTHING ABOUT WHAT AN AGENT CAN CAUSE ────────────────────
+// This declares `ai:view_plan` — the AUTHOR/VIEW half MOTIR-3188 split out — and
+// the POST above keeps `ai:decide_plan`. `CLI_TOKEN_GRANT` carries neither, so a
+// sandboxed agent's credential reaches this read no more than it reaches the
+// decision.
+export const GET = withV1Route<{ key: string }>({ permission: 'ai:view_plan' }, async (ctx) => {
+  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+  const plan = await plansService.readPlanForWorkItem(projectId, identifier, ctx.service);
+  return NextResponse.json(await presentResolvedPlan(plan, ctx));
+});
+
+/**
+ * A plan on the wire, with every reference it carries resolved to a key.
+ *
+ * Shared by the two handlers because the presentation is the same one — a caller
+ * that read a plan and then approved it must not have to reconcile two shapes of
+ * the same document.
+ */
+async function presentResolvedPlan(
+  plan: PlanWithItemsDto,
+  ctx: { service: ServiceContext },
+): Promise<V1Plan> {
   const refs = await workItemsService.resolveReferenceSummaries(
-    { ids: targetIds, keys: [] },
+    { ids: planReferenceIds(plan), keys: [] },
     plan.projectId,
     ctx.service,
   );
-  return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs)));
-});
+  return presentPlan(plan, planTargetKeyResolver(refs));
+}

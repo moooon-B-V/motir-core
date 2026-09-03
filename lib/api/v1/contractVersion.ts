@@ -287,5 +287,29 @@
  *   states: `V1_CONTRACT_VERSION` was `1.22.0` at `435bce9bd`, so this claims
  *   `1.23.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   OPERATIONS rather than a position, precisely so that stays one line.
+ *
+ * - `1.24.0` — MOTIR-4085 adds `getWorkItemPlan`
+ *   (`GET …/work-items/{key}/plan-approval`): the plan a
+ *   card's own re-plan produced, READ without deciding it, resolved by exactly the
+ *   walk the POST beside it uses. It exists so an unattended loop can BOUND what
+ *   it is about to approve — `motir auto --auto-approve-replan` reads the
+ *   proposals, checks that each falls inside the card's own lane (the leaf and its
+ *   siblings), and declines to approve one that does not, naming what fell out. It
+ *   also adds `parentKey` to a plan PROPOSAL: `parentRef` is a cuid, which §7
+ *   forbids a client from resolving, so without it a caller cannot answer *where
+ *   is this proposal putting a child?* at all.
+ *
+ *   Additive twice over: one new operation (§8's first allowed change) and one new
+ *   nullable field on an existing resource; no declared shape changed and nothing
+ *   was removed. The read is gated on `ai:view_plan` and the decision stays on
+ *   `ai:decide_plan`; `CLI_TOKEN_GRANT` holds NEITHER, so a sandboxed agent
+ *   reaches the new door no more than it reaches the old one — the grant is not
+ *   widened, and `work-item-plan-approval-route.test.ts` asserts that from the
+ *   constant.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, per the rule the 1.22.0 entry
+ *   states: `V1_CONTRACT_VERSION` was `1.23.0` at `e055b6b23`, so this claims
+ *   `1.24.0`. If a sibling has taken it since, RENUMBER this entry — it names the
+ *   OPERATION rather than a position, precisely so that stays one line.
  */
-export const V1_CONTRACT_VERSION = '1.23.0';
+export const V1_CONTRACT_VERSION = '1.24.0';
