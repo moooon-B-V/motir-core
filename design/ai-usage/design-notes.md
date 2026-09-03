@@ -194,6 +194,23 @@ this amendment every planning run would fall to the shipped renderer's generic
 - **Everything else in Panel 5 is UNCHANGED** — the columns, the pagination, the
   scope note, and the access path (already drawn in Panel 1; this amends a panel
   inside a surface that is already reachable).
+- **⚠️ WHAT THIS PANEL DOES NOT SHOW, recorded because it is not obvious from the
+  drawing and the amendment sits right next to it (MOTIR-4325).** The run log is
+  **planning runs only, by construction** — every figure in Panels 2, 4 and 5
+  joins `PlanningTurn`, which `motir-ai`'s `usageService` states outright. But
+  the ledger has **three** debit kinds: `debit` (a planning turn), `ci_overage`
+  (CI minutes past the pool) and `search` (a web search on the grounding
+  channel). CI has its own card on the _billing_ panel; **search is rendered
+  nowhere at all**, and the `balance` this area's Panel 2 draws is the WHOLE
+  ledger — so the spend shown here and the balance above it are measured over
+  different sets, with nothing on the surface saying so.
+  **That is NOT this card's to fix and is deliberately not drawn here** — it
+  predates the wire change, it reaches Panel 2 (out of scope), and where a
+  non-AI charge belongs is a real design question rather than something to
+  improvise. It is filed as MOTIR-4325, and it is named here so the next reader
+  of this asset — including the code card MOTIR-4305 — does not re-derive it or
+  read the run log as a complete account of what burns credits. It will widen:
+  hosted-agent runtime and code-graph indexing are the same shape, arriving.
 - **Shipped-reality check.** The pill markup mirrors the shipped renderer
   one-for-one: `OrgUsageClient.tsx` renders `<Pill className={jobKindTint(kind)}
 text-(--el-text-strong) border-transparent>` and the mock's `.pill-*` classes
