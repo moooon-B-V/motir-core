@@ -66,6 +66,7 @@ const BASE: PlanChangeConversationState = {
   outOfCredits: false,
   stopping: false,
   stopped: false,
+  queued: [],
 };
 
 function renderRail(
@@ -253,5 +254,109 @@ describe('STOPPED — a decision, and asserted BY ABSENCE', () => {
       { onStop, index: REVIEWABLE_INDEX },
     );
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('THE COMPOSER STAYS LIVE while the run works (MOTIR-4274)', () => {
+  it('⚠️ leaves the @ trigger and the input ENABLED while streaming', () => {
+    const { container } = renderRail(
+      { phase: 'streaming', progress: { kind: 'searching' } },
+      { onStop },
+    );
+
+    // Asserted on the emitted `disabled` ATTRIBUTES, not on an opacity class,
+    // because that is what the shipped component actually sets — `busy` used to
+    // put a real `disabled` on all three, so a user could not type at all while
+    // a run worked. Making the composer live is a behaviour change, not styling.
+    const form = container.querySelector('form')!;
+    expect(form.querySelector('input[type="text"]')?.hasAttribute('disabled')).toBe(false);
+    expect(
+      form.querySelector('[data-testid="planning-target-trigger"]')?.hasAttribute('disabled'),
+    ).toBe(false);
+    // ⚠️ SEND IS NOT ASSERTED HERE, and that is a distinction rather than a gap.
+    // It carries `disabled={disabled || draft.trim().length === 0}`, so with an
+    // empty draft it is disabled for a reason that has nothing to do with a run —
+    // asserting it enabled would be asserting that an empty message can be sent.
+    // What this card changed is the FIRST half of that expression, and the input
+    // and the trigger above are where that half is observable. The next test
+    // covers the pair end to end.
+    expect(form.querySelector('button[type="submit"]')).toBeTruthy();
+  });
+
+  it('…and Send becomes available as soon as there is something to send', () => {
+    const { container } = renderRail(
+      { phase: 'streaming', progress: { kind: 'searching' } },
+      { onStop },
+    );
+    const input = container.querySelector('form input[type="text"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Also drop the narration card.' } });
+
+    // The end-to-end proof the composer is live mid-run: a user can TYPE and then
+    // PRESS, which is exactly the pair the old lock made impossible.
+    expect(
+      (container.querySelector('form button[type="submit"]') as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
+
+  it('still locks the composer while a DECISION is in flight', () => {
+    // An approve or a discard is a write against the plan; a turn sent
+    // mid-decision would race it. `loading` too — there is no thread yet.
+    for (const phase of ['deciding', 'loading'] as const) {
+      const { container, unmount } = renderRail({ phase }, { onStop });
+      const input = container.querySelector('form input[type="text"]');
+      expect(input?.hasAttribute('disabled'), phase).toBe(true);
+      unmount();
+    }
+  });
+});
+
+describe('A QUEUED turn, and the same turn once the run has READ it (MOTIR-4274)', () => {
+  const queued = (read: boolean) => ({
+    phase: 'streaming' as const,
+    progress: { kind: 'searching' as const },
+    queued: [{ id: 'm1', text: 'Also drop the narration card.', read }],
+  });
+
+  it('renders the queued turn with the QUEUED label, the clock and the marker', () => {
+    renderRail(queued(false), { onStop });
+
+    expect(screen.getByText('Also drop the narration card.')).toBeTruthy();
+    const marker = screen.getByTestId('plan-change-queued');
+    expect(marker.textContent).toContain('Queued');
+    expect(marker.textContent).toContain('finishes the card it is writing');
+  });
+
+  it('⚠️ the READ state changes THREE things, and none of them is colour', () => {
+    const { container: pending } = renderRail(queued(false), { onStop });
+    const pendingHtml = pending.innerHTML;
+    const { container: read } = renderRail(queued(true), { onStop });
+    const readHtml = read.innerHTML;
+
+    // 1. the label slot
+    expect(pendingHtml).toContain('queued');
+    expect(readHtml).toContain('read');
+    // 2. the clock glyph
+    expect(pendingHtml).toContain('lucide-clock');
+    expect(readHtml).not.toContain('lucide-clock');
+    // 3. the marker line
+    expect(screen.getByTestId('plan-change-queued-read').textContent).toContain(
+      'Read at the boundary',
+    );
+  });
+
+  it('⚠️ does NOT re-tint the bubble — warning is spoken for by the ASKING state', () => {
+    // Two warm pending-ish states one scroll apart are less legible than one, so
+    // the pending fact is carried by a word, a glyph and a marker instead. The
+    // queued bubble is the ordinary user bubble.
+    const { container } = renderRail(queued(false), { onStop });
+    const bubble = screen.getByText('Also drop the narration card.').closest('div')!;
+    expect(bubble.className).toContain('--el-chat-bubble-user');
+    expect(container.innerHTML).not.toContain('--el-warning-surface');
+  });
+
+  it('shows nothing when nothing is queued — the ordinary run', () => {
+    renderRail({ phase: 'streaming', progress: { kind: 'searching' } }, { onStop });
+    expect(screen.queryByTestId('plan-change-queued')).toBeNull();
+    expect(screen.queryByTestId('plan-change-queued-read')).toBeNull();
   });
 });

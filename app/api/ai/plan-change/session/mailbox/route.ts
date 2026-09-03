@@ -92,3 +92,44 @@ export async function POST(req: Request): Promise<Response> {
     throw err;
   }
 }
+
+// GET /api/ai/plan-change/session/mailbox?jobId=… — WHAT IS STILL WAITING for
+// that run (Story MOTIR-4054 · MOTIR-4274). Session-authenticated, and it does
+// NOT consume: the boundary read is motir-ai's alone.
+//
+// ⚠️ THIS EXISTS BECAUSE THE OTHER REPO EMITS NOTHING. `motir-ai` records the
+// consumed turn ids in its `MailboxReport` and that report never reaches
+// motir-core — the planning handler returns `{ planDelta, summary }` — and no
+// stream frame is emitted at a boundary either. So a composer that queued a turn
+// cannot be TOLD it was read; it can only ask what is still waiting, and infer
+// the answer from the turn's absence.
+//
+// That is a poll, and a poll is worse than a push. It is bounded on purpose: the
+// client only asks while a run is streaming AND it has something queued, so an
+// ordinary run — nobody typed anything — makes zero requests. If motir-ai ever
+// emits a `folded` frame, this door stops being the only answer and the polling
+// goes with it.
+export async function GET(req: Request): Promise<Response> {
+  const gate = await requireCompliantSession();
+  if (!gate.ok) return gate.response;
+
+  const ctx = await getActiveProject();
+  if (!ctx) return noActiveProject();
+
+  const jobId = new URL(req.url).searchParams.get('jobId');
+  if (!jobId) {
+    return NextResponse.json(
+      { code: 'BAD_REQUEST', error: '`jobId` is required.' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const result = await planChangeMailboxService.peekForJob(jobId, ctx);
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (err) {
+    const mapped = mapPlanChangeError(err);
+    if (mapped) return mapped;
+    throw err;
+  }
+}

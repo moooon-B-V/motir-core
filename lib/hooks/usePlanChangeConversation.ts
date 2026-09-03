@@ -13,6 +13,8 @@ import {
   settleAskJob,
   submitAskTurn,
   submitContextualPlan,
+  attachMidRunTurn,
+  peekMailbox,
   stopPlanChangeRun,
   submitPlanChange,
   type AskRedirectResponse,
@@ -85,6 +87,15 @@ import {
  *  against the Plan (materialize / decline), so the gate must read busy for
  *  either — a Discard that looked idle mid-POST could be double-fired. */
 export type PlanChangePhase = 'loading' | 'idle' | 'streaming' | 'review' | 'deciding';
+
+/** One turn typed mid-run, and whether the run has taken it yet. */
+export interface QueuedTurn {
+  /** The mailbox entry's id — what the peek is matched against. */
+  id: string;
+  text: string;
+  /** The run consumed it at a phase boundary. */
+  read: boolean;
+}
 
 /** A progress frame the run narrates while the job works. */
 export type PlanChangeProgress =
@@ -168,6 +179,22 @@ export interface PlanChangeConversationState {
    */
   stopping: boolean;
   /**
+   * What the user typed WHILE the run was working, and whether the run has read
+   * it yet (Story MOTIR-4054 · MOTIR-4274).
+   *
+   * ⚠️ NOT PART OF THE THREAD, and that is the storage talking rather than a
+   * choice. A mid-run turn goes into the boundary MAILBOX, which is a different
+   * table from `plan_change_turn` — so it is not in `session.turns` and cannot be
+   * rendered from there. It joins the transcript's history only if and when a
+   * later run's accumulated intent carries it.
+   *
+   * `read` flips when the run has taken it at a phase boundary. Until then the
+   * surface must say QUEUED: a message that looks delivered and changes nothing
+   * for another thirty seconds reads as a bug, and the boundary can be a whole
+   * authoring session away.
+   */
+  queued: QueuedTurn[];
+  /**
    * The run ENDED because the user ended it.
    *
    * ⚠️ THIS IS NOT AN ERROR, and the code below goes out of its way not to record
@@ -193,9 +220,18 @@ const INITIAL: PlanChangeConversationState = {
   outOfCredits: false,
   stopping: false,
   stopped: false,
+  queued: [],
 };
 
 const OUT_OF_CREDITS_CODES = new Set(['MOTIR_AI_OUT_OF_CREDITS', 'out_of_credits']);
+
+/**
+ * How often the composer asks whether its queued turns have been read
+ * (MOTIR-4274). Three seconds: a phase boundary is minutes apart, so this is
+ * about how quickly the surface stops saying QUEUED, not about catching the
+ * boundary. It only ticks while a run is streaming AND something is unread.
+ */
+const MAILBOX_POLL_MS = 3000;
 
 /** Map one raw SSE frame to the narration the rail shows, or null to ignore it. */
 export function narrateFrame(event: string, data: unknown): PlanChangeProgress | null {
@@ -541,6 +577,10 @@ export function usePlanChangeConversation({
           // this state exists to prevent.
           stopping: false,
           stopped: false,
+          // The mailbox is per-RUN, so the queue is too: a new job has an empty
+          // one, and carrying the last run's turns into it would show the user
+          // sentences that can never be read again.
+          queued: [],
         }));
         stoppingRef.current = false;
 
@@ -620,6 +660,7 @@ export function usePlanChangeConversation({
             outOfCredits: false,
             stopping: false,
             stopped: false,
+            queued: [],
           }));
           stoppingRef.current = false;
           await finishPlanRun(submitted.jobId, submitted.planId, null, controller);
@@ -648,6 +689,10 @@ export function usePlanChangeConversation({
           // this state exists to prevent.
           stopping: false,
           stopped: false,
+          // The mailbox is per-RUN, so the queue is too: a new job has an empty
+          // one, and carrying the last run's turns into it would show the user
+          // sentences that can never be read again.
+          queued: [],
         }));
         stoppingRef.current = false;
 
@@ -727,7 +772,64 @@ export function usePlanChangeConversation({
   const send = useCallback(
     async (text: string, targets?: readonly PlanningTarget[]) => {
       const body = text.trim();
-      if (!body || abortRef.current) return;
+      if (!body) return;
+
+      // ⚠️ THE RUN IS STILL WORKING → THE MAILBOX, NOT THE SUBMIT (MOTIR-4274).
+      //
+      // ⚠️ AND THIS SITS ABOVE THE `abortRef` BAIL DELIBERATELY. That guard —
+      // `if (abortRef.current) return` — is the SECOND place the composer was
+      // locked during a run, and the one that is invisible: the `disabled` prop
+      // is what a reader sees, and this is what actually refused the call. It was
+      // right when a run was a monologue (there was nowhere for the turn to go,
+      // so a second send could only mean a second job) and it is wrong now, for
+      // exactly the same reason the prop was.
+      //
+      // It still guards the SUBMIT path below, which is what it was written for:
+      // a mid-run turn must never start a second job, and that remains true —
+      // the turn goes to the mailbox instead of being dropped.
+      //
+      // One control, two destinations, chosen by the phase — and the user does
+      // not have to know which. Both wrong answers are SILENT: a mid-run turn
+      // sent down the submit path opens a SECOND planning job on a thread that
+      // already has one, and a between-runs turn sent to the mailbox lands in a
+      // box nothing will ever check. So the branch is here, once, before either
+      // door is chosen.
+      //
+      // It starts nothing. The run reads this at its next phase boundary, which
+      // can be a whole authoring session away, so the turn is QUEUED until it
+      // does — and the surface says so rather than looking delivered.
+      if (stateRef.current.phase === 'streaming') {
+        const jobId = stateRef.current.jobId;
+        if (!jobId) return;
+        // Per SEND, never per render: a retry of this click must deliver once,
+        // and the next sentence must not be swallowed as a replay of this one.
+        const idempotencyKey = `turn:${jobId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+        try {
+          const delivery = await attachMidRunTurn(jobId, body, idempotencyKey);
+          if (!mountedRef.current) return;
+          setState((s) => ({
+            ...s,
+            // The door answers with the mailbox AS IT STANDS, so this is the
+            // whole pending set rather than a local append — which keeps the
+            // count right when a turn was consumed between two sends.
+            queued: delivery.turns.map((t) => ({ id: t.id, text: t.text, read: false })),
+          }));
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          if (!mountedRef.current) return;
+          // A LEGIBLE refusal, and the draft is the caller's to keep. The common
+          // one is `PLAN_CHANGE_JOB_NOT_RUNNING` — the run settled between the
+          // render and the click — which is a state conflict rather than a
+          // failure of the thread, so the conversation is untouched.
+          const code = err instanceof PlanEditsClientError ? err.code : null;
+          setState((s) => ({ ...s, errorCode: code ?? 'MAILBOX_FAILED' }));
+        }
+        return;
+      }
+
+      // Below here is the SUBMIT path, which still refuses re-entry: a run is in
+      // flight and starting a second one is the thing the guard exists to stop.
+      if (abortRef.current) return;
 
       // Is this turn the REPLY to a question the planner is waiting on? Derived
       // from the thread the user was actually looking at when they pressed the
@@ -757,6 +859,10 @@ export function usePlanChangeConversation({
           // this state exists to prevent.
           stopping: false,
           stopped: false,
+          // The mailbox is per-RUN, so the queue is too: a new job has an empty
+          // one, and carrying the last run's turns into it would show the user
+          // sentences that can never be read again.
+          queued: [],
         }));
         stoppingRef.current = false;
         await run(anchor, (signal) =>
@@ -785,6 +891,7 @@ export function usePlanChangeConversation({
         // previous run's ending must not be painted onto it.
         stopping: false,
         stopped: false,
+        queued: [],
       }));
       stoppingRef.current = false;
       await runAsk((signal) => submitAskTurn(body, signal, isAnswer));
@@ -938,6 +1045,56 @@ export function usePlanChangeConversation({
   const dismissError = useCallback(() => {
     setState((s) => ({ ...s, errorCode: null, outOfCredits: false }));
   }, []);
+
+  /**
+   * WATCH the mailbox drain (Story MOTIR-4054 · MOTIR-4274).
+   *
+   * ⚠️ A POLL, AND ONLY BECAUSE THERE IS NOTHING TO PUSH. `motir-ai` consumes a
+   * turn at a phase boundary and emits NO frame for it; the ids it records land
+   * in a `MailboxReport` that never reaches motir-core (the handler returns
+   * `{ planDelta, summary }`). So a turn's ABSENCE from the pending set is the
+   * only evidence the run took it, and asking is the only way to see it.
+   *
+   * ⚠️ IT IS BOUNDED BY ITS OWN CONDITION, which is the thing that makes it
+   * acceptable rather than a background timer nobody remembers. It runs only
+   * while a run is STREAMING and something is UNREAD — so the overwhelmingly
+   * common run, the one where nobody typed anything, makes zero requests, and
+   * the last read stops it rather than a timeout.
+   *
+   * If a `folded` frame ever lands upstream, delete this effect and read the
+   * frame; nothing else here changes.
+   */
+  useEffect(() => {
+    const unread = state.queued.some((t) => !t.read);
+    const jobId = state.jobId;
+    if (state.phase !== 'streaming' || !unread || !jobId) return;
+
+    const controller = new AbortController();
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const delivery = await peekMailbox(jobId, controller.signal);
+          if (!mountedRef.current) return;
+          const stillWaiting = new Set(delivery.turns.map((t) => t.id));
+          setState((s) => ({
+            ...s,
+            // Read = no longer waiting. Nothing is removed: the transcript is a
+            // record, and a turn the run TOOK is exactly the one worth still
+            // seeing — it is why the next level looks the way it does.
+            queued: s.queued.map((t) => (stillWaiting.has(t.id) ? t : { ...t, read: true })),
+          }));
+        } catch {
+          /* a failed peek is not a finding: the next tick asks again, and the
+             run is unaffected either way. */
+        }
+      })();
+    }, MAILBOX_POLL_MS);
+
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [state.phase, state.jobId, state.queued]);
 
   /**
    * END the run (Story MOTIR-4054 · MOTIR-4068).

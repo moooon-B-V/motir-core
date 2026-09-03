@@ -314,6 +314,29 @@ export const planChangeMailboxService = {
   },
 
   /**
+   * What is waiting for a JOB, without consuming it — {@link peek} addressed by
+   * the job rather than by the session (Story MOTIR-4054 · MOTIR-4274).
+   *
+   * ⚠️ WHY A CLIENT NEEDS THIS AT ALL, stated here because it is a fact about the
+   * OTHER repo and is invisible from this one. `motir-ai` emits NO stream frame
+   * when a boundary consumes a turn: the ids land in `MailboxReport.consumed`,
+   * and that report is not in the job result the handler returns
+   * (`{ planDelta, summary }`). So a surface that has queued a turn has no way to
+   * learn it was read except by asking what is still waiting — a turn that has
+   * left the pending set is a turn the run took.
+   *
+   * A frame would be better and is a `motir-ai` card, not this one. If one ever
+   * lands, this door stops being the composer's only answer and it can go.
+   */
+  async peekForJob(jobId: string, pctx: MailboxContext): Promise<MailboxDeliveryDto> {
+    const session = await findThreadForJob(jobId, pctx);
+    // Same reading as the boundary read: no thread for this job means nothing is
+    // waiting, which is true, and is not an error.
+    if (!session) return { turns: [], stopped: false };
+    return planChangeMailboxService.peek(jobId, session.id, pctx);
+  },
+
+  /**
    * What is waiting, WITHOUT consuming it — the read the composer makes to show
    * its own queued state.
    *

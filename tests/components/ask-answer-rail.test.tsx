@@ -93,6 +93,7 @@ const BASE: PlanChangeConversationState = {
   outOfCredits: false,
   stopping: false,
   stopped: false,
+  queued: [],
 };
 
 const handlers = {

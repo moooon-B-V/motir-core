@@ -91,6 +91,7 @@ function renderRail(turns: PlanChangeTurnDto[], refs: PlanChangeSessionDto['work
     outOfCredits: false,
     stopping: false,
     stopped: false,
+    queued: [],
   };
   return renderWithIntl(
     <PlanChangeRail
@@ -226,6 +227,7 @@ describe('state B — the question changes the composer', () => {
       outOfCredits: false,
       stopping: false,
       stopped: false,
+      queued: [],
     };
     renderWithIntl(
       <PlanChangeRail

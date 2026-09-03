@@ -111,6 +111,7 @@ const IDLE: PlanChangeConversationState = {
   outOfCredits: false,
   stopping: false,
   stopped: false,
+  queued: [],
 };
 
 afterEach(() => {

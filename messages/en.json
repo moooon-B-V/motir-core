@@ -6045,7 +6045,11 @@
       "stop": "Stop",
       "stoppingAction": "Stopping…",
       "stopping": "Stopping — finishing this card first.",
-      "stopped": "You stopped this run."
+      "stopped": "You stopped this run.",
+      "queuedLabel": "queued",
+      "queuedRead": "read",
+      "queuedMarker": "Queued — Motir AI reads this when it finishes the card it is writing.",
+      "queuedReadMarker": "Read at the boundary — folded into this run."
     },
     "targets": {
       "sectionLabel": "Work items",

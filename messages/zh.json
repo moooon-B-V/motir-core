@@ -6041,7 +6041,11 @@
       "stop": "停止",
       "stoppingAction": "正在停止…",
       "stopping": "正在停止 —— 先完成当前这张卡片。",
-      "stopped": "你停止了这次运行。"
+      "stopped": "你停止了这次运行。",
+      "queuedLabel": "待读",
+      "queuedRead": "已读",
+      "queuedMarker": "已排队 —— Motir AI 写完当前这张卡片后会读到。",
+      "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。"
     },
     "targets": {
       "sectionLabel": "工作项",

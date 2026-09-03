@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, MessageCircleQuestionMark, RefreshCw, Sparkles } from 'lucide-react';
+import { Check, Clock, MessageCircleQuestionMark, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
@@ -346,6 +346,44 @@ export function PlanChangeRail({
           ) : null}
         </div>
 
+        {/* QUEUED — what the user typed while the run was working (MOTIR-4274).
+            Rendered from `state.queued` rather than from the thread because a
+            mid-run turn lives in the MAILBOX, a different table from
+            `plan_change_turn`; it is not in `session.turns` and cannot be.
+
+            ⚠️ THE BUBBLE IS NOT RE-TINTED, deliberately. The obvious move is a
+            warm tint on the pending turn and it is wrong here:
+            `--el-warning-surface` already carries the planner's ASKING state on
+            this exact surface, and two warm pending-ish states one scroll apart
+            are less legible than one (`design/ai-chat/plan-change-run-live.mock.html`
+            sheet 2). The pending fact is carried by a WORD, a GLYPH and a MARKER
+            instead — and the queued/read distinction by all three changing. */}
+        {state.queued.map((turn) => (
+          <div key={turn.id} className="flex flex-col gap-1">
+            <Bubble
+              role="user"
+              label={
+                turn.read ? (
+                  tc('queuedRead')
+                ) : (
+                  <>
+                    <Clock className="size-3" aria-hidden="true" />
+                    {tc('queuedLabel')}
+                  </>
+                )
+              }
+            >
+              {turn.text}
+            </Bubble>
+            <p
+              className="text-center text-xs text-(--el-text-secondary)"
+              data-testid={turn.read ? 'plan-change-queued-read' : 'plan-change-queued'}
+            >
+              {turn.read ? tc('queuedReadMarker') : tc('queuedMarker')}
+            </p>
+          </div>
+        ))}
+
         {/* STOPPED — a MARKER, not an alert (MOTIR-4068).
             It uses the shipped `system`-marker line verbatim: centred,
             `text-xs`, `--el-text-secondary`. Deliberately NOT the error block
@@ -404,7 +442,17 @@ export function PlanChangeRail({
         onSubmit={onSend}
         placeholder={composerPlaceholder}
         autoFocus={askingForReason}
-        disabled={busy || state.phase === 'loading'}
+        // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
+        // works — that is the whole point of the mailbox, and it is a BEHAVIOUR
+        // change rather than a styling one: `busy` put a real `disabled`
+        // attribute on the `@` trigger, the input AND Send, so a user could not
+        // type at all. What a mid-run send DOES is the hook's branch; what it
+        // may do is here.
+        //
+        // `deciding` still locks it, and correctly: an approve or a discard is a
+        // write against the plan, and a turn sent mid-decision would race it.
+        // `loading` too — there is no thread to append to yet.
+        disabled={state.phase === 'loading' || state.phase === 'deciding'}
         // The pending question travels to the composer, not to a header pill:
         // measured at the rail's real 22rem the header row is already full, and
         // the bar belongs beside the control whose behaviour actually changed.
