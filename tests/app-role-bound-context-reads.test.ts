@@ -706,7 +706,7 @@ describe('workItemRepository.findByIds — one read, five consuming surfaces', (
   it('reads the batch through a bound tx, and returns the EMPTY answer without one', async () => {
     const { fx, blocker } = await seedLinkedPair('FBC');
 
-    // The two arms of `tx ?? db`, side by side. The bound one is the contract;
+    // The two arms of `tx ?? dbRead`, side by side. The bound one is the contract;
     // the unbound one is pinned as the EMPTY answer rather than as rows, because
     // asserting rows there would be asserting that a path with no binding works.
     const bound = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>

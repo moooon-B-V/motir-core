@@ -5,7 +5,7 @@ import {
   type ProjectRepoRole,
   type ProjectRepoTakeoverState,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import { ESTABLISHED_PROJECT_REPO_STATES } from '@/lib/projectRepos/vocabulary';
 
@@ -258,7 +258,7 @@ export const projectRepoRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectRepoWithRealized | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectRepo.findFirst({
       where: { id, workspaceId },
       include: { githubRepo: true, collaborators: COLLABORATOR_COLUMNS },
@@ -278,7 +278,7 @@ export const projectRepoRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectRepoWithRealized[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectRepo.findMany({
       where: { projectId, role, workspaceId },
       include: { githubRepo: true, collaborators: COLLABORATOR_COLUMNS },

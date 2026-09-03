@@ -1,5 +1,5 @@
 import { Prisma, type Attachment, type AttachmentSource } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Single-op data access for the `attachment` table (Subtask 2.3.7 upload leaf;
 // Subtask 5.2.1 adds the work_item-link management methods). Writes require
@@ -45,7 +45,7 @@ export const attachmentRepository = {
    * service applies the workspace-scoping + linked checks (a repo is a leaf).
    */
   /**
-   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? dbRead` fallback until every
    * caller bound its read; the arm then had no caller, so it was dead code that
    * returned an EMPTY result under `motir_app` and raised nothing — the exact
    * silent failure this cutover exists to remove. A branch that cannot be
@@ -72,7 +72,7 @@ export const attachmentRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Attachment[]> {
     const { take = 50, cursor } = options;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.attachment.findMany({
       // The lifecycle-owned sources never reach this panel — see
       // LIFECYCLE_OWNED_SOURCES for which and why.
@@ -85,7 +85,7 @@ export const attachmentRepository = {
 
   /** The panel's total count ("Show more (N)" + the header badge, 5.2.2). */
   async countByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     // The SAME predicate the listing uses, from the same constant — the badge
     // and the list cannot disagree.
     return client.attachment.count({
@@ -101,7 +101,7 @@ export const attachmentRepository = {
    * input short-circuits to [] without touching the DB.
    */
   /**
-   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? dbRead` fallback until every
    * caller bound its read; the arm then had no caller, so it was dead code that
    * returned an EMPTY result under `motir_app` and raised nothing — the exact
    * silent failure this cutover exists to remove. A branch that cannot be
@@ -198,7 +198,7 @@ export const attachmentRepository = {
    * IS NULL + createdAt range scan.
    */
   /**
-   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? dbRead` fallback until every
    * caller bound its read; the arm then had no caller, so it was dead code that
    * returned an EMPTY result under `motir_app` and raised nothing — the exact
    * silent failure this cutover exists to remove. A branch that cannot be
@@ -231,7 +231,7 @@ export const attachmentRepository = {
     organizationId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ total: bigint }>>`
       SELECT COALESCE(SUM(a."size_bytes"), 0) AS total
       FROM "attachment" a

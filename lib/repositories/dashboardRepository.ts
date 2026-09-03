@@ -1,5 +1,5 @@
 import { Prisma, type Dashboard } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import type { DashboardWithFacts } from '@/lib/mappers/dashboardMappers';
 
 // Dashboard data access (Story 6.3 · Subtask 6.3.1). Single Prisma ops;
@@ -23,7 +23,7 @@ export const dashboardRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<DashboardWithFacts | null> {
     if (!workspaceId || !id) return null;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.dashboard.findFirst({ where: { id, workspaceId }, include: factsInclude });
   },
 
@@ -40,7 +40,7 @@ export const dashboardRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<DashboardWithFacts[]> {
     if (!workspaceId || !actorUserId) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.dashboard.findMany({
       where: { workspaceId, OR: [{ access: 'workspace' }, { ownerId: actorUserId }] },
       include: factsInclude,

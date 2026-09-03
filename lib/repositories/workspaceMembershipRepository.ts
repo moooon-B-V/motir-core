@@ -5,7 +5,7 @@ import {
   type Workspace,
   type WorkspaceMembership,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // A membership row joined with the slice of its user the members list
 // renders. Kept here (not in the service) because the join shape is a
@@ -207,7 +207,7 @@ export const workspaceMembershipRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workspaceMembership.findFirst({
       where: { workspaceId, role: 'owner' },
       orderBy: { createdAt: 'asc' },

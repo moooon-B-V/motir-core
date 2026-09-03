@@ -19,6 +19,10 @@ interface Client {
 }
 
 declare const db: Client;
+// The SAME client under a narrower type (MOTIR-4295) — what `lib/db.ts` exports
+// as `dbRead`, so a `tx ?? dbRead` fallback does not hand every call a union of
+// two whole Prisma clients. Declared here for the same reason `db` is.
+declare const dbRead: Client;
 
 // A LOCAL stand-in for Prisma's namespace, so the parameter annotations below
 // read `Prisma.TransactionClient` — byte-identical to a shipped repository's,
@@ -49,6 +53,16 @@ export const fixtureRepository = {
   async findGlobalSetting(id: string, tx?: Prisma.TransactionClient) {
     const client = tx ?? db;
     return client.globalSetting.findUnique({ where: { id } });
+  },
+
+  // (5) BINDABLE + policy-gated, through `dbRead` (MOTIR-4295). IN SCOPE for
+  //     exactly the reason (1) is: the narrowing is a fact about the TYPE, and
+  //     nothing about which GUC is bound. A scanner keyed on the name `db` alone
+  //     would have dropped this read — and 247 real ones — out of the bindable
+  //     set with no assertion failing anywhere.
+  async findWidgetViaDbRead(id: string, tx?: Prisma.TransactionClient) {
+    const client = tx ?? dbRead;
+    return client.widget.findMany({ where: { id } });
   },
 
   // (4) NOT bindable at all — no `tx` parameter. That is the SIBLING scanner's

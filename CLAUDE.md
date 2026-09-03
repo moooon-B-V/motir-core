@@ -39,6 +39,26 @@ operations. Repositories never contain business logic or transactions.**
      subsequent write) take `tx: Prisma.TransactionClient` and use
      `SELECT FOR UPDATE` via `$queryRaw` when concurrent writes could race
      on the same row.
+   - **⚠️ A read that ACCEPTS an optional `tx` falls back to `dbRead`, never to
+     `db`** — `const client = tx ?? dbRead;`. Both names are the same object,
+     exported from `@/lib/db`; `dbRead` is it under `Prisma.TransactionClient`.
+     Writing `tx ?? db` makes the local a UNION of two whole Prisma clients, and
+     every later `client.<model>.findMany({ … })` then resolves against both
+     constituents of a 105-model generated client. **Measured with
+     `--generateTrace` (MOTIR-4295): one such method cost 9.6 s of check time
+     against 36 ms for the same method reading `tx` alone.** Across the app
+     project the sweep took `Instantiations` from **9,210,038 to 2,129,376**
+     (−77%) and the type-check's peak memory from 2.72 GB to 2.24 GB.
+     Annotating the local (`const client: Prisma.TransactionClient = tx ?? db`)
+     does NOT help — it measured 10.6 s; the union has to go, not be re-labelled.
+     **⚠️ And the cost MOVES rather than repeating**: it lands on whichever file
+     the checker reaches first, so a profile's top entry is a symptom of ORDER,
+     not of that file being pathological — fixing one file just promotes the
+     next. `db` stays correct for a read that takes no `tx` at all, and is
+     REQUIRED for anything opening a transaction (`dbRead` carries no
+     `$transaction`, which is what makes the rule enforceable by the type
+     checker). `tests/rls/`'s scanners read both names, and their fixtures pin
+     that in both directions.
 
 2. **Service** (`lib/services/*.ts`) — Business logic. Orchestrates
    repositories. Owns **all `prisma.$transaction(...)` calls**. Owns

@@ -1,5 +1,5 @@
 import { Prisma, type WorkItemComponent } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // WorkItemComponent repository — single Prisma operations on the
 // `work_item_component` join table (Story 5.4 · Subtask 5.4.1). The
@@ -77,7 +77,7 @@ export const workItemComponentRepository = {
    * admin list reads it bare.
    */
   async countByComponent(componentId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemComponent.count({ where: { componentId } });
   },
 
@@ -124,7 +124,7 @@ export const workItemComponentRepository = {
     workItemId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemComponent[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemComponent.findMany({ where: { workItemId } });
   },
 };

@@ -1,5 +1,5 @@
 import { Prisma, type Notification } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Notification repository — single Prisma operations on the `notification`
 // table (Story 5.7 · Subtask 5.7.2). The persistence leaf the 5.7.3 fan-in job
@@ -57,7 +57,7 @@ export const notificationRepository = {
    * when read inside a transaction.
    */
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<Notification | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.notification.findUnique({ where: { id } });
   },
 
@@ -79,7 +79,7 @@ export const notificationRepository = {
     options: ListByRecipientOptions = {},
     tx?: Prisma.TransactionClient,
   ): Promise<Notification[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { take = 20, cursor, category, order = 'desc' } = options;
     return client.notification.findMany({
       where: { recipientUserId, ...(category ? { category } : {}) },
@@ -105,7 +105,7 @@ export const notificationRepository = {
     options: { category?: Prisma.NotificationWhereInput['category'] } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { category } = options;
     return client.notification.count({
       where: { recipientUserId, readAt: null, ...(category ? { category } : {}) },
@@ -124,7 +124,7 @@ export const notificationRepository = {
     options: { category?: Prisma.NotificationWhereInput['category'] } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { category } = options;
     return client.notification.count({
       where: { recipientUserId, ...(category ? { category } : {}) },

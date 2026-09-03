@@ -1,5 +1,5 @@
 import { Prisma, type CustomFieldDefinition } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Custom-field-definition repository — single Prisma operations on the
 // `custom_field_definition` table (Story 5.3 · Subtask 5.3.1). The
@@ -85,7 +85,7 @@ export const customFieldDefinitionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldDefinition | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldDefinition.findFirst({ where: { id, workspaceId } });
   },
 
@@ -100,7 +100,7 @@ export const customFieldDefinitionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldDefinition[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldDefinition.findMany({
       where: { projectId, workspaceId },
       orderBy: { position: 'asc' },
@@ -122,7 +122,7 @@ export const customFieldDefinitionRepository = {
     workItemId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldDefinitionWithItemValue[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldDefinition.findMany({
       where: { projectId, workspaceId },
       orderBy: { position: 'asc' },
@@ -149,7 +149,7 @@ export const customFieldDefinitionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldDefinition.count({ where: { projectId, workspaceId } });
   },
 };

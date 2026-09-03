@@ -1,5 +1,5 @@
 import { Prisma, type BoardColumnStatus } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the `board_column_status` mapping table (Story 3.1 ·
 // Subtask 3.1.3) — the column ↔ workflow-status edges. Single-Prisma-op
@@ -26,7 +26,7 @@ export const boardColumnStatusRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<BoardColumnStatus[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.boardColumnStatus.findMany({ where: { boardId, workspaceId } });
   },
 
@@ -36,7 +36,7 @@ export const boardColumnStatusRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<BoardColumnStatus[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.boardColumnStatus.findMany({ where: { columnId, workspaceId } });
   },
 

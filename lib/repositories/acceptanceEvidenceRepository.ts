@@ -1,5 +1,5 @@
 import { Prisma, type AcceptanceEvidenceStatus } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import type { AcceptanceEvidenceWithAttachment } from '@/lib/mappers/acceptanceEvidenceMappers';
 
 // Single-op data access for the `acceptance_evidence` table (Story MOTIR-1627 ·
@@ -27,7 +27,7 @@ export const acceptanceEvidenceRepository = {
     workItemId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<AcceptanceEvidenceWithAttachment | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.acceptanceEvidence.findFirst({
       where: { workItemId, isCurrent: true },
       include: { attachment: true, traceAttachment: true },
@@ -39,7 +39,7 @@ export const acceptanceEvidenceRepository = {
     id: string,
     tx?: Prisma.TransactionClient,
   ): Promise<AcceptanceEvidenceWithAttachment | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.acceptanceEvidence.findUnique({
       where: { id },
       include: { attachment: true, traceAttachment: true },
@@ -111,7 +111,7 @@ export const acceptanceEvidenceRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<string[]> {
     if (workItemIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.acceptanceEvidence.findMany({
       where: { workItemId: { in: workItemIds }, isCurrent: true, status: 'pending' },
       select: { workItemId: true },

@@ -1,5 +1,5 @@
 import { Prisma, type PlanChangeSession } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Single Prisma operations on the `plan_change_session` table (Story 7.30 ·
 // MOTIR-1728). Writes require `tx` (a compile-time guarantee they run in a
@@ -30,7 +30,7 @@ export const planChangeSessionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planChangeSession.findFirst({ where: { projectId, scopeKey, workspaceId } });
   },
 

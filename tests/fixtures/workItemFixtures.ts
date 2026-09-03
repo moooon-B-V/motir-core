@@ -9,7 +9,7 @@ import type {
   WorkItemLinkKind,
   WorkItemType,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -129,7 +129,7 @@ export async function nextTestPosition(
   projectId: string,
   tx?: Prisma.TransactionClient,
 ): Promise<string> {
-  const client = tx ?? db;
+  const client = tx ?? dbRead;
   const last = await client.workItem.findFirst({
     where: { projectId },
     orderBy: { position: 'desc' },

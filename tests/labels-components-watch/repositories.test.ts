@@ -45,7 +45,7 @@ import { truncateAuthTables } from '../helpers/db';
 // through the SAME owner client the writes use, keeping RLS inert as the header says.
 //
 // One claim did NOT survive that move and is recorded rather than quietly dropped:
-// two reads here were written to exercise the repositories' `tx ?? db` FALLBACK arm
+// two reads here were written to exercise the repositories' `tx ?? dbRead` FALLBACK arm
 // ("both client paths (bare `db` + in-`tx`)"). Under the role that arm no longer
 // returns rows to assert on — deliberately, since a read nobody bound cannot see the
 // tenant — so those sites now pass a tx like every other read. The arm itself is a

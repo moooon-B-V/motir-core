@@ -32,7 +32,7 @@
  * the statuses the first reseed just preserved and re-applies the same values.
  */
 import type { Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { db, dbRead } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 
@@ -129,7 +129,7 @@ export async function applyPreservedStatuses(args: {
   /** See {@link PreserveStatusClient}; defaults to the `@/lib/db` singleton. */
   client?: PreserveStatusClient;
 }): Promise<PreserveResult> {
-  const client = args.client ?? db;
+  const client = args.client ?? dbRead;
   let preserved = 0;
   let fellBack = 0;
   const warnings: string[] = [];

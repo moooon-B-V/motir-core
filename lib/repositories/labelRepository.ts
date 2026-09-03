@@ -1,5 +1,5 @@
 import { Prisma, type Label } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Label repository — single Prisma operations on the `label` table (Story
 // 5.4 · Subtask 5.4.1). The persistence leaf under labelsService (5.4.2),
@@ -28,7 +28,7 @@ export const labelRepository = {
     nameLower: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Label | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.label.findUnique({
       where: { projectId_nameLower: { projectId, nameLower } },
     });
@@ -48,7 +48,7 @@ export const labelRepository = {
     take = 20,
     tx?: Prisma.TransactionClient,
   ): Promise<Label[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.label.findMany({
       where: { projectId, nameLower: { startsWith: q.toLowerCase() } },
       orderBy: { nameLower: 'asc' },
@@ -70,7 +70,7 @@ export const labelRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Label[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.label.findMany({ where: { id: { in: ids }, projectId } });
   },
 
@@ -81,7 +81,7 @@ export const labelRepository = {
    * order. Read-only path → `db` singleton.
    */
   async listByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<Label[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.label.findMany({
       where: { workItems: { some: { workItemId } } },
       orderBy: { nameLower: 'asc' },

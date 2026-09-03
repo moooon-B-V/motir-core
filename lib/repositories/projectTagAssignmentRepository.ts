@@ -1,5 +1,5 @@
 import { Prisma, type ProjectTag, type ProjectTagAssignment } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // projectTagAssignmentRepository (Story 6.13 · Subtask 6.13.5) — single-op
 // access to the project ↔ tag join (`project_tag_assignment`). The tagging
@@ -20,7 +20,7 @@ export const projectTagAssignmentRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<AssignmentWithTag[]> {
-    return (tx ?? db).projectTagAssignment.findMany({
+    return (tx ?? dbRead).projectTagAssignment.findMany({
       where: { projectId },
       include: { tag: true },
       orderBy: { tag: { label: 'asc' } },

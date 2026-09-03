@@ -5,7 +5,7 @@ import {
   type ProjectRoleDefinition,
   type User,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // A project-membership row joined with the slice of its user the members list
 // renders. Kept here (not in the service) because the join shape is a
@@ -53,7 +53,7 @@ export const projectMembershipRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectMembership | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectMembership.findUnique({
       where: { userId_projectId: { userId, projectId } },
     });
@@ -76,7 +76,7 @@ export const projectMembershipRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectMembershipWithRoleDefinition | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectMembership.findUnique({
       where: { userId_projectId: { userId, projectId } },
       include: { roleDefinition: true },
@@ -97,7 +97,7 @@ export const projectMembershipRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectMembership[]> {
     if (projectIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectMembership.findMany({
       where: { userId, projectId: { in: projectIds } },
     });
@@ -167,7 +167,7 @@ export const projectMembershipRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<{ role: MemberRole; count: number }[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const groups = await client.projectMembership.groupBy({
       by: ['role'],
       where: { projectId },
@@ -194,7 +194,7 @@ export const projectMembershipRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<{ roleDefinitionId: string; count: number }[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const groups = await client.projectMembership.groupBy({
       by: ['roleDefinitionId'],
       where: { projectId, roleDefinitionId: { not: null } },

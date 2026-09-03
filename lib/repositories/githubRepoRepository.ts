@@ -1,5 +1,5 @@
 import { type GithubInstallation, type GithubRepo, type Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // GitHub-repo repository — single Prisma operations on the `github_repo` table
 // (Story 7.10 · MOTIR-891). `installationId` here is the INTERNAL
@@ -228,7 +228,7 @@ export const githubRepoRepository = {
     name: string,
     tx?: Prisma.TransactionClient,
   ): Promise<(GithubRepo & { installation: GithubInstallation })[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.githubRepo.findMany({
       where: {
         owner: { equals: owner, mode: 'insensitive' },

@@ -1,5 +1,5 @@
 import { Prisma, type PlanItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // PlanItem repository — single Prisma operations on the `plan_item` table
 // (Story 7.21 · MOTIR-1336). Writes require `tx`; pure reads use the `db`
@@ -15,7 +15,7 @@ export const planItemRepository = {
   /** A plan's proposal items in append order (createdAt asc, id asc). Optional
    *  `tx` joins a surrounding transaction (the materialize read in approve). */
   async findByPlan(planId: string, tx?: Prisma.TransactionClient): Promise<PlanItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.findMany({
       where: { planId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -43,7 +43,7 @@ export const planItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<PlanItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.findMany({
       where: { workItemId, workspaceId, op: { in: ['modify', 'remove'] } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -51,7 +51,7 @@ export const planItemRepository = {
   },
 
   async countByPlan(planId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.count({ where: { planId } });
   },
 
@@ -62,7 +62,7 @@ export const planItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Map<string, number>> {
     if (planIds.length === 0) return new Map();
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.planItem.groupBy({
       by: ['planId'],
       where: { planId: { in: planIds } },
@@ -74,7 +74,7 @@ export const planItemRepository = {
   /** A single PlanItem by id. Optional `tx` joins a surrounding transaction
    *  (the proposal-edit path re-reads the item under the plan lock). */
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<PlanItem | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.findUnique({ where: { id } });
   },
 

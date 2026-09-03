@@ -1,5 +1,5 @@
 import { Prisma, type WorkflowStatus, type WorkflowTransition } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the per-project status-workflow tables (Story 2.2 · Subtask
 // 2.2.3). Single-Prisma-op leaves per CLAUDE.md — no business logic, no DTO
@@ -26,7 +26,7 @@ export const workflowsRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkflowStatus[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workflowStatus.findMany({
       where: { projectId, workspaceId },
       orderBy: { position: 'asc' },
@@ -45,7 +45,7 @@ export const workflowsRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkflowStatus[]> {
     if (projectIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workflowStatus.findMany({
       where: { projectId: { in: projectIds }, workspaceId },
     });
@@ -57,7 +57,7 @@ export const workflowsRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkflowTransition[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workflowTransition.findMany({
       where: { projectId, workspaceId },
     });
@@ -74,7 +74,7 @@ export const workflowsRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkflowStatus | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workflowStatus.findFirst({
       where: { projectId, workspaceId, key },
     });
@@ -91,7 +91,7 @@ export const workflowsRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkflowTransition | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workflowTransition.findFirst({
       where: { projectId, workspaceId, fromStatusId, toStatusId },
     });
@@ -128,7 +128,7 @@ export const workflowsRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkflowStatus | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workflowStatus.findFirst({ where: { id: statusId, workspaceId } });
   },
 
@@ -138,7 +138,7 @@ export const workflowsRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkflowTransition | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workflowTransition.findFirst({ where: { id: transitionId, workspaceId } });
   },
 

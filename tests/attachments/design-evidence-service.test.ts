@@ -853,7 +853,7 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
       fx.ctx,
     );
 
-    // The repository's `tx ?? db` fallback: the panel read runs under an
+    // The repository's `tx ?? dbRead` fallback: the panel read runs under an
     // already-bound workspace context, not inside the supersede transaction.
     const current = await withWorkspaceServiceContext(fx.ctx.workspaceId, (tx) =>
       designEvidenceRepository.findCurrentByWorkItem(card.id, tx),

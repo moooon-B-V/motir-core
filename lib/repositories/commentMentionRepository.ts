@@ -1,5 +1,5 @@
 import { Prisma, type CommentMention } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Comment-mention repository — single Prisma operations on the
 // `comment_mention` table (Story 5.1 · Subtask 5.1.1): the queryable
@@ -55,7 +55,7 @@ export const commentMentionRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<CommentMention[]> {
     if (commentIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.commentMention.findMany({ where: { commentId: { in: commentIds } } });
   },
 };

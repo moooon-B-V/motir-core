@@ -1,5 +1,5 @@
 import { Prisma, type WorkItemLink, type WorkItemLinkKind } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import {
   CrossWorkspaceLinkError,
   DuplicateLinkError,
@@ -42,7 +42,7 @@ export const workItemLinkRepository = {
    * singleton and is covered by its own tests.
    */
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<WorkItemLink | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemLink.findUnique({ where: { id } });
   },
 
@@ -57,7 +57,7 @@ export const workItemLinkRepository = {
     kind?: WorkItemLinkKind,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemLink[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemLink.findMany({
       where: { fromId, ...(kind ? { kind } : {}) },
     });
@@ -73,7 +73,7 @@ export const workItemLinkRepository = {
     kind?: WorkItemLinkKind,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemLink[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemLink.findMany({
       where: { toId, ...(kind ? { kind } : {}) },
     });
@@ -93,7 +93,7 @@ export const workItemLinkRepository = {
     kind: WorkItemLinkKind,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemLink | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemLink.findUnique({
       where: { fromId_toId_kind: { fromId, toId, kind } },
     });
@@ -113,7 +113,7 @@ export const workItemLinkRepository = {
     bId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemLink | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemLink.findFirst({
       where: {
         OR: [
@@ -223,7 +223,7 @@ export const workItemLinkRepository = {
   ): Promise<
     Array<{ id: string; status: string; projectId: string; sessionBranch: string | null }>
   > {
-    const rows = await (tx ?? db).workItemLink.findMany({
+    const rows = await (tx ?? dbRead).workItemLink.findMany({
       where: { fromId: workItemId, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: {
         toItem: { select: { id: true, status: true, projectId: true, sessionBranch: true } },
@@ -259,7 +259,7 @@ export const workItemLinkRepository = {
     Array<{ fromId: string; status: string; projectId: string; sessionBranch: string | null }>
   > {
     if (fromIds.length === 0) return [];
-    const rows = await (tx ?? db).workItemLink.findMany({
+    const rows = await (tx ?? dbRead).workItemLink.findMany({
       where: { fromId: { in: fromIds }, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: {
         fromId: true,
@@ -297,7 +297,7 @@ export const workItemLinkRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ blockedId: string; blockerId: string }>> {
     if (itemIds.length === 0) return [];
-    const rows = await (tx ?? db).workItemLink.findMany({
+    const rows = await (tx ?? dbRead).workItemLink.findMany({
       where: { fromId: { in: itemIds }, kind: 'is_blocked_by', toItem: { archivedAt: null } },
       select: { fromId: true, toId: true },
     });
@@ -350,7 +350,7 @@ export const workItemLinkRepository = {
     }>
   > {
     if (fromIds.length === 0) return [];
-    const rows = await (tx ?? db).workItemLink.findMany({
+    const rows = await (tx ?? dbRead).workItemLink.findMany({
       where: {
         fromId: { in: fromIds },
         kind: 'is_blocked_by',
@@ -417,7 +417,7 @@ export const workItemLinkRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ fromId: string; sessionBranch: string }>> {
     if (fromIds.length === 0) return [];
-    const rows = await (tx ?? db).workItemLink.findMany({
+    const rows = await (tx ?? dbRead).workItemLink.findMany({
       where: {
         fromId: { in: fromIds },
         kind: 'is_blocked_by',
@@ -467,7 +467,7 @@ export const workItemLinkRepository = {
     }>
   > {
     if (toIds.length === 0) return [];
-    const rows = await (tx ?? db).workItemLink.findMany({
+    const rows = await (tx ?? dbRead).workItemLink.findMany({
       where: {
         toId: { in: toIds },
         kind: 'is_blocked_by',
