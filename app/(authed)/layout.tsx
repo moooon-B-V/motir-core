@@ -24,6 +24,7 @@ import { AppLayout } from '@/components/ui/AppLayout';
 import { SidebarDrawer } from '@/components/ui/SidebarDrawer';
 import { TopNav } from './_components/TopNav';
 import { SidebarNav } from './_components/SidebarNav';
+import { HelpMenu } from './_components/HelpMenu';
 import { ShellTierNav } from './_components/ShellTierNav';
 import { CommandPaletteProvider } from './_components/CommandPaletteProvider';
 import { CreateIssueProvider } from './_components/CreateIssueProvider';
@@ -197,17 +198,19 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // these two helpers; a shell that hides a door to a page that still renders is
   // the failure a second predicate would produce.
   const workspaceTierRevealed = isWorkspaceTierRevealed(scopedWorkspaceModels.length);
-  // Where the rail's `Legal` row points — `null` on a deployment that has
-  // configured no legal documents, and then the row does not render at all
-  // (MOTIR-4010). Resolved here because the manifest is a server-side read and
-  // `SidebarNav` is a client component. It is a synchronous parse of one
-  // environment value, so it joins no wave and costs no round trip.
+  // Where the Help menu's `Legal documents` row points — `null` on a
+  // deployment that has configured no legal documents, and then the row does
+  // not render at all (MOTIR-4010; re-homed off the rail by MOTIR-4239).
+  // Resolved here because the manifest is a server-side read and `HelpMenu` is
+  // a client component. It is a synchronous parse of one environment value, so
+  // it joins no wave and costs no round trip.
   const legalIndexUrl = resolveLegalIndexUrl();
-  // Where the rail's `Docs` row points — `null` on a deployment that has
+  // Where the Help menu's `Docs` row points — `null` on a deployment that has
   // configured no documentation url, and then that row does not render either
-  // (MOTIR-4167). The same shape as the line above, for the same reason: the
-  // documentation left this repository with the public reading surface
-  // (MOTIR-3932), so the row reads the operator's configuration, server-side.
+  // (MOTIR-4167; re-homed off the rail by MOTIR-4239). The same shape as the
+  // line above, for the same reason: the documentation left this repository
+  // with the public reading surface (MOTIR-3932), so the row reads the
+  // operator's configuration, server-side.
   const docsIndexUrl = resolveDocsIndexUrl();
 
   // Project data — only meaningful when there's an active workspace. Without
@@ -395,8 +398,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       user={{ name: session.user.name, email: session.user.email }}
                       workspaceTierRevealed={workspaceTierRevealed}
                       publicProjectsAvailable={publicProjectsAvailable}
-                      legalIndexUrl={legalIndexUrl}
-                      docsIndexUrl={docsIndexUrl}
+                      helpMenu={
+                        <HelpMenu docsIndexUrl={docsIndexUrl} legalIndexUrl={legalIndexUrl} />
+                      }
                     />
                   }
                 >
@@ -457,8 +461,10 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   // room for the controls the below-md bar's four-slot budget
                   // displaced. Each one is the SAME component the bar renders,
                   // re-homed — build-in-public (labelled, truncating), then
-                  // report, then theme. The Plan-with-AI pill is deliberately
-                  // absent: PlanWithAIFab below is already its phone-width door.
+                  // Help (MOTIR-4239 — the drawer has no footer of its own, so
+                  // its trigger lives here instead), report, then theme. The
+                  // Plan-with-AI pill is deliberately absent: PlanWithAIFab
+                  // below is already its phone-width door.
                   footer={
                     <>
                       <div className="min-w-0 flex-1">
@@ -471,6 +477,11 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           <BuildingInPublicHeaderLink placement="drawer" />
                         ) : null}
                       </div>
+                      <HelpMenu
+                        placement="drawer"
+                        docsIndexUrl={docsIndexUrl}
+                        legalIndexUrl={legalIndexUrl}
+                      />
                       <ReportButton display="drawer" />
                       <ThemeToggle placement="drawer" />
                     </>
@@ -483,8 +494,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     user={{ name: session.user.name, email: session.user.email }}
                     workspaceTierRevealed={workspaceTierRevealed}
                     publicProjectsAvailable={publicProjectsAvailable}
-                    legalIndexUrl={legalIndexUrl}
-                    docsIndexUrl={docsIndexUrl}
                   />
                 </SidebarDrawer>
 

@@ -385,13 +385,14 @@ test.describe('@smoke shell journeys', () => {
     await expect(page.getByRole('button', { name: 'Create your first project' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Switch project' })).toHaveCount(0);
 
-    // The project-scoped nav is hidden; Settings/Docs (bottom section) stay.
+    // The project-scoped nav is hidden; Settings/Git (bottom section) stay.
+    // Docs and Legal documents left this section for the Help menu (MOTIR-4239).
     const rail = page.getByRole('navigation', { name: 'Primary' });
     await expect(rail.getByRole('link', { name: 'Work Items' })).toHaveCount(0);
     await expect(rail.getByRole('link', { name: 'Boards' })).toHaveCount(0);
     await expect(rail.getByRole('link', { name: 'Reports' })).toHaveCount(0);
     await expect(rail.getByRole('link', { name: 'Settings' })).toBeVisible();
-    await expect(rail.getByRole('link', { name: 'Docs' })).toBeVisible();
+    await expect(rail.getByRole('link', { name: 'Git' })).toBeVisible();
   });
 
   // ── 10. Re-login lands on the LAST working project (+ its workspace/org) ───

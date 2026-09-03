@@ -136,7 +136,7 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // no tooltip, no "ask an admin" line. The rows below simply close up.
   await expect(settingsDoor(page)).toHaveCount(0);
   await expect(rail(page).getByRole('link', { name: 'Job runs' })).toBeVisible();
-  await expect(rail(page).getByRole('link', { name: 'Docs' })).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: 'Git' })).toBeVisible();
 
   // ⌘K offers no settings deep link either — the palette reads the same registry.
   const palette = await openPalette(page);

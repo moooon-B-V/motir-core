@@ -17,6 +17,12 @@ import { ShortcutsCheatsheet } from './ShortcutsCheatsheet';
  * (it knows nothing about workspaces or projects), so the application data only
  * has to flow into `AppCommandPalette`.
  *
+ * `openShortcuts()` (MOTIR-4239) is the same seam for the cheatsheet: before it,
+ * `cheatsheetOpen` / `setCheatsheetOpen` were local state and nothing outside
+ * this file could open the dialog, so only the `?` key could. The Help menu's
+ * "Keyboard shortcuts" row is the first other caller, and `?` keeps working
+ * unchanged — both roads set the same state.
+ *
  * Shortcut bindings come from `lib/shortcuts.ts` (the single source of truth the
  * cheatsheet also reads), so the keys advertised in the cheatsheet are exactly
  * the keys wired here.
@@ -25,6 +31,7 @@ interface CommandPaletteContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
   openCommandPalette: () => void;
+  openShortcuts: () => void;
 }
 
 const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null);
@@ -42,8 +49,13 @@ export function CommandPaletteProvider({ children }: { children: ReactNode }) {
   useShortcut(SHORTCUTS.shortcuts.combo, () => setCheatsheetOpen(true));
 
   const value = useMemo<CommandPaletteContextValue>(
-    () => ({ open, setOpen, openCommandPalette: () => setOpen(true) }),
-    [open],
+    () => ({
+      open,
+      setOpen,
+      openCommandPalette: () => setOpen(true),
+      openShortcuts: () => setCheatsheetOpen(true),
+    }),
+    [open, setCheatsheetOpen],
   );
 
   return (

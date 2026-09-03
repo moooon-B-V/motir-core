@@ -953,14 +953,12 @@
       "jobRuns": "任务运行",
       "git": "Git",
       "github": "GitHub",
-      "docs": "文档",
       "backlog": "待办列表",
       "triage": "分流",
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
       "resumeOnboardingInProgress": "继续引导，进行中",
-      "legal": "法律条款",
       "security": "安全"
     },
     "topNav": {
@@ -1016,6 +1014,12 @@
       "platformAdmin": "平台管理",
       "platformAdminHint": "运维控制台·全部租户",
       "staffOnly": "仅限员工"
+    },
+    "help": {
+      "label": "帮助",
+      "docs": "文档",
+      "shortcuts": "键盘快捷键",
+      "legal": "法律文件"
     },
     "account": {
       "signOut": "退出登录",
