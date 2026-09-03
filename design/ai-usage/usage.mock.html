@@ -672,6 +672,13 @@
         background: var(--el-tint-mint);
         color: var(--el-text-strong);
       }
+      /* MOTIR-4303 (2026-09-03) — the ONE planning kind. Added BESIDE the three
+         above, never replacing them: `AiUsage.jobKind` is persisted history, so
+         the older tints keep labelling runs an organization has already paid for. */
+      .pill-plan {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
       .pill-warn {
         background: var(--el-tint-yellow);
         color: var(--el-text-strong);
@@ -1617,10 +1624,18 @@
                     </tr>
                   </thead>
                   <tbody>
+                    <!-- MOTIR-4303 — THE WEEK AFTER THE SWITCH, which is what this
+                         table has to be drawn in. Every run submitted from here on
+                         records ONE planning kind, so the newest rows carry the
+                         `plan` pill; the rows below them keep the four historical
+                         labels, because `AiUsage.jobKind` is persisted history and
+                         those are the runs the organization was billed for. A run
+                         log that showed only one state or only the other would
+                         specify a surface nobody will ever see. -->
                     <tr>
                       <td><span class="muted">Jun 16 · 14:22</span></td>
                       <td>
-                        <span class="pill pill-generate">Generate plan</span>
+                        <span class="pill pill-plan">Planning</span>
                         <span class="muted" style="margin-left: 6px">Mobile App</span>
                       </td>
                       <td>
@@ -1632,7 +1647,7 @@
                     <tr>
                       <td><span class="muted">Jun 16 · 13:58</span></td>
                       <td>
-                        <span class="pill pill-expand">Expand story</span>
+                        <span class="pill pill-plan">Planning</span>
                         <span class="muted" style="margin-left: 6px">Mobile App</span>
                       </td>
                       <td>
@@ -1641,6 +1656,7 @@
                       <td class="num"><span class="muted">148k</span></td>
                       <td class="num credits">22</td>
                     </tr>
+                    <!-- ── the switch happened here ─────────────────────────── -->
                     <tr>
                       <td><span class="muted">Jun 16 · 11:40</span></td>
                       <td>
@@ -1677,10 +1693,15 @@
                       <td class="num"><span class="muted">358k</span></td>
                       <td class="num credits">98</td>
                     </tr>
+                    <!-- The FOURTH historical label. It is drawn with the NEUTRAL
+                         pill because that is what the shipped renderer does:
+                         `jobKindLabel` has a `replan` case and `jobKindTint` does
+                         not, so a re-plan row falls to `bg-(--el-surface)`. Drawn
+                         as it really renders, not as a fourth tint it never had. -->
                     <tr>
                       <td><span class="muted">Jun 15 · 16:05</span></td>
                       <td>
-                        <span class="pill pill-augment">Augment tree</span>
+                        <span class="pill pill-neutral">Re-plan</span>
                         <span class="muted" style="margin-left: 6px">Web App</span>
                       </td>
                       <td>
