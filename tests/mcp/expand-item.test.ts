@@ -139,7 +139,7 @@ describe('expand_item — submit and return', () => {
     // calls, not a second submit path.
     expect(vi.mocked(submitJob)).toHaveBeenCalledTimes(1);
     const [kind, , context] = vi.mocked(submitJob).mock.calls[0]!;
-    expect(kind).toBe('expand_item');
+    expect(kind).toBe('plan');
     expect((context as { rootItemKey?: string }).rootItemKey).toBe(story.identifier);
 
     // Return-immediately, asserted negatively: nothing streamed, nothing polled.

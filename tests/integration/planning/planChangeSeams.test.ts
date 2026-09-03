@@ -424,7 +424,7 @@ describe('seam · the ACCUMULATED thread is what the plan-edit job receives', ()
     ];
 
     // The shipped job kind — the conversation adds none.
-    expect(kind).toBe('augment');
+    expect(kind).toBe('plan');
     expect(tenant.projectId).toBe(fx.projectId);
     expect(tenant.workspaceId).toBe(fx.workspaceId);
     expect(tenant.projectKey).toBe(fx.project.identifier);
@@ -595,13 +595,15 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     // The refinement still carries the original request. Selected by KIND, not by
     // call index: an approve on a project's first plan also fires the one-shot
     // `propose_convention` job (MOTIR-839), which is a submit this seam does not
-    // care about.
+    // care about. Since MOTIR-4304 the kind that selects the planning submits is
+    // `plan` — the ONE planning kind — and `propose_convention` is still the
+    // thing being filtered out, so the selection is unchanged in what it means.
     const calls = submitJobMock.mock.calls as unknown as Array<
       [string, unknown, { prompt: string }]
     >;
-    const augments = calls.filter((call) => call[0] === 'augment');
-    expect(augments).toHaveLength(2);
-    const [, , payload] = augments[1]!;
+    const planningSubmits = calls.filter((call) => call[0] === 'plan');
+    expect(planningSubmits).toHaveLength(2);
+    const [, , payload] = planningSubmits[1]!;
     expect(payload.prompt).toContain('Add a story');
     expect(payload.prompt).toContain('Now split it');
   });

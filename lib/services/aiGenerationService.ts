@@ -101,7 +101,10 @@ export const aiGenerationService = {
       projectKey: ctx.project.identifier,
     };
     const { jobId } = await submitJob(
-      'generate_tree',
+      // ONE planning kind (ADR `session-model.md` §6 step 2). This submit names no
+      // target at all, which is exactly how motir-ai reads it as *plan the
+      // project* — the arm `readProjectTarget` serves.
+      'plan',
       tenant,
       {
         prompt: input.prompt ?? null,

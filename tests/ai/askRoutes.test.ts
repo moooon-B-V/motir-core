@@ -398,7 +398,7 @@ describe('the REDIRECT — a turn the handler hands back', () => {
     // The SECOND submit is the shipped plan-edit kind — the plan-change path is
     // called, not re-implemented.
     const kinds = submitJobMock.mock.calls.map((c) => (c as unknown as [string])[0]);
-    expect(kinds).toEqual(['ask_project', 'augment']);
+    expect(kinds).toEqual(['ask_project', 'plan']);
     expect(body.jobId).toBe('job-augment-9');
     expect(body.planId).toBeTruthy();
 
@@ -424,7 +424,7 @@ describe('the REDIRECT — a turn the handler hands back', () => {
 
     expect(second.outcome).toBe('silent');
     const kinds = submitJobMock.mock.calls.map((c) => (c as unknown as [string])[0]);
-    expect(kinds).toEqual(['ask_project', 'augment']);
+    expect(kinds).toEqual(['ask_project', 'plan']);
   });
 });
 

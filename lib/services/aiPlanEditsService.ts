@@ -7,7 +7,7 @@ import {
 } from '@/lib/ai/lessonCapture';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
-import type { JobContextBag, JobKind, JobStreamEvent, SubmittedRequirement } from '@/lib/ai/types';
+import type { JobContextBag, JobStreamEvent, SubmittedRequirement } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
@@ -50,10 +50,18 @@ function buildTenant(ctx: ProjectContext, organizationId: string, isMeta: boolea
   };
 }
 
-/** The job kinds a plan EDIT submits — the 7.11/7.12 set (`generate_tree` is
- *  `aiGenerationService`'s). All three write their output through the 7.21
- *  Plan/PlanItem proposal store. */
-type PlanEditJobKind = Extract<JobKind, 'augment' | 'expand_item' | 'replan'>;
+/**
+ * ⚠️ `PlanEditJobKind` IS GONE (MOTIR-4304). It named the 7.11/7.12 subset a plan
+ * EDIT could submit — `augment` / `expand_item` / `replan` — and after ADR
+ * `session-model.md` §6 step 2 there is one planning kind, `plan`, for all six
+ * submit sites. `submitPlanEditJob` lost its `kind` parameter with it: a
+ * parameter with one legal value is a parameter that will drift.
+ *
+ * What each site names is now the CONTEXT, which is what motir-ai resolves the
+ * target arm from — `context.planId` a plan, `context.rootItemKey` /
+ * `context.targetKeys` a work item, neither the project. Nothing about the
+ * context changes here; only the kind does.
+ */
 
 /**
  * The ids a plan-edit submit hands back.
@@ -132,7 +140,6 @@ async function assertCanPlan(ctx: ProjectContext): Promise<void> {
 }
 
 async function submitPlanEditJob(
-  kind: PlanEditJobKind,
   context: JobContextBag,
   ctx: ProjectContext,
   opts: PlanEditSubmitOptions = {},
@@ -168,7 +175,10 @@ async function submitPlanEditJob(
   });
   const tenant = buildTenant(ctx, organizationId, isMeta);
   const { jobId } = await submitJob(
-    kind,
+    // ONE planning kind (ADR `session-model.md` §6 step 2). Every planning submit
+    // in the product sends this; motir-ai reads WHAT the run is about off the
+    // context bag, not off a name.
+    'plan',
     tenant,
     {
       ...context,
@@ -357,7 +367,7 @@ export const aiPlanEditsService = {
     requirement?: SubmittedRequirement,
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    return submitPlanEditJob('augment', { prompt, ...(requirement ? { requirement } : {}) }, ctx);
+    return submitPlanEditJob({ prompt, ...(requirement ? { requirement } : {}) }, ctx);
   },
 
   /**
@@ -397,7 +407,6 @@ export const aiPlanEditsService = {
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
     return submitPlanEditJob(
-      'augment',
       { prompt, targetKeys: [...targetKeys], ...(requirement ? { requirement } : {}) },
       ctx,
     );
@@ -429,7 +438,7 @@ export const aiPlanEditsService = {
       );
     }
 
-    return submitPlanEditJob('expand_item', { rootItemKey: itemKey }, ctx, opts);
+    return submitPlanEditJob({ rootItemKey: itemKey }, ctx, opts);
   },
 
   /**
@@ -508,7 +517,11 @@ export const aiPlanEditsService = {
         workspaceId: ctx.workspaceId,
       });
       const submitted = await submitJob(
-        'revise_plan',
+        // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes
+        // this a REVISION on the far side — `readerForPlan`'s first arm — so it is
+        // the only thing distinguishing it on the wire now, and its silent loss
+        // would route every revision to the project arm.
+        'plan',
         buildTenant(ctx, organizationId, isMeta),
         {
           // The PLAN is the target. `planId` is the only address a revision has —
@@ -561,7 +574,7 @@ export const aiPlanEditsService = {
       );
     }
 
-    return submitPlanEditJob('replan', { rootItemKey: itemKey }, ctx);
+    return submitPlanEditJob({ rootItemKey: itemKey }, ctx);
   },
 
   streamAugment(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {

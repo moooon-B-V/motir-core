@@ -73,6 +73,22 @@ const CANONICAL_JOB_KINDS = [
   // envelope rather than mis-dispatched — this guard exists to make the window
   // between them visible rather than silent.
   'revise_plan',
+  // `plan` (Story MOTIR-3943 — MOTIR-4304). THE ONE PLANNING KIND: after ADR
+  // `session-model.md` §6 step 2 all six planning submit sites send it, and
+  // motir-ai resolves what the run is about from the CONTEXT rather than from
+  // the name. Already in motir-ai's canonical set (declared by MOTIR-3940's step
+  // 1, which made it ACCEPTED while motir-core was still sending the five old
+  // kinds); adding it HERE closes that member of the drift.
+  //
+  // ⚠️ THE DRIFT THAT REMAINS IS REAL AND INTENDED, and a reader must be able to
+  // tell it from an oversight: motir-ai's list also carries `code_audit` and
+  // `security_audit`, whose motir-core mirrors land with their own consumer
+  // surfaces. And for one more card the five planning members are in BOTH lists
+  // on purpose — motir-ai keeps accepting them until MOTIR-4306, and motir-core
+  // keeps declaring them until MOTIR-4308 — so this switch stays revertible on
+  // its own. That window is the thing this guard exists to make visible rather
+  // than silent.
+  'plan',
 ] as const;
 
 // The motir-core typed error each canonical code maps to (lib/ai/errors.ts).

@@ -92,7 +92,7 @@ describe('submitRevise — the change lands on the plan you are holding', () => 
     await aiPlanEditsService.submitRevise(planId, 'Split it', projectCtx(fx));
 
     const [kind, , context] = (submitJob as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(kind).toBe('revise_plan');
+    expect(kind).toBe('plan');
     expect(context).toMatchObject({ planId, prompt: 'Split it' });
     // A revision names no work item — that is the gap the kind exists to close.
     expect(context).not.toHaveProperty('rootItemKey');
@@ -151,9 +151,14 @@ describe('submitRevise — the change lands on the plan you are holding', () => 
     await expect(
       aiPlanEditsService.submitRevise(planId, 'Second', projectCtx(fx)),
     ).rejects.toBeInstanceOf(PlanRevisionInFlightError);
-    expect(
-      (submitJob as ReturnType<typeof vi.fn>).mock.calls.filter(([k]) => k === 'revise_plan'),
-    ).toHaveLength(1);
+    // ONE submit, not two — the lease refused the second before a job was spent.
+    // Counted on the KIND, which is `plan` for every planning submit since
+    // MOTIR-4304; `context.planId` is what still says this one is a revision.
+    const submits = (submitJob as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([k]) => k === 'plan',
+    );
+    expect(submits).toHaveLength(1);
+    expect((submits[0]![2] as { planId?: string }).planId).toBe(planId);
   });
 
   it('REFUSES an `approved` or `declined` plan, naming the status', async () => {
@@ -209,6 +214,6 @@ describe('submitRevise — the change lands on the plan you are holding', () => 
     // An augment OPENS a plan; a revision does not. That difference is the card.
     expect(await adminDb.plan.count({ where: { projectId: fx.projectId } })).toBe(before + 1);
     const [kind] = (submitJob as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect(kind).toBe('augment');
+    expect(kind).toBe('plan');
   });
 });

@@ -77,6 +77,24 @@ export const JOB_KINDS = [
   // side declares its own types against the shared contract (the open-core
   // boundary).
   'revise_plan',
+  // `plan` (Story MOTIR-3943 · MOTIR-4304 — ADR `motir-ai/docs/decisions/session-model.md`
+  // §6 step 2) — THE ONE PLANNING KIND. Every planning submit in the product sends
+  // it: `startGeneration`, `submitAugment`, `submitContextual`, `submitExpand`,
+  // `submitReplan` and `submitRevise`, plus the auto-plan cadence trigger, which
+  // reaches the wire only through `submitExpand` and so inherits the switch.
+  //
+  // ⚠️ IT REPLACES A DISTINCTION NOTHING CONSUMED. The five planning kinds above
+  // all route through one walk on the far side (MOTIR-3940), so the kind was
+  // transport carrying an operation name — and an operation is derivable from
+  // what the request already says, which is why naming it added no information
+  // and created a second place for the answer to drift. What motir-ai resolves
+  // the run from is the CONTEXT: `context.planId` names a plan, `rootItemKey` /
+  // `targetKeys` a work item, and NEITHER means plan the project.
+  //
+  // ⚠️ THE FIVE ABOVE STAY, for now, and their removal is MOTIR-4308's — it runs
+  // after motir-ai has stopped accepting them (MOTIR-4306). Keeping them here is
+  // what makes this switch revertible on its own.
+  'plan',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
