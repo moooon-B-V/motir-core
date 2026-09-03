@@ -1,0 +1,243 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import { planReviewItem } from '../helpers/planReview';
+import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
+import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+
+// MOTIR-4185 (story MOTIR-4181, design Part XIV §9) — BOTH DOORS, ONE PEEK.
+//
+// ⚠️ AC 1 IS ONE TEST OVER BOTH HOSTS, NOT TWO THAT AGREE, and the distinction is
+// the whole point of the story. Two tests that each assert their own door's
+// output can both pass while the two doors render different things — which is
+// exactly the state this story found: the canvas's peek showed the target's
+// CURRENT values with no sign a plan was about to change them, and the list's
+// showed the proposed values in a surface that was not the shipped peek. So the
+// assertion below renders the SAME proposal through each host and compares the
+// two renderings to each other.
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/plans/p1',
+  useSearchParams: () => new URLSearchParams(''),
+}));
+vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
+  updateIssueAction: vi.fn(),
+  changeStatusAction: vi.fn(),
+}));
+
+import { PlanProposalList } from '@/components/planning/PlanProposalList';
+import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
+
+const MODIFY: PlanReviewItemDto = planReviewItem({
+  planItemId: 'pi_modify',
+  op: 'modify',
+  nodeId: 'wi_1',
+  identifier: 'MOTIR-7',
+  title: 'One peek for a PROPOSAL',
+  kind: 'story',
+  priority: 'highest',
+  storyPoints: 8,
+  descriptionMd: 'The body a reviewer reads before approving.',
+  explanationMd: 'Why it matters.',
+  changes: [{ field: 'priority', from: 'high', to: 'highest' }],
+  proposal: {
+    op: 'modify',
+    identifier: 'MOTIR-7',
+    changedFields: ['priority'],
+    settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+  },
+});
+
+/** The target's payload the peek fetches on open, for a `modify` / `remove`. */
+const PEEK_RESPONSE = {
+  id: 'wi_1',
+  identifier: 'MOTIR-7',
+  title: 'One peek for a proposal',
+  projectIdentifier: 'MOTIR',
+  workItemRefs: {},
+  kind: 'story',
+  status: 'todo',
+  statusLabel: 'To Do',
+  statusCategory: 'todo',
+  descriptionMd: 'The CURRENT body.',
+  explanationMd: null,
+  type: null,
+  executor: null,
+  assigneeName: null,
+  assigneeId: null,
+  reporterName: 'Zhu Yue',
+  priority: 'high',
+  labels: [],
+  components: [],
+  dueLabel: null,
+  dueDate: null,
+  sprintName: null,
+  sprintId: null,
+  storyPoints: 3,
+  estimateMinutes: null,
+  estimateLabel: null,
+  customFields: [],
+  createdAt: '2026-09-01T00:00:00.000Z',
+  updatedAt: '2026-09-01T00:00:00.000Z',
+  archived: null,
+  parent: null,
+  parentId: null,
+  readiness: null,
+  pullRequests: [],
+  repoDelivery: [],
+  deliveries: [],
+  hasChildren: false,
+  canPlan: false,
+  workflow: { statuses: [], transitions: [], policyMode: 'open' },
+  members: [],
+  sprints: [],
+  projectComponents: [],
+  estimation: {
+    estimationStatistic: 'story_points',
+    pointScale: 'fibonacci',
+    customScaleValues: [],
+    canEdit: false,
+  },
+};
+
+beforeEach(() => {
+  // One stub for both doors. The canvas asks for its LEVEL before it draws; the
+  // peek asks for the TARGET's payload on open. Answering both from here is what
+  // makes the two renderings comparable rather than accidentally different.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/api/work-items/peek') {
+        return { ok: true, json: async () => PEEK_RESPONSE } as unknown as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ nodes: [], edges: [], offLevelBlockers: [] }),
+      } as unknown as Response;
+    }),
+  );
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  cleanup();
+});
+
+/** Open the proposal through the LIST door and return what the peek rendered. */
+async function throughTheList(item: PlanReviewItemDto): Promise<string> {
+  render(<PlanProposalList items={[item]} decided={false} />);
+  fireEvent.click(screen.getByRole('button', { name: /Open / }));
+  await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
+  const text = screen.getByTestId('proposal-peek').textContent ?? '';
+  cleanup();
+  return text;
+}
+
+/**
+ * Open the SAME proposal through the CANVAS door.
+ *
+ * The canvas fetches its own level before it draws, and its `View` pill appears
+ * only on a SELECTED node — so the door has to be driven the way a reader drives
+ * it (select, then View) rather than by finding a button. `/api/work-items/peek`
+ * is answered by the same stub the list side uses, which is what makes the two
+ * renderings comparable at all.
+ */
+async function throughTheCanvas(item: PlanReviewItemDto): Promise<string> {
+  render(<PlanReviewCanvas items={[item]} projectKey="MOTIR" version={0} />);
+  const node = await waitFor(() => {
+    const found = document.querySelector(`[data-node-id="${item.nodeId}"]`);
+    if (!found) throw new Error('the canvas has not drawn its level yet');
+    return found as HTMLElement;
+  });
+  fireEvent.keyDown(node, { key: 'Enter' });
+  fireEvent.click(within(node).getByTestId('view-button'));
+  await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
+  const text = screen.getByTestId('proposal-peek').textContent ?? '';
+  cleanup();
+  return text;
+}
+
+describe('both plan-review doors open ONE peek (MOTIR-4185)', () => {
+  it('renders the SAME peek for the same modify, from the list and from the canvas (AC 1)', async () => {
+    const fromList = await throughTheList(MODIFY);
+    const fromCanvas = await throughTheCanvas(MODIFY);
+
+    // The load-bearing comparison: the two doors against EACH OTHER. Two tests
+    // that each asserted their own door's output would both have passed on the
+    // state this story exists to fix.
+    expect(fromList).toBe(fromCanvas);
+
+    // …and not vacuously equal — the peek actually rendered the proposal.
+    expect(fromList).toContain('MOTIR-7');
+    expect(fromList).toContain('change');
+    expect(fromList).toContain('Why it matters.');
+  });
+
+  it('opens the proposed values, not the target’s current ones (AC 1)', async () => {
+    const fromList = await throughTheList(MODIFY);
+    // The overlay: the peek shows what the work item will BE. `The CURRENT body`
+    // is what the fetched target carries, and the plan replaces it.
+    expect(fromList).toContain('The body a reviewer reads before approving.');
+    expect(fromList).not.toContain('The CURRENT body.');
+  });
+
+  it('opens all THREE ops from the list (AC 2)', async () => {
+    for (const [op, identifier, expected] of [
+      ['add', null, 'not yet created'],
+      ['modify', 'MOTIR-7', 'change'],
+      ['remove', 'MOTIR-7', 'remove'],
+    ] as const) {
+      const item = planReviewItem({
+        planItemId: `pi_${op}`,
+        op,
+        identifier,
+        title: `A ${op} proposal`,
+        proposal: {
+          op,
+          identifier,
+          changedFields: [],
+          settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+        },
+      });
+      render(<PlanProposalList items={[item]} decided={false} />);
+      fireEvent.click(screen.getByRole('button', { name: /Open / }));
+      await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
+      expect(screen.getByTestId('quick-view-op').textContent).toBe(expected);
+      cleanup();
+    }
+  });
+
+  it('keeps ONE close affordance on the new host (AC 6)', async () => {
+    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    fireEvent.click(screen.getByRole('button', { name: /Open / }));
+    await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
+    const closes = screen.getAllByLabelText('Close');
+    // MOTIR-4022 measured two controls named `Close` 40px apart in one dialog on
+    // the surface being retired. It must not return with its replacement.
+    expect(closes.length).toBe(1);
+  });
+
+  it('returns focus to the row that opened it (AC 5)', async () => {
+    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    const row = screen.getByRole('button', { name: /Open / });
+    row.focus();
+    fireEvent.click(row);
+    await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    // The dialog is mounted INSIDE the list, so closing it unmounts the dialog in
+    // the same commit that re-renders the rows — and the Modal's own restore
+    // lands before the row is settled. The explicit refocus is what closes that
+    // (MOTIR-4022), and it must survive the host swap.
+    await waitFor(() => expect(document.activeElement).toBe(row));
+  });
+
+  it('leaves the list row’s own diff rendering alone (AC 7)', () => {
+    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    // The node is a SIGNAL and the list is where a change is SPELLED (Part VIII
+    // §3). This story adds a reading; it must not move one.
+    expect(screen.getByText('high')).toBeTruthy();
+    expect(screen.getAllByText('highest').length).toBeGreaterThan(0);
+  });
+});
