@@ -225,6 +225,28 @@ it the right moment:
 refinement** that only adds isolation _between_ tenants. Nothing here needs to
 wait on a PSL submission.
 
+> ⚠️ **AND THAT SENTENCE IS SCOPED TO THIS DECISION — it is not a general
+> statement about the tenant namespace.** It holds because the only thing served
+> at `*.<base>` under §2 is a public project page whose customer-authored
+> Markdown **cannot execute script**: `motir-marketing` renders it with
+> `react-markdown` + `remark-gfm` and NO `rehype-raw`, so raw HTML is escaped and
+> `javascript:` hrefs are stripped by the default URL transform (measured
+> 2026-09-03 — zero `script`, `iframe` and `img` elements from hostile input).
+> With no script on a tenant host there is no way to set a cookie at the base
+> domain, which is the entire class a listing defends.
+>
+> **THE MOMENT ANYTHING ON `*.<base>` CAN RUN CUSTOMER CODE, THE REFINEMENT
+> BECOMES A PREREQUISITE** — cookies are DOMAIN-scoped, not origin-scoped, so one
+> tenant's script could set `Domain=<base>` and every other tenant would receive
+> it. The same-origin policy does not cover this and no application-level fix
+> does either. **MOTIR-4213 carries the mechanism, the lead time and the entry
+> conditions**; the point to note here is that the listing must be MERGED AND
+> SHIPPING IN BROWSERS before such a surface serves its first request, and that
+> is months of other people's release cadence, not ours.
+>
+> This note records a CONDITION, not a plan: no decision to host customer code on
+> `*.<base>` is taken here or anywhere else in this record.
+
 ---
 
 ## §5 — Q4: what a SELF-HOSTED build serves
