@@ -3891,9 +3891,20 @@ card**.
 | foot line    | `Approving this plan archives {key}.`                                                                                                                                |
 | the link out | present, labelled `Open the work item as it stands →` (§7)                                                                                                           |
 
-**`targetMissing`.** A `remove` whose target is already archived or hard-deleted (the DTO's own flag)
-shows the peek's shipped NOT-FOUND panel rather than an empty proposal — the state
+**`targetMissing`.** A `remove` whose target is ~~already archived or~~ hard-deleted (the DTO's own
+flag) shows the peek's shipped NOT-FOUND panel rather than an empty proposal — the state
 `IssueQuickViewPanel state="notfound"` already draws, reused rather than re-invented.
+
+> **⚠️ CORRECTED 2026-09-03 (MOTIR-4256) — the ARCHIVED half of that sentence was wrong.**
+> `planReviewService` computes `targetMissing = item.op !== 'add' && !target`, and the batched read
+> behind `target` is `workItemRepository.findByIdsInWorkspace` — a plain
+> `findMany({ where: { id: { in: ids }, workspaceId } })` that does **not** filter `archivedAt`. So an
+> archived target IS resolved, `targetMissing` stays `false`, and the peek renders the `remove`
+> normally; only a hard-DELETED target reaches the NOT-FOUND panel. Nothing about the drawn state
+> changes and no asset is re-exported — what changes is which cards reach it. It matters one surface
+> over: `design/work-items/design-notes.md` § _The PENDING-PLAN indicator on the item page_ draws the
+> archived-item-plus-`remove`-proposal STACK, and that panel is only real because an archived target
+> keeps its proposal readable.
 
 ## 9. §9 · The two ENTRANCES — unchanged in shape, re-pointed in target
 
