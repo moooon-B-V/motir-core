@@ -6,67 +6,90 @@
     <title>The plan canvas at arrival, and SHOW CHANGES — MOTIR-3259</title>
     <style>
       /* ----------------------------------------------------------------------
-         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
-         light theme / warm-editorial / motir palette). This standalone mock uses
-         the same VALUES so it renders without the Tailwind build, exactly as the
-         sibling assets (design/ai-chat/*.mock.html, design/roadmap/*.mock.html) do.
-         Nothing here re-defines shape/colour semantics — it re-states them so a
-         plain browser paints the real palette.
+         Token block — the `--el-*` ELEMENT-token layer, resolved to the LIGHT /
+         warm-editorial / motir values the running app computes, exactly as the
+         sibling asset `plan-revision.mock.html` states them. A plain browser
+         paints the real palette without the Tailwind build.
+
+         ⚠️ MOTIR-4349 — this block USED to alias the same values onto private
+         names (`--muted: #787671`, `--soft: #fafaf9`, …). The values were right
+         and that was the trap: a raw hex does not flip with `data-palette`,
+         does not follow a re-skin, and is invisible to every ink guard in the
+         tree, all of which key on `--el-*`. Both scanners read the token off
+         the DECLARATION at the paint site, so re-defining an alias AS
+         `var(--el-…)` would not have helped — the sites themselves have to
+         name the token. Consume the token layer, and the guard can see the
+         asset.
       ---------------------------------------------------------------------- */
       :root {
-        /* text */
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --secondary: #5d5b54;
-        --muted: #787671;
-        --faint: #a4a097;
-        /* surfaces */
-        --page: #f4f3f1;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        /* borders */
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --border-strong: #d3cfc8;
-        /* accent */
-        --accent: #5645d4;
-        --accent-pressed: #4534b3;
-        --accent-soft: #f4f2fd;
-        --highlight: #ff64c8;
-        /* status / intent */
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --danger: #e03131;
-        --info: #0075de;
-        /* tints */
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --mint: #d9f3e1;
-        --lavender: #e6e0f5;
-        --sky: #dcecfa;
-        --danger-surface: #fde0ec;
-        --warning-surface: #ffe8d4;
-        /* work-item type hues */
-        --t-epic: #ff64c8;
-        --t-epic-soft: #ffe3f5;
-        --t-story: #1aae39;
-        --t-story-soft: #d9f3e1;
-        --t-task: #0075de;
-        --t-task-soft: #dcecfa;
-        --t-bug: #e03131;
-        --t-subtask: #2a9d99;
-        --t-subtask-soft: #d6f0ee;
-        /* shape */
-        --r-card: 12px;
-        --r-btn: 10px;
-        --r-control: 8px;
-        --r-pill: 999px;
-        --sh-subtle: 0 1px 2px #0000000d;
-        --sh-card: 0 2px 6px #0000000f;
-        --sh-elev: 0 4px 14px #00000014;
-        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        /* ── Ink ──────────────────────────────────────────────────
+           `--el-text-muted` and `--el-text-faint` are DECLARED and used only
+           where WCAG does not measure them: muted is 4.12–4.34:1 on every
+           tinted surface and faint clears AA on none (CLAUDE.md's measured
+           table). Declaring them still matters — `mockStateInkScan` resolves a
+           token by planting a probe, and an asset that declares neither
+           reports its faint ink as muted. Faint carries the two decorative
+           chrome glyphs, the strike-through RULE colour, and the id on an
+           archived `.node.remove`, which is inactive text 1.4.3 exempts. */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-identifier: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
+
+        /* ── Surfaces ───────────────────────────────────── */
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        /* ── Borders ────────────────────────────────────── */
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        /* ── Accent ─────────────────────────────────────── */
+        --el-accent: #5645d4;
+        --el-accent-on-surface: #5645d4;
+        --el-accent-text: #ffffff;
+
+        /* ── Status ─────────────────────────────────────── */
+        --el-success: #1aae39;
+        --el-info: #0075de;
+
+        /* ── Tints + semantic surfaces ───────────────────────── */
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-warning-surface: #ffe8d4;
+
+        /* ── Work-item type hues ───────────────────────────── */
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-subtask: #2a9d99;
+
+        /* ── Palette-DERIVED washes, never invented hues ─────────────
+           The plan-diff language this area decided paints an `add` node and
+           its rail chip in a wash far lighter than `--el-tint-lavender`, and
+           the story/task type tiles have `--el-tint-mint` / `--el-tint-sky`
+           twins while the teal subtask hue has none. All three are
+           `color-mix()` over tokens — the form CLAUDE.md blesses — so they
+           re-tint with `data-palette` instead of freezing a hex. */
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg));
+        --el-accent-wash-border: color-mix(in srgb, var(--el-accent) 12%, var(--el-page-bg));
+        --el-type-subtask-wash: color-mix(in srgb, var(--el-type-subtask) 17%, var(--el-page-bg));
+
+        /* ── Shape + type (element-semantic names; warm-editorial values) ── */
+        --radius-card: 12px;
+        --radius-btn: 10px;
+        --radius-control: 8px;
+        --radius-badge: 999px;
+        --shadow-subtle: 0 1px 2px #0000000d;
+        --shadow-card: 0 2px 6px #0000000f;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       * {
@@ -74,8 +97,8 @@
       }
       body {
         margin: 0;
-        background: var(--page);
-        color: var(--text);
+        background: var(--el-surface);
+        color: var(--el-text);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
@@ -91,7 +114,7 @@
       }
       .doc-head p {
         margin: 0;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 14px;
         line-height: 1.5;
         max-width: 70ch;
@@ -103,17 +126,17 @@
         gap: 6px;
       }
       .ref {
-        font: 600 11px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
-        border: 1px solid #e3def8;
-        border-radius: var(--r-pill);
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
+        border: 1px solid var(--el-accent-wash-border);
+        border-radius: var(--radius-badge);
         padding: 3px 9px;
       }
       .ref.muted {
-        color: var(--secondary);
-        background: var(--hub);
-        border-color: var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-color: var(--el-border);
       }
 
       .panel {
@@ -126,9 +149,9 @@
         margin-bottom: 11px;
       }
       .panel-cap .n {
-        font: 700 12px var(--mono);
-        color: #fff;
-        background: var(--accent);
+        font: 700 12px var(--font-mono);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
         border-radius: 6px;
         padding: 2px 7px;
         letter-spacing: 0.02em;
@@ -139,13 +162,13 @@
       }
       .panel-cap span.note {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .frame {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 16px;
-        background: var(--surface);
-        box-shadow: var(--sh-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
         overflow: hidden;
       }
 
@@ -156,12 +179,12 @@
         height: 560px;
       }
       .nav a.on {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent-on-surface);
         font-weight: 600;
       }
       .nav a.on svg {
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
 
       .main {
@@ -180,7 +203,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         padding: 2px 9px;
         font-size: 11.5px;
         font-weight: 600;
@@ -191,24 +214,24 @@
         height: 12px;
       }
       .pill.generating {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       .pill.planned {
-        background: var(--lavender);
-        color: #3a2d8a;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
       }
       .pill.approved {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
       }
       .pill.declined {
-        background: var(--mutedfill);
-        color: var(--muted);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .pill.stale {
-        background: var(--warning-surface);
-        color: #8a3d00;
+        background: var(--el-warning-surface);
+        color: var(--el-text-strong);
       }
       .hdrtop .pill {
         align-self: flex-start;
@@ -216,9 +239,9 @@
       }
 
       .pill.count {
-        background: var(--hub);
-        color: var(--secondary);
-        border: 1px solid var(--border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
         font-weight: 600;
       }
       @keyframes sp {
@@ -230,8 +253,8 @@
         position: relative;
         overflow: hidden;
         background:
-          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
-          var(--hub);
+          radial-gradient(circle at 1px 1px, var(--el-border) 1px, transparent 0) 0 0 / 26px 26px,
+          var(--el-surface);
       }
       .ovl {
         position: absolute;
@@ -242,58 +265,58 @@
         align-items: center;
         gap: 7px;
         padding: 6px 11px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-control);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--strong);
-        box-shadow: var(--sh-subtle);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
       }
       .crumb svg {
         width: 13px;
         height: 13px;
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .crumb .dot {
         width: 15px;
         height: 15px;
         border-radius: 5px;
-        background: var(--accent);
+        background: var(--el-accent);
       }
       .search {
         display: inline-flex;
         align-items: center;
         gap: 7px;
         padding: 6px 10px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-control);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
         font-size: 12.5px;
-        color: var(--muted);
-        box-shadow: var(--sh-subtle);
+        color: var(--el-text-secondary);
+        box-shadow: var(--shadow-subtle);
         min-width: 190px;
       }
       .search svg {
         width: 14px;
         height: 14px;
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .search kbd {
         margin-left: auto;
-        font: 600 10px var(--mono);
-        color: var(--faint);
-        background: var(--mutedfill);
+        font: 600 10px var(--font-mono);
+        color: var(--el-text-secondary);
+        background: var(--el-muted);
         border-radius: 4px;
         padding: 1px 5px;
       }
       .node {
         position: absolute;
         width: 236px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        box-shadow: var(--sh-subtle);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
         padding: 11px 12px;
       }
       .node .top {
@@ -305,7 +328,7 @@
         flex: none;
         width: 30px;
         height: 30px;
-        border-radius: var(--r-control);
+        border-radius: var(--radius-control);
         display: grid;
         place-items: center;
       }
@@ -314,13 +337,13 @@
         height: 17px;
       }
       .node .id {
-        font: 600 11px var(--mono);
-        color: var(--faint);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-identifier);
       }
       .node .ttl {
         font-size: 13px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         line-height: 1.25;
         margin-top: 1px;
       }
@@ -333,14 +356,14 @@
       .node .who {
         margin-left: auto;
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .opbadge {
         margin-left: auto;
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         padding: 2px 8px;
         font-size: 10.5px;
         font-weight: 700;
@@ -352,23 +375,24 @@
 
       /* op treatments */
       .node.add {
-        border: 1.5px dashed var(--accent);
-        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
-        box-shadow: 0 0 0 3px #5645d41a;
+        border: 1.5px dashed var(--el-accent);
+        background:
+          linear-gradient(0deg, var(--el-accent-wash), var(--el-accent-wash)), var(--el-card);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 10%, transparent);
       }
       .opbadge.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .node.modify {
-        border-color: var(--info);
+        border-color: var(--el-info);
         box-shadow:
-          0 0 0 1px var(--info) inset,
-          var(--sh-subtle);
+          0 0 0 1px var(--el-info) inset,
+          var(--shadow-subtle);
       }
       .opbadge.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
          Deliberately NOT red/dashed/hatched — that language is reserved for the
@@ -376,48 +400,55 @@
          shipped canvas language we compose. Archive is reversible, not an error,
          so it reads as greyscale + strike-through, like the cancelled status hue. */
       .node.remove {
-        border: 1px solid var(--border-strong);
-        background: var(--mutedfill);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
         opacity: 0.66;
         filter: grayscale(0.5);
       }
       .node.remove .ttl {
         text-decoration: line-through;
-        text-decoration-color: var(--faint);
-        color: var(--muted);
+        text-decoration-color: var(--el-text-faint);
+        color: var(--el-text-secondary);
       }
+      /* The archived node's id stays READABLE: the node is dimmed as a whole
+         (opacity + grayscale), which is the treatment that says "archived", and
+         the id is still the fact a reader needs — which card is going away.
+         `--el-text-faint` clears AA on no surface and this element carries no
+         `aria-hidden` / disabled semantics for 1.4.3 to exempt, so it takes
+         `--el-text-secondary` (MOTIR-4349). Faint keeps the strike-through RULE
+         colour above, which is a graphic. */
       .node.remove .id {
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .opbadge.remove {
-        background: var(--mutedfill);
-        color: var(--secondary);
-        border: 1px solid var(--border-strong);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border-strong);
       }
       .opc.add {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent-on-surface);
       }
 
       /* A NEUTRAL explanatory note (MOTIR-2985) — `.callout` is the warning
          treatment and would read as one. */
       .note-box {
         margin: 14px 18px 4px;
-        border: 1px solid var(--border);
-        background: var(--soft);
-        border-radius: var(--r-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
         padding: 11px 13px;
         font-size: 12.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .note-box b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .note-box code {
-        font: 600 11.5px var(--mono);
-        background: var(--hub);
-        border: 1px solid var(--border);
+        font: 600 11.5px var(--font-mono);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
         border-radius: 5px;
         padding: 1px 5px;
       }
@@ -472,12 +503,12 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       /* A SELECTED node — the accent ring the shipped canvas already uses for
          selection (roadmap panel 1). Selection is what reveals View. */
       .node.selected {
-        box-shadow: 0 0 0 2px var(--accent);
+        box-shadow: 0 0 0 2px var(--el-accent);
       }
 
       /* ==================================================================
@@ -513,10 +544,10 @@
         width: 3px;
       }
       .node.dec-ok::before {
-        background: var(--success);
+        background: var(--el-success);
       }
       .node.dec-no::before {
-        background: var(--muted);
+        background: var(--el-text-muted);
       }
       /* A decided `remove` DROPS the fade. `opacity`+`grayscale` mean "this
          is about to happen"; on a decided card it either already happened
@@ -532,47 +563,48 @@
         margin-left: auto;
       }
       .opchip .seg.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .opchip .seg.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       .opchip .seg.remove {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       /* The level caption becomes the plan's outcome, stated once — same
          primitive and placement as Panel E's "Proposed by this plan". */
       .lvlcap.decided-ok {
-        color: #0f5e29;
+        color: var(--el-text-strong);
       }
       .lvlcap.decided-no {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .cmp-cap.bad {
-        background: var(--warning-surface);
-        color: #8a3d00;
+        background: var(--el-warning-surface);
+        color: var(--el-text-strong);
       }
       .cmp-cap.good {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
       }
       .mini.add {
-        border-color: var(--accent);
-        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+        border-color: var(--el-accent);
+        background:
+          linear-gradient(0deg, var(--el-accent-wash), var(--el-accent-wash)), var(--el-card);
       }
       .mini.modify {
-        border-color: var(--info);
+        border-color: var(--el-info);
       }
       .mini .mchip i.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .mini .mchip i.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       /* ---- Part IX (MOTIR-3259): SHOW CHANGES, and the proposed crumb -------
          Nothing here is a new visual language. The emphasis is the SHIPPED
@@ -582,8 +614,8 @@
          mock's local tokens and applied to a SET instead of to one node. */
       .node.emph {
         box-shadow:
-          0 0 0 2px var(--soft),
-          0 0 0 4px var(--accent);
+          0 0 0 2px var(--el-surface-soft),
+          0 0 0 4px var(--el-accent);
       }
       .node.dim {
         opacity: 0.35;
@@ -598,13 +630,13 @@
         gap: 7px;
         height: 36px;
         padding: 0 11px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-btn);
-        background: var(--surface);
-        color: var(--secondary);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-card);
+        color: var(--el-text-secondary);
         font-size: 12.5px;
         font-weight: 600;
-        box-shadow: var(--sh-card);
+        box-shadow: var(--shadow-card);
         white-space: nowrap;
       }
       .sc svg {
@@ -612,19 +644,19 @@
         height: 14px;
       }
       .sc.on {
-        background: var(--accent-soft);
-        border-color: var(--accent);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        border-color: var(--el-accent);
+        color: var(--el-accent-on-surface);
       }
       .sc.off-disabled {
         opacity: 0.5;
       }
       .sc .n {
-        font: 600 11px var(--mono);
-        color: var(--muted);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-secondary);
       }
       .sc.on .n {
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
       /* The breadcrumb crumb for a parent that does not exist yet. It keeps the
          committed crumb's `KEY · Title` grammar and puts the WORD `New` in the
@@ -632,41 +664,41 @@
          the accent ink and the `+` glyph as second and third channels rather
          than as the only one. */
       .crumb.proposed {
-        border-color: var(--accent);
+        border-color: var(--el-accent);
         border-style: dashed;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
       }
       .crumb .newkey {
-        font: 700 11px var(--mono);
-        color: var(--accent);
+        font: 700 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
       }
       .capnote {
         position: absolute;
         font-size: 11.5px;
         line-height: 1.6;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         max-width: 620px;
       }
       .tilebox {
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
         padding: 12px 13px;
         display: grid;
         gap: 9px;
       }
       .tilebox .cap {
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .tilebox p {
         margin: 0;
         font-size: 11.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .beforeafter {
         display: grid;
@@ -674,31 +706,31 @@
         gap: 0;
       }
       .beforeafter > div:first-child {
-        border-right: 1px solid var(--border);
+        border-right: 1px solid var(--el-border);
       }
       .bacap {
         display: flex;
         align-items: baseline;
         gap: 9px;
         padding: 11px 14px 9px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
         font-size: 12.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .bacap b {
-        font: 700 10.5px var(--mono);
+        font: 700 10.5px var(--font-mono);
         letter-spacing: 0.06em;
         text-transform: uppercase;
         padding: 2px 7px;
         border-radius: 5px;
       }
       .bacap b.bad {
-        background: var(--warning-surface);
-        color: #8a3b00;
+        background: var(--el-warning-surface);
+        color: var(--el-text-strong);
       }
       .bacap b.good {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
       }
     </style>
   </head>
@@ -756,11 +788,11 @@
                 >
                 <div class="node lvl" style="left: 30px; top: 82px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-story-soft)"
+                    <span class="tile" style="background: var(--el-tint-mint)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-story)"
+                        stroke="var(--el-type-story)"
                         stroke-width="2"
                       >
                         <path d="M4 4h11l5 5v11H4z" />
@@ -770,7 +802,9 @@
                       <div class="id">MOTIR-3232</div>
                       <div class="ttl">The Plans surface, refined</div>
                     </div>
-                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-muted); color: var(--el-text-secondary)"
                       >in progress</span
                     >
                   </div>
@@ -778,11 +812,11 @@
 
                 <div class="node lvl" style="left: 286px; top: 82px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-story-soft)"
+                    <span class="tile" style="background: var(--el-tint-mint)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-story)"
+                        stroke="var(--el-type-story)"
                         stroke-width="2"
                       >
                         <path d="M4 4h11l5 5v11H4z" />
@@ -792,7 +826,9 @@
                       <div class="id">MOTIR-3264</div>
                       <div class="ttl">Gateway sync frequency</div>
                     </div>
-                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-muted); color: var(--el-text-secondary)"
                       >blocked</span
                     >
                   </div>
@@ -800,11 +836,11 @@
 
                 <div class="node lvl" style="left: 30px; top: 178px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-story-soft)"
+                    <span class="tile" style="background: var(--el-tint-mint)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-story)"
+                        stroke="var(--el-type-story)"
                         stroke-width="2"
                       >
                         <path d="M4 4h11l5 5v11H4z" />
@@ -814,7 +850,9 @@
                       <div class="id">MOTIR-3211</div>
                       <div class="ttl">The hosting ADR sweep</div>
                     </div>
-                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-muted); color: var(--el-text-secondary)"
                       >to do</span
                     >
                   </div>
@@ -822,11 +860,11 @@
 
                 <div class="node lvl add" style="left: 286px; top: 178px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-story-soft)"
+                    <span class="tile" style="background: var(--el-tint-mint)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-story)"
+                        stroke="var(--el-type-story)"
                         stroke-width="2"
                       >
                         <path d="M4 4h11l5 5v11H4z" />
@@ -851,7 +889,7 @@
 
                 <div class="capnote" style="left: 30px; top: 280px; max-width: 470px">
                   One proposed story among three committed siblings, and
-                  <strong style="color: var(--strong)"
+                  <strong style="color: var(--el-text-strong)"
                     >nothing says the plan is mostly elsewhere</strong
                   >
                   — its five subtasks are one drill away, behind a card the reader has no reason to
@@ -874,16 +912,18 @@
                     ><span class="newkey">New</span> · Payout reconciliation</span
                   >
                 </div>
-                <span class="lvlcap" style="left: 30px; top: 58px; color: var(--accent)"
+                <span
+                  class="lvlcap"
+                  style="left: 30px; top: 58px; color: var(--el-accent-on-surface)"
                   >Proposed by this plan — the level it fills</span
                 >
                 <div class="node lvl add" style="left: 30px; top: 82px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -907,11 +947,11 @@
 
                 <div class="node lvl add" style="left: 286px; top: 82px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -935,11 +975,11 @@
 
                 <div class="node lvl add" style="left: 30px; top: 178px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -963,11 +1003,11 @@
 
                 <div class="node lvl add" style="left: 286px; top: 178px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -992,8 +1032,8 @@
                 <div class="capnote" style="left: 30px; top: 280px; max-width: 470px">
                   The five cards the plan is actually about, on the level they land on, with the
                   proposed story named in the breadcrumb.
-                  <strong style="color: var(--strong)">The epic is one Back away</strong> — the
-                  direction a reader can discover.
+                  <strong style="color: var(--el-text-strong)">The epic is one Back away</strong> —
+                  the direction a reader can discover.
                 </div>
               </div>
             </div>
@@ -1048,7 +1088,7 @@
               </div>
               <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap">
                 <span class="crumb"><span class="dot"></span>MOTIR-3232 · The Plans surface</span>
-                <span style="font-size: 11.5px; color: var(--muted)">vs</span>
+                <span style="font-size: 11.5px; color: var(--el-text-secondary)">vs</span>
                 <span class="crumb proposed"
                   ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6">
                     <path d="M12 5v14M5 12h14" /></svg
@@ -1058,7 +1098,7 @@
             </div>
             <div class="tilebox">
               <div class="cap">A level that is ENTIRELY proposed</div>
-              <div class="viewport" style="height: 210px; border-radius: var(--r-control)">
+              <div class="viewport" style="height: 210px; border-radius: var(--radius-control)">
                 <div class="ovl" style="top: 12px; left: 14px">
                   <span class="crumb"
                     ><span class="dot"></span>MOTIR-653 · Epic 8
@@ -1071,16 +1111,18 @@
                     ><span class="newkey">New</span> · Payout reconciliation</span
                   >
                 </div>
-                <span class="lvlcap" style="left: 30px; top: 56px; color: var(--accent)"
+                <span
+                  class="lvlcap"
+                  style="left: 30px; top: 56px; color: var(--el-accent-on-surface)"
                   >Nothing committed here yet — every card on this level is this plan's</span
                 >
                 <div class="node lvl add" style="left: 30px; top: 80px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -1104,11 +1146,11 @@
 
                 <div class="node lvl add" style="left: 286px; top: 80px; width: 232px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -1227,8 +1269,13 @@
 
             <div class="node lvl modify" style="left: 30px; top: 86px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1246,8 +1293,13 @@
             </div>
             <div class="node lvl" style="left: 282px; top: 86px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1255,15 +1307,22 @@
                   <div class="id">MOTIR-844</div>
                   <div class="ttl">Settlement webhook retries</div>
                 </div>
-                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                <span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >to do</span
                 >
               </div>
             </div>
             <div class="node lvl remove" style="left: 534px; top: 86px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1281,8 +1340,13 @@
             </div>
             <div class="node lvl" style="left: 30px; top: 190px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1290,15 +1354,22 @@
                   <div class="id">MOTIR-860</div>
                   <div class="ttl">Payout notifications</div>
                 </div>
-                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                <span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >in review</span
                 >
               </div>
             </div>
             <div class="node lvl add" style="left: 282px; top: 190px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1315,8 +1386,13 @@
             </div>
             <div class="node lvl" style="left: 534px; top: 190px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1324,13 +1400,15 @@
                   <div class="id">MOTIR-871</div>
                   <div class="ttl">Marketplace fee ledger</div>
                 </div>
-                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                <span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >to do</span
                 >
               </div>
             </div>
           </div>
-          <div class="bacap" style="border-top: 1px solid var(--border)">
+          <div class="bacap" style="border-top: 1px solid var(--el-border)">
             <b class="good">on</b> the three light, the rest go back
           </div>
           <div class="viewport" style="height: 306px">
@@ -1368,8 +1446,13 @@
 
             <div class="node lvl modify emph" style="left: 30px; top: 86px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1387,8 +1470,13 @@
             </div>
             <div class="node lvl dim" style="left: 282px; top: 86px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1396,15 +1484,22 @@
                   <div class="id">MOTIR-844</div>
                   <div class="ttl">Settlement webhook retries</div>
                 </div>
-                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                <span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >to do</span
                 >
               </div>
             </div>
             <div class="node lvl remove emph" style="left: 534px; top: 86px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1422,8 +1517,13 @@
             </div>
             <div class="node lvl dim" style="left: 30px; top: 190px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1431,15 +1531,22 @@
                   <div class="id">MOTIR-860</div>
                   <div class="ttl">Payout notifications</div>
                 </div>
-                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                <span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >in review</span
                 >
               </div>
             </div>
             <div class="node lvl add emph" style="left: 282px; top: 190px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1456,8 +1563,13 @@
             </div>
             <div class="node lvl dim" style="left: 534px; top: 190px; width: 236px">
               <div class="top">
-                <span class="tile" style="background: var(--t-task-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                <span class="tile" style="background: var(--el-tint-sky)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-task)"
+                    stroke-width="2"
+                  >
                     <rect x="4" y="4" width="16" height="16" rx="3" />
                     <path d="m9 12 2 2 4-4" /></svg
                 ></span>
@@ -1465,7 +1577,9 @@
                   <div class="id">MOTIR-871</div>
                   <div class="ttl">Marketplace fee ledger</div>
                 </div>
-                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                <span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >to do</span
                 >
               </div>
@@ -1529,11 +1643,16 @@
                   >Show changes<span class="n">3 of 11</span></span
                 >
               </div>
-              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+              <div class="viewport" style="height: 220px; border-radius: var(--radius-control)">
                 <div class="node lvl modify selected" style="left: 20px; top: 20px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -1551,8 +1670,13 @@
                 </div>
                 <div class="node lvl dim" style="left: 230px; top: 20px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -1560,15 +1684,22 @@
                       <div class="id">MOTIR-844</div>
                       <div class="ttl">Settlement webhook</div>
                     </div>
-                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-muted); color: var(--el-text-secondary)"
                       >to do</span
                     >
                   </div>
                 </div>
                 <div class="node lvl add dim" style="left: 20px; top: 126px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -1610,11 +1741,16 @@
                   >Show changes</span
                 >
               </div>
-              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+              <div class="viewport" style="height: 220px; border-radius: var(--radius-control)">
                 <div class="node lvl" style="left: 20px; top: 30px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -1622,7 +1758,9 @@
                       <div class="id">MOTIR-901</div>
                       <div class="ttl">Unrelated level</div>
                     </div>
-                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-muted); color: var(--el-text-secondary)"
                       >to do</span
                     >
                   </div>
@@ -1630,8 +1768,13 @@
 
                 <div class="node lvl" style="left: 230px; top: 30px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -1639,7 +1782,9 @@
                       <div class="id">MOTIR-902</div>
                       <div class="ttl">Nothing proposed</div>
                     </div>
-                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-muted); color: var(--el-text-secondary)"
                       >done</span
                     >
                   </div>
@@ -1663,14 +1808,14 @@
                   >Show changes<span class="n">4 of 4</span></span
                 >
               </div>
-              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+              <div class="viewport" style="height: 220px; border-radius: var(--radius-control)">
                 <div class="node lvl add emph" style="left: 20px; top: 30px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -1694,11 +1839,11 @@
 
                 <div class="node lvl add emph" style="left: 230px; top: 30px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -1722,11 +1867,11 @@
 
                 <div class="node lvl add emph" style="left: 20px; top: 126px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M5 12h14M5 7h9M5 17h9" /></svg
@@ -1764,11 +1909,16 @@
                   >Show what changed<span class="n">3 of 11</span></span
                 >
               </div>
-              <div class="viewport" style="height: 220px; border-radius: var(--r-control)">
+              <div class="viewport" style="height: 220px; border-radius: var(--radius-control)">
                 <div class="node lvl modify emph" style="left: 20px; top: 30px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -1782,8 +1932,13 @@
 
                 <div class="node lvl dim" style="left: 230px; top: 30px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -1791,7 +1946,9 @@
                       <div class="id">MOTIR-844</div>
                       <div class="ttl">Settlement webhook</div>
                     </div>
-                    <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-muted); color: var(--el-text-secondary)"
                       >to do</span
                     >
                   </div>
@@ -1799,8 +1956,13 @@
 
                 <div class="node lvl emph" style="left: 20px; top: 126px; width: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="4" y="4" width="16" height="16" rx="3" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>

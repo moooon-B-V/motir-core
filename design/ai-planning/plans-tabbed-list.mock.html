@@ -6,67 +6,88 @@
     <title>The Plans list, tabbed by status — MOTIR-3233</title>
     <style>
       /* ----------------------------------------------------------------------
-         Token block — mirrors motir-core/app/globals.css (--el-* element tokens,
-         light theme / warm-editorial / motir palette). This standalone mock uses
-         the same VALUES so it renders without the Tailwind build, exactly as the
-         sibling assets (design/ai-chat/*.mock.html, design/roadmap/*.mock.html) do.
-         Nothing here re-defines shape/colour semantics — it re-states them so a
-         plain browser paints the real palette.
+         Token block — the `--el-*` ELEMENT-token layer, resolved to the LIGHT /
+         warm-editorial / motir values the running app computes, exactly as the
+         sibling asset `plan-revision.mock.html` states them. A plain browser
+         paints the real palette without the Tailwind build.
+
+         ⚠️ MOTIR-4349 — this block USED to alias the same values onto private
+         names (`--muted: #787671`, `--soft: #fafaf9`, …). The values were right
+         and that was the trap: a raw hex does not flip with `data-palette`,
+         does not follow a re-skin, and is invisible to every ink guard in the
+         tree, all of which key on `--el-*`. Both scanners read the token off
+         the DECLARATION at the paint site, so re-defining an alias AS
+         `var(--el-…)` would not have helped — the sites themselves have to
+         name the token. Consume the token layer, and the guard can see the
+         asset.
       ---------------------------------------------------------------------- */
       :root {
-        /* text */
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --secondary: #5d5b54;
-        --muted: #787671;
-        --faint: #a4a097;
-        /* surfaces */
-        --page: #f4f3f1;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        /* borders */
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --border-strong: #d3cfc8;
-        /* accent */
-        --accent: #5645d4;
-        --accent-pressed: #4534b3;
-        --accent-soft: #f4f2fd;
-        --highlight: #ff64c8;
-        /* status / intent */
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --danger: #e03131;
-        --info: #0075de;
-        /* tints */
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --mint: #d9f3e1;
-        --lavender: #e6e0f5;
-        --sky: #dcecfa;
-        --danger-surface: #fde0ec;
-        --warning-surface: #ffe8d4;
-        /* work-item type hues */
-        --t-epic: #ff64c8;
-        --t-epic-soft: #ffe3f5;
-        --t-story: #1aae39;
-        --t-story-soft: #d9f3e1;
-        --t-task: #0075de;
-        --t-task-soft: #dcecfa;
-        --t-bug: #e03131;
-        --t-subtask: #2a9d99;
-        --t-subtask-soft: #d6f0ee;
-        /* shape */
-        --r-card: 12px;
-        --r-btn: 10px;
-        --r-control: 8px;
-        --r-pill: 999px;
-        --sh-subtle: 0 1px 2px #0000000d;
-        --sh-card: 0 2px 6px #0000000f;
-        --sh-elev: 0 4px 14px #00000014;
-        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        /* ── Ink ──────────────────────────────────────────────────
+           `--el-text-muted` and `--el-text-faint` are DECLARED and used only
+           where WCAG does not measure them: muted is 4.12–4.34:1 on every
+           tinted surface and faint clears AA on none (CLAUDE.md's measured
+           table). Declaring them still matters — `mockStateInkScan` resolves a
+           token by planting a probe, and an asset that declares neither
+           reports its faint ink as muted. Faint carries the meta-line's
+           decorative glyphs and its `·` separators. */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-identifier: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
+
+        /* ── Surfaces ───────────────────────────────────── */
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        /* ── Borders ────────────────────────────────────── */
+        --el-border: #e5e3df;
+        --el-border-strong: #c8c4be;
+
+        /* ── Accent ─────────────────────────────────────── */
+        --el-accent: #5645d4;
+        --el-accent-on-surface: #5645d4;
+        --el-accent-text: #ffffff;
+
+        /* ── Status ───────────────────────────────────────
+           Danger AS TEXT takes `--el-danger-on-surface`, never `--el-danger`
+           (MOTIR-3663): the raw hue is under AA on most tints, and
+           `--el-danger-text` is the ink FOR a danger fill. The DANGER hue
+           itself still draws the border it is a border on. */
+        --el-warning: #dd5b00;
+        --el-danger: #e03131;
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+
+        /* ── Tints + semantic surfaces ───────────────────────── */
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-warning-surface: #ffe8d4;
+
+        /* ── Palette-DERIVED washes, never invented hues ─────────────
+           The accent wash the `plans` hub paints its AI affordances in, and
+           the failed-run glyph tile, are `color-mix()` over tokens — the form
+           CLAUDE.md blesses — so they re-tint with `data-palette` instead of
+           freezing a hex. */
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg));
+        --el-accent-wash-border: color-mix(in srgb, var(--el-accent) 12%, var(--el-page-bg));
+        --el-danger-wash: color-mix(in srgb, var(--el-danger) 10%, var(--el-page-bg));
+        --el-danger-wash-border: color-mix(in srgb, var(--el-danger) 35%, var(--el-page-bg));
+
+        /* ── Shape + type (element-semantic names; warm-editorial values) ── */
+        --radius-card: 12px;
+        --radius-btn: 10px;
+        --radius-control: 8px;
+        --radius-badge: 999px;
+        --shadow-subtle: 0 1px 2px #0000000d;
+        --shadow-card: 0 2px 6px #0000000f;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       * {
@@ -74,8 +95,8 @@
       }
       body {
         margin: 0;
-        background: var(--page);
-        color: var(--text);
+        background: var(--el-surface);
+        color: var(--el-text);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
@@ -91,7 +112,7 @@
       }
       .doc-head p {
         margin: 0;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 14px;
         line-height: 1.5;
         max-width: 70ch;
@@ -103,17 +124,17 @@
         gap: 6px;
       }
       .ref {
-        font: 600 11px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
-        border: 1px solid #e3def8;
-        border-radius: var(--r-pill);
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
+        border: 1px solid var(--el-accent-wash-border);
+        border-radius: var(--radius-badge);
         padding: 3px 9px;
       }
       .ref.muted {
-        color: var(--secondary);
-        background: var(--hub);
-        border-color: var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-color: var(--el-border);
       }
 
       .panel {
@@ -126,9 +147,9 @@
         margin-bottom: 11px;
       }
       .panel-cap .n {
-        font: 700 12px var(--mono);
-        color: #fff;
-        background: var(--accent);
+        font: 700 12px var(--font-mono);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
         border-radius: 6px;
         padding: 2px 7px;
         letter-spacing: 0.02em;
@@ -139,13 +160,13 @@
       }
       .panel-cap span.note {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .frame {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 16px;
-        background: var(--surface);
-        box-shadow: var(--sh-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-card);
         overflow: hidden;
       }
 
@@ -156,12 +177,12 @@
         height: 560px;
       }
       .nav a.on {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent-on-surface);
         font-weight: 600;
       }
       .nav a.on svg {
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
 
       .main {
@@ -171,7 +192,7 @@
       }
       .topbar {
         height: 50px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--el-border);
         display: flex;
         align-items: center;
         gap: 10px;
@@ -184,7 +205,7 @@
       }
       .topbar .sub {
         font-size: 12.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .topbar .grow {
         margin-left: auto;
@@ -194,7 +215,7 @@
         align-items: center;
         gap: 7px;
         border: 0;
-        border-radius: var(--r-btn);
+        border-radius: var(--radius-btn);
         padding: 8px 13px;
         font-size: 13px;
         font-weight: 600;
@@ -205,17 +226,17 @@
         height: 15px;
       }
       .btn.primary {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .btn.secondary {
         background: transparent;
-        color: var(--strong);
-        border: 1px solid var(--border-strong);
+        color: var(--el-text-strong);
+        border: 1px solid var(--el-border-strong);
       }
       .btn.ghost {
         background: transparent;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .btn.sm {
         padding: 6px 10px;
@@ -233,14 +254,14 @@
         gap: 13px;
         align-items: center;
         padding: 13px 14px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
         margin-bottom: 9px;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--shadow-subtle);
       }
       .row:hover {
-        border-color: var(--border-strong);
+        border-color: var(--el-border-strong);
       }
       .row .ic {
         width: 22px;
@@ -259,21 +280,21 @@
       .row .idea .t {
         font-size: 13.5px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .row .idea .m {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-top: 2px;
         display: flex;
         gap: 12px;
         flex-wrap: wrap;
       }
       .row .idea .m b {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-weight: 600;
       }
       .row .meta {
@@ -286,7 +307,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         padding: 2px 9px;
         font-size: 11.5px;
         font-weight: 600;
@@ -297,24 +318,24 @@
         height: 12px;
       }
       .pill.generating {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
       }
       .pill.planned {
-        background: var(--lavender);
-        color: #3a2d8a;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
       }
       .pill.approved {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
       }
       .pill.declined {
-        background: var(--mutedfill);
-        color: var(--muted);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .pill.stale {
-        background: var(--warning-surface);
-        color: #8a3d00;
+        background: var(--el-warning-surface);
+        color: var(--el-text-strong);
       }
       /* --- MOTIR-3577: the FIFTH plan STATUS (Part XI §2) -----------------
          `.pill.stale` above is the ADVISORY drift count and stays peach; this
@@ -324,8 +345,8 @@
          `--el-text-strong`, hue in the tint, charcoal ink (finding #35) — NOT
          with a saturated hue-ink like the four legacy status pills above it. */
       .pill.stale-fatal {
-        background: var(--rose);
-        color: var(--strong);
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
       }
       /* --- MOTIR-2985: the authorship attribution (amends A + B) ---------
          An entry in the row's EXISTING meta line, not new chrome: same
@@ -344,10 +365,10 @@
         width: 12px;
         height: 12px;
         flex: none;
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .attrib b {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-weight: 600;
       }
       /* ONLY the harness truncates — the title above keeps its own ellipsis and
@@ -359,7 +380,7 @@
         white-space: nowrap;
       }
       .attrib .model {
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       /* WHO ASKED — the person. The shipped initial-letter `Avatar`
          (app/(authed)/items/_components/issueCellPrimitives.tsx), at the 18px
@@ -368,8 +389,8 @@
         width: 18px;
         height: 18px;
         border-radius: 999px;
-        background: var(--text);
-        color: #fff;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
         font-size: 9.5px;
         font-weight: 600;
         display: inline-grid;
@@ -385,12 +406,12 @@
       /* The hairline that separates WHO ASKED from WHO WROTE inside one entry —
          they are one sentence about provenance, not two facts to scan apart. */
       .attrib .sep {
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       /* WHY the plan started — `Plan.origin = cadence`. A separate entry, never
          merged into the WHO one. */
       .attrib.origin {
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .hdrtop .pill {
         align-self: flex-start;
@@ -398,9 +419,9 @@
       }
 
       .pill.count {
-        background: var(--hub);
-        color: var(--secondary);
-        border: 1px solid var(--border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
         font-weight: 600;
       }
       @keyframes sp {
@@ -416,9 +437,9 @@
         gap: 5px;
         font-size: 11px;
         font-weight: 600;
-        color: #8a3d00;
-        background: var(--warning-surface);
-        border-radius: var(--r-pill);
+        color: var(--el-text-strong);
+        background: var(--el-warning-surface);
+        border-radius: var(--radius-badge);
         padding: 2px 8px;
       }
       .stale svg {
@@ -428,7 +449,7 @@
       .summary .idea {
         font-size: 14px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
         line-height: 1.3;
       }
 
@@ -436,21 +457,21 @@
          treatment and would read as one. */
       .note-box {
         margin: 14px 18px 4px;
-        border: 1px solid var(--border);
-        background: var(--soft);
-        border-radius: var(--r-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
         padding: 11px 13px;
         font-size: 12.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .note-box b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .note-box code {
-        font: 600 11.5px var(--mono);
-        background: var(--hub);
-        border: 1px solid var(--border);
+        font: 600 11.5px var(--font-mono);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
         border-radius: 5px;
         padding: 1px 5px;
       }
@@ -464,27 +485,27 @@
         border-radius: 13px;
         display: grid;
         place-items: center;
-        background: var(--hub);
-        border: 1px solid var(--border);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
       }
       .estate .glyph svg {
         width: 22px;
         height: 22px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .estate.fail .glyph {
-        background: #fdeae3;
-        border-color: #f3b4a0;
+        background: var(--el-danger-wash);
+        border-color: var(--el-danger-wash-border);
       }
       .estate.fail .glyph svg {
-        color: var(--warning);
+        color: var(--el-warning);
       }
       .estate.credits .glyph {
-        background: var(--accent-soft);
-        border-color: #e3def8;
+        background: var(--el-accent-wash);
+        border-color: var(--el-accent-wash-border);
       }
       .estate.credits .glyph svg {
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
       @keyframes scan {
         0% {
@@ -519,9 +540,9 @@
         display: inline-flex;
         align-items: center;
         gap: 2px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-btn);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        background: var(--el-card);
         padding: 2px;
       }
       .tabs .tab {
@@ -531,9 +552,9 @@
         height: 36px;
         padding: 0 10px;
         border: 0;
-        border-radius: calc(var(--r-btn) - 2px);
+        border-radius: calc(var(--radius-btn) - 2px);
         background: transparent;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 13px;
         font-weight: 500;
         font-family: inherit;
@@ -541,18 +562,18 @@
         cursor: pointer;
       }
       .tabs .tab.on {
-        background: var(--page);
-        color: var(--strong);
-        box-shadow: var(--sh-subtle);
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
       }
       .tabs .tab .n {
         font-size: 11px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .tabs .tab.on .n {
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
       /* The below-`sm` strip: the same control with its counts dropped. The
          `.narrow` wrapper is the MEASURING RIG — a 343px box is exactly a 375px
@@ -563,20 +584,20 @@
            authed shell's `px-4` gutters, so an overflow measured against this
            border is the overflow the real page would have. */
         width: 365px;
-        border: 1px dashed var(--border-strong);
-        border-radius: var(--r-control);
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
         padding: 10px;
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .narrow .cap {
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         margin-bottom: 7px;
       }
       .narrow.over {
-        border-color: var(--danger);
+        border-color: var(--el-danger);
       }
       /* MOTIR-3577 — the DISPOSITION rig. The strip is 361.9px in a 343px box, so
          this clips it exactly as the page would: `Declined` loses its last
@@ -586,29 +607,29 @@
         overflow-x: auto;
       }
       .measure {
-        font: 600 11px var(--mono);
-        color: var(--secondary);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-secondary);
         margin-top: 7px;
       }
       .measure em {
         font-style: normal;
-        color: var(--danger);
+        color: var(--el-danger-on-surface);
       }
       /* The per-tab EMPTY state — quieter than the whole-surface one, and with
          no CTA. Composed from the shipped `EmptyState`'s structure at the
          smaller of its two sizes. */
       .tabempty {
-        border: 1px dashed var(--border);
-        border-radius: var(--r-card);
-        background: var(--soft);
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
         padding: 26px 18px;
         text-align: center;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .tabempty h4 {
         margin: 0 0 4px;
         font-size: 13.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .tabempty p {
         margin: 0;
@@ -618,9 +639,9 @@
       /* The whole-surface empty state — the shipped `EmptyState` with its
          Sparkles glyph and its Plan-with-AI CTA, which this Part RETAINS. */
       .surfempty {
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
         padding: 34px 18px;
         text-align: center;
       }
@@ -630,7 +651,7 @@
         margin: 0 auto 12px;
         display: grid;
         place-items: center;
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
       .surfempty .glyph svg {
         width: 34px;
@@ -639,14 +660,14 @@
       .surfempty h4 {
         margin: 0 0 5px;
         font-size: 15px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .surfempty p {
         margin: 0 auto 14px;
         max-width: 46ch;
         font-size: 12.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       /* The page HEADER as it actually ships — h1 + subtitle, and (before this
          Part) a Plan-with-AI pill in its right slot. Drawn at both widths so the
@@ -663,27 +684,27 @@
         margin: 0 0 3px;
         font-size: 20px;
         letter-spacing: -0.01em;
-        color: var(--text);
+        color: var(--el-text);
       }
       .pghead p {
         margin: 0;
         font-size: 12.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       /* The DECIDER half of a decided row's attribution (Part VII §3). Same
          entry, same inks, one more glyph — nothing new in the palette. */
       .attrib .role {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .decided-strip {
         display: flex;
         gap: 10px;
         align-items: center;
         padding: 0 18px 4px;
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
     </style>
   </head>
@@ -769,13 +790,16 @@
               <div class="list" style="padding-top: 6px">
                 <div
                   class="row"
-                  style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
+                  style="
+                    border-color: var(--el-accent);
+                    box-shadow: 0 0 0 1px var(--el-accent-wash);
+                  "
                 >
-                  <span class="ic" style="background: var(--lavender)"
+                  <span class="ic" style="background: var(--el-tint-lavender)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#3a2d8a"
+                      stroke="var(--el-text-strong)"
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -790,7 +814,7 @@
                       ><span>planned <b>2h ago</b></span
                       ><span class="attrib"
                         ><span class="who-av">M</span><b class="person">Mara</b>
-                        <span class="sep">·</span
+                        <span class="sep" aria-hidden="true">·</span
                         ><svg
                           viewBox="0 0 24 24"
                           fill="none"
@@ -837,11 +861,11 @@
                   </div>
                 </div>
                 <div class="row">
-                  <span class="ic" style="background: var(--sky)"
+                  <span class="ic" style="background: var(--el-tint-sky)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#0a4fa0"
+                      stroke="var(--el-text-strong)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -901,11 +925,11 @@
                   </div>
                 </div>
                 <div class="row">
-                  <span class="ic" style="background: var(--lavender)"
+                  <span class="ic" style="background: var(--el-tint-lavender)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#3a2d8a"
+                      stroke="var(--el-text-strong)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -940,11 +964,11 @@
                   </div>
                 </div>
                 <div class="row" style="width: 430px">
-                  <span class="ic" style="background: var(--lavender)"
+                  <span class="ic" style="background: var(--el-tint-lavender)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#3a2d8a"
+                      stroke="var(--el-text-strong)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1046,11 +1070,11 @@
               </div>
               <div class="list" style="padding-top: 6px">
                 <div class="row">
-                  <span class="ic" style="background: var(--mint)"
+                  <span class="ic" style="background: var(--el-tint-mint)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#0f5e29"
+                      stroke="var(--el-text-strong)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1102,11 +1126,11 @@
               <div class="decided-strip">Declined</div>
               <div class="list" style="padding-top: 0">
                 <div class="row" style="opacity: 0.78">
-                  <span class="ic" style="background: var(--mutedfill)"
+                  <span class="ic" style="background: var(--el-muted)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#787671"
+                      stroke="var(--el-text-muted)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1156,11 +1180,11 @@
                      A state A2 has no row for, and the one that proves the
                      decider cannot be assumed present. -->
                 <div class="row" style="opacity: 0.78">
-                  <span class="ic" style="background: var(--mutedfill)"
+                  <span class="ic" style="background: var(--el-muted)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#787671"
+                      stroke="var(--el-text-muted)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1547,11 +1571,11 @@
               </div>
               <div class="list" style="padding-top: 6px">
                 <div class="row">
-                  <span class="ic" style="background: var(--rose)"
+                  <span class="ic" style="background: var(--el-tint-rose)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#37352f"
+                      stroke="var(--el-text-strong)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1586,11 +1610,11 @@
                   </div>
                 </div>
                 <div class="row">
-                  <span class="ic" style="background: var(--rose)"
+                  <span class="ic" style="background: var(--el-tint-rose)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#37352f"
+                      stroke="var(--el-text-strong)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1642,11 +1666,11 @@
                   for contrast — the DECLINED row, which this must not be mistaken for
                 </div>
                 <div class="row">
-                  <span class="ic" style="background: var(--mutedfill)"
+                  <span class="ic" style="background: var(--el-muted)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#787671"
+                      stroke="var(--el-text-muted)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1791,13 +1815,13 @@
                     style="
                       font-size: 13px;
                       line-height: 1.55;
-                      color: var(--secondary);
+                      color: var(--el-text-secondary);
                       margin-top: 9px;
                     "
                   >
-                    <b style="color: var(--strong)">Plan out of date</b> — work it changes has since
-                    been finished. Approve is unavailable; decline it, or wait in case the work
-                    reopens.
+                    <b style="color: var(--el-text-strong)">Plan out of date</b> — work it changes
+                    has since been finished. Approve is unavailable; decline it, or wait in case the
+                    work reopens.
                   </div>
                   <div
                     style="
@@ -1819,8 +1843,8 @@
                     >
                     <span
                       style="
-                        font: 600 11.5px var(--mono);
-                        color: var(--secondary);
+                        font: 600 11.5px var(--font-mono);
+                        color: var(--el-text-secondary);
                         padding-left: 2px;
                       "
                       >+2 more</span
