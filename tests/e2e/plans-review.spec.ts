@@ -33,6 +33,7 @@ import {
   seedPlansReview,
   seedEmptyPlansProject,
   PLANS_SEED_PASSWORD,
+  PLAN_SUMMARY_UNBREAKABLE_TOKEN,
 } from './_helpers/plans-review-seed';
 
 // Service-side seeding of a whole tenant + tree + three plans, plus the sign-in
@@ -111,6 +112,28 @@ test('Plans: nav → list → stale detail → approve-anyway → decline', asyn
   await expect(page.getByLabel('Proposed plan canvas')).toBeVisible();
   await expect(page.getByTestId('plan-item-node').first()).toBeVisible();
   await expect(page.getByTestId('stale-badge').first()).toBeVisible();
+
+  // ⚠️ THE RAIL DOES NOT SCROLL SIDEWAYS (MOTIR-4578), and this is the ONLY lane
+  // that can say so. The transcript's scroller stated one overflow axis, which
+  // CSS Overflow 3 computes the other to `auto`, and the plan SUMMARY — an
+  // agent-written planning turn — rendered with no wrap guard: one unbreakable
+  // token wider than the 311px text column drew a scrollbar across the whole
+  // 22rem rail. The unit guard
+  // (`tests/components/plan-review-rail-overflow.test.tsx`) asserts the
+  // MECHANISM, because happy-dom does no layout and `0 === 0` is green on the
+  // broken component. The GEOMETRY is only measurable here, in a real browser at
+  // the real track width, so this is where it is asserted.
+  //
+  // The seed's summary carries that token, so the numbers below are read on
+  // content that WOULD overflow: equality is the fix working, not the fixture
+  // being tame.
+  const transcript = page.getByTestId('plan-review-transcript');
+  await expect(transcript).toContainText(PLAN_SUMMARY_UNBREAKABLE_TOKEN);
+  const overflow = await transcript.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  }));
+  expect(overflow.scrollWidth).toBe(overflow.clientWidth);
 
   // Per-item staleness summary: both drifted items, each with its own reason —
   // and each reason is about something that proposal NAMED.

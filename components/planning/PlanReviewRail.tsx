@@ -222,10 +222,28 @@ export function PlanReviewRail({
           draft. Part XII §A's *inside the decision block, above the two verbs* was
           an ORDER and an adjacency, and both survive — composer last in the
           transcript, verbs directly beneath it. */}
+      {/* BOTH AXES ARE STATED — the third site of the rule `AppLayout`'s `<main>`
+          and the nav rail's scroller already follow (MOTIR-4232), and the one
+          that did not (MOTIR-4578). Left implicit, `overflow-x` does not stay
+          `visible`: CSS Overflow 3 computes it to `auto` whenever the other axis
+          is non-visible, so ONE unbreakable token anywhere in this pane — a
+          `snake_case` identifier in a generated plan summary, measured at ~43
+          characters against the 311px content column — drew a scrollbar across
+          the whole rail.
+
+          `hidden`, not `<main>`'s `auto`, and the two are not in tension: that
+          scroller resolves to `auto` because content wider than the column (a
+          table, a code block, a board) must stay REACHABLE. This pane holds
+          PROSE, and prose that has to be scrolled sideways is prose nobody
+          reads. It has nothing to reveal — provided every generated string
+          WRAPS, which is the other half of this fix and what
+          `tests/components/plan-review-rail-overflow.test.tsx` keeps true. The
+          axis alone would hide the symptom and lose the text; the guards alone
+          would leave the next unguarded field free to draw the bar again. */}
       <div
         ref={transcriptRef}
         data-testid="plan-review-transcript"
-        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5"
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-5"
       >
         <header className="flex min-w-0 flex-col gap-2">
           {/* The status is an OVERLINE on its own line ABOVE the title (MOTIR-3074),
@@ -259,8 +277,18 @@ export function PlanReviewRail({
           <h2 className="min-w-0 font-serif text-lg font-semibold wrap-anywhere text-(--el-text)">
             {review.title ?? t('untitledPlan')}
           </h2>
+          {/* The SAME guard the `<h2>` above carries, and it was owed here first
+              (MOTIR-4578). The title is one generated line; this paragraph is a
+              whole agent-written planning turn, so it is the likelier carrier of
+              an unbreakable token by a wide margin — and it shipped with
+              neither class. `wrap-anywhere` rather than `break-words` for the
+              reason measured on the title: only `overflow-wrap: anywhere` feeds
+              its break opportunities into the MIN-CONTENT size the fixed 22rem
+              track is measured from. */}
           {review.summary ? (
-            <p className="text-sm text-(--el-text-secondary)">{review.summary}</p>
+            <p className="min-w-0 text-sm wrap-anywhere text-(--el-text-secondary)">
+              {review.summary}
+            </p>
           ) : null}
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--el-text-secondary)">
             <span>{t('itemCount', { n: review.itemCount })}</span>
@@ -300,8 +328,20 @@ export function PlanReviewRail({
               {t('staleSummary', { n: review.staleCount })}
             </p>
             <ul className="flex flex-col gap-1">
+              {/* Each row is guarded for the same reason as the summary
+                  (MOTIR-4578): it renders a card TITLE, which is generated text
+                  and routinely carries a cuid or a SCREAMING_CASE constant. This
+                  branch cannot draw the reported bar (that plan was `approved`,
+                  and only a stale one renders here) — it is the same defect one
+                  branch over, and shipping the fix for one generated field while
+                  leaving its neighbour is precisely how this card came to
+                  exist. `overflow-wrap` inherits, so the `<li>` covers the
+                  `<span>` inside it. */}
               {staleItems.map((item) => (
-                <li key={item.planItemId} className="text-xs text-(--el-text-secondary)">
+                <li
+                  key={item.planItemId}
+                  className="min-w-0 text-xs wrap-anywhere text-(--el-text-secondary)"
+                >
                   <span className="font-medium text-(--el-text)">{item.title}</span>
                   {' — '}
                   {item.staleReasons.map((r) => staleReasonLabel(r, t)).join(', ')}

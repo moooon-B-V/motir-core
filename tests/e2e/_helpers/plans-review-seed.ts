@@ -39,6 +39,20 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // Satisfies the credential-strength rule (same shape as backlog-seed's).
 export const PLANS_SEED_PASSWORD = 'plans-review-e2e-pass-7';
 
+/**
+ * A token with NO line-break opportunity, carried in the stale plan's SUMMARY
+ * (MOTIR-4578). A plan summary holds an agent-written planning turn, so a
+ * `snake_case` identifier this long is ordinary content rather than an
+ * adversarial input — and at 59 characters it is comfortably past the ~43 the
+ * rail's 311px text column can hold, which is what makes the geometric
+ * assertion in `plans-review.spec.ts` able to go red at all.
+ *
+ * ⚠️ NO `-` and NO `/`: the browser takes a break opportunity at both, which is
+ * why a 47-character PATH does not overflow and this does.
+ */
+export const PLAN_SUMMARY_UNBREAKABLE_TOKEN =
+  'plan_summary_token_with_no_break_opportunity_whatsoever_ok';
+
 export interface PlanRef {
   id: string;
 }
@@ -125,7 +139,10 @@ export async function seedPlansReview(email: string): Promise<PlansReviewSeed> {
   const cleanProposalUnderBusyParent = 'Onboarding copy pass';
   const stale = await plansService.createPlan(
     projectId,
-    { title: 'Q3 onboarding & settings', summary: 'Wire up onboarding and refresh settings.' },
+    {
+      title: 'Q3 onboarding & settings',
+      summary: `Wire up onboarding and refresh settings, per ${PLAN_SUMMARY_UNBREAKABLE_TOKEN}.`,
+    },
     ctx,
   );
   await plansService.addProposals(
