@@ -277,6 +277,46 @@ tie a running row to a specific repo, so the in-flight state is aggregate, not p
 One-container-per-repo is what keeps the **succeeded** state per-repo, which is the state both
 consumers actually gate on. **Re-modelling the ledger to allow batching is out of scope.**
 
+### §6.1 — AMENDMENT 2026-09-04 (MOTIR-4519): the permanent claim was made 313 times about repos nothing had indexed
+
+**Nothing in §6 is retracted — the contract held and the CLASSIFIER held. What failed is one field
+read, three layers below either.** It is recorded here because §6 is where a reader goes to ask what
+a `succeeded` row means, and for eight days the answer was not the one written above.
+
+`packages/orchestrator/src/adapters/fly/flyMachines.ts`'s `exitCodeOfEvent` preferred Fly's
+`exit_event.guest_exit_code` over `exit_code`, on a comment asserting the guest's number was the
+container's own. **Production says the reverse.** Read from the fleet's Machines API on 2026-09-04:
+**180 of 180** exit events carried `{ "guest_exit_code": 0, "exit_code": 40 }`, on containers whose
+own logs read `{"ok":false,"failure":"UPLOAD","exitCode":40}` (MOTIR-4518's cause — every one of them
+died at the upload grant). `guest_exit_code` is the guest VM's status and is `0` on any clean guest
+shutdown, so the fallback never fired and **every** failed container reached `classifyIndexExit` as a
+`0`, the one code that grants `indexed: true`.
+
+Measured on production the same day:
+
+|                                                                                          |                                                                                        |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `index-settle:*` memos in `job_step`, 2026-08-28 → 2026-09-04                            | **601, every one `exitCode: 0` / `exitClass: indexed`** — not one `40`, not one `null` |
+| `succeeded` rows carrying `{ indexed: true, repoRef, projectsIndexed: 2 }`, 8-day window | **313** (312 `system.code-graph-refresh` + 1 `system.code-graph-index`)                |
+| newest row in motir-ai's `CodeRepo` pointer table                                        | **2026-08-21T11:58:20Z** — seven days BEFORE the first of those 601                    |
+
+So §6's _"a `succeeded` row is a permanent claim that the repo is indexed"_ was being asserted, per
+repo, about a fleet that had uploaded nothing since 2026-08-21.
+
+**⚠️ AND THE REPOSITORY ALREADY HELD THE CONTROL THAT SETTLES IT.**
+`fleet-image-pull.md` §2.4 ran `sh -c 'exit 99'` and `sh -c 'exit 0'` inside a fleet Machine and wrote:
+_"Read `exit_code` in the machine's `exit` event, **not** `guest_exit_code`, which read `0` in every
+probe including the `exit 99` control — a trap worth recording for MOTIR-2006."_ MOTIR-2006 is the
+card family that wrote the parse. **The corpus contained its own refutation and nothing compared the
+two** — which is the durable half of this amendment: a record that contradicts a code comment is
+worth as much as a production reading, and neither is consulted by the other.
+
+The preference is inverted, and the guard that survives is
+`tests/ciFleet/codeGraphIndexDispatch.test.ts`'s _classifies the code FLY REPORTED_ — it walks the
+whole exit taxonomy from a production-shaped `exit_event` through the real adapter parse into
+`classifyIndexExit`, so the ledger's `indexed` claim is pinned to the CONTAINER's own code rather
+than to the step having completed.
+
 ## §7 — Decision 6
 
 **The concurrency cap lives in the ORCHESTRATOR's admission control** — a global bound from
