@@ -1961,6 +1961,19 @@ shell at reduced opacity. A real
 `<button>` carrying `aria-pressed`. **No raw hex, no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` /
 `h-*`.**
 
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4349) — the LOCAL declaration the sentence above cites no longer
+> exists, and neither does the line it cites it at.** `plan-canvas-arrival.mock.html` has been
+> re-pointed at the `--el-*` element-token layer: its `:root` no longer aliases the design system's
+> values onto private names, so there is no `--accent-soft: #f4f2fd` at `:36` or anywhere else. The
+> wash that hex drew is now **`--el-accent-wash`**, declared as
+> `color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg))` — both inputs are tokens, so it
+> re-tints with `data-palette` instead of freezing one palette's purple.
+> **The correction the sentence makes is UNCHANGED and still binding**: `--el-accent-soft` is
+> defined nowhere, the ACTIVE fill is `--el-tint-lavender`, and a mock-local name must never be
+> transcribed into the `--el-*` namespace. What changed is only that this asset no longer HAS a
+> mock-local colour name to transcribe — which is the class fix, not a reason to re-read the
+> decision above.
+
 ### §L2 · The SET, and why it is orthogonal to the op languages
 
 **Every proposal on the level in view, whatever its `op`** — `add`, `modify` and `remove` alike,
@@ -2498,11 +2511,22 @@ square stays `aria-hidden` exactly as the other four do (the row's meaning is in
 
 **Contrast** — every `Pill` tone puts its hue in the TINT and its ink in `--el-text-strong`
 (charcoal, ~10:1 in both themes — finding #35), and `severity="danger"` is exactly that recipe over
-`--el-tint-rose`. So this adds **no ink and no new pairing**. ⚠️ The four incumbent status pills in
+`--el-tint-rose`. So this adds **no ink and no new pairing**. ~~⚠️ The four incumbent status pills in
 `plans-tabbed-list.mock.html` carry hue-saturated inks (`#0a4fa0`, `#3a2d8a`, `#0f5e29`) that predate
 finding #35 and that the shipped `Pill` no longer paints; the fifth pill is drawn as the component
 actually renders it, which is why its ink reads darker-neutral beside them. Do not "match" the
-mock's legacy inks in code.
+mock's legacy inks in code.~~
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4349) — the four legacy inks are GONE from the asset, so there is
+> nothing left to mis-match.** `plans-tabbed-list.mock.html` has been re-pointed at the `--el-*`
+> layer, and the hand-darkened hues the struck sentence names — `#0a4fa0` (`.pill.generating`),
+> `#3a2d8a` (`.pill.planned`), `#0f5e29` (`.pill.approved`) and `#8a3d00` (`.pill.stale`) — are all
+> replaced by **`--el-text-strong`** over their existing tint, which is finding #35's recipe and
+> exactly what the fifth pill already drew. **The instruction survives its subject:** a build card
+> takes the `Pill` component's tone, never a colour read off a mock. What is no longer true is the
+> observation it rested on — the fifth pill's ink no longer "reads darker-neutral beside them",
+> because all five now carry the same charcoal ink. `plan-canvas-arrival.mock.html` carried the
+> identical four inks on its own copy of these pills and is swept in the same change.
 
 ### §3 — The WHEN label: no new column for the ROW, one needed for the RAIL
 
@@ -3033,6 +3057,17 @@ Tailwind emits `background-color: var(--el-accent-soft)`, an unresolved custom p
 computed-value time, and the declaration is simply dropped. No build error, no lint, no test. **A mock
 that declares its own token names lets a name that exists only in the mock reach production as though it
 were a design-system token** — which is why this asset declares none (§14).
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4349) — step 1's declaration is DELETED, and the chain can no
+> longer start there.** `plan-canvas-arrival.mock.html` now declares the `--el-*` element-token
+> layer and nothing else, so `--accent-soft: #f4f2fd` is gone (with the whole private-alias block it
+> sat in) and the `:36` line reference no longer resolves. The wash is
+> **`--el-accent-wash: color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg))`** — a name that
+> is still local to the asset, but whose VALUE is derived from tokens rather than invented, so
+> transcribing it into a build card yields `color-mix()` over two real tokens instead of a hex that
+> resolves nowhere. **Steps 2–4 and the decision below are unchanged and still correct.** The class
+> fix is `plans-tabbed-list.mock.html` and this asset carrying no privately-named colour at all
+> (MOTIR-4318's population), and the guard that will assert it tree-wide is MOTIR-4353.
 
 **THE DECISION — the ACTIVE fill is `--el-tint-lavender`, and it is defined everywhere:**
 
