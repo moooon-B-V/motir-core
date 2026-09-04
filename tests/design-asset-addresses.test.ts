@@ -1204,8 +1204,41 @@ interface PathFinding {
   line: number;
 }
 
+// ── The files a design asset MIRRORS are swept too (MOTIR-4344) ────────────
+//
+// The sweep below reads `design/**`, which is where a stale citation is CAUGHT
+// and not where it is WRITTEN. MOTIR-4344's defect was a dead path in a
+// `theme.css` comment above the `--el-avatar-*` ramp: it went dead on
+// 2026-08-11 with MOTIR-2680 and nothing saw it until MOTIR-4252 lifted the
+// block into a mock — at which point this guard fired on the COPY, inside a
+// card that had nothing to do with it, while the original stayed dead in its
+// own home. Correcting the copy is what makes the guard green again, so the
+// mechanism actively hides the source.
+//
+// `packages/design-system/theme.css` is the file design assets mirror: a
+// `*.mock.html` opens by copying its token block, comments and all, so the
+// next agent reads those comments either way and the guard's own rationale —
+// a path that does not exist sends that agent looking for nothing — applies
+// to the source at least as strongly as to the copy.
+//
+// SCOPE is the MEASURED one rather than the widest available. Sweeping every
+// `.css` outside `node_modules` (five files) finds exactly the same population
+// as sweeping this one, so the extra four buy nothing; sweeping `**/*.ts`
+// would fold in every import specifier and turn this into a different check
+// with a different failure mode. Add a file here when a design asset starts
+// mirroring it.
+const MIRRORED_SOURCES = ['packages/design-system/theme.css'];
+
+/** Every file the source-path sweep opens: the design assets, then the sources they mirror. */
+function sweptSources(): string[] {
+  return [
+    ...walk(join(ROOT, 'design')).filter((path) => /\.(md|html|pen)$/.test(path)),
+    ...MIRRORED_SOURCES.map((path) => join(ROOT, path)),
+  ];
+}
+
 function sweepPaths(): PathFinding[] {
-  const assets = walk(join(ROOT, 'design')).filter((path) => /\.(md|html|pen)$/.test(path));
+  const assets = sweptSources();
   const findings = new Map<string, PathFinding>();
   for (const asset of assets) {
     const file = relative(ROOT, asset).split(sep).join('/');
@@ -1621,13 +1654,15 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   },
 ];
 
-describe('a design asset cites source paths that still exist', () => {
+describe('a design asset — and the sources it mirrors — cite source paths that still exist', () => {
   it('finds no cited repo path that resolves to nothing', () => {
     expect(
       unlisted(sweepPaths().map(reconcilablePath), KNOWN_PATHS.map(pathIdOf)),
       'A design asset tells the next agent which shipped file to mirror; a path it names that ' +
         'does not exist sends that agent looking for nothing, and what it does next is improvise. ' +
-        'Correct the asset, or add the pair to KNOWN_PATHS with a reason if the path is deliberate.',
+        'The same holds for a MIRRORED_SOURCES file, whose comments are copied into assets ' +
+        'verbatim. Correct the file, or add the pair to KNOWN_PATHS with a reason if the path ' +
+        'is deliberate.',
     ).toEqual([]);
   });
 
@@ -1736,5 +1771,61 @@ describe('the source-path sweep catches the drift it was written for', () => {
 
   it('resolves an extension-less citation the way an import specifier reads', () => {
     expect(missing('composed from `components/ui/Card` and `components/ui/Pill`')).toEqual([]);
+  });
+});
+
+// ── The widening, seen failing ─────────────────────────────────────────────
+//
+// Same contract as the block above: a guard that has never been observed to
+// fail is not evidence. These run the real extractor and the real resolver
+// over the mirrored file's own pre-fix content.
+describe('the sweep reaches the file a design asset mirrors', () => {
+  const missing = (source: string) =>
+    [
+      ...new Set(
+        pathsIn(source)
+          .map(toRepoPath)
+          .filter((path): path is string => path !== null)
+          .filter((path) => !resolvesInRepo(path)),
+      ),
+    ].sort();
+
+  it('opens every MIRRORED_SOURCES entry, and each one still exists', () => {
+    // A findings-based assertion cannot see this: the file is swept whether or
+    // not it has findings, and a clean file looks identical to one nobody read.
+    // So assert the INPUT set, which is the thing a typo silently empties.
+    expect(MIRRORED_SOURCES.filter((path) => !existsSync(join(ROOT, path)))).toEqual([]);
+    const swept = new Set(sweptSources().map((path) => relative(ROOT, path).split(sep).join('/')));
+    expect(MIRRORED_SOURCES.filter((path) => !swept.has(path))).toEqual([]);
+  });
+
+  it('names the dead citation design/** could only ever see in a copy', () => {
+    // `packages/design-system/theme.css` as it stood above the `--el-avatar-*`
+    // ramp until MOTIR-4344 — verbatim, comment marker and all.
+    expect(
+      missing(
+        [
+          '  /* Avatar ramp — KEEP the named keys (peach…yellow): lib/projects/avatar.ts persists',
+          '     project.avatarColor ∈ these strings, so numbering them would break stored rows',
+          '     (spec §7.1, rung-2 migration safety). */',
+        ].join('\n'),
+      ),
+    ).toEqual(['lib/projects/avatar.ts']);
+  });
+
+  it('names an extension-less citation of a test file, which reads as resolved and is not', () => {
+    // The other two findings the widening surfaced in the same file. A `.test.ts`
+    // citation that drops its suffix is NOT an import specifier — nothing imports
+    // a spec — so `CITED_EXTENSIONS` cannot rescue it, and the fix is the
+    // citation rather than the resolver.
+    expect(missing('asserted palette-dependent by tests/theme/paletteTokenCoverage)')).toEqual([
+      'tests/theme/paletteTokenCoverage',
+    ]);
+  });
+
+  it('passes the citations that shipped in their place', () => {
+    expect(missing(readFileSync(join(ROOT, 'packages/design-system/theme.css'), 'utf8'))).toEqual(
+      [],
+    );
   });
 });

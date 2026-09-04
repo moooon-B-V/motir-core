@@ -2917,10 +2917,27 @@
   --el-label-4: var(--color-tint-lavender);
   --el-label-5: var(--color-tint-sky);
   --el-label-6: var(--color-tint-yellow);
-  /* Avatar ramp — KEEP the named keys (peach…yellow): lib/projects/avatar.ts persists
-     project.avatarColor ∈ these strings, so numbering them would break stored rows
-     (spec §7.1, rung-2 migration safety). The fallback fixes --el-type-* misuse #2 —
-     the mono initials tile keeps its blue but stops borrowing --el-type-task. */
+  /* Avatar ramp — KEEP the named keys (peach…yellow): they are addressed BY NAME, as
+     literal `bg-(--el-avatar-<key>)` class strings, by
+     `app/(authed)/triage/_components/TriageAvatar.tsx` (a hash of the display name
+     indexes a fixed six-entry array — its ORDER is load-bearing too) and by the
+     `--el-avatar-fallback` initial tiles in
+     `app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx` and
+     `app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx`.
+     `app/tokens/page.tsx` enumerates all seven. Numbering them would break those
+     lookups, and Tailwind cannot rewrite an arbitrary-value class it never sees.
+     ⚠️ Until MOTIR-4344 this comment reached the same conclusion from MIGRATION
+     safety instead: a module under `lib/projects/` was said to persist a per-project
+     colour column whose values were these key names, so numbering them would break
+     stored rows (spec §7.1, rung-2). Both halves of that warrant went in MOTIR-2680
+     (commit c73fb9112, 2026-08-11, landed in #2046) —
+     `prisma/migrations/20260811223000_drop_project_preset_avatar/migration.sql` drops
+     the column outright ("The values are LOST, deliberately") and the same change
+     deleted the module. The CONCLUSION survived its warrant; the warrant above is the
+     one that is true today. Neither dead address is repeated here on purpose — a
+     citation is only worth as much as the thing it addresses. The fallback fixes
+     --el-type-* misuse #2 — the mono initials tile keeps its blue but stops
+     borrowing --el-type-task. */
   --el-avatar-peach: var(--color-tint-peach);
   --el-avatar-rose: var(--color-tint-rose);
   --el-avatar-mint: var(--color-tint-mint);
@@ -3280,7 +3297,7 @@
 
    Not part of the Tier-3 layer above and deliberately not named `--el-*`:
    that layer is a COLOUR contract (every member aliases a Tier-0 --color-*
-   and is asserted palette-dependent by tests/theme/paletteTokenCoverage).
+   and is asserted palette-dependent by tests/theme/paletteTokenCoverage.test.ts).
    A knob here is a NUMBER inside a color-mix() — one value for every
    palette and both themes — so it fails both halves of that contract while
    being exactly the thing that has to be expressed once.
@@ -3342,7 +3359,7 @@
    `@layer utilities`; this rule is UNLAYERED, and an unlayered declaration
    outranks a layered one whatever their specificity. That is the whole of the
    mechanism — it does not depend on source order or on this file's position in
-   the `@import` list. Measured, not reasoned: tests/theme/reducedMotionSpinner
+   the `@import` list. Measured, not reasoned: tests/theme/reducedMotionSpinner.test.ts
    reads it back off the COMPILED stylesheet for both consumer shapes.
    ═══════════════════════════════════════════════════════════════════════ */
 @media (prefers-reduced-motion: reduce) {
