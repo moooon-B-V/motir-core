@@ -171,10 +171,14 @@ decision from a default:
 | --------------------------- | ----------------- | -------------------------------------------------------------------------------- |
 | Merge method                | **squash**        | what the repository already merges with                                          |
 | Maximum PRs to build        | **3**             | speculation depth. Higher merges faster and wastes more on an ejection           |
-| Minimum PRs to merge / wait | **3** / **5 min** | the batching window — this is what turns a 25-merge morning into far fewer gates. ⚠️ **The floor was 1 as applied; MOTIR-4407 §2 raised it to 3 and this table was not updated with it.** §7.6 measures what the 3 actually buys |
+| Minimum PRs to merge / wait | **3** / **5 min** | the batching window — this is what turns a 25-merge morning into far fewer gates |
 | Maximum PRs to merge        | **5**             | caps a batch                                                                     |
 | Grouping                    | **all green**     | a batch merges only if every entry passes                                        |
 | Check response timeout      | **60 min**        | must exceed the gate plus queue wait, or healthy entries are ejected             |
+
+⚠️ **The minimum was applied as 1, not 3.** MOTIR-4407 §2 raised it and did not update this
+table, so for a while a reader could not tell the decision from the drift. §7.6 measures what the
+3 actually buys — which is less than it looks.
 
 Leave **"Require branches to be up to date before merging" OFF** — §2.1.
 
@@ -304,12 +308,12 @@ merge. **It does not, and the reason is not in either card.**
 
 A nine-deep queue drained on 2026-09-04 as **2, then 1, then 1, then 1** — never the floor:
 
-| PRs                  | merged at   | group |
-| -------------------- | ----------- | ----- |
-| #2605, #2597         | `09:42:47Z` | 2     |
-| #2598                | `09:46:50Z` | 1     |
-| #2599                | `09:58:01Z` | 1     |
-| #2600                | `~10:08Z`   | 1     |
+| PRs          | merged at   | group |
+| ------------ | ----------- | ----- |
+| #2605, #2597 | `09:42:47Z` | 2     |
+| #2598        | `09:46:50Z` | 1     |
+| #2599        | `09:58:01Z` | 1     |
+| #2600        | `~10:08Z`   | 1     |
 
 `min_entries_to_merge_wait_minutes: 5` is the escape hatch, and it is **always already spent**:
 these entries were enqueued at 08:59–09:03 and merged 40–65 minutes later. The floor binds only
@@ -320,16 +324,16 @@ setting is broken.
 
 **⚠️ A `max_entries_to_build` SLOT IS RELEASED WHEN THE GROUP'S WHOLE WORKFLOW RUN REACHES A
 TERMINAL STATE — NOT WHEN ITS ENTRY MERGES.** This is the mechanism, and it is the thing neither
-§4 nor §7.5 costed. Five for five on the day, each new group created 7–20 s after a *previous
-group's CI run* completed:
+§4 nor §7.5 costed. Five for five on the day, each new group created 7–20 s after a _previous
+group's CI run_ completed:
 
-| new group built  | preceded by (CI run end)                                        |
-| ---------------- | --------------------------------------------------------------- |
-| `pr-2598` 09:22:58 | `pr-2582` 09:22:51 — **#2582 had already MERGED at 08:58:01**   |
-| `pr-2599` 09:34:21 | `pr-2597` 09:34:08 (not yet merged)                             |
-| `pr-2600` 09:42:50 | `pr-2605` 09:42:30                                              |
-| `pr-2601` 09:46:54 | `pr-2598` 09:46:34                                              |
-| `pr-2602` 09:58:04 | `pr-2599` 09:57:47                                              |
+| new group built    | preceded by (CI run end)                                      |
+| ------------------ | ------------------------------------------------------------- |
+| `pr-2598` 09:22:58 | `pr-2582` 09:22:51 — **#2582 had already MERGED at 08:58:01** |
+| `pr-2599` 09:34:21 | `pr-2597` 09:34:08 (not yet merged)                           |
+| `pr-2600` 09:42:50 | `pr-2605` 09:42:30                                            |
+| `pr-2601` 09:46:54 | `pr-2598` 09:46:34                                            |
+| `pr-2602` 09:58:04 | `pr-2599` 09:57:47                                            |
 
 The first row carries it: #2582 was on `main`, its entry gone from the queue, and its still-running
 workflow held one of only three slots for a further 25 minutes. So slots free at staggered times,
@@ -339,7 +343,7 @@ SLOT CYCLE, not by the group floor.**
 
 Two consequences worth stating plainly:
 
-- **`max_entries_to_merge: 5` is unreachable as configured.** The queue builds *prefixes* — one
+- **`max_entries_to_merge: 5` is unreachable as configured.** The queue builds _prefixes_ — one
   new entry per slot, e.g. `[2601]`, `[2601,2602]`, `[2601,2602,2603]` — so the deepest prefix
   that can exist is `max_entries_to_build`. A merge cannot carry more than 3 while that is 3.
 - **A slow-but-GREEN job costs the queue as much as a red one.** `ci-complete` needs
@@ -350,13 +354,13 @@ Two consequences worth stating plainly:
 
 **The failure rate, which is what §7.5 gates the lever on:**
 
-| window                          | merge-group CI runs | failed        |
-| ------------------------------- | ------------------- | ------------- |
-| since 2026-09-03T10:00Z (24 h)  | 121                 | 51 — **42%**  |
-| since 2026-09-04T00:00Z         | 42                  | 6 — **14%**   |
-| since 2026-09-04T05:00Z         | 16                  | 0 — **0%**    |
+| window                         | merge-group CI runs | failed       |
+| ------------------------------ | ------------------- | ------------ |
+| since 2026-09-03T10:00Z (24 h) | 121                 | 51 — **42%** |
+| since 2026-09-04T00:00Z        | 42                  | 6 — **14%**  |
+| since 2026-09-04T05:00Z        | 16                  | 0 — **0%**   |
 
-**So the lever stays un-pulled, and the reason has changed.** §7.5 asked for *a day* below ~10%;
+**So the lever stays un-pulled, and the reason has changed.** §7.5 asked for _a day_ below ~10%;
 the last 16 runs are clean and the trend is good, but today-so-far is 14% and the 24-hour figure
 is 42% — worse than the ~30% §7.5 measured. Raising `max_entries_to_build` to 5 during that would
 buy latency with exactly the ejection churn §4 could not bound. **Re-measure on the first day
