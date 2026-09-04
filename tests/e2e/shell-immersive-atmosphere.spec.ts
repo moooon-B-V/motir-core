@@ -355,6 +355,14 @@ interface Chrome {
     borderRadius: string;
     borderRightColor: string;
     backgroundColor: string;
+    // ⚠️ `outlineStyle` is the discriminator, NOT `outlineWidth`. `outline-width`
+    // computes INDEPENDENTLY of `outline-style`, so an element with no outline
+    // at all reads back the UA's initial `medium` — measured as `3px` in
+    // chromium — while `outline-style` is `none` and nothing is painted. Reading
+    // the width alone says "there is an outline here" on every element in the
+    // document. Both are kept because once the style IS `solid`, the width is
+    // the half that says the hairline is 1px rather than some other line.
+    outlineStyle: string;
     outlineWidth: string;
     outlineColor: string;
   };
@@ -385,6 +393,7 @@ async function readChrome(page: Page): Promise<Chrome> {
         borderRadius: r.borderRadius,
         borderRightColor: r.borderRightColor,
         backgroundColor: r.backgroundColor,
+        outlineStyle: r.outlineStyle,
         outlineWidth: r.outlineWidth,
         outlineColor: r.outlineColor,
       },
@@ -500,7 +509,7 @@ test.describe('3D / Immersive treats the shell chrome (MOTIR-4253)', () => {
 
     const before = await readChromeBoxes(page);
     const resting = await readChrome(page);
-    expect(resting.rail.outlineWidth, 'no outline at rest').toBe('0px');
+    expect(resting.rail.outlineStyle, 'no outline is DRAWN at rest').toBe('none');
 
     // ── `prefers-contrast: more`. The rail's hairline comes back as an OUTLINE
     // at `outline-offset: -1px` — drawn outside the box, following the radius —
@@ -509,7 +518,8 @@ test.describe('3D / Immersive treats the shell chrome (MOTIR-4253)', () => {
     // WITH and WITHOUT the media condition, not merely "a line appeared".
     await page.emulateMedia({ contrast: 'more' });
     const contrast = await readChrome(page);
-    expect(contrast.rail.outlineWidth, 'the rail hairline is restored').toBe('1px');
+    expect(contrast.rail.outlineStyle, 'the rail hairline is drawn').toBe('solid');
+    expect(contrast.rail.outlineWidth, 'and it is a hairline').toBe('1px');
     expect(contrast.bar.borderBottomColor, 'and the bar’s').not.toBe('rgba(0, 0, 0, 0)');
     expect(contrast.rail.boxShadow, 'a high-contrast user keeps the depth').toBe(
       resting.rail.boxShadow,
@@ -521,7 +531,8 @@ test.describe('3D / Immersive treats the shell chrome (MOTIR-4253)', () => {
     // there. Still no layout change.
     await page.emulateMedia({ contrast: null, forcedColors: 'active' });
     const forced = await readChrome(page);
-    expect(forced.rail.outlineWidth, 'the rail hairline is restored here too').toBe('1px');
+    expect(forced.rail.outlineStyle, 'the rail hairline is drawn here too').toBe('solid');
+    expect(forced.rail.outlineWidth, 'and it is a hairline').toBe('1px');
     expect(await readChromeBoxes(page), 'the forced-colors fallback moved the box').toEqual(before);
 
     await page.emulateMedia({ forcedColors: null });
