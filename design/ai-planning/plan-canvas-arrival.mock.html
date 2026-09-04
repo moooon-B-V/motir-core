@@ -394,25 +394,42 @@
         background: var(--el-tint-sky);
         color: var(--el-text-strong);
       }
-      /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
-         Deliberately NOT red/dashed/hatched — that language is reserved for the
-         cross-story dependency signal (.ghost / .node.flagged below), which is
-         shipped canvas language we compose. Archive is reversible, not an error,
-         so it reads as greyscale + strike-through, like the cancelled status hue. */
+      /* REMOVE = "will be archived": a NEUTRAL treatment. Deliberately NOT
+         red/dashed/hatched — that language is reserved for the cross-story
+         dependency signal (.ghost / .node.flagged below), which is shipped canvas
+         language we compose. Archive is reversible, not an error, so it reads as
+         a muted frame + strike-through, like the cancelled status hue.
+
+         ⚠️ AMENDED 2026-09-04 (MOTIR-4475) — `opacity: 0.66` and
+         `filter: grayscale(0.5)` are GONE from this rule, and this asset carried
+         the defect the component did. CSS `opacity` composites the element AND
+         ITS WHOLE SUBTREE against the backdrop, so the fill and every string
+         inside the node were mixed toward the board's `--el-canvas`: measured on
+         the composed DOM at the shipped 0.8, the title, the identifier and the
+         status pill all read 3.95:1 and the op badge 3.98:1, under AA's 4.50 —
+         and all of it SURVIVED MOTIR-4260's re-inking, because opacity scales
+         whatever ink you pick. That is MOTIR-2495's rule ("no ink choice can fix
+         it") at a second site, and its remedy is to carry the state as COLOUR.
+
+         Nothing is lost. `remove` still speaks through three channels — the
+         strong border, the muted fill and the strike — and PENDING vs DECIDED is
+         carried by the two signals a decided node ADDS (the outcome spine and
+         the outcome segment on its op chip), which is exactly how `add` and
+         `modify` distinguish the same two states without dimming anything. */
       .node.remove {
         border: 1px solid var(--el-border-strong);
         background: var(--el-muted);
-        opacity: 0.66;
-        filter: grayscale(0.5);
       }
       .node.remove .ttl {
         text-decoration: line-through;
         text-decoration-color: var(--el-text-faint);
         color: var(--el-text-secondary);
       }
-      /* The archived node's id stays READABLE: the node is dimmed as a whole
-         (opacity + grayscale), which is the treatment that says "archived", and
-         the id is still the fact a reader needs — which card is going away.
+      /* The archived node's id stays READABLE. It used to say "the node is dimmed
+         as a whole (opacity + grayscale), which is the treatment that says
+         archived" — that dimming is gone (MOTIR-4475, above), and the treatment
+         is now the muted frame and the strike. The id is still the fact a reader
+         needs — which card is going away.
          `--el-text-faint` clears AA on no surface and this element carries no
          `aria-hidden` / disabled semantics for 1.4.3 to exempt, so it takes
          `--el-text-secondary` (MOTIR-4349). Faint keeps the strike-through RULE
@@ -549,11 +566,14 @@
       .node.dec-no::before {
         background: var(--el-text-muted);
       }
-      /* A decided `remove` DROPS the fade. `opacity`+`grayscale` mean "this
-         is about to happen"; on a decided card it either already happened
-         or never will, and the fade would also desaturate the outcome
-         spine — the one signal that settles which. The muted frame, the
-         strike and the strong border all stay. */
+      /* ⚠️ KEPT AS AN EXPLICIT NO-OP (MOTIR-4475). This rule existed because
+         `.node.remove` faded and a DECIDED one must not: "on a decided card it
+         either already happened or never will, and the fade would also
+         desaturate the outcome spine — the one signal that settles which". There
+         is no fade on either arm any more, so it now asserts the shared value
+         rather than overriding one. It stays because a reader meeting the
+         decided/pending pair should find the sentence that decided it here,
+         where the DIFFERENCE between the two arms is drawn. */
       .node.remove.dec-ok,
       .node.remove.dec-no {
         opacity: 1;

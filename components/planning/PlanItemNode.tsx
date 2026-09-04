@@ -95,14 +95,31 @@ export function PlanItemNode({
     item.op === 'add'
       ? 'border border-dashed border-(--el-accent) bg-(--el-tint-lavender) shadow-(--shadow-card)'
       : item.op === 'remove'
-        ? // A DECIDED `remove` drops the FADE (Part VI §3). `opacity` means "this
-          // is about to happen"; on a decided card it either already happened or
-          // never will, and the fade would also mute the outcome spine — the one
-          // signal that settles which. The muted fill, the strong border and the
-          // strike all stay.
-          `border border-(--el-border-strong) bg-(--el-muted) shadow-(--shadow-subtle)${
-            outcome ? '' : ' opacity-80'
-          }`
+        ? // ⚠️ NO `opacity` ON EITHER ARM (MOTIR-4475). A DECIDED `remove` already
+          // dropped the fade (Part VI §3, MOTIR-4260); the PENDING one carried
+          // `opacity-80` on this same element, which paints the fill — and CSS
+          // `opacity` composites the element AND ITS WHOLE SUBTREE against the
+          // backdrop, so the frame and every string inside it were mixed at 0.8
+          // over the board's `--el-canvas`. Measured on the composed DOM: the
+          // title at 3.95:1, the identifier at 3.95:1, the status pill at 3.95:1
+          // and the op badge at 3.98:1, all under AA's 4.50 — and all of it
+          // SURVIVING MOTIR-4260's re-inking, because opacity scales whatever ink
+          // you pick. That is MOTIR-2495's rule at a second site: "no ink choice
+          // can fix it", and its remedy is to carry the state as COLOUR.
+          //
+          // Nothing is lost by removing it, which is what makes colour the whole
+          // remedy here rather than half of one. `remove` already speaks through
+          // three other channels — the strong border, the muted fill and the
+          // strike — and the PENDING/DECIDED distinction is carried by the two
+          // signals a decided node ADDS: the outcome spine below and the outcome
+          // segment fused onto its op badge. That is exactly how `add` and
+          // `modify` distinguish the same two states, and neither of them dims.
+          //
+          // `tests/components/composed-surface-ink.test.tsx` mounts the pending
+          // node on its own `--el-canvas` board and measures the composite, so a
+          // re-introduced `opacity-*` on a text-bearing subtree goes red here
+          // rather than on somebody's screen.
+          'border border-(--el-border-strong) bg-(--el-muted) shadow-(--shadow-subtle)'
         : 'border border-(--el-border) bg-(--el-surface) ring-2 ring-(--el-info) shadow-(--shadow-card)';
 
   return (

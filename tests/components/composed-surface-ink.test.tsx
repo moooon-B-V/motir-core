@@ -179,23 +179,29 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
     // resolves nothing across that gap and ABSTAINS, so the pairing was green in
     // `tests/theme/inkContrastLint.test.ts` and always would have been.
     const { container } = renderWithIntl(
-      <PlanItemNode
-        item={planReviewItem({
-          op: 'remove',
-          nodeId: 'wi_2',
-          identifier: 'PROD-21',
-          title: 'Superseded subtask',
-          status: 'todo',
-          // The peek envelope (MOTIR-4183) restates the op; the builder's
-          // default describes an `add`, which this case is not.
-          proposal: {
+      // ⚠️ MOUNTED ON THE BOARD IT ACTUALLY SITS ON (MOTIR-4475). A node whose
+      // frame is `opacity`-dimmed composites against the CANVAS behind it, and
+      // mounting it bare made the guard measure a backdrop the product does not
+      // have. `--el-canvas` is what `PlanReviewCanvas` paints under these nodes.
+      <div className="bg-(--el-canvas)">
+        <PlanItemNode
+          item={planReviewItem({
             op: 'remove',
+            nodeId: 'wi_2',
             identifier: 'PROD-21',
-            changedFields: [],
-            settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
-          },
-        })}
-      />,
+            title: 'Superseded subtask',
+            status: 'todo',
+            // The peek envelope (MOTIR-4183) restates the op; the builder's
+            // default describes an `add`, which this case is not.
+            proposal: {
+              op: 'remove',
+              identifier: 'PROD-21',
+              changedFields: [],
+              settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+            },
+          })}
+        />
+      </div>,
     );
     // The struck title is on screen AND the node paints its own `--el-muted`
     // frame under it. Both are asserted because either one absent turns the
@@ -204,6 +210,65 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
     expect(screen.getByText('Superseded subtask')).toBeTruthy();
     expect(paintedSurfaces(container)).toContain('--el-muted');
     expectNoFailingInk(container, 'PlanItemNode (remove)');
+  });
+
+  it('the PENDING remove node — the OPACITY composite, which no ink choice fixes (MOTIR-4475)', async () => {
+    // ⚠️ THE SITE BOTH GUARDS WERE SILENT ON, and for two independent reasons.
+    // The static walk abstains across the `frame` variable (MOTIR-4251's
+    // enumeration); this render-time helper had no `opacity` term AT ALL and
+    // measured only the muted and faint inks — so after MOTIR-4260 re-inked the
+    // title to `--el-text-secondary` the sweep returned `measuredSites: []` on
+    // this node. It was silent about the site TWICE over.
+    //
+    // `opacity` composites the element AND its subtree against the backdrop, so
+    // the frame and the title are both mixed at 0.8 over `--el-canvas`. That is
+    // the MOTIR-2495 class at a second site: "opacity halves whatever you pick",
+    // and the re-inking that took the DECIDED node from 4.12:1 to 6.18:1 left
+    // the PENDING one at 3.95:1.
+    const { PlanItemNode } = await import('@/components/planning/PlanItemNode');
+    const { container } = renderWithIntl(
+      <div className="bg-(--el-canvas)">
+        <PlanItemNode
+          item={planReviewItem({
+            op: 'remove',
+            nodeId: 'wi_3',
+            identifier: 'PROD-22',
+            title: 'A pending removal',
+            status: 'todo',
+            proposal: {
+              op: 'remove',
+              identifier: 'PROD-22',
+              changedFields: [],
+              settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+            },
+          })}
+          // PENDING: no outcome. This is the whole time a plan sits `planned`
+          // and somebody is deciding whether to approve it — i.e. the state a
+          // reviewer actually looks at.
+          outcome={null}
+        />
+      </div>,
+    );
+
+    // The anti-tautology pair, one tier stricter than the sweep above: the site
+    // must be MEASURED, not merely not-failing. `measuredInkSites` returning []
+    // is what this node did before the secondary ink joined the default set.
+    const sites = measuredInkSites(container, { theme: 'light' });
+    expect(
+      sites.map((s) => `${s.ink} on ${s.surface} @${s.opacity} — ${s.ratio}`),
+      'the pending remove node must be MEASURED, not merely not-failing',
+    ).not.toHaveLength(0);
+
+    expectNoFailingInk(container, 'PlanItemNode (remove, PENDING)');
+
+    // BOTH THEMES (the card's criterion 1). Light is the binding one for the
+    // muted ink, but an opacity composite is not an ink property — it scales
+    // whatever ink is there — so dark is a real measurement here rather than the
+    // repeat `themesThatBind` reports for the undimmed case.
+    expect(
+      findInkContrastFailures(container, { theme: 'dark' }).map(formatRenderedFinding),
+      'PlanItemNode (remove, PENDING) — dark',
+    ).toEqual([]);
   });
 
   it('the command palette — components/ui/CommandPalette.tsx', async () => {
