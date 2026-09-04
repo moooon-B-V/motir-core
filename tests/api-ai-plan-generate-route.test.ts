@@ -178,8 +178,16 @@ describe('POST /api/ai/plan/generate', () => {
       projectKey: fx.projectIdentifier,
     });
     // The envelope carries the prompt + the project's AI-explanations opt-in
-    // (Story 7.4 · MOTIR-850) — OFF by default for a fresh project.
-    expect(context).toEqual({ prompt: 'build me a tracker', generateExplanations: false });
+    // (Story 7.4 · MOTIR-850) — OFF by default for a fresh project — and the
+    // planning-mistake CONSENT flag (MOTIR-3350 · MOTIR-4343), which is ON for a
+    // project that has never touched the setting. Kept as an EXACT shape rather
+    // than loosened to `objectContaining`: an absent flag is read on the far
+    // side as ON, so what this assertion is for is that the key is THERE.
+    expect(context).toEqual({
+      prompt: 'build me a tracker',
+      generateExplanations: false,
+      recordPlanningMistakes: true,
+    });
     expect(actor).toEqual({ userId: fx.ownerId });
 
     // The Plan really exists, is `generating`, and is bound to the job (sourceJobId).
@@ -214,7 +222,11 @@ describe('POST /api/ai/plan/generate', () => {
 
     const [jobKind, , context] = submitJobMock.mock.calls[0]!;
     expect(jobKind).toBe('plan');
-    expect(context).toEqual({ prompt: 'with explanations', generateExplanations: true });
+    expect(context).toEqual({
+      prompt: 'with explanations',
+      generateExplanations: true,
+      recordPlanningMistakes: true,
+    });
   });
 
   it('surfaces out-of-credits as a DISTINCT 402, leaving NO orphan Plan', async () => {
