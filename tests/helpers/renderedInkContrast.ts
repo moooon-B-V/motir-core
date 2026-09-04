@@ -1,4 +1,4 @@
-import { contrast, flattenColorMix } from '../theme/colorMetrics';
+import { contrast, flattenColorMix, mixSrgb } from '../theme/colorMetrics';
 import { loadTokenLayer, resolveToken } from '../theme/paletteCascade';
 
 // MOTIR-4251 — the RENDER-TIME ink guard, for the surfaces the static walk
@@ -61,21 +61,52 @@ import { loadTokenLayer, resolveToken } from '../theme/paletteCascade';
 /** WCAG 1.4.3 AA for body text. Large-text's 3:1 is deliberately not modelled. */
 export const AA = 4.5;
 
-/** The two inks under measurement, as their token names. */
+/** The inks under measurement, as their token names. */
 export const MUTED_INK = '--el-text-muted';
 export const FAINT_INK = '--el-text-faint';
+/**
+ * The SECONDARY ink — added by MOTIR-4475, and the reason it is measured at all
+ * is the opacity term below.
+ *
+ * At `opacity: 1` it clears AA on every background in both themes (6.18–6.80:1),
+ * so including it costs nothing and finds nothing. Under a COMPOSITE it does
+ * not: `opacity` scales whatever ink you pick toward the backdrop, and a title
+ * re-inked from muted to secondary specifically to clear AA landed at 3.95:1
+ * anyway. A guard that measures only the two inks a re-inking moves AWAY from
+ * goes silent on exactly the sites a re-inking has just touched.
+ */
+export const SECONDARY_INK = '--el-text-secondary';
 
 /** The background an element with no painting ancestor lands on. */
 export const DEFAULT_SURFACE = '--el-page-bg';
 
 export type Theme = 'light' | 'dark';
 
+const classesOf = (el: Element) => el.getAttribute('class') ?? '';
+
 /** `text-(--el-x)`, with or without a variant prefix (`hover:`, `group-hover:`). */
 const inkClass = (token: string) => `text-(${token})`;
 /** Every `bg-(--el-x)` on one element, prefixed or not. */
 const PAINTS_BACKGROUND = /bg-\((--el-[\w-]+)\)/g;
 
-const classesOf = (el: Element) => el.getAttribute('class') ?? '';
+/**
+ * An `opacity-<n>` utility — Tailwind's numeric scale (`opacity-80` ⇒ `0.8`) or
+ * an arbitrary value (`opacity-[0.66]`). A variant prefix is matched too, on the
+ * same reading `resolveSurface` gives a prefixed background: a state of the TEXT
+ * is covered by 1.4.3, and over-reporting a conditional one is the safe
+ * direction to be wrong in.
+ */
+const OPACITY_UTILITY = /(?:^|[\s:])opacity-(?:(\d{1,3})|\[([\d.]+)\])(?![\w-])/g;
+
+/** Every opacity this element declares, as a factor in `[0, 1]`. */
+function opacitiesOf(el: Element): number[] {
+  const out: number[] = [];
+  for (const m of classesOf(el).matchAll(OPACITY_UTILITY)) {
+    const value = m[1] !== undefined ? Number(m[1]) / 100 : Number(m[2]);
+    if (Number.isFinite(value) && value >= 0 && value < 1) out.push(value);
+  }
+  return out;
+}
 
 /**
  * Every `--el-*` token that resolves to a flat hex in one theme, keyed by name.
@@ -225,6 +256,16 @@ export interface ResolvedSurface {
    * one way this guard can be green and say nothing.
    */
   defaulted: boolean;
+  /**
+   * The cumulative `opacity` this text is composited at — `1` when nothing in
+   * the chain dims it (MOTIR-4475).
+   */
+  opacity: number;
+  /**
+   * The token BEHIND the outermost dimming element, which the composite mixes
+   * toward. Only meaningful when {@link opacity} is below 1.
+   */
+  backdrop: string;
 }
 
 /**
@@ -250,19 +291,82 @@ export interface ResolvedSurface {
 export function resolveSurface(el: Element, theme: Theme, ink: string): ResolvedSurface {
   const hexes = tokenHexes(theme);
   const inkHex = hexes[ink];
-  for (let node: Element | null = el; node; node = node.parentElement) {
+
+  /** The worst background this one element paints, or null if it paints none. */
+  const paintedBy = (node: Element): string | null => {
     const tokens = Array.from(classesOf(node).matchAll(PAINTS_BACKGROUND))
       .map((m) => m[1]!)
       .filter((token) => token in hexes);
-    if (tokens.length === 0) continue;
-    const worst = inkHex
+    if (tokens.length === 0) return null;
+    return inkHex
       ? tokens.reduce((a, b) =>
           contrast(inkHex, hexes[a]!) <= contrast(inkHex, hexes[b]!) ? a : b,
         )
       : tokens[0]!;
-    return { token: worst, painter: node, defaulted: false };
+  };
+
+  // ── PASS 1 — the surface, and the OPACITY chain above it (MOTIR-4475) ──────
+  // `opacity < 1` composites the element AND ITS WHOLE SUBTREE against the
+  // backdrop, so an ancestor's dimming reaches text several levels down and
+  // reaches the fill that text sits on at the same time. The walk therefore
+  // collects two things it did not before: the cumulative factor, and WHERE the
+  // outermost dimming element sits — because that is what decides which
+  // background is the composite's backdrop rather than part of the group.
+  let token: string | null = null;
+  let painter: Element | null = null;
+  let opacity = 1;
+  let outermostDimmed: Element | null = null;
+  for (let node: Element | null = el; node; node = node.parentElement) {
+    if (token === null) {
+      const found = paintedBy(node);
+      if (found !== null) {
+        token = found;
+        painter = node;
+      }
+    }
+    for (const value of opacitiesOf(node)) {
+      opacity *= value;
+      outermostDimmed = node;
+    }
   }
-  return { token: DEFAULT_SURFACE, painter: null, defaulted: true };
+  const resolved = token ?? DEFAULT_SURFACE;
+  const defaulted = token === null;
+  if (opacity >= 1 || outermostDimmed === null) {
+    return { token: resolved, painter, defaulted, opacity: 1, backdrop: DEFAULT_SURFACE };
+  }
+
+  // ── PASS 2 — the BACKDROP, strictly ABOVE the outermost dimming element ────
+  // Everything at or below it is inside the composited group, including its own
+  // fill; what the group is mixed toward is whatever paints behind it.
+  let backdrop = DEFAULT_SURFACE;
+  for (let node: Element | null = outermostDimmed.parentElement; node; node = node.parentElement) {
+    const found = paintedBy(node);
+    if (found !== null) {
+      backdrop = found;
+      break;
+    }
+  }
+  return { token: resolved, painter, defaulted, opacity, backdrop };
+}
+
+/**
+ * The ratio this text is ACTUALLY read at, composite included (MOTIR-4475).
+ *
+ * `opacity` mixes the whole group toward the backdrop, so BOTH terms move: the
+ * ink toward the backdrop and the fill toward the backdrop. Measuring the ink at
+ * full strength on the undimmed fill is the reading that let a title re-inked to
+ * clear AA (6.18:1 on `--el-muted`) ship at 3.95:1 over the canvas.
+ */
+export function composedRatio(theme: Theme, ink: string, surface: ResolvedSurface): number | null {
+  const hexes = tokenHexes(theme);
+  const inkHex = hexes[ink];
+  const surfaceHex = hexes[surface.token];
+  if (!inkHex || !surfaceHex) return null;
+  if (surface.opacity >= 1) return contrast(inkHex, surfaceHex);
+  const backdropHex = hexes[surface.backdrop];
+  if (!backdropHex) return null;
+  const percent = surface.opacity * 100;
+  return contrast(mixSrgb(inkHex, percent, backdropHex), mixSrgb(surfaceHex, percent, backdropHex));
 }
 
 // ── The finding ─────────────────────────────────────────────────────────────
@@ -277,7 +381,21 @@ export interface RenderedInkFinding {
   text: string;
   /** True when the surface came from the page default rather than from an ancestor. */
   defaulted: boolean;
+  /** The cumulative `opacity` the text is composited at — `1` when undimmed. */
+  opacity: number;
+  /** The token the composite mixes toward. Only meaningful below `opacity: 1`. */
+  backdrop: string;
 }
+
+/**
+ * The inks measured when a caller names none.
+ *
+ * SECONDARY joined MUTED and FAINT with the opacity term (MOTIR-4475): at full
+ * strength it clears AA everywhere, so it is free; under a composite it is the
+ * ink a re-inking will have just MOVED TO, and the guard has to be able to see
+ * the site it was moved to.
+ */
+export const DEFAULT_INKS: readonly string[] = [MUTED_INK, FAINT_INK, SECONDARY_INK];
 
 export interface InkSweepOptions {
   /** Which theme's resolved values to measure with. Default `light`. */
@@ -308,7 +426,7 @@ export function findInkContrastFailures(
   options: InkSweepOptions = {},
 ): RenderedInkFinding[] {
   const theme = options.theme ?? 'light';
-  const inks = options.inks ?? [MUTED_INK, FAINT_INK];
+  const inks = options.inks ?? DEFAULT_INKS;
   const list = rootList(roots);
   const seen = new Set<Element>();
   const findings: RenderedInkFinding[] = [];
@@ -322,7 +440,7 @@ export function findInkContrastFailures(
         if (!classes.includes(inkClass(ink))) continue;
         if (exemptionFor(el) !== null) continue;
         const surface = resolveSurface(el, theme, ink);
-        const measured = ratio(theme, ink, surface.token);
+        const measured = composedRatio(theme, ink, surface);
         if (measured === null || measured >= AA) continue;
         findings.push({
           ink,
@@ -333,6 +451,8 @@ export function findInkContrastFailures(
           classes,
           text: (ownText(el) || paintedText(el)).slice(0, 60),
           defaulted: surface.defaulted,
+          opacity: surface.opacity,
+          backdrop: surface.backdrop,
         });
       }
     }
@@ -341,7 +461,8 @@ export function findInkContrastFailures(
 }
 
 export function formatRenderedFinding(f: RenderedInkFinding): string {
-  return `${f.ink} on ${f.surface} — ${f.ratio}:1 (${f.theme}, AA is ${AA}) — <${f.tag} class="${f.classes}"> "${f.text}"`;
+  const composite = f.opacity < 1 ? ` composited at opacity ${f.opacity} over ${f.backdrop}` : '';
+  return `${f.ink} on ${f.surface}${composite} — ${f.ratio}:1 (${f.theme}, AA is ${AA}) — <${f.tag} class="${f.classes}"> "${f.text}"`;
 }
 
 /**
@@ -367,6 +488,8 @@ export interface MeasuredInkSite {
   ink: string;
   surface: string;
   ratio: number | null;
+  /** The cumulative `opacity` the site is composited at — `1` when undimmed. */
+  opacity: number;
   tag: string;
   text: string;
 }
@@ -388,7 +511,7 @@ export function measuredInkSites(
   options: InkSweepOptions = {},
 ): MeasuredInkSite[] {
   const theme = options.theme ?? 'light';
-  const inks = options.inks ?? [MUTED_INK, FAINT_INK];
+  const inks = options.inks ?? DEFAULT_INKS;
   const list = rootList(roots);
   const seen = new Set<Element>();
   const out: MeasuredInkSite[] = [];
@@ -404,7 +527,8 @@ export function measuredInkSites(
         out.push({
           ink,
           surface: surface.token,
-          ratio: ratio(theme, ink, surface.token),
+          ratio: composedRatio(theme, ink, surface),
+          opacity: surface.opacity,
           tag: el.tagName.toLowerCase(),
           text: (ownText(el) || paintedText(el)).slice(0, 60),
         });

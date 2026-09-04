@@ -10,6 +10,7 @@ import { StatusPill } from '@/components/issues/StatusPill';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { IssueType } from '@/lib/issues/parentRules';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOpDto } from '@/lib/dto/plans';
 
@@ -29,30 +30,69 @@ import type { PlanItemOpDto } from '@/lib/dto/plans';
 // `--spacing-control-x|y` exactly as that row does.
 
 /** The three sections, in the order Part VIII draws them. Each renders only when
- *  it is non-empty. */
+ *  it is non-empty.
+ *
+ *  THREE ARMS PER OP, because the plan's decision is three-valued (MOTIR-4495).
+ *  `key`/`chip` are the PROPOSAL tense a pending plan reads in; `decidedKey`/
+ *  `decidedChip` are the past tense an APPROVED plan reads in; `declinedKey`/
+ *  `declinedChip` are the proposal tense again, and they are spelled out rather
+ *  than folded into a `!== 'accepted'` test because Part VIII §3 DECIDED the
+ *  declined arm's words, and a table that names all three is where the next
+ *  reader looks when it decides differently. No new copy key: every string the
+ *  declined arm renders already ships. */
 const SECTIONS = [
   {
     op: 'add',
     key: 'listAdds',
     decidedKey: 'listCreated',
+    declinedKey: 'listAdds',
     chip: 'opAdd',
     decidedChip: 'opCreated',
+    declinedChip: 'opAdd',
   },
   {
     op: 'modify',
     key: 'listUpdates',
     decidedKey: 'listApplied',
+    declinedKey: 'listUpdates',
     chip: 'opModify',
     decidedChip: 'opApplied',
+    declinedChip: 'opModify',
   },
   {
     op: 'remove',
     key: 'listArchives',
     decidedKey: 'listArchived',
+    declinedKey: 'listArchives',
     chip: 'opRemove',
     decidedChip: 'opArchived',
+    declinedChip: 'opRemove',
   },
 ] as const;
+
+type Section = (typeof SECTIONS)[number];
+
+/**
+ * Which of a section's three vocabularies the plan's OUTCOME selects.
+ *
+ * ⚠️ THE INPUT IS THE OUTCOME, NEVER A `decided` BOOLEAN (MOTIR-4495). Two of
+ * the three values collapse onto one arm, which is exactly what made the boolean
+ * look sufficient — and it was wrong for the third: a DECLINED plan rendered
+ * `Created` / `Applied` / `Archived` about work that never happened, with the
+ * `add` row contradicting itself inside one line (`Created … no key yet`). The
+ * canvas eleven lines away in `PlanDetail` already computed the three-valued
+ * value; the list was handed a boolean derived from the same two statuses.
+ */
+function vocabularyFor(
+  section: Section,
+  outcome: PlanItemOutcome | null,
+): { headingKey: string; chipKey: string } {
+  if (outcome === 'accepted')
+    return { headingKey: section.decidedKey, chipKey: section.decidedChip };
+  if (outcome === 'declined')
+    return { headingKey: section.declinedKey, chipKey: section.declinedChip };
+  return { headingKey: section.key, chipKey: section.chip };
+}
 
 // ⚠️ TOTAL over `PlanItemOpDto`, at BUILD time (MOTIR-3242). The list renders one
 // section per op, so an op the sections do not cover is a proposal that silently
@@ -74,7 +114,7 @@ function issueTypeOf(kind: string): IssueType {
 
 /** The op chip — panel B's own vocabulary, unchanged. The list introduces no
  *  fourth language for the same three facts. */
-function OpChip({ op, decided }: { op: string; decided: boolean }) {
+function OpChip({ op, outcome }: { op: string; outcome: PlanItemOutcome | null }) {
   const t = useTranslations('planReview');
   const section = SECTIONS.find((s) => s.op === op);
   if (!section) return null;
@@ -87,7 +127,15 @@ function OpChip({ op, decided }: { op: string; decided: boolean }) {
   //
   // A DECIDED plan's list is a RECORD, in the same tense Part VI gave the canvas,
   // so both move: `created` / `applied` / `archived`.
-  const label = t(decided ? section.decidedChip : section.chip);
+  //
+  // ⚠️ AND THE SENTENCE THAT FOLLOWS THAT ONE IN PART VIII §3 IS THE OTHER HALF,
+  // which this comment used to quote without implementing (MOTIR-4495):
+  // *"A declined plan's list keeps the proposal tense and adds no outcome chip:
+  // nothing happened to those cards."* `decided` was a BOOLEAN over a
+  // three-valued axis, so the decline took the approve arm and the list said
+  // `Created` / `Applied` / `Archived` about work that never happened.
+  const { chipKey } = vocabularyFor(section, outcome);
+  const label = t(chipKey);
   if (op === 'add') return <Pill severity="info">{label}</Pill>;
   if (op === 'modify') return <Pill status="planned">{label}</Pill>;
   return <Pill tone="archived">{label}</Pill>;
@@ -160,11 +208,11 @@ function ChangeLines({ changes }: { changes: PlanItemChangeDto[] }) {
 
 function ProposalRow({
   item,
-  decided,
+  outcome,
   onOpen,
 }: {
   item: PlanReviewItemDto;
-  decided: boolean;
+  outcome: PlanItemOutcome | null;
   onOpen: (item: PlanReviewItemDto, trigger: HTMLButtonElement) => void;
 }) {
   const t = useTranslations('planReview');
@@ -273,7 +321,7 @@ function ProposalRow({
             label={item.statusLabel}
           />
         ) : null}
-        <OpChip op={item.op} decided={decided} />
+        <OpChip op={item.op} outcome={outcome} />
       </div>
     </li>
   );
@@ -281,11 +329,20 @@ function ProposalRow({
 
 export interface PlanProposalListProps {
   items: PlanReviewItemDto[];
-  /** A decided plan's list is a RECORD, in the past tense (Part VI / Part VIII §3). */
-  decided: boolean;
+  /**
+   * The plan's DECISION — `'accepted'` / `'declined'` / `null` — the same value
+   * `PlanDetail` already computes for the canvas, never a `decided` boolean
+   * (MOTIR-4495).
+   *
+   * An APPROVED plan's list is a RECORD, in the past tense Part VI gave the
+   * canvas. A DECLINED plan's keeps the PROPOSAL tense: nothing happened to
+   * those cards, and saying `Created` about a card that was never created is
+   * wrong in the same line that says `no key yet` (Part VIII §3).
+   */
+  outcome: PlanItemOutcome | null;
 }
 
-export function PlanProposalList({ items, decided }: PlanProposalListProps) {
+export function PlanProposalList({ items, outcome }: PlanProposalListProps) {
   const t = useTranslations('planReview');
   // The SAME read modal the canvas's View pill opens — this body does not gain a
   // second read view, which is the property Part XIII §7 is about. It is mounted
@@ -361,7 +418,7 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
         return (
           <section key={section.op} className="mb-4 last:mb-0">
             <h3 className="mb-1.5 flex items-center gap-2 px-(--spacing-control-x) text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-              {t(decided ? section.decidedKey : section.key)}
+              {t(vocabularyFor(section, outcome).headingKey)}
               <Pill tone="neutral">{rows.length}</Pill>
             </h3>
             <ul className="flex flex-col">
@@ -369,7 +426,7 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
                 <ProposalRow
                   key={item.planItemId}
                   item={item}
-                  decided={decided}
+                  outcome={outcome}
                   onOpen={openPeek}
                 />
               ))}
@@ -382,7 +439,7 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
           work-item peek for an `add` that approval has already materialized
           (MOTIR-3161, bug MOTIR-4471). Each renders nothing when its half is null, so
           only one is ever open. */}
-      <ProposalPeek item={peeked.proposal} onClose={closePeek} />
+      <ProposalPeek item={peeked.proposal} outcome={outcome} onClose={closePeek} />
       <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
     </div>
   );

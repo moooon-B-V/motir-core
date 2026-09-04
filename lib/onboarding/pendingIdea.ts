@@ -31,10 +31,13 @@ import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 
 export const PENDING_IDEA_COOKIE = 'motir_pending_idea';
 
-// Where the preserved idea lands after auth: the authed discovery chat (Subtask
-// 7.3.5 / MOTIR-833). Auth redirects here (via `next=`) and 7.3.5 reads the
-// cookie above to seed the conversation's first turn. Part of the same seam.
-export const ONBOARDING_ENTRY_PATH = '/onboarding';
+// Where the preserved idea lands after auth is `ONBOARDING_ENTRY_PATH`, and it
+// is declared ONCE, in `lib/navigation/landing.ts` (MOTIR-4403). This module
+// used to carry its own copy of the same value under this comment: a cookie
+// module is a CONSUMER of the entrance, never its owner — the owner is the
+// plain module both the client and the server halves already import from.
+// Auth redirects there (via `next=`) and 7.3.5 reads the cookie above to seed
+// the conversation's first turn. Part of the same seam.
 
 // Keep the cookie small and the seeded first turn sane. The hero textarea clamps
 // to the same bound; anything longer is truncated rather than rejected, so a

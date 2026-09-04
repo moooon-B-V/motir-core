@@ -171,11 +171,24 @@ The composed canvas+chat shell, with the Plans chrome layered on:
   - **`modify`** → the **EXISTING** node, **solid INFO (blue) ring + a "proposed change" badge** +
     an inline **old→new diff** (old read live from the target, new from `patch`) — SAME id, not a
     ghost copy.
-  - **`remove`** → a **dimmed, de-saturated, NEUTRAL "will be archived"** treatment (solid muted
-    border + grey fill + strike-through title + an archive chip) — deliberately **not**
-    red/dashed/hatched, since archive is reversible (the `cancelled`-status hue), not the
-    error/attention signal cross-story deps carry. This is the fix for the original collision:
-    `remove` previously read identically to a cross-level dependency.
+  - **`remove`** → a **NEUTRAL "will be archived"** treatment (solid muted border + grey fill +
+    strike-through title + an archive chip) — deliberately **not** red/dashed/hatched, since
+    archive is reversible (the `cancelled`-status hue), not the error/attention signal cross-story
+    deps carry. This is the fix for the original collision: `remove` previously read identically to
+    a cross-level dependency.
+    - **⚠️ AMENDED 2026-09-04 (MOTIR-4475) — it is no longer "dimmed, de-saturated".** The asset and
+      the component both carried an `opacity` fade on the node ROOT, and CSS `opacity` composites
+      the element AND its whole subtree against the backdrop: measured on the composed DOM at the
+      shipped `opacity-80`, the title, the identifier and the status pill all read **3.95:1** over
+      the board's `--el-canvas` and the op badge **3.98:1**, under AA's 4.50 — and every one of them
+      survived MOTIR-4260's re-inking of the title, because opacity scales whatever ink you pick.
+      That is MOTIR-2495's rule at a second site (_"no ink choice can fix it"_), and its remedy is to
+      carry the state as COLOUR. **Nothing is lost:** the strong border, the muted fill and the
+      strike are three channels already, and PENDING vs DECIDED is carried by the two signals a
+      decided node ADDS — the outcome spine and the outcome segment on its op chip — which is how
+      `add` and `modify` distinguish the same two states without dimming anything.
+      `tests/components/composed-surface-ink.test.tsx` mounts the pending node on its own
+      `--el-canvas` board and measures the composite, in both themes.
 - **Inline edit of a proposed `add`** (MOTIR-1370). The Edit pencil on an `add` node opens a
   **Modal** edit form over the add's proposed fields — **Title** (`Input`), **Type** (the kind
   picker `TypePicker`), **Work type** (`WorkItemTypePicker`), **Priority** (`PriorityPicker`),

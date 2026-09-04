@@ -127,7 +127,7 @@ afterEach(() => {
 
 /** Open the proposal through the LIST door and return what the peek rendered. */
 async function throughTheList(item: PlanReviewItemDto): Promise<string> {
-  render(<PlanProposalList items={[item]} decided={false} />);
+  render(<PlanProposalList items={[item]} outcome={null} />);
   fireEvent.click(screen.getByRole('button', { name: /Open / }));
   await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
   const text = screen.getByTestId('proposal-peek').textContent ?? '';
@@ -201,7 +201,7 @@ describe('both plan-review doors open ONE peek (MOTIR-4185)', () => {
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
         },
       });
-      render(<PlanProposalList items={[item]} decided={false} />);
+      render(<PlanProposalList items={[item]} outcome={null} />);
       fireEvent.click(screen.getByRole('button', { name: /Open / }));
       await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
       expect(screen.getByTestId('quick-view-op').textContent).toBe(expected);
@@ -210,7 +210,7 @@ describe('both plan-review doors open ONE peek (MOTIR-4185)', () => {
   });
 
   it('keeps ONE close affordance on the new host (AC 6)', async () => {
-    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    render(<PlanProposalList items={[MODIFY]} outcome={null} />);
     fireEvent.click(screen.getByRole('button', { name: /Open / }));
     await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
     const closes = screen.getAllByLabelText('Close');
@@ -220,7 +220,7 @@ describe('both plan-review doors open ONE peek (MOTIR-4185)', () => {
   });
 
   it('returns focus to the row that opened it (AC 5)', async () => {
-    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    render(<PlanProposalList items={[MODIFY]} outcome={null} />);
     const row = screen.getByRole('button', { name: /Open / });
     row.focus();
     fireEvent.click(row);
@@ -234,7 +234,7 @@ describe('both plan-review doors open ONE peek (MOTIR-4185)', () => {
   });
 
   it('leaves the list row’s own diff rendering alone (AC 7)', () => {
-    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    render(<PlanProposalList items={[MODIFY]} outcome={null} />);
     // The node is a SIGNAL and the list is where a change is SPELLED (Part VIII
     // §3). This story adds a reading; it must not move one.
     expect(screen.getByText('high')).toBeTruthy();
@@ -261,7 +261,7 @@ describe('the target fetch has a TERMINAL state in every direction (MOTIR-4185)'
       'fetch',
       vi.fn(async () => ({ ok: false, status: 404 }) as unknown as Response),
     );
-    render(<PlanProposalList items={[MODIFY]} decided={false} />);
+    render(<PlanProposalList items={[MODIFY]} outcome={null} />);
     fireEvent.click(screen.getByRole('button', { name: /Open / }));
 
     expect(await screen.findByTestId('proposal-peek-missing')).toBeTruthy();
@@ -283,7 +283,7 @@ describe('the target fetch has a TERMINAL state in every direction (MOTIR-4185)'
       title: 'A proposed work item',
       proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
     });
-    render(<PlanProposalList items={[add]} decided={false} />);
+    render(<PlanProposalList items={[add]} outcome={null} />);
     fireEvent.click(screen.getByRole('button', { name: /Open / }));
 
     expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
@@ -296,7 +296,7 @@ describe('the target fetch has a TERMINAL state in every direction (MOTIR-4185)'
 // ⚠️ WHY THE SUITE ABOVE COULD NOT SEE THIS. It walks the `op` axis exhaustively
 // — add, modify, remove, both doors, one assertion over both — and never varies
 // the SECOND axis at all: every fixture in it is an un-materialized `add`
-// (`identifier: null`) rendered with `decided={false}`. So the arm the defect
+// (`identifier: null`) rendered with `outcome={null}`. So the arm the defect
 // lives in was not weakly covered, it was structurally unreachable. The fixtures
 // below are that missing second axis, and criteria 4 and 5 hold the arms that
 // were already correct so the fix cannot silently widen.
@@ -325,7 +325,7 @@ const MATERIALIZED_ADD: PlanReviewItemDto = planReviewItem({
 
 describe('a DECIDED plan’s list row opens the card that EXISTS (bug MOTIR-4471)', () => {
   it('a materialized `add` opens the ORDINARY work-item peek, not proposal mode (AC 3)', async () => {
-    render(<PlanProposalList items={[MATERIALIZED_ADD]} decided={true} />);
+    render(<PlanProposalList items={[MATERIALIZED_ADD]} outcome="accepted" />);
     fireEvent.click(screen.getByRole('button', { name: /Open / }));
 
     // The tell that the right door opened: the link out carries the COMMITTED
@@ -354,7 +354,7 @@ describe('a DECIDED plan’s list row opens the card that EXISTS (bug MOTIR-4471
       title: 'A proposed work item',
       proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
     });
-    render(<PlanProposalList items={[pending]} decided={false} />);
+    render(<PlanProposalList items={[pending]} outcome={null} />);
     fireEvent.click(screen.getByRole('button', { name: /Open / }));
 
     await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
@@ -385,7 +385,7 @@ describe('a DECIDED plan’s list row opens the card that EXISTS (bug MOTIR-4471
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
         },
       });
-      render(<PlanProposalList items={[item]} decided={true} />);
+      render(<PlanProposalList items={[item]} outcome="accepted" />);
       fireEvent.click(screen.getByRole('button', { name: /Open / }));
 
       await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
@@ -399,7 +399,7 @@ describe('a DECIDED plan’s list row opens the card that EXISTS (bug MOTIR-4471
     // hold whichever half was open. The proposal half is covered above; this is
     // the half the fix adds, and a close that cleared only the half it knew
     // about would leave the other mounted and focus nowhere.
-    render(<PlanProposalList items={[MATERIALIZED_ADD]} decided={true} />);
+    render(<PlanProposalList items={[MATERIALIZED_ADD]} outcome="accepted" />);
     const row = screen.getByRole('button', { name: /Open / });
     row.focus();
     fireEvent.keyDown(row, { key: 'Enter' });

@@ -923,6 +923,94 @@ const DESIGN_ASSET_MATCHERS: ReadonlyArray<RegExp> = [
   /\bdesign assets?\b/i,
 ];
 
+// ── The AMENDMENT, not only the NEW ASSET (MOTIR-4477) ───────────────────────
+// Every matcher above is an ASSET tell — a file, a path, or a word for a
+// drawing. A criterion that commissions a design as an AMENDMENT TO AN EXISTING
+// DESIGN DOCUMENT names none of them, because there is no new file: the
+// deliverable is a section inside a note that already ships. The observed
+// fixture, which is MOTIR-4472's criterion 1 as authored:
+//
+//   *"A design section exists amending Part XIV with the decided axis for
+//   `modify` and `remove`, naming the chosen answer and the copy for every
+//   string that changes — read before the code is written."*
+//
+// Run the eight matchers over it and every one misses — it says *"a design
+// SECTION"* and *"Part XIV"*, and the `design-notes.md` path was in that card's
+// Context refs, which {@link acceptanceCriteriaSpan} does not reach. So
+// `designCriterionIndex` stayed null, the pair was never formed, and a card that
+// was its own design blocker sealed with `advisories: []`.
+//
+// ⚠️ IT STRENGTHENS WITH MATURITY, which is why it is worth a matcher rather
+// than a note. Once an area HAS a design document, the natural phrasing for new
+// design work is an amendment to it — *"a section amending Part XIV"*, *"§7
+// gains a decided arm"* — which is better writing than *"a new design asset"*
+// and invisible to a list of file tells. The detector is quietest exactly where
+// the design corpus is most established.
+//
+// ⚠️ IT IS A COMPOUND, AND NEITHER HALF IS A TELL ON ITS OWN — the same
+// asymmetry the bare `.png` note above records, in the other direction. *Amend*
+// and *section* are two of the commonest words in this corpus; a matcher on
+// either alone would MANUFACTURE a design criterion on cards that have none, and
+// a manufactured design criterion plus any ordinary render criterion is a
+// brand-new false positive. So it requires a DESIGN-QUALIFIED document noun
+// (*the design notes*, *a design section*, *the design spec*) AND an amendment
+// verb, in one criterion. A docs card amending an ADR, or a criterion citing
+// *"§3 of the decision record"*, carries the verb and no design-qualified noun
+// and stays silent — which is the floor `tests/` asserts with a string taken
+// from a real non-design card.
+//
+// ⚠️ AND A BARE `Part <ROMAN>` / `§<n>` IS DELIBERATELY NOT THE NOUN. Section
+// numbering is how every decision record in `docs/decisions/` cites itself, so
+// it identifies a DOCUMENT and says nothing about which kind — the word that
+// carries the design claim is `design`, and it has to be adjacent to the noun
+// rather than anywhere in the criterion.
+
+/**
+ * A DESIGN DOCUMENT named as a DOCUMENT rather than as a file — *"a design
+ * section"*, *"the design notes"*, *"the design spec"*, *"the design document"*,
+ * *"the design of record"*. The qualifier is what makes it a design tell.
+ */
+const DESIGN_DOCUMENT_NOUN_RE =
+  /\bdesign(?:'s)?[\s-]+(?:notes?|docs?|documents?|specs?|specifications?|sections?|records?)\b|\b(?:notes?|docs?|documents?|specs?|sections?)\s+of\s+(?:the\s+)?design\b|\bdesign\s+of\s+record\b/i;
+
+/**
+ * An UNAMBIGUOUS amendment verb — a word whose only ordinary reading is *this
+ * document is being changed*. *"cites Part XIV"* is a card reading a design;
+ * *"amends Part XIV"* is a card writing one, and only the second is a design
+ * deliverable. Safe to look for anywhere in the criterion, because none of these
+ * is a thing a card does to a COMPONENT.
+ */
+const DESIGN_AMENDMENT_VERB_RE =
+  /\b(?:amend(?:s|ed|ing|ment|ments)?|supersed(?:e|es|ed)|revis(?:e|es|ed|ion|ions)|(?:is|are|was|were)\s+updated\s+to\s+cover|(?:is|are|was|were)\s+added\s+to)\b/i;
+
+/**
+ * A GROWTH verb whose SUBJECT is the design document itself — *"the design notes
+ * GAIN a decided arm"*.
+ *
+ * ⚠️ These verbs are split off deliberately, and the subject constraint is the
+ * whole reason. *Gains* / *extends* / *adds* describe a card changing a
+ * COMPONENT at least as often as a document — *"the peek GAINS a decided arm,
+ * per the design notes"* is a code criterion CONSUMING a drawing, and a
+ * proximity test cannot tell it from the sentence above, because in both the two
+ * words are a few characters apart. So the document has to be what does the
+ * gaining: the noun immediately precedes the verb, within one clause.
+ */
+const DESIGN_DOCUMENT_GROWS_RE =
+  /\bdesign(?:'s)?[\s-]+(?:notes?|docs?|documents?|specs?|specifications?|sections?|records?)\b[^.;:]{0,30}?\b(?:gains?|gained|grows?|grew|extends?|extended|adds?|carries|carry)\b/i;
+
+/**
+ * Whether a criterion commissions an AMENDMENT to an existing design document.
+ *
+ * Evaluated over the WHOLE criterion — bullet plus continuation lines — because
+ * it is a compound and its two halves routinely land on different lines of one
+ * wrapped bullet. The asset matchers stay per-line, which is what they have
+ * always been.
+ */
+export function namesDesignDocumentAmendment(text: string): boolean {
+  if (DESIGN_DOCUMENT_NOUN_RE.test(text) && DESIGN_AMENDMENT_VERB_RE.test(text)) return true;
+  return DESIGN_DOCUMENT_GROWS_RE.test(text);
+}
+
 /**
  * Nouns that name a RENDERED SURFACE — something a person looks at in the running
  * app. Kept UI-specific on purpose: `card`, `row`, `list`, `field` and `table` all
@@ -943,8 +1031,14 @@ const SURFACE_VERB_RE =
  */
 const COMPONENT_PATH_RE = /[A-Za-z0-9_.@()[\]-]+(?:\/[A-Za-z0-9_.@()[\]-]+)*\.[jt]sx\b/i;
 
-/** Whether a criterion's own SUBJECT is a design asset — a path or an artefact. */
-function namesDesignAsset(text: string): boolean {
+/**
+ * Whether a criterion's own SUBJECT is a design asset — a path or an artefact.
+ *
+ * Exported so the predicate can be asserted directly against a fixture string
+ * (MOTIR-4477): a widening asserted only through `selfBlockingDesignCriteria`
+ * cannot say WHICH half moved.
+ */
+export function namesDesignAsset(text: string): boolean {
   return DESIGN_ASSET_MATCHERS.some((re) => re.test(text));
 }
 
@@ -1016,10 +1110,14 @@ export function selfBlockingDesignCriteria(
   // on the bullet and whose verb wraps to the next line is one criterion, once.
   let designHere = false;
   let surfaceHere = false;
+  // The criterion's own text, joined — the amendment compound (MOTIR-4477) is
+  // read over the WHOLE criterion, since its noun and its verb land on different
+  // lines of a wrapped bullet as often as not.
+  let criterionText = '';
 
   const settle = () => {
     if (criterionIndex === 0) return;
-    if (designHere) {
+    if (designHere || namesDesignDocumentAmendment(criterionText)) {
       if (designCriterionIndex === null) designCriterionIndex = criterionIndex;
       return; // a design-asset criterion is never also the surface criterion
     }
@@ -1032,9 +1130,11 @@ export function selfBlockingDesignCriteria(
       criterionIndex += 1;
       designHere = false;
       surfaceHere = false;
+      criterionText = '';
     }
     if (criterionIndex === 0) continue; // the heading and any lead-in prose
     const text = raw.replace(INLINE_MARKUP_RE, '');
+    criterionText += `${text}\n`;
     if (namesDesignAsset(text)) designHere = true;
     if (namesRenderedSurface(text)) surfaceHere = true;
   }

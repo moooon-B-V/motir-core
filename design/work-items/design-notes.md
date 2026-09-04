@@ -1424,24 +1424,48 @@ complexity for nothing"). Full Modal a11y contract: focus trap, Esc closes,
 focus returns to the opening card, dialog labelled by the filename, the
 image carries the filename as alt.
 
-**⚠️ The chrome's ink is literal WHITE, deliberately, and the mock now draws the
-scrim OPAQUE so that ink can be measured (MOTIR-4277).** The scrim is
+**⚠️ The chrome's ink is literal WHITE, deliberately.** The scrim is
 `bg-black/80` in the LIGHT theme and in the DARK one — it is theme-INVARIANT —
 so an `--el-*` ink token would wrongly flip with the theme and turn the header
 near-black on a black scrim in dark. `AttachmentPreview.tsx` states the same
 decision for the shipped component, and this asset is where it was decided; the
 white is not an un-swept raw hue. The scrim ITSELF is a BACKDROP that carries no
 meaning, which is the one grant `CLAUDE.md`'s never-invent-a-colour rule makes
-for a raw value. What DID change is only how the mock renders it: it declares
-the opaque colour `bg-black/80` composites to over this board's own page
-(`0.8 × #000` over `--el-surface` `#f6f5f4` = `#313131`) instead of the
-translucent `rgba(0, 0, 0, 0.8)`. Identical pixels — the `.png` re-exported at
-byte-identical dimensions — and the reason is measurement:
-`tests/theme/mockStateInkScan.ts` grounds an element on its nearest OPAQUE
-painted ancestor, so a translucent scrim was skipped and the header's white was
-measured against the near-white page BEHIND the lightbox — **1.07:1**, counted as
-failing ink, where what it actually sits on under the `.lb-btn:hover` tint is
-**6.90:1**. The `80%` is still the spec and is stated in the paragraph above.
+for a raw value. **Both of those paragraphs are unchanged and are still the
+spec.**
+
+**⚠️ AMENDED 2026-09-04 (MOTIR-4400) — the mock declares the scrim as
+`rgba(0, 0, 0, 0.8)` again, and the sentence that justified pre-compositing it
+is retired.** MOTIR-4277 had the mock declare the OPAQUE colour `bg-black/80`
+composites to over this board's own page (`0.8 × #000` over `--el-surface`
+`#f6f5f4` = `#313131`), because `tests/theme/mockStateInkScan.ts` grounded an
+element on its nearest OPAQUE painted ancestor: a translucent scrim was skipped
+and the header's white was measured against the near-white page BEHIND the
+lightbox — **1.07:1**, counted as failing ink, where it actually sits at
+**6.90:1** under the `.lb-btn:hover` tint.
+
+**That is no longer true.** [MOTIR-4317] (merged `37b791035`, 2026-09-03) fixed
+exactly that limitation — `restingBackground` folds every translucent layer
+between an element and the first opaque ground back over it with `composite`
+instead of walking past it — and neither this paragraph nor the mock's own
+comment was swept. Measured with the shipped scanner under all three spellings
+of the same scrim (`#313131`, `rgba(0, 0, 0, 0.8)`, `#000000cc`), the verdict is
+IDENTICAL: **9 state background rules, 0 findings, 0 abstentions.** The
+pre-composite bought nothing the scanner can see.
+
+Two things were wrong with it, and only the second is cosmetic. **The mock no
+longer drew the scrim it SPECIFIES** — `#313131` equals `bg-black/80` over the
+page only while `--el-surface` is `#f6f5f4`, and the page is a TOKEN
+(`body { background: var(--el-surface) }`), so a palette swap or any re-pointing
+of this area's Tier-0 values moves the page and leaves the scrim behind, showing
+a grey slab where the spec says 80% black over the page. And **the stated reason
+would have been followed again**: a reader meeting that comment learns that the
+state-ink scanner cannot see through a translucent ancestor, and pre-composites
+the next scrim, the next frosted panel and the next glass `data-surface` the same
+way — spreading a workaround for a fixed defect into the material axis
+`CLAUDE.md` documents as translucent by design. The `.png` is re-exported and the
+pixels are unchanged while `--el-surface` is `#f6f5f4`, which is the point: what
+moved is the DECLARATION, not the render.
 
 ### Viewer / read-only (panel 7)
 

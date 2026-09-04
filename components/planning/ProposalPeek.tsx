@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 
 // READ A PROPOSAL WITH THE SHIPPED PEEK (MOTIR-4185, story MOTIR-4181, design
@@ -147,10 +148,23 @@ function proposedPayload(item: PlanReviewItemDto, projectIdentifier: string): Qu
 
 export function ProposalPeek({
   item,
+  outcome = null,
   onClose,
 }: {
   /** The proposal to read, or null when the peek is closed. */
   item: PlanReviewItemDto | null;
+  /**
+   * The PLAN's decision — `'accepted'` / `'declined'` / `null` (Part XIV §16,
+   * MOTIR-4472).
+   *
+   * ⚠️ WITHOUT IT THIS SURFACE IS NOT STALE, IT IS BLIND. The plan's status
+   * reached `PlanDetail`, forked into a boolean for the list and a three-valued
+   * `outcome` for the canvas, and reached here NOT AT ALL — measured in §16.0 as
+   * an `outerHTML` that is 11,676 bytes and byte-for-byte IDENTICAL across all
+   * three statuses through both doors. No amount of re-wording fixes a component
+   * that was never told.
+   */
+  outcome?: PlanItemOutcome | null;
   onClose: () => void;
 }) {
   // THREE states, not two (MOTIR-4185). `pending` renders the shipped skeleton;
@@ -313,6 +327,7 @@ export function ProposalPeek({
           state="ready"
           data={data}
           proposal={item.proposal}
+          proposalOutcome={outcome}
           onClose={onClose}
         />
       </div>

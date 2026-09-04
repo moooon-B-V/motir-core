@@ -253,20 +253,14 @@ const KNOWN_PRIVATE_COLOURS: { file: string; property: string; why: string }[] =
 // card that removes it again — never a way to land a new asset outside the
 // token layer.
 const UNSWEPT_ASSETS: { file: string; count: number; card: string; why: string }[] = [
-  {
-    file: 'design/ai-chat/planning-workspace.mock.html',
-    count: 30,
-    card: 'MOTIR-4428',
-    why:
-      'The TWELFTH asset, found by this guard on its first run. It declares three `--el-*` — ' +
-      '`--el-accent` / `--el-accent-text` / `--el-highlight`, added by MOTIR-3217 for the ' +
-      "floating orb alone — so it satisfied MOTIR-4318's population predicate (`declares no " +
-      '`--el-*` at all`) and fell outside the eleven, correctly. Its other thirty colours are the ' +
-      'MOTIR-4318 pattern verbatim, work-type limb included, and every one of them IS ' +
-      'tokenisable, so none of them belongs in KNOWN_PRIVATE_COLOURS. Sweeping a design asset is ' +
-      "out of MOTIR-4353's scope by that card's own boundary, so it is carded rather than " +
-      'absorbed.',
-  },
+  // EMPTY, and it got here the way the table above says it has to: the sweep and
+  // the row's deletion in ONE diff (MOTIR-4428, 2026-09-04).
+  //
+  // The row it held was `design/ai-chat/planning-workspace.mock.html`, count 30 —
+  // the TWELFTH asset, found by this guard on its first run, declaring three
+  // `--el-*` for MOTIR-3217's floating orb against thirty private aliases. All
+  // thirty are now `--el-*` at their points of use, the private `:root` block is
+  // gone, and the two ink scanners see the asset for the first time.
 ];
 
 // ── The real tree ───────────────────────────────────────────────────────────

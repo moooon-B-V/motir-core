@@ -344,17 +344,30 @@ describe('PlanItemNode — the decided outcome', () => {
     expect(screen.getByText('add')).toBeTruthy();
   });
 
-  it('drops the fade on a DECIDED remove, and keeps it on an undecided one', () => {
-    // `opacity` means "this is about to happen"; on a decided card it either
-    // already happened or never will — and it would mute the outcome spine, the
-    // one signal that settles which.
+  it('carries NO fade on a remove, decided or not (MOTIR-4475)', () => {
+    // ⚠️ REVERSED FROM WHAT THIS TEST ASSERTED (MOTIR-4260 pinned the fade on
+    // the UNDECIDED arm; MOTIR-4475 removed it from both). `opacity` composites
+    // the element AND its subtree, so the fade dimmed the frame and every string
+    // inside it at 0.8 over the board's `--el-canvas` — the title at 3.95:1, the
+    // identifier and the status pill at 3.95:1, the op badge at 3.98:1, all under
+    // AA, and all of it surviving MOTIR-4260's re-inking because opacity scales
+    // whatever ink you pick (the MOTIR-2495 rule, at a second site).
+    //
+    // Nothing is lost: `remove` still speaks through the strong border, the muted
+    // fill and the strike, and PENDING vs DECIDED is carried by the two signals a
+    // decided node ADDS — the spine and the outcome segment — which is how `add`
+    // and `modify` distinguish the same two states without dimming anything.
     renderWithIntl(<PlanItemNode item={item({ op: 'remove' })} />);
-    expect(screen.getByTestId('plan-item-node').className).toContain('opacity-80');
+    expect(screen.getByTestId('plan-item-node').className).not.toContain('opacity-');
+    // …and the PENDING node still says nothing about an outcome, which is what
+    // makes it legible as pending.
+    expect(screen.queryByTestId('plan-item-outcome')).toBeNull();
+    expect(screen.queryByTestId('plan-item-outcome-spine')).toBeNull();
     cleanup();
 
     renderWithIntl(<PlanItemNode item={item({ op: 'remove' })} outcome="declined" />);
     const node = screen.getByTestId('plan-item-node');
-    expect(node.className).not.toContain('opacity-80');
+    expect(node.className).not.toContain('opacity-');
     // …and the strike stays: a declined remove is the one place a reader could be
     // misled, which is exactly why the word must be there to correct it.
     expect(screen.getByText('A proposed item').className).toContain('line-through');

@@ -179,6 +179,29 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
     // affixes below AA, and no ink could fix it — so the token layer, not the
     // call site, has to carry the state. A re-introduced opacity filter would
     // re-open the defect on every disabled field with a prefix or suffix.
+    //
+    // ⚠️ THIS STAYS A PER-FILE PIN, AND MOTIR-4475 IS WHY THAT IS NOW THE RIGHT
+    // SCOPE RATHER THAN A GAP. That card met the same class at a second site —
+    // `PlanItemNode`'s pending `remove` frame, `opacity-80` on the element that
+    // paints the fill — and asked whether this ban should be generalised to
+    // every component that dims a text-bearing subtree. It should not, for two
+    // reasons. A STATIC `opacity-\d` ban cannot tell a dimmed text subtree from
+    // the legitimate uses all over this tree (`hover:opacity-90` on a button, a
+    // spinner, a decorative overlay), so widening it by file list buys a growing
+    // allowlist and the same blind spot one file over — the shape MOTIR-3693
+    // already paid for on `TINTED_SURFACE_TOKENS`. And the general instrument
+    // now EXISTS at the tier that can decide it: `tests/helpers/
+    // renderedInkContrast.ts` composites every `opacity-<n>` on an element or
+    // any ancestor into both ink and surface before measuring, so any component
+    // the composed-surface sweep mounts is covered by MEASUREMENT rather than by
+    // a string ban, and `--el-text-secondary` joined its default ink set for the
+    // same reason.
+    //
+    // What this pin still buys, and what keeps it here: `Input.tsx` lives in
+    // `packages/design-system` and is a PRIMITIVE — the render-time guard rules
+    // on the surfaces that mount it, never on the primitive itself, and the
+    // token trio below (`--el-input-disabled-bg` / `-border` / `-text`) is the
+    // decision this test is really pinning.
     const input = read('packages/design-system/src/components/ui/Input.tsx');
     // Comments stripped first — the doc comment NAMES `opacity-50` to explain
     // why it is gone, and that sentence is the point, not a violation.

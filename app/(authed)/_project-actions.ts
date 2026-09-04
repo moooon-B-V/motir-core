@@ -1,4 +1,5 @@
 'use server';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
@@ -119,7 +120,7 @@ export async function startNewAiProjectAction(): Promise<void> {
   await projectsService.setActiveProject({ userId, workspaceId, projectId: project.id });
 
   // redirect() throws NEXT_REDIRECT — keep it outside any try/catch.
-  redirect('/onboarding');
+  redirect(ONBOARDING_ENTRY_PATH);
 }
 
 /**

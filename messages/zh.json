@@ -295,6 +295,13 @@
     "railChangeNone": "此计划不变更这些字段，只变更描述与说明。",
     "railAddAll": "此处的每个值都是批准后将创建的内容。",
     "railRemoveArchives": "批准此计划将归档 {key}。",
+    "railChangeCountApplied": "此计划已变更它可设置的 {m} 个字段中的 {n} 个。",
+    "railChangeCountDeclined": "此计划本将变更它可设置的 {m} 个字段中的 {n} 个，但因被拒绝，没有任何字段发生变化。",
+    "railChangeNoneApplied": "此计划未变更这些字段，只变更了描述与说明。",
+    "railChangeNoneDeclined": "此计划本不会变更这些字段，只会变更描述与说明。",
+    "railAddDeclined": "此计划已被拒绝——这些值均未创建。",
+    "railRemoveArchived": "此计划已归档 {key}。",
+    "railRemoveDeclined": "此计划本将归档 {key}，但因被拒绝，未执行归档。",
     "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。"
   },
   "planEdits": {

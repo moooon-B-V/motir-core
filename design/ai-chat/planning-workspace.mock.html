@@ -31,38 +31,94 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Reusable AI planning workspace — shell + universal entrance</title>
     <style>
+      /* ----------------------------------------------------------------------
+         Token block — the `--el-*` ELEMENT-token layer, resolved to the LIGHT /
+         warm-editorial / motir values the running app computes, exactly as the
+         in-area copy of record `design/ai-planning/plan-revision.mock.html`
+         states them. A plain browser paints the real palette without the
+         Tailwind build.
+
+         ⚠️ MOTIR-4428 (2026-09-04) — this block USED to alias those same values
+         onto THIRTY PRIVATE names (`--muted: #787671`, `--surface: #ffffff`,
+         `--type-epic: #ff64c8`, …), and its own comment already said which
+         tokens they stood for. That is the MOTIR-4318 pattern verbatim, and the
+         values being right is the trap: a raw hex on a private name does not
+         flip with `data-palette`, does not follow a re-skin, and is INVISIBLE to
+         every ink guard in the tree — both `design-ink-contrast` and
+         `design-state-ink-contrast` classify an ink by reading an `--el-*` name
+         off the declaration AT THE POINT OF USE, so `color: var(--el-text-secondary)` is
+         unmeasured however `--muted` is defined. Measured before this sweep,
+         both scanners returned ZERO SITES on this file.
+
+         ⚠️ WHY MOTIR-4318 DID NOT CATCH IT, AND WHY THAT WAS CORRECT. Its
+         population predicate is *declares NO `--el-*` at all*, and the three
+         tokens MOTIR-3217 added for the floating orb alone satisfy it — so this
+         asset fell outside the eleven. MOTIR-4318's own card names this file in
+         exactly that role and predicts this shape ("an asset that declares one
+         token and aliases the rest — a file that passes the guard and is exactly
+         as unmeasurable as the eleven"). What was never done is MEASURE that
+         limb's population, which is why the sweep is a card of its own.
+
+         ⚠️ MAP BY VALUE AND ROLE, NEVER BY NAME. The old `--surface` was
+         `#ffffff` while the design system's `--el-surface` is `#f6f5f4`: the old
+         `--surface` is `--el-card`, and it is the old `--hub` that is
+         `--el-surface`. Three more moved by a few units to the system's own
+         value — `--secondary` `#54514b` → `--el-text-secondary` `#5d5b54`,
+         `--rose` `#fce4ea` → `--el-tint-rose` `#fde0ec`, `--yellow` `#fbf2cc` →
+         `--el-tint-yellow` `#fef7d6` — which is the point of a token layer: the
+         asset now says the ROLE and the system says the value.
+      ---------------------------------------------------------------------- */
       :root {
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --secondary: #54514b;
-        --muted: #787671;
-        --faint: #a4a097;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --accent: #5645d4;
-        --accent-soft: #ece9fb;
-        --accent-text: #ffffff;
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --info: #0075de;
-        --danger: #e03131;
-        --sky: #dcecfa;
-        --lavender: #e6e0f5;
-        --mint: #d9f3e1;
-        --peach: #ffe8d4;
-        --rose: #fce4ea;
-        --yellow: #fbf2cc;
-        --pink: #ff64c8;
-        /* work-item type hues (--el-type-*) */
-        --type-epic: #ff64c8;
-        --type-story: #1aae39;
-        --type-task: #0075de;
-        --type-bug: #e03131;
-        --type-subtask: #2a9d99;
+        /* ── Ink ─────────────────────────────────────────────────────────
+           `--el-text-muted` and `--el-text-faint` are declared and used only
+           where the guards allow: muted is 4.12–4.34:1 on every tinted surface
+           and faint clears AA on none (CLAUDE.md's measured table, MOTIR-2455).
+           Declaring them still matters — `mockStateInkScan` resolves a token by
+           planting a probe, and an asset that declares neither reports its faint
+           ink as muted. */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        /* ── Surfaces ─────────────────────────────────────────────────── */
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        /* ── Borders ──────────────────────────────────────────────────── */
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+
+        /* ── Status ───────────────────────────────────────────────────── */
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-info: #0075de;
+        --el-danger: #e03131;
+
+        /* ── Tints ────────────────────────────────────────────────────── */
+        --el-tint-sky: #dcecfa;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-peach: #ffe8d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-yellow: #fef7d6;
+
+        /* ── Work-item type hues ──────────────────────────────────────────
+           `packages/design-system/theme.css` declares all five, and MOTIR-4350's
+           swept `design/roadmap/roadmap.mock.html:67`–`71` declares exactly these
+           names inline — so this is NOT the allowlist case MOTIR-4318 predicted
+           for a work-type palette. The old block's own comment already named the
+           tokens it was standing in for. */
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-bug: #e03131;
+        --el-type-subtask: #2a9d99;
+
         font-family:
           ui-sans-serif,
           system-ui,
@@ -94,6 +150,16 @@
         --el-accent: var(--color-primary-fill);
         --el-accent-text: var(--color-primary-foreground);
         --el-highlight: var(--color-accent);
+        /* The accent WASH, palette-DERIVED rather than invented (MOTIR-4428).
+           The old private `--accent-soft: #ece9fb` was `bg-black`-style dead
+           weight: a frozen tint of ONE palette's accent. No `--el-*` token
+           exposes a wash this light, so it is a `color-mix` whose inputs are BOTH
+           tokens — the form CLAUDE.md blesses — and it is declared HERE rather
+           than on `:root` so it re-tints with `data-palette` alongside the accent
+           it is mixed from. Same derivation as
+           `design/ai-chat/canvas-spatial.mock.html` (MOTIR-4346); the ratio is
+           this asset's own (11% ⇒ #eceafa against the old #ece9fb). */
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
         /* Recipe knob — theme.css `:root` (MOTIR-3207). The first stop mixes
            this much of the glyph's own colour into the fill; it is the orb's
            CONTRAST knob, so it is read, never retyped. */
@@ -152,7 +218,7 @@
       body {
         margin: 0;
         background: #f1efec;
-        color: var(--text);
+        color: var(--el-text);
         padding: 30px 22px 60px;
       }
       .page-head {
@@ -162,18 +228,18 @@
       .page-head h1 {
         font-size: 21px;
         margin: 0 0 7px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         letter-spacing: -0.01em;
       }
       .page-head p {
         font-size: 13.5px;
         line-height: 1.55;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         max-width: 920px;
         margin: 0;
       }
       .page-head .ref {
-        color: var(--accent);
+        color: var(--el-accent);
         font:
           600 12px ui-monospace,
           monospace;
@@ -183,8 +249,8 @@
       .sheet {
         max-width: 1150px;
         margin: 0 auto 26px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         box-shadow: 0 1px 3px #0000000d;
         overflow: hidden;
@@ -194,26 +260,26 @@
         align-items: baseline;
         gap: 10px;
         padding: 13px 18px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .sheethead .n {
         font:
           700 11px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: var(--el-accent-wash);
         padding: 2px 7px;
         border-radius: 6px;
       }
       .sheethead h2 {
         font-size: 14.5px;
         margin: 0;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .sheethead .cap {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-left: auto;
       }
       .sheetbody {
@@ -222,34 +288,34 @@
       .note {
         font-size: 12px;
         line-height: 1.5;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         margin: 14px 18px 0;
         padding: 10px 12px;
-        background: var(--soft);
-        border: 1px solid var(--hair);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
         border-radius: 10px;
       }
       .note b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .note code,
       .sheethead code {
         font:
           600 11.5px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: var(--el-accent-wash);
         padding: 1px 5px;
         border-radius: 5px;
       }
 
       /* ── a framed "screen" (the app at full bleed) ── */
       .screen {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 2px 10px #0000000f;
-        background: var(--surface);
+        background: var(--el-card);
       }
 
       /* the two-pane PlanningWorkspace frame */
@@ -268,7 +334,7 @@
         overflow: hidden;
         background:
           radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
-          var(--hub);
+          var(--el-surface);
       }
       .world {
         position: absolute;
@@ -296,26 +362,26 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 5px 10px;
         font-size: 12px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         box-shadow: 0 1px 2px #0000000d;
       }
       .crumb .muted {
-        color: var(--faint);
+        color: var(--el-text-secondary);
         font-weight: 500;
       }
       .crumb .chev {
-        color: var(--faint);
+        color: var(--el-text-secondary);
         font-size: 11px;
         margin-left: 1px;
       }
       .crumb .sep {
-        color: var(--faint);
+        color: var(--el-text-secondary);
         font-weight: 500;
         margin: 0 1px;
       }
@@ -323,22 +389,22 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 5px 9px;
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         box-shadow: 0 1px 2px #0000000d;
       }
       .searchbox kbd {
         font:
           600 10px ui-monospace,
           monospace;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 4px;
         padding: 0 4px;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .zoomctl {
         bottom: 12px;
@@ -346,8 +412,8 @@
         display: inline-flex;
         align-items: center;
         gap: 2px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         padding: 3px;
         box-shadow: 0 1px 3px #0000000f;
@@ -358,7 +424,7 @@
         border: 0;
         background: transparent;
         border-radius: 6px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 14px;
         cursor: default;
         display: grid;
@@ -366,7 +432,7 @@
       }
       .zoomctl .pct {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         padding: 0 6px;
         min-width: 40px;
         text-align: center;
@@ -378,12 +444,12 @@
         display: flex;
         flex-direction: column;
         gap: 5px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 10px;
         padding: 8px 11px;
         font-size: 10.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         box-shadow: 0 1px 2px #0000000d;
         max-width: 220px;
       }
@@ -395,7 +461,7 @@
       .legend i {
         width: 16px;
         height: 0;
-        border-top: 2px solid var(--border);
+        border-top: 2px solid var(--el-border);
         display: inline-block;
         flex: none;
       }
@@ -403,18 +469,18 @@
         border-top: 2px solid #b8b3aa;
       }
       .legend i.pending {
-        border-top: 2px dashed var(--accent);
+        border-top: 2px dashed var(--el-accent);
       }
       .legend i.cross {
-        border-top: 2px solid var(--warning);
+        border-top: 2px solid var(--el-warning);
       }
 
       /* ── canvas node (StationCard language) ── */
       .node {
         position: absolute;
         width: 210px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 15px;
         padding: 11px 12px;
         box-shadow: 0 2px 6px #0000000f;
@@ -431,13 +497,13 @@
         box-shadow: none;
       }
       .node.active {
-        border-color: var(--accent);
+        border-color: var(--el-accent);
         box-shadow:
           0 0 0 3px #5645d426,
           0 4px 12px #5645d41f;
       }
       .node.proposed {
-        border: 1.5px dashed var(--accent);
+        border: 1.5px dashed var(--el-accent);
         background: linear-gradient(180deg, #fbfaff, #f6f3ff);
         box-shadow:
           0 2px 10px #5645d41f,
@@ -460,12 +526,12 @@
       .ntitle {
         font-size: 12.5px;
         font-weight: 700;
-        color: var(--text);
+        color: var(--el-text);
         line-height: 1.18;
       }
       .nsub {
         font-size: 10.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-top: 1px;
       }
       .pill {
@@ -481,29 +547,29 @@
         white-space: nowrap;
       }
       .pill.reviewed {
-        background: var(--mint);
+        background: var(--el-tint-mint);
         color: #0f5e29;
       }
       .pill.here {
-        background: var(--lavender);
+        background: var(--el-tint-lavender);
         color: #3a2d8a;
       }
       .pill.deciding {
-        background: var(--peach);
+        background: var(--el-tint-peach);
         color: #8a3d00;
       }
       .pill.proposed {
-        background: var(--accent-soft);
+        background: var(--el-accent-wash);
         color: #3a2d8a;
       }
       .pill.done {
-        background: var(--mint);
+        background: var(--el-tint-mint);
         color: #0f5e29;
       }
       .capt {
         margin-top: 9px;
         padding-top: 8px;
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
         display: flex;
         flex-direction: column;
         gap: 4px;
@@ -513,7 +579,7 @@
         gap: 6px;
         align-items: flex-start;
         font-size: 11px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
 
       /* ── chat rail (mirrors DiscoveryChatRail.tsx) ── */
@@ -521,15 +587,15 @@
         display: flex;
         flex-direction: column;
         min-height: 0;
-        border-left: 1px solid var(--border);
-        background: var(--surface);
+        border-left: 1px solid var(--el-border);
+        background: var(--el-card);
       }
       .railhead {
         display: flex;
         align-items: center;
         gap: 8px;
         padding: 11px 16px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .railhead .dot {
         width: 9px;
@@ -544,19 +610,19 @@
           monospace;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .railhead .lbl::before {
         content: '✦ ';
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .railhead .mode {
         margin-left: auto;
         font:
           600 10px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: var(--el-accent-wash);
         padding: 2px 7px;
         border-radius: 5px;
       }
@@ -588,12 +654,12 @@
         flex: none;
       }
       .avatar.ai {
-        background: var(--accent);
+        background: var(--el-accent);
         color: #fff;
       }
       .avatar.user {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .bubble {
         border-radius: 13px;
@@ -603,46 +669,46 @@
         max-width: 232px;
       }
       .bubble.ai {
-        background: var(--soft);
-        color: var(--text);
+        background: var(--el-surface-soft);
+        color: var(--el-text);
       }
       .bubble.user {
-        background: var(--accent);
+        background: var(--el-accent);
         color: #fff;
       }
       .drafting {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        background: var(--soft);
+        background: var(--el-surface-soft);
         border-radius: 13px;
         padding: 8px 11px;
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .spin {
         width: 13px;
         height: 13px;
         border-radius: 50%;
         border: 2px solid #d8d4cd;
-        border-top-color: var(--accent);
+        border-top-color: var(--el-accent);
       }
       .composer {
         display: flex;
         align-items: center;
         gap: 8px;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
         padding: 11px 12px;
       }
       .composer .inp {
         flex: 1;
         min-width: 0;
         height: 34px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         padding: 0 11px;
         font-size: 12px;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         display: flex;
         align-items: center;
       }
@@ -650,7 +716,7 @@
         width: 34px;
         height: 34px;
         border-radius: 9px;
-        background: var(--accent);
+        background: var(--el-accent);
         color: #fff;
         display: grid;
         place-items: center;
@@ -668,8 +734,8 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        background: var(--surface);
-        border: 1px solid var(--accent);
+        background: var(--el-card);
+        border: 1px solid var(--el-accent);
         border-radius: 12px;
         padding: 9px 11px 9px 14px;
         box-shadow: 0 6px 22px #5645d422;
@@ -677,23 +743,23 @@
       }
       .persistbar .txt {
         font-size: 12px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         font-weight: 600;
       }
       .persistbar .txt small {
         display: block;
         font-weight: 500;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         font-size: 10.5px;
       }
       .btn {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 6px 12px;
         font-size: 12px;
         font-weight: 600;
-        background: var(--surface);
-        color: var(--secondary);
+        background: var(--el-card);
+        color: var(--el-text-secondary);
         cursor: default;
         white-space: nowrap;
       }
@@ -709,7 +775,7 @@
       .btn.ghost {
         background: transparent;
         border-color: transparent;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .btn.sm {
         padding: 4px 9px;
@@ -723,20 +789,20 @@
         gap: 16px;
       }
       .modecard {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
-        background: var(--surface);
+        background: var(--el-card);
       }
       .modecard .mh {
         padding: 11px 13px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .modecard .mh h3 {
         margin: 0;
         font-size: 13px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         display: flex;
         align-items: center;
         gap: 8px;
@@ -744,17 +810,17 @@
       .modecard .mh .door {
         margin-top: 4px;
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .modecard .mh .door b {
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .modecard .mh .door code {
         font:
           600 10.5px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: var(--el-accent-wash);
         padding: 1px 4px;
         border-radius: 4px;
       }
@@ -767,8 +833,8 @@
         font-size: 0;
       }
       .miniframe .minirail {
-        border-left: 1px solid var(--border);
-        background: var(--surface);
+        border-left: 1px solid var(--el-border);
+        background: var(--el-card);
         padding: 10px;
         display: flex;
         flex-direction: column;
@@ -780,7 +846,7 @@
           monospace;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .minibub {
         font-size: 10px;
@@ -789,11 +855,11 @@
         padding: 6px 8px;
       }
       .minibub.ai {
-        background: var(--soft);
-        color: var(--secondary);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
       }
       .minibub.user {
-        background: var(--accent);
+        background: var(--el-accent);
         color: #fff;
         align-self: flex-end;
         max-width: 92%;
@@ -801,11 +867,11 @@
       .mininode {
         position: absolute;
         border-radius: 9px;
-        border: 1px solid var(--border);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
         font-size: 9px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         padding: 5px 7px;
         box-shadow: 0 1px 4px #0000000d;
         display: flex;
@@ -820,51 +886,51 @@
         flex: none;
       }
       .mininode.prop {
-        border: 1.5px dashed var(--accent);
+        border: 1.5px dashed var(--el-accent);
         background: #faf9ff;
       }
       .mininode.done {
         opacity: 0.85;
       }
       .mininode.lock {
-        background: var(--soft);
-        color: var(--muted);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
       }
 
       /* ════ the universal entrance (sheet 4) — ONE global HERO affordance ════ */
       .lead {
         font-size: 13px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         margin: 0 0 18px;
         max-width: 1000px;
       }
       .lead b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .lead code {
         font:
           600 11.5px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: var(--el-accent-wash);
         padding: 1px 5px;
         border-radius: 5px;
       }
       .desc {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin: 0;
         line-height: 1.5;
       }
       .desc b {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .desc code {
         font:
           600 11px ui-monospace,
           monospace;
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .entrance {
         display: grid;
@@ -872,10 +938,10 @@
         gap: 18px;
       }
       .optcard {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         overflow: hidden;
-        background: var(--surface);
+        background: var(--el-card);
         display: flex;
         flex-direction: column;
       }
@@ -884,13 +950,13 @@
         align-items: center;
         gap: 9px;
         padding: 11px 14px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .optcard .opt-h h3 {
         margin: 0;
         font-size: 13.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .reco-badge {
         margin-left: auto;
@@ -906,7 +972,7 @@
       }
       .optcard .opt-b {
         padding: 13px 14px 15px;
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
       }
       /* a stage that lets the glow read */
       .stage {
@@ -920,7 +986,7 @@
           120% 150% at 82% -20%,
           #efeafd 0%,
           #f7f6fb 46%,
-          var(--surface) 80%
+          var(--el-card) 80%
         );
       }
       /* the real global top nav (Option A host) */
@@ -930,8 +996,8 @@
         gap: 9px;
         width: 100%;
         padding: 9px 13px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         box-shadow: 0 3px 12px -3px #0000001a;
       }
@@ -939,10 +1005,10 @@
         font-size: 13px;
         font-weight: 800;
         letter-spacing: -0.01em;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .topnav .brand b {
-        color: var(--accent);
+        color: var(--el-accent);
         font-weight: 800;
       }
       .topnav .spacer {
@@ -954,9 +1020,9 @@
         border-radius: 8px;
         display: grid;
         place-items: center;
-        color: var(--muted);
-        background: var(--soft);
-        border: 1px solid var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
         font-size: 12px;
       }
       .avatarchip {
@@ -965,8 +1031,8 @@
         border-radius: 50%;
         display: grid;
         place-items: center;
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
         font-size: 11px;
         font-weight: 700;
       }
@@ -1033,10 +1099,10 @@
         height: 196px;
         border-radius: 11px;
         overflow: hidden;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         background:
           radial-gradient(circle at 1px 1px, #e6e3de 1px, transparent 0) 0 0 / 22px 22px,
-          var(--soft);
+          var(--el-surface-soft);
       }
       .fabstage .faux {
         padding: 14px 16px;
@@ -1113,9 +1179,9 @@
         right: 84px;
         bottom: 28px;
         font-size: 10.5px;
-        color: var(--faint);
-        background: var(--surface);
-        border: 1px solid var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 6px;
         padding: 3px 7px;
       }
@@ -1127,10 +1193,10 @@
         gap: 20px;
         align-items: center;
         margin-top: 18px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         overflow: hidden;
-        background: var(--surface);
+        background: var(--el-card);
       }
       .anatomy .ashow {
         position: relative;
@@ -1142,7 +1208,7 @@
         background:
           radial-gradient(80% 90% at 30% 20%, #ece6fb 0%, transparent 60%),
           radial-gradient(70% 80% at 80% 90%, #fbe2f0 0%, transparent 62%), #fafafa;
-        border-right: 1px solid var(--hair);
+        border-right: 1px solid var(--el-border-soft);
       }
       .anatomy ul {
         margin: 0;
@@ -1155,27 +1221,27 @@
       .anatomy li {
         font-size: 12px;
         line-height: 1.4;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         display: flex;
         gap: 9px;
         align-items: flex-start;
       }
       .anatomy li b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       /* the orb under every shipped palette — the proof that its paint is
          palette-derived rather than three frozen hexes (MOTIR-3217) */
       .palstrip {
         margin-top: 16px;
-        border: 1px solid var(--hair);
+        border: 1px solid var(--el-border-soft);
         border-radius: 12px;
-        background: var(--soft);
+        background: var(--el-surface-soft);
         padding: 13px 15px 16px;
       }
       .palstrip .psh {
         font-size: 11.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         margin: 0 0 14px;
       }
       .palstrip .psrow {
@@ -1196,7 +1262,7 @@
         font:
           600 10px ui-monospace,
           monospace;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .palstrip .orb {
         width: 46px;
@@ -1223,30 +1289,30 @@
         margin-top: 18px;
       }
       .modemap .mm {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 11px;
         padding: 11px 12px;
-        background: var(--surface);
+        background: var(--el-card);
       }
       .modemap .mm .where {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .modemap .mm .arrow {
         margin: 3px 0;
         font-size: 13px;
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .modemap .mm .what {
         font-size: 12px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .modemap .mm .ref {
         font:
           600 9.5px ui-monospace,
           monospace;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
 
       /* ── the floating "M" universal AI callout (Option B) ── */
@@ -1300,8 +1366,8 @@
       .ai-menu {
         width: 250px;
         border-radius: 14px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         box-shadow: 0 16px 40px -8px #00000026;
         overflow: hidden;
       }
@@ -1311,7 +1377,7 @@
         gap: 8px;
         padding: 10px 13px;
         background: linear-gradient(135deg, #efeafd, #fbe9f4);
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .ai-menu .am-h .mini-orb {
         width: 22px;
@@ -1327,7 +1393,7 @@
       }
       .ai-menu .am-h b {
         font-size: 12.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .ai-menu .am-row {
         display: flex;
@@ -1336,7 +1402,7 @@
         padding: 9px 13px;
       }
       .ai-menu .am-row + .am-row {
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
       }
       .ai-menu .am-row .ic {
         width: 24px;
@@ -1346,8 +1412,8 @@
         place-items: center;
         flex: none;
         font-size: 13px;
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent);
       }
       .ai-menu .am-row.primary .ic {
         background: linear-gradient(135deg, #6a4ef2, #9450ef);
@@ -1356,24 +1422,24 @@
       .ai-menu .am-row .tt {
         font-size: 12px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .ai-menu .am-row .ds {
         font-size: 10.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-top: 1px;
       }
       .ai-menu .am-ask {
         margin: 4px 11px 11px;
         height: 32px;
         border-radius: 9px;
-        border: 1px solid var(--border);
-        background: var(--soft);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
         display: flex;
         align-items: center;
         padding: 0 11px;
         font-size: 11px;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
 
       /* ── style-aware showcase (sheet 5): one button, six design styles ── */
@@ -1383,7 +1449,7 @@
         gap: 14px;
       }
       .styletile {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
       }
@@ -1392,19 +1458,19 @@
         align-items: center;
         gap: 7px;
         padding: 8px 12px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
         font:
           600 10px ui-monospace,
           monospace;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .styletile .st-h .def {
         margin-left: auto;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: var(--el-accent-wash);
         padding: 1px 6px;
         border-radius: 999px;
         font-size: 8.5px;
@@ -1554,28 +1620,28 @@
         display: inline-flex;
         align-items: center;
         gap: 7px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 5px 10px;
         font-size: 12px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         box-shadow: 0 1px 2px #0000000d;
       }
       .wclose .x {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         line-height: 1;
       }
       .wclose kbd {
         font:
           600 9.5px ui-monospace,
           monospace;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 4px;
         padding: 0 4px;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
 
       /* ── sheet 6: opening on top of the app + exiting ── */
@@ -1588,10 +1654,10 @@
       .ontop {
         position: relative;
         height: 318px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
-        background: var(--hub);
+        background: var(--el-surface);
       }
       /* the PM app, sitting BEHIND the workspace */
       .appback {
@@ -1604,8 +1670,8 @@
         filter: saturate(0.9);
       }
       .appback .col {
-        background: var(--soft);
-        border: 1px solid var(--hair);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
         border-radius: 9px;
         padding: 8px;
         display: flex;
@@ -1614,14 +1680,14 @@
       }
       .appback .col b {
         font-size: 9px;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
       .appback .card {
         height: 26px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 7px;
       }
       .scrim {
@@ -1636,8 +1702,8 @@
         inset: 16px;
         border-radius: 14px;
         overflow: hidden;
-        border: 1px solid var(--border);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
         box-shadow: 0 30px 70px -18px #00000073;
         display: grid;
         grid-template-columns: 1fr 150px;
@@ -1646,7 +1712,7 @@
         position: relative;
         background:
           radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 20px 20px,
-          var(--hub);
+          var(--el-surface);
       }
       .wsoverlay .wtop {
         position: absolute;
@@ -1658,8 +1724,8 @@
         gap: 8px;
       }
       .wsoverlay .wrail {
-        border-left: 1px solid var(--border);
-        background: var(--surface);
+        border-left: 1px solid var(--el-border);
+        background: var(--el-card);
         padding: 10px;
         display: flex;
         flex-direction: column;
@@ -1671,7 +1737,7 @@
           monospace;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .exitcol {
         display: flex;
@@ -1679,18 +1745,18 @@
         gap: 14px;
       }
       .panel {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
-        background: var(--surface);
+        background: var(--el-card);
       }
       .panel .ph {
         font-size: 12px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
         padding: 10px 13px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .panel .pb {
         padding: 13px;
@@ -1700,20 +1766,20 @@
         align-items: center;
         gap: 9px;
         font-size: 12px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         padding: 6px 0;
       }
       .exitopt + .exitopt {
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
       }
       .exitopt .k {
         flex: none;
       }
       /* the unsaved-proposals guard dialog */
       .guard {
-        border: 1px solid var(--accent);
+        border: 1px solid var(--el-accent);
         border-radius: 12px;
-        background: var(--surface);
+        background: var(--el-card);
         box-shadow: 0 12px 30px -10px #5645d440;
         overflow: hidden;
       }
@@ -1721,20 +1787,20 @@
         padding: 12px 13px 4px;
         font-size: 12.5px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .guard .gd {
         padding: 0 13px 11px;
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         line-height: 1.45;
       }
       .guard .ga {
         display: flex;
         gap: 7px;
         padding: 11px 13px;
-        border-top: 1px solid var(--hair);
-        background: var(--soft);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
         flex-wrap: wrap;
       }
 
@@ -1947,8 +2013,8 @@
                 <span
                   class="tile"
                   style="
-                    background: var(--accent-soft);
-                    color: var(--accent);
+                    background: var(--el-accent-wash);
+                    color: var(--el-accent);
                     width: 22px;
                     height: 22px;
                     font-size: 12px;
@@ -1980,8 +2046,8 @@
                 <span
                   class="tile"
                   style="
-                    background: var(--accent-soft);
-                    color: var(--accent);
+                    background: var(--el-accent-wash);
+                    color: var(--el-accent);
                     width: 22px;
                     height: 22px;
                     font-size: 12px;
@@ -2015,8 +2081,8 @@
                 <span
                   class="tile"
                   style="
-                    background: var(--accent-soft);
-                    color: var(--accent);
+                    background: var(--el-accent-wash);
+                    color: var(--el-accent);
                     width: 22px;
                     height: 22px;
                     font-size: 12px;
@@ -2047,8 +2113,8 @@
                 <span
                   class="tile"
                   style="
-                    background: var(--accent-soft);
-                    color: var(--accent);
+                    background: var(--el-accent-wash);
+                    color: var(--el-accent);
                     width: 22px;
                     height: 22px;
                     font-size: 12px;
@@ -2539,7 +2605,7 @@
                   <span>keyboard — closes from anywhere in the workspace</span>
                 </div>
                 <div class="exitopt">
-                  <span class="k" style="font-size: 12px; color: var(--accent); font-weight: 600"
+                  <span class="k" style="font-size: 12px; color: var(--el-accent); font-weight: 600"
                     >↩ Back to board</span
                   >
                   <span>the close is labelled with where you came from</span>
@@ -2578,15 +2644,24 @@
       // (The real surface uses the shipped PlanningCanvas; here we statically
       //  place nodes + draw edges so the composed canvas reads faithfully — it
       //  is the design/roadmap/ canvas language, not a re-drawn canvas.)
+      // ⚠️ THE FIVE WORK-TYPE HUES ARE TOKENS, NOT HEXES (MOTIR-4428). These are
+      // painted onto an inline `style=` at runtime, so they are the one set of
+      // colours in this sheet that no static scanner reads either way — which is
+      // exactly why they were the last five raw hues left. They re-tint with
+      // `data-palette` now, like every other colour on the board.
       const TYPE = {
-        epic: '#ff64c8',
-        story: '#1aae39',
-        task: '#0075de',
-        subtask: '#2a9d99',
-        bug: '#e03131',
+        epic: 'var(--el-type-epic)',
+        story: 'var(--el-type-story)',
+        task: 'var(--el-type-task)',
+        subtask: 'var(--el-type-subtask)',
+        bug: 'var(--el-type-bug)',
       };
-      function tint(hex) {
-        return hex + '22';
+      // The old form appended `22` as an 8-digit-hex alpha, which a `var()`
+      // cannot carry. `0x22 / 255` is 13%, expressed as a `color-mix` over
+      // `transparent` — the form CLAUDE.md blesses, and the only one that
+      // survives a palette swap.
+      function tint(colour) {
+        return `color-mix(in srgb, ${colour} 13%, transparent)`;
       }
 
       // Place a full StationCard-language node; returns the element for edge routing.
@@ -2595,7 +2670,7 @@
         el.className = 'node' + (n.cls ? ' ' + n.cls : '') + (n.sm ? ' sm' : '');
         el.style.left = n.x + 'px';
         el.style.top = n.y + 'px';
-        const hue = TYPE[n.type] || '#5645d4';
+        const hue = TYPE[n.type] || 'var(--el-accent)';
         const pill = n.pill ? `<span class="pill ${n.pill[0]}">${n.pill[1]}</span>` : '';
         const capt = n.capt
           ? '<div class="capt">' + n.capt.map((c) => `<div>${c}</div>`).join('') + '</div>'
@@ -2613,7 +2688,7 @@
         el.className = 'mininode' + (n.cls ? ' ' + n.cls : '');
         el.style.left = n.x + 'px';
         el.style.top = n.y + 'px';
-        const hue = TYPE[n.type] || '#5645d4';
+        const hue = TYPE[n.type] || 'var(--el-accent)';
         el.innerHTML = `<span class="dt" style="background:${hue}"></span>${n.t}`;
         host.appendChild(el);
         return el;

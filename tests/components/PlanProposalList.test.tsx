@@ -49,7 +49,7 @@ describe('the list shows ALL THREE ops (MOTIR-3239)', () => {
     // ⚠️ THE LOAD-BEARING ONE. A list showing two ops under a row whose item
     // count includes three is a surface arguing with itself — and that count is
     // on the row that got the reader here. `remove` is rare, not excluded.
-    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} outcome={null} />);
 
     expect(screen.getByText('Adds')).toBeTruthy();
     expect(screen.getByText('Updates')).toBeTruthy();
@@ -65,7 +65,7 @@ describe('the list shows ALL THREE ops (MOTIR-3239)', () => {
   });
 
   it('a section with nothing in it does not render', () => {
-    renderWithIntl(<PlanProposalList items={[add()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add()]} outcome={null} />);
 
     expect(screen.getByText('Adds')).toBeTruthy();
     expect(screen.queryByText('Updates')).toBeNull();
@@ -76,7 +76,7 @@ describe('the list shows ALL THREE ops (MOTIR-3239)', () => {
     renderWithIntl(
       <PlanProposalList
         items={[add(), add({ planItemId: 'a2', title: 'Another' }), modify()]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -89,13 +89,13 @@ describe('the row (MOTIR-3239)', () => {
   it('an `add` has NO KEY and says so rather than leaving a gap', () => {
     // `identifier` is null until approve materializes it. An empty slot in a
     // column of keys reads as a missing value; this reads as the fact it is.
-    renderWithIntl(<PlanProposalList items={[add()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add()]} outcome={null} />);
 
     expect(screen.getByText('no key yet')).toBeTruthy();
   });
 
   it('a `modify` shows its key, and a `remove` strikes its title', () => {
-    renderWithIntl(<PlanProposalList items={[modify(), remove()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[modify(), remove()]} outcome={null} />);
 
     expect(screen.getByText('MOTIR-812')).toBeTruthy();
     expect(screen.getByText('Legacy CSV export').className).toContain('line-through');
@@ -107,7 +107,7 @@ describe('the row (MOTIR-3239)', () => {
         items={[
           add({ type: 'code', storyPoints: 5, estimateMinutes: 90, targetRepo: 'motir-core' }),
         ]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -120,7 +120,7 @@ describe('the row (MOTIR-3239)', () => {
         items={[
           add({ parentNodeId: 'pi_0', parentIdentifier: null, parentTitle: 'A proposed story' }),
         ]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -134,7 +134,7 @@ describe('the row (MOTIR-3239)', () => {
     renderWithIntl(
       <PlanProposalList
         items={[add({ stale: true, staleReasons: ['parent_removed'] })]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -147,7 +147,7 @@ describe('a `modify`’s diff is SPELLED OUT, not signalled (MOTIR-3239)', () =>
     // The canvas's overlay answers *this node is changing* inside a ~280px card:
     // it is a SIGNAL. The list answers *changing to WHAT*, at pane width, for a
     // reader deciding whether to approve.
-    renderWithIntl(<PlanProposalList items={[modify()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[modify()]} outcome={null} />);
 
     // The LABEL, not the wire name — see the field-label totality guard.
     expect(screen.getByText('Title')).toBeTruthy();
@@ -167,7 +167,7 @@ describe('a `modify`’s diff is SPELLED OUT, not signalled (MOTIR-3239)', () =>
             changes: [{ field: 'description', from: 'old body…', to: 'a completely new body…' }],
           }),
         ]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -180,7 +180,7 @@ describe('a `modify`’s diff is SPELLED OUT, not signalled (MOTIR-3239)', () =>
     renderWithIntl(
       <PlanProposalList
         items={[modify({ changes: [{ field: 'priority', from: null, to: 'high' }] })]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -193,7 +193,7 @@ describe('the row’s remaining arms (MOTIR-3242 — the story gate’s top-up)'
     renderWithIntl(
       <PlanProposalList
         items={[add({ parentNodeId: 'wi_p', parentIdentifier: 'MOTIR-653', parentTitle: null })]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -212,7 +212,7 @@ describe('the row’s remaining arms (MOTIR-3242 — the story gate’s top-up)'
             statusCategory: 'in_progress',
           }),
         ]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -225,7 +225,7 @@ describe('the row’s remaining arms (MOTIR-3242 — the story gate’s top-up)'
     renderWithIntl(
       <PlanProposalList
         items={[modify({ changes: [{ field: 'priority', from: 'high', to: null }] })]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -249,7 +249,7 @@ describe('the row’s remaining arms (MOTIR-3242 — the story gate’s top-up)'
             parentTitle: null,
           }),
         ]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -268,13 +268,13 @@ describe('the row’s remaining arms (MOTIR-3242 — the story gate’s top-up)'
     // `PlanProposalList.tsx` makes a fourth `PlanItemOpDto` member a BUILD error
     // rather than an invisible row. This test states that the three the enum has
     // today all reach a section, so the runtime half is covered too.
-    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} outcome={null} />);
 
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
   });
 
   it('an unknown KIND falls back to the task glyph rather than throwing', () => {
-    renderWithIntl(<PlanProposalList items={[add({ kind: 'epicish' })]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add({ kind: 'epicish' })]} outcome={null} />);
 
     expect(screen.getByText('A proposed story')).toBeTruthy();
   });
@@ -289,17 +289,17 @@ describe('the states (MOTIR-3239)', () => {
   // reader is sent looking for one. What the pane owes now is the move that IS
   // available, which is the same one the rail's own empty hint names.
   it('EMPTY — a plan that proposes nothing names the move that is left', () => {
-    renderWithIntl(<PlanProposalList items={[]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[]} outcome={null} />);
 
     expect(screen.getByText('No proposals')).toBeTruthy();
     expect(screen.getByText(/Declining ends it/)).toBeTruthy();
     expect(screen.queryByText(/if you approve it/)).toBeNull();
   });
 
-  it('DECIDED — the list is a RECORD, in the past tense', () => {
+  it('APPROVED — the list is a RECORD, in the past tense', () => {
     // Part VI made this pane a record of what was accepted. The list is the same
     // pane's other body, so it says the same thing in the same tense.
-    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} decided />);
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} outcome="accepted" />);
 
     // The SECTION headers move to the past tense…
     expect(screen.getByText('Created')).toBeTruthy();
@@ -313,6 +313,59 @@ describe('the states (MOTIR-3239)', () => {
   });
 });
 
+describe('the THREE-VALUED outcome, all nine cells (MOTIR-4495)', () => {
+  // `decided` was a BOOLEAN over a three-valued axis, so a DECLINE took the
+  // APPROVE arm and the list said `Created` / `Applied` / `Archived` about work
+  // that never happened. Reproduced on `origin/main` through this same door:
+  //
+  //   HEADINGS: ["Created1","Applied1","Archived1"]
+  //   ROWS:     "no key yet … subtask · code · 3 pts created"   ← the `add` row
+  //             contradicting itself inside one line
+  //
+  // The nine cells are asserted as a MATRIX rather than as three more cases,
+  // because the defect was that two of the three columns were the same column.
+  const HEADINGS = {
+    null: ['Adds', 'Updates', 'Archives'],
+    accepted: ['Created', 'Applied', 'Archived'],
+    declined: ['Adds', 'Updates', 'Archives'],
+  } as const;
+  const CHIPS = {
+    null: ['add', 'change', 'remove'],
+    accepted: ['created', 'applied', 'archived'],
+    declined: ['add', 'change', 'remove'],
+  } as const;
+
+  it.each([
+    ['a PENDING plan', null, 'null'],
+    ['an APPROVED plan', 'accepted', 'accepted'],
+    ['a DECLINED plan', 'declined', 'declined'],
+  ] as const)('%s renders its own three headings and three chips', (_label, outcome, key) => {
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} outcome={outcome} />);
+
+    for (const heading of HEADINGS[key]) expect(screen.getByText(heading)).toBeTruthy();
+    for (const chip of CHIPS[key]) expect(screen.getByText(chip)).toBeTruthy();
+  });
+
+  it('a DECLINED plan says NOTHING in the past tense — the defect, asserted directly', () => {
+    // Per Part VIII §3: *"A declined plan's list keeps the proposal tense and
+    // adds no outcome chip: nothing happened to those cards."*
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} outcome="declined" />);
+
+    for (const word of ['Created', 'Applied', 'Archived', 'created', 'applied', 'archived']) {
+      expect(screen.queryByText(word), word).toBeNull();
+    }
+  });
+
+  it("a DECLINED `add`'s row does not claim a creation beside its own `no key yet`", () => {
+    // The sharpest cell: the row that contradicted itself in one line.
+    renderWithIntl(<PlanProposalList items={[add()]} outcome="declined" />);
+    const row = screen.getByRole('listitem').textContent ?? '';
+    expect(row).toContain('no key yet');
+    expect(row).toContain('add');
+    expect(row).not.toContain('created');
+  });
+});
+
 describe('the field LABEL, not the wire name (MOTIR-3242)', () => {
   it('renders the catalogue label for a camelCase wire field', () => {
     // `storyPoints` would otherwise read as STORYPOINTS — the shape that once put
@@ -320,7 +373,7 @@ describe('the field LABEL, not the wire name (MOTIR-3242)', () => {
     renderWithIntl(
       <PlanProposalList
         items={[modify({ changes: [{ field: 'storyPoints', from: '3', to: '5' }] })]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -335,7 +388,7 @@ describe('the field LABEL, not the wire name (MOTIR-3242)', () => {
     renderWithIntl(
       <PlanProposalList
         items={[modify({ changes: [{ field: 'somethingNew', from: 'a', to: 'b' }] })]}
-        decided={false}
+        outcome={null}
       />,
     );
 
@@ -364,7 +417,7 @@ describe('a renaming modify (MOTIR-4018)', () => {
     });
 
   it('shows the PROPOSED title as the headline, beside the committed key', () => {
-    renderWithIntl(<PlanProposalList items={[renaming()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[renaming()]} outcome={null} />);
     // The proposed title appears TWICE on the row, and that is the design: once
     // as the headline (what the card will BE) and once as the `to` side of the
     // TITLE change line (what it is changing to). Take the first — the headline.
@@ -375,7 +428,7 @@ describe('a renaming modify (MOTIR-4018)', () => {
   });
 
   it('still spells `old → new` on the TITLE change line', () => {
-    renderWithIntl(<PlanProposalList items={[renaming()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[renaming()]} outcome={null} />);
     const row = screen
       .getAllByText('Invoice templates + branding')[0]!
       .closest('li') as HTMLElement;
@@ -393,7 +446,7 @@ describe('a renaming modify (MOTIR-4018)', () => {
 // one that could not open it.
 describe('the row opens its proposal', () => {
   it('carries exactly ONE control, and it is the title', () => {
-    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add(), modify(), remove()]} outcome={null} />);
     // One tab stop per row. A row of buttons is the shipped listbox-rows a11y
     // lesson, and the chips beside the title stay non-interactive text.
     const rows = screen.getAllByRole('listitem');
@@ -403,7 +456,7 @@ describe('the row opens its proposal', () => {
   });
 
   it('names itself `Open <key> · <title>`, and `New · <title>` when the card has no key yet', () => {
-    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} outcome={null} />);
     // The visible title is contained in the accessible name (WCAG 2.5.3), and an
     // `add` is named the way this surface already names a keyless card.
     expect(screen.getByRole('button', { name: 'Open MOTIR-812 · Payout ledger' })).toBeTruthy();
@@ -411,7 +464,7 @@ describe('the row opens its proposal', () => {
   });
 
   it('opens the SAME quick view the canvas’s View pill opens, and closes again', async () => {
-    renderWithIntl(<PlanProposalList items={[add()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add()]} outcome={null} />);
     expect(screen.queryByTestId('proposal-peek')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open New · A proposed story' }));
@@ -425,7 +478,7 @@ describe('the row opens its proposal', () => {
   });
 
   it('stretches its hit area over the whole row, so the row is the target', () => {
-    renderWithIntl(<PlanProposalList items={[modify()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[modify()]} outcome={null} />);
     const button = screen.getByRole('button', { name: /^Open MOTIR-812/ });
     // `after:inset-0` is what makes the row clickable without wrapping the `<dl>`
     // of change lines in a `<button>`, which would be invalid markup.
@@ -473,7 +526,7 @@ describe('every item shape opens the same read view as the canvas', () => {
 
   for (const [label, item, door] of shapes) {
     it(`opens for ${label}`, async () => {
-      renderWithIntl(<PlanProposalList items={[item]} decided={false} />);
+      renderWithIntl(<PlanProposalList items={[item]} outcome={null} />);
       const row = screen.getByRole('button', { name: /^Open / });
       fireEvent.click(row);
       // One close, on every shape — not only on the one the fix was written for.
@@ -499,7 +552,7 @@ describe('every item shape opens the same read view as the canvas', () => {
 // `Modal`'s own restore fires before the row it should return to is settled.
 describe('closing the quick view', () => {
   it('returns focus to the row that opened it', async () => {
-    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} outcome={null} />);
     const row = screen.getByRole('button', { name: 'Open New · A proposed story' });
 
     row.focus();
@@ -519,7 +572,7 @@ describe('closing the quick view', () => {
   it('returns focus to the RIGHT row when a second one was opened', async () => {
     // The ref must follow the trigger, not the first row that ever opened one —
     // the failure mode a single-row test cannot see.
-    renderWithIntl(<PlanProposalList items={[add(), modify()]} decided={false} />);
+    renderWithIntl(<PlanProposalList items={[add(), modify()]} outcome={null} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open New · A proposed story' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /close/i }));
     await act(async () => {

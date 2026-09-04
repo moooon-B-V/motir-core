@@ -10,6 +10,7 @@ import {
   type DirectionDocView as DirectionDocModel,
   type FeatureCatalogView,
 } from '@/lib/onboarding/directionDoc';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 // The read-only tier-doc FULL PAGE body (Subtask 7.20.14 / MOTIR-1355) — a thin top
 // bar (← Back to roadmap + breadcrumb) over the SHIPPED `DirectionDocView` (834) at
@@ -53,7 +54,7 @@ export function DirectionDocFullPage({
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--el-border) pb-(--spacing-control-y)">
         {origin === 'onboarding' ? (
-          <Link href="/onboarding" className={backClassName}>
+          <Link href={ONBOARDING_ENTRY_PATH} className={backClassName}>
             <ChevronLeft className="size-4" aria-hidden="true" />
             Back to roadmap
           </Link>
