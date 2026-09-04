@@ -6,6 +6,13 @@
 //   ⌘K opens the palette → type "iss" → ↓ → ↵ navigates to /items →
 //   ⌘\ collapses the rail → ? opens the cheatsheet → Esc closes it.
 //
+// A second journey lives here for the same reason: LAYERED DISMISSAL below `md`
+// (MOTIR-4326). One `Escape` must peel one surface — the drawer's Help menu —
+// and leave the drawer under it standing. It is a keyboard-only path on a
+// keyboard-only surface, which is exactly this file's subject, and it is
+// unreachable from either surface's own component test: the drawer passes, the
+// menu passes, and the COMPOSITION is what was broken.
+//
 // Pairs with shell-a11y.spec.ts (axe sweep + structural aria invariants).
 //
 // Modifier note: the shell's useShortcut resolves `Mod` to ⌘ on Apple
@@ -110,5 +117,71 @@ test.describe('@a11y shell keyboard navigation', () => {
     // The skip-link is sr-only until focused, then `focus:not-sr-only` reveals
     // it — so visibility itself is the proof the focus state is styled.
     await expect(skipLink).toBeVisible();
+  });
+
+  // MOTIR-4326 — ONE `Escape`, ONE SURFACE.
+  //
+  // Below `md` the rail folds into `SidebarDrawer` (a Radix `Dialog`) and the
+  // Help menu opens as a Radix `Popover` from its utility strip, so two
+  // dismissable layers are stacked. Radix peels the highest one and stops; the
+  // drawer used to ALSO carry a `useShortcut('esc', …)` listener on `window`,
+  // outside that stack, which fired for the same key and took the drawer with
+  // it. The whole defect is in the COMPOSITION, which is why this is a browser
+  // spec and not a component one.
+  //
+  // The surface is below `md`, where the ordinary device has no `Escape` key at
+  // all — so it is reached the way it is really reached, on a NARROWED window
+  // that still has a keyboard, and driven with the keyboard alone (`locator
+  // .press` focuses and keys the control; no pointer, in keeping with this
+  // file's discipline).
+  //
+  // Every assertion waits on an authoritative signal: the trigger's own
+  // `aria-expanded` (Radix's disclosure state) and each panel's role + name.
+  // Never a timeout — CLAUDE.md § E2E discipline.
+  test('below `md`, one Escape closes the Help menu and leaves the drawer open', async ({
+    page,
+  }) => {
+    await signUp(page, 'e2e-shell-keyboard-layering@example.com');
+    await createFirstProject(page, 'Mobile App');
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/dashboard');
+
+    // The rail is `hidden md:block`, so at this width it leaves the
+    // accessibility tree entirely and the drawer's dialog is unambiguous.
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toHaveCount(0);
+
+    const hamburger = page.getByRole('button', { name: 'Open navigation' });
+    await expect(hamburger).toBeVisible();
+    await hamburger.press('Enter');
+
+    const drawer = page.getByRole('dialog', { name: 'Navigation' });
+    await expect(drawer).toBeVisible();
+
+    // The Help trigger lives in the drawer's utility strip. Its PANEL is
+    // portaled to the document, not into the drawer, so it is located on the
+    // page — scoping it to the drawer would fail on a build where all is well.
+    const help = drawer.getByRole('button', { name: 'Help' });
+    await expect(help).toBeVisible();
+    await help.press('Enter');
+    await expect(help).toHaveAttribute('aria-expanded', 'true');
+    const menu = page.getByRole('dialog', { name: 'Help' });
+    await expect(menu).toBeVisible();
+
+    // ── THE DEFECT, IF IT IS BACK, FAILS HERE ──────────────────────────────
+    // One key, one layer. The drawer is asserted through its own trigger as
+    // well as through the dialog, because "the drawer closed" and "the menu
+    // closed" both read as a missing element otherwise — the ambiguity the
+    // original observation had to be disambiguated out of by a control.
+    await page.keyboard.press('Escape');
+    await expect(help).toHaveAttribute('aria-expanded', 'false');
+    await expect(menu).toHaveCount(0);
+    await expect(drawer, 'the drawer survived dismissing the menu').toBeVisible();
+    await expect(help, 'and its utility strip is still reachable').toBeVisible();
+
+    // The second Escape closes the drawer — the behaviour the fix must not
+    // trade away in order to get the first one right.
+    await page.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(0);
   });
 });
