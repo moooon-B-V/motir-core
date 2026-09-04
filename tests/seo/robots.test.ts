@@ -17,15 +17,24 @@ import {
 // symptom until traffic disappears weeks later.
 
 describe('robots policy', () => {
-  it('serves a body with the sitemap and host of the resolved origin', () => {
+  it('serves a body with the host of the resolved origin and NO sitemap', () => {
+    // ⚠️ MOTIR-4583. This assertion used to read
+    // `expect(result.sitemap).toBe('https://example.test/sitemap.xml')`, and it
+    // is inverted rather than relaxed. `app/sitemap.ts` answered that address
+    // with an empty `<urlset>`, which the sitemaps schema does not permit, so
+    // Search Console reported a PERMANENT error on a signal that was meant to
+    // say "nothing to crawl". The route is deleted and the directive with it;
+    // `tests/seo/sitemapAbsent.test.ts` carries the full reasoning and asserts
+    // both halves of the absence.
     const result = buildRobots('https://example.test');
-    expect(result.sitemap).toBe('https://example.test/sitemap.xml');
+    expect(result.sitemap).toBeUndefined();
     expect(result.host).toBe('https://example.test');
   });
 
   it('renders through the route with no argument', () => {
     const result = robots();
-    expect(result.sitemap).toMatch(/\/sitemap\.xml$/);
+    expect(result.sitemap).toBeUndefined();
+    expect(result.host).toMatch(/^https?:\/\//);
     expect(Array.isArray(result.rules) ? result.rules : [result.rules]).toHaveLength(1);
   });
 
@@ -98,8 +107,11 @@ describe('robots policy', () => {
   it('does NOT disallow the ?rank= facets — they are self-canonical indexable states', () => {
     // `app/(public)/explore/(square)/page.tsx` builds `alternates.canonical`
     // from the query it was handed, so `?rank=popular` canonicalises to
-    // ITSELF, and `app/sitemap.ts` lists it as its own entry. A Disallow here
-    // would contradict both.
+    // ITSELF. A Disallow here would contradict that canonical, and would stop a
+    // crawler following the 308 to the page that renders on `motir.co`. (This
+    // comment used to add "and `app/sitemap.ts` lists it as its own entry" —
+    // that sitemap emptied with MOTIR-3951 and is deleted outright by
+    // MOTIR-4583, so the canonical is the whole of the reason now.)
     expect(disallowedPaths().some((d) => d.includes('rank'))).toBe(false);
     expect(disallowedPaths()).not.toContain('/explore');
   });

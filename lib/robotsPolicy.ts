@@ -34,10 +34,40 @@
 // `?rank=recent` are SELF-canonical — `app/(public)/explore/(square)/page.tsx`
 // builds `alternates.canonical` from the query it was given, not from a
 // collapsed `/explore` — and each renders a distinct `galleryHeading`
-// ("Trending" / "Popular" / "New"). They are three deliberate indexable states,
-// which is why `app/sitemap.ts` lists them as separate entries. Disallowing
-// them would de-index two of the three and contradict the canonical the page
-// itself emits. They stay in the sitemap and stay crawlable.
+// ("Trending" / "Popular" / "New"). They are three deliberate indexable states.
+// Disallowing them would de-index two of the three and contradict the canonical
+// the page itself emits. They stay crawlable. (They used to be named here as
+// separate entries in this host's sitemap; there is no sitemap on this host any
+// more — see the note directly below — and their pages moved to `motir.co` with
+// MOTIR-3951, which advertises them in ITS sitemap. The crawlability of the
+// address on THIS host is what this policy still decides, because `proxy.ts`
+// 308s it.)
+//
+// ⚠️ THIS HOST ADVERTISES NO SITEMAP, AND AN EMPTY ONE IS WHY (MOTIR-4583).
+// `buildRobots` used to emit `Sitemap: ${origin}/sitemap.xml`, and `app/
+// sitemap.ts` answered it with an empty `<urlset>` — a deliberate signal,
+// documented in that file, meaning "this host has nothing public to crawl"
+// since MOTIR-3951 moved every crawlable page to `motir.co`.
+//
+// **The policy was right and the ENCODING was not.** The sitemaps schema
+// requires at least one `<url>`, so an empty `<urlset>` is invalid: Google
+// fetched it fine (`HTTP/2 200`, `application/xml`) and Search Console reported
+// `Missing XML tag · Parent tag: urlset · Tag: url` at line 3, PERMANENTLY —
+// the condition producing the error was the intended end state, so it could
+// never clear. There is no representation of *deliberately nothing* in that
+// schema; the standard way to say it is to serve no sitemap at all, which is
+// what this host does now. `app/sitemap.ts` is deleted and this key is gone.
+//
+// So do NOT reintroduce either half. Re-adding `sitemap:` here would point a
+// crawler at an address that 404s; re-adding the route to satisfy the pointer
+// puts the permanent Search Console error back. `tests/seo/sitemapAbsent.test.ts`
+// asserts both absences, and `docs/decisions/public-surface-hosts.md` §6 carries
+// the per-host decision.
+//
+// ⚠️ `host: origin` below STAYS. Dropping it too would leave this module with no
+// runtime dependency on the origin at all — a real simplification, and a
+// cross-host product decision (`motir.co` emits `Host:` as well) that MOTIR-4583
+// deliberately did not take by side effect in a bug fix.
 
 import type { MetadataRoute } from 'next';
 
@@ -104,7 +134,7 @@ export function disallowedPaths(): string[] {
 export function buildRobots(origin: string): MetadataRoute.Robots {
   return {
     rules: [{ userAgent: '*', allow: '/', disallow: disallowedPaths() }],
-    sitemap: `${origin}/sitemap.xml`,
+    // No `sitemap` key — this host serves none. See the module note above.
     host: origin,
   };
 }

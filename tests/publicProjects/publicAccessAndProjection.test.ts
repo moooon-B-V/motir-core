@@ -127,9 +127,15 @@ describe('public READ access (6.12.9) — anonymous + cross-org, non-public 404'
   });
 
   // The SITEMAP read (6.12.4) — the one public read with no HTTP gate in front of
-  // it and, until MOTIR-2833, no test at all. It went unnoticed because it is the
-  // only public read whose caller is a framework boundary (`app/sitemap.ts`)
-  // rather than a route, so no route test reached it either.
+  // it and, until MOTIR-2833, no test at all. It went unnoticed because it was
+  // the only public read whose caller was a framework boundary
+  // (`app/sitemap.ts`) rather than a route, so no route test reached it either.
+  //
+  // ⚠️ That boundary is GONE (MOTIR-3951 emptied the sitemap, MOTIR-4583 deleted
+  // the route because an empty `<urlset>` is schema-invalid), and the read is
+  // still live — `publicFollowDigestService` consumes it. So this case is now
+  // the ONLY thing exercising it, which is the reason it must not be dropped
+  // along with the caller it was named after.
   //
   // Its `public` verdict in `tests/rls/singleton-read-guard.test.ts` rests on this
   // case: `project_public_read` is an UNGATED `"accessLevel" = 'public'` arm, so
