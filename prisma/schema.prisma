@@ -5450,6 +5450,17 @@ model PlanItem {
   /// — the RLS policy and the explicit filter both name it — so the composite
   /// answers the whole predicate rather than half of it.
   @@index([workItemId, workspaceId])
+  /// THE FORWARD-PARENT INDEX (MOTIR-4365). The item page's pending-plan read
+  /// asks a SECOND question the one above cannot answer — *which plans propose
+  /// to add CHILDREN under THIS card?* — and it cannot answer it for a reason
+  /// deeper than its column list: an `add` has NO `workItemId` at all. The row
+  /// it would name does not exist until the plan is approved, so an `add` names
+  /// its parent in `parentRef` and nothing else. Without this index that arm
+  /// falls to a sequential scan of every proposal in the workspace, on a read
+  /// that runs inside the item page's request on every item page. `workspaceId`
+  /// rides second for exactly the reason it does above — every read is
+  /// tenant-scoped, so the composite answers the whole predicate.
+  @@index([parentRef, workspaceId])
   @@map("plan_item")
 }
 

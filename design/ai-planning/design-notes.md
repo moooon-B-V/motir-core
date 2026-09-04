@@ -4145,6 +4145,16 @@ The canvas node and the list row (Parts IX and XIII); the review rail and the Ap
 DIFF inside the peek — `changes[]` spells old→new in the list row and that is where a diff belongs
 (MOTIR-4134's boundary, unchanged). **The peek's question stays _what will this work item BE_.**
 
+> **⚠️ AMENDED 2026-09-04 (MOTIR-4493) — the DECIDED axis is now DRAWN, in §16, and the shape of this
+> amendment is worth a sentence because the list did not shrink.** What a `modify` / `remove` peek
+> says once the plan is `approved` or `declined` was never on this list, which is the defect rather
+> than an omission from it: §15's harness seeds through `markPlanned`, so no state the asset measured
+> could have exhibited a decided one, and an omission with no state in the fixture leaves nothing here
+> to find. So the entry does not LEAVE the list — **it is added and immediately discharged**, with its
+> address, because a reader checking this list for the decided axis must land somewhere other than
+> silence. **The peek's question is now _what will this work item BE_ on an undecided plan and _what
+> did this plan DO to it_ on a decided one** (§16.1), and §16.9 carries §16's own does-NOT-draw list.
+
 ## 15. §15 · How this asset was produced (reproduced here, because the harness is deleted)
 
 The mock's stylesheet IS Tailwind's real output for this document, and its markup is composed in the
@@ -4179,3 +4189,299 @@ Measurement at `deviceScaleFactor: 1`; the PNG is exported with the shipped
 **after** `prettier --write` on the mock. The dark panel was rendered in Chromium at
 `data-theme="dark"` with `data-appearance-scope`, not inferred — a bare nested `data-theme` re-skins
 nothing, because `--el-*` resolves at the element that DECLARES it.
+
+## 16. §16 · The DECIDED axis — what a `modify` / `remove` peek says once the plan is approved or declined (MOTIR-4493)
+
+**AMENDS this Part; it is not a new one.** Part XIV drew proposal mode across the `op` axis and never
+across the DECIDED one, and §15 is why: its harness seeds through
+`plansService.createPlan + addProposals + markPlanned`, so every panel above was measured on a
+**`planned`** plan. An omission with no state in the fixture leaves no trace in the output — which is
+why §14's own _does NOT draw_ list does not name it either. The one decided-state sentence this Part
+carries is the materialized-`add` clause at §7, which answers the `add` arm and nothing else.
+
+### 16.0 What was RENDERED first, and the one measurement that decides the section
+
+Per the design-against-shipped-reality rule, and §0's format. The **real shipped components** were
+mounted at `origin/main` `da4c407` — `PlanProposalList`, `PlanReviewCanvas`, `PlanItemNode` and
+`ProposalPeek` with the real catalog, through the shipped `renderWithIntl` harness — with the plan's
+decidedness varied and NOTHING else. Both doors, three plan statuses, three ops. The harness is
+reproduced in §16.11 rather than cited, because it is deleted before this asset lands.
+
+| what was rendered                                                          | what it settled                                                                                                                                  |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| the same `modify`, at `planned` / `approved` / `declined`, from BOTH doors | the peek's `outerHTML` is **11,676 bytes and byte-for-byte IDENTICAL in all six**                                                                |
+| the same `remove`, same six                                                | identical again — and its peek renders the shipped **`Archived` banner and pill** over a foot line reading `Approving this plan archives RND-3.` |
+| a DECLINED `add` through the list door                                     | it does **not** route away — `identifier` is null for ever, so it opens proposal mode and reads `Every value here is what approval will create.` |
+| the list ROW beside the peek it opens, on an approved plan                 | row `Applied` · `applied`; peek `change`. Eight lines apart in one component tree                                                                |
+| the CANVAS node beside the peek its `View` pill opens                      | node `change · declined`; peek `change`                                                                                                          |
+
+**The load-bearing number is the first one, and it is stronger than the report this card was carved
+out of.** MOTIR-4472 says the peek speaks in the future tense after a decision. It does not merely
+speak in the wrong tense — **it cannot tell**: the plan's status reaches `PlanDetail`, forks into a
+`decided` boolean for the list and a three-valued `outcome` for the canvas, and reaches `ProposalPeek`
+**not at all** (`ProposalPeek({ item, onClose })`, §7's own signature). A surface whose output does not
+change when its subject does is not stale; it is blind, and no amount of re-wording fixes a component
+that was never told.
+
+**And it is why the approved-`remove` panel is the sharpest evidence in the asset**: the shipped
+`ArchivedBanner` says _This work item is archived_ and the rail foot, 500px below it in the same
+dialog, says _Approving this plan archives RND-3._ Both are rendered from the same open. One of them
+is reading the target's payload, which knows; the other is reading the proposal envelope, which does
+not.
+
+### 16.1 The DECISION — **(b)**, and the axis is THREE-VALUED rather than a boolean
+
+**Proposal mode GAINS a decided arm. The peek is not routed away.** The two candidate answers this
+card was handed:
+
+- **(a)** route a decided plan's every row to the ordinary work-item peek, as the materialized-`add`
+  arm already does (§7's `:4001` clause / `PlanReviewCanvas.onView`);
+- **(b)** give proposal mode a decided arm — the same surface, in the past tense.
+
+**(b), and this asset sharpens its shape:** the peek takes the plan's **OUTCOME**
+(`'accepted' | 'declined' | null`), the value `PlanDetail` already computes for the canvas — never a
+`decided` boolean. Part VI §3 settled the arithmetic and this Part inherits it rather than re-deciding
+it: `op` and `outcome` are independent, so there are **six** renderings and not four, and a two-valued
+prop has to pick one decided arm as the default for both. (The list picked the approve arm and is
+wrong on every declined plan — measured above, filed as **MOTIR-4495**, and NOT this card's to fix.)
+
+### 16.2 Why not (a) — four reasons, and the fourth is the one that generalises
+
+1. **This area has answered this exact question twice, and both times it KEPT the surface and moved
+   the TENSE.** Part VI §4 re-decided the canvas pane on the ground that after a decision it holds
+   **the record of the decision** — _"A record is not spent by the decision — it is produced by
+   it."_ Part VIII §3 gave the list `Created` / `Applied` / `Archived` rather than removing it. (a)
+   would be the first time this surface answers a decision by DELETING a reading, and it would do it
+   on the one component whose stated purpose (§3) is to record which fields the plan moved.
+2. **Part VI §3 already ruled on a future-tense signal left standing on a decided proposal, and the
+   remedy was ADDITION.** Its declined-`remove` clause: _"The strike is the one place a reader could
+   be misled — it says will be archived about a work item that was not. The chip's `declined` segment
+   is what corrects it."_ The rail foot's `Approving this plan archives {key}.` is that same
+   misleading signal, in a full sentence, on the same op.
+3. **(a) is not available where the record matters most.** A DECLINED `modify` routed to the ordinary
+   peek shows a work item with nothing anywhere saying a plan proposed to change it and was refused —
+   the record is not diminished, it is gone, and the plan row is then the only place it survives. An
+   approved `remove` whose target was hard-deleted routes to a **404**.
+4. **§7's `add` clause does NOT generalise, and reading it as a decidedness rule is the mistake this
+   section exists to name.** A materialized `add` routes away because **the proposal BECAME the work
+   item** — projection and work item are one object, so the proposal reading holds nothing the
+   committed reading lacks. A `modify` is the opposite shape: the proposal is a **DELTA** and the work
+   item is the **RESULT**, and the work item as it stands cannot say which fields this plan moved.
+   **The routing is a consequence of IDENTITY, not of decidedness** — which is also why it correctly
+   does not fire on a DECLINED `add`, whose `identifier` stays null for ever (§16.0, measured).
+
+### 16.3 The op chip — Part VI §3's FUSED chip, one primitive over
+
+The peek's status slot (§4) carries the op chip, and on a `modify` / `remove` the target's live
+`StatusValue` beside it. **Decided, the op chip gains a second SEGMENT carrying the outcome word**, so
+it reads `op × outcome` — exactly the construction `PlanItemNode`'s `OpBadge` already draws
+(`:192-250`), which is the node the canvas's `View` pill sits on.
+
+| slot                    | `planned`         | `approved`                | `declined`                         |
+| ----------------------- | ----------------- | ------------------------- | ---------------------------------- |
+| `modify`                | `change`          | `change` · **`accepted`** | `change` · **`declined`**          |
+| `remove`                | `remove`          | `remove` · **`accepted`** | `remove` · **`declined`**          |
+| `add` (un-materialized) | `not yet created` | — routes away (§7)        | `not yet created` · **`declined`** |
+
+- **Segment 1 is the shipped chip, byte for byte** — `Pill severity="info"` / `status="planned"` /
+  `tone="archived"` (§4, unchanged). **Segment 2** takes Part VI §3's own two pairs:
+  accepted `bg-(--el-tint-mint)` / `text-(--el-text-strong)`, declined `bg-(--el-muted)` /
+  `text-(--el-text-secondary)`. The seam is a 1px `border-s border-(--el-border-soft)` rule, not a gap;
+  `--radius-badge` on the outer corners, `--spacing-chip-x/y` per segment.
+- **The peek's op chip is a `Pill` and the node's is a bare span, and NEITHER changes its primitive.**
+  The construction is shared, the primitive is each host's own — the same relationship §4 already has
+  with `PlanProposalList.tsx:90-92`.
+- **NO NEW COPY KEY.** `planReview.opModify` / `opRemove` / `notYetCreated` and
+  `planReview.outcomeAccepted` / `outcomeDeclined` all ship, the last two authored by Part VI for this
+  exact word. **No fourth vocabulary**, which is §4's own rule applied to a second axis.
+- **Why the chip and not the LIST's `applied` / `archived` word.** They answer different questions:
+  Part VI's `accepted` / `declined` is what happened to the **PROPOSAL**, Part VIII's `created` /
+  `applied` / `archived` is what happened to the **WORK ITEM** — and the peek's status slot is where
+  _the proposal's own state lives_ (§4, in those words), with the work item's own state already
+  rendering beside it as the `StatusValue` and the `Archived` pill. Saying `archived` in the op slot of
+  a dialog that already carries an `Archived` pill would be the surface saying one thing twice and the
+  other thing not at all.
+
+### 16.4 The primary control's label — the override **LIFTS** on approved, and **STAYS** on declined
+
+§7 decided that proposal mode re-labels the link out to **`Open the work item as it stands →`**
+(`planReview.openTargetAsItStands`), and it says why in its own words: the destination shows the work
+item as it IS, so the peek's `changed · Highest` and the page's `High` are one work item described two
+ways. **That label is a WARNING about a divergence, so it is right exactly while the divergence
+exists.**
+
+| plan status    | the control reads                   | key                                                |
+| -------------- | ----------------------------------- | -------------------------------------------------- |
+| `planned`      | `Open the work item as it stands →` | `planReview.openTargetAsItStands` (unchanged)      |
+| **`approved`** | **`Open full page →`**              | **`issueViews.openFullPage` — the override LIFTS** |
+| **`declined`** | `Open the work item as it stands →` | `planReview.openTargetAsItStands` (kept)           |
+
+- **Approved: the divergence is gone, so the warning is spent.** The plan has been applied; the
+  destination IS the projection. §7 says `openTargetAsItStands` _"REPLACES `issueViews.openFullPage`
+  in proposal mode and only there"_ — and once the two agree, "only there" has stopped being here.
+  Keeping it would assert a disagreement that no longer exists, which is the same class of untruth
+  §7 introduced it to remove.
+- **Declined: the divergence is MAXIMAL, and this is the state the label was written for.** The peek
+  shows what the plan proposed; the page shows the work item, untouched. A reader who follows the link
+  finds none of it.
+- **A REUSED key, not a new one**, and the pleasing result is that the label retires on the state it
+  was drawn against and survives on the state nobody had drawn.
+- **On an `add` the control is ABSENT at every status** (§7) — a declined `add` has no route, and it
+  never will have one.
+
+### 16.5 The rail-foot line — the four arms become nine, and SIX new keys
+
+§3's pinned line is the sentence that reads the silence of the unmarked rows, and it is the only
+element on the surface that states what the plan DOES. It is therefore the whole of the tense.
+
+| op                  | `planned` (ships)                                                                                        | `approved`                                                                                                              | `declined`                                                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`add`**           | `Every value here is what approval will create.`<br>`railAddAll`                                         | — routes away (§7)                                                                                                      | **`This plan was declined — none of these values was created.`**<br>**`railAddDeclined`**                                                     |
+| **`modify`**, n > 0 | `This plan changes {n} of the {m} fields it can set.`<br>`railChangeCount`                               | **`This plan changed {n} of the {m} fields it can set.`**<br>**`railChangeCountApplied`**                               | **`This plan would have changed {n} of the {m} fields it can set. It was declined, so none of them moved.`**<br>**`railChangeCountDeclined`** |
+| **`modify`**, n = 0 | `This plan changes none of these fields — only the description and the explanation.`<br>`railChangeNone` | **`This plan changed none of these fields — only the description and the explanation.`**<br>**`railChangeNoneApplied`** | **`This plan would have changed none of these fields — only the description and the explanation.`**<br>**`railChangeNoneDeclined`**           |
+| **`remove`**        | `Approving this plan archives {key}.`<br>`railRemoveArchives`                                            | **`This plan archived {key}.`**<br>**`railRemoveArchived`**                                                             | **`This plan would have archived {key}. It was declined, so it was not.`**<br>**`railRemoveDeclined`**                                        |
+
+**Six new keys, in `planReview`, in BOTH catalogs — `messages/en.json` and `messages/zh.json` in the
+same change, because a key added to one is a parity failure** (§10's rule, unchanged).
+
+Four decisions inside that table, each of which could have gone the other way:
+
+- **The COUNT survives on `declined`, and that is the whole of what (b) buys.** The cheap declined
+  arm is one flat sentence — _"This plan was declined."_ — which drops `n of m`. But the CHANGED
+  markers are still on the rows, and §3's entire argument is that a marker without the denominator
+  cannot be read: an unmarked row means either _the plan is not changing this_ or _no plan can change
+  this at all_. Dropping the count on declined would keep every marker and delete the line that makes
+  them legible, which is the ambiguity §3 exists to remove, restored one state over.
+- **`would have` rather than a bare past.** A declined `modify` did not change two fields and did not
+  change none of them; it proposed two and was refused. The subjunctive is what carries that, and it is
+  the same tense Part VI's `declined` segment puts on the node.
+- **The declined arms NAME the decline** rather than leaving it to the chip. Colour is never the only
+  carrier (§11) and neither is a chip 500px above the line: the sentence at the foot of the rail is
+  read by somebody who has scrolled the rail, and it has to stand on its own.
+- **`remove` × approved reads `This plan archived {key}.`, not `{key} is archived`.** The `Archived`
+  pill and the shipped `ArchivedBanner` already say the work item IS archived; what only this line can
+  say is **who did it** — this plan. That is the whole reason (a) is wrong for this cell, in one
+  sentence.
+
+### 16.6 The DECIDED axis, cell by cell
+
+The axis is an enum and the enum is the checklist. Every cell is DRAWN or is named here with its
+reason.
+
+| plan status    | `modify`             | `remove`                                                 | `add`                                                          |
+| -------------- | -------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
+| **`planned`**  | unchanged — §§2–8    | unchanged                                                | unchanged                                                      |
+| **`approved`** | **DRAWN** — panel 10 | **DRAWN** — panel 10, incl. the `Archived` banner + pill | **NOT DRAWN**: routes to the committed peek (§7), MOTIR-4471's |
+| **`declined`** | **DRAWN** — panel 10 | **DRAWN** — panel 10                                     | **DRAWN** — panel 10; see the correction below                 |
+
+> **⚠️ CORRECTION — MOTIR-4493's own brief was wrong about one cell, and the render is what found
+> it.** The card assigned BOTH decided `add` cells to MOTIR-4471 (_"already answered at `:4001`"_).
+> That is true of `approved` and **false of `declined`**: §7's clause and
+> `PlanReviewCanvas.onView` / `PlanProposalList.openPeek` alike key on
+> `op === 'add' && identifier != null`, and a declined `add` keeps `identifier: null` **for ever** —
+> Part VI §3 says so in its own words (_"A declined `add` keeps `new`, and must: it never became
+> anything"_). Rendered, a declined `add` opens proposal mode and reads
+> `Every value here is what approval will create.` about a plan that can never be approved. The cell
+> is drawn here and `railAddDeclined` is its copy. Amended on MOTIR-4493's record.
+
+**Two sub-cells, drawn as limits rather than as panels:**
+
+- **`remove` × decided × `targetMissing`** (hard-deleted target) — **UNCHANGED**: the shipped
+  not-found panel, `IssueQuickViewPanel state="notfound"` (§8, and the 2026-09-03 correction that
+  narrowed it to hard-deleted only). It is a deliberate limit, not an oversight: proposal mode's
+  decided arm speaks about a target it can READ, and a target that no longer exists leaves the plan's
+  own row as the only surviving record — which the LIST still has (Part VIII §3). Giving the not-found
+  panel a decided arm would mean drawing the plan's record inside a panel whose whole message is that
+  there is nothing to show.
+- **`modify` / `remove` × decided × the CHANGED markers** — **UNCHANGED**, on every marked row. They
+  are the record. This is the single element (a) would have discarded, and keeping it is what §16.5's
+  denominator is for.
+
+### 16.7 Both doors, on a decided plan
+
+MOTIR-4185's property — the list row and the canvas `View` pill open the **same** peek — **holds
+unchanged, and was re-measured at both decided values** (§16.0: the six `modify` renderings are
+byte-identical across both doors as well as across all three statuses). §9's table needs no new row:
+the two doors are unchanged in shape and unchanged in target, and the decided arm is a property of the
+peek rather than of either door. Panel 10 draws both, on a decided plan, so a reader can see it is
+still true.
+
+**What this section does NOT touch on either door**: the list row's own vocabulary and the canvas
+node's own outcome chip are Part VIII §3's and Part VI §3's respectively. **The list's declined arm is
+a shipped DEFECT** — measured in §16.0, filed as **MOTIR-4495** — and it is named here only because a
+reader comparing the row to the peek on a declined plan will see two wrong things and should know
+which card owns which.
+
+### 16.8 a11y
+
+- **The outcome segment carries TEXT** — `accepted` / `declined` — inside the chip, exactly as Part VI
+  §3 requires. Nothing on this surface is distinguished by hue, and the decided axis adds no exception.
+- **The foot line NAMES the decline in words**, so a reader who never reaches the chip still gets it.
+- The chip stays ONE tab-stop-free `<span>` pair; the decided arm adds **no control**, so §11's
+  count of one `Close` and one link out is unchanged.
+- The re-labelled link out (§16.4) changes its accessible name with its visible text, which is the
+  shipped `Link`'s behaviour — the label IS the accessible name here.
+
+### 16.9 What §16 does NOT draw
+
+The list row and the canvas node on a decided plan (Part VIII §3 and Part VI §3 — composed here by
+citation, never re-specified); the review rail's `DecidedOutcome` and the Approve / Decline gate (Part
+VI §1 and Part XIII §8); the establish band an approve stacks above the canvas (Part VI §4); the
+decided arm of the not-found panel (§16.6, named as a limit); and any change to WHICH proposal a door
+routes where — §7's identity rule is composed, not re-decided.
+
+### 16.10 GIVES / TAKES — swept over every `MOTIR-<n>` this section names
+
+`grep`ped the finished asset for every key it names and read each against the tree.
+
+| key                                                                         | element / structure / premise                                                                                                                                                                                                                                                           | gives / takes                                       | action                                                                                                                                                                             |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4472** (the peek's decided arm)                                     | **ELEMENT** — the fused chip, the label rule, six copy keys with their strings; **STRUCTURE** — the peek takes an OUTCOME, not a boolean, so the prop is three-valued; **PREMISE** — its own body offered (a) and (b) and recommended (b): (b) is confirmed, and its shape is corrected | **GIVES**                                           | **RE-ESTIMATED — see below**                                                                                                                                                       |
+| **MOTIR-4471** (the `add` arm)                                              | **PREMISE** — §16.2(4) restates its routing rule as a consequence of IDENTITY rather than of decidedness, which is what its own fix already keys on (`identifier != null`); **TAKES** — its scope does NOT extend to a DECLINED `add`, which the brief had assigned to it               | **TAKES** (a scope it was never asked for)          | **none owed** — nothing in MOTIR-4471's criteria claims the declined `add`; it is `implemented` on exactly the materialized arm. Recorded so the next reader does not re-assign it |
+| **MOTIR-4495** (the list's boolean)                                         | **PREMISE** — §16.1's three-valued argument is the same one, one component over                                                                                                                                                                                                         | neither — filed by this pass, with its own criteria | none                                                                                                                                                                               |
+| **MOTIR-4185** (both doors)                                                 | **PREMISE** — its property is re-measured at both decided values and holds                                                                                                                                                                                                              | neither                                             | none — `done`, and confirmed rather than changed                                                                                                                                   |
+| MOTIR-3161 / Part VI §3                                                     | **PREMISE** — the `op × outcome` arithmetic and the two colour pairs are borrowed verbatim                                                                                                                                                                                              | neither                                             | none                                                                                                                                                                               |
+| MOTIR-3239 / Part VIII §3                                                   | **PREMISE** — the decided list's tense rule, cited; its declined half is MOTIR-4495's                                                                                                                                                                                                   | neither                                             | none                                                                                                                                                                               |
+| MOTIR-4183 / MOTIR-4184                                                     | **PREMISE** — the envelope and the overlay are unchanged; the outcome rides beside them, not inside `changedFields`                                                                                                                                                                     | neither                                             | none — both `done`                                                                                                                                                                 |
+| MOTIR-4197                                                                  | neither — the item page's pending-plan banner is still somebody else's card, and §16.4 does not touch it                                                                                                                                                                                | neither                                             | none                                                                                                                                                                               |
+| MOTIR-3084 / MOTIR-4022 / MOTIR-4134 / MOTIR-4143 / MOTIR-4256 / MOTIR-4277 | neither — cited as history / provenance                                                                                                                                                                                                                                                 | neither                                             | none                                                                                                                                                                               |
+
+**The one action, and it is a SIZE rather than a criterion.** MOTIR-4472 was authored at **3 points /
+50 minutes** against a body that named _"three new copy keys"_. What this section hands it is a
+three-valued prop threaded from `PlanDetail` through both hosts into `ProposalPeek`, a fused chip, a
+conditional on WHICH label key the link out reads, **six** new keys in **two** catalogs, and a test
+matrix of three statuses × three ops. That is not the card that was sized. **Re-estimated to 5 points
+/ 70 minutes in this same pass** (`plan-rules/type-design.md`'s sweep-the-referrers corollary — a
+GIVES that outgrows a card's sizing is re-estimated by the designer, not discovered by whoever picks
+it up). It stays ONE card: one component, one repository, one pull request, and splitting a chip from
+the sentence beside it would put two halves of one tense in two reviews.
+
+### 16.11 How the decided panels were produced (reproduced here, because the harness is deleted)
+
+The mock's stylesheet is unchanged — Tailwind's own output for this document, per §15 — and the new
+panels are composed in the app's own utility classes against the **dumped markup of the shipped
+components**, taken from the render below. No token is declared locally.
+
+```ts
+// a throwaway spec under tests/components/, deleted before the commit, run in the SHIPPED
+// happy-dom harness (tests/helpers/renderWithIntl + tests/helpers/planReview), so the
+// components are the real ones and the strings are the real catalog:
+//
+//   render(<PlanProposalList items={[item]} decided={d} />)          // the LIST door
+//   render(<PlanReviewCanvas items={[item]} projectKey="MOTIR"
+//                            version={0} outcome={o} />)             // the CANVAS door
+//
+// for item ∈ { modify, remove, un-materialized add }
+//     × (d, o) ∈ { (false, null), (true, 'accepted'), (true, 'declined') }
+//
+// then, per cell: the row's outerHTML, the node's outerHTML, and — after driving the door the
+// way a reader drives it (click the row title / select the node, then View) — the peek's
+// outerHTML from [data-testid="proposal-peek"]. `/api/work-items/peek` is stubbed with the
+// target's payload, which is the request §2's amendment says the peek makes on open.
+```
+
+**The comparison is byte-for-byte** (`diff` over the dumped `outerHTML`), which is what turns _"the
+peek looks the same"_ into the 11,676-byte identity in §16.0. §15's Playwright-against-`next start`
+harness would have measured the same thing more expensively: this section decides no geometry — every
+panel below is a string and a chip inside a layout §3 and §4 already measured at 1440×900 — so the
+render it needed was of the MARKUP, not of the pixels.

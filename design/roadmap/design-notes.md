@@ -454,9 +454,16 @@ real shipped surface, annotated with the component it composes.
 > #1398) — two DISTINCT node interactions, do not conflate them:**
 >
 > 1. **SELECT (click a card) = HIGHLIGHT only.** `ProjectRoadmapCanvas` rings the
->    selected card (`--el-accent` + `--el-surface-soft` offset) and lights the
->    dependency it belongs to (its `connectedIds` — the node + everything it links
->    to). Selecting does **NOT** open a detail surface.
+>    selected card (`--el-accent-on-surface` + `--el-surface-soft` offset) and
+>    lights the dependency it belongs to (its `connectedIds` — the node +
+>    everything it links to). Selecting does **NOT** open a detail surface.
+>    (**MOTIR-4474** moved the ring, the emphasised edge stroke and its arrowhead
+>    off `--el-accent` — the FILL role, whose contrast is guaranteed only against
+>    `--el-accent-text` on top of it — onto `--el-accent-on-surface`, the ink. The
+>    fill measured 1.24–2.77:1 on `--el-canvas` in four light palettes, under WCAG
+>    1.4.11's 3:1. This line described the shipped code and so recorded the same
+>    mistake; the pairing is now measured in
+>    `tests/theme/canvasEmphasisInkContrast.test.ts`.)
 > 2. **A dedicated VIEW button opens the detail** — surfaced **on the selected
 >    card**, the same bottom-edge action slot where the shipped **"Open ›" DRILL
 >    pill** appears (the canvas renders that pill on a _selected drillable_ card).
