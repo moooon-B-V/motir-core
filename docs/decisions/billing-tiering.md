@@ -3,7 +3,14 @@
 - **Status:** Accepted (2026-06-21, locked with Yue; **catalog provisioned in
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
-  is locked. **Amended 2026-06-23 + 2026-06-24 — see below.**
+  is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 — see below.**
+- **Amendment (2026-09-04, MOTIR-4331) — the two-lane credit margin is OWNED by
+  MOTIR-4331, and the implementation is a `lane` dimension on `ModelCreditRate`.**
+  §2's DECISION assigned both the implementation and the calibration to Epic 9
+  (MOTIR-673) and named two implementations without choosing. MOTIR-4331 (a story of
+  the AI-economics epic MOTIR-4329) takes the implementation; Epic 9 stays the lane's
+  first CONSUMER. The chosen implementation is the use-case **dimension**, not the
+  per-lane model key. See the amendment in §2.
 - **Amendment (2026-06-24, 8.1.22 / MOTIR-1316) — every PAID AI plan BUNDLES 1 tracker seat.**
   A paid Motir AI plan (Standard / Pro / Max) now **includes 1 tracker seat → the
   org's §4 caps are lifted** (`scaled`). Why: the solo plan-with-AI journey was
@@ -377,6 +384,54 @@ only vs the PM tools above, not vs Cursor).
 > copy fix (promise _running_ the agent + top-ups, never "whole tasks") is the
 > interim guard until the lane ships.
 
+> **Amendment (2026-09-04, MOTIR-4331) — the OWNER moves, and the implementation is
+> CHOSEN.** The decision above stands unchanged in substance; what changes is who
+> builds it and which of its two offered implementations is built.
+>
+> - **Owner.** The two-lane margin is implemented by **MOTIR-4331**, a story of the
+>   AI-economics epic **MOTIR-4329** — not by Epic 9 (MOTIR-673). Epic 9 remains the
+>   lane's **first consumer**: it mints the run credentials that carry
+>   `lane = agent`. The reason for the move is that a rate is an economics concern,
+>   and this one stayed unbuilt for fifteen months precisely because it was filed
+>   under the epic that consumes it.
+> - **The implementation, chosen: a `lane` dimension on `ModelCreditRate`.** Lane
+>   values are `planning` and `agent`; uniqueness widens from `(model, effectiveFrom)`
+>   to `(model, lane, effectiveFrom)`; every pre-existing row is `planning`; and an
+>   **unclassified turn is priced in the planning lane** — the expensive one, so a
+>   missing classification can never silently under-charge. The rejected alternative
+>   is the "distinct model-key per lane — zero-migration" option: it smuggles a
+>   billing dimension into a column typed as a model **identifier**, which every
+>   consumer of `model` — the planner's model list, the model catalog, and the
+>   price-drift guard from MOTIR-4333 — would then have to know about.
+> - **Why a dimension is the right shape (rung 1, the providers' own price sheets).**
+>   Model providers already price a per-use-case rate as a **dimension of the same
+>   model's row**, never as a second model: OpenAI prices one model at Standard /
+>   Flex / Priority / Batch service tiers
+>   ([pricing](https://developers.openai.com/api/docs/pricing),
+>   [flex processing](https://developers.openai.com/api/docs/guides/flex-processing)),
+>   and Anthropic's Message Batches price **every** model at half its standard rate
+>   ([pricing](https://platform.claude.com/docs/en/about-claude/pricing)). All three
+>   retrieved 2026-09-04.
+> - **What the lane's `marginMultiplier` is, and is not.** It is the credit-**count**
+>   markup applied to a cost-calibrated base credit; the **dollar** margin is set
+>   jointly with it by the credit→`$` peg. So the near-cost lane's multiplier is a
+>   small fraction — it is emphatically **not** the stated percentage above
+>   transcribed into the column, which would leave agent credits selling at a
+>   multiple of token cost, the exact outcome this decision exists to prevent. The
+>   arithmetic, the peg sensitivity and every COGS figure stay in the private
+>   `motir-meta/margin-analysis.md`, per §1's rule; nothing numeric about margin
+>   belongs in this repository.
+> - **What still holds, unchanged.** The ~20% target over **fully-loaded** COGS
+>   (provider tokens **+** agent hosting); the requirement to **calibrate** it against
+>   measured token + hosting cost — now MOTIR-4483, gated on the hosting meter
+>   MOTIR-4336, which replaces the provisional figure the story ships; and
+>   BYO-API-key as the secondary lever for the heaviest users.
+> - **The edge, deliberately deferred.** The epic-level `MOTIR-4329 blocks MOTIR-673`
+>   relationship is wired **after this amendment merges**, by MOTIR-4482 — so the
+>   dependency graph never asserts an ownership this record still denies. Merging
+>   this amendment IS the ratification; declining it re-files MOTIR-4331 under
+>   Epic 9 with nothing to unwind.
+
 ### 3. The Stripe Price catalog (binding on 8.1.2 / MOTIR-1141)
 
 A paid org's subscription carries **two recurring items**: one **shared per-seat
@@ -733,10 +788,10 @@ gates the mutations. Self-host: N/A (no billing surface).
   **agent lane at ~20% (near-cost, over tokens + hosting)** so credits burn slowly
   and stay within Cursor's ballpark (never ~10× pricier) — the moat is the **automatic
   agent loop**, not price. **No code in 8.1** (the rate is effective-dated config;
-  nothing meters the agent loop until Epic 9). **Owner: Epic 9 (MOTIR-673)** —
-  implement the lane (a use-case dimension on `ModelCreditRate`, or an agent
-  model-key) and calibrate the ~20% against measured token + hosting cost; pool-size
-  growth and BYO-API-key are secondary levers if needed. The 8.1.21 / MOTIR-1311 copy
+  nothing meters the agent loop until Epic 9). **Owner and implementation: see the
+  2026-09-04 amendment in §2** (MOTIR-4331 owns it, Epic 9 is the first consumer, and
+  the implementation is the `lane` dimension on `ModelCreditRate`); pool-size growth
+  and BYO-API-key are secondary levers if needed. The 8.1.21 / MOTIR-1311 copy
   fix (promise _running_ the agent + top-ups, never "whole tasks") is the interim
   guard. Detail in the private `motir-meta/margin-analysis.md` §9.
 - **Out of scope (named so they land in their owning story):** the actual Stripe
