@@ -169,7 +169,20 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
       events: [indexEvent(installationId, workspaceId)],
     });
 
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
+    // ⚠️ STILL `toEqual`, AND STILL EXACT — `coreTimings` (MOTIR-4413) is named
+    // rather than allowed for. `toMatchObject` would have been the one-character
+    // fix and it would have thrown away what these assertions are FOR: §6's
+    // ledger contract is that this row carries `indexed` / `repoRef` /
+    // `projectsIndexed` and nothing a reader has to learn about, so an
+    // assertion that stops noticing extra keys stops guarding the contract on the
+    // very card that adds one. `expect.any(Array)` keeps the shape closed while
+    // recording that a fourth, optional key now exists.
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 2,
+      coreTimings: expect.any(Array),
+    });
     expect(composed).toHaveBeenCalled();
     for (const call of composed.mock.calls) {
       expect(call[2]?.steps, 'the job must supply the durable seam').toBeDefined();
@@ -260,7 +273,12 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
       `index-boot:${projectId}`,
       `index-settle:${projectId}`,
     ]);
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 1,
+      coreTimings: expect.any(Array),
+    });
     // Teardown was reached — the guarantee the whole shape exists for, now held
     // by an ordinary `finally` rather than by a step reachable from both exits.
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
@@ -331,6 +349,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
         indexed: true,
         repoRef: REPO_REF,
         projectsIndexed: projectCount,
+        coreTimings: expect.any(Array),
       });
 
       // ⚠️ AND THE LEDGER DID NOT. Two projects must not become two rows or two
@@ -344,6 +363,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
         indexed: true,
         repoRef: REPO_REF,
         projectsIndexed: projectCount,
+        coreTimings: expect.any(Array),
       });
     },
     30_000,
@@ -620,7 +640,12 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     expect(stepIds(ctx)).toContain(`index-boot:${memoizedProjectId}`);
     expect(stepIds(ctx)).not.toContain(`index-boot:${drifted.id}`);
     expect(boot.mock.calls.map((call) => call[0]!.projectId)).toEqual([memoizedProjectId]);
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 1,
+      coreTimings: expect.any(Array),
+    });
   }, 30_000);
 });
 
@@ -821,7 +846,12 @@ describe('the admission cap queues, and nothing is dropped', () => {
     });
 
     // It waited twice and then indexed. NOTHING was dropped.
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 1,
+      coreTimings: expect.any(Array),
+    });
     const projectId = projectIds[0]!;
     const ids = stepIds(ctx);
     // Three asks, ONE checkpoint. The retry loop is in-process now, so the
@@ -977,7 +1007,12 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
       events: [refreshEventFor({ installationId, workspaceId })],
     });
 
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 1,
+      coreTimings: expect.any(Array),
+    });
     // The re-execution was NOT refused, and it was not a second slot either.
     expect(seen.map((v) => v.outcome)).toEqual(['admitted', 'already_held']);
     // ONE container, from the run that owns the capacity.
@@ -1068,7 +1103,12 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
 
     // The ledger row a refresh writes is unchanged in SHAPE — one per repo, one
     // repoRef — which is what makes this a path swap and not a contract change.
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 2,
+      coreTimings: expect.any(Array),
+    });
 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
     expect(ids[0]).toBe('resolve-target');
@@ -1163,8 +1203,30 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
       events: [refreshEventFor({ installationId, workspaceId, eventId: 'evt-parity-refresh' })],
     });
 
-    expect(indexRun.result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
-    expect(refreshRun.result).toEqual(indexRun.result);
+    expect(indexRun.result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 2,
+      coreTimings: expect.any(Array),
+    });
+    // ⚠️ THE PARITY IS OVER THE CONTRACT, NOT OVER THE NUMBERS. `coreTimings`
+    // (MOTIR-4413) is a MEASUREMENT of two different runs, so comparing the two
+    // results field for field would assert that two containers took the same
+    // number of milliseconds — a flake by construction, and one that would read
+    // as "the two jobs diverged". What must match is the ledger contract and the
+    // SHAPE of the reading: the same three fields, and the same phases recorded
+    // for the same number of containers.
+    const { coreTimings: refreshTimings, ...refreshContract } = refreshRun.result as {
+      coreTimings?: { projectId: string; phasesMs: Record<string, number> }[];
+    } & Record<string, unknown>;
+    const { coreTimings: indexTimings, ...indexContract } = indexRun.result as {
+      coreTimings?: { projectId: string; phasesMs: Record<string, number> }[];
+    } & Record<string, unknown>;
+    expect(refreshContract).toEqual(indexContract);
+    expect(refreshTimings).toHaveLength(indexTimings!.length);
+    expect(refreshTimings!.map((t) => Object.keys(t.phasesMs).sort())).toEqual(
+      indexTimings!.map((t) => Object.keys(t.phasesMs).sort()),
+    );
     // ⚠️ THE PARITY IS OVER THE FLEET PATH, and `derive-first-audit` is the ONE
     // step deliberately outside it (MOTIR-2266). It hangs off
     // `system.code-graph-index` alone because `docs/decisions/audit-on-first-index.md`

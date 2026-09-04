@@ -402,6 +402,21 @@ export interface SupervisionSettled<O> {
    * SEE the race rather than infer it.
    */
   raced: boolean;
+  /**
+   * THE NUMBER OF THE POLL THIS SUPERVISION ENDED ON (1-based) — the poll that
+   * observed the container done, or the one that would have run next when a
+   * deadline or the ceiling fired instead (MOTIR-4413).
+   *
+   * ⚠️ IT IS STABLE ACROSS PASSES, which is the whole reason it is worth
+   * returning rather than counting. It is `row.pollNumber + 1` read from
+   * `job_supervision`, and a terminal transition ADVANCES NOTHING — `terminate`
+   * writes `settling` and then `settled` and never touches the count — so the
+   * completing pass and every later replayed pass derive the same number from the
+   * same row. A caller may therefore turn it into a duration (its own
+   * `waitMs(pollNumber)`, which is pure) and get the same answer on every pass,
+   * where a counter kept in memory across a `JobRunDefer` would get zero.
+   */
+  pollNumber: number;
 }
 
 export async function advanceSupervision<V, O>(
@@ -435,6 +450,12 @@ export async function advanceSupervision<V, O>(
       reason: 'replayed',
       outcome: await hooks.settle('replayed', state, null),
       raced: true,
+      // ⚠️ THE SAME NUMBER THE COMPLETING PASS REPORTED, not a fresh count. The
+      // terminal transition advanced nothing, so `row.pollNumber` still holds
+      // what the last ADVANCE wrote and this expression reproduces the
+      // completing pass's value exactly — which is what lets a caller derive a
+      // span here and get the answer it got then (MOTIR-4413).
+      pollNumber: state.pollNumber,
     };
   }
 
@@ -540,5 +561,5 @@ async function terminate<V, O>(
   const won = await store.claimTerminal(runId, subject);
   const outcome = await hooks.settle(reason, state, verdict);
   if (won) await store.markSettled(runId, subject);
-  return { status: 'settled', reason, outcome, raced: !won };
+  return { status: 'settled', reason, outcome, raced: !won, pollNumber: state.pollNumber };
 }

@@ -27,6 +27,8 @@ import {
   toFlyMachine,
 } from '@motir/orchestrator';
 import { RepoTarballUrlNotRedirectedError, RepoTarballUrlUnsupportedError } from '@/lib/git';
+import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
+import { isJobRunDefer } from '@/lib/jobs/engine/defer';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { usersService } from '@/lib/services/usersService';
@@ -1449,5 +1451,192 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     expect(rollup.containerCount).toBe(1);
     // The rollup equals the row — the invariant a signed-delta rollup has to keep.
     expect(rollup.containerSeconds).toBe(row.billableSeconds);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE CORE-SIDE PHASE SPANS (MOTIR-4413) — `docs/decisions/code-graph-index-fleet.md` §6
+//
+// ⚠️ THE PROPERTY UNDER TEST IS SURVIVAL, NOT ARITHMETIC. Computing three
+// subtractions correctly is not what is hard here and not what would break in
+// production: `advanceIndexContainer` is re-entered from the top on every pass
+// and normally leaves by throwing `JobRunDefer`, so the interesting question is
+// whether a number measured on the pass that did the work is still there on the
+// pass that writes the ledger row — dozens of runs later. A test that drives one
+// pass proves nothing about that, and would pass just as happily against a
+// `let elapsed = 0` in the wrong scope.
+//
+// So both tests below drive MORE THAN ONE PASS, and the clock JUMPS between
+// them: a span re-derived from the settling pass's clock would come back wrong
+// by the size of the jump, and one accumulated in a local would come back zero.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Budgets for a run that DEFERS. `FAST` is tuned for the in-process composition,
+ * where a whole supervision happens inside one call and 500 ms is generous; these
+ * tests jump the clock by ninety seconds per pass on purpose, so the same ceiling
+ * would fire the deadline transition and settle a container that never ran. The
+ * POLL cadence stays at `FAST`'s milliseconds — it is what `pollToDetect` reads.
+ */
+const SPAN_BUDGETS = {
+  bootDeadlineMs: 600_000,
+  indexTimeoutMs: 3_600_000,
+  pollIntervalMs: 1,
+  maxPollIntervalMs: 1,
+  admissionWaitMs: 1,
+  maxAdmissionWaitMs: 1,
+} as const;
+
+/** A memoizing step seam — what `job_step` is to a real run, in a Map. */
+function memoizingSeam(memo: Map<string, unknown>) {
+  return {
+    run: async <T>(id: string, fn: () => T | Promise<T>): Promise<T> => {
+      if (memo.has(id)) return memo.get(id) as T;
+      // Round-tripped through JSON exactly as the engine's shim does, so a value
+      // that only survives because it stayed in memory fails here rather than in
+      // production on the second pass.
+      const value = JSON.parse(JSON.stringify(await fn())) as T;
+      memo.set(id, value);
+      return value;
+    },
+  };
+}
+
+/**
+ * Drive `advanceIndexContainer` pass by pass until it settles, jumping the clock
+ * forward between passes exactly as a real deferral does.
+ *
+ * Returns the outcome AND the number of passes it took, because "it really did
+ * defer" is half of what the tests below are asserting.
+ */
+async function driveToSettlement(options: {
+  memo: Map<string, unknown>;
+  store: ReturnType<typeof inMemorySupervisionStore>;
+  clock: { ms: number };
+  exitCode?: number | null;
+}) {
+  const { memo, store, clock } = options;
+  const now = (): Date => new Date(clock.ms);
+  let passes = 0;
+  for (let i = 0; i < 50; i += 1) {
+    passes += 1;
+    try {
+      const outcome = await codeGraphIndexDispatchService.advanceIndexContainer(
+        'run-spans',
+        INPUT,
+        {
+          ...SPAN_BUDGETS,
+          steps: memoizingSeam(memo),
+          supervisionStore: store,
+          now,
+          // The wait a real pass spends suspended, applied to the clock rather
+          // than to the wall — one pass of a self-rescheduling supervision.
+          sleep: async (ms: number) => {
+            clock.ms += ms;
+          },
+        },
+      );
+      return { outcome, passes };
+    } catch (err) {
+      if (!isJobRunDefer(err)) throw err;
+      // THE DEFER — and the clock moves a long way, which is the whole point.
+      // A pass is scheduled minutes later in production; here it is 90 seconds,
+      // chosen to be far larger than any span this run legitimately produced so
+      // a recomputation cannot hide inside the noise.
+      clock.ms += 90_000;
+      if (options.exitCode !== undefined) {
+        const live = fakeOrchestrator.liveContainerIds();
+        if (live[0]) fakeOrchestrator.completeJob(live[0], { exitCode: options.exitCode });
+      }
+    }
+  }
+  throw new Error('the supervision never settled');
+}
+
+describe('the CORE-side phase spans survive a JobRunDefer (MOTIR-4413)', () => {
+  it('records admission wait, boot and poll-to-detect as THREE spans, per container', async () => {
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const { outcome, passes } = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    // The supervision really was a state machine over runs, not one call.
+    expect(passes).toBeGreaterThan(1);
+    expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+
+    const timings = (outcome as Extract<typeof outcome, { outcome: 'settled' }>).coreTimings;
+    // THREE spans, never one aggregate: a long admission queue, a slow boot and
+    // a lagging poll are three different faults and sum to the same number.
+    expect(Object.keys(timings?.phasesMs ?? {}).sort()).toEqual([
+      'admissionWait',
+      'boot',
+      'pollToDetect',
+    ]);
+    for (const ms of Object.values(timings!.phasesMs)) {
+      expect(Number.isFinite(ms)).toBe(true);
+      expect(ms).toBeGreaterThanOrEqual(0);
+    }
+    // The total is the SUM OF WHAT IS PRESENT — never a wall clock the phases
+    // are expected to add up to, which is the reading a missing span would break.
+    expect(timings!.totalMs).toBe(
+      Object.values(timings!.phasesMs).reduce((sum, ms) => sum + ms, 0),
+    );
+  });
+
+  it('a LATER pass re-derives the SAME spans — they are not reset by the pass that reads them', async () => {
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const settled = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+    const measured = (settled.outcome as Extract<typeof settled.outcome, { outcome: 'settled' }>)
+      .coreTimings;
+    expect(measured?.phasesMs.admissionWait).toBeDefined();
+
+    // ── THE REPLAY PASS ──────────────────────────────────────────────────────
+    // An hour later, on a fan-out that re-enters every settled subject on every
+    // later pass. Every step answers from the memo, the supervision row reads
+    // `settled`, and NOTHING is measured on this pass — so if a span were taken
+    // from this pass's clock it would be off by an hour, and if it were carried
+    // in a local it would be gone.
+    clock.ms += 3_600_000;
+    const replayed = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    expect(replayed.passes).toBe(1);
+    const again = (replayed.outcome as Extract<typeof replayed.outcome, { outcome: 'settled' }>)
+      .coreTimings;
+    expect(again).toEqual(measured);
+  });
+
+  it('OMITS a span whose source is missing, and still settles — telemetry never fails a run', async () => {
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    // ⚠️ THE REAL CASE THIS COVERS IS A DEPLOYMENT MID-ROLLOUT, not a defensive
+    // hypothetical. A run already in flight when this card ships has an
+    // `index-admit:<pid>` memo written in the OLD shape — no `requestedAt`, no
+    // `admittedAt` — and will replay it for the rest of its life. Seeding that
+    // exact row is what proves those runs keep working.
+    memo.set(`index-admit:${INPUT.projectId}`, {
+      outcome: 'admitted',
+      admission: admissionFor(INPUT),
+    });
+
+    const { outcome } = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    // The run SETTLED. Nothing threw, and the verdict is untouched.
+    expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+
+    const timings = (outcome as Extract<typeof outcome, { outcome: 'settled' }>).coreTimings;
+    // The two spans that read those instants are ABSENT — not zero, which would
+    // be the opposite claim ("this took no time" rather than "unmeasurable").
+    expect(timings?.phasesMs).not.toHaveProperty('admissionWait');
+    expect(timings?.phasesMs).not.toHaveProperty('boot');
+    // And the one with a durable source of its own — the supervision row's poll
+    // count — is still reported. A partial reading is worth more than none.
+    expect(timings?.phasesMs.pollToDetect).toBeGreaterThanOrEqual(0);
+    expect(timings?.totalMs).toBe(timings?.phasesMs.pollToDetect);
   });
 });
