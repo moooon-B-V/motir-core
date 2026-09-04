@@ -14,6 +14,7 @@
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.tests.json" },
+    { "path": "./tsconfig.e2e.json" },
     { "path": "./tsconfig.scripts.json" },
     { "path": "./packages/orchestrator" }
   ]
