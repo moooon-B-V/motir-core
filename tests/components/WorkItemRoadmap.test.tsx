@@ -655,6 +655,97 @@ describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
     expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
   });
 
+  // ── THE REFRESH INSIDE THE DOOR (bug MOTIR-4426) ───────────────────────────
+  // The two tests above pin the door's two halves as MOTIR-3490 shipped them: the
+  // level opens, and it opens WITHOUT a second request. Together they say the level
+  // is served from the cached root read — which is also the whole defect, because
+  // the manual refresh (MOTIR-1542) clears that cache at the top of the very
+  // callback that reads it back.
+  //
+  // ⚠️ THE RE-RENDER IS THE TEST. A fresh mount at `refreshSignal={1}` passes on the
+  // UNFIXED code — it loads the root first, so the cache is warm by the time the
+  // door is opened — and a guard that cannot go red is not evidence. So the refresh
+  // is delivered to the SAME mounted component, standing INSIDE the group, which is
+  // where the reader was.
+  it('a refresh INSIDE the grouped level re-reads it — never "No items at this level"', async () => {
+    stubRoot(mixedRoot);
+    const view = render(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={0} />);
+    await screen.findByText('Epic one');
+
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    expect(await screen.findByText('A parentless defect')).toBeTruthy();
+
+    // The reader presses the header's Refresh while standing on the grouped level.
+    view.rerender(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={1} />);
+
+    // The rows come back. Asserted on the EMPTY-STATE COPY as well as on the rows,
+    // because the copy is what the reader actually saw: `emptyDrilled` is an
+    // assertion that the level has nothing on it, and it was false.
+    await waitFor(() => expect(screen.queryByText('No items at this level')).toBeNull());
+    expect(await screen.findByText('A parentless defect')).toBeTruthy();
+    expect(screen.getByText('A parentless task')).toBeTruthy();
+  });
+
+  it('that refresh is a real RE-READ, and it settles the caller', async () => {
+    stubRoot(mixedRoot);
+    const onRefreshSettled = vi.fn();
+    const view = render(
+      <WorkItemRoadmap projectKey="MOTIR" refreshSignal={0} onRefreshSettled={onRefreshSettled} />,
+    );
+    await screen.findByText('Epic one');
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('A parentless defect');
+    const roadmapCalls = () =>
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) =>
+        String(c[0]).includes('/roadmap'),
+      ).length;
+    const before = roadmapCalls();
+    expect(onRefreshSettled).not.toHaveBeenCalled(); // an initial load never settles
+
+    view.rerender(
+      <WorkItemRoadmap projectKey="MOTIR" refreshSignal={1} onRefreshSettled={onRefreshSettled} />,
+    );
+
+    // A REAL fetch, not a cache entry the refresh was excused from clearing —
+    // otherwise the control would report having refreshed rows it had not re-read.
+    await waitFor(() => expect(roadmapCalls()).toBeGreaterThan(before));
+    // And the header's spinner clears on that fetch completing, exactly as it does
+    // on a real level: the synthetic branch now awaits, and `loadLevel`'s `finally`
+    // is what reports it.
+    await waitFor(() => expect(onRefreshSettled).toHaveBeenCalled());
+  });
+
+  it('a grouped row stays PEEKABLE after that refresh — the re-read rows are registered', async () => {
+    stubRoot(mixedRoot);
+    const view = render(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={0} />);
+    await screen.findByText('Epic one');
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('A parentless defect');
+
+    view.rerender(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={1} />);
+    await waitFor(() => expect(screen.queryByText('No items at this level')).toBeNull());
+
+    // View resolves the peek key off the id -> identifier map `registerItems` fills;
+    // an UNREGISTERED id resolves to nothing and `onView` opens nothing at all
+    // (`useWorkItemQuickView.onView`). The root load filled that map before the
+    // refresh; the grouped branch now fills it too, so this level no longer depends
+    // on a load it did not make. The PEEK REQUEST is the assertion, because it
+    // carries the identifier the id resolved TO — the harness serves one canned peek
+    // body for every key, so the rendered peek cannot tell us which row was asked for.
+    fireEvent.keyDown(el('B9')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('view-button'));
+    await waitFor(() =>
+      expect(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some((c) =>
+          String(c[0]).includes('/api/work-items/peek?key=MOTIR-9'),
+        ),
+      ).toBe(true),
+    );
+  });
+
   it('a single grouped row reads "1 item", not "1 items"', async () => {
     stubRoot({ ...mixedRoot, nodes: [epic('E1', 'MOTIR-1', 'Epic one'), mixedRoot.nodes[1]] });
     render(<WorkItemRoadmap projectKey="MOTIR" />);
@@ -900,5 +991,142 @@ describe('a truncated level says so (MOTIR-3490 · AC 3)', () => {
     const tile = await screen.findByTestId('level-truncation-tile');
     fireEvent.keyDown(tile.closest('[data-node-id]')!, { key: 'Enter' });
     expect(onSelect).not.toHaveBeenCalledWith('__level_more__');
+  });
+});
+
+// ── MOTIR-4501 · the tile is drawn at EVERY level, so it must uncap EVERY level ──
+// The block above pins the ROOT level, which is the only place the affordance was
+// ever exercised — and the only place it worked, because there the level's own
+// cache key and `rootCacheKey()` are the same string. A DRILLED level's key is a
+// different string, so marking the root's key left the drilled level capped, its
+// cached copy intact, and the reload that followed served from that cache: no
+// request was issued at all. `design/roadmap/design-notes.md` DECISION 7 asks for
+// the tile "at every level, not only the root"; this is the activation half of it.
+describe('a truncated DRILLED level uncaps ITSELF, not the root (MOTIR-4501)', () => {
+  // TWO drillable roots, so AUTO-DRILL (MOTIR-1807) leaves the root level alone and
+  // there is a real drill to perform. The ROOT is WHOLE (`levelTotal` equals its row
+  // count) — only the DRILLED level overflows, which is the shape the cap actually
+  // bites in: an epic accumulates children far faster than a project accumulates
+  // epics.
+  const twoRoots = {
+    nodes: [
+      {
+        id: 'E1',
+        parentId: null,
+        kind: 'epic',
+        identifier: 'MOTIR-1',
+        title: 'Epic one',
+        status: 'in_progress',
+        isDone: false,
+        hasChildren: true,
+      },
+      {
+        id: 'E2',
+        parentId: null,
+        kind: 'epic',
+        identifier: 'MOTIR-3',
+        title: 'Epic two',
+        status: 'todo',
+        isDone: false,
+        hasChildren: true,
+      },
+    ],
+    edges: [],
+    offLevelBlockers: [],
+    levelTotal: 2,
+  };
+  // E1's children as the CAPPED read returns them: 3 rows of a level of 205.
+  const cappedChildren = {
+    nodes: Array.from({ length: 3 }, (_, i) => ({
+      id: `S${i}`,
+      parentId: 'E1',
+      kind: 'story',
+      identifier: `MOTIR-1${i}`,
+      title: `Story ${i}`,
+      status: 'todo',
+      isDone: false,
+      hasChildren: false,
+    })),
+    edges: [],
+    offLevelBlockers: [],
+    levelTotal: 205,
+  };
+  // The same level read whole: the row the cap had been dropping is on it, and
+  // `levelTotal` now equals the row count, so no tile is emitted for it.
+  const wholeChildren = {
+    ...cappedChildren,
+    nodes: [
+      ...cappedChildren.nodes,
+      {
+        id: 'S205',
+        parentId: 'E1',
+        kind: 'story',
+        identifier: 'MOTIR-205',
+        title: 'The newest story',
+        status: 'todo',
+        isDone: false,
+        hasChildren: false,
+      },
+    ],
+    levelTotal: 4,
+  };
+
+  function stubLevels(seen: string[]) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+        seen.push(u);
+        if (u.includes('parentId=E1')) {
+          return {
+            ok: true,
+            json: async () => (u.includes('all=1') ? wholeChildren : cappedChildren),
+          };
+        }
+        return { ok: true, json: async () => twoRoots };
+      }),
+    );
+  }
+
+  it('activating the tile on a DRILLED level re-reads THAT level with all=1, drops the tile, and leaves the root alone', async () => {
+    const seen: string[] = [];
+    stubLevels(seen);
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+
+    // Drill into E1 — the level whose 205 children the cap truncates to 3.
+    expect(await screen.findByText('Epic one')).toBeTruthy();
+    expect(screen.queryByTestId('level-truncation-tile')).toBeNull(); // the root is whole
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+
+    // EMISSION is per-level and always was — the tile draws on the drilled level.
+    const tile = await screen.findByTestId('level-truncation-tile');
+    expect(within(tile).getByText('+ 202 more')).toBeTruthy();
+    expect(within(tile).getByText('Showing 3 of 205')).toBeTruthy();
+    expect(seen.some((u) => u.includes('all=1'))).toBe(false); // not before it is asked for
+
+    fireEvent.keyDown(tile.closest('[data-node-id]')!, { key: 'Enter' });
+
+    // AC 1 — the re-read is ISSUED, and it names the DRILLED level, not the root.
+    expect(await screen.findByText('The newest story')).toBeTruthy();
+    await waitFor(() =>
+      expect(seen.some((u) => u.includes('parentId=E1') && u.includes('all=1'))).toBe(true),
+    );
+    // AC 2 — the reader's escape is complete: the level came back whole, so the
+    // tile is gone rather than still sitting there promising a way out.
+    await waitFor(() => expect(screen.queryByTestId('level-truncation-tile')).toBeNull());
+
+    // AC 3 — the ROOT was never marked `all` and never evicted. Going Back issues
+    // no `all=1` read of a level nobody complained about, and the root still
+    // renders its own rows.
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('Epic one')).toBeTruthy();
+    expect(screen.getByText('Epic two')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Story 0')).toBeNull());
+    // A ROOT read carries no `parentId`; none of them may carry `all=1`.
+    expect(seen.filter((u) => !u.includes('parentId=')).some((u) => u.includes('all=1'))).toBe(
+      false,
+    );
   });
 });

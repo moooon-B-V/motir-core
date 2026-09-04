@@ -68,12 +68,7 @@ jobs:
       - if: steps.guard.outputs.enabled == 'true'
         uses: actions/checkout@v6
       - if: steps.guard.outputs.enabled == 'true'
-        uses: pnpm/action-setup@v6
-      - if: steps.guard.outputs.enabled == 'true'
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+        uses: ./.github/actions/pnpm
       - if: steps.guard.outputs.enabled == 'true'
         run: pnpm install --frozen-lockfile
       - if: steps.guard.outputs.enabled == 'true'

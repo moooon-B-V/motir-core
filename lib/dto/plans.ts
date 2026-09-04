@@ -979,21 +979,42 @@ export const WORK_ITEM_PENDING_PLAN_SILENT_STATUSES = [
 export type WorkItemPendingPlanStatusDto = (typeof WORK_ITEM_PENDING_PLAN_STATUSES)[number];
 
 /**
- * ONE undecided proposal about ONE work item, as the item page reads it
- * (MOTIR-4197). One row per plan: `PlanItem` is `@@unique([planId, workItemId])`,
- * so a plan holds at most one `modify` / `remove` naming a given card.
+ * What ONE undecided plan CLAIMS about ONE work item, as the item page reads it
+ * (MOTIR-4197, widened by MOTIR-4365 · design MOTIR-4364 §A3).
+ *
+ * ⚠️ ONE ROW PER PLAN, AND THAT IS NOW LOAD-BEARING RATHER THAN INCIDENTAL. It
+ * used to be a property of the substrate: `@@unique([planId, workItemId])` caps
+ * a plan at one `modify` / `remove` per card, so one proposal WAS one plan and
+ * `pendingPlanCountHeadline` could count rows and be right by accident. The
+ * `parentRef` arm breaks that accident — a plan holding eight `add`s under this
+ * card produces eight PlanItem rows — so the collapse is performed, in
+ * `plansService.listPendingProposalsForWorkItem`, as an in-memory fold over a
+ * set bounded by the proposals naming one card. It is NOT a second query.
+ *
+ * ⚠️ AND THE FIVE INHABITED SHAPES ARE THE COMPONENT'S TOTALITY. Postgres treats
+ * NULLs as distinct, so N `add` rows (null target) coexist with one `modify` OR
+ * one `remove`: `modify` · `remove` · `add` · `modify`+`add` · `remove`+`add`.
+ * A sixth (`modify`+`remove`) is excluded by the unique constraint rather than
+ * by choice. The invariant `op !== null || childCount > 0` is what makes those
+ * five exhaustive — a row that claims nothing is not a row.
  *
  * Deliberately the POINTER and nothing more — the plan's id (the link), its
- * title (the link's name) and the op (which sentence). The proposed VALUES are
- * read on the plan-review surfaces; a third surface rendering them is the
- * defect the card exists to remove, not the fix.
+ * title (the link's name), and WHAT it claims. The proposed VALUES are read on
+ * the plan-review surfaces; a third surface rendering them is the defect the
+ * card exists to remove, not the fix. `childCount` is the one exception and it
+ * is a magnitude, not a value: an `add` count IS the difference between a tweak
+ * and a story about to gain a subtree, whereas a `modify`'s magnitude is not
+ * knowable from the row at all (`patch` is a sparse blob).
  */
 export interface WorkItemPendingProposalDto {
   planId: string;
   /** `Plan.title` is nullable; the page falls back to `planReview.untitledPlan`. */
   planTitle: string | null;
   planStatus: WorkItemPendingPlanStatusDto;
-  /** `add` cannot name an existing card (its `workItemId` is null until
-   *  materialize), so only the two ops that TARGET a card can arrive here. */
-  op: Exclude<PlanItemOpDto, 'add'>;
+  /** What this plan proposes about THIS card. `null` when it only adds children
+   *  — an `add` cannot TARGET an existing card, since its `workItemId` is null
+   *  until materialize, so only the two targeting ops can ever appear here. */
+  op: Exclude<PlanItemOpDto, 'add'> | null;
+  /** How many `add`s in this plan name this card as their parent; `0` when none. */
+  childCount: number;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import ts from 'typescript';
 
@@ -56,13 +56,45 @@ const readTsconfig = (name: string): Record<string, unknown> => {
 
 const asStrings = (value: unknown): string[] => (Array.isArray(value) ? (value as string[]) : []);
 
-/** The projects the solution file must compose, discovered rather than listed. */
-const ROOT_TSCONFIGS = [
+/**
+ * Is this filename a tsconfig at the repository ROOT? Exported so the mutation
+ * case below can exercise the predicate itself rather than trust it.
+ */
+export const isRootTsconfig = (name: string): boolean => /^tsconfig(\..+)?\.json$/.test(name);
+
+/**
+ * The projects the solution file must compose — DISCOVERED FROM DISK, which is
+ * what the comment on this constant used to claim while the list underneath it
+ * was hand-written (MOTIR-4363).
+ *
+ * ⚠️ WHY THE HAND-WRITTEN LIST WAS A HOLE, and it is precisely the hole this
+ * file exists to close, one level up. `compositeProjects` is derived from this
+ * constant, and the *references EVERY composite project* assertion below is
+ * quantified over `compositeProjects`. So a new composite project that nobody
+ * added HERE was exempt from that assertion — and the assertion's own comment
+ * says a project left off the solution file "is simply not type-checked,
+ * silently and greenly". The guard against a silent omission was itself
+ * omission-shaped: adding `tsconfig.e2e.json` to the solution and forgetting it
+ * here would have gone green, and so would forgetting it in BOTH places.
+ *
+ * Reading the directory removes the second copy. The non-vacuity floor is
+ * `REQUIRED_TSCONFIGS` below — a glob that starts matching nothing must fail
+ * loudly rather than pass over an empty set.
+ */
+const ROOT_TSCONFIGS = readdirSync(ROOT).filter(isRootTsconfig).sort();
+
+/**
+ * The root tsconfigs this repository cannot lose without the split being over.
+ * This is the FLOOR, not the population: discovery above is the population, and
+ * a name here that stops existing fails rather than silently shrinking the set.
+ */
+const REQUIRED_TSCONFIGS = [
   'tsconfig.json',
   'tsconfig.node.json',
   'tsconfig.base.json',
   'tsconfig.app.json',
   'tsconfig.tests.json',
+  'tsconfig.e2e.json',
   'tsconfig.scripts.json',
   'tsconfig.solution.json',
 ] as const;
@@ -125,15 +157,36 @@ const packageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 };
 
 describe('the type-check is a solution of project references (MOTIR-4293)', () => {
-  it('finds every root tsconfig and at least three composite projects', () => {
+  it('discovers every root tsconfig and at least four composite projects', () => {
     // Without this, a rename or a parser regression would make every assertion
     // below pass vacuously — the failure mode this whole file exists to prevent,
-    // one level down.
+    // one level down. Since ROOT_TSCONFIGS is now READ from disk, comparing it
+    // against `configs` would be a tautology; the non-vacuity comes from the
+    // floor instead — a glob matching nothing, or a rename, fails HERE.
+    for (const name of REQUIRED_TSCONFIGS) {
+      expect(ROOT_TSCONFIGS, `${name} is missing from the repository root`).toContain(name);
+    }
+    expect(ROOT_TSCONFIGS.length).toBeGreaterThanOrEqual(REQUIRED_TSCONFIGS.length);
     expect([...configs.keys()].sort()).toEqual([...ROOT_TSCONFIGS].sort());
-    expect(compositeProjects.length).toBeGreaterThanOrEqual(3);
+    expect(compositeProjects.length).toBeGreaterThanOrEqual(4);
     expect(compositeProjects).toContain('tsconfig.app.json');
     expect(compositeProjects).toContain('tsconfig.tests.json');
+    expect(compositeProjects).toContain('tsconfig.e2e.json');
     expect(compositeProjects).toContain('tsconfig.scripts.json');
+  });
+
+  it('BITES on a discovery that has stopped seeing the root tsconfigs', () => {
+    // The mutation case for the predicate the whole file now depends on. A
+    // discovery that silently matched nothing would exempt every project from
+    // every assertion below — the same silent-and-green failure one tier up.
+    const discover = (names: string[]) => names.filter(isRootTsconfig).sort();
+    expect(discover(['tsconfig.json', 'tsconfig.e2e.json', 'package.json'])).toEqual([
+      'tsconfig.e2e.json',
+      'tsconfig.json',
+    ]);
+    // …and it does not sweep in the build state or a near-miss neighbour.
+    expect(discover(['tsconfig.tsbuildinfo', 'jsconfig.json', 'my-tsconfig.json'])).toEqual([]);
+    expect(discover(['README.md'])).toEqual([]);
   });
 
   it('keeps `tsconfig.json` the PRODUCT program — no whole-tree glob, tests and scripts excluded', () => {

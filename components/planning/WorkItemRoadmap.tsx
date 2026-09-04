@@ -210,6 +210,26 @@ export function WorkItemRoadmap({
   const showAllRef = useRef(new Set<string>());
   const [showAllTick, setShowAllTick] = useState(0);
 
+  // THE CACHE KEY OF THE LEVEL ON SCREEN (bug MOTIR-4501). The tile is emitted for
+  // EVERY real level — `levelTotal` is passed for all of them, and the roadmap
+  // design (`design/roadmap/design-notes.md` DECISION 7) says so in as many words —
+  // but its activation used to name `rootCacheKey()` unconditionally. On the root
+  // the two strings are identical, which is why it worked there and only there; on
+  // a drilled level they differ, so the `all` flag was marked for a level the
+  // reader was not standing on, the drilled level's cached copy survived the
+  // eviction, and the reload that followed HIT that cache and issued no request at
+  // all. Nothing errored: every miss in this component is absorbed by a `??` or a
+  // cache hit.
+  //
+  // So the level NAMES ITSELF: `loadLevel` writes the key it just composed here,
+  // and `handleSelect` marks and evicts THAT key. `ProjectRoadmapCanvas` holds one
+  // load effect and calls `loadLevelRef.current(focusId)` from it, so the ref is
+  // always the level whose tile is being activated. `null` on the two SYNTHETIC
+  // branches (`ORIGIN_ID`, `NOT_IN_EPIC_ID`): neither passes `levelTotal`, so
+  // neither can draw a tile, and a stale key must not be uncappable from a level
+  // that has none.
+  const levelKeyRef = useRef<string | null>(null);
+
   // The phase card only renders in the WHOLE-PROJECT scope (the sprint slice's road
   // did not start at onboarding), so neither the badge read nor the station level is
   // owed anywhere else — and never on a SUBTREE-rooted mount (MOTIR-2287), whose
@@ -271,6 +291,42 @@ export function WorkItemRoadmap({
     [projectKey, scope, subtreeRootId],
   );
 
+  // THE ROOT LEVEL, READ RATHER THAN REMEMBERED (bug MOTIR-4426). The grouped
+  // node's level is SERVED FROM the root read, and a cached value is not a source.
+  // The manual refresh (MOTIR-1542) clears every cached level at the top of
+  // `loadLevel`, three statements before the grouped branch reads one back — so a
+  // reader standing INSIDE the group got `undefined`, and every `?? []` below it
+  // turned that miss into a well-formed EMPTY level: `emptyDrilled` ("This node
+  // has no children to show") over rows that exist, on the level they were
+  // standing on, until they pressed Back.
+  //
+  // A MISS therefore RE-READS — which is exactly what the sibling synthetic door
+  // three lines below already does: `ORIGIN_ID` serves `readPreplan()`, whose
+  // promise is keyed on the refresh generation, so a refresh makes it re-read
+  // instead of come back empty. The grouped door had copied that door's SHAPE
+  // (intercept the id, serve it locally) without the half that survives a cache
+  // generation change.
+  //
+  // A HIT is untouched, and that is what keeps MOTIR-3490's own guarantee true:
+  // an ordinary drill inside one refresh generation still issues no request.
+  const readRootLevel = useCallback(async (): Promise<RoadmapLevelData> => {
+    const key = rootCacheKey();
+    const cached = cacheRef.current.get(key);
+    if (cached) return cached;
+    // The same read the ROOT level's own load makes, `all` included — the key is
+    // `rootCacheKey()` in both places, so the two can never disagree about which
+    // level this is.
+    const wi = await fetchRoadmapLevel(
+      projectKey,
+      subtreeRootId,
+      scope,
+      undefined,
+      showAllRef.current.has(key),
+    );
+    cacheRef.current.set(key, wi);
+    return wi;
+  }, [projectKey, scope, subtreeRootId, rootCacheKey]);
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // A new refresh generation invalidates every cached level so this load hits the
@@ -286,6 +342,8 @@ export function WorkItemRoadmap({
         // it has never heard of. The pre-plan read is awaited HERE, on the drill, not
         // ahead of the canvas.
         if (parentId === ORIGIN_ID) {
+          // Synthetic: no cache key, so no level for the tile to uncap (MOTIR-4501).
+          levelKeyRef.current = null;
           return buildPreplanStationLevel(await readPreplan());
         }
         // THE GROUPED NODE'S LEVEL (MOTIR-3490) — synthetic, and served from the
@@ -296,8 +354,18 @@ export function WorkItemRoadmap({
         // node, so asking the API for its children asks for the children of an id
         // it has never heard of).
         if (parentId === NOT_IN_EPIC_ID) {
-          const root = cacheRef.current.get(rootCacheKey());
-          const rows = (root?.items ?? []).filter(isNotInEpicRow);
+          // Synthetic: no cache key of its own — it is SERVED FROM the root read
+          // and passes no `levelTotal`, so no tile is drawn on it (MOTIR-4501).
+          levelKeyRef.current = null;
+          // `readRootLevel` (above) serves the cached root read, and RE-READS it
+          // when there is none — the refresh case (bug MOTIR-4426). Registering
+          // the rows is owed here for the same reason: the peek's id → identifier
+          // map was filled by the root load, and the clear that lost the level
+          // did not lose the map, but a re-read level whose rows were never
+          // registered would leave View inert on this level alone.
+          const root = await readRootLevel();
+          registerItems(root);
+          const rows = root.items.filter(isNotInEpicRow);
           // ⚠️ THE EDGES ARE SCOPED TO THE ROWS (bug MOTIR-3557). The root's
           // edge list is the edges of the WHOLE root level — the 18 root epics
           // included, wired to each other by the epic roadmap's own dependency
@@ -314,8 +382,8 @@ export function WorkItemRoadmap({
           return buildWorkItemLevel(
             {
               items: rows,
-              edges: (root?.edges ?? []).filter((e) => rowIds.has(e.blockedId)),
-              offLevelBlockers: root?.offLevelBlockers ?? [],
+              edges: root.edges.filter((e) => rowIds.has(e.blockedId)),
+              offLevelBlockers: root.offLevelBlockers,
             },
             { markActive: true, scope },
           );
@@ -331,6 +399,10 @@ export function WorkItemRoadmap({
         // React `key`), so the canvas re-loads the ROOT in the new scope; the scoped
         // key is the belt-and-suspenders guard.
         const key = `${projectKey}:${scope}:${subtreeRootId ?? ROOT_KEY}:${readParentId ?? ROOT_KEY}`;
+        // The level the reader is now on OWNS this key — the tile's activation reads
+        // it back (bug MOTIR-4501). Written before the await, so an activation can
+        // never name the level this load replaced.
+        levelKeyRef.current = key;
         let wi = cacheRef.current.get(key);
         if (!wi) {
           // `all` only for a level the reader explicitly asked to see whole
@@ -395,7 +467,7 @@ export function WorkItemRoadmap({
       produced,
       rooted,
       subtreeRootId,
-      rootCacheKey,
+      readRootLevel,
       t,
     ],
   );
@@ -411,12 +483,16 @@ export function WorkItemRoadmap({
         onSelect?.(id);
         return;
       }
-      const key = rootCacheKey();
+      // THE LEVEL THE READER IS STANDING ON, not the root (bug MOTIR-4501).
+      // `loadLevel` recorded it; a null means the level on screen is synthetic and
+      // draws no tile, so there is nothing this activation could have come from.
+      const key = levelKeyRef.current;
+      if (!key) return;
       showAllRef.current.add(key);
       cacheRef.current.delete(key);
       setShowAllTick((n) => n + 1);
     },
-    [onSelect, rootCacheKey],
+    [onSelect],
   );
 
   return (

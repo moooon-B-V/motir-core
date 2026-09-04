@@ -3801,9 +3801,25 @@ export const plansService = {
   },
 
   /**
-   * The UNDECIDED proposals that name ONE work item — what the work-item detail
-   * page announces about the plan that is about to change it (bug MOTIR-4197 ·
-   * design MOTIR-4256).
+   * The UNDECIDED plans that name ONE work item — what the work-item detail page
+   * announces about the plan that is about to change it, ARCHIVE it, or ADD
+   * CHILDREN under it (bug MOTIR-4197 · design MOTIR-4256; widened by bug
+   * MOTIR-4365 · design MOTIR-4364 AMENDMENT A).
+   *
+   * ⚠️ ONE ROW PER PLAN, NOT PER PROPOSAL, and the fold below is what makes that
+   * true. The repository's second arm returns one row per `add` parented on this
+   * card, so a single plan expanding a story into eight subtasks arrives as
+   * eight rows. `pendingPlanCountHeadline` counts PLANS and always did — it was
+   * only ever ACCIDENTALLY equal to the proposal count, because
+   * `@@unique([planId, workItemId])` capped a plan at one targeting op per card.
+   * Handing the component the un-folded rows would announce *"11 pending plans
+   * name this item"* about three plans: no error, still grammatical, false.
+   *
+   * The fold is IN MEMORY and deliberately not a second query — the rows already
+   * arrive ordered by `plan.createdAt`, and the set is bounded by the proposals
+   * naming ONE card, so `§3`'s *one indexed lookup inside a group that already
+   * awaits several* survives, which is the figure MOTIR-4197 made a shipping
+   * condition.
    *
    * ⚠️ ITS OWN READ, NOT `aiBoundaryService.readPendingPlans`. That seam is
    * PROJECT-scoped, returns `itemCount` and never the proposals, caps at ten,
@@ -3837,16 +3853,34 @@ export const plansService = {
         tx,
       ),
     );
-    return rows.map((row) => ({
-      planId: row.plan.id,
-      planTitle: row.plan.title,
-      // The repository filtered on exactly this set, so the narrowing is a
-      // restatement of the predicate rather than a second decision.
-      planStatus: row.plan.status as WorkItemPendingPlanStatusDto,
-      // `add` is excluded by the repository's `op` predicate — the same reason
-      // an `add` can never be the target of a reverse lookup at all.
-      op: row.op as Exclude<PlanItemOpDto, 'add'>,
-    }));
+    // A Map preserves insertion order, and the rows arrive ordered by
+    // `plan.createdAt` — so the folded list keeps plan-creation order without a
+    // second sort, and the first row of each plan is the one that fixes its
+    // position.
+    const byPlan = new Map<string, WorkItemPendingProposalDto>();
+    for (const row of rows) {
+      let claim = byPlan.get(row.plan.id);
+      if (!claim) {
+        claim = {
+          planId: row.plan.id,
+          planTitle: row.plan.title,
+          // The repository filtered on exactly this set, so the narrowing is a
+          // restatement of the predicate rather than a second decision.
+          planStatus: row.plan.status as WorkItemPendingPlanStatusDto,
+          op: null,
+          childCount: 0,
+        };
+        byPlan.set(row.plan.id, claim);
+      }
+      // An `add` is a CHILD proposed under this card (it reached this read
+      // through `parentRef`, since its own `workItemId` is null until
+      // materialize); a `modify` / `remove` is a claim ON the card, and
+      // `@@unique([planId, workItemId])` caps a plan at one of them, so the
+      // assignment cannot be overwriting a different op.
+      if (row.op === 'add') claim.childCount += 1;
+      else claim.op = row.op as Exclude<PlanItemOpDto, 'add'>;
+    }
+    return [...byPlan.values()];
   },
 
   /**

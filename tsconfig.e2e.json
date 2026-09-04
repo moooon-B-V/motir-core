@@ -1,0 +1,60 @@
+{
+  // ── The E2E project (MOTIR-4363) ────────────────────────────────────────────
+  //
+  // ⚠️ THE RULE THAT PLACES A FILE, AND IT IS THE RUNNER: **a file is in this
+  // project if and only if PLAYWRIGHT ENTERS THROUGH IT** — a spec it discovers
+  // (`testDir: 'tests/e2e'`, `.spec.ts`) or a config it is invoked with. Nothing
+  // else. Everything a spec IMPORTS — `_helpers/`, `_reporters/`,
+  // `global-setup.ts`, `global-teardown.ts`, `shard-plan.ts`, `tests/fixtures/`,
+  // `tests/helpers/` — stays in `tsconfig.tests.json`, which this project
+  // REFERENCES. A new test file is placed by one question with one answer:
+  // *does Playwright run it, or does something Playwright runs import it?*
+  //
+  // ⚠️ AND THE ENTRY-POINT LINE IS WHY THE SPLIT IS EXPRESSIBLE AT ALL, not a
+  // convenience. A file belongs to exactly one project, so a module both runners
+  // load has to sit in the project the other one references — and nine vitest
+  // suites do import back into `tests/e2e/` (`_helpers/db-reset`,
+  // `_helpers/reporting`, `_helpers/totp`, `_helpers/readiness`,
+  // `_helpers/acceptance-diagnostics`, `_helpers/harness-watchdog`,
+  // `_reporters/harness-watchdog`, `shard-plan`). Cutting at `tests/e2e/**`
+  // would make that a REFERENCE CYCLE, which a project graph cannot express;
+  // cutting at the ENTRY POINTS cannot, because an entry point is the one kind
+  // of file nothing imports. That is what removes the file move MOTIR-4363
+  // budgeted for: not one test file changes directory.
+  //
+  // ── Why this project exists ─────────────────────────────────────────────────
+  // MOTIR-4293 split one 4.42 GB `tsc` program into project references and left
+  // the ceiling as ONE project — the tests project, at 84.6% of node 22's
+  // default heap, with the other three summing to less than it. MOTIR-4294's
+  // tripwire fires at 90%, so the lane was green with about five stories of
+  // growth left. `tsconfig.base.json`'s header states the rule this answers:
+  // every further heap bump moves the cliff by one story and none removes it,
+  // so the remedy is a project boundary.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/e2e",
+    "tsBuildInfoFile": ".tsout/e2e/tsconfig.tsbuildinfo"
+  },
+  // The specs Playwright discovers, and the three configs it is invoked with.
+  // All three share `testDir: 'tests/e2e'` and partition it by `testMatch` /
+  // `testIgnore`, so the spec glob is the whole discovered set for every lane.
+  "include": [
+    "tests/e2e/**/*.spec.ts",
+    "playwright.config.ts",
+    "playwright.acceptance.config.ts",
+    "playwright.cloud.config.ts"
+  ],
+  "exclude": ["node_modules", "packages", ".tsout"],
+  // The app for `@/lib/…`, and the tests project for everything under `tests/`
+  // — every helper, seed, reporter and global hook a spec or a config imports
+  // is a source file of THAT project and is consumed here as its emitted
+  // declaration. No reference to the scripts project: no spec imports one, and
+  // the helpers that do reach it through `tsconfig.tests.json`'s own reference.
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.tests.json" }]
+}

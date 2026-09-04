@@ -516,6 +516,18 @@ export const aiPlanEditsService = {
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
+      // MOTIR-4343. `submitRevise` is the OTHER submit that bypasses
+      // `submitPlanEditJob` — deliberately, because a revision holds a lease and
+      // must not open a second plan — so it never reached the resolution that
+      // sits inside that shared submit, and a project with capture switched off
+      // was still captured on every revision. Resolved for the SUBMITTING
+      // project: `ctx.projectId` is the one the plan was just proved to belong
+      // to (the `PlanNotFoundError` guard above), so this is the same project
+      // whose setting the reviewer configured.
+      const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
       const submitted = await submitJob(
         // ONE planning kind (ADR §6 step 2). `context.planId` below is what makes
         // this a REVISION on the far side — `readerForPlan`'s first arm — so it is
@@ -530,6 +542,9 @@ export const aiPlanEditsService = {
           planId,
           prompt,
           generateExplanations: ctx.project.aiGenerateExplanations,
+          // ALWAYS present, `false` when off — the same discipline as the shared
+          // submit above, and for the same reason: absence reads as ON.
+          [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
           ...(code ? { code } : {}),
           ...(repositories ? { repositories } : {}),
         },

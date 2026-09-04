@@ -152,3 +152,53 @@ describe('the settings rail inside the area (design panel 2)', () => {
     }
   });
 });
+
+// MOTIR-4368 — the door's `active:` predicate, driven in BOTH directions.
+//
+// The row is highlighted inside the settings area, EXCEPT where one of the four
+// workspace-settings sub-routes that has a row of its own is current — so only
+// one row ever reads current. That is five clauses (`/settings`, then a
+// negation per sub-route), and a spec that only drives the positive side leaves
+// four short-circuit arms unreached: the predicate would still read green with
+// any one negation deleted, which is exactly the regression it exists to stop.
+//
+// So each case names the route AND asserts the count of current rows, because
+// "this row is not current" is only half the contract — the other half is that
+// the more specific row took the highlight rather than nobody having it.
+describe('the settings door yields to a more specific workspace sub-route', () => {
+  const current = () => settingsRow()?.getAttribute('aria-current') ?? null;
+
+  /** Every row reading current, across the whole rail. */
+  const currentRows = () =>
+    screen.getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page');
+
+  it.each([
+    ['/settings', 'the settings home itself'],
+    ['/settings/organization', 'the org home the door points at below the tier reveal'],
+    ['/settings/workspace', "the workspace area's own page"],
+  ])('reads current at %s — %s', (path) => {
+    pathname = path;
+    renderRail(ADMIN, PROJECT, true);
+    expect(current()).toBe('page');
+    expect(currentRows()).toHaveLength(1);
+  });
+
+  it.each([
+    ['/settings/workspace/security', 'Security'],
+    ['/settings/workspace/jobs', 'Job runs'],
+    ['/settings/workspace/github', 'Git'],
+    ['/settings/workspace/gitlab', 'Git'],
+  ])('yields at %s, and the %s row takes the highlight instead', (path, owner) => {
+    pathname = path;
+    renderRail(ADMIN, PROJECT, true);
+    expect(current()).toBeNull();
+    expect(currentRows()).toHaveLength(1);
+    expect(currentRows()[0]?.textContent).toContain(owner);
+  });
+
+  it('reads current nowhere outside the settings area — the first clause', () => {
+    pathname = '/dashboard';
+    renderRail(ADMIN, PROJECT, true);
+    expect(current()).toBeNull();
+  });
+});

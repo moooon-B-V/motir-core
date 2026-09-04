@@ -1,0 +1,36 @@
+-- The FORWARD-PARENT INDEX on `plan_item` (Bug MOTIR-4365 · design MOTIR-4364
+-- AMENDMENT A), the twin of `20260826170000_plan_item_work_item_index`.
+--
+-- WHY: the work-item page's pending-plan read (MOTIR-4197) asks *which
+-- undecided plans name THIS card?*, and until now it could only ask half of
+-- that question. A `modify` / `remove` names its target in `work_item_id` and
+-- is served by the reverse index; an `add` has NO `work_item_id` at all — the
+-- row it would name does not exist until the plan is approved — so it names its
+-- parent in `parent_ref` and nothing else. Expanding a story into subtasks is
+-- the commonest plan in this product, and it was the one shape the indicator
+-- could not see.
+--
+-- ⚠️ NO EXISTING INDEX CAN SERVE IT. `plan_item_plan_id_work_item_id_key` leads
+-- with `plan_id`; `plan_item_work_item_id_workspace_id_idx` leads with a column
+-- an `add` leaves NULL; `plan_item_workspace_id_idx` selects the whole tenant.
+-- Without this one, the new arm falls to a sequential scan of every proposal in
+-- the workspace — on a read that runs inside the item page's request, on every
+-- item page.
+--
+-- `parent_ref` leads because it is the selective column; `workspace_id` rides
+-- second because every read of this table is tenant-scoped (the RLS policy and
+-- the service's explicit filter both name it), so the composite answers the
+-- whole predicate rather than half of it — the same reasoning, column for
+-- column, as the reverse index.
+--
+-- ⚠️ ITS COLUMN LIST IS DELIBERATELY DISTINCT from every other index on this
+-- model — `(plan_id, work_item_id)`, `(plan_id)`, `(workspace_id)`,
+-- `(work_item_id, workspace_id)`. Prisma's differ pairs a database index to a
+-- datamodel index BY COLUMN LIST, so a reused list surfaces as a permanent
+-- spurious RENAME on the next `migrate dev` (the partial-index rule in
+-- CLAUDE.md, MOTIR-1960).
+--
+-- Purely additive: no column, no constraint, no data change.
+
+-- CreateIndex
+CREATE INDEX "plan_item_parent_ref_workspace_id_idx" ON "plan_item"("parent_ref", "workspace_id");

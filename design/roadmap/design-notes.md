@@ -454,9 +454,16 @@ real shipped surface, annotated with the component it composes.
 > #1398) — two DISTINCT node interactions, do not conflate them:**
 >
 > 1. **SELECT (click a card) = HIGHLIGHT only.** `ProjectRoadmapCanvas` rings the
->    selected card (`--el-accent` + `--el-surface-soft` offset) and lights the
->    dependency it belongs to (its `connectedIds` — the node + everything it links
->    to). Selecting does **NOT** open a detail surface.
+>    selected card (`--el-accent-on-surface` + `--el-surface-soft` offset) and
+>    lights the dependency it belongs to (its `connectedIds` — the node +
+>    everything it links to). Selecting does **NOT** open a detail surface.
+>    (**MOTIR-4474** moved the ring, the emphasised edge stroke and its arrowhead
+>    off `--el-accent` — the FILL role, whose contrast is guaranteed only against
+>    `--el-accent-text` on top of it — onto `--el-accent-on-surface`, the ink. The
+>    fill measured 1.24–2.77:1 on `--el-canvas` in four light palettes, under WCAG
+>    1.4.11's 3:1. This line described the shipped code and so recorded the same
+>    mistake; the pairing is now measured in
+>    `tests/theme/canvasEmphasisInkContrast.test.ts`.)
 > 2. **A dedicated VIEW button opens the detail** — surfaced **on the selected
 >    card**, the same bottom-edge action slot where the shipped **"Open ›" DRILL
 >    pill** appears (the canvas renders that pill on a _selected drillable_ card).
@@ -1458,6 +1465,26 @@ for its children would ask for the children of an id it has never heard of.
   partition is non-empty, so the level it opens can never be empty. Recorded
   because the absence of an empty state is otherwise indistinguishable from a
   forgotten one.
+  - **⚠️ THAT SENTENCE IS ABOUT THE NODE'S EMISSION, NOT ABOUT THE LEVEL — and
+    "SERVED FROM the root read" does not mean "SERVED FROM whatever is in the
+    cache" (bug MOTIR-4426, added after the fact).** The node is built from a
+    level that was just read, so it cannot be emitted over an empty partition;
+    the LEVEL BEHIND IT is built from a cache ENTRY, and an entry can be gone.
+    The manual refresh (MOTIR-1542) clears every cached level, so a reader
+    standing INSIDE the group got a miss — and each `?? []` on the way out turned
+    that miss into a well-formed EMPTY level, which drew `emptyDrilled` ("This
+    node has no children to show") over rows that exist.
+  - **So a MISS RE-READS the root level; it never renders empty.** A HIT is
+    unchanged and still issues no request, which is what keeps the no-second-fetch
+    bullet above true for the ordinary drill — the guarantee is about a DRILL
+    within one refresh generation, not about the level having no source of its
+    own. The ORIGIN door already worked this way and is the precedent: its
+    `readPreplan` promise is keyed on the refresh generation, so a refresh makes
+    it re-read rather than come back empty.
+  - **The pattern, for the next synthetic level anyone adds here:** a door whose
+    contents are DERIVED from another level owes a way to re-derive them. Serving
+    them from a cache is an optimisation; being unable to re-read is a defect, and
+    it presents as an empty room rather than as an error.
 - **⚠️ THE LEVEL'S EDGES ARE SCOPED TO ITS MEMBERS, and "served from the cached
   level" does NOT mean "handed the cached level" (bug MOTIR-3557, added after the
   fact).** The bullets above settle what a MEMBER renders and were read as

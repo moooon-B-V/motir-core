@@ -1818,8 +1818,13 @@ export default defineConfig({
         // gate to make a build pass.
         'app/**/_components/HelpMenu.tsx',
         'app/**/_components/CommandPaletteProvider.tsx',
-        // `SidebarNav.tsx` — GATED on three axes, report-only on the fourth, and
-        // the split is the whole story of MOTIR-4324.
+        // `SidebarNav.tsx` — GATED on all four axes since MOTIR-4368. It was
+        // three-plus-a-finding for the length of one card, and the two halves of
+        // that story are kept together below because the DISTINCTION is the
+        // point: MOTIR-4324 deleted a branch no fixture could honestly reach,
+        // MOTIR-4368 wrote the specs for three arms a person can reach in the
+        // running app. Two coverage shortfalls on one file, identical in a
+        // report and opposite in kind.
         //
         // ⚠️ WHAT THIS COMMENT SAID UNTIL MOTIR-4324, kept because the number it
         // quotes is the before half of this card's evidence: the file was
@@ -1841,15 +1846,30 @@ export default defineConfig({
         //     <the 14 specs naming SidebarNav / the authed layout>
         //   SidebarNav.tsx  100 stmts · 86.95 branch · 100 fn · 100 lines
         //
-        // Statements, functions and lines are at 100 and GATED at the 90 floor in
-        // `thresholds` below. BRANCHES is not, and the remaining cause is a
-        // different one from the one this card closed: the two uncovered arms are
-        // the DRAWER variant of the account-settings and project-settings rails
-        // (`collapsed={isDrawer ? false : undefined}` at both settings returns),
-        // plus the five-clause `active:` predicate on the workspace-settings row.
-        // Those are reachable, real, and untested — a coverage gap, not dead
-        // code — so they are neither this card's to write nor a bar to lower.
-        // Filed as its own bug: MOTIR-4368.
+        // Statements, functions and lines were at 100 and GATED at the 90 floor.
+        // BRANCHES was not, and the remaining cause was a different one from the
+        // one MOTIR-4324 closed: the three uncovered arms were the DRAWER
+        // variant of the account-settings and project-settings rails
+        // (`collapsed={isDrawer ? false : undefined}` at both settings returns)
+        // plus the five-clause `active:` predicate on the workspace-settings
+        // row. Reachable, real, and untested — a coverage gap, not dead code —
+        // so neither that card's to write nor a bar to lower. Filed as
+        // MOTIR-4368, which is what closed it.
+        //
+        // MOTIR-4368 — the same fourteen specs, RE-MEASURED first (the before
+        // half above reproduced exactly on `origin/main` @ `da4c4078b`, at
+        // 40/46 branches, uncovered 236,261,463) and then again after the specs
+        // it added:
+        //
+        //   SidebarNav.tsx  100 stmts · 100 branch · 100 fn · 100 lines
+        //   Branches: 100% ( 46/46 ) — was 86.95% ( 40/46 )
+        //
+        // The six arms: the drawer arm of each settings return
+        // (`sidebar-nav-rail-head.test.tsx`, which asserts BOTH directions — the
+        // drawer ignores a collapsed store, the rail follows it) and the four
+        // negations of the workspace-settings predicate, each driven at its own
+        // sub-route (`SidebarNav-settings-door.test.tsx`). `branches` is pinned
+        // at the 90 floor in `thresholds` below, beside its three siblings.
         'app/**/_components/SidebarNav.tsx',
       ],
       reporter: ['text', 'text-summary'],
@@ -3525,17 +3545,20 @@ export default defineConfig({
         // rather than at the measured 100, so a later refactor has room without
         // anyone loosening a gate to make a build pass.
         //
-        // ⚠️ `SidebarNav.tsx` IS here since MOTIR-4324, and on THREE axes rather
-        // than four — statements / functions / lines, each MEASURED at 100 after
-        // the dead "Soon" badge was retired. `branches` is deliberately absent:
-        // at 86.95 it is under the floor for a cause that is not this file's
-        // dead code (the untested drawer arm of both settings rails), and an axis
-        // is left off rather than pinned below 90, which would be lowering a bar
-        // to make a build pass. Its `include` entry carries the numbers and the
-        // bug. Same shape as `lib/github/checkSuites.ts` above, which pins three.
+        // ⚠️ `SidebarNav.tsx` is on ALL FOUR axes since MOTIR-4368. It arrived
+        // here with THREE (MOTIR-4324, statements / functions / lines at 100
+        // after the dead "Soon" badge was retired) and `branches` deliberately
+        // absent: at 86.95 it was under the floor, and an axis is left OFF
+        // rather than pinned below 90, which would be lowering a bar to make a
+        // build pass. MOTIR-4368 closed the gap by writing the missing specs —
+        // the drawer arm of both settings rails and the workspace-settings row's
+        // five-clause `active:` predicate — and the axis is pinned at the same
+        // 90 floor as its three siblings, on a measured 100. Its `include` entry
+        // carries the before/after numbers.
         'app/**/_components/SidebarNav.tsx': {
           lines: 90,
           functions: 90,
+          branches: 90,
           statements: 90,
         },
         'app/**/_components/HelpMenu.tsx': {

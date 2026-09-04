@@ -4,6 +4,15 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { contrast } from '../theme/colorMetrics';
 import { loadTokenLayer, resolveToken, type ThemeContext } from '../theme/paletteCascade';
+import {
+  AA,
+  MUTED_INK,
+  findInkContrastFailures,
+  formatRenderedFinding,
+  paintedSurfaces,
+  ratio,
+  surfacesUnderAA,
+} from '../helpers/renderedInkContrast';
 
 // MOTIR-4246 — the ink guard for the `/items` ROW, in both chromes, at the tier
 // the static one cannot reach.
@@ -22,18 +31,51 @@ import { loadTokenLayer, resolveToken, type ThemeContext } from '../theme/palett
 // modules. So the lane was green with the row's identifier at 4.17:1 on hover.
 //
 // A RENDER resolves what a static walk cannot: the composed DOM already carries
-// the answer the import graph would have to reconstruct. `tests/components/
-// quick-view-rail-ink.test.tsx` (MOTIR-4196) is the worked pattern this reuses —
-// same ancestor walk, same two WCAG exemptions — widened in one respect, below.
+// the answer the import graph would have to reconstruct.
 //
-// ── The widening: a HOVER tint is a surface ─────────────────────────────────
+// ⚠️ MOTIR-4263 — THE RESOLVER THAT USED TO LIVE HERE IS NOW SHARED.
+//
+// This file shipped (#2543) with its own `surfaceUnder` ancestor walk and its
+// own `carriesText` exemption test, copied from the shape
+// `tests/components/quick-view-rail-ink.test.tsx` (MOTIR-4196) had established.
+// That was the right instruction when this card was written: the shared resolver
+// did not exist, so reusing the pattern meant copying it. MOTIR-4251 (#2546)
+// landed `tests/helpers/renderedInkContrast.ts` in parallel, and for one commit
+// `main` carried TWO independently-written render-time resolvers answering the
+// same question. Two of them drift the first time an exemption or a walk is
+// corrected in one file and not the other — and the divergence is silent in the
+// direction that matters, because a resolver that misses a surface returns an
+// EMPTY findings list, which is what a clean surface returns.
+//
+// So the walk and the exemptions below are the shared helper's now. The
+// assertions are UNCHANGED in substance; what changed is that the resolver is
+// wider than the one it replaces:
+//
+//  * the surface set is DERIVED from the resolved token values rather than
+//    matched a token at a time, so an ALIAS of a failing colour (MOTIR-3693's
+//    `--el-sidebar-bg`) cannot hide in it;
+//  * where an element paints more than one background the WORST one decides,
+//    which is a strict widening of "the first `bg-(--el-*)` on the nearest
+//    painting ancestor";
+//  * the exemption set is `aria-hidden` · decorative glyph · **disabled** ·
+//    no-text, read off the composed DOM.
+//
+// ── The widening this file contributed, now in the helper ───────────────────
 // The rail paints `bg-(--el-surface-soft)` unconditionally, so the prototype's
 // walk only had to recognise a bare `bg-(--el-*)`. A table row paints its tint
 // under a `hover:` variant. WCAG 1.4.3 is about TEXT, and hover is a state of
 // that text rather than a separate element, so the tint the pointer reveals is a
-// surface the text has to be legal on. The walk below therefore accepts a
-// variant-prefixed `bg-(--el-*)` and REPORTS the variant, so a failure says
-// which state it was measured in.
+// surface the text has to be legal on. `renderedInkContrast`'s
+// `PAINTS_BACKGROUND` is unanchored for exactly that reason and matches a
+// variant-prefixed utility, so the `hover:` case this card exists for is ruled
+// on by the shared resolver, not by a second one.
+//
+// One thing IS lost and is named rather than left to be noticed: the local walk
+// captured the variant and printed it, so a failure said which state it was
+// measured in. The shared finding prints the element's whole `class` attribute
+// instead, which carries the prefix verbatim — the same information, one step
+// less digested. That is the trade a single mechanism costs, and it is smaller
+// than the drift two mechanisms guarantee.
 //
 // ── Nothing here is a hardcoded colour ──────────────────────────────────────
 // Every ink, every surface and every ratio is resolved from the shipped
@@ -97,77 +139,30 @@ const resolve = (token: string): string => {
   return value;
 };
 
-/** WCAG AA for body text. */
-const AA = 4.5;
-
-const MUTED_CLASS = 'text-(--el-text-muted)';
-
-/**
- * A `bg-(--el-*)` utility, with or without variant prefixes — `bg-(--el-card)`
- * and `hover:bg-(--el-surface)` both paint a surface the text below them has to
- * be legal on; the second only does so in a state, which the capture records.
- */
-const PAINTS_BACKGROUND = /(?:^|\s)((?:[\w-]+:)*)bg-\((--el-[\w-]+)\)/;
-
 const classesOf = (el: Element): string => el.getAttribute('class') ?? '';
 
-interface PaintedSurface {
-  token: string;
-  /** `hover:` / `focus-within:` / … — empty when the tint is unconditional. */
-  variant: string;
-}
-
 /**
- * The nearest surface an element's text actually lands on — the ancestor walk
- * the static guard cannot perform, because in the source the painter and the
- * painted are in different modules.
+ * The rendered ROWS — the population this guard is scoped to. The sweep below
+ * takes them as its roots rather than the whole container, which keeps the
+ * subject exactly what it was: text inside an `/items` row, over the tint the
+ * row itself paints. The shared resolver still walks UP out of a root to find
+ * the painter, so the row's own `hover:bg-(--el-surface)` is what it lands on.
  */
-function surfaceUnder(el: Element): PaintedSurface | null {
-  for (let node: Element | null = el; node; node = node.parentElement) {
-    const match = PAINTS_BACKGROUND.exec(classesOf(node));
-    if (match) return { variant: match[1] ?? '', token: match[2]! };
-  }
-  return null;
-}
-
-/**
- * WCAG 1.4.3 is about TEXT. A decorative glyph (`aria-hidden`) and an icon
- * inside a labelled control carry no text-contrast obligation — the same two
- * exemptions the static guard applies, applied here to the rendered node. This
- * is what exempts `TreeTable`'s expand chevron, which carries the muted ink on a
- * button whose only child is an `aria-hidden` <svg>.
- */
-function carriesText(el: Element): boolean {
-  if (el.getAttribute('aria-hidden') === 'true') return false;
-  if (el.closest('[aria-hidden="true"]')) return false;
-  if (el.tagName.toLowerCase() === 'svg') return false;
-  return (el.textContent ?? '').trim().length > 0;
-}
-
-function describeSite(el: Element): string {
-  const text = (el.textContent ?? '').trim().slice(0, 40);
-  const surface = surfaceUnder(el);
-  const where = surface
-    ? `${surface.variant}${surface.token} (${contrast(resolve('--el-text-muted'), resolve(surface.token)).toFixed(2)}:1)`
-    : '(no painted ancestor)';
-  return `<${el.tagName.toLowerCase()} class="${classesOf(el)}"> — "${text}" on ${where}`;
+function rowsIn(container: HTMLElement): Element[] {
+  return Array.from(container.querySelectorAll('[role="row"]'));
 }
 
 /**
  * Every element inside a rendered `/items` ROW that paints `--el-text-muted` as
- * TEXT over a surface that ink fails AA on — the failing set DERIVED from the
- * resolved values, never from a list of token names.
+ * TEXT over a surface that ink fails AA on — resolved by the SHARED render-time
+ * resolver (MOTIR-4251), so this file adds no second walk and no second
+ * exemption predicate of its own.
  */
 function offendersIn(container: HTMLElement): string[] {
-  const muted = resolve('--el-text-muted');
-  return Array.from(container.querySelectorAll('[role="row"] *'))
-    .filter((el) => classesOf(el).includes(MUTED_CLASS))
-    .filter(carriesText)
-    .filter((el) => {
-      const surface = surfaceUnder(el);
-      return surface !== null && contrast(muted, resolve(surface.token)) < AA;
-    })
-    .map(describeSite);
+  return findInkContrastFailures(rowsIn(container), {
+    theme: 'light',
+    inks: [MUTED_INK],
+  }).map(formatRenderedFinding);
 }
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
@@ -290,6 +285,15 @@ describe('MOTIR-4246 · the /items row resolves its own ink', () => {
       expect(contrast(ink, rowTint)).toBeCloseTo(6.24, 2);
       expect(contrast(ink, page)).toBeGreaterThanOrEqual(AA);
     }
+
+    // And the SAME measurement taken through the shared resolver (MOTIR-4263).
+    // The two agreeing is what says the helper models the token layer the way
+    // this card measured it by hand — and it is the assertion that would have
+    // gone red had the two resolvers been allowed to drift.
+    expect(ratio('light', MUTED_INK, '--el-surface')).toBeCloseTo(4.17, 2);
+    expect(ratio('light', MUTED_INK, '--el-page-bg')).toBeCloseTo(4.54, 2);
+    expect(surfacesUnderAA('light', MUTED_INK)).toContain('--el-surface');
+    expect(surfacesUnderAA('light', MUTED_INK)).not.toContain('--el-page-bg');
   });
 
   it('the LIST chrome: no text in a row carries --el-text-muted over the hover tint', () => {
@@ -298,6 +302,10 @@ describe('MOTIR-4246 · the /items row resolves its own ink', () => {
     // test passes by ruling on nothing.
     const row = screen.getByTestId('issue-row-PROD-1');
     expect(classesOf(row)).toContain('hover:bg-(--el-surface)');
+    // …and the shared resolver SEES that tint. A sweep whose roots paint no
+    // failing surface is green for a reason that has nothing to do with the
+    // code, which is the one way this guard can pass while saying nothing.
+    expect(paintedSurfaces(rowsIn(container))).toContain('--el-surface');
 
     expect(
       offendersIn(container),
@@ -334,6 +342,8 @@ describe('MOTIR-4246 · the /items row resolves its own ink', () => {
     // forwards from the shared columns, and the synthetic loading row.
     expect(screen.getByText('Loading children…')).toBeTruthy();
     expect(within(screen.getByTestId('issue-row-PROD-1')).getByText('PROD-1')).toBeTruthy();
+    // The tree chrome paints the same row tint, and the shared resolver sees it.
+    expect(paintedSurfaces(rowsIn(container))).toContain('--el-surface');
 
     expect(
       offendersIn(container),

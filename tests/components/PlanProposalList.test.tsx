@@ -445,9 +445,17 @@ describe('the row opens its proposal', () => {
 // `plan-review-canvas.test.tsx`; this is the list half, run over all four item
 // shapes — because the row's accessible name is built from `identifier`, and an
 // `add` before and after materialization are the two cases that differ.
-describe('every item shape opens the same read view', () => {
-  const shapes: [string, ReturnType<typeof planReviewItem>][] = [
-    ['an add with no key yet', add()],
+//
+// ⚠️ AMENDED (bug MOTIR-4471). This block used to expect `proposal-peek` for ALL
+// FOUR shapes, which asserted the very divergence its own header forbids: the
+// canvas routes a MATERIALIZED `add` to the ordinary work-item peek
+// (`PlanReviewCanvas.onView`, MOTIR-3161) because the proposal has become a
+// card, so a list expecting proposal mode for that shape was opening a DIFFERENT
+// modal from the canvas, not the same one. The seam is unchanged; the per-shape
+// expectation is what was wrong.
+describe('every item shape opens the same read view as the canvas', () => {
+  const shapes: [string, ReturnType<typeof planReviewItem>, 'proposal' | 'committed'][] = [
+    ['an add with no key yet', add(), 'proposal'],
     [
       'an add that has MATERIALIZED',
       planReviewItem({
@@ -456,20 +464,27 @@ describe('every item shape opens the same read view', () => {
         identifier: 'MOTIR-901',
         title: 'Created card',
       }),
+      // It IS a work item now — `identifier != null` on an `add` is what says so.
+      'committed',
     ],
-    ['a modify', modify()],
-    ['a remove', remove()],
+    ['a modify', modify(), 'proposal'],
+    ['a remove', remove(), 'proposal'],
   ];
 
-  for (const [label, item] of shapes) {
+  for (const [label, item, door] of shapes) {
     it(`opens for ${label}`, async () => {
       renderWithIntl(<PlanProposalList items={[item]} decided={false} />);
       const row = screen.getByRole('button', { name: /^Open / });
       fireEvent.click(row);
-      expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
       // One close, on every shape — not only on the one the fix was written for.
-      const dialog = screen.getByRole('dialog');
+      const dialog = await screen.findByRole('dialog');
       expect(within(dialog).getAllByRole('button', { name: /close/i })).toHaveLength(1);
+      if (door === 'proposal') {
+        expect(await screen.findByTestId('proposal-peek')).toBeTruthy();
+      } else {
+        expect(screen.queryByTestId('proposal-peek')).toBeNull();
+        expect(screen.queryByTestId('quick-view-op')).toBeNull();
+      }
     });
   }
 });

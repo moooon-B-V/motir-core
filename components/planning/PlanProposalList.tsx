@@ -8,6 +8,7 @@ import { Pill } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { ProposalPeek } from '@/components/planning/ProposalPeek';
+import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { PlanItemChangeDto, PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanItemOpDto } from '@/lib/dto/plans';
@@ -290,9 +291,23 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
   // second read view, which is the property Part XIII §7 is about. It is mounted
   // HERE rather than lifted to the island because the two bodies are mutually
   // exclusive (only one renders at a time, so the two mounts can never both be
-  // open) and the canvas's peek state is a compound one — a proposal OR a
-  // committed key — of which a list row can only ever be the first.
-  const [peeked, setPeeked] = useState<PlanReviewItemDto | null>(null);
+  // open).
+  //
+  // ⚠️ AND THE STATE IS THE CANVAS'S COMPOUND ONE — a proposal OR a committed
+  // key (`PlanReviewCanvas.tsx:231-234`), because a list row can be EITHER
+  // (bug MOTIR-4471). This is the correction MOTIR-4185 item 4 asked for and did
+  // not get: what stood here claimed, as a fact about the code beneath it, that
+  // a row could only ever hold the proposal half — and on a DECIDED plan that is
+  // false. An `add`'s `identifier` is null until approve materializes it, so an
+  // `add` WITH one has become a work item; opening it as a proposal renders
+  // `not yet created`, an `Open the work item as it stands →` link and a rail
+  // foot saying approval will create these values, over a card that exists and
+  // whose real key and status the same peek is displaying. That false premise is
+  // what produced the defect, so it is gone rather than annotated.
+  const [peeked, setPeeked] = useState<{ proposal: PlanReviewItemDto | null; key: string | null }>({
+    proposal: null,
+    key: null,
+  });
   // ⚠️ FOCUS RETURN IS EXPLICIT HERE, and it is not redundant with the modal's own
   // (MOTIR-4022). The dialog is mounted INSIDE this list, so closing it unmounts
   // the dialog in the same commit that re-renders the rows — and the restore the
@@ -304,10 +319,21 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const openPeek = useCallback((item: PlanReviewItemDto, trigger: HTMLButtonElement) => {
     triggerRef.current = trigger;
-    setPeeked(item);
+    // The SAME test the canvas's View pill applies (`PlanReviewCanvas.onView`,
+    // MOTIR-3161), and the one `op === 'add'` test that survived Part XIV's
+    // collapse: an `add` carrying an identifier is a COMMITTED card, so it opens
+    // the ordinary work-item peek. Every other proposal — an un-materialized
+    // `add`, and a `modify` / `remove` on a plan whether decided or not — opens
+    // the shipped peek in PROPOSAL MODE, unchanged (MOTIR-4185).
+    const materializedAdd = item.op === 'add' && item.identifier != null;
+    if (!materializedAdd) setPeeked({ proposal: item, key: null });
+    else setPeeked({ proposal: null, key: item.identifier });
   }, []);
   const closePeek = useCallback(() => {
-    setPeeked(null);
+    // BOTH halves, from the one handler: the two peeks are mutually exclusive by
+    // construction, and a close that cleared only the half it knew about would
+    // leave the other mounted.
+    setPeeked({ proposal: null, key: null });
     // After the close has flushed, so the restore is not racing the unmount.
     requestAnimationFrame(() => triggerRef.current?.focus());
   }, []);
@@ -351,10 +377,13 @@ export function PlanProposalList({ items, decided }: PlanProposalListProps) {
           </section>
         );
       })}
-      {/* The SHIPPED peek, in proposal mode (MOTIR-4185). The list gains no
-          second read view — it now opens the SAME one the canvas's View pill
-          does, which is the property Part XIII §7 named and Part XIV delivers. */}
-      <ProposalPeek item={peeked} onClose={closePeek} />
+      {/* BOTH peeks, exactly as the canvas mounts them (`PlanReviewCanvas.tsx:432-433`).
+          The SHIPPED peek in proposal mode (MOTIR-4185) for a proposal; the ordinary
+          work-item peek for an `add` that approval has already materialized
+          (MOTIR-3161, bug MOTIR-4471). Each renders nothing when its half is null, so
+          only one is ever open. */}
+      <ProposalPeek item={peeked.proposal} onClose={closePeek} />
+      <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
     </div>
   );
 }

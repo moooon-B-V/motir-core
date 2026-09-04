@@ -328,11 +328,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-lint
         uses: actions/cache@v4
@@ -375,11 +371,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-structural-guards
         uses: actions/cache@v4
@@ -408,11 +400,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-typecheck
         uses: actions/cache@v4
@@ -538,11 +526,7 @@ jobs:
     # services needed — the suite is pure (no server, no Postgres).
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-ds
         uses: actions/cache@v4
@@ -576,11 +560,7 @@ jobs:
     # where Postgres is; the sandbox's docker build/smoke matrix is 7.9.7c's.
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       # No node_modules cache here on purpose: the shared cache key covers only
       # the ROOT node_modules, while a filtered run also needs
       # packages/cli/node_modules — a cache hit would skip the install that
@@ -620,11 +600,7 @@ jobs:
     # that setup.
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       # No node_modules cache here, for the reason the `cli` job gives: the
       # shared key covers only the ROOT node_modules, while a filtered run also
       # needs packages/orchestrator/node_modules, and a cache hit would skip the
@@ -666,7 +642,26 @@ jobs:
   design-guards:
     name: Design asset guards
     runs-on: ubuntu-latest
-    # Observed 1.1–1.4 min → 10 (~7x, the short-job floor).
+    # Observed 2.6 min → 10 (~3.8x, still above the short-job floor). NOT
+    # RAISED — re-derived, which is a different act (MOTIR-4449, criterion 9).
+    #
+    # MOTIR-3569 sized this at "1.1–1.4 min → 10 (~7x)" and that reading was
+    # right when it was taken. Two things moved underneath it since, in opposite
+    # directions, and only one of them was a defect:
+    #
+    #   - The SETUP grew from seconds to as much as 437 s, because
+    #     `pnpm/action-setup` bootstraps itself with `npm ci`. That is what
+    #     cancelled this job at 10m00s twice, and it is REMOVED rather than
+    #     accommodated — the step is now 6 s (run 33881990263).
+    #   - The lane's own WORK grew honestly: the design guards have multiplied
+    #     since MOTIR-3569, and `vitest --config vitest.design.config.ts` alone
+    #     is 118 s of the 157 s total on that run.
+    #
+    # So the ceiling is unchanged and the OBSERVATION is restated, because the
+    # old range no longer describes the job and a stale range is what let a
+    # 437-second regression hide inside a budget expressed as a multiple of it.
+    # ⚠️ One post-change sample. MOTIR-3569's bar asks for four before this is
+    # treated as the lane's settled range — re-derive it once there are.
     timeout-minutes: 10
     permissions:
       # `contents: read` and nothing else. This job used to also request
@@ -681,11 +676,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-design-guards
         uses: actions/cache@v4
@@ -733,11 +724,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Start Postgres
         uses: ./.github/actions/postgres
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-build
         uses: actions/cache@v4
@@ -930,7 +917,32 @@ jobs:
     # skip this suite entirely. Every non-pull_request event runs it.
     if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
     strategy:
-      fail-fast: false
+      # ── FAIL-FAST IS A PROPERTY OF THE LANE, NOT OF THE SUITE (MOTIR-4407) ──
+      #
+      # On a PULL REQUEST a red shard must NOT cancel its eleven siblings. The
+      # full fan-out is what makes a failure diagnosable, and this repository's
+      # flake triage depends on it specifically: the discriminator between a
+      # flake and a regression is ROTATION — a different test failing each run,
+      # the other shards behaving differently — and cancelling them deletes the
+      # evidence that tells the two apart. A cancelled shard also reports
+      # `cancelled`, which reads as neither pass nor fail.
+      #
+      # In the MERGE QUEUE the trade inverts. Nothing is diagnosed there: the
+      # entry is ejected, the batches behind it are invalidated and re-formed,
+      # and every minute the remaining shards keep running is a minute the queue
+      # is held by an entry already known to be leaving. The diagnosis happens
+      # on the pull request afterwards, on a branch that still exists — the
+      # queue's `gh-readonly-queue/main/pr-<n>-<sha>` ref does not survive the
+      # ejection, so its full fan-out could not be read even if it finished.
+      #
+      # ⚠️ THE TWO HALVES ARE ONE CHANGE. Fail-fast here is only affordable
+      # because the pull-request lane still runs this whole suite. Measured over
+      # 2026-08-27 → 09-04, 81 failing PR CI runs: 77 involved a heavy job
+      # (Vitest 93 · Playwright 33 · coverage 9) and 4 were fast-job-only. Slim
+      # the PR lane to lint/typecheck and 95% of real failures arrive in the
+      # queue instead — at which point cancelling the fan-out leaves nowhere to
+      # read them. Do not do one without re-deciding the other.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         leg: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
@@ -993,11 +1005,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Start Postgres
         uses: ./.github/actions/postgres
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-test
         uses: actions/cache@v4
@@ -1086,11 +1094,7 @@ jobs:
       HUSKY: '0'
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-coverage
         uses: actions/cache@v4
@@ -1210,10 +1214,16 @@ jobs:
     # build` is red.
     needs: [build, changes]
     strategy:
-      # One leg failing must NOT cancel the others — we want the full E2E
-      # picture (and all Playwright reports) from a single run, not a race to
-      # the first red shard.
-      fail-fast: false
+      # One leg failing must NOT cancel the others ON A PULL REQUEST — we want
+      # the full E2E picture (and all Playwright reports) from a single run,
+      # not a race to the first red shard. That is the lane where an E2E red is
+      # READ, and the lane where this repository's flakiest suite most needs the
+      # sibling shards' behaviour to tell a flake from a regression.
+      #
+      # In the merge queue it is the opposite trade — the entry is leaving
+      # either way, so the remaining shards only hold the queue. The reasoning
+      # is written out once, on the `test` job's matrix above (MOTIR-4407).
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         include:
           # The non-at-scale, non-a11y suite, split five ways. `--grep-invert`
@@ -1418,7 +1428,12 @@ jobs:
     needs: [build, changes]
     if: ${{ needs.changes.outputs.app == 'true' && (github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, 'e2e-at-scale')) }}
     strategy:
-      fail-fast: false
+      # Same rule as the two matrices above (MOTIR-4407). This lane's `if:` is
+      # already merge-queue-first, so the expression resolves TRUE on almost
+      # every run of it — the `e2e-at-scale` label path is the exception, and it
+      # is exactly the case that wants the full fan-out, since someone applied
+      # that label in order to READ these legs.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         include:
           # Stories 3.5 + 4.7 — board journeys AT SCALE (Kanban + Scrum). The

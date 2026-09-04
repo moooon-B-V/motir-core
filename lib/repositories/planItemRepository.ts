@@ -62,23 +62,40 @@ export const planItemRepository = {
   },
 
   /**
-   * The UNDECIDED proposals that target a given work item, with the plan each
-   * one belongs to — the work-item page's pending-plan read (bug MOTIR-4197 ·
-   * design MOTIR-4256 §3).
+   * The UNDECIDED proposals that NAME a given work item, with the plan each one
+   * belongs to — the work-item page's pending-plan read (bug MOTIR-4197 · design
+   * MOTIR-4256 §3, widened by bug MOTIR-4365 · design MOTIR-4364 AMENDMENT A).
    *
-   * The same predicate as `findByWorkItemId` above — `{ workItemId, workspaceId,
-   * op ∈ {modify, remove} }`, served by the same `[workItemId, workspaceId]`
-   * reverse index — narrowed to the plans in `statuses` (the caller passes
+   * ⚠️ TWO ARMS, BECAUSE A PROPOSAL NAMES A CARD IN TWO DIFFERENT COLUMNS — and
+   * that is a fact about the substrate, not a filter someone chose narrowly:
+   *
+   *   * a `modify` / `remove` TARGETS the card: `workItemId`, the reverse index
+   *     `[workItemId, workspaceId]` (MOTIR-3579);
+   *   * an `add` PARENTS on the card: `parentRef`, the forward-parent index
+   *     `[parentRef, workspaceId]` (MOTIR-4365). An `add` has NO `workItemId` at
+   *     all — the row it would name does not exist until the plan is approved —
+   *     so widening the `op` list alone would have changed nothing, which is why
+   *     this is an `OR` of two indexed predicates rather than a looser one.
+   *
+   * `parentRef` is matched on the RESOLVED work-item id, which is what the
+   * column holds: `add_plan_items` rewrites a `MOTIR-<n>` key to its id on the
+   * way IN (MOTIR-3576, `resolveKeyRefs`), so the stored value is either a real
+   * id or an intra-plan `planItem:<id>` temp-ref — and a temp-ref names another
+   * PROPOSAL as the parent, which is correctly not this card.
+   *
+   * Narrowed to the plans in `statuses` (the caller passes
    * `WORK_ITEM_PENDING_PLAN_STATUSES`; the SET is the service's decision, not
    * this method's) and to the plans of `projectId`, so a caller granted browse
    * on one project cannot read another project's proposals through a work-item
    * id it happens to know. The plan's `id` / `title` / `status` ride back on the
-   * SAME query — ONE indexed lookup, never a read per row — which is the figure
-   * the item page's tier-two group is allowed to add.
+   * SAME query — ONE query, never a read per row — which is the figure the item
+   * page's tier-two group is allowed to add. A plan may now return SEVERAL rows
+   * (N `add`s under one card), and collapsing them to one row per plan is the
+   * service's in-memory fold, deliberately not a second query.
    *
    * ⚠️ NO `tx`-less arm: this read runs inside the page's request, and on a card
    * with no pending plan — nearly every card — it must cost exactly the index
-   * probe and nothing more.
+   * probes and nothing more.
    */
   async findPendingByWorkItemId(
     workItemId: string,
@@ -90,10 +107,12 @@ export const planItemRepository = {
     const client = tx ?? dbRead;
     return client.planItem.findMany({
       where: {
-        workItemId,
         workspaceId,
-        op: { in: ['modify', 'remove'] },
         plan: { projectId, status: { in: [...statuses] } },
+        OR: [
+          { workItemId, op: { in: ['modify', 'remove'] } },
+          { parentRef: workItemId, op: 'add' },
+        ],
       },
       include: { plan: { select: { id: true, title: true, status: true } } },
       orderBy: [{ plan: { createdAt: 'asc' } }, { id: 'asc' }],

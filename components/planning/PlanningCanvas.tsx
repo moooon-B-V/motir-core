@@ -419,7 +419,11 @@ export function PlanningCanvas({
                       : kind === 'running'
                         ? 'fill-(--el-status-in-progress)'
                         : kind === 'emphasis'
-                          ? 'fill-(--el-accent)'
+                          ? // the ACCENT INK, not `--el-accent` (the FILL). A marker
+                            // painted on the board is a mark ON a surface, so it owes
+                            // 3:1 against `--el-canvas` — which the fill misses in four
+                            // light palettes (1.24–2.77:1). MOTIR-4474.
+                            'fill-(--el-accent-on-surface)'
                           : kind === 'pending'
                             ? 'fill-(--el-canvas-edge-pending)'
                             : 'fill-(--el-canvas-edge-committed)'
@@ -444,8 +448,15 @@ export function PlanningCanvas({
             const cross = edge.variant === 'cross';
             const running = edge.variant === 'running';
             // When a node is selected, only its own edges stay lit; a lit non-cross
-            // edge is EMPHASISED in the accent (so even a faint dashed `pending`
+            // edge is EMPHASISED in the accent INK (so even a faint dashed `pending`
             // connector clearly pops, matching the selected card's accent ring).
+            // ⚠️ `--el-accent-on-surface`, NEVER `--el-accent`. The fill token's
+            // contrast is guaranteed against `--el-accent-text` sitting ON it, not
+            // against a board it is painted on: on Candy light it measured 1.26:1
+            // on `--el-canvas` and 1.01:1 against a plain edge dimmed to 12%, so
+            // selecting a card painted its own edges the shade of the ones it was
+            // de-emphasising. `tests/theme/canvasEmphasisInkContrast.test.ts` reads
+            // the token back out of this file and measures it. MOTIR-4474.
             const lit = selectedId == null || edge.from === selectedId || edge.to === selectedId;
             // ⚠️ `running` outranks the selection emphasis and yields only to
             // `cross`. A run's live edge must stay the live one while a reader
@@ -476,7 +487,7 @@ export function PlanningCanvas({
                         // and weight without moving (MOTIR-3972).
                         'canvas-edge-running stroke-(--el-status-in-progress)'
                       : emph
-                        ? 'stroke-(--el-accent)'
+                        ? 'stroke-(--el-accent-on-surface)'
                         : pending
                           ? 'stroke-(--el-canvas-edge-pending)'
                           : 'stroke-(--el-canvas-edge-committed)'
