@@ -166,11 +166,16 @@ describe('verifyIndexContainerAiAddress — the preflight', () => {
 
   it('REACHABLE when a public address answers /health', async () => {
     vi.stubEnv(MOTIR_AI_CONTAINER_URL_ENV_VAR, `${PUBLIC_AI_URL}/`);
-    const fetchImpl = vi.fn(async () => new Response('{"status":"ok"}', { status: 200 }));
+    // The parameter is DECLARED — a zero-arg `vi.fn` types `mock.calls` as `[]`,
+    // so indexing into it is a compile error rather than an assertion.
+    const fetchImpl = vi.fn(
+      async (_url: string | URL | Request) => new Response('{"status":"ok"}', { status: 200 }),
+    );
 
     const verdict = await verifyIndexContainerAiAddress({ isConfigured: true, fetchImpl });
 
     expect(verdict).toEqual({ verdict: 'reachable', address: PUBLIC_AI_URL, status: 200 });
+    // The trailing slash was normalised away, and the probe asks for /health.
     expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${PUBLIC_AI_URL}/health`);
   });
 
