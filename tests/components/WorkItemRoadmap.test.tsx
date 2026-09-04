@@ -655,6 +655,97 @@ describe('the root level groups its NON-EPIC rows (MOTIR-3490)', () => {
     expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
   });
 
+  // ── THE REFRESH INSIDE THE DOOR (bug MOTIR-4426) ───────────────────────────
+  // The two tests above pin the door's two halves as MOTIR-3490 shipped them: the
+  // level opens, and it opens WITHOUT a second request. Together they say the level
+  // is served from the cached root read — which is also the whole defect, because
+  // the manual refresh (MOTIR-1542) clears that cache at the top of the very
+  // callback that reads it back.
+  //
+  // ⚠️ THE RE-RENDER IS THE TEST. A fresh mount at `refreshSignal={1}` passes on the
+  // UNFIXED code — it loads the root first, so the cache is warm by the time the
+  // door is opened — and a guard that cannot go red is not evidence. So the refresh
+  // is delivered to the SAME mounted component, standing INSIDE the group, which is
+  // where the reader was.
+  it('a refresh INSIDE the grouped level re-reads it — never "No items at this level"', async () => {
+    stubRoot(mixedRoot);
+    const view = render(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={0} />);
+    await screen.findByText('Epic one');
+
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    expect(await screen.findByText('A parentless defect')).toBeTruthy();
+
+    // The reader presses the header's Refresh while standing on the grouped level.
+    view.rerender(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={1} />);
+
+    // The rows come back. Asserted on the EMPTY-STATE COPY as well as on the rows,
+    // because the copy is what the reader actually saw: `emptyDrilled` is an
+    // assertion that the level has nothing on it, and it was false.
+    await waitFor(() => expect(screen.queryByText('No items at this level')).toBeNull());
+    expect(await screen.findByText('A parentless defect')).toBeTruthy();
+    expect(screen.getByText('A parentless task')).toBeTruthy();
+  });
+
+  it('that refresh is a real RE-READ, and it settles the caller', async () => {
+    stubRoot(mixedRoot);
+    const onRefreshSettled = vi.fn();
+    const view = render(
+      <WorkItemRoadmap projectKey="MOTIR" refreshSignal={0} onRefreshSettled={onRefreshSettled} />,
+    );
+    await screen.findByText('Epic one');
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('A parentless defect');
+    const roadmapCalls = () =>
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) =>
+        String(c[0]).includes('/roadmap'),
+      ).length;
+    const before = roadmapCalls();
+    expect(onRefreshSettled).not.toHaveBeenCalled(); // an initial load never settles
+
+    view.rerender(
+      <WorkItemRoadmap projectKey="MOTIR" refreshSignal={1} onRefreshSettled={onRefreshSettled} />,
+    );
+
+    // A REAL fetch, not a cache entry the refresh was excused from clearing —
+    // otherwise the control would report having refreshed rows it had not re-read.
+    await waitFor(() => expect(roadmapCalls()).toBeGreaterThan(before));
+    // And the header's spinner clears on that fetch completing, exactly as it does
+    // on a real level: the synthetic branch now awaits, and `loadLevel`'s `finally`
+    // is what reports it.
+    await waitFor(() => expect(onRefreshSettled).toHaveBeenCalled());
+  });
+
+  it('a grouped row stays PEEKABLE after that refresh — the re-read rows are registered', async () => {
+    stubRoot(mixedRoot);
+    const view = render(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={0} />);
+    await screen.findByText('Epic one');
+    fireEvent.keyDown(el('__not_in_an_epic__')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+    await screen.findByText('A parentless defect');
+
+    view.rerender(<WorkItemRoadmap projectKey="MOTIR" refreshSignal={1} />);
+    await waitFor(() => expect(screen.queryByText('No items at this level')).toBeNull());
+
+    // View resolves the peek key off the id -> identifier map `registerItems` fills;
+    // an UNREGISTERED id resolves to nothing and `onView` opens nothing at all
+    // (`useWorkItemQuickView.onView`). The root load filled that map before the
+    // refresh; the grouped branch now fills it too, so this level no longer depends
+    // on a load it did not make. The PEEK REQUEST is the assertion, because it
+    // carries the identifier the id resolved TO — the harness serves one canned peek
+    // body for every key, so the rendered peek cannot tell us which row was asked for.
+    fireEvent.keyDown(el('B9')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('view-button'));
+    await waitFor(() =>
+      expect(
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.some((c) =>
+          String(c[0]).includes('/api/work-items/peek?key=MOTIR-9'),
+        ),
+      ).toBe(true),
+    );
+  });
+
   it('a single grouped row reads "1 item", not "1 items"', async () => {
     stubRoot({ ...mixedRoot, nodes: [epic('E1', 'MOTIR-1', 'Epic one'), mixedRoot.nodes[1]] });
     render(<WorkItemRoadmap projectKey="MOTIR" />);
