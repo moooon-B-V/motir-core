@@ -19,6 +19,8 @@
 - **Supersedes / superseded by:** **AMENDED 2026-08-29 by
   `public-surface-hosts.md`** — see AMENDMENT 1 at the foot of this file. It is
   the first record in this directory about a repository other than `motir-core`.
+  **§3 is additionally CORRECTED 2026-09-04 — see AMENDMENT 2**, which fixes what
+  it said about the kind of IPv4 the `motir-marketing` app holds.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `application-hosting.md` / `production-service-stack.md`): a decision record is
@@ -162,10 +164,10 @@ on nameservers `launch1.spaceship.net` / `launch2.spaceship.net` (read
 
 Two records are ADDED, and they are additions to a name that is already in use:
 
-| Name           | Type             | Points at                                                                                        | Added by   |
-| -------------- | ---------------- | ------------------------------------------------------------------------------------------------ | ---------- |
-| `motir.co`     | **`A` + `AAAA`** | the `motir-marketing` Fly app's dedicated addresses, read from `fly ips list` at provisioning    | MOTIR-1455 |
-| `www.motir.co` | **`CNAME`**      | the app's Fly hostname (`<hash>.motir-marketing.fly.dev`), the shape `app.motir.co` already uses | MOTIR-1455 |
+| Name           | Type             | Points at                                                                                                                                                  | Added by   |
+| -------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `motir.co`     | **`A` + `AAAA`** | the `motir-marketing` Fly app's public ingress addresses — a **shared** IPv4 and a dedicated IPv6 (AMENDMENT 2) — read from `fly ips list` at provisioning | MOTIR-1455 |
+| `www.motir.co` | **`CNAME`**      | the app's Fly hostname (`<hash>.motir-marketing.fly.dev`), the shape `app.motir.co` already uses                                                           | MOTIR-1455 |
 
 ### ⚠️ Why this is a decision and not a formality: the apex is already occupied
 
@@ -194,7 +196,7 @@ _mail_. That constraint is what turns Q1 from a preference into an asymmetry:
 
 | Host                  | How the apex is pointed                                                                                                                                                                     | Verdict                                                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Fly (A)**           | Fly issues a dedicated IPv4 and IPv6 per app; the apex takes ordinary `A` + `AAAA` records                                                                                                  | ✅ coexists with `MX` / `TXT` with nothing to work around                                                                                                                           |
+| **Fly (A)**           | Fly gives every app public ingress addresses — a shared IPv4 by default, a dedicated IPv6 (AMENDMENT 2); the apex takes ordinary `A` + `AAAA` records                                       | ✅ coexists with `MX` / `TXT` with nothing to work around                                                                                                                           |
 | **A static host (B)** | Typically a `CNAME` to a platform hostname. At an apex that needs either an `ALIAS` / `ANAME` record type the DNS provider must offer, **or** moving the zone to the host's own nameservers | ⚠️ the second path means **re-creating seven records MOTIR-2596 published the day before**, including a two-string DKIM `TXT` — an operation whose failure mode is silent mail loss |
 
 **This is not a knockout argument against B and is not presented as one.** A host
@@ -468,3 +470,53 @@ here first is not misled by a record that is right about what it was asked.
 It does not re-open Q1, Q3 or Q4, and it changes no cited reading. The
 measurements in the 2026-08-27 ground-truth table were correct on the day and
 are left exactly as they were.
+
+---
+
+## AMENDMENT 2 — §3 called the `motir-marketing` IPv4 _dedicated_; it is **shared** (MOTIR-4338, 2026-09-04)
+
+This amendment corrects a fact, not a decision. **Every answer in §3 stands** —
+the apex is pointed with `A` + `AAAA`, `www` with a `CNAME`, and the reasoning
+that made that a decision rather than a formality is untouched.
+
+Read first-hand from Fly on **2026-09-03**, as `zhuyue11@gmail.com`:
+
+```
+$ fly ips list -a motir-marketing
+ VERSION │ IP                      │ TYPE                       │ REGION │ CREATED AT
+ v6      │ 2a09:8280:1::17d:93fd:0 │ public ingress (dedicated) │ global │ Aug 28 2026 00:17
+ v4      │ 66.241.125.217          │ public ingress (shared)    │        │ Jan 1 0001 00:00
+```
+
+Corroborated from the public DNS on **2026-09-04**:
+
+```
+$ dig +short motir.co A     → 66.241.125.217
+$ dig +short motir.co AAAA  → 2a09:8280:1::17d:93fd:0
+```
+
+**The shared IPv4 is accepted and not upgraded.** A dedicated one is $2/mo and
+would buy the adjective without changing anything behind it; the full weighing
+lives in `public-tenant-addresses.md` §5's AMENDMENT 1, which is where the trade
+actually bites, because that is the record that hands the address to customers.
+
+### What was corrected
+
+| line                                         | was                                                  | is                                                                                            |
+| -------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| §3's record table, `motir.co` row            | _"the app's **dedicated** addresses"_                | _"public ingress addresses — a **shared** IPv4 and a dedicated IPv6"_                         |
+| §3's host-comparison table, **Fly (A)** cell | _"Fly issues a **dedicated** IPv4 and IPv6 per app"_ | _"Fly gives every app public ingress addresses — a shared IPv4 by default, a dedicated IPv6"_ |
+
+**The Fly (A) verdict does not move.** That cell's argument is that the apex
+takes ordinary `A` + `AAAA` records and therefore coexists with the `MX` and
+`TXT` records MOTIR-2596 published — which is equally true of a shared address.
+The comparison against a static host is unaffected in both directions.
+
+### Why the error was worth a card
+
+`application-hosting.md` already carried the correct reading, twice — its
+2026-08-13 cost note (_"All three apps are on shared IPv4 (no $2/mo dedicated
+address)"_) and §27's pricing row, both sourced to Fly's published pricing. So
+the corpus contained its own refutation and nothing compared the two, while the
+records a reader reaches for **while setting the value customers point an apex
+at** were the wrong ones.

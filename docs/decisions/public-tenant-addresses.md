@@ -259,10 +259,10 @@ contract returns the subject rather than just an id.
 **Any hostname the customer can point at the `motir-marketing` app.** No
 restriction to subdomains, and no restriction to one hostname per domain.
 
-| customer's hostname                  | record they create                     | why                                                                                                                                                                                                                                  |
-| ------------------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| a **subdomain** (`roadmap.acme.com`) | `CNAME` → the app's Fly hostname       | Fly: _"CNAME records work well for subdomains (like `www.example.com` or `app.example.com`). A CNAME points your custom domain at a unique `.fly.dev` hostname for your app."_                                                       |
-| an **apex** (`acme-roadmap.com`)     | `A` + `AAAA` → the app's dedicated IPs | Fly: _"Use A and AAAA records for most direct connections to your app. These records point your domain directly to your app's IP addresses."_ This is the same shape `marketing-site-hosting.md` §3 already relies on at `motir.co`. |
+| customer's hostname                  | record they create                                                                                       | why                                                                                                                                                                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| a **subdomain** (`roadmap.acme.com`) | `CNAME` → the app's Fly hostname                                                                         | Fly: _"CNAME records work well for subdomains (like `www.example.com` or `app.example.com`). A CNAME points your custom domain at a unique `.fly.dev` hostname for your app."_                                                       |
+| an **apex** (`acme-roadmap.com`)     | `A` + `AAAA` → the app's public ingress IPs — a **shared** IPv4 and a dedicated IPv6 (AMENDMENT 1 below) | Fly: _"Use A and AAAA records for most direct connections to your app. These records point your domain directly to your app's IP addresses."_ This is the same shape `marketing-site-hosting.md` §3 already relies on at `motir.co`. |
 
 **An apex is accepted rather than refused**, and Statuspage is the mirror we
 deviate from here — its help page recommends _"that you make this a dedicated
@@ -274,8 +274,10 @@ capability is bought for.
 
 > **The apex path carries a real, stateful cost — recorded because it is not
 > obvious.** A customer apex is pinned to the `motir-marketing` app's **IP
-> addresses**, not to a name we control. If those addresses ever change, every
-> customer apex breaks at once and the fix is on the customer's side. A
+> addresses**, not to a name we control — and, per AMENDMENT 1 below, the IPv4
+> among them is a **shared Fly Anycast address from a platform pool**, which is
+> less ours still. If those addresses ever change, every customer apex breaks at
+> once and the fix is on the customer's side. A
 > subdomain pointed by `CNAME` does not have this property. The settings pane
 > (MOTIR-4229) therefore presents `CNAME` as the recommended shape and the apex
 > as the one that needs the customer's DNS to be re-edited if we ever move — and
@@ -314,6 +316,82 @@ one extra record, once, at add time.
 4. **Only then** do we `POST` the certificate request to Fly. A certificate is
    never requested for an unverified hostname — which also keeps us clear of
    Let's Encrypt's per-registered-domain issuance limits for names we do not own.
+
+### ⚠️ AMENDMENT 1 (2026-09-04, Bug MOTIR-4338) — the apex IPv4 is **shared**, and the stateful cost above is re-stated against that
+
+**The record set table and the stateful-cost note both said _dedicated_. The
+platform says _shared_, and has since before either sentence was written.**
+
+Read first-hand from Fly on **2026-09-03**, as `zhuyue11@gmail.com`:
+
+```
+$ fly ips list -a motir-marketing
+ VERSION │ IP                      │ TYPE                       │ REGION │ CREATED AT
+ v6      │ 2a09:8280:1::17d:93fd:0 │ public ingress (dedicated) │ global │ Aug 28 2026 00:17
+ v4      │ 66.241.125.217          │ public ingress (shared)    │        │ Jan 1 0001 00:00
+```
+
+Corroborated from the public DNS on **2026-09-04**, which is what a customer's
+resolver sees:
+
+```
+$ dig +short motir.co A     → 66.241.125.217
+$ dig +short motir.co AAAA  → 2a09:8280:1::17d:93fd:0
+```
+
+`motir-core` is the same shape (`66.241.124.71` shared v4, `2a09:8280:1::163:172a:0`
+dedicated v6), so this is the org's default posture and not one app's anomaly.
+
+### The decision: **accept the shared IPv4.** It is not upgraded to a dedicated one
+
+`fly ips allocate-v4 -a motir-marketing` would cost $2/mo
+(`application-hosting.md` §27) and would make the word _dedicated_ true. It is
+**rejected**, and the reason matters more than the price:
+
+> **A dedicated IPv4 buys protection against _Fly moving this app to a different
+> address_. That is not the exposure.** Fly's shared IPv4 is the platform's own
+> ingress Anycast range, not a per-app lease that rotates — and a customer apex
+> is pinned to whichever address we publish either way. The blast radius the
+> paragraph above sizes is **identical** under both options, so $2/mo buys the
+> adjective and nothing behind it.
+
+Nothing in this directory ever decided otherwise. `application-hosting.md` has
+recorded the shared posture as a **cost reading** twice — _"All three apps are on
+shared IPv4 (no $2/mo dedicated address) and Anycast IPv6 is free"_ (2026-08-13)
+and §27's pricing row — but neither is a choice, and no rejected-alternatives
+table anywhere weighed allocation. The word _dedicated_ in this section and in
+`marketing-site-hosting.md` §3 was an **assumption written as fact**, describing a
+state no app in the org has ever been in. This amendment is the first time the
+question has actually been put.
+
+### What this changes, and what stands
+
+- **§5's record-set table** now names the kinds: shared IPv4, dedicated IPv6.
+- **The stateful-cost note** now says the IPv4 is a shared platform address. Its
+  conclusion is **unchanged** — an apex is still pinned to an address rather than
+  a name, `CNAME` is still the recommended shape, and the values are still read
+  from `fly ips list` at provisioning and never hardcoded.
+- **§10's AMENDMENT 1 rows** for `MOTIR_PUBLIC_ADDRESS_A_RECORDS` /
+  `..._AAAA_RECORDS` now describe the addresses they actually carry.
+- **`marketing-site-hosting.md` §3** is corrected by the same card, at its table
+  row and at the Fly cell of its comparison table. That cell's **verdict is
+  untouched**: the Fly-vs-static-host asymmetry turns on the apex taking
+  `A`/`AAAA` rather than a `CNAME`, which is true of a shared address too.
+- **`application-hosting.md` needs no change.** It is the record that was right.
+- **MOTIR-4314's value is unaffected.** `MOTIR_PUBLIC_ADDRESS_A_RECORDS` is
+  `66.241.125.217` under this decision, which is what it was already set to.
+
+### One correction to the report that produced this amendment
+
+MOTIR-4338 cited `motir-marketing`'s `/docs/public-address` page as already
+publishing `66.241.125.217` to customers. **It does not**, and had already
+stopped by the time the card was filed: MOTIR-4316 (`81a946c`, 2026-09-03)
+replaced every literal on that page with _"shown in the pane"_ and the sentence
+_"These are the addresses Motir is served on, read from the platform we run on,
+and they can change — the pane changes with them and a page like this one does
+not."_ No IP literal exists anywhere in that repository. That is the posture this
+amendment wants and it is already in force — the customer's copy of the address
+comes from the pane, which reads the variables, which are read from the platform.
 
 ---
 
@@ -826,11 +904,11 @@ point of deciding it in a document.
 **AMENDMENT 1 (2026-09-03, MOTIR-4278) — three rows this table OMITTED, and the
 omission is what §5's table could not be implemented without.**
 
-| variable                            | app          | kind | value                                               | read by                                  |
-| ----------------------------------- | ------------ | ---- | --------------------------------------------------- | ---------------------------------------- |
-| `MOTIR_PUBLIC_ADDRESS_CNAME_TARGET` | `motir-core` | env  | the app's own hostname (`motir-marketing.fly.dev`)  | `lib/publicAddresses/pointingRecords.ts` |
-| `MOTIR_PUBLIC_ADDRESS_A_RECORDS`    | `motir-core` | env  | the app's dedicated IPv4 addresses, comma-separated | the same module                          |
-| `MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS` | `motir-core` | env  | the app's dedicated IPv6 addresses, comma-separated | the same module                          |
+| variable                            | app          | kind | value                                                                                        | read by                                  |
+| ----------------------------------- | ------------ | ---- | -------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `MOTIR_PUBLIC_ADDRESS_CNAME_TARGET` | `motir-core` | env  | the app's own hostname (`motir-marketing.fly.dev`)                                           | `lib/publicAddresses/pointingRecords.ts` |
+| `MOTIR_PUBLIC_ADDRESS_A_RECORDS`    | `motir-core` | env  | the app's public ingress IPv4 addresses — **shared**, per §5's AMENDMENT 1 — comma-separated | the same module                          |
+| `MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS` | `motir-core` | env  | the app's public ingress IPv6 addresses (dedicated), comma-separated                         | the same module                          |
 
 **Why they were missing, said plainly.** §5's table decides that a subdomain
 creates a `CNAME` and an apex creates `A` + `AAAA`, and §5's order of operations
