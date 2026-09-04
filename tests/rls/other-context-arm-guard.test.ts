@@ -70,11 +70,15 @@ type Verdict =
   | 'blind-carded';
 
 /**
- * The §8 hostname reservation (Bug MOTIR-4366) — one verdict, three sites.
+ * The §8 hostname reservation (Bug MOTIR-4366) — one verdict, FIVE sites.
  *
- * Written once and shared, because the three findings are not three judgements:
+ * Written once and shared, because the findings are not separate judgements:
  * they are the same table, the same policy and the same argument, reached from
- * the two services that touch it.
+ * the two services that touch it. It was three sites until Story MOTIR-4451
+ * added `release` and gave `getForWorkspace` a reason to read the table
+ * (Amendment 2 counts the rename cap over names BURNT, so the reservation count
+ * is now an input to the DTO). Neither is a new argument — they are the same
+ * table reached from two more doors.
  */
 const HOSTNAME_RESERVATION_WHY =
   '`public_hostname_reservation_read` is `FOR SELECT USING (true)` and reads NO GUC, so an ' +
@@ -86,14 +90,23 @@ const HOSTNAME_RESERVATION_WHY =
   'would admit only the writer and silently release every name to everybody else, which is ' +
   "this guard's own failure mode with the polarity reversed. The table carries nothing to " +
   'protect: a one-way digest and a workspace id that no longer resolves. ' +
-  '⚠️ SETTLED BY MEASUREMENT, NOT BY READING THE POLICY, and CI cannot supply it — no ' +
-  'workflow sets `TEST_DB_APP_ROLE`, so the Vitest lane runs as the OWNER and a green shard ' +
-  'is silent about RLS. Run under `TEST_DB_APP_ROLE=1` against a base carrying this ' +
-  'migration, `tests/publicAddresses/hostnameReservation.test.ts` and ' +
-  '`tests/publicAddresses/publicSubdomainService.test.ts` are 36/36. Those tests are the ' +
+  '⚠️ SETTLED BY MEASUREMENT, NOT BY READING THE POLICY. ' +
+  '⚠️ AND CI DOES SUPPLY IT NOW — the struck half of this sentence read "CI cannot supply ' +
+  'it: no workflow sets `TEST_DB_APP_ROLE`, so the Vitest lane runs as the OWNER and a green ' +
+  'shard is silent about RLS", and that stopped being true at MOTIR-2734. That flag is ' +
+  'RETIRED and read NOWHERE in this tree: `currentWorkerUrl()` applies the non-bypass role ' +
+  'UNCONDITIONALLY, so `@/lib/db` is `motir_app` in every Vitest run, local and CI alike, and ' +
+  'the policies bite on the code under test wherever the suite runs. The correction matters ' +
+  'because the old sentence tells whoever adds the next entry that the one instrument this ' +
+  'ledger accepts is unavailable to them. It is available, and it is the ordinary suite. ' +
+  'Measured on this tree: `tests/publicAddresses/hostnameReservation.test.ts`, ' +
+  '`tests/publicAddresses/publicSubdomainService.test.ts` and ' +
+  '`tests/publicAddresses/subdomainReleaseGate.test.ts` are 62/62. Those tests are the ' +
   'instrument: a blind SELECT makes `assertNotReserved` find nothing and every refusal case ' +
-  'admits the claim, and a wrong INSERT `WITH CHECK` writes zero reservations — either way ' +
-  'a majority of that file goes red rather than passing quietly.';
+  'admits the claim, a blind COUNT hands every workspace a fresh rename cap after a release ' +
+  '(the unbounded name burn Amendment 2 exists to stop), and a wrong INSERT `WITH CHECK` ' +
+  'writes zero reservations — each of those takes a majority of that set red rather than ' +
+  'passing quietly.';
 
 /**
  * One entry per (descriptor, site, model). Keyed `<descriptor>::<site.key> :: <model>`.
@@ -116,6 +129,19 @@ const DELIBERATELY_UNARMED: Record<string, { verdict: Verdict; why: string }> = 
     verdict: 'guc-less-arm',
     why: HOSTNAME_RESERVATION_WHY,
   },
+  // The two doors Story MOTIR-4451 opened onto the same table. `release` writes
+  // the reservations and deletes the addresses in one transaction;
+  // `getForWorkspace` only COUNTS, because Amendment 2 measures the rename cap
+  // over names BURNT rather than over alias rows.
+  'workspace-user::lib/services/publicSubdomainService.ts#release :: publicHostnameReservation': {
+    verdict: 'guc-less-arm',
+    why: HOSTNAME_RESERVATION_WHY,
+  },
+  'workspace-user::lib/services/publicSubdomainService.ts#getForWorkspace :: publicHostnameReservation':
+    {
+      verdict: 'guc-less-arm',
+      why: HOSTNAME_RESERVATION_WHY,
+    },
   'workspace-user::lib/services/workspacesService.ts#deleteWorkspace :: publicHostnameReservation':
     {
       verdict: 'guc-less-arm',

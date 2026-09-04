@@ -59,18 +59,18 @@ see Q7, which is the one place that happened.
 
 ## §1 — The decisions, in one table
 
-| #       | Question                                               | Decision                                                                                                                                                                                                 |
-| ------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Q1**  | Which base domain do tenant subdomains hang off?       | A **separate registrable domain**, never a subdomain of `motir.co`. The exact string is **configuration, not code** — MOTIR-4208 buys one from the ranked, RDAP-checked shortlist in §2.                 |
-| **Q2**  | What does a subdomain NAME?                            | The **WORKSPACE**. `acme.<base>/<identifier>`.                                                                                                                                                           |
-| **Q3**  | What does a customer domain name?                      | **ONE public project, at the domain's root.**                                                                                                                                                            |
-| **Q4**  | Which customer hostnames, and how is ownership proven? | **Any hostname the customer can point** — `CNAME` for a subdomain, `A`/`AAAA` for an apex. Ownership proven by a **`TXT` record** at `_motir-verify.<host>` BEFORE a certificate is requested.           |
-| **Q5**  | Who issues and renews the certificate?                 | **Fly**, per hostname, on the **`motir-marketing`** app, driven from `motir-core` over Fly's REST certificates API. One **wildcard** `*.<base>` covers every tenant subdomain.                           |
-| **Q6**  | The canonical rule                                     | **Exactly one PRIMARY address per project.** Every other address `301`s to it; `canonical`, `og:url`, JSON-LD `@id`, the sitemap and the Atom feed all name the primary.                                 |
-| **Q7**  | Rename, and the reserved set                           | An old subdomain **keeps redirecting and is never released**. Renames capped at **5**. The reserved-name set is a constant in code, enumerated in §8.                                                    |
-| **Q8**  | The tier gate                                          | A new `EntitlementKind` **`custom_domains`** and **`maxCustomDomains`** on `PmEntitlements`, read through `entitlementsService`. **Tenant subdomains are free on every tier; custom domains are gated.** |
-| **Q9**  | The open-core line                                     | The whole capability is **cloud-only** behind `isCloud()`.                                                                                                                                               |
-| **Q10** | Branding on a customer address                         | **The public chrome stays Motir's on every address.** No white-label in this story — a decision with a reversal condition, not a deferral.                                                               |
+| #       | Question                                               | Decision                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Q1**  | Which base domain do tenant subdomains hang off?       | A **separate registrable domain**, never a subdomain of `motir.co`. The exact string is **configuration, not code** — MOTIR-4208 buys one from the ranked, RDAP-checked shortlist in §2.                                                                                                                                                                                                                                               |
+| **Q2**  | What does a subdomain NAME?                            | The **WORKSPACE**. `acme.<base>/<identifier>`.                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Q3**  | What does a customer domain name?                      | **ONE public project, at the domain's root.**                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Q4**  | Which customer hostnames, and how is ownership proven? | **Any hostname the customer can point** — `CNAME` for a subdomain, `A`/`AAAA` for an apex. Ownership proven by a **`TXT` record** at `_motir-verify.<host>` BEFORE a certificate is requested.                                                                                                                                                                                                                                         |
+| **Q5**  | Who issues and renews the certificate?                 | **Fly**, per hostname, on the **`motir-marketing`** app, driven from `motir-core` over Fly's REST certificates API. One **wildcard** `*.<base>` covers every tenant subdomain.                                                                                                                                                                                                                                                         |
+| **Q6**  | The canonical rule                                     | **Exactly one PRIMARY address per project.** Every other address `301`s to it; `canonical`, `og:url`, JSON-LD `@id`, the sitemap and the Atom feed all name the primary.                                                                                                                                                                                                                                                               |
+| **Q7**  | Rename, release, and the reserved set                  | A RENAMED subdomain **keeps redirecting and is never released** to another workspace. A workspace **may RELEASE its own subdomain** (Amendment 2): the live label and every alias stop being addresses and every one of those names is reserved **for ever**, claimable by nobody. Renames capped at **5**, counted over names burnt — releasing does **not** reset it. The reserved-name set is a constant in code, enumerated in §8. |
+| **Q8**  | The tier gate                                          | A new `EntitlementKind` **`custom_domains`** and **`maxCustomDomains`** on `PmEntitlements`, read through `entitlementsService`. **Tenant subdomains are free on every tier; custom domains are gated.**                                                                                                                                                                                                                               |
+| **Q9**  | The open-core line                                     | The whole capability is **cloud-only** behind `isCloud()`.                                                                                                                                                                                                                                                                                                                                                                             |
+| **Q10** | Branding on a customer address                         | **The public chrome stays Motir's on every address.** No white-label in this story — a decision with a reversal condition, not a deferral.                                                                                                                                                                                                                                                                                             |
 
 ---
 
@@ -452,6 +452,12 @@ the default and stays free.
 
 ### The decision — the old address is never released
 
+> **⚠️ AMENDED by AMENDMENT 2 (2026-09-04, Story MOTIR-4451), at the end of this
+> section.** The sentence below is the decision as originally taken and is kept
+> verbatim; it is NARROWED there to the case it was written for — a rename — and
+> joined by a second limb allowing a workspace to release its own subdomain
+> against a permanent reservation. Read both.
+
 **A renamed subdomain keeps redirecting, permanently, and is never released for
 another workspace to claim.**
 
@@ -592,6 +598,144 @@ re-connecting it. Holding a name we do not own is not a protection.
 - **A reservation is released only by an operator**, under `app.system_admin`.
   The table has no tenant `UPDATE` or `DELETE` arm and the repository has no
   remove method, so releasing a name is a deliberate act with a person behind it.
+
+### ⚠️ AMENDMENT 2 (2026-09-04, Story MOTIR-4451) — a workspace may RELEASE its own subdomain
+
+**This amendment does not overturn the decision above. It reads what the decision
+is ABOUT**, and the distinction it turns on is small enough to be worth stating
+before anything else:
+
+> **Never-released is a rule about who may take the name NEXT. It was never a
+> rule about who must keep SERVING it.**
+
+Those were the same thing only because deleting the row was the only way to stop
+serving, and Amendment 1 has already separated them: `PublicHostnameReservation`
+holds a name out of the namespace with no address row behind it. So the release
+keeps the property Q7 actually protects and drops the one it never argued for.
+
+The reasoning is not read into the rule from outside — the code that implements
+it says so in as many words
+(`lib/publicAddresses/hostnameReservation.ts`, `reservesItsHostname`):
+
+> _"§8's never-released rule is about MOTIR'S OWN namespace: we hand out
+> `<label>.<base>` from a space we own, so releasing a label lets a stranger
+> inherit somebody's inbound links."_
+
+Nothing in that sentence is about a workspace un-claiming its OWN name.
+
+#### The original wording, preserved
+
+The decision at the head of this section read, and until this amendment read only:
+
+> ~~**A renamed subdomain keeps redirecting, permanently, and is never released
+> for another workspace to claim.**~~
+
+It is not replaced. It is **narrowed to the case it was written for — a RENAME —
+and joined by a second limb** for the case it never asked about:
+
+> **A workspace may RELEASE its own subdomain. Releasing removes the live label
+> and every retained alias as ADDRESSES, and reserves every one of those
+> hostnames for ever, so no workspace — including the one releasing it — can ever
+> claim any of them again.**
+
+A rename is still never released in the sense §8 meant: the retired label keeps
+its slot, keeps redirecting, and cannot be taken by a stranger. What changes is
+that a workspace now has an exit that is not "delete the workspace".
+
+#### The three properties, each stated so a test can be written from it
+
+1. **The name is held for ever.** Every hostname the release removes — the live
+   `workspace_subdomain` and every `workspace_subdomain_alias` — is written into
+   `PublicHostnameReservation` as a digest in the SAME transaction as the delete,
+   and the reserve happens BEFORE the delete. A claim for any of those labels is
+   refused afterwards, by this workspace or any other, through the same
+   reservation check a claim already runs.
+2. **The redirect stops.** A released hostname is no longer an address: it
+   resolves to no workspace and no project, so it serves a `404` rather than a
+   `301` to an address that no longer exists. This is the one behaviour a reader
+   of Q7's _"keeps redirecting"_ would predict wrongly — the redirect is a
+   property of the retained alias ROW, and release is what removes the row.
+3. **The workspace's projects fall back.** With no subdomain claimed, §7's
+   default-primary table takes its first row again: `motir.co/p/<identifier>` is
+   the primary for every public project in that workspace, `motir.co/p/*` serves
+   `200` rather than `301`, and those projects reappear in `motir.co`'s own
+   sitemap under MOTIR-4222's per-host rule.
+
+#### What release does NOT do
+
+**It does not touch `custom_domain` rows.** The kinds a release acts on are
+chosen by `reservesItsHostname`, which already excludes them and already carries
+the reason: a customer's own domain is theirs whatever happens to their Motir
+account, and holding it would be _"a hostage"_ rather than a protection (the
+_A CUSTOMER domain is NOT reserved_ sub-section above). A workspace with custom
+domains keeps every one of them, keeps their certificate states, and a **promoted
+custom domain stays the canonical** — releasing the subdomain changes nothing for
+a project whose primary was already a customer domain.
+
+#### The rename cap: **releasing does NOT reset it**
+
+**Decided here rather than left to the implementation, because the implementation
+has a default and the default is wrong.** `renamesLeft` is derived today as
+`MAX_SUBDOMAIN_RENAMES − aliases.length` (`publicSubdomainService.toDto`), a count
+of alias ROWS. A release deletes those rows, so an implementation that changes
+nothing else hands a workspace a fresh cap on every release — and
+claim → rename ×5 → release, repeated, burns names out of a shared namespace
+without bound. That is precisely what the cap exists to stop, so a release that
+reset it would give back through the exit what §8's cap holds at the door.
+
+**The cap is therefore measured over the names the workspace has TAKEN OUT of the
+namespace, not over the alias rows it currently holds:**
+
+> `renamesLeft = MAX_SUBDOMAIN_RENAMES − (aliases held + hostnames this workspace
+has reserved)`
+
+For every workspace that has never released, the second term is zero and this is
+the same number as before — the generalisation agrees with today's behaviour
+everywhere today's behaviour is defined. After a release it keeps counting.
+
+Two consequences worth naming rather than discovering:
+
+- **A release charges the LIVE label too**, because the live label is also
+  permanently burnt. A workspace that claims once and releases once has spent one
+  of its five, not zero. That is the honest count under _names burnt in a shared
+  namespace_, and the alternative — distinguishing a released alias from a
+  released live label — would need a column on the reservation table that exists
+  only to make the cap kinder.
+- **A workspace can exhaust its cap and still release.** Release is not a claim
+  and is not capped; what the cap bounds is how many times it can come BACK.
+  A workspace at `renamesLeft: 0` may release, and then cannot claim again.
+
+#### The reservation's provenance now names a LIVING workspace
+
+`retired_from_workspace_id` was introduced by Amendment 1 for the workspace-delete
+path only, and both its schema comment and its RLS migration describe it as
+naming _"a workspace that no longer exists"_. **After this amendment that is no
+longer true in general** — a release writes it while the workspace is very much
+alive. Nothing about the column's shape or its policies has to change: it is still
+not a relation, the `FOR SELECT USING (true)` read arm is still what makes a
+global namespace answerable, and the `WITH CHECK ("retired_from_workspace_id" =
+current_setting('app.workspace_id', true))` insert arm is satisfied by
+construction, because a release runs inside `withWorkspaceContext` bound to the
+workspace it is releasing. What has to change is the two COMMENTS, and correcting
+them is part of the release card rather than of this one.
+
+#### Why this is written down rather than worked around
+
+The workaround for a subdomain somebody regrets is a hand-written database
+delete, and **that is the version that actually breaks Q7**: it removes the
+`public_address` row, leaves no reservation behind, and hands the label back to
+the world — the exact outcome the rule exists to prevent, arrived at in the act
+of respecting it.
+
+#### The trigger, recorded honestly
+
+This amendment exists because we hit it ourselves. `hey.motir.site` was claimed on
+the `moooon` workspace as testing input and then renamed, so `motir.co/p/MOTIR`
+`301`s to a subdomain nobody wants and Motir's own project pages are absent from
+Motir's own sitemap — with no operation between _rename_ and _delete the
+workspace_. The cost of finding it this way is our own sitemap for a few days. The
+same shape reaches the first customer who claims their company name at the wrong
+level, publishes it, and asks how to undo it.
 
 ---
 
@@ -802,6 +946,9 @@ epic, not a settings toggle.
 | **MOTIR-4222** (the canonical)                        | §7 in full, including the half that is easy to miss: the primary is what `publicProjectUrl()` **emits**, not only what `<link rel="canonical">` says.                                                                                                                                                                                                                                                                                 |
 | **MOTIR-4228** (the entitlement)                      | §9's kind, field, four provisional values and the six-line assert shape.                                                                                                                                                                                                                                                                                                                                                              |
 | **MOTIR-4207** (verification, **outside** this story) | §6's warning: the certificate path is a claim about a running system and only a live issue discharges it.                                                                                                                                                                                                                                                                                                                             |
+| **MOTIR-4454** (the release path, Amendment 2)        | Amendment 2 in full: reserve-before-delete in ONE transaction, the kinds chosen by `reservesItsHostname`, custom domains untouched, no certificate call, and the `renamesLeft` rule — the cap counts names BURNT (aliases held + hostnames this workspace has reserved), so a release does not reset it. Also the two comment corrections Amendment 2's provenance sub-section names.                                                 |
+| **MOTIR-4453 / MOTIR-4455** (the Remove control)      | What the confirm may promise, and only that: the name held for ever and claimable by nobody, the redirect STOPPING rather than continuing, and the projects returning to `motir.co/p/<identifier>` per §7's default-primary table. It may not promise the label back.                                                                                                                                                                 |
+| **MOTIR-4458** (release `hey` / `tak`, manual)        | Amendment 2's three properties, read back from the DEPLOYMENT rather than from a merge — which is why it sits outside the story that ships the capability.                                                                                                                                                                                                                                                                            |
 
 ### ⚠️ What this record CHANGES about cards already written
 
@@ -822,6 +969,17 @@ re-read against the answers above.** The result:
   should not re-open it.
 - **Every other consumer — CHECKED, no contradiction.** Each either names no
   shape this record fixes differently, or already states the answer above.
+- **AMENDMENT 2's own sweep (2026-09-04) — CHECKED.** The three rows added to the
+  table above were re-read against Amendment 2 and none contradicts it. Two
+  pointers rather than contradictions are recorded so the next reader does not
+  re-open them. MOTIR-4454's criteria cite the fallback as _"§7 rule 3"_, which is
+  §7's default-primary TABLE — its first row, _no subdomain claimed_ — and not a
+  numbered rule; the address it names is the right one. And MOTIR-4211's row above
+  records that the pane inherits §8's rename warning _"the old address keeps
+  redirecting and is never released"_: that warning is still correct for a RENAME
+  and must NOT be reused as the release confirm's copy, where property 2 above
+  says the redirect stops. MOTIR-4453 draws the release copy separately, which is
+  what keeps the two apart.
 
 The check that mattered most is the one that came back **negative**: a decision's
 own consequences table makes it easy to assert an amendment that was never made,

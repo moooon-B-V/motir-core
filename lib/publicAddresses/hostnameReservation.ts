@@ -96,6 +96,16 @@ export function hostnameReservationHash(hostname: string): string {
  * and reserving it for ever would lock the rightful owner out of connecting
  * their own domain again. Holding a name we do not own is not a protection, it
  * is a hostage.
+ *
+ * ⚠️ AND THAT REASONING IS WHAT AMENDMENT 2 READS THIS RULE BY
+ * (`docs/decisions/public-tenant-addresses.md` §8, Story MOTIR-4451). The
+ * sentence above says never-released is about who may take the name NEXT — not
+ * about who must keep SERVING it — so a workspace may RELEASE its own subdomain:
+ * this predicate chooses the kinds that go, every one of them is reserved by
+ * digest in the same transaction as the delete, and the names stay held for ever.
+ * The judgement here is unchanged and is now load-bearing in a second place: a
+ * release must select its rows through THIS function and never through a
+ * hand-written kind list, or it takes a customer's own domain with it.
  */
 export function reservesItsHostname(kind: PublicAddressKind): boolean {
   return kind === 'workspace_subdomain' || kind === 'workspace_subdomain_alias';

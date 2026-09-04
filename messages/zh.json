@@ -2240,6 +2240,7 @@
         "claimable": "之后可以重命名，但次数有限。",
         "active": "使用中",
         "alias": "重定向至此",
+        "aliasShort": "重定向",
         "copy": "复制地址",
         "copied": "地址已复制",
         "open": "在新标签页中打开",
@@ -2255,6 +2256,17 @@
         "remaining": "此次之后你还可重命名 {count} 次。",
         "cancel": "取消",
         "confirm": "重命名"
+      },
+      "release": {
+        "remove": "移除",
+        "title": "要移除 {hostname} 吗？",
+        "lead": "{count, plural, other {以下 # 个地址将停止提供访问：}}",
+        "warningTitle": "{count, plural, other {这些名称将被永久保留，任何人都无法再认领它们——包括你自己。}}",
+        "warningBody": "Motir 会把每个已释放的名称永久排除在命名空间之外，因此其他工作区无法继承指向你的链接。",
+        "renamesAfter": "若你再次认领子域名，将只剩 {count, plural, =0 {0} other {#}} 次重命名机会——释放不会把它们还给你。",
+        "fallback": "你的公开项目将回到 {url}，并重新出现在 {site} 上。",
+        "cancel": "取消",
+        "confirm": "移除子域名"
       },
       "domains": {
         "title": "你自己的域名",
