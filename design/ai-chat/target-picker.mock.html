@@ -58,55 +58,96 @@
     -->
     <style>
       /* ----------------------------------------------------------------------
-         Token block — mirrors motir-core/app/globals.css light-theme values.
-         Colour: --el-* only.  Shape: semantic tokens.  No raw hex/radius.
+         Token block — the `--el-*` ELEMENT-token layer, resolved to the LIGHT /
+         warm-editorial / motir values the running app computes, exactly as the
+         in-area copy of record `design/ai-planning/plan-revision.mock.html`
+         states them. A plain browser paints the real palette without the
+         Tailwind build.
+
+         ⚠️ MOTIR-4346 (2026-09-03) — this block USED to alias those same values
+         onto PRIVATE names (`--muted: #787671`, `--soft: #fafaf9`,
+         `--surface: #ffffff`, …). The values were right, and that was the trap:
+         a raw hex does not flip with `data-palette`, does not follow a re-skin,
+         and is invisible to every ink guard in the tree — both
+         `design-ink-contrast` and `design-state-ink-contrast` classify an ink by
+         reading an `--el-*` name off the DECLARATION at the point of use, so
+         `color: var(--el-text-muted)` is unmeasured however `--muted` is defined. This
+         asset sat outside both by construction and both were green about it.
+         Consume the token layer and the guards can see the asset.
+
+         ⚠️ MAP BY VALUE AND ROLE, NEVER BY NAME. The old `--surface` was
+         `#ffffff` while the design system's `--el-surface` is `#f6f5f4`: the old
+         `--surface` is `--el-card`, and it is the old `--hub` that is
+         `--el-surface`. A name-based substitution would have repainted every
+         white card in this asset.
       ---------------------------------------------------------------------- */
       :root {
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --secondary: #5d5b54;
-        --muted: #787671;
-        --faint: #a4a097;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --hair-strong: #d3cfc8;
-        --accent: #5645d4;
-        --accent-soft: #f4f2fd;
-        --accent-text: #ffffff;
-        --highlight: #ff64c8;
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --danger: #e03131;
-        --info: #0075de;
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --mint: #d9f3e1;
-        --lavender: #e6e0f5;
-        --sky: #dcecfa;
-        --yellow: #fef7d6;
-        --type-epic: #ff64c8;
-        --type-story: #1aae39;
-        --type-task: #0075de;
-        --type-bug: #e03131;
-        --type-subtask: #2a9d99;
-        --r-card: 12px;
-        --r-modal: 14px;
-        --r-btn: 8px;
-        --r-input: 9px;
-        --r-control: 6px;
-        --r-badge: 999px;
-        --sh-subtle: 0 1px 2px #0000000d;
-        --sh-card: 0 2px 6px #0000000f;
-        --sh-elev: 0 8px 26px -10px #0000001f;
-        --sh-modal: 0 24px 60px -18px #00000033;
-        --focus: #5645d4;
-        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-        --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
-        --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        /* ── Ink ─────────────────────────────────────────────────────────
+           `--el-text-muted` and `--el-text-faint` are DECLARED and used only
+           where the guards allow: muted is 4.12–4.34:1 on every tinted surface
+           and faint clears AA on none (CLAUDE.md's measured table, MOTIR-2455).
+           Declaring them still matters — `mockStateInkScan` resolves a token by
+           planting a probe, and an asset that declares neither reports its faint
+           ink as muted. */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-identifier: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        /* ── Surfaces ─────────────────────────────────────────────────── */
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        /* ── Borders ──────────────────────────────────────────────────── */
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        /* ── Accent ───────────────────────────────────────────────────── */
+        --el-accent: #5645d4;
+        --el-accent-on-surface: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-highlight: #ff64c8;
+
+        /* ── Tints ────────────────────────────────────────────────────── */
+        --el-tint-peach: #ffe8d4;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+
+        /* ── Work-item type hues (theme.css §--el-type-*) ──────────────── */
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-bug: #e03131;
+        --el-type-subtask: #2a9d99;
+
+        /* ── The accent WASH, palette-DERIVED rather than invented ──────
+           The picker's selected row, its `@` trigger and the target chips paint
+           a wash far lighter than `--el-tint-lavender`, and no `--el-*` token
+           exposes one. It is a `color-mix` whose inputs are BOTH tokens — the
+           form CLAUDE.md blesses — so it re-tints with `data-palette` instead of
+           freezing the old `#f4f2fd`. Same derivation as
+           `plan-detail-list-view.mock.html` (MOTIR-4277). */
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg));
+
+        /* ── Shape + type (element-semantic names; warm-editorial values) ── */
+        --radius-card: 12px;
+        --radius-btn: 8px;
+        --radius-input: 9px;
+        --radius-control: 6px;
+        --radius-badge: 999px;
+        --shadow-subtle: 0 1px 2px #0000000d;
+        --shadow-card: 0 2px 6px #0000000f;
+        --shadow-elevated: 0 8px 26px -10px #0000001f;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --font-serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       }
 
       * {
@@ -114,9 +155,9 @@
       }
       body {
         margin: 0;
-        background: #f4f3f1;
-        color: var(--text);
-        font-family: var(--sans);
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
         -webkit-font-smoothing: antialiased;
         padding: 32px 24px 120px;
       }
@@ -125,10 +166,10 @@
       .sheet {
         max-width: 1150px;
         margin: 0 auto 28px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        box-shadow: var(--sh-subtle);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
         overflow: hidden;
       }
       .sheethead {
@@ -136,24 +177,24 @@
         align-items: baseline;
         gap: 10px;
         padding: 13px 18px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .sheethead .n {
-        font: 700 11px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
+        font: 700 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
         padding: 2px 7px;
-        border-radius: var(--r-control);
+        border-radius: var(--radius-control);
       }
       .sheethead h2 {
         font-size: 14.5px;
         margin: 0;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .sheethead .cap {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-left: auto;
       }
       .sheetbody {
@@ -162,20 +203,20 @@
       .note {
         font-size: 12px;
         line-height: 1.5;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         margin: 14px 18px 0;
         padding: 10px 12px;
-        background: var(--soft);
-        border: 1px solid var(--hair);
-        border-radius: var(--r-control);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-control);
       }
       .note b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .note code {
-        font: 600 11.5px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
+        font: 600 11.5px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
         padding: 1px 5px;
         border-radius: 5px;
       }
@@ -184,13 +225,13 @@
         margin: 0 auto 22px;
       }
       .doc-head h1 {
-        font: 700 22px/1.2 var(--serif);
+        font: 700 22px/1.2 var(--font-serif);
         margin: 0 0 8px;
         letter-spacing: -0.01em;
       }
       .doc-head p {
         margin: 0;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 13.5px;
         line-height: 1.55;
         max-width: 82ch;
@@ -202,20 +243,20 @@
         gap: 6px;
       }
       .ref {
-        font: 600 11px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
-        border-radius: var(--r-badge);
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
+        border-radius: var(--radius-badge);
         padding: 3px 9px;
       }
 
       /* ---- screen frame ---- */
       .screen {
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
         overflow: hidden;
-        box-shadow: var(--sh-card);
-        background: var(--surface);
+        box-shadow: var(--shadow-card);
+        background: var(--el-card);
       }
 
       /* ═══════════════ SHIPPED RAIL (composed, not redrawn) ═══════════════ */
@@ -223,38 +264,38 @@
         display: flex;
         flex-direction: column;
         min-height: 0;
-        border-left: 1px solid var(--border);
-        background: var(--surface);
+        border-left: 1px solid var(--el-border);
+        background: var(--el-card);
       }
       .railhead {
         display: flex;
         align-items: center;
         gap: 8px;
         padding: 11px 16px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .railhead .dot {
         width: 9px;
         height: 9px;
         border-radius: 50%;
-        background: linear-gradient(135deg, #5645d4, #ff64c8);
-        box-shadow: 0 0 7px #ff64c885;
+        background: linear-gradient(135deg, var(--el-accent), var(--el-highlight));
+        box-shadow: 0 0 7px color-mix(in srgb, var(--el-highlight) 52%, transparent);
       }
       .railhead .lbl {
-        font: 600 11px var(--mono);
+        font: 600 11px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .railhead .lbl::before {
         content: '✦ ';
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
       }
       .railhead .mode {
         margin-left: auto;
-        font: 600 10px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
+        font: 600 10px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
         padding: 2px 7px;
         border-radius: 5px;
       }
@@ -286,12 +327,12 @@
         flex: none;
       }
       .avatar.ai {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .avatar.user {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .bubble {
         border-radius: 13px;
@@ -301,19 +342,19 @@
         max-width: 232px;
       }
       .bubble.ai {
-        background: var(--soft);
-        color: var(--text);
+        background: var(--el-surface-soft);
+        color: var(--el-text);
       }
       .bubble.user {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
 
       /* ═══════════════ THE COMPOSER — the primary surface this design changes ═══════════════ */
       .composer {
         display: flex;
         flex-direction: column;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
       }
       /* the targets tray (above the input, visible when items are picked) */
       .targets-tray {
@@ -325,10 +366,10 @@
         min-height: 0;
       }
       .targets-tray-label {
-        font: 600 10px var(--mono);
+        font: 600 10px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         padding: 2px 0;
         flex: none;
         margin-right: 2px;
@@ -340,13 +381,13 @@
         gap: 5px;
         vertical-align: baseline;
         padding: 1px 7px 1px 6px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-control);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
         font-size: 11.5px;
         line-height: 1.35;
         white-space: nowrap;
-        color: var(--text);
+        color: var(--el-text);
         cursor: default;
         max-width: 180px;
       }
@@ -361,10 +402,10 @@
         display: block;
       }
       .wi-key {
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 0.9em;
         font-weight: 500;
-        color: var(--accent);
+        color: var(--el-accent-on-surface);
         flex: none;
       }
       .wi-title {
@@ -379,32 +420,32 @@
         display: grid;
         place-items: center;
         border-radius: 3px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         cursor: pointer;
         margin-left: 1px;
       }
       .wi-remove:hover {
-        background: var(--soft);
-        color: var(--text);
+        background: var(--el-surface-soft);
+        color: var(--el-text);
       }
       .wi-remove svg {
         width: 11px;
         height: 11px;
       }
       .t-epic {
-        color: var(--type-epic);
+        color: var(--el-type-epic);
       }
       .t-story {
-        color: var(--type-story);
+        color: var(--el-type-story);
       }
       .t-task {
-        color: var(--type-task);
+        color: var(--el-type-task);
       }
       .t-bug {
-        color: var(--type-bug);
+        color: var(--el-type-bug);
       }
       .t-subtask {
-        color: var(--type-subtask);
+        color: var(--el-type-subtask);
       }
 
       /* the input row */
@@ -419,25 +460,25 @@
         flex: 1;
         min-width: 0;
         height: 34px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-input);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
         padding: 0 11px;
         font: inherit;
         font-size: 12px;
-        color: var(--text);
+        color: var(--el-text);
         display: flex;
         align-items: center;
-        background: var(--surface);
+        background: var(--el-card);
       }
       .composer-row .inp::placeholder {
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .composer-row .send {
         width: 34px;
         height: 34px;
-        border-radius: var(--r-btn);
-        background: var(--accent);
-        color: #fff;
+        border-radius: var(--radius-btn);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         display: grid;
         place-items: center;
         flex: none;
@@ -451,10 +492,10 @@
         bottom: 48px;
         left: 12px;
         right: 12px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        box-shadow: var(--sh-elev);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
         padding: 4px 0;
         z-index: 50;
         overflow: hidden;
@@ -462,19 +503,19 @@
       }
       .drop-head {
         padding: 7px 12px 4px;
-        font: 600 10px var(--mono);
+        font: 600 10px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         display: flex;
         align-items: center;
         gap: 6px;
       }
       .drop-head .q {
         font-weight: 500;
-        color: var(--text);
+        color: var(--el-text);
         text-transform: none;
-        font-family: var(--sans);
+        font-family: var(--font-sans);
         letter-spacing: 0;
       }
       .drop-row {
@@ -483,11 +524,11 @@
         gap: 8px;
         padding: 7px 12px;
         font-size: 13px;
-        color: var(--text);
+        color: var(--el-text);
         cursor: pointer;
       }
       .drop-row.is-active {
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .drop-row .dr-type {
         width: 15px;
@@ -500,9 +541,9 @@
         display: block;
       }
       .drop-row .dr-key {
-        font-family: var(--mono);
+        font-family: var(--font-mono);
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-identifier);
         flex: none;
         width: 72px;
       }
@@ -520,14 +561,14 @@
       .drop-hint {
         padding: 14px 12px;
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         text-align: center;
       }
       .drop-hint .spin {
         display: inline-block;
         width: 14px;
         height: 14px;
-        color: var(--faint);
+        color: var(--el-text-faint);
         vertical-align: -3px;
         margin-right: 6px;
       }
@@ -547,28 +588,28 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-badge);
+        border-radius: var(--radius-badge);
         padding: 2px 9px;
         font-size: 11px;
         font-weight: 500;
         white-space: nowrap;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .p-planned {
-        background: var(--lavender);
+        background: var(--el-tint-lavender);
       }
       .p-inprogress {
-        background: var(--sky);
+        background: var(--el-tint-sky);
       }
       .p-done {
-        background: var(--mint);
+        background: var(--el-tint-mint);
       }
       .p-blocked {
-        background: var(--peach);
+        background: var(--el-tint-peach);
       }
       .p-cancelled {
-        background: var(--mutedfill);
-        color: var(--muted);
+        background: var(--el-muted);
+        color: var(--el-text-muted);
       }
 
       /* ═══════════════ THE MAP (CANVAS) HIGHLIGHT — Panel 3 ═══════════════ */
@@ -581,39 +622,39 @@
         position: relative;
         overflow: hidden;
         background:
-          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 24px 24px,
-          var(--hub);
+          radial-gradient(circle at 1px 1px, var(--el-border) 1px, transparent 0) 0 0 / 24px 24px,
+          var(--el-surface);
       }
       .canvas-label {
         position: absolute;
         top: 10px;
         left: 14px;
-        font: 600 10px var(--mono);
+        font: 600 10px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--faint);
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-control);
+        color: var(--el-text-secondary);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
         padding: 3px 7px;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--shadow-subtle);
       }
       /* canvas node (composed from planning-workspace.mock.html) */
       .node {
         position: absolute;
         width: 200px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         padding: 10px 11px;
-        box-shadow: var(--sh-card);
+        box-shadow: var(--shadow-card);
         z-index: 2;
       }
       .node.active {
-        border-color: var(--accent);
+        border-color: var(--el-accent);
         box-shadow:
-          0 0 0 3px #5645d426,
-          0 4px 12px #5645d41f;
+          0 0 0 3px color-mix(in srgb, var(--el-accent) 15%, transparent),
+          0 4px 12px color-mix(in srgb, var(--el-accent) 12%, transparent);
       }
       .node.upcoming {
         opacity: 0.5;
@@ -638,22 +679,22 @@
       .ntitle {
         font-size: 12px;
         font-weight: 700;
-        color: var(--text);
+        color: var(--el-text);
         line-height: 1.18;
       }
       .nsub {
         font-size: 10px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 1px;
       }
       .focus-ring {
         position: absolute;
         inset: -2px;
         border-radius: 18px;
-        border: 2px solid var(--accent);
+        border: 2px solid var(--el-accent);
         box-shadow:
-          0 0 14px #5645d43d,
-          0 0 28px -4px #ff64c84d;
+          0 0 14px color-mix(in srgb, var(--el-accent) 24%, transparent),
+          0 0 28px -4px color-mix(in srgb, var(--el-highlight) 30%, transparent);
         pointer-events: none;
         z-index: 3;
       }
@@ -661,15 +702,15 @@
         position: absolute;
         top: -24px;
         right: -4px;
-        font: 600 10px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
-        border: 1px solid var(--accent);
-        border-radius: var(--r-badge);
+        font: 600 10px var(--font-mono);
+        color: var(--el-accent-on-surface);
+        background: var(--el-accent-wash);
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-badge);
         padding: 2px 7px;
         white-space: nowrap;
         z-index: 4;
-        box-shadow: 0 0 8px #5645d41f;
+        box-shadow: 0 0 8px color-mix(in srgb, var(--el-accent) 12%, transparent);
       }
 
       /* ═══════════════ STATES PANEL (4) ═══════════════ */
@@ -679,37 +720,37 @@
         gap: 14px;
       }
       .state-card {
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
         overflow: hidden;
       }
       .state-card .sc-h {
-        font: 600 10px var(--mono);
+        font: 600 10px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         padding: 8px 11px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .state-card .sc-b {
         padding: 14px 11px;
         position: relative;
       }
       .mini-drop {
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
-        box-shadow: var(--sh-subtle);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        box-shadow: var(--shadow-subtle);
         overflow: hidden;
       }
       .mini-drop .md-head {
         padding: 7px 11px 4px;
-        font: 600 10px var(--mono);
+        font: 600 10px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .mini-drop .md-row {
         display: flex;
@@ -717,20 +758,20 @@
         gap: 7px;
         padding: 6px 11px;
         font-size: 12px;
-        color: var(--text);
+        color: var(--el-text);
       }
       .mini-drop .md-hint {
         padding: 10px 11px;
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .mini-drop .md-hint .spinner {
         display: inline-block;
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        border: 2px solid #d8d4cd;
-        border-top-color: var(--accent);
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
         vertical-align: -2px;
         margin-right: 5px;
       }
@@ -750,10 +791,10 @@
         align-items: flex-start;
       }
       .mini-label {
-        font: 600 10px var(--mono);
+        font: 600 10px var(--font-mono);
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         margin-bottom: 8px;
       }
     </style>
@@ -763,10 +804,10 @@
       <h1>@-mention work-item picker in the planning chat</h1>
       <p>
         MOTIR-1490 · <b>type: design</b> · Parent MOTIR-812 (Contextual planning from each work
-        item). The user types <code style="font-family: var(--mono)">@</code> in the planning-chat
-        composer → a search dropdown over the project's work items; picked items become inline
-        target chips. <b>Multiple targets</b> supported — the session API (MOTIR-909) accepts a
-        target SET.
+        item). The user types <code style="font-family: var(--font-mono)">@</code> in the
+        planning-chat composer → a search dropdown over the project's work items; picked items
+        become inline target chips. <b>Multiple targets</b> supported — the session API (MOTIR-909)
+        accepts a target SET.
       </p>
       <div class="refs">
         <span class="ref">MOTIR-1490 · design</span>
@@ -787,7 +828,7 @@
       </div>
       <div class="sheetbody">
         <div class="screen">
-          <div style="max-width: 340px; border-right: 1px solid var(--border)">
+          <div style="max-width: 340px; border-right: 1px solid var(--el-border)">
             <div class="rail">
               <div class="railhead">
                 <span class="dot"></span><span class="lbl">Motir AI</span>
@@ -808,19 +849,19 @@
               <div class="composer">
                 <div class="composer-row" style="position: relative">
                   <span class="inp">
-                    <span style="color: var(--muted)">Add sub-stories to </span>
+                    <span style="color: var(--el-text-muted)">Add sub-stories to </span>
                     <span
                       style="
-                        color: var(--accent);
-                        font-family: var(--mono);
+                        color: var(--el-accent-on-surface);
+                        font-family: var(--font-mono);
                         font-weight: 600;
-                        background: var(--accent-soft);
+                        background: var(--el-accent-wash);
                         border-radius: 4px;
                         padding: 1px 5px;
                       "
                       >@bil</span
                     >
-                    <span style="border-left: 1.5px solid var(--accent); margin-left: 1px"
+                    <span style="border-left: 1.5px solid var(--el-accent); margin-left: 1px"
                       >&nbsp;</span
                     >
                   </span>
@@ -998,7 +1039,9 @@
                   </span>
                 </div>
                 <div class="composer-row">
-                  <span class="inp" style="color: var(--faint)">Ask Motir to expand these…</span>
+                  <span class="inp" style="color: var(--el-text-secondary)"
+                    >Ask Motir to expand these…</span
+                  >
                   <span class="send">➤</span>
                 </div>
               </div>
@@ -1032,7 +1075,7 @@
                   </span>
                 </div>
                 <div class="composer-row">
-                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                  <span class="inp" style="color: var(--el-text-secondary)">Message Motir AI…</span>
                   <span class="send">➤</span>
                 </div>
               </div>
@@ -1043,7 +1086,7 @@
             <div class="screen" style="border-bottom: 0">
               <div class="composer">
                 <div class="composer-row">
-                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                  <span class="inp" style="color: var(--el-text-secondary)">Message Motir AI…</span>
                   <span class="send">➤</span>
                 </div>
               </div>
@@ -1063,7 +1106,9 @@
                       align-items: center;
                     "
                   >
-                    <span class="inp" style="padding-left: 36px; color: var(--faint); width: 100%"
+                    <span
+                      class="inp"
+                      style="padding-left: 36px; color: var(--el-text-secondary); width: 100%"
                       >Message Motir AI…</span
                     >
                     <span
@@ -1075,11 +1120,11 @@
                         justify-content: center;
                         width: 22px;
                         height: 22px;
-                        border-radius: var(--r-control);
-                        border: 1px solid var(--border);
-                        background: var(--soft);
-                        font: 600 12px var(--mono);
-                        color: var(--muted);
+                        border-radius: var(--radius-control);
+                        border: 1px solid var(--el-border);
+                        background: var(--el-surface-soft);
+                        font: 600 12px var(--font-mono);
+                        color: var(--el-text-secondary);
                         cursor: pointer;
                       "
                       >@</span
@@ -1129,7 +1174,7 @@
                   <span class="canvas-label">Scoped to MOTIR-812</span>
                   <div class="node upcoming" style="top: 30px; left: 30px">
                     <div class="nhead">
-                      <span class="tile" style="background: var(--peach)">⚙</span>
+                      <span class="tile" style="background: var(--el-tint-peach)">⚙</span>
                       <div>
                         <div class="ntitle">Payments</div>
                         <div class="nsub">2 stories</div>
@@ -1141,7 +1186,7 @@
                     <div class="focus-ring"></div>
                     <div class="focus-pill">Target</div>
                     <div class="nhead">
-                      <span class="tile" style="background: var(--lavender)">📚</span>
+                      <span class="tile" style="background: var(--el-tint-lavender)">📚</span>
                       <div>
                         <div class="ntitle">Billing — invoicing</div>
                         <div class="nsub">MOTIR-812 · 3 stories</div>
@@ -1150,7 +1195,7 @@
                   </div>
                   <div class="node done" style="top: 200px; left: 40px">
                     <div class="nhead">
-                      <span class="tile" style="background: var(--mint)">✓</span>
+                      <span class="tile" style="background: var(--el-tint-mint)">✓</span>
                       <div>
                         <div class="ntitle">Auth module</div>
                         <div class="nsub">Done</div>
@@ -1170,7 +1215,7 @@
                         <div
                           style="
                             font-size: 10.5px;
-                            color: rgba(255, 255, 255, 0.7);
+                            color: color-mix(in srgb, var(--el-accent-text) 70%, transparent);
                             margin-bottom: 4px;
                             display: flex;
                             align-items: center;
@@ -1198,7 +1243,11 @@
                               display: inline-flex;
                               align-items: center;
                               gap: 4px;
-                              background: rgba(255, 255, 255, 0.15);
+                              background: color-mix(
+                                in srgb,
+                                var(--el-accent-text) 15%,
+                                transparent
+                              );
                               border-radius: 5px;
                               padding: 2px 7px;
                               font-size: 11px;
@@ -1214,7 +1263,11 @@
                               display: inline-flex;
                               align-items: center;
                               gap: 4px;
-                              background: rgba(255, 255, 255, 0.15);
+                              background: color-mix(
+                                in srgb,
+                                var(--el-accent-text) 15%,
+                                transparent
+                              );
                               border-radius: 5px;
                               padding: 2px 7px;
                               font-size: 11px;
@@ -1235,7 +1288,7 @@
                         <div
                           style="
                             font-size: 10.5px;
-                            color: var(--muted);
+                            color: var(--el-text-secondary);
                             margin-bottom: 4px;
                             display: flex;
                             align-items: center;
@@ -1249,7 +1302,7 @@
                             fill="none"
                             stroke="currentColor"
                             stroke-width="2"
-                            style="color: var(--accent)"
+                            style="color: var(--el-accent-on-surface)"
                           >
                             <circle cx="12" cy="5" r="1" />
                             <path d="M12 7v7" />
@@ -1302,7 +1355,9 @@
                       </span>
                     </div>
                     <div class="composer-row">
-                      <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                      <span class="inp" style="color: var(--el-text-secondary)"
+                        >Message Motir AI…</span
+                      >
                       <span class="send">➤</span>
                     </div>
                   </div>
@@ -1320,7 +1375,7 @@
                   <span class="canvas-label">Scoped to MOTIR-812</span>
                   <div class="node upcoming" style="top: 30px; left: 30px">
                     <div class="nhead">
-                      <span class="tile" style="background: var(--peach)">⚙</span>
+                      <span class="tile" style="background: var(--el-tint-peach)">⚙</span>
                       <div>
                         <div class="ntitle">Payments</div>
                         <div class="nsub">2 stories</div>
@@ -1331,7 +1386,7 @@
                     <div class="focus-ring"></div>
                     <div class="focus-pill">Target</div>
                     <div class="nhead">
-                      <span class="tile" style="background: var(--lavender)">📚</span>
+                      <span class="tile" style="background: var(--el-tint-lavender)">📚</span>
                       <div>
                         <div class="ntitle">Billing — invoicing</div>
                         <div class="nsub">MOTIR-812 · 3 stories</div>
@@ -1340,7 +1395,7 @@
                   </div>
                   <div class="node done" style="top: 200px; left: 40px">
                     <div class="nhead">
-                      <span class="tile" style="background: var(--mint)">✓</span>
+                      <span class="tile" style="background: var(--el-tint-mint)">✓</span>
                       <div>
                         <div class="ntitle">Auth module</div>
                         <div class="nsub">Done</div>
@@ -1360,7 +1415,7 @@
                         <div
                           style="
                             font-size: 10.5px;
-                            color: rgba(255, 255, 255, 0.7);
+                            color: color-mix(in srgb, var(--el-accent-text) 70%, transparent);
                             margin-bottom: 4px;
                             display: flex;
                             align-items: center;
@@ -1388,7 +1443,11 @@
                               display: inline-flex;
                               align-items: center;
                               gap: 4px;
-                              background: rgba(255, 255, 255, 0.15);
+                              background: color-mix(
+                                in srgb,
+                                var(--el-accent-text) 15%,
+                                transparent
+                              );
                               border-radius: 5px;
                               padding: 2px 7px;
                               font-size: 11px;
@@ -1402,7 +1461,11 @@
                               display: inline-flex;
                               align-items: center;
                               gap: 4px;
-                              background: rgba(255, 255, 255, 0.15);
+                              background: color-mix(
+                                in srgb,
+                                var(--el-accent-text) 15%,
+                                transparent
+                              );
                               border-radius: 5px;
                               padding: 2px 7px;
                               font-size: 11px;
@@ -1416,7 +1479,11 @@
                               display: inline-flex;
                               align-items: center;
                               gap: 4px;
-                              background: rgba(255, 255, 255, 0.15);
+                              background: color-mix(
+                                in srgb,
+                                var(--el-accent-text) 15%,
+                                transparent
+                              );
                               border-radius: 5px;
                               padding: 2px 7px;
                               font-size: 11px;
@@ -1436,7 +1503,7 @@
                         <div
                           style="
                             font-size: 10.5px;
-                            color: var(--muted);
+                            color: var(--el-text-secondary);
                             margin-bottom: 4px;
                             display: flex;
                             align-items: center;
@@ -1450,7 +1517,7 @@
                             fill="none"
                             stroke="currentColor"
                             stroke-width="2"
-                            style="color: var(--accent)"
+                            style="color: var(--el-accent-on-surface)"
                           >
                             <circle cx="12" cy="5" r="1" />
                             <path d="M12 7v7" />
@@ -1520,7 +1587,9 @@
                       </span>
                     </div>
                     <div class="composer-row">
-                      <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                      <span class="inp" style="color: var(--el-text-secondary)"
+                        >Message Motir AI…</span
+                      >
                       <span class="send">➤</span>
                     </div>
                   </div>
@@ -1561,7 +1630,7 @@
             <div class="sc-b">
               <div class="mini-drop">
                 <div class="md-head">Work items</div>
-                <div class="md-hint" style="color: var(--faint)">
+                <div class="md-hint" style="color: var(--el-text-secondary)">
                   Type to search the project's work items…
                 </div>
               </div>
@@ -1627,7 +1696,7 @@
                 <div class="focus-ring"></div>
                 <div class="focus-pill">Target</div>
                 <div class="nhead">
-                  <span class="tile" style="background: var(--lavender)">📚</span>
+                  <span class="tile" style="background: var(--el-tint-lavender)">📚</span>
                   <div>
                     <div class="ntitle">Billing — invoicing</div>
                     <div class="nsub">MOTIR-812 · 3 stories</div>
@@ -1636,7 +1705,7 @@
               </div>
               <div class="node upcoming" style="top: 40px; left: 320px">
                 <div class="nhead">
-                  <span class="tile" style="background: var(--peach)">⚙</span>
+                  <span class="tile" style="background: var(--el-tint-peach)">⚙</span>
                   <div>
                     <div class="ntitle">Payments</div>
                     <div class="nsub">2 stories</div>
@@ -1684,7 +1753,7 @@
                   </span>
                 </div>
                 <div class="composer-row">
-                  <span class="inp" style="color: var(--faint)">Message Motir AI…</span>
+                  <span class="inp" style="color: var(--el-text-secondary)">Message Motir AI…</span>
                   <span class="send">➤</span>
                 </div>
               </div>
