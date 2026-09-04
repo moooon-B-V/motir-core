@@ -2227,6 +2227,7 @@
         "claimable": "This can be renamed later, a limited number of times.",
         "active": "Active",
         "alias": "Redirects here",
+        "aliasShort": "Redirects",
         "copy": "Copy address",
         "copied": "Address copied",
         "open": "Open in a new tab",
@@ -2242,6 +2243,17 @@
         "remaining": "You have {count, plural, one {# rename} other {# renames}} left after this one.",
         "cancel": "Cancel",
         "confirm": "Rename"
+      },
+      "release": {
+        "remove": "Remove",
+        "title": "Remove {hostname}?",
+        "lead": "{count, plural, one {This address will stop answering:} other {These # addresses will stop answering:}}",
+        "warningTitle": "{count, plural, one {This name is held for ever. Nobody can claim it again — including you.} other {These names are held for ever. Nobody can claim them again — including you.}}",
+        "warningBody": "Motir keeps every released name out of its namespace permanently, so no other workspace can inherit links that pointed at yours.",
+        "renamesAfter": "You will have {count, plural, =0 {no renames} one {# rename} other {# renames}} left if you claim a subdomain again — releasing does not give them back.",
+        "fallback": "Your public projects go back to {url}, and appear on {site} again.",
+        "cancel": "Cancel",
+        "confirm": "Remove subdomain"
       },
       "domains": {
         "title": "Your own domain",

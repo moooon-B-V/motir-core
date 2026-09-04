@@ -12,6 +12,8 @@ import {
 import { customDomainService } from '@/lib/services/customDomainService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { guardSettingsPage } from '../_guard';
+import { publicProjectPath, publicSiteOrigin } from '@/lib/publicProjects/urls';
+
 import { PublicSubdomainCard } from './_components/PublicSubdomainCard';
 import { CustomDomainsSection } from './_components/CustomDomainsSection';
 
@@ -117,6 +119,17 @@ export default async function ProjectPublicAddressPage() {
         workspaceId={ctx.workspaceId}
         baseDomain={tenantBaseDomain()}
         projectIdentifier={ctx.project.identifier}
+        // ⚠️ RESOLVED HERE, NOT IN THE CARD. `MOTIR_PUBLIC_SITE_URL` is server
+        // configuration, and the release confirm's last sentence tells a
+        // customer where their projects go once nothing is claimed (ADR §7's
+        // default-primary table, first row). A client component guessing the
+        // origin would print a different address than the one the product
+        // actually emits, on the one sentence whose whole job is that address.
+        // The scheme is stripped because this is read, not followed.
+        publicSiteHost={publicSiteOrigin().replace(/^https?:\/\//, '')}
+        fallbackAddress={`${publicSiteOrigin().replace(/^https?:\/\//, '')}${publicProjectPath(
+          ctx.project.identifier,
+        )}`}
         subdomain={subdomain}
         canManage={membership ? roleMayManageAddress(membership.role) : false}
       />
