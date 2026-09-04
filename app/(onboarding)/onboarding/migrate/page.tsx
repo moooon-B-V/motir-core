@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { MigrateWizard } from './_components/MigrateWizard';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 // The migrate-onboarding wizard (Story 7.15 · MOTIR-934) — the stepped,
 // resumable set-up shell for onboarding an EXISTING codebase. Full-screen in
@@ -21,7 +22,7 @@ export default async function MigrateOnboardingPage() {
   if (!session) redirect('/sign-in?next=%2Fonboarding%2Fmigrate');
 
   const ctx = await getActiveProject();
-  if (!ctx) redirect('/onboarding');
+  if (!ctx) redirect(ONBOARDING_ENTRY_PATH);
 
   // Onboarding-ran gate (bug MOTIR-2090) — the SAME gate `/onboarding` and
   // `/onboarding/discovery` carry (Subtask 7.4 / MOTIR-1264). Without it this

@@ -12,6 +12,7 @@ import { Combobox } from '@/components/ui/Combobox';
 import { cn } from '@/lib/utils/cn';
 import type { ConnectionConfig, ImportSourceId } from './importClient';
 import type { WizardConnected } from './ImportWizard';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 export interface ConnectionDraft {
   jira: { baseUrl: string; projectKey: string };
@@ -292,7 +293,10 @@ export function ConnectStep({
       ) : null}
 
       <Footer>
-        <a href="/onboarding" className="text-sm text-(--el-link) hover:text-(--el-link-pressed)">
+        <a
+          href={ONBOARDING_ENTRY_PATH}
+          className="text-sm text-(--el-link) hover:text-(--el-link-pressed)"
+        >
           {t('chrome.cancel')}
         </a>
         <Button onClick={onNext} disabled={!canProceed} loading={busy}>
