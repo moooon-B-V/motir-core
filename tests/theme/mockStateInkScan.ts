@@ -120,6 +120,40 @@ import { MUTED_TOKEN, parseElements } from './inkContrastMockScan';
 // question is unchanged, because a translucent element background correctly does
 // NOT re-ground the subtree beneath it.
 //
+// ── The PARSER underneath both of those (MOTIR-4342) ────────────────────────
+// The section above turns a silent skip into an honest abstention, and names
+// the gap one colour form further out: `toHex` read neither an 8-digit
+// `#rrggbbaa` nor `currentcolor`, so 47 elements on `origin/main` @ `e6d85218d`
+// painted a background this file could not read at all — 20 of them an 8-digit
+// hex across 6 assets, 27 a `currentcolor`. Both are ordinary design-system
+// authoring: the first is the frosted-panel / scrim / glass `data-surface`
+// material axis, the second a background that means *whatever this element's
+// ink is*.
+//
+// Widening the parser is NOT a local change to a regex, which is why it did not
+// belong inside MOTIR-4317. A `toHex` null is read as *translucent* by the
+// grounding walk, as *not a colour* by the ink read, and as *unresolvable* by
+// `composite` — three readers, three meanings, one return value — so what the
+// widening changes is what three separate measurements MEAN. Three things
+// follow, and they are the shape of the section below:
+//
+//   1. ONE parse. `parseColour` is the single reader; `toHex`, `alphaIn`,
+//      `composite` and `classifyPaint` are four questions asked of it. A form
+//      one of them can read and another cannot is the asymmetry MOTIR-4317 was.
+//   2. `currentcolor` is resolved AT THE SITE, in `paintedBackground` and
+//      `resolveAt`, never string-matched at a call site — it is a value-at-a-
+//      site question, which is what this file renders to answer.
+//   3. *Translucent* and *unreadable* stop sharing `toHex`'s null where the
+//      difference is load-bearing: `classifyPaint` gives the grounding walk
+//      three answers, and `groundAbstentionReason` prints which one happened.
+//      A guard that fails for the wrong reason costs more than one that fails
+//      for none.
+//
+// The state arm measured 0 findings and 0 abstentions over all 167 mocks both
+// before and after — every one of those 47 elements sits off the chains this
+// arm walks, which is a fact about which assets carry `:hover` tints this week
+// and not a boundary anybody drew.
+//
 // ── The SECOND boundary is GONE, with its subject (MOTIR-4277) ──────────────
 // This file shipped a second decline and a second counter, `unTokenisedInkCount`:
 // ink that names NO `--el-*` token at all — a raw hex, or a local `:root` alias
@@ -251,21 +285,99 @@ export function stampSourceLines(html: string): string {
 
 /* ──────────────────────────── colour resolution ──────────────────────────── */
 
-const HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+/**
+ * The hex forms this file reads — 3, 4, 6 and 8 digits.
+ *
+ * ⚠️ MOTIR-4342 — the 4- and 8-digit forms carry an ALPHA channel, and until
+ * this widened they were not hex to this file at all. `#00000066` and
+ * `rgba(0, 0, 0, 0.4)` paint identical pixels, which is what made the gap
+ * invisible: a reader auditing this file for alpha handling finds `alphaIn`,
+ * `composite` and an explicit refusal in `toHex`, all correct and all reasoning
+ * carefully about alpha, and nothing in that reading suggests a whole notation
+ * is missing. The tell was never in the code that handles alpha; it was in the
+ * one regex that decides what counts as a hex.
+ *
+ * Measured on `origin/main` @ `e6d85218d`, over all 167 mocks: 20 elements
+ * across 6 assets paint an 8-digit hex — the frosted panels, canvas scrims and
+ * glass `data-surface` overlays of the material axis `CLAUDE.md` documents, so
+ * the population is what the tree looks like when the design system is used as
+ * intended, not an exotic authoring form.
+ */
+const HEX_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
-function toHex(value: string): string | null {
+/** A colour this file can read, in the one shape every reader below wants. */
+interface Rgba {
+  r: number;
+  g: number;
+  b: number;
+  /** 0…1. A form that declares no alpha reads 1. */
+  a: number;
+}
+
+/**
+ * Read a colour, or null when this file cannot — the SINGLE parse every other
+ * function in this section goes through.
+ *
+ * It is one function rather than a regex per caller because widening what the
+ * file can read is not a local change: `toHex`, `alphaIn`, `composite` and
+ * `classifyPaint` ask four different questions of the same value, and a form
+ * one of them could read while another could not is exactly the asymmetry
+ * MOTIR-4317 was filed for — one translucent layer composited because the code
+ * reached it through `composite`, the other dropped because the code reached it
+ * through `toHex`.
+ */
+function parseColour(value: string): Rgba | null {
   const trimmed = value.trim();
-  if (HEX_RE.test(trimmed)) return trimmed.toLowerCase();
+  if (HEX_RE.test(trimmed)) {
+    const digits = trimmed.slice(1);
+    // `#rgb` / `#rgba` are the same colour with every digit doubled.
+    const wide =
+      digits.length <= 4
+        ? digits
+            .split('')
+            .map((digit) => digit + digit)
+            .join('')
+        : digits;
+    const at = (index: number) => parseInt(wide.slice(index * 2, index * 2 + 2), 16);
+    return { r: at(0), g: at(1), b: at(2), a: wide.length === 8 ? at(3) / 255 : 1 };
+  }
   const rgb =
     /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.]+%?)\s*)?\)$/i.exec(trimmed);
   if (!rgb) return null;
-  if (rgb[4] !== undefined && alphaOf(rgb[4]) < 1) return null;
-  const channel = (raw: string) => Math.round(Number(raw)).toString(16).padStart(2, '0').slice(-2);
-  return `#${channel(rgb[1]!)}${channel(rgb[2]!)}${channel(rgb[3]!)}`;
+  return {
+    r: Number(rgb[1]!),
+    g: Number(rgb[2]!),
+    b: Number(rgb[3]!),
+    a: rgb[4] === undefined ? 1 : alphaOf(rgb[4]!),
+  };
 }
 
 function alphaOf(raw: string): number {
   return raw.endsWith('%') ? Number(raw.slice(0, -1)) / 100 : Number(raw);
+}
+
+/** One 0–255 channel as its two hex digits. */
+function channel(raw: number): string {
+  return Math.round(raw).toString(16).padStart(2, '0').slice(-2);
+}
+
+function hexOf(colour: Rgba): string {
+  return `#${channel(colour.r)}${channel(colour.g)}${channel(colour.b)}`;
+}
+
+/**
+ * The OPAQUE colour a value names, or null.
+ *
+ * ⚠️ THE NULL MEANS TWO DIFFERENT THINGS — *this is not a colour I can read*
+ * and *this colour is translucent* — and it always has. That is why
+ * `classifyPaint` below exists and why `restingBackground` asks IT rather than
+ * asking this twice: the alpha refusal is deliberate and load-bearing (it is
+ * what TELLS the walk a layer has to be composited rather than taken as the
+ * ground), so the refusal cannot also be the file's *unreadable* signal.
+ */
+function toHex(value: string): string | null {
+  const colour = parseColour(value);
+  return colour === null || colour.a < 1 ? null : hexOf(colour);
 }
 
 /**
@@ -276,46 +388,77 @@ function alphaOf(raw: string): number {
  * downstream (`restingBackground` abstains rather than guessing).
  */
 function alphaIn(value: string): number {
-  const rgba = /^rgba?\(\s*[\d.]+[\s,]+[\d.]+[\s,]+[\d.]+\s*[,/]\s*([\d.]+%?)\s*\)$/i.exec(
-    value.trim(),
-  );
-  return rgba ? alphaOf(rgba[1]!) : 1;
+  return parseColour(value)?.a ?? 1;
+}
+
+/** How the walk reads ONE painted background value. */
+export type PaintClass = 'opaque' | 'translucent' | 'unreadable';
+
+/**
+ * Classify a painted background — the THREE answers `restingBackground` has to
+ * tell apart, where `toHex` alone gives it two.
+ *
+ * ⚠️ MOTIR-4342. Before this, *translucent* and *unreadable* arrived at that
+ * walk as one `toHex` null, so a layer the file could not parse was pushed onto
+ * the composite stack like a scrim and the site abstained saying *"translucent
+ * over no opaque ground"* — which is not why. **A guard that fails for the wrong
+ * reason costs more than one that fails for none:** the first reader spends the
+ * run looking at the asset instead of at the parser.
+ */
+export function classifyPaint(value: string): PaintClass {
+  const colour = parseColour(value);
+  if (colour === null) return 'unreadable';
+  return colour.a >= 1 ? 'opaque' : 'translucent';
+}
+
+/** Does this value name `currentcolor` anywhere in it? */
+const CURRENT_COLOUR_RE = /\bcurrentcolor\b/i;
+
+/**
+ * Substitute `currentcolor` with the element's own computed `color`.
+ *
+ * `currentcolor` is a background that means *whatever this element's ink is* —
+ * a value-AT-a-site question exactly like `var()`, and a real colour the engine
+ * already knows. So it is answered HERE, once, before anything downstream tries
+ * to read the value as a colour, rather than special-cased at whichever call
+ * site happened to meet it first. Twenty-seven elements paint one as a
+ * background on `origin/main` @ `e6d85218d`.
+ *
+ * ⚠️ IT CANNOT BE LEFT TO `resolveAt`'s PROBE, which is why `resolveAt` calls
+ * this rather than the other way round: the probe is planted inside a wrapper
+ * that paints the sentinel, so a probe declaring `color: currentcolor` reads the
+ * SENTINEL back and the site is reported as an undefined token.
+ *
+ * Where the engine has no colour to give — an element whose own `color` is
+ * itself unresolved — the value is returned untouched and classifies as
+ * unreadable, which is the honest answer rather than a fabricated one.
+ */
+function substituteCurrentColour(window: Window, element: El, value: string): string {
+  if (!CURRENT_COLOUR_RE.test(value)) return value;
+  const ink = window.getComputedStyle(element).getPropertyValue('color').trim();
+  if (!ink || CURRENT_COLOUR_RE.test(ink)) return value;
+  return value.replace(/\bcurrentcolor\b/gi, ink);
 }
 
 /**
  * Composite a possibly-translucent colour over an opaque ground, or return it
  * unchanged when it is already opaque.
  *
- * A hover tint written `rgba(0, 0, 0, 0.08)` paints REAL pixels, and declining
- * to measure it because it carries an alpha would be an abstention with no
- * warrant — the ground under it is knowable, and where it is not this returns
- * null and the site is named rather than passed.
+ * A hover tint written `rgba(0, 0, 0, 0.08)` — or `#00000014`, the same pixels
+ * spelled the other way — paints REAL pixels, and declining to measure it
+ * because it carries an alpha would be an abstention with no warrant: the ground
+ * under it is knowable, and where it is not this returns null and the site is
+ * named rather than passed.
  */
 function composite(value: string, ground: string | null): string | null {
-  const opaque = toHex(value);
-  if (opaque) return opaque;
-  const rgba = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*[,/]\s*([\d.]+%?)\s*\)$/i.exec(
-    value.trim(),
-  );
-  if (!rgba || !ground) return null;
-  const alpha = alphaOf(rgba[4]!);
-  if (alpha <= 0) return null;
-  const base = ground.replace('#', '');
-  const full =
-    base.length === 3
-      ? base
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : base;
-  const mix = (index: number) => {
-    const over = Number(rgba[index + 1]!);
-    const under = parseInt(full.slice(index * 2, index * 2 + 2), 16);
-    return Math.round(over * alpha + under * (1 - alpha))
-      .toString(16)
-      .padStart(2, '0');
-  };
-  return `#${mix(0)}${mix(1)}${mix(2)}`;
+  const over = parseColour(value);
+  if (over === null) return null;
+  if (over.a >= 1) return hexOf(over);
+  if (over.a <= 0 || ground === null) return null;
+  const under = parseColour(ground);
+  if (under === null) return null;
+  const mix = (o: number, u: number) => channel(o * over.a + u * (1 - over.a));
+  return `#${mix(over.r, under.r)}${mix(over.g, under.g)}${mix(over.b, under.b)}`;
 }
 
 /* ─────────────────────────────── the scan ────────────────────────────────── */
@@ -369,10 +512,13 @@ function styleRules(document: Doc): PaintRule[] {
  * stylesheet gets that right.
  */
 function resolveAt(window: Window, host: El, value: string): string | null {
+  // `currentcolor` is substituted BEFORE the probe is planted, never by it —
+  // see `substituteCurrentColour`'s header for why the probe cannot answer it.
+  const declared = substituteCurrentColour(window, host, value);
   const wrapper = window.document.createElement('span');
   wrapper.setAttribute('style', `color: ${SENTINEL}`);
   const probe = window.document.createElement('span');
-  probe.setAttribute('style', `color: ${value}`);
+  probe.setAttribute('style', `color: ${declared}`);
   wrapper.appendChild(probe);
   host.appendChild(wrapper);
   const resolved = window.getComputedStyle(probe).getPropertyValue('color').trim();
@@ -407,17 +553,24 @@ const PAINTS_NO_COLOUR = new Set([
 ]);
 
 /**
- * The background an element paints ITSELF, verbatim, or null when it paints
+ * The background an element paints ITSELF, RESOLVED, or null when it paints
  * nothing at all — no declaration, one of the spellings above, or a zero-alpha
  * colour, which are all one answer.
  *
  * ⚠️ This does NOT decide whether the colour is opaque. That is the caller's
  * question and the two callers want opposite things from it — see
- * `ownBackground` and `restingBackground` directly below.
+ * `ownBackground` and `restingBackground` directly below. Ask `classifyPaint`.
+ *
+ * ⚠️ "RESOLVED" is MOTIR-4342's one word: `currentcolor` is substituted here,
+ * at the element that paints it, so every caller downstream sees a colour
+ * rather than a keyword only this element can expand. Exported because the
+ * census that measures which of the tree's painted backgrounds this file can
+ * READ has to ask the shipped resolver rather than copy its predicate.
  */
-function paintedBackground(window: Window, element: El): string | null {
-  const value = window.getComputedStyle(element).getPropertyValue('background-color').trim();
-  if (!value || PAINTS_NO_COLOUR.has(value.toLowerCase())) return null;
+export function paintedBackground(window: Window, element: El): string | null {
+  const declared = window.getComputedStyle(element).getPropertyValue('background-color').trim();
+  if (!declared || PAINTS_NO_COLOUR.has(declared.toLowerCase())) return null;
+  const value = substituteCurrentColour(window, element, declared);
   return alphaIn(value) <= 0 ? null : value;
 }
 
@@ -460,41 +613,85 @@ function ownBackground(window: Window, element: El): string | null {
  * Where the chain reaches the document with no opaque ground anywhere, there is
  * nothing to composite over and the honest answer is still null; both callers
  * already handle it (an abstention naming the site, and the CONTROL's *nothing
- * opaque grounds it at rest*). A layer this cannot READ takes the same answer,
- * and that is the one branch with no site in the tree today: an unknown ground
- * is not a ground to claim, and skipping such a layer would be this very defect
- * one colour form further out.
+ * opaque grounds it at rest*). A layer this cannot READ takes the same answer:
+ * an unknown ground is not a ground to claim, and skipping such a layer would
+ * be this very defect one colour form further out.
  *
- * ⚠️ Those two nulls are DIFFERENT ANSWERS sharing one return value, and the
- * caller's abstention says *translucent over no opaque ground* for both. There
- * is no site in the tree that reaches the second one, which is why it is a note
- * rather than a second return shape — but `toHex` reads neither an 8-digit
- * `#rrggbbaa` nor `currentcolor`, and both appear on real assets, so a state
- * rule written near one will get the wrong reason before it gets a wrong
- * number. MOTIR-4342 carries that gap; it is a `toHex` parser widening, not a
- * grounding one.
+ * ⚠️ MOTIR-4342 — THOSE TWO NULLS ARE DIFFERENT ANSWERS, AND THEY NO LONGER
+ * SHARE ONE RETURN VALUE. MOTIR-4317 left them both as a bare null, so the
+ * caller's abstention read *translucent over no opaque ground* for both; this
+ * returns the layer it could not read alongside the null, and
+ * `groundAbstentionReason` says which happened. It is a second return shape
+ * rather than a note because the widening one line up made the unreadable
+ * branch a smaller set, not an empty one — a named CSS colour, an `hsl()` the
+ * engine passes through, the next notation nobody has thought of.
  */
-function restingBackground(window: Window, element: El): string | null {
+interface RestingGround {
+  /** The composited ground, or null when the walk cannot name one. */
+  ground: string | null;
+  /**
+   * The layer value the walk could not READ, where that is why `ground` is
+   * null. Null when the chain is simply translucent all the way to the
+   * document — a different answer, and one that gets a different reason.
+   */
+  unreadable: string | null;
+}
+
+function restingBackground(window: Window, element: El): RestingGround {
   const layers: string[] = []; // translucent, nearest the element first
   let ground: string | null = null;
   for (let node: El | null = element; node; node = node.parentElement as El | null) {
     const value = paintedBackground(window, node);
     if (value === null) continue;
-    const opaque = toHex(value);
-    if (opaque !== null) {
-      ground = opaque;
+    const paint = classifyPaint(value);
+    // An unreadable layer stops the walk rather than joining the fold: the
+    // pixels above the ground are unknown, so the ground is unknown too.
+    if (paint === 'unreadable') return { ground: null, unreadable: value };
+    if (paint === 'opaque') {
+      ground = toHex(value);
       break;
     }
     layers.push(value);
   }
-  if (ground === null) return null;
+  if (ground === null) return { ground: null, unreadable: null };
   // Bottom up: the layer nearest the ground is painted first, and folding the
   // other way round produces a different colour rather than an error.
   for (let index = layers.length - 1; index >= 0; index -= 1) {
     ground = composite(layers[index]!, ground);
-    if (ground === null) return null;
+    // Unreachable: every layer classified `translucent` and the ground is a
+    // hex, so `composite` has both halves. Kept as the type's own guard.
+    if (ground === null) return { ground: null, unreadable: layers[index]! };
   }
-  return ground;
+  return { ground, unreadable: null };
+}
+
+/**
+ * Why a state rule's surface could not be resolved — THREE answers, not one.
+ *
+ * ⚠️ MOTIR-4342. The single sentence this replaced said *translucent over no
+ * opaque ground* whatever had actually happened, and two of the three things it
+ * covered were not that. The reason a guard prints IS its output: a reader who
+ * is told the ground is missing goes and looks at the asset's stacking, and the
+ * answer was in the parser the whole time.
+ */
+function groundAbstentionReason(
+  declaredValue: string,
+  resolved: string,
+  resting: RestingGround,
+): string {
+  const head =
+    `the state background ${JSON.stringify(declaredValue)} resolved to ` +
+    `${JSON.stringify(resolved)}, which `;
+  if (classifyPaint(resolved) === 'unreadable') {
+    return `${head}this scanner cannot read as a colour`;
+  }
+  if (resting.unreadable !== null) {
+    return (
+      `${head}is translucent over an ancestor painting ` +
+      `${JSON.stringify(resting.unreadable)}, which this scanner cannot read as a colour`
+    );
+  }
+  return `${head}is translucent over no opaque ground`;
 }
 
 /** The two 1.4.3 grants, read exactly as the resting scanner reads them. */
@@ -674,14 +871,13 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
         // which is a resolved answer and a common one (`.opt.is-disabled:hover
         // { background: transparent }` un-paints a resting tint).
         if (declared === 'transparent' || declared === '') continue;
-        const surface = composite(declared, restingBackground(window, host));
+        const restingGround = restingBackground(window, host);
+        const surface = composite(declared, restingGround.ground);
         if (surface === null) {
           abstentions.push({
             file,
             stateSelector: rule.selectorText,
-            reason:
-              `the state background ${JSON.stringify(rule.background)} resolved to ` +
-              `${JSON.stringify(declared)}, which is translucent over no opaque ground`,
+            reason: groundAbstentionReason(rule.background, declared, restingGround),
           });
           continue;
         }
@@ -708,7 +904,7 @@ export function scanMockStateInk(file: string, html: string): MockStateScan {
           if (seen.has(element)) continue;
           seen.add(element);
 
-          const resting = restingBackground(window, element);
+          const resting = restingBackground(window, element).ground;
           findings.push({
             file,
             line: Number(element.getAttribute(LINE_ATTRIBUTE) ?? 0),

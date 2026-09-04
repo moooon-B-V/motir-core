@@ -91,6 +91,15 @@ export default defineConfig({
       // `design/**` and nothing else, so a design PR is both the only thing that
       // can break it and the only thing that can fix it.
       'tests/design-state-ink-contrast.test.ts',
+      // `scripts/render-design-mock-search` (MOTIR-4374) guards the viewport
+      // SEARCH inside `scripts/render-design-mock.mjs` — the tool every design
+      // PR uses to re-export a `.png`, and the one whose silent failure mode is
+      // an asset three times too tall. It reads no asset (it drives the search
+      // with a fake renderer), so it is not in this lane by the drift guard's
+      // predicate; it is here because a `design/*` branch is where the script it
+      // guards is RUN, and because the spec needs neither a database nor a
+      // browser, so it costs this lane milliseconds.
+      'tests/scripts/render-design-mock-search.test.ts',
     ],
   },
   resolve: {

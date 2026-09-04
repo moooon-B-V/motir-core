@@ -54,6 +54,19 @@ import {
 // MOTIR-3068). The scanner still rules only on `--el-text-muted`; ink outside the
 // token layer is the never-invent-a-colour rule's subject and is enforced there.
 //
+// ⚠️ MOTIR-4342 widened the COLOUR PARSER under all of this, and the tree-wide
+// numbers did not move: 279 state background rules, 0 findings, 0 abstentions,
+// before and after, over all 167 mocks (`npx tsx` over `scanMockStateInk`, the
+// same walk this spec runs). That is the point rather than an anticlimax — 47
+// elements paint a background the scanner could not read (20 an 8-digit
+// `#rrggbbaa` across 6 assets, 27 a `currentcolor`), and every one of them
+// happens to sit off the chains the state arm walks. It is a coincidence of
+// which assets carry `:hover` tints this week, not a boundary anybody drew, so
+// the counterfactual lives in the FIXTURES below: each of the four new grounding
+// cases ABSTAINED on `origin/main` @ 37b791035, every one of them saying
+// "translucent over no opaque ground" — including the one whose ground was an
+// opaque `#223344ff`.
+//
 // ── This spec belongs to the `design/*` lane ────────────────────────────────
 // It reads `design/**` and nothing else, so a `design/*` branch — where the
 // root Vitest job is deliberately skipped — is exactly the branch that must run
@@ -293,6 +306,160 @@ describe('design state-ink — the scanner, on fixtures it must and must not rep
     expect(scanned.abstentions.map((a) => a.reason)).toEqual([
       'the state background "rgba(255, 255, 255, 0.2)" resolved to "rgba(255, 255, 255, 0.2)", ' +
         'which is translucent over no opaque ground',
+    ]);
+  });
+
+  // ── MOTIR-4342 — the PARSER under the grounding walk ──────────────────────
+  // `toHex` read a 3- or 6-digit hex and an `rgb()` / `rgba()`, and nothing
+  // else. So an 8-digit `#rrggbbaa` — the SAME colour the block above already
+  // composites, spelled the other way — and a `currentcolor` background both
+  // came back as *not a colour I can read*, which the grounding walk read as
+  // *translucent* and then failed to fold. 47 elements paint one of the two on
+  // `origin/main` @ `e6d85218d`.
+  //
+  // ⚠️ Every fixture below asserts a FIXED VALUE, never a ratio, and every one
+  // of them ABSTAINED before this card: the counterfactual is a named colour,
+  // not a smaller number. Fixture one is MOTIR-4317's lightbox with both alphas
+  // respelled as hex, and it lands on the same two hexes byte for byte — which
+  // is the whole point of the defect.
+
+  it('folds an 8-digit-hex TRANSLUCENT ancestor into the ground', () => {
+    const found = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #f6f5f4; }` +
+        `.scrim { background: #000000cc; }` +
+        `.row:hover { background: #ffffff33; }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="scrim">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></body></html>`,
+    ).findings;
+
+    expect(found).toHaveLength(1);
+    // `#000000cc` IS `rgba(0, 0, 0, 0.8)` — 0xcc/255 — so the two spellings owe
+    // the same two hexes as the MOTIR-4317 fixture above, and get them.
+    expect(found[0]!.restingSurface).toBe('#313131');
+    expect(found[0]!.surface).toBe('#5a5a5a');
+  });
+
+  it('takes an 8-digit-hex OPAQUE (`…ff`) ancestor as the ground', () => {
+    // The other half of the widening, and the one a ratio cannot show: an
+    // `…ff` hex is not translucent at all, so it must STOP the walk rather than
+    // join the fold. Pre-fix it did neither — `toHex` refused it, the walk
+    // pushed it onto the composite stack, and the site abstained.
+    const found = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #f6f5f4; }` +
+        `.panel { background: #223344ff; }` +
+        `.row:hover { background: #ffffff33; }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="panel">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></body></html>`,
+    ).findings;
+
+    expect(found).toHaveLength(1);
+    // The panel itself, NOT the page behind it and NOT a composite of the two.
+    expect(found[0]!.restingSurface).toBe('#223344');
+    expect(found[0]!.surface).toBe('#4e5c69');
+  });
+
+  it('treats a `#rrggbb00` ancestor as painting nothing', () => {
+    // Zero alpha is *paints no colour*, which `PAINTS_NO_COLOUR` already says
+    // for the keyword spellings and `alphaIn` says for `rgba(…, 0)`. The hex
+    // form has to arrive at the same answer, or the ground becomes a colour
+    // nobody can see — here, a navy that paints not one pixel.
+    const found = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #f6f5f4; }` +
+        `.ghost { background: #12345600; }` +
+        `.row:hover { background: #ffffff33; }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="ghost">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></body></html>`,
+    ).findings;
+
+    expect(found).toHaveLength(1);
+    // The page, not `#123456` and not a composite over it.
+    expect(found[0]!.restingSurface).toBe('#f6f5f4');
+    expect(found[0]!.surface).toBe('#f8f7f6');
+  });
+
+  it("grounds a `currentcolor` background on the element's OWN ink", () => {
+    // `currentcolor` means *whatever this element's ink is* — a value AT a
+    // site, which is the class of question this file renders to answer. The
+    // body's ink is deliberately different from the panel's, so an answer taken
+    // from the wrong element would show as `#1a1a1a` rather than as a number
+    // that merely happens to be right.
+    const found = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #f6f5f4; color: #1a1a1a; }` +
+        `.panel { color: #3a2f6d; background: currentcolor; }` +
+        `.row:hover { background: #ffffff33; }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="panel">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></body></html>`,
+    ).findings;
+
+    expect(found).toHaveLength(1);
+    expect(found[0]!.restingSurface).toBe('#3a2f6d');
+    expect(found[0]!.surface).toBe('#61598a');
+  });
+
+  it('names an UNREADABLE ancestor as the reason, not the missing ground', () => {
+    // AC 4. MOTIR-4317 left `restingBackground` with two nulls sharing one
+    // return value and one sentence — *translucent over no opaque ground* — for
+    // both. The widening above shrinks the unreadable set; it does not empty
+    // it, and a guard that fails for the wrong reason sends the first reader to
+    // the asset's stacking when the answer is in the parser.
+    const scanned = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #f6f5f4; }` +
+        `.mystery { background: rebeccapurple; }` +
+        `.row:hover { background: #ffffff33; }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body><div class="mystery">` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</div></body></html>`,
+    );
+    expect(scanned.findings).toEqual([]);
+    expect(scanned.abstentions.map((a) => a.reason)).toEqual([
+      'the state background "#ffffff33" resolved to "#ffffff33", which is translucent over an ' +
+        'ancestor painting "rebeccapurple", which this scanner cannot read as a colour',
+    ]);
+  });
+
+  it('names an UNREADABLE state background as the reason, not a missing ground', () => {
+    // The third of the three answers the one sentence used to cover: here it is
+    // the TINT itself the file cannot read, and there is a perfectly good
+    // opaque ground under it.
+    const scanned = scanMockStateInk(
+      'fixture.mock.html',
+      `<!doctype html><html><head><style>` +
+        `:root { --el-text-muted: #787671; }` +
+        `body { background: #f6f5f4; }` +
+        `.row:hover { background: rebeccapurple; }` +
+        `.id { color: var(--el-text-muted); }` +
+        `</style></head><body>` +
+        `<div class="row"><span class="id">PROD-12</span></div>` +
+        `</body></html>`,
+    );
+    expect(scanned.findings).toEqual([]);
+    expect(scanned.abstentions.map((a) => a.reason)).toEqual([
+      'the state background "rebeccapurple" resolved to "rebeccapurple", which this scanner ' +
+        'cannot read as a colour',
     ]);
   });
 

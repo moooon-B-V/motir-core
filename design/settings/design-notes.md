@@ -570,6 +570,233 @@ this pass, because the AC asks for it and the AST ink guard cannot see CSS:
 
 ---
 
+# The permission picker's two COLUMNS — the RULE, not the row count — `permission-columns.mock.html` (MOTIR-3580)
+
+> **⚠️ THIS SECTION AMENDS the MOTIR-2578 section above on ONE axis — how the picker
+> allocates its two columns — and on nothing else.** That asset stays exactly as it
+> is: it is the record of the six-key moment it was drawn at, its measurements
+> (836px resting / 938px tallest) were taken then, and a design asset is a record
+> of its moment rather than a spec that tracks the product. What is superseded is
+> its _"Column split is 3 rows / 3 rows"_ line, and only because that line states a
+> COUNT where the design's durable content is a RULE.
+
+## The disposition — DRAW THE RULE, not the count
+
+MOTIR-3580 offered two ways out and this asset takes the second:
+
+- **RE-MEASURE** — refresh the drawing at the current cardinality and accept that
+  the next growth files the card again.
+- **DRAW THE RULE** — state the _balance rule_ and show a representative set rather
+  than a pinned one. ✅ **Chosen.**
+
+**The evidence for choosing it is the card's own history, and it is unusually
+clean.** `GRANTABLE_PERMISSIONS` (`lib/tokens/grant.ts`) is DERIVED — a permission
+is grantable because some token-reachable operation asserts it — so the set grows
+whenever a permission is minted, on a schedule nothing about this surface controls.
+It has grown **seven** times since the picker was drawn. Each growth was recorded,
+one at a time, as a new pair of literal row counts and a renewed note in
+`tests/settings/permissionMeta.test.tsx`, and each renewal said the re-measure
+belonged to a design card. None filed one. **Panel 3 of the mock derives all seven
+of those pairs from a single rule.** Seven perishable measurements and one durable
+statement, describing the same layout: that asymmetry is the argument, and it is
+drawn rather than asserted.
+
+**So the numbers in this asset are dated instances, and say so on the drawing.**
+The row counts, the pixel heights and the group sizes are all labelled _as at
+2026-09-03_. Nothing downstream may read them as a specification.
+
+## The rule
+
+`permissionColumnsForTokens` (`app/(authed)/settings/account/_components/permissionMeta.tsx`)
+implements exactly this, and the mock's Panel 1 draws it:
+
+1. **The unit is a DOMAIN GROUP, never a row.** A heading and its permissions move
+   together; a group is never broken across the columns. A domain heading with its
+   rows stranded in the other column is worse than any amount of imbalance.
+2. **The cut is the FIRST boundary at which the left column holds at least half the
+   rows.** Groups are taken in catalog order and the group that crosses half stays
+   on the left. Two consequences worth stating because they are what make the rule
+   checkable: the left column is never the shorter one, and dropping its last group
+   would put it under half.
+3. **Balance is what the rule BUYS, not a constraint it is held to.** The imbalance
+   is whatever the group sizes allow. Neither column is padded, no group is split to
+   even them up, and the modal's height is set by the taller column — the left one.
+
+### ⚠️ It is GREEDY, not minimal-imbalance — and the difference is real
+
+The rule takes the first boundary past half, which is not always the boundary with
+the smallest imbalance. At group sizes `5 · 5 · 1` it cuts **10 / 1** where the best
+non-breaking boundary is **5 / 6**. The two coincide at every cardinality the set has
+actually had, which is why the gap has never been visible on screen.
+
+**This corrects a claim made in the test file itself.** MOTIR-3629 replaced an
+`Math.abs(left - right) <= 1` assertion — correctly, it had stopped being reachable —
+with an assertion that the split takes _"the one with the SMALLEST imbalance"_, and
+described that as _"the rule the splitter actually implements"_. It is not: it is a
+second coincidence that holds today, which is exactly the thing the first assertion
+was retired for being. The rule drawn here is what the code does. If a future catalog
+makes the greedy cut lopsided, that is a design decision to take **then, on this
+asset** — not a silent difference between a drawing and a component.
+
+### The seven cardinalities, derived rather than quoted
+
+Domains in catalog order: `project · work_item · comment · sprint · ai`.
+
+| Card       | When       | What grew             | Group sizes         | Rows | Split (derived) |
+| ---------- | ---------- | --------------------- | ------------------- | ---- | --------------- |
+| MOTIR-2578 | measured   | the asset's moment    | `1 · 2 · 1 · 1 · 1` | 6    | **3 / 3**       |
+| MOTIR-2988 | 2026-08-18 | + `ai:view_plan`      | `1 · 2 · 1 · 1 · 2` | 7    | **4 / 3**       |
+| MOTIR-3188 | 2026-08-20 | + `ai:decide_plan`    | `1 · 2 · 1 · 1 · 3` | 8    | **4 / 4**       |
+| MOTIR-3361 | 2026-08-25 | + `lesson:manage`     | `2 · 2 · 1 · 1 · 3` | 9    | **5 / 4**       |
+| MOTIR-3480 | 2026-08-25 | + `lesson:view`       | `3 · 2 · 1 · 1 · 3` | 10   | **5 / 5**       |
+| MOTIR-3553 | 2026-08-26 | + `lesson:reinforce`  | `4 · 2 · 1 · 1 · 3` | 11   | **6 / 5**       |
+| MOTIR-3629 | 2026-08-27 | + `work_item:archive` | `4 · 3 · 1 · 1 · 3` | 12   | **7 / 5**       |
+
+Every split in the right-hand column is COMPUTED by the rule from the group sizes
+beside it. None is quoted from the test file's comment chain — that is the point of
+the table, and it is what the mock's Panel 3 renders.
+
+## THE MEASUREMENT — the number, not an adjective (as at 2026-09-03)
+
+Measured in the mock's own render (chromium, light, 1200px, `getBoundingClientRect`),
+with the picker inside the shipped modal geometry (`max-w-[42rem]`,
+`p-(--spacing-card-padding)`):
+
+|                             |                                                          |
+| --------------------------- | -------------------------------------------------------- |
+| Modal content width         | **672px** (42rem, the shipped `className` override)      |
+| Picker grid                 | **590px**                                                |
+| Left column · 7 rows        | **590px**                                                |
+| Right column · 5 rows       | **473px**                                                |
+| Residual imbalance          | **117px**                                                |
+| Per-row height, left column | **66–91px** (the one-line description wraps at two rows) |
+
+**⚠️ A row is not a fixed height, so the rule balances a PROXY.** Balancing row COUNT
+is an approximation of balancing HEIGHT, and it is the right one: balancing measured
+pixels would re-cut the columns whenever a translated description changed length,
+which is a layout that moves for reasons a reader cannot see. The 117px residual is
+the price of the proxy, and it is drawn so the next reader argues with a number
+instead of an adjective.
+
+**Not re-measured here, deliberately:** the modal's own total height. MOTIR-2578's
+836px / 938px are measurements of a modal whose other fields this card does not
+touch, and re-taking them would be re-cutting a frozen asset to chase a number. What
+this asset owns is the column allocation.
+
+## Grounded in shipped reality — the picker in Panel 2 is the app's own output
+
+Panels 2 and 2b are **not a redraw**. The markup is `CreateTokenModal`'s rendered
+output, lifted verbatim, with the compiled Tailwind stylesheet inlined — so every
+class, every string and both column contents are the shipped ones and the asset
+cannot drift from the running UI by being retyped.
+
+Reproduced inline rather than cited, because the harness is a throwaway that does not
+survive the commit:
+
+```js
+// 1. Dump the real component's markup through the repo's own vitest + RTL setup —
+//    `tests/helpers/renderWithIntl.tsx` gives real `messages/en.json` with real ICU
+//    plurals, and every path alias just works.
+//      renderWithIntl(<ToastProvider><CreateTokenModal open … /></ToastProvider>)
+//      writeFileSync('modal.html', document.body.innerHTML)
+//    Run under a throwaway config: { environment: 'happy-dom', esbuild: { jsx: 'automatic' },
+//    resolve.alias: { '@': <root>, 'server-only': 'tests/stubs/server-only.ts' } }.
+//
+// 2. Compile the CSS scoped to THAT markup, not to the repo:
+//      @import 'tailwindcss' source(none);
+//      @source './page.html';
+//      @import '@motir/design-system/theme.css';
+//    through `@tailwindcss/postcss` (its CJS entry needs `mod.default ?? mod`).
+//
+// 3. Lift the token layers UNLAYERED into a leading <style>, by brace-counting the
+//    compiler's own output — never retyped. Two blocks need it, for two different
+//    reasons, and both are invisible in a browser:
+//      • Tailwind emits Tier-0 inside `@layer theme`, which a cascade-layer-blind
+//        engine (happy-dom — three design guards run on it) drops entirely.
+//      • `packages/design-system/theme.css` declares the Tier-3
+//        `:root, [data-appearance-scope]` block BELOW its first `@scope` at-rule,
+//        where happy-dom's parser has already stopped.
+//    Three details, each of which produced a silently HALF-styled mock:
+//      • Brace-count over the COMMENT-STRIPPED source. theme.css's prose quotes
+//        selectors, so literal `{ … }` pairs inside comments mis-balance a raw
+//        counter and it swallows the `@scope` at-rule that follows.
+//      • Emit the Tier-3 block TWICE — once on its own selector and once as a
+//        SEPARATE `[data-theme] { … }` rule, before the `[data-theme='dark']` one, so
+//        the nested dark scope recomputes `--el-*` against its own Tier-0 flip. The
+//        combined `:root, [data-appearance-scope], [data-theme]` form resolves in
+//        Chromium and yields NOTHING in happy-dom.
+//      • STRIP the nested `@supports` groups out of the lift. happy-dom discards the
+//        declarations it parsed BEFORE a nested at-rule and keeps the ones after, so
+//        `--el-page-bg` (first in the block) read unset while `--el-card` (5 KB later)
+//        resolved — a half-applied palette, which is the shape that hides. Each
+//        group's base declaration sits outside it, so the fallback survives, and
+//        Chromium takes the full sheet below anyway.
+//
+// 4. `node scripts/render-design-mock.mjs design/settings/permission-columns.mock.html --width 1200`
+//    AFTER `prettier --write` on the mock.
+```
+
+Verified by measurement rather than by looking (each of these produces a picture a
+reviewer would accept): `--el-page-bg` resolves at `:root`, the Panel 2b scope
+computes `--el-card: #0f0f0f` / `--el-text: #f3f4f6`, both frames measure 672px, and
+the two columns carry 7 and 5 switches under the group headings the rule predicts.
+
+## The panels
+
+1. **The rule** — its three clauses, then the current set's group blocks with the
+   running totals and the cut drawn at the boundary the rule picks.
+2. **The picker at the current set (light)** — the shipped modal geometry at twelve
+   rows, with the measurement strip beneath it.
+   2b. **The same picker, dark** — token parity for the nested `[data-theme="dark"]`
+   scope.
+3. **The one rule reproduces every split the set has ever had** — the table above,
+   plus one column-allocation strip per cardinality so the cut is visibly walking
+   right and back as the groups grow.
+
+**THE ACCESS PATH** is unchanged and is not redrawn here: avatar menu → Settings →
+the Account rail → **Tokens** → the **Create token** button in the "Your tokens" card
+header. It is DRAWN in `design/settings/token-scopes.mock.html` panel 7. This asset
+amends how that surface allocates its columns; it does not re-specify the surface, so
+redrawing its door would be a second copy to go stale.
+
+## Colour + contrast
+
+Every colour is an `--el-*` token and every radius a shape token. The picker markup
+carries the shipped component's own classes untouched — including the two the
+MOTIR-2578 pass corrected (`--el-text-secondary` on the domain heading, never
+`--el-text-faint`; `--el-text-inverted` on the switch knob), which is a property this
+asset inherits rather than re-decides, because the markup is the component's.
+
+## What this CHANGES in the guard
+
+`tests/settings/permissionMeta.test.tsx` asserted the split twice: three invariants
+that state the rule, and two literals that pin a count. The literals were the tripwire
+the renewal chain hung off — they went red on every growth, and the note explaining
+why was renewed rather than discharged, five times.
+
+**The literals are gone and the rule is asserted directly**: the columns are whole
+domain groups in catalog order, the left column reaches at least half the rows,
+removing its last group would drop it below half, and no group appears in both. That
+is a strictly stronger statement than `7` and `5` — it holds at every cardinality, it
+cannot be satisfied by a wrong split that happens to have the right sizes, and it
+never needs touching again when a permission is minted. The renewed comment chain is
+DELETED rather than extended; this section is where its content now lives, which is
+where a design decision belongs.
+
+## GIVES / TAKES
+
+- **TAKES from MOTIR-2578** the two-column composition, the grouping-by-catalog-domain
+  decision, the danger-row treatment and the access path. None of it is re-decided.
+- **TAKES from `lib/permissions/catalog.ts`** the domain order and the contiguity of
+  the `project` group, which is what makes "whole groups in catalog order" a layout
+  rule rather than an accident.
+- **GIVES to `tests/settings/permissionMeta.test.tsx`** the rule its assertions now
+  state, and the licence to stop pinning a count.
+- **GIVES to whoever mints the next permission** the thing the last five growths did
+  not have: nothing to re-measure, and no note to renew.
+
+---
+
 # Token scope selection — `token-scopes.mock.html` (Story 7.7 · 7.7.18)
 
 The reference the **7.7.19** code subtask builds against. It EXTENDS the
