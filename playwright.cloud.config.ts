@@ -153,6 +153,22 @@ export default defineConfig({
   outputDir: 'out/playwright-output-billing',
   use: {
     baseURL: BASE_URL,
+    // ⚠️ WITHOUT THIS A NAVIGATION IS BOUNDED ONLY BY THE TEST CEILING, and in
+    // this lane that ceiling is FIFTEEN MINUTES (MOTIR-4423). Playwright's
+    // default `navigationTimeout` is `0` — no timeout — so `page.goto` /
+    // `page.goBack` / `page.waitForURL` inherit whatever the test has left.
+    // `cloud-plans-surface.spec.ts` sets `timeout: 900_000` for its seed, which
+    // is CORRECT (see the note there: the budget is the seed, and a green run
+    // pays nothing for headroom) — but a bare `waitForURL` then gets that same
+    // quarter-hour. It happened on merge-group run 33856167486: one hung
+    // `waitForURL` at `cloud-plans-surface.spec.ts:344` burned the full 900s and
+    // PASSED ON RETRY, so nothing went red — it only turned a 7.5-minute lane
+    // into a 23-minute one and held a merge-queue build slot for the difference.
+    //
+    // 30s is not a new number: it is what a dozen call sites in `tests/e2e`
+    // already pass explicitly to `waitForURL`. Setting it here bounds the ones
+    // that forgot, and leaves every test ceiling exactly as authored.
+    navigationTimeout: 30_000,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
