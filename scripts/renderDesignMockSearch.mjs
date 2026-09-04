@@ -110,6 +110,9 @@ export async function overflowCorrectedWidths(shoot, target1x, height, scale) {
   return candidates;
 }
 
+/** @typedef {{ width: number, height: number, scale: number }} RenderSettings */
+/** @typedef {'EXACT' | 'DIMS' | 'DRIFT' | 'REFLOW'} Verdict */
+
 /**
  * Recover the render settings that produced `committed`, by probing viewports
  * with `shoot` and keeping the closest match.
@@ -125,6 +128,25 @@ export async function overflowCorrectedWidths(shoot, target1x, height, scale) {
  *   REFLOW  different height, FURTHER than that — the best viewport found still
  *           reflows the document, so these settings would write a plausible,
  *           wrong image. The runner refuses to write on this verdict.
+ *
+ * ⚠️ The options are ANNOTATED rather than left to inference, and that is not
+ * decoration: without it TypeScript reads `forcedWidth`'s type off its `= null`
+ * default and infers `null | undefined`, so every caller passing a real width
+ * fails to compile (`TS2322`, caught by CI on this card's own first push).
+ *
+ * @param {{
+ *   shoot: (width: number, height: number, scale: number) => Promise<Buffer>,
+ *   committed: Buffer,
+ *   forcedWidth?: number | null,
+ *   heights?: number[],
+ *   scales?: number[],
+ *   standardWidths?: number[],
+ * }} options
+ * @returns {Promise<{
+ *   settings: RenderSettings | null,
+ *   verdict: Verdict | null,
+ *   heightDelta: number | null,
+ * }>}
  */
 export async function searchRenderSettings({
   shoot,
