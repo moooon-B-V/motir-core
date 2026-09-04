@@ -178,8 +178,13 @@ export const MCP_CLIENT_FORMATS_CHECKED_ON = '2026-08-06';
 
 /**
  * Every client block. **No entry hard-codes the endpoint, the header or the token
- * shape** — each interpolates `facts`, which is what makes MOTIR-2330's negative
- * case (build with a sentinel origin, assert every config carries it) meaningful.
+ * shape** — each interpolates `facts`, which is what makes the negative case in
+ * `tests/mcp/mcp-doc-guards.test.ts` (build with a sentinel origin, assert every
+ * config carries it) meaningful. That case is MOTIR-2330's, restored by
+ * MOTIR-4269 after MOTIR-3951 deleted it along with the pages it shared a
+ * directory with — this sentence went on naming it for two days after the file
+ * had gone, which is why that gate now also asserts every test path named here
+ * is a real file.
  *
  * Where a vendor supports reading the secret from somewhere else, the block uses
  * it. A guide whose first instruction is "paste a live credential into a file
