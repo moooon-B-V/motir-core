@@ -210,6 +210,26 @@ export function WorkItemRoadmap({
   const showAllRef = useRef(new Set<string>());
   const [showAllTick, setShowAllTick] = useState(0);
 
+  // THE CACHE KEY OF THE LEVEL ON SCREEN (bug MOTIR-4501). The tile is emitted for
+  // EVERY real level — `levelTotal` is passed for all of them, and the roadmap
+  // design (`design/roadmap/design-notes.md` DECISION 7) says so in as many words —
+  // but its activation used to name `rootCacheKey()` unconditionally. On the root
+  // the two strings are identical, which is why it worked there and only there; on
+  // a drilled level they differ, so the `all` flag was marked for a level the
+  // reader was not standing on, the drilled level's cached copy survived the
+  // eviction, and the reload that followed HIT that cache and issued no request at
+  // all. Nothing errored: every miss in this component is absorbed by a `??` or a
+  // cache hit.
+  //
+  // So the level NAMES ITSELF: `loadLevel` writes the key it just composed here,
+  // and `handleSelect` marks and evicts THAT key. `ProjectRoadmapCanvas` holds one
+  // load effect and calls `loadLevelRef.current(focusId)` from it, so the ref is
+  // always the level whose tile is being activated. `null` on the two SYNTHETIC
+  // branches (`ORIGIN_ID`, `NOT_IN_EPIC_ID`): neither passes `levelTotal`, so
+  // neither can draw a tile, and a stale key must not be uncappable from a level
+  // that has none.
+  const levelKeyRef = useRef<string | null>(null);
+
   // The phase card only renders in the WHOLE-PROJECT scope (the sprint slice's road
   // did not start at onboarding), so neither the badge read nor the station level is
   // owed anywhere else — and never on a SUBTREE-rooted mount (MOTIR-2287), whose
@@ -322,6 +342,8 @@ export function WorkItemRoadmap({
         // it has never heard of. The pre-plan read is awaited HERE, on the drill, not
         // ahead of the canvas.
         if (parentId === ORIGIN_ID) {
+          // Synthetic: no cache key, so no level for the tile to uncap (MOTIR-4501).
+          levelKeyRef.current = null;
           return buildPreplanStationLevel(await readPreplan());
         }
         // THE GROUPED NODE'S LEVEL (MOTIR-3490) — synthetic, and served from the
@@ -332,6 +354,9 @@ export function WorkItemRoadmap({
         // node, so asking the API for its children asks for the children of an id
         // it has never heard of).
         if (parentId === NOT_IN_EPIC_ID) {
+          // Synthetic: no cache key of its own — it is SERVED FROM the root read
+          // and passes no `levelTotal`, so no tile is drawn on it (MOTIR-4501).
+          levelKeyRef.current = null;
           // `readRootLevel` (above) serves the cached root read, and RE-READS it
           // when there is none — the refresh case (bug MOTIR-4426). Registering
           // the rows is owed here for the same reason: the peek's id → identifier
@@ -374,6 +399,10 @@ export function WorkItemRoadmap({
         // React `key`), so the canvas re-loads the ROOT in the new scope; the scoped
         // key is the belt-and-suspenders guard.
         const key = `${projectKey}:${scope}:${subtreeRootId ?? ROOT_KEY}:${readParentId ?? ROOT_KEY}`;
+        // The level the reader is now on OWNS this key — the tile's activation reads
+        // it back (bug MOTIR-4501). Written before the await, so an activation can
+        // never name the level this load replaced.
+        levelKeyRef.current = key;
         let wi = cacheRef.current.get(key);
         if (!wi) {
           // `all` only for a level the reader explicitly asked to see whole
@@ -454,12 +483,16 @@ export function WorkItemRoadmap({
         onSelect?.(id);
         return;
       }
-      const key = rootCacheKey();
+      // THE LEVEL THE READER IS STANDING ON, not the root (bug MOTIR-4501).
+      // `loadLevel` recorded it; a null means the level on screen is synthetic and
+      // draws no tile, so there is nothing this activation could have come from.
+      const key = levelKeyRef.current;
+      if (!key) return;
       showAllRef.current.add(key);
       cacheRef.current.delete(key);
       setShowAllTick((n) => n + 1);
     },
-    [onSelect, rootCacheKey],
+    [onSelect],
   );
 
   return (

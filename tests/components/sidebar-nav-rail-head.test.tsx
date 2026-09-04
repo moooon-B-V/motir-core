@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen } from '@testing-library/react';
+import { act, cleanup, screen } from '@testing-library/react';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { SIDEBAR_COLLAPSED_STORAGE_KEY } from '@/lib/hooks/useSidebarCollapsed';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 
 // MOTIR-2556 — the rail's head gave the project up
@@ -35,7 +36,34 @@ const PROJECT = {
 
 const USER = { name: 'Yue', email: 'yue@example.com' };
 
+/**
+ * Drive the shared collapse store (`useSidebarCollapsed`).
+ *
+ * It is a module-level external store whose only mutators are the hook's own
+ * setter and the cross-tab `storage` listener, and that listener is registered
+ * by a MOUNTED consumer — so this has to run AFTER the render, never before it,
+ * and the reset in `afterEach` has to run BEFORE `cleanup()`. Same recipe as
+ * `help-menu-story-gate.test.tsx`.
+ */
+function setStoreCollapsed(next: boolean): void {
+  window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
+  act(() => {
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: SIDEBAR_COLLAPSED_STORAGE_KEY,
+        newValue: String(next),
+      }),
+    );
+  });
+}
+
+/** The rail element itself — `Sidebar` renders one `<nav>`. */
+const rail = () => screen.getByRole('navigation');
+
 afterEach(() => {
+  // BEFORE cleanup, while a consumer is still subscribed — see above.
+  setStoreCollapsed(false);
+  window.localStorage.removeItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
   cleanup();
   pathname = '/dashboard';
 });
@@ -73,5 +101,70 @@ describe('the rail head, after the project left it (MOTIR-2556)', () => {
     // component (SettingsSidebarHeader) and this story does not touch it
     expect(screen.getAllByText('Motir').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Switch project' })).toBeNull();
+  });
+});
+
+// MOTIR-4368 — the SETTINGS and ACCOUNT areas in the DRAWER variant.
+//
+// This file already renders both variants (the head assertions above) and both
+// settings areas, which is why the case lives here rather than in a new file:
+// the two AREAS each `return` a `<Sidebar>` of their own, and each of those
+// returns carries its own `collapsed={isDrawer ? false : undefined}`. Only the
+// DEFAULT area's copy of that expression was ever driven in the drawer, so the
+// two settings copies sat uncovered while the file read 100% on statements,
+// functions and lines — a coverage gap in reachable code, not dead code: the
+// drawer is what a narrow viewport gets (`SidebarDrawer` mounts this component
+// with `variant="drawer"`), and both settings areas are reachable there.
+//
+// The behaviour the expression buys: the drawer ALWAYS renders expanded, so a
+// user who collapsed the desktop rail still gets labelled rows on a phone,
+// where a 56px icon rail inside a full-width drawer would be absurd. The rail
+// keeps following the shared store. Both directions are asserted, because a
+// spec that only drives the drawer would pass against a hard-coded `false`.
+describe('the settings and account areas in the DRAWER (MOTIR-4368)', () => {
+  const ADMIN = ['project:administer'] as const;
+
+  it.each([
+    ['project settings', '/settings/project'],
+    ['account settings', '/settings/account/profile'],
+  ])('the %s rail ignores a collapsed store in the drawer', (_area, path) => {
+    pathname = path;
+    renderWithIntl(
+      <SidebarNav
+        activeProject={PROJECT}
+        variant="drawer"
+        settingsPermissions={[...ADMIN]}
+        user={USER}
+      />,
+    );
+
+    setStoreCollapsed(true);
+
+    // `collapsed={false}` overrides the store, so the drawer stays expanded.
+    expect(rail().getAttribute('data-collapsed')).toBeNull();
+    // …and expanded means the rows carry their labels as text, which is the
+    // whole point: a collapsed rail renders icon tiles with tooltips instead.
+    expect(screen.getByText(_area === 'project settings' ? 'Details' : 'Profile')).toBeTruthy();
+  });
+
+  it.each([
+    ['project settings', '/settings/project'],
+    ['account settings', '/settings/account/profile'],
+  ])('the %s rail FOLLOWS the collapsed store in the rail variant', (_area, path) => {
+    pathname = path;
+    renderWithIntl(
+      <SidebarNav
+        activeProject={PROJECT}
+        variant="rail"
+        settingsPermissions={[...ADMIN]}
+        user={USER}
+      />,
+    );
+
+    setStoreCollapsed(true);
+
+    // `collapsed={undefined}` defers to the store — the other arm of the same
+    // ternary, and the reason this pair is asserted together.
+    expect(rail().getAttribute('data-collapsed')).toBe('true');
   });
 });

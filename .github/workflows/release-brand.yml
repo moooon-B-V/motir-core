@@ -73,11 +73,7 @@ jobs:
       PKG_DIR: packages/brand
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
 
       # OIDC Trusted Publishing needs npm >= 11.5.1; node 22 ships npm 10.x.
       - name: Upgrade npm for OIDC Trusted Publishing
