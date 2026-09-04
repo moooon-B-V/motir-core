@@ -166,6 +166,7 @@ import type {
   ExecutorDto,
   IssueDetailDto,
   ProjectTreeFilter,
+  ReadinessVerdictDto,
   RelationshipLinkDto,
   RelationshipLinkGroups,
   UpdateWorkItemInput,
@@ -4479,6 +4480,52 @@ export const workItemsService = {
       blockedByAncestorId,
       inheritedSessionBranch,
       conflictingSessionBranches,
+    };
+  },
+
+  /**
+   * {@link getReadiness}, RESOLVED into the 2.4.5 banner's own shape — the ids
+   * turned into summaries. `getIssueDetail` builds this inline because it has
+   * already loaded the link targets and the ancestor chain; the link Server
+   * Actions have neither, and this is the read that lets them hand a FRESH
+   * verdict straight back to the client panel.
+   *
+   * ⚠️ MOTIR-4496 — WHY A SECOND DOOR ONTO A VERDICT THE DETAIL READ ALREADY
+   * COMPUTES. The relationships panel used to learn the banner's new state only
+   * from `router.refresh()`, i.e. from a re-render of the WHOLE detail page (the
+   * item, the children, the sprints, the to-dos, the roll-up, the pending
+   * plans). Making the link ROWS optimistic without this would have handed that
+   * whole-page wait to the banner instead of removing it — the panel's rows had
+   * been absorbing it on the banner's behalf. One blocker read + one summary
+   * read is what the banner actually depends on, so that is what the action
+   * returns. Readiness stays SERVER-derived: nothing here re-derives a terminal
+   * set in the browser.
+   *
+   * `openBlockers` is `key ASC` like every other relationship projection, so the
+   * banner's blocker list does not re-order under the optimistic update.
+   */
+  async getReadinessVerdict(workItemId: string, ctx: ServiceContext): Promise<ReadinessVerdictDto> {
+    const readiness = await this.getReadiness(workItemId, ctx);
+    const ids = [...readiness.openBlockerIds];
+    if (readiness.blockedByAncestorId !== null) ids.push(readiness.blockedByAncestorId);
+    if (ids.length === 0) {
+      return { ready: readiness.ready, openBlockers: [], blockedByAncestor: null };
+    }
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace(ids, ctx.workspaceId, tx),
+    );
+    return {
+      ready: readiness.ready,
+      openBlockers: rows
+        .filter((r) => readiness.openBlockerIds.has(r.id))
+        .sort(byKeyAsc)
+        .map(toWorkItemSummaryDto),
+      blockedByAncestor:
+        readiness.blockedByAncestorId === null
+          ? null
+          : (rows
+              .filter((r) => r.id === readiness.blockedByAncestorId)
+              .map(toWorkItemSummaryDto)[0] ?? null),
     };
   },
 

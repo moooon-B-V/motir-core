@@ -12,7 +12,7 @@ import { isRelationshipKind, relationshipToLink } from '@/lib/workItems/linkRela
 import { linkErrorMessage } from '@/lib/workItems/linkErrorMessages';
 import { prLinkErrorMessage } from '@/lib/github/prLinkErrorMessages';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
-import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type { ReadinessVerdictDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { PullRequestLinkCandidateDto } from '@/lib/dto/github';
 
 // Server Actions for the detail-page LINK MANAGEMENT surface (Subtask 2.4.9).
@@ -25,7 +25,37 @@ import type { PullRequestLinkCandidateDto } from '@/lib/dto/github';
 // `lib/workItems/linkRelationships.ts`. The typed-error → inline-message map is
 // shared with the create-modal link surface (2.4.10) in `linkErrorMessages.ts`.
 
+/** The bare outcome of a link write — no payload beyond success/failure. */
 export type LinkActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * A RELATIONSHIP write's answer to the panel. MOTIR-4496: `ok` carries the
+ * RE-JUDGED readiness verdict, so the panel's banner reconciles off the ACTION
+ * rather than off `router.refresh()` — a whole-page re-render whose cost is the
+ * `max()` of every unrelated read on the detail page. The refresh still runs
+ * and still wins (it is the authority); this is what the banner shows in the
+ * meantime.
+ */
+export type RemoveLinkActionResult =
+  | { ok: true; readiness: ReadinessVerdictDto }
+  | { ok: false; error: string };
+
+/**
+ * The add's answer additionally carries the `work_item_link.id` it created, so
+ * the panel's OPTIMISTIC row — inserted at click time from the candidate
+ * already in hand, under a temporary id — can take its REAL id as soon as the
+ * write answers. Without it the remove button on a just-added row would be
+ * armed with an id the server has never heard of until the refresh lands, which
+ * is precisely the window this card is about.
+ *
+ * The row's CONTENT is not echoed back: the client picked the target out of
+ * {@link listLinkCandidatesAction}'s own {@link WorkItemSummaryDto} moments
+ * earlier, so re-reading it here would buy a round trip to restate what the
+ * caller is holding. The refresh is what reconciles any drift.
+ */
+export type CreateLinkActionResult =
+  | { ok: true; readiness: ReadinessVerdictDto; linkId: string }
+  | { ok: false; error: string };
 
 /**
  * Candidate target issues for the picker, server-searched by `query` (key +
@@ -73,7 +103,7 @@ export async function createLinkAction(input: {
   identifier: string;
   targetId: string;
   relationship: RelationshipKind;
-}): Promise<LinkActionResult> {
+}): Promise<CreateLinkActionResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const t = await getErrorsTranslator();
@@ -84,12 +114,17 @@ export async function createLinkAction(input: {
   if (!input.targetId) return { ok: false, error: t('actions.pickIssueToLink') };
 
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  let linkId: string;
+  let readiness: ReadinessVerdictDto;
   try {
     // Tenant gate on the current item — a forged cross-workspace id 404s here
     // before any write (linkWorkItems only checks from/to are co-located).
     await workItemsService.getWorkItem(input.currentItemId, serviceCtx);
     const link = relationshipToLink(input.relationship, input.currentItemId, input.targetId);
-    await workItemsService.linkWorkItems(link, serviceCtx);
+    linkId = (await workItemsService.linkWorkItems(link, serviceCtx)).id;
+    // MOTIR-4496: re-judge readiness HERE, so the panel's banner has the new
+    // verdict from this response instead of from the whole-page refresh below.
+    readiness = await workItemsService.getReadinessVerdict(input.currentItemId, serviceCtx);
   } catch (err) {
     const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
@@ -97,7 +132,7 @@ export async function createLinkAction(input: {
   }
 
   revalidatePath(`/items/${input.identifier}`);
-  return { ok: true };
+  return { ok: true, linkId, readiness };
 }
 
 /**
@@ -107,8 +142,12 @@ export async function createLinkAction(input: {
  */
 export async function removeLinkAction(input: {
   linkId: string;
+  /** The item whose panel the row was removed from — the item whose readiness
+   *  the caller is showing, and the one re-judged for the response. Tenant-gated
+   *  here exactly as `createLinkAction` gates it. */
+  currentItemId: string;
   identifier: string;
-}): Promise<LinkActionResult> {
+}): Promise<RemoveLinkActionResult> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const t = await getErrorsTranslator();
@@ -116,9 +155,13 @@ export async function removeLinkAction(input: {
   if (!ctx) return { ok: false, error: t('actions.pickProjectFirst') };
 
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  let readiness: ReadinessVerdictDto;
   try {
+    await workItemsService.getWorkItem(input.currentItemId, serviceCtx); // cross-tenant gate
     await workItemsService.getLink(input.linkId, serviceCtx); // cross-tenant gate
     await workItemsService.unlinkWorkItems(input.linkId, serviceCtx);
+    // MOTIR-4496: the banner's new verdict rides THIS response, not the refresh.
+    readiness = await workItemsService.getReadinessVerdict(input.currentItemId, serviceCtx);
   } catch (err) {
     const msg = linkErrorMessage(err, t);
     if (msg) return { ok: false, error: msg };
@@ -126,7 +169,7 @@ export async function removeLinkAction(input: {
   }
 
   revalidatePath(`/items/${input.identifier}`);
-  return { ok: true };
+  return { ok: true, readiness };
 }
 
 // ── Explicit item→PR link (Story 7.10 · MOTIR-1596, design/github Panel 5) ──

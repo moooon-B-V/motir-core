@@ -1,5 +1,14 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import type { ReadinessVerdictDto, RelationshipLinkDto } from '@/lib/dto/workItems';
+import type { RelationshipKind } from '@/lib/dto/workItemLinks';
+import type {
+  ReadinessVerdictDto,
+  RelationshipLinkDto,
+  WorkItemSummaryDto,
+} from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import { ContentSectionCard } from './ContentSectionCard';
 import { AddLinkControl } from './AddLinkControl';
@@ -11,6 +20,12 @@ import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { showsReadiness } from '@/lib/issues/readinessVisibility';
 import { StatusPill } from '@/components/issues/StatusPill';
+import {
+  createLinkAction,
+  removeLinkAction,
+  type CreateLinkActionResult,
+  type RemoveLinkActionResult,
+} from '../actions';
 
 // The relationships panel on the issue detail page (Story 2.4 · Subtasks 2.4.5
 // + 2.4.9), per `design/work-items/relationships.mock.html` + `links.mock.html`:
@@ -25,6 +40,40 @@ import { StatusPill } from '@/components/issues/StatusPill';
 // (MOTIR-3103). This file used to keep its own copy of the category map —
 // one of five — which is how `implemented` could share a chip with three
 // other statuses in every one of them at once.
+
+// ── MOTIR-4496: this panel is a CLIENT ISLAND, and it owns the write ──────────
+// It used to be a server component whose two edit affordances each called their
+// own Server Action and then `router.refresh()`, with nothing in between. That
+// made the visible latency of a link mutation the latency of the detail page's
+// WHOLE read group (the item, the children, the sprints, the to-dos, the
+// roll-up, the pending plans) rather than of the one route the user invoked —
+// the page-state-after-mutation contract's third case (`CLAUDE.md`), unmet: a
+// client island that owns state needs an optimistic local insert/remove, not
+// only a refresh. Four `@smoke` E2E tests had been rotating failures on that
+// race across two spec files.
+//
+// So the WRITE moved up here, because the optimistic state and the rows have to
+// live in one component: `AddLinkControl` / `RemoveLinkButton` keep their form
+// and confirm UX and hand the mutation to `addLink` / `removeLink` below. The
+// REMOVE error moved up with it — an optimistic removal unmounts the row before
+// the rejection arrives, so the popover that must show the message is gone by
+// then (`removeErrors`, below).
+//
+// THE BANNER MOVED WITH THE ROWS, DELIBERATELY (criterion 7a). Making only the
+// rows optimistic would have handed the whole-page wait to the readiness
+// banner, whose assertions have never flaked precisely because the row
+// assertion above them was absorbing it — the same race under two new line
+// numbers. The banner is NOT re-derived in the browser (readiness is a
+// server-side judgement over each blocker's own project's terminal set): the
+// link actions now RETURN the re-judged verdict, and the panel shows it until
+// the refresh supersedes it.
+//
+// RECONCILIATION (criterion 5). `router.refresh()` still runs and is still the
+// authority. Every optimistic entry is stamped with a monotonic `seq`; when a
+// refresh started for seq N commits, every entry at or below N is dropped, so
+// whatever the server just re-rendered wins — including a server that DISAGREES
+// (a row we hid that is still there comes back). Entries above N are a mutation
+// that landed while that refresh was in flight and survive until their own.
 
 export interface RelationshipsPanelProps {
   blockedBy: RelationshipLinkDto[];
@@ -51,6 +100,34 @@ export interface RelationshipsPanelProps {
   identifier?: string;
 }
 
+/** One optimistic mutation, stamped with the sequence number that retires it. */
+type PendingRemoval = { linkId: string; seq: number };
+type PendingAddition = { relationship: RelationshipKind; link: RelationshipLinkDto; seq: number };
+type Overlay = {
+  removed: PendingRemoval[];
+  added: PendingAddition[];
+  readiness: { value: ReadinessVerdictDto; seq: number } | null;
+};
+
+const EMPTY_OVERLAY: Overlay = { removed: [], added: [], readiness: null };
+
+/** Take a verdict only if it is NEWER than the one already shown.
+ *
+ * Two writes in flight resolve in whatever order the server answers, and the
+ * readiness verdict is a single slot rather than a list — so without this an
+ * older response clobbers the newer optimistic state, the `seq`-guarded
+ * reconcile `CLAUDE.md` requires of every optimistic mutation. */
+function latestReadiness(current: Overlay['readiness'], value: ReadinessVerdictDto, seq: number) {
+  return current && current.seq > seq ? current : { value, seq };
+}
+
+/** `key ASC` — the order every relationship projection is served in
+ *  (MOTIR-4063), so an optimistic row lands where the refresh will put it
+ *  rather than at the end and then jumping. */
+function byItemKeyAsc(a: RelationshipLinkDto, b: RelationshipLinkDto): number {
+  return a.item.key - b.item.key;
+}
+
 // One linked item: a navigable row (id+title share an inline baseline, icon/pill
 // centered — the alignment the design specifies). When editable, a remove button
 // sits OUTSIDE the link (an interactive control can't nest inside an anchor).
@@ -59,15 +136,19 @@ function LinkRow({
   workflow,
   isOpenBlocker,
   editable,
-  identifier,
   relationshipLabel,
+  onRemove,
+  removeError,
+  onDismissRemoveError,
 }: {
   link: RelationshipLinkDto;
   workflow: WorkflowDto;
   isOpenBlocker?: boolean;
   editable?: boolean;
-  identifier?: string;
   relationshipLabel: string;
+  onRemove?: (linkId: string) => Promise<RemoveLinkActionResult>;
+  removeError?: string | null;
+  onDismissRemoveError?: (linkId: string) => void;
 }) {
   const t = useTranslations('issueViews');
   const { item } = link;
@@ -105,12 +186,14 @@ function LinkRow({
           </Pill>
         )}
       </RelationshipPeekLink>
-      {editable && identifier ? (
+      {editable && onRemove ? (
         <RemoveLinkButton
           linkId={link.linkId}
-          identifier={identifier}
           relationshipLabel={relationshipLabel}
           targetIdentifier={item.identifier}
+          onRemove={onRemove}
+          error={removeError ?? null}
+          onDismissError={onDismissRemoveError}
         />
       ) : null}
     </li>
@@ -133,27 +216,173 @@ export function RelationshipsPanel({
 }: RelationshipsPanelProps) {
   const t = useTranslations('issueViews');
   const tl = useTranslations('labels');
+  const router = useRouter();
+
+  const [overlay, setOverlay] = useState<Overlay>(EMPTY_OVERLAY);
+  // A rejected removal's message, per link. It lives HERE because the
+  // optimistic removal unmounts the row — and its confirm popover — before the
+  // rejection arrives, so the control that must show it no longer exists at
+  // that moment (see RemoveLinkButton).
+  const [removeErrors, setRemoveErrors] = useState<Record<string, string>>({});
+  const [isRefreshing, startRefresh] = useTransition();
+  const seqRef = useRef(0);
+  // The highest seq a STARTED refresh covers. Read only when that refresh
+  // commits, which is what makes the drop below "the server has now spoken
+  // about everything up to here".
+  const refreshedThroughRef = useRef(0);
+
+  // The callback is ASYNC so the transition spans the refresh rather than the
+  // call that starts it: `isRefreshing` stays true until the refreshed tree has
+  // committed, which is what makes its falling edge mean "the server's props
+  // are now on screen" — the precondition the reconcile below depends on.
+  const startRefreshThrough = useCallback(
+    (seq: number) => {
+      startRefresh(async () => {
+        refreshedThroughRef.current = Math.max(refreshedThroughRef.current, seq);
+        await router.refresh();
+      });
+    },
+    [router],
+  );
+
+  // The refresh has committed → the props below are the server's own answer, so
+  // drop every optimistic entry it covers. A later mutation (seq above the
+  // watermark) is still in flight and keeps its overlay.
+  useEffect(() => {
+    if (isRefreshing) return;
+    const through = refreshedThroughRef.current;
+    if (through === 0) return;
+    setOverlay((o) => {
+      const removed = o.removed.filter((r) => r.seq > through);
+      const added = o.added.filter((a) => a.seq > through);
+      const nextReadiness = o.readiness && o.readiness.seq > through ? o.readiness : null;
+      if (
+        removed.length === o.removed.length &&
+        added.length === o.added.length &&
+        nextReadiness === o.readiness
+      ) {
+        return o;
+      }
+      return { removed, added, readiness: nextReadiness };
+    });
+  }, [isRefreshing]);
+
+  const addLink = useCallback(
+    async (
+      relationship: RelationshipKind,
+      target: WorkItemSummaryDto,
+    ): Promise<CreateLinkActionResult> => {
+      if (!currentItemId || !identifier) throw new Error('AddLinkControl needs an editable panel');
+      const seq = ++seqRef.current;
+      // OPTIMISTIC: the row is in the list before the request leaves, built from
+      // the candidate the picker already fetched. The temporary linkId is
+      // replaced by the real one below, so the row's own remove button is armed
+      // with a server-known id as soon as the write answers.
+      setOverlay((o) => ({
+        ...o,
+        added: [
+          ...o.added,
+          { relationship, link: { linkId: `optimistic:${seq}`, item: target }, seq },
+        ],
+      }));
+      const res = await createLinkAction({
+        currentItemId,
+        identifier,
+        targetId: target.id,
+        relationship,
+      });
+      if (!res.ok) {
+        // ROLL BACK — the control surfaces `res.error` inline.
+        setOverlay((o) => ({ ...o, added: o.added.filter((a) => a.seq !== seq) }));
+        return res;
+      }
+      setOverlay((o) => ({
+        ...o,
+        added: o.added.map((a) =>
+          a.seq === seq ? { ...a, link: { ...a.link, linkId: res.linkId } } : a,
+        ),
+        readiness: latestReadiness(o.readiness, res.readiness, seq),
+      }));
+      startRefreshThrough(seq);
+      return res;
+    },
+    [currentItemId, identifier, startRefreshThrough],
+  );
+
+  const dismissRemoveError = useCallback((linkId: string) => {
+    setRemoveErrors((e) =>
+      linkId in e ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== linkId)) : e,
+    );
+  }, []);
+
+  const removeLink = useCallback(
+    async (linkId: string): Promise<RemoveLinkActionResult> => {
+      if (!currentItemId || !identifier)
+        throw new Error('RemoveLinkButton needs an editable panel');
+      const seq = ++seqRef.current;
+      // OPTIMISTIC: the row leaves the list before the request does.
+      setOverlay((o) => ({ ...o, removed: [...o.removed, { linkId, seq }] }));
+      const res = await removeLinkAction({ linkId, currentItemId, identifier });
+      if (!res.ok) {
+        // ROLL BACK — the row returns, and the message goes with it so the
+        // re-mounted confirm popover can surface it inline.
+        setOverlay((o) => ({ ...o, removed: o.removed.filter((r) => r.seq !== seq) }));
+        setRemoveErrors((e) => ({ ...e, [linkId]: res.error }));
+        return res;
+      }
+      setOverlay((o) => ({ ...o, readiness: latestReadiness(o.readiness, res.readiness, seq) }));
+      startRefreshThrough(seq);
+      return res;
+    },
+    [currentItemId, identifier, startRefreshThrough],
+  );
+
+  // The server's rows ⊕ this panel's un-reconciled optimism.
+  const removedIds = new Set(overlay.removed.map((r) => r.linkId));
+  function project(server: RelationshipLinkDto[], relationship: RelationshipKind) {
+    const kept = server.filter((l) => !removedIds.has(l.linkId));
+    const pending = overlay.added
+      .filter((a) => a.relationship === relationship)
+      // A refresh can land the real row while this entry is still un-retired
+      // (its own refresh not yet committed) — don't render it twice.
+      .filter((a) => !kept.some((l) => l.linkId === a.link.linkId))
+      .map((a) => a.link);
+    return pending.length === 0 ? kept : [...kept, ...pending].sort(byItemKeyAsc);
+  }
+
+  const effectiveReadiness = overlay.readiness?.value ?? readiness;
+
   const groups = [
     {
-      key: 'blocked_by',
+      key: 'blocked_by' as const,
       label: tl('relationship.blocked_by'),
-      items: blockedBy,
+      items: project(blockedBy, 'blocked_by'),
       blockerGroup: true,
     },
-    { key: 'blocks', label: tl('relationship.blocks'), items: blocks, blockerGroup: false },
     {
-      key: 'relates_to',
+      key: 'blocks' as const,
+      label: tl('relationship.blocks'),
+      items: project(blocks, 'blocks'),
+      blockerGroup: false,
+    },
+    {
+      key: 'relates_to' as const,
       label: tl('relationship.relates_to'),
-      items: relatesTo,
+      items: project(relatesTo, 'relates_to'),
       blockerGroup: false,
     },
     {
-      key: 'duplicates',
+      key: 'duplicates' as const,
       label: tl('relationship.duplicates'),
-      items: duplicates,
+      items: project(duplicates, 'duplicates'),
       blockerGroup: false,
     },
-    { key: 'clones', label: tl('relationship.clones'), items: clones, blockerGroup: false },
+    {
+      key: 'clones' as const,
+      label: tl('relationship.clones'),
+      items: project(clones, 'clones'),
+      blockerGroup: false,
+    },
   ];
   const nonEmpty = groups.filter((g) => g.items.length > 0);
   // The readiness banner shows for a TODO-category item that is NOT archived —
@@ -166,32 +395,30 @@ export function RelationshipsPanel({
   // not the blocker count (bug-ready-banner-no-deps).
   const currentCategory = workflow.statuses.find((s) => s.key === currentStatus)?.category;
   const showReadiness = showsReadiness({ statusCategory: currentCategory, archived });
-  const openBlockerIds = new Set(readiness.openBlockers.map((b) => b.id));
+  const openBlockerIds = new Set(effectiveReadiness.openBlockers.map((b) => b.id));
   const canEdit = Boolean(editable && currentItemId && identifier);
 
   return (
     <ContentSectionCard title={t('relationships')} subtitle={t('relationshipsGloss')}>
       <div className="flex flex-col gap-4">
-        {canEdit ? (
-          <AddLinkControl currentItemId={currentItemId!} identifier={identifier!} />
-        ) : null}
+        {canEdit ? <AddLinkControl currentItemId={currentItemId!} onAdd={addLink} /> : null}
 
         {/* Readiness shows while the item is still in the todo category
             (2.5.21): green "Ready to start" when ready (no blockers, or all
             terminal), peach "Blocked" naming the open blockers otherwise. */}
         {showReadiness ? (
           <ReadinessBadge
-            ready={readiness.ready}
-            blockers={readiness.openBlockers.map((b) => ({
+            ready={effectiveReadiness.ready}
+            blockers={effectiveReadiness.openBlockers.map((b) => ({
               identifier: b.identifier,
               href: `/items/${b.identifier}`,
             }))}
             blockedByAncestor={
-              readiness.blockedByAncestor
+              effectiveReadiness.blockedByAncestor
                 ? {
-                    identifier: readiness.blockedByAncestor.identifier,
-                    title: readiness.blockedByAncestor.title,
-                    href: `/items/${readiness.blockedByAncestor.identifier}`,
+                    identifier: effectiveReadiness.blockedByAncestor.identifier,
+                    title: effectiveReadiness.blockedByAncestor.title,
+                    href: `/items/${effectiveReadiness.blockedByAncestor.identifier}`,
                   }
                 : null
             }
@@ -219,8 +446,10 @@ export function RelationshipsPanel({
                     workflow={workflow}
                     isOpenBlocker={group.blockerGroup && openBlockerIds.has(link.item.id)}
                     editable={canEdit}
-                    identifier={identifier}
                     relationshipLabel={group.label}
+                    onRemove={canEdit ? removeLink : undefined}
+                    removeError={removeErrors[link.linkId] ?? null}
+                    onDismissRemoveError={dismissRemoveError}
                   />
                 ))}
               </ul>

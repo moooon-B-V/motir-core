@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Plus } from 'lucide-react';
 import type { ComboboxOption } from '@/components/ui/Combobox';
@@ -9,8 +8,9 @@ import { LinkAddForm } from '@/components/issues/LinkAddForm';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { useLinkCandidateSearch } from '@/hooks/useLinkCandidateSearch';
 import type { RelationshipKind } from '@/lib/dto/workItemLinks';
+import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { IssueType } from '@/lib/issues/parentRules';
-import { createLinkAction, listLinkCandidatesAction } from '../actions';
+import { listLinkCandidatesAction, type CreateLinkActionResult } from '../actions';
 
 // The add-link control on the relationships panel (Subtask 2.4.9), per
 // `design/work-items/links.mock.html`. A quiet "+ Link issue" entry point that
@@ -21,25 +21,35 @@ import { createLinkAction, listLinkCandidatesAction } from '../actions';
 // is query-driven, fetching per debounced keystroke through
 // `useLinkCandidateSearch` instead of loading a newest-50 window once;
 // candidates also refetch when the relationship changes (the already-linked
-// exclusion is direction-aware), Add calls `createLinkAction` and
-// `router.refresh()` re-renders the panel + banner, and the typed trigger errors
-// surface inline (LinkAddForm's AA-safe banner).
+// exclusion is direction-aware), and the typed trigger errors surface inline
+// (LinkAddForm's AA-safe banner).
+//
+// MOTIR-4496: Add no longer performs the write. It hands the picked CANDIDATE
+// to the panel's `onAdd`, which inserts the row OPTIMISTICALLY from that
+// candidate before the request leaves — the candidate is a full
+// `WorkItemSummaryDto`, so the optimistic row is the real row minus its
+// server-assigned `linkId`, which the response supplies. The panel owns the
+// refresh; this control owns the form and its inline error.
 
 export function AddLinkControl({
   currentItemId,
-  identifier,
+  onAdd,
 }: {
   currentItemId: string;
-  identifier: string;
+  /** The panel's optimistic add — inserts the row from `target`, awaits the
+   *  Server Action, and rolls back on a non-2xx (whose message lands here). */
+  onAdd: (
+    relationship: RelationshipKind,
+    target: WorkItemSummaryDto,
+  ) => Promise<CreateLinkActionResult>;
 }) {
-  const router = useRouter();
   const t = useTranslations('issueViews');
   const tForm = useTranslations('ui');
   const [open, setOpen] = useState(false);
   const [relationship, setRelationship] = useState<RelationshipKind>('blocked_by');
   const [targetId, setTargetId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setPending] = useState(false);
 
   // Server-search: per-keystroke debounced fetch, refetched per relationship
   // (the exclusion set is direction-aware). The empty/short query returns nothing
@@ -82,16 +92,24 @@ export function AddLinkControl({
 
   function submit() {
     if (!targetId) return;
+    // The picked candidate IS the row's content — `listLinkCandidatesAction`
+    // returns full summaries, so the panel needs no round trip to draw it.
+    const target = search.candidates.find((c) => c.id === targetId);
+    if (!target) return;
     setError(null);
-    startTransition(async () => {
-      const res = await createLinkAction({ currentItemId, identifier, targetId, relationship });
-      if (res.ok) {
-        reset();
-        router.refresh();
-      } else {
-        setError(res.error);
+    setPending(true);
+    // ⚠️ NOT a `useTransition` (MOTIR-4496) — see RemoveLinkButton: `onAdd`'s
+    // optimistic insert must be an URGENT update, and a transition makes every
+    // update inside it non-urgent.
+    void (async () => {
+      try {
+        const res = await onAdd(relationship, target);
+        if (res.ok) reset();
+        else setError(res.error);
+      } finally {
+        setPending(false);
       }
-    });
+    })();
   }
 
   if (!open) {
