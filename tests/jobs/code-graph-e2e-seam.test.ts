@@ -38,6 +38,9 @@ import type { IndexAdmission } from '@/lib/services/codeGraphIndexAdmissionServi
 const ORIGINAL_DISPATCHER: Dispatcher = getGlobalDispatcher();
 
 const AI_ORIGIN = 'http://motir-ai.index-e2e.local';
+/** What the lane hands the CONTAINER (MOTIR-4518) — `indexWriterSeamEnv()`'s
+ *  `MOTIR_AI_CONTAINER_URL`, kept in step with it. */
+const CONTAINER_AI_ORIGIN = 'http://motir-ai-public.index-e2e.local';
 const OWNER = 'moooon';
 const NAME = 'motir-core';
 const REF = 'main';
@@ -67,6 +70,11 @@ function armHarness(): void {
   vi.stubEnv('E2E_TEST_CODE_GRAPH', '1');
   vi.stubEnv('E2E_PROD_HARNESS', '1');
   vi.stubEnv('MOTIR_AI_URL', AI_ORIGIN);
+  // The CONTAINER's address (MOTIR-4518) — a different value, mirroring
+  // `indexWriterSeamEnv()`. In the lane the two differ because the worker and
+  // the container are in different places; here they differ so the assertion
+  // below can tell them apart.
+  vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_ORIGIN);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'e2e-index-placeholder-token');
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   // A REAL RSA key pair, because `createAppJwt` has to actually sign — nothing
@@ -144,7 +152,12 @@ describe('the boot path crosses both boundaries and lands their values in the SP
     expect(env['MOTIR_INDEX_RUN_CREDENTIAL']).toBe(E2E_INDEX_RUN_CREDENTIAL);
     expect(env['MOTIR_INDEX_TARBALL_URL']).toBe(e2eTarballUrl(OWNER, NAME, REF));
     expect(env['MOTIR_INDEX_REPO_REF']).toBe(`${OWNER}/${NAME}`);
-    expect(env['MOTIR_AI_BASE_URL']).toBe(AI_ORIGIN);
+    // ⚠️ THE CONTAINER's address, NOT the worker's (MOTIR-4518). The mint above
+    // really went to `AI_ORIGIN` — that is the worker's own transport — and the
+    // value that lands in the spec is the other one. The two are different here
+    // for the same reason they are different in production.
+    expect(env['MOTIR_AI_BASE_URL']).toBe(CONTAINER_AI_ORIGIN);
+    expect(env['MOTIR_AI_BASE_URL']).not.toBe(AI_ORIGIN);
 
     // Both boundaries really were crossed — not short-circuited by a cached
     // token or a fallback.

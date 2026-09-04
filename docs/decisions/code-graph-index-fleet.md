@@ -127,6 +127,67 @@ unsafe" is a reasonable first reaction, and it costs a Fly org, a payment method
 of env vars and a provisioning card (MOTIR-1984, archived) every time someone has it. §4 is the
 answer to it.
 
+### §3.2 — THE COROLLARY NOBODY WROTE DOWN: the container is in a DIFFERENT org from motir-core, so it needs a DIFFERENT motir-ai ADDRESS
+
+**Appended 2026-09-04 (MOTIR-4518), after two weeks of it being false in production.**
+
+§3 says the container runs in `motir-fleet`. §3.1 says a 6PN is **organization-scoped**. Put the
+two sentences next to each other and the consequence is immediate — and for a year nobody did:
+
+| caller                 | organization      | how it reaches motir-ai                                                                                                            |
+| ---------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `motir-core`           | `moooon`          | `MOTIR_AI_URL` — `http://motir-ai.internal:8080` in production, a 6PN name resolvable because motir-core and motir-ai share an org |
+| an **index container** | **`motir-fleet`** | **that same name is NXDOMAIN.** It needs an address that resolves from outside `moooon`                                            |
+
+**What actually happened.** `codeGraphIndexDispatchService.bootIndexContainer` resolved the
+container's `MOTIR_AI_BASE_URL` by calling `motirAiBaseUrl()` — motir-core's own accessor.
+`lib/ai/motirAiClient.ts`'s doc comment even said the fleet container was that accessor's
+consumer, so the dispatcher was doing exactly what the code told it to. It was correct while
+`MOTIR_AI_URL` was public and became wrong the day the seam went private (MOTIR-3277, private
+ingress allocated `2026-08-21 09:47`; the coordination rows stop moving at `11:48–11:58`). From
+then on **every** index run booted, downloaded its repository, spent up to two hours building a
+45 MB graph, and then died at
+
+```
+[indexer] error: run failed IndexerError: motir-ai /v1/code-graph/run/upload-grant
+  was unreachable — caused by TypeError: fetch failed
+  — caused by Error: getaddrinfo ENOTFOUND motir-ai.internal
+{"ok":false,"failure":"UPLOAD","exitCode":40}
+```
+
+one call before the upload. "Build once, sync forever" (MOTIR-3249) had never run since, because
+nothing could reach `recordSnapshotPointer` to advance the coordination row the sync path reads.
+
+**The decision.** The container's address is resolved by a **separate accessor with its own
+variable** — `motirAiContainerBaseUrl()` / `MOTIR_AI_CONTAINER_URL` — sitting immediately beside
+`motirAiBaseUrl()` so a reader of one meets the other. `MOTIR_AI_URL` is **unchanged** and stays
+on the private seam: MOTIR-3277 decided that for motir-core's own transport, and moving it to
+satisfy a different consumer would undo a decision it is not about.
+
+**There is NO fallback between the two, deliberately.** A default is what made this cost two
+weeks instead of one dead-lettered run: unset now throws inside `bootIndexContainer`'s deployment
+gate, which releases the admission slot and records a failure, before a machine is billed.
+
+**Does this widen the fleet's exposure?** The reachability changes; the AUTHORITY does not. §4 is
+untouched — the container still carries only its run-scoped credential, and motir-ai's three
+container-facing routes are gated on it by `runCredentialAuth`. Verified anonymously against the
+public host on 2026-09-04: `GET /health` answers `{"status":"ok"}`, and
+`POST /v1/code-graph/run/upload-grant` answers **401 `service_unauthorized` — "A run-scoped
+credential is required."** The route was already reachable from the public internet; what was
+missing was telling the container about it.
+
+**And the guard, because the shape of this fault is the point.** Every gating signal was green
+throughout — both fleet boot preflights reported `bootable`, the job ledger reported 259
+`succeeded` rows, motir-ai logged only its own re-index contract working as designed. Both
+preflights ask whether a container can **boot**; neither had ever asked whether the booted
+container can **reach** anything. `system.daily-health-check` now carries a third probe that does
+(`fleetPreflightService.checkIndexContainerAiAddress`). It is loud on the two verdicts motir-core
+is entitled to be loud about — the variable is unset, or the address is **private/network-scoped
+and therefore cannot resolve from another organization whatever this process sees** — and only
+`indeterminate` when a probe from `moooon` fails, which is a statement about motir-core's network
+rather than about the address. It cannot prove the fleet's view from here; the structural arm is
+the one that would have caught this on day one, and it needs no probe.
+
 ## §4 — Decision 3
 
 **Isolation comes from CREDENTIAL SCOPE, not org count.**

@@ -59,6 +59,14 @@ const SNAPSHOT_URL =
   'https://fly.storage.tigris.dev/bucket/codegraph/ai-proj/moooon-B-V_motir-core/abc.db.gz' +
   '?X-Amz-Signature=PRESIGNED&X-Amz-Expires=1800';
 const AI_URL = 'https://ai.example.test';
+/**
+ * The address the CONTAINER is given (MOTIR-4518) — deliberately DIFFERENT from
+ * `AI_URL`, which is the address motir-core itself uses. In production they are
+ * different because the two callers sit in different organizations, and a suite
+ * that stubbed one value for both could not tell a correct dispatcher from the
+ * one that shipped.
+ */
+const CONTAINER_AI_URL = 'https://ai-public.example.test';
 const SERVICE_TOKEN = 'svc-token-must-never-reach-a-container';
 const INSTALLATION_TOKEN = 'ghs_installation_must_never_reach_a_container';
 const DATABASE_URL = 'postgres://motir:secret@db.example.test/motir';
@@ -203,6 +211,7 @@ beforeEach(() => {
   vi.stubEnv('GITHUB_APP_ID', '4242');
   vi.stubEnv('GITHUB_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('MOTIR_AI_URL', AI_URL);
+  vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_URL);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', SERVICE_TOKEN);
   vi.stubEnv('DATABASE_URL', DATABASE_URL);
   // Select the FAKE adapter the way a deployment selects Fly.
@@ -246,7 +255,7 @@ describe('buildIndexSpec — the container gets the image its boot contract name
   const SPEC_ARGS = {
     target: INPUT,
     fleet: { image: 'motir/indexer@sha256:abc', region: 'ams' },
-    aiBaseUrl: AI_URL,
+    aiBaseUrl: CONTAINER_AI_URL,
     tarballUrl: TARBALL_URL,
     runCredential: RUN_CREDENTIAL,
     timeoutSeconds: 1800,
@@ -268,7 +277,7 @@ describe('buildIndexSpec — the container gets the image its boot contract name
     expect(spec.env).toEqual({
       MOTIR_INDEX_TARBALL_URL: TARBALL_URL,
       MOTIR_INDEX_REPO_REF: 'moooon-B-V/motir-core',
-      MOTIR_AI_BASE_URL: AI_URL,
+      MOTIR_AI_BASE_URL: CONTAINER_AI_URL,
       MOTIR_INDEX_RUN_CREDENTIAL: RUN_CREDENTIAL,
     });
   });
@@ -366,6 +375,60 @@ describe('the booted spec carries no credential the container has no use for', (
     // The one motir-ai credential it DOES hold is the run-scoped one.
     expect(spec.env['MOTIR_INDEX_RUN_CREDENTIAL']).toBe(RUN_CREDENTIAL);
     expect(tarballBodyTouched).toBe(false);
+  });
+});
+
+// ── The address the container is GIVEN (MOTIR-4518) ────────────────────────
+//
+// ⚠️ THIS IS THE CARD'S CENTRAL ASSERTION, and it is a NEGATIVE about a value
+// rather than about a key. The env KEY set above has been pinned since
+// MOTIR-2026 and was correct throughout: `MOTIR_AI_BASE_URL` was present, spelled
+// right, and carried a well-formed URL. What was wrong was WHICH url — the one
+// motir-core reaches motir-ai at, over a private 6PN address scoped to
+// motir-core's own Fly organization, handed to a machine that runs in the
+// FLEET's organization, where the name does not exist. Every index run from
+// 2026-08-21 booted, downloaded the repository, spent nineteen minutes building
+// a 45 MB graph and then died on
+// `getaddrinfo ENOTFOUND motir-ai.internal` at the upload grant.
+//
+// So the two variables are stubbed to DIFFERENT values in this suite, and these
+// tests read the difference. A dispatcher that calls `motirAiBaseUrl()`, that
+// falls back to it, or that reads `MOTIR_AI_URL` directly fails here.
+
+describe("the container is handed its OWN motir-ai address, never motir-core's", () => {
+  it('puts MOTIR_AI_CONTAINER_URL in the spec while the MINT goes to MOTIR_AI_URL', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    expect(booted.phase).toBe('supervising');
+
+    const spec = fakeOrchestrator.specs[0]!;
+    // The container's address: the public one.
+    expect(spec.env['MOTIR_AI_BASE_URL']).toBe(CONTAINER_AI_URL);
+    // motir-core's OWN transport is untouched and still on the private seam —
+    // the half of the fix that is a refusal to change something (MOTIR-3277).
+    expect(motirAiCalls()).toHaveLength(1);
+    expect(motirAiCalls()[0]!.url).toBe(`${AI_URL}/v1/code-graph/run-credential`);
+    // And the two are genuinely different values, so the assertion above cannot
+    // be satisfied by accident.
+    expect(spec.env['MOTIR_AI_BASE_URL']).not.toBe(AI_URL);
+  });
+
+  it('REFUSES to boot when MOTIR_AI_CONTAINER_URL is unset — no silent fallback, no machine', async () => {
+    // ⚠️ THE ARM THAT MAKES THE DEFECT UNREPEATABLE. With a fallback this
+    // deployment boots a container that cannot reach motir-ai and burns a
+    // nineteen-minute machine to find out; without one it costs a throw before
+    // anything is provisioned. `MOTIR_AI_URL` is left perfectly well set, which
+    // is exactly the state a fallback would have been happy with.
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
+
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST),
+    ).rejects.toThrow('MOTIR_AI_CONTAINER_URL');
+
+    // Nothing was provisioned, nothing was minted, and — the invariant every
+    // failure path in this function owes — the admission slot went back.
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(motirAiCalls()).toHaveLength(0);
+    expect(released).toEqual([ADMISSION.slotRef]);
   });
 });
 

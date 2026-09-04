@@ -38,6 +38,9 @@ const RUNNER_REPO = 'moooon-b-v/motir-ci-runner';
 const RUNNER_IMAGE = `ghcr.io/${RUNNER_REPO}@sha256:446c692d`;
 const INDEXER_REPO = 'motir-ci-fleet/motir-indexer';
 const INDEXER_IMAGE = `registry.fly.io/${INDEXER_REPO}@sha256:9f2c1ab4`;
+/** The address a deployment hands an index container for motir-ai (MOTIR-4518) —
+ *  motir-ai's PUBLIC ingress, and deliberately not `MOTIR_AI_URL`. */
+const CONTAINER_AI_URL = 'https://ai-public.example.test';
 
 function jsonRes(status: number, body: unknown, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -311,6 +314,10 @@ describe("the INDEXER image's preflight rides the same health check", () => {
     // to ignore.
     await seedHealthyJobSchedules();
     stubFleet(INDEXER_IMAGE);
+    // A deployment that indexes owes the container an address it can resolve
+    // (MOTIR-4518); without it the run fails on THAT probe instead, which is a
+    // different assertion from the one this test makes.
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_URL);
     vi.stubGlobal(
       'fetch',
       vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
@@ -319,9 +326,12 @@ describe("the INDEXER image's preflight rides the same health check", () => {
         // thing that is actually unreachable, and a substring test would also
         // fire for any other host carrying it in a path (CodeQL
         // `js/incomplete-url-substring-sanitization`).
-        if (new URL(String(rawUrl)).host === 'registry.fly.io') {
+        const host = new URL(String(rawUrl)).host;
+        if (host === 'registry.fly.io') {
           throw new Error('getaddrinfo ENOTFOUND registry.fly.io');
         }
+        // The container-address probe (MOTIR-4518) rides the same stubbed fetch.
+        if (host === new URL(CONTAINER_AI_URL).host) return new Response('ok', { status: 200 });
         return serveManifest(rawUrl, init, [RUNNER_REPO]);
       }),
     );
@@ -333,6 +343,151 @@ describe("the INDEXER image's preflight rides the same health check", () => {
       ok: true,
       fleet: { verdict: 'bootable' },
       indexFleet: { verdict: 'indeterminate', reference: INDEXER_IMAGE },
+      indexContainerAi: { verdict: 'reachable', address: CONTAINER_AI_URL },
+    });
+  });
+});
+
+// ── THE THIRD FAULT ON THE SAME SURFACE (MOTIR-4518) ─────────────────────────
+//
+// Both probes above ask whether a container can BOOT. Neither has ever asked
+// whether the booted container can REACH anything, and that is where the fleet
+// spent two weeks: pullable image, successful boot, repository downloaded, 45 MB
+// graph built, and then `getaddrinfo ENOTFOUND motir-ai.internal` one call before
+// it could be uploaded — because motir-core handed the container motir-core's own
+// private motir-ai address and the container runs in another organization. Both
+// image verdicts were green the whole time, correctly. These pin the probe that
+// asks the other question, and that the three verdicts stay TOLD APART.
+
+describe("the index container's motir-ai ADDRESS rides the same health check", () => {
+  function stubIndexingFleet() {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', INDEXER_IMAGE);
+  }
+
+  /** Both registries serve, and the container address answers. */
+  function everythingServes() {
+    return vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
+      if (new URL(String(rawUrl)).host === new URL(CONTAINER_AI_URL).host) {
+        return new Response('ok', { status: 200 });
+      }
+      return serveManifest(rawUrl, init, [RUNNER_REPO, INDEXER_REPO]);
+    });
+  }
+
+  it('records the verdict on a healthy tick, beside the two image ones', async () => {
+    await seedHealthyJobSchedules();
+    stubIndexingFleet();
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_URL);
+    vi.stubGlobal('fetch', everythingServes());
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({
+      ok: true,
+      fleet: { verdict: 'bootable' },
+      indexFleet: { verdict: 'bootable' },
+      indexContainerAi: { verdict: 'reachable', address: CONTAINER_AI_URL, status: 200 },
+    });
+  });
+
+  it('FAILS the run when the container is given a PRIVATE address — with both images perfectly pullable', async () => {
+    // ⚠️ THE CARD'S GUARD, in the exact state that shipped. `MOTIR_AI_URL` is the
+    // private seam and stays that way; what is wrong is that the CONTAINER's
+    // variable carries it too. Note that no probe is involved: from this process
+    // the address resolves, which is precisely why the verdict has to be
+    // structural.
+    await seedHealthyJobSchedules();
+    stubIndexingFleet();
+    vi.stubEnv('MOTIR_AI_URL', 'http://motir-ai.internal:8080');
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', 'http://motir-ai.internal:8080');
+    vi.stubGlobal('fetch', everythingServes());
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, error } = (await engine.execute()) as {
+      result?: unknown;
+      error?: { message?: string };
+    };
+
+    expect(result).toBeUndefined();
+    // The message sends an operator to the right system: a Fly SECRET on
+    // motir-core, not a registry. Sending them to re-run an image mirror for a
+    // name-resolution fault is what two weeks of green image probes already did.
+    expect(error?.message).toContain('motir-ai.internal');
+    expect(error?.message).toContain('MOTIR_AI_CONTAINER_URL');
+    expect(error?.message).not.toContain(INDEXER_IMAGE);
+    expect(error?.message).not.toContain('garbage-collects');
+  });
+
+  it('FAILS the run when a deployment that indexes has no container address at all', async () => {
+    await seedHealthyJobSchedules();
+    stubIndexingFleet();
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
+    vi.stubGlobal('fetch', everythingServes());
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result, error } = (await engine.execute()) as {
+      result?: unknown;
+      error?: { message?: string };
+    };
+
+    expect(result).toBeUndefined();
+    expect(error?.message).toContain('MOTIR_AI_CONTAINER_URL');
+    // And it says why there is no fallback, because "just point it at
+    // MOTIR_AI_URL" is the fix an operator would otherwise reach for — and is
+    // the defect.
+    expect(error?.message).toContain('MOTIR_AI_URL');
+  });
+
+  it('does NOT fail the run when this process merely could not REACH the address', async () => {
+    // Same boundary both image probes hold: a transport failure is a statement
+    // about motir-core's network, not about the address. It is on the row either
+    // way.
+    await seedHealthyJobSchedules();
+    stubIndexingFleet();
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', CONTAINER_AI_URL);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
+        if (new URL(String(rawUrl)).host === new URL(CONTAINER_AI_URL).host) {
+          throw new Error('fetch failed');
+        }
+        return serveManifest(rawUrl, init, [RUNNER_REPO, INDEXER_REPO]);
+      }),
+    );
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({
+      ok: true,
+      indexFleet: { verdict: 'bootable' },
+      indexContainerAi: { verdict: 'indeterminate', address: CONTAINER_AI_URL },
+    });
+  });
+
+  it('is NOT_APPLICABLE on a deployment that does not index — the container variable is not owed', async () => {
+    await seedHealthyJobSchedules();
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
+    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
+    vi.stubGlobal('fetch', registryServing([RUNNER_REPO]));
+
+    const engine = new JobTestEngine({ function: dailyHealthCheck });
+    const { result } = await engine.execute();
+
+    expect(result).toMatchObject({
+      ok: true,
+      fleet: { verdict: 'bootable' },
+      indexFleet: { verdict: 'not_applicable' },
+      indexContainerAi: { verdict: 'not_applicable' },
     });
   });
 });

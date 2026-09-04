@@ -49,23 +49,82 @@ interface ClientConfig {
 }
 
 /**
- * motir-ai's base URL — WITHOUT the service token (MOTIR-2026).
+ * motir-ai's base URL as THIS PROCESS reaches it — WITHOUT the service token
+ * (MOTIR-2026).
  *
- * ⚠️ IT EXISTS SO ONE CALLER CAN HAVE THE URL AND NOT THE TOKEN. A fleet index
- * container is handed `MOTIR_AI_BASE_URL` and a RUN-SCOPED credential, and
- * nothing else that reaches motir-ai
- * (`docs/decisions/code-graph-index-fleet.md` §4). {@link config} cannot serve
- * that caller: it refuses when `MOTIR_AI_SERVICE_TOKEN` is unset and hands back
- * the token beside the url, which is precisely the value the container must
- * never see. Re-reading `MOTIR_AI_URL` at the dispatcher instead would put a
- * second copy of the variable name — and of the trailing-slash normalisation —
- * one module away from this one.
+ * ⚠️ IT EXISTS SO ONE CALLER CAN HAVE THE URL AND NOT THE TOKEN. {@link config}
+ * refuses when `MOTIR_AI_SERVICE_TOKEN` is unset and hands the token back beside
+ * the url, so a caller that needs only the address cannot use it.
+ *
+ * ⚠️ IT IS NOT THE ADDRESS AN INDEX CONTAINER IS GIVEN — see
+ * {@link motirAiContainerBaseUrl}, directly below, and read the two together.
+ * This paragraph used to say the opposite in those words ("a fleet index
+ * container is handed `MOTIR_AI_BASE_URL`…"), and the dispatcher did exactly
+ * what it said. **CORRECTED (MOTIR-4518):** `MOTIR_AI_URL` is the address
+ * motir-core reaches motir-ai at, which in production is a PRIVATE, org-scoped
+ * one (`http://motir-ai.internal:8080`); an index container runs in a DIFFERENT
+ * organization, where that name does not resolve at all. Every index run died at
+ * `getaddrinfo ENOTFOUND motir-ai.internal` for two weeks — after building the
+ * graph, one call before it could be uploaded — because these two values were
+ * one value.
  *
  * Read at CALL time, like everything else here.
  */
 export function motirAiBaseUrl(): string {
   const url = process.env['MOTIR_AI_URL'];
   if (!url) throw new MotirAiConfigError('MOTIR_AI_URL is not set');
+  return url.replace(/\/+$/, '');
+}
+
+/**
+ * The env var carrying the address an INDEX CONTAINER is given for motir-ai.
+ * Exported so the preflight and its message name the same literal the accessor
+ * reads (MOTIR-4518).
+ */
+export const MOTIR_AI_CONTAINER_URL_ENV_VAR = 'MOTIR_AI_CONTAINER_URL';
+
+/**
+ * motir-ai's base URL AS THE INDEX CONTAINER MUST REACH IT (MOTIR-4518) — the
+ * value that becomes the container's `MOTIR_AI_BASE_URL`.
+ *
+ * ⚠️ WHY THIS IS A SECOND ACCESSOR AND NOT A SECOND CALL TO ITS TWIN. The two
+ * callers are in DIFFERENT PLACES, so they are different values, and the code
+ * has to be able to say so:
+ *
+ * | who is calling | from where | which address |
+ * | --- | --- | --- |
+ * | motir-core (this process) | the `moooon` organization | {@link motirAiBaseUrl} — `MOTIR_AI_URL`, private/6PN in production |
+ * | an index container | the FLEET's own organization | this accessor — `MOTIR_AI_CONTAINER_URL`, which must resolve from outside `moooon` |
+ *
+ * A `.internal` name is 6PN: the platform resolves it only for machines in the
+ * SAME organization as the app it names. It is therefore correct for the row
+ * above it and unusable for the row below it — not because one of them is
+ * misconfigured, but because private-network addressing is scoped to a network
+ * and the two callers are on different ones. `MOTIR_AI_URL` stays on the private
+ * seam deliberately (MOTIR-3277); moving it to satisfy this consumer would undo
+ * that decision for a caller it is not about.
+ *
+ * ⚠️ AND THERE IS NO FALLBACK TO `MOTIR_AI_URL`, DELIBERATELY. A default is what
+ * turned the original mistake into two silent weeks: the container booted, ran
+ * for nineteen minutes, built a 45 MB graph and threw it away at the upload
+ * grant, while the ledger recorded success. Unset must be LOUD and must be loud
+ * BEFORE a machine is billed — this throws inside `bootIndexContainer`'s
+ * deployment gate, which releases the admission slot and records a failure
+ * instead of a phantom index.
+ *
+ * The container's authority is unchanged and is not widened by this: it still
+ * carries only a run-scoped credential, minted per (project, repo, run), and
+ * motir-ai's container-facing routes are gated on it (`runCredentialAuth`) —
+ * verified anonymously against the public host, which answers 401
+ * `service_unauthorized` rather than serving anything.
+ *
+ * Read at CALL time, like everything else here.
+ */
+export function motirAiContainerBaseUrl(): string {
+  const url = process.env[MOTIR_AI_CONTAINER_URL_ENV_VAR];
+  if (!url) {
+    throw new MotirAiConfigError(`${MOTIR_AI_CONTAINER_URL_ENV_VAR} is not set`);
+  }
   return url.replace(/\/+$/, '');
 }
 

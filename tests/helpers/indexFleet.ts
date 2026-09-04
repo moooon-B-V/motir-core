@@ -27,6 +27,19 @@ const PASSWORD = 'hunter2hunter2';
 export const INDEX_TARBALL_URL =
   'https://codeload.github.com/moooon/motir-core/legacy.tar.gz/refs/heads/main?token=PRESIGNED';
 export const INDEX_AI_URL = 'https://ai.example.test';
+/**
+ * The address the CONTAINER is given for motir-ai (MOTIR-4518) — a DIFFERENT
+ * value from {@link INDEX_AI_URL} on purpose, because in production they are
+ * different: motir-core reaches motir-ai over a private, organization-scoped
+ * address, and an index container runs in another organization where that name
+ * does not resolve. Every suite driving the index job therefore proves the two
+ * are told apart, not just that one of them is present.
+ *
+ * It is never FETCHED here — nothing in this process talks to it; it only has to
+ * arrive in the container spec — so its host is deliberately absent from the
+ * stubbed `fetch` below.
+ */
+export const INDEX_CONTAINER_AI_URL = 'https://ai-public.example.test';
 export const INDEX_SERVICE_TOKEN = 'svc-token-must-never-reach-a-container';
 export const INDEX_RUN_CREDENTIAL = 'mrc1.payload.signature';
 /** The repo `seedIndexWorkspace` connects by default. */
@@ -86,6 +99,12 @@ export function stubIndexFleet(): void {
   stubAppCredentials();
   vi.stubEnv('MOTIR_AI_URL', INDEX_AI_URL);
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', INDEX_SERVICE_TOKEN);
+  // ⚠️ REQUIRED, and separate from the line above (MOTIR-4518). The address the
+  // container is handed has no fallback to motir-core's own — a default is what
+  // let every production index run die at `getaddrinfo ENOTFOUND
+  // motir-ai.internal` for two weeks — so `bootIndexContainer` throws without it
+  // and no supervised run in any of these suites can settle.
+  vi.stubEnv('MOTIR_AI_CONTAINER_URL', INDEX_CONTAINER_AI_URL);
   // Select the FAKE adapter the way a deployment selects Fly.
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
 
