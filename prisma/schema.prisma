@@ -8708,11 +8708,23 @@ enum PublicAddressStatus {
 /// as a typed `HostnameTakenError` (the `IdentifierTakenError` precedent in
 /// `projectsService.changeKey`). There is no count-then-write to lose.
 ///
-/// It is also what makes §8's never-released rule hold with no extra machinery:
-/// a retired label keeps its row, the row keeps the name, and nobody else can
-/// take it. Exactly the shape `ProjectKeyAlias` uses one level down, where
+/// It is also what makes §8's never-released rule hold for a RENAME with no
+/// extra machinery: a retired label keeps its row, the row keeps the name, and
+/// nobody else can take it. Modelled on `ProjectKeyAlias` one level down, where
 /// `@@unique([workspaceId, identifier])` reserves a retired project key against
 /// the live namespace.
+///
+/// ⚠️ AMENDED (Bug MOTIR-4366) — THAT MECHANISM COVERS THE RENAME AND NOT THE
+/// WORKSPACE DELETE, and the precedent above is exactly what hid the gap.
+/// `ProjectKeyAlias`'s uniqueness is workspace-SCOPED, so cascading its slot
+/// away with its tenant costs nothing; this `hostname` unique is GLOBAL, and
+/// `workspaceId` below is `onDelete: Cascade` — so a workspace delete released
+/// the live subdomain and every retained alias to whoever asked next, on the one
+/// path that runs unattended (the account-erasure sweep). **The cascade is
+/// deliberately KEPT**, and the reservation now outlives it in
+/// {@link PublicHostnameReservation}, which holds a DIGEST rather than the
+/// hostname so the erasure obligation and §8 can both be satisfied. See that
+/// model, and §8's AMENDMENT 1.
 ///
 /// ── `workspaceId` is denormalized, deliberately ──
 ///
@@ -8757,4 +8769,66 @@ model PublicAddress {
   /// the state and orders on the clock.
   @@index([status, lastCheckedAt])
   @@map("public_address")
+}
+
+/// A hostname held OUT of the global namespace after the row that held it is
+/// gone — Bug MOTIR-4366, amending ADR §8.
+///
+/// §8 decides a subdomain is never released, and `PublicAddress` implements that
+/// with the `hostname` unique index: a retired label keeps its row, the row keeps
+/// the name. That mechanism has exactly one hole, and it is the hole the
+/// `ProjectKeyAlias` precedent it was ported from cannot have. `ProjectKeyAlias`
+/// is `@@unique([workspaceId, identifier])` — its slot is scoped BY the tenant,
+/// so cascading it away with the tenant costs nothing. `PublicAddress.hostname`
+/// is `@unique` GLOBALLY, and `workspace_id` is `onDelete: Cascade`, so deleting
+/// a workspace hands its live subdomain and every retained alias back to whoever
+/// asks next. A pattern lifted across a scope boundary looks identical at the
+/// call site and has inverted consequences.
+///
+/// ── WHY A SECOND TABLE AND NOT A TOMBSTONED `PublicAddress` ────────────────
+///
+/// The alternative was to keep the address row and null its tenancy. It was
+/// rejected on the ERASURE half rather than on the schema half: the retained
+/// value would still be the literal hostname, which can itself be the personal
+/// datum (`jane-smith.<base>`), and `workspace_id` is the RLS tenancy key — a
+/// nullable one would make every policy on the table read a NULL comparison and
+/// every `workspaceId: string` in the codebase a lie. This table keeps
+/// `PublicAddress` exactly as it is, cascade included, so erasure stays simple
+/// and complete, and holds the ONE fact that must outlive it.
+///
+/// ── NO FOREIGN KEY, DELIBERATELY ───────────────────────────────────────────
+///
+/// `retiredFromWorkspaceId` is a NAME for something that is already gone by the
+/// time anyone reads it, not a pointer to something that must still exist — the
+/// same reasoning, and the same shape, as `CodeGraphOffboarding`'s tenant
+/// coordinates, whose own comment records that a row surviving the workspace
+/// cascade is the point. A relation here would re-introduce the very cascade
+/// this table exists to survive.
+///
+/// It is kept for two things and nothing else: the RLS `WITH CHECK` below has a
+/// column to compare against, so a tenant can only reserve names on its own
+/// behalf; and an operator answering "why is this name held?" has somewhere to
+/// start. It is an opaque, orphaned identifier — the workspace it names no
+/// longer exists and nothing joins to it.
+model PublicHostnameReservation {
+  id String @id @default(cuid())
+
+  /// SHA-256 of the normalised hostname under a versioned domain-separation
+  /// prefix — `lib/publicAddresses/hostnameReservation.ts` is the transform, and
+  /// the only one. The digest and NOT the hostname, because Article 17 asks for
+  /// the personal datum to be gone and §8 asks for the name to be held for ever;
+  /// a value that can be TESTED and not READ BACK is what satisfies both, and
+  /// testing a candidate is the only thing a claim ever needs to do.
+  ///
+  /// `@unique` for the same reason `public_address.hostname` is: it makes the
+  /// reserve idempotent (a resumed erasure sweep re-runs the write and inserts
+  /// nothing) without a count-then-write to lose.
+  hostnameHash String @unique @map("hostname_hash")
+
+  /// The workspace whose deletion retired it. NOT a relation — see above.
+  retiredFromWorkspaceId String @map("retired_from_workspace_id")
+
+  retiredAt DateTime @default(now()) @map("retired_at")
+
+  @@map("public_hostname_reservation")
 }

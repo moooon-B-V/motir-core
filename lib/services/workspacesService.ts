@@ -8,6 +8,12 @@ import { db } from '@/lib/db';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
+import { publicHostnameReservationRepository } from '@/lib/repositories/publicHostnameReservationRepository';
+import {
+  hostnameReservationHash,
+  reservesItsHostname,
+} from '@/lib/publicAddresses/hostnameReservation';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -717,6 +723,12 @@ export const workspacesService = {
    * memberships now, workspace-scoped data from later Stories later.
    * Asserts membership first, then deletes inside a workspace-scoped
    * transaction so the workspace RLS policy permits the delete.
+   *
+   * TWO things survive the cascade on purpose, and both are written HERE
+   * because here is the only place that still sees what is about to be lost:
+   * the code-graph offboarding row (§14.3, enqueued post-commit from ids read
+   * before the cascade) and the public-hostname RESERVATION (ADR §8, written
+   * INSIDE the delete's own transaction — Bug MOTIR-4366).
    */
   async deleteWorkspace(input: { workspaceId: string; actorUserId: string }): Promise<void> {
     await workspacesService.assertMembership(input.actorUserId, input.workspaceId);
@@ -742,9 +754,49 @@ export const workspacesService = {
       (tx) => projectRepository.findAllIdsByWorkspace(input.workspaceId, tx),
     );
 
+    // ⚠️ RESERVE THE PUBLIC HOSTNAMES IN THE SAME TRANSACTION AS THE DELETE
+    // (Bug MOTIR-4366 · `docs/decisions/public-tenant-addresses.md` §8, as
+    // amended).
+    //
+    // `public_address.workspace_id` is `ON DELETE CASCADE`, so this delete frees
+    // the workspace's live subdomain AND every label it ever retired back into a
+    // GLOBALLY unique namespace — where the next workspace to ask inherits every
+    // inbound link the departed one accumulated. §8 says a subdomain is never
+    // released, and the mechanism it relies on ("a retired label keeps its row,
+    // the row keeps the name") has no answer for the row's owner going away.
+    //
+    // ⚠️ AND THIS IS THE PATH THAT RUNS IT AUTOMATICALLY.
+    // `accountErasureSweepService` deletes a sole-membership workspace THROUGH
+    // this method on a scheduled job, discharging a GDPR erasure request — so
+    // the release needed nobody to decide it, errored nothing, and logged
+    // nothing unusual.
+    //
+    // ONE transaction with the delete, deliberately, and not the two-step the
+    // `projectIds` read above is. That read only has to happen BEFORE the
+    // cascade; this write has to be ATOMIC with it, because the failure mode it
+    // repairs is exactly "the delete committed and the reservation did not".
+    //
+    // What is stored is a DIGEST, never the hostname: the deletion is often an
+    // erasure obligation and a hostname can itself be the personal datum
+    // (`jane-smith.<base>`). A claim only ever needs to TEST a candidate, which
+    // is the one thing a one-way hash still answers. `custom_domain` rows are
+    // excluded — that name belongs to the customer, not to us
+    // (`lib/publicAddresses/hostnameReservation.ts`).
     await withWorkspaceContext(
       { userId: input.actorUserId, workspaceId: input.workspaceId },
-      (tx) => workspaceRepository.delete(input.workspaceId, tx),
+      async (tx) => {
+        const addresses = await publicAddressRepository.listForWorkspaceInTx(input.workspaceId, tx);
+        await publicHostnameReservationRepository.reserveMany(
+          addresses
+            .filter((address) => reservesItsHostname(address.kind))
+            .map((address) => ({
+              hostnameHash: hostnameReservationHash(address.hostname),
+              retiredFromWorkspaceId: input.workspaceId,
+            })),
+          tx,
+        );
+        await workspaceRepository.delete(input.workspaceId, tx);
+      },
     );
 
     // POST-COMMIT, BEST-EFFORT — and IMMEDIATE, with no retention window (§14.3).
