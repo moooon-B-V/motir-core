@@ -371,3 +371,129 @@ export const CLI_WHAT_NEXT: readonly GuideBlock[] = [
     ],
   },
 ];
+
+// ── The PUBLISHED command catalogue (MOTIR-4390) ────────────────────────────
+//
+// What `GET /api/docs/cli-commands.json` serves — the CLI's command tree as an
+// anonymous, unversioned documentation artifact, exactly as
+// `/api/docs/mcp-tools.json` serves the MCP tool catalogue. It exists because
+// `motir.co/docs/cli` had NO WAY TO READ THE CATALOGUE AT ALL.
+//
+// ── The precondition that forced this card, VERIFIED ────────────────────────
+// `npm pack @motir/cli@0.4.0` — its manifest carries
+// `exports: { "./package.json": "./package.json" }`, no `main`, no `types`,
+// `files: ["dist"]`. `COMMAND_CATALOG` is bundled inside `dist/index.js` and is
+// importable by NOTHING. The parent card's *"generated from that catalogue"*
+// asserted a door that does not exist.
+//
+// ── THE CHOICE, ON THE RECORD — a served route, not a package export ────────
+// MOTIR-4390 names two mechanisms and requires the reason to be written down.
+//
+//   OPTION 2, a package export (`"./catalogue"` + types), was REJECTED. Its
+//   attraction is the parent card's own words — *"cannot drift from the
+//   published binary"* — and that property does not survive contact with the
+//   consumer. `motir-marketing` would take a versioned npm dependency, pinned in
+//   ITS lockfile, so the page would describe whatever version that repository
+//   last bumped to, while a reader who runs `npm install -g @motir/cli` gets
+//   `latest`. It guarantees agreement with A published version, never with THE
+//   one the reader installed. And it is a COMMITTED COPY with extra steps —
+//   precisely the shape MOTIR-4180 removed from that repository and
+//   `tests/docs/docs.test.ts` guards against: stale exactly when it is
+//   displayed, and invisible to every guard, because a guard runs on the path
+//   where the fetch works.
+//
+//   OPTION 1, this route, was CHOSEN. It keeps every documentation consumer
+//   identical (fetch fresh, no fallback, nothing committed), needs no dependency
+//   in the other repository, and is the shipped precedent one directory over.
+//
+// ── The discriminator the card demanded an answer to ────────────────────────
+// *"Does the page document the CURRENTLY PUBLISHED CLI, or the CLI at `main`?"*
+// This route serves the CLI at the deployed `main`, so the honest answer is: the
+// CLI at `main`, AND IT SAYS SO. The document carries `packageVersion` read from
+// the CLI's own manifest, so a reader comparing it with what they installed can
+// SEE the gap rather than be told there is none. Neither mechanism could have
+// removed that gap; this one is the only one that makes it visible.
+//
+// ⚠️ NO `examples` FIELD, AND THE REASON IS A FALSIFIED PREMISE (MOTIR-4390).
+// The card asks for *"the worked examples the catalogue already holds"*, and
+// `COMMAND_CATALOG` holds none: a `CommandCatalogEntry` has exactly `path`,
+// `signature`, `description`, `helpGroup` and `options`. The two examples the
+// parent card cites — `motir auth login --server …`, `motir link --project …` —
+// live in `packages/cli/src/help.ts`'s prose EXAMPLES block, not in the record.
+// So this document publishes what exists and derives `invocation`; composing a
+// worked example from it is the consuming page's job. Authoring 23 examples here
+// would be a second home for facts the CLI already declares, which is the one
+// thing this module's own header forbids.
+
+/** One published command — every field READ from `COMMAND_CATALOG`. */
+export interface PublishedCliCommand {
+  /** What the user types after `motir`: `login`, `auth status`, `link add`. */
+  path: string;
+  /** The positional-argument syntax as registered: `<key>`, `[ref]`, or `''`. */
+  signature: string;
+  /** `motir <path> <signature>` — what a reader actually types. */
+  invocation: string;
+  description: string;
+  /** The help-group heading, or `null` for a subcommand (commander groups none). */
+  helpGroup: string | null;
+  /** Every PUBLISHED flag, in registration order. Hidden aliases are omitted. */
+  options: { flags: string; description: string }[];
+}
+
+/** The published document: `GET /api/docs/cli-commands.json`'s body. */
+export interface CliCommandsDocument {
+  /** The npm package a reader installs. */
+  packageName: string;
+  /**
+   * The version of the CLI this document DESCRIBES — the manifest at the
+   * deployed `main`, which may be ahead of what npm serves as `latest`. Carried
+   * so the gap is visible rather than implied (see the discriminator above).
+   */
+  packageVersion: string;
+  /** The install line, derived from the package name. */
+  installCommand: string;
+  /** The `engines.node` range the package declares. */
+  nodeRequirement: string;
+  /** The server every command talks to unless told otherwise. */
+  defaultServer: string;
+  /** Computed from the rows, never written. */
+  commandCount: number;
+  /** EVERY command in the catalogue, in registration order. No subset. */
+  commands: PublishedCliCommand[];
+}
+
+/**
+ * The published catalogue.
+ *
+ * ⚠️ TOTAL over `COMMAND_CATALOG` — it maps the record itself rather than the
+ * four help groups {@link cliCommandGroups} renders. That function DROPS a
+ * command whose group resolves to none, which is right for a curated overview
+ * and wrong for a reference: the card's own criterion is that the published
+ * count equals the count the catalogue declares, with no filtering and no
+ * hand-maintained subset.
+ *
+ * The one thing dropped is a HIDDEN option, and that is the catalog's own
+ * publishing decision stated on the row (`CommandOption.hidden` — "ACCEPTED but
+ * not PUBLISHED"), not this document's.
+ */
+export function cliCommandsDocument(): CliCommandsDocument {
+  const commands = COMMAND_CATALOG.map((entry) => ({
+    path: entry.path,
+    signature: entry.signature,
+    invocation: cliInvocation(entry),
+    description: entry.description,
+    helpGroup: entry.helpGroup,
+    options: entry.options
+      .filter((option) => option.hidden !== true)
+      .map((option) => ({ flags: option.flags, description: option.description })),
+  }));
+  return {
+    packageName: CLI_PACKAGE_NAME,
+    packageVersion: cliManifest.version,
+    installCommand: CLI_INSTALL_COMMAND,
+    nodeRequirement: CLI_NODE_REQUIREMENT,
+    defaultServer: DEFAULT_SERVER_URL,
+    commandCount: commands.length,
+    commands,
+  };
+}
