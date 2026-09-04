@@ -139,13 +139,24 @@ export function AppLayout({ banner, topNav, sidebar, children, className }: AppL
         token so that `var(--height-control)` resolves against whatever
         `[data-style]` is in scope on this element, instead of freezing the
         value `:root` happened to have.
+
+        BOTH columns carry `2 * var(--spacing-rail-inset)` (MOTIR-4253), and the
+        term is in the COLUMN rather than on the rail for the same reason the
+        sum is composed here at all. A style that FLOATS the rail insets it on
+        all four sides — but the rail FILLS its cell, so a margin shrinks the
+        RAIL and not the cell, and the collapsed rail's content box would drop
+        below one `--height-control` square: MOTIR-4232's invariant, broken by
+        the fix for a different card. So the column grows by twice the inset and
+        the main region gives up that width. The base layer sets the token to
+        `0px`, so for the ten styles whose rail has a shared edge both sums
+        compile to exactly the numbers they have today.
       */}
       <div
         className={cn(
           'grid min-h-0 flex-1 grid-cols-1',
           collapsed
-            ? 'md:grid-cols-[calc(var(--height-control)_+_var(--width-rail-chrome))_1fr]'
-            : 'md:grid-cols-[240px_1fr]',
+            ? 'md:grid-cols-[calc(var(--height-control)_+_var(--width-rail-chrome)_+_2_*_var(--spacing-rail-inset))_1fr]'
+            : 'md:grid-cols-[calc(240px_+_2_*_var(--spacing-rail-inset))_1fr]',
         )}
       >
         {/* Persistent rail — hidden below md, where the drawer takes over. */}

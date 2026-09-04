@@ -168,7 +168,18 @@ function railWidthForStyle(css: string, styleId: string): number {
   if (control === null || chrome === null) {
     throw new Error(`the rail column is \`${column}\` but its tokens do not resolve`);
   }
-  return control + chrome;
+  // ⚠️ THE INSET IS PART OF THE COLUMN (MOTIR-4253). A style that FLOATS the
+  // rail holds it off the frame on all four sides, and the rail FILLS its cell
+  // — so the term is in the COLUMN, and a resolver that ignored it would report
+  // a rail NARROWER than the one the browser lays out. That under-report is the
+  // dangerous direction here: it still clears the fit assertion below, so this
+  // suite would go on passing while measuring a column the app does not have.
+  // Absent from the compiled column ⇒ genuinely zero, which is what every style
+  // without a floating rail compiles to anyway.
+  const inset = column.includes('--spacing-rail-inset')
+    ? (tokenForStyle(css, '--spacing-rail-inset', styleId) ?? 0)
+    : 0;
+  return control + chrome + 2 * inset;
 }
 
 describe('the collapsed rail tracks --height-control (MOTIR-4232)', () => {
@@ -177,9 +188,13 @@ describe('the collapsed rail tracks --height-control (MOTIR-4232)', () => {
 
     const rule = /grid-template-columns:\s*calc\(([^;]*?)\)\s*1fr;/.exec(css);
     expect(rule, 'the collapsed rail column did not compile to a calc()').not.toBeNull();
-    // Both operands present: the rail is the control PLUS the rail's own chrome.
+    // Every operand present: the rail is the control, PLUS the rail's own
+    // chrome, PLUS twice the inset a floating rail is held off the frame by
+    // (MOTIR-4253 — `0px` at the base layer, so this is a no-op for the ten
+    // styles whose rail keeps its shared edge).
     expect(rule![1]).toContain('var(--height-control)');
     expect(rule![1]).toContain('var(--width-rail-chrome)');
+    expect(rule![1]).toContain('var(--spacing-rail-inset)');
 
     // The literal this card removed must not come back. `56px` as a rail column
     // is the defect; it is only correct for the one style that happens to sit

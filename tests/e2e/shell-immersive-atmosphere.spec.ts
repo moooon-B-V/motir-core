@@ -333,3 +333,208 @@ test.describe('aurora drifts on the shell exactly as it drifts on the page (MOTI
     });
   });
 });
+
+// ── THE SHELL CHROME (MOTIR-4253) ──────────────────────────────────────────
+// The rendered half of `tests/theme/immersiveShellChrome.test.ts`, and the same
+// division of labour the two blocks above use: the unit lane asserts the WIRING
+// (the rules exist, they match the design asset declaration for declaration, the
+// fallbacks touch no layout property) and this asserts what a user SEES. Neither
+// substitutes for the other — `box-shadow: var(--shadow-card)` inside an
+// `@scope` block resolves in neither of the DOM implementations the unit lane
+// has, so only a browser can tell a treated frame from an untreated one.
+//
+// THE ORACLE IS THE DEFAULT STYLE'S OWN COMPUTED VALUE, never a hard-coded
+// expectation. The card's first criterion says so outright, and it is the same
+// discipline as `body`'s computed canvas above: a table of expected shadow
+// strings would need re-typing every time the depth is tuned.
+
+/** Both chrome hosts, as the browser resolves them. */
+interface Chrome {
+  rail: {
+    boxShadow: string;
+    borderRadius: string;
+    borderRightColor: string;
+    backgroundColor: string;
+    // ⚠️ `outlineStyle` is the discriminator, NOT `outlineWidth`. `outline-width`
+    // computes INDEPENDENTLY of `outline-style`, so an element with no outline
+    // at all reads back the UA's initial `medium` — measured as `3px` in
+    // chromium — while `outline-style` is `none` and nothing is painted. Reading
+    // the width alone says "there is an outline here" on every element in the
+    // document. Both are kept because once the style IS `solid`, the width is
+    // the half that says the hairline is 1px rather than some other line.
+    outlineStyle: string;
+    outlineWidth: string;
+    outlineColor: string;
+  };
+  bar: {
+    boxShadow: string;
+    backgroundColor: string;
+    backgroundImage: string;
+    borderBottomColor: string;
+    position: string;
+  };
+}
+
+async function readChrome(page: Page): Promise<Chrome> {
+  return page.evaluate(() => {
+    // `.filter({ visible: true })`'s DOM equivalent: the mobile DRAWER renders a
+    // second rail that is hidden at this viewport, and picking it would measure
+    // a box the user never sees.
+    const rails = [...document.querySelectorAll<HTMLElement>("[data-surface='sidebar']")];
+    const rail = rails.find((el) => el.offsetParent !== null);
+    const bar = document.querySelector<HTMLElement>("[data-surface='header']");
+    if (!rail) throw new Error('no visible [data-surface=sidebar] on this signed-in route');
+    if (!bar) throw new Error('no [data-surface=header] on this signed-in route');
+    const r = getComputedStyle(rail);
+    const b = getComputedStyle(bar);
+    return {
+      rail: {
+        boxShadow: r.boxShadow,
+        borderRadius: r.borderRadius,
+        borderRightColor: r.borderRightColor,
+        backgroundColor: r.backgroundColor,
+        outlineStyle: r.outlineStyle,
+        outlineWidth: r.outlineWidth,
+        outlineColor: r.outlineColor,
+      },
+      bar: {
+        boxShadow: b.boxShadow,
+        backgroundColor: b.backgroundColor,
+        backgroundImage: b.backgroundImage,
+        borderBottomColor: b.borderBottomColor,
+        position: b.position,
+      },
+    };
+  });
+}
+
+/** Both chrome boxes, rounded — the geometry an a11y fallback must not move. */
+async function readChromeBoxes(page: Page) {
+  return page.evaluate(() => {
+    const rails = [...document.querySelectorAll<HTMLElement>("[data-surface='sidebar']")];
+    const rail = rails.find((el) => el.offsetParent !== null)!;
+    const bar = document.querySelector<HTMLElement>("[data-surface='header']")!;
+    const box = (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      return [r.x, r.y, r.width, r.height].map((n) => Math.round(n * 100) / 100);
+    };
+    return { rail: box(rail), bar: box(bar) };
+  });
+}
+
+test.describe('3D / Immersive treats the shell chrome (MOTIR-4253)', () => {
+  test('the rail floats and the bar becomes a lid — neither does under the default style', async ({
+    page,
+  }) => {
+    await openAppearance(page, 'e2e-shell-chrome-treatment@example.com');
+
+    // ── The CONTROL. This is what "renders byte-identically to the default
+    // style" meant, and it is what makes every reading below a CHANGE rather
+    // than a value that was always there.
+    const flat = await readChrome(page);
+    expect(flat.rail.boxShadow, 'the default style leaves the rail flat').toBe('none');
+    expect(flat.bar.boxShadow, 'and the bar flat').toBe('none');
+
+    await chooseAppearance(page, 'Style', '3D / Immersive', 'data-style', '3d-immersive');
+    const deep = await readChrome(page);
+
+    // ── AC 1, against the default style's own computed values.
+    expect(
+      deep.rail.boxShadow,
+      'the RAIL must take a treatment the default style does not',
+    ).not.toBe(flat.rail.boxShadow);
+    expect(deep.bar.boxShadow, 'and so must the BAR — this is the defect itself').not.toBe(
+      flat.bar.boxShadow,
+    );
+
+    // ── The RAIL is a floating PANEL: a shadow instead of a shared edge, and a
+    // radius, so it reads as an object at a distance.
+    expect(deep.rail.boxShadow).not.toBe('none');
+    expect(deep.rail.borderRadius, 'a floating panel has corners').not.toBe(flat.rail.borderRadius);
+    expect(deep.rail.borderRightColor, 'the shared edge goes transparent').toBe('rgba(0, 0, 0, 0)');
+
+    // ── The BAR is the LID: no fill, no hairline, one contact shadow — and it
+    // keeps its `sticky`, which is BOTH the containing block a positional
+    // override would break and the stacking context that makes the shadow paint
+    // (AC 8's rendered half; the unit lane asserts no rule declares `position`).
+    expect(deep.bar.backgroundColor, 'the atmosphere runs UNDER the lid').toBe('rgba(0, 0, 0, 0)');
+    expect(deep.bar.borderBottomColor).toBe('rgba(0, 0, 0, 0)');
+    expect(deep.bar.boxShadow).not.toBe('none');
+    expect(deep.bar.position, 'the lid never overrides the host’s sticky').toBe('sticky');
+
+    // ── AC 13. A transparent fill is only half the claim: the thing behind it
+    // has to be the atmosphere. Painting an opaque fill here is exactly the
+    // shape MOTIR-4230 fixed one surface over.
+    expect(deep.bar.backgroundImage, 'the lid paints no canvas of its own').toBe('none');
+    const canvases = await readCanvases(page);
+    expect(canvases.shell, 'and what shows through it is the shell atmosphere').toContain(
+      'radial-gradient',
+    );
+  });
+
+  test('is palette-derived where it is a COLOUR and theme-invariant where it is a SHADOW', async ({
+    page,
+  }) => {
+    await openAppearance(page, 'e2e-shell-chrome-themes@example.com');
+    await chooseAppearance(page, 'Style', '3D / Immersive', 'data-style', '3d-immersive');
+
+    const light = await readChrome(page);
+    await chooseAppearance(page, 'Theme', 'Dark', 'data-theme', 'dark');
+    const dark = await readChrome(page);
+
+    // ── AC 5, first half. The rail's fill is `--el-sidebar-bg`, so it MOVES
+    // with the palette — a value that agreed across themes would be evidence
+    // the token reads are not landing at all.
+    expect(
+      dark.rail.backgroundColor,
+      'the rail fill is palette-derived, so dark resolves differently',
+    ).not.toBe(light.rail.backgroundColor);
+
+    // ── AC 5, second half, and it is asserted POSITIVELY rather than skipped.
+    // §2 builds the shadows from a fixed near-ink `rgba` on purpose — a shadow
+    // is not a palette colour — so they are theme-INVARIANT, and the criterion
+    // as originally written (that the treatment's resolved value must differ
+    // between themes) would have failed here by construction. Pinning the
+    // invariance is what makes a future palette-derived shadow a deliberate
+    // change rather than a silent one.
+    expect(dark.rail.boxShadow, 'the rail depth is theme-invariant, by design').toBe(
+      light.rail.boxShadow,
+    );
+    expect(dark.bar.boxShadow, 'and so is the lid’s contact shadow').toBe(light.bar.boxShadow);
+  });
+
+  test('the a11y fallbacks restore a line and MOVE NOTHING', async ({ page }) => {
+    await openAppearance(page, 'e2e-shell-chrome-fallbacks@example.com');
+    await chooseAppearance(page, 'Style', '3D / Immersive', 'data-style', '3d-immersive');
+
+    const before = await readChromeBoxes(page);
+    const resting = await readChrome(page);
+    expect(resting.rail.outlineStyle, 'no outline is DRAWN at rest').toBe('none');
+
+    // ── `prefers-contrast: more`. The rail's hairline comes back as an OUTLINE
+    // at `outline-offset: -1px` — drawn outside the box, following the radius —
+    // and the bar's border-bottom already has its width, so only its colour is
+    // given back. The geometry assertion is the criterion's own words: identical
+    // WITH and WITHOUT the media condition, not merely "a line appeared".
+    await page.emulateMedia({ contrast: 'more' });
+    const contrast = await readChrome(page);
+    expect(contrast.rail.outlineStyle, 'the rail hairline is drawn').toBe('solid');
+    expect(contrast.rail.outlineWidth, 'and it is a hairline').toBe('1px');
+    expect(contrast.bar.borderBottomColor, 'and the bar’s').not.toBe('rgba(0, 0, 0, 0)');
+    expect(contrast.rail.boxShadow, 'a high-contrast user keeps the depth').toBe(
+      resting.rail.boxShadow,
+    );
+    expect(await readChromeBoxes(page), 'the contrast fallback moved the box').toEqual(before);
+
+    // ── `forced-colors: active` additionally drops the shadow, because the
+    // platform is repainting every colour and a multi-layer shadow is noise
+    // there. Still no layout change.
+    await page.emulateMedia({ contrast: null, forcedColors: 'active' });
+    const forced = await readChrome(page);
+    expect(forced.rail.outlineStyle, 'the rail hairline is drawn here too').toBe('solid');
+    expect(forced.rail.outlineWidth, 'and it is a hairline').toBe('1px');
+    expect(await readChromeBoxes(page), 'the forced-colors fallback moved the box').toEqual(before);
+
+    await page.emulateMedia({ forcedColors: null });
+  });
+});
