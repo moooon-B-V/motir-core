@@ -53,6 +53,17 @@
         7   remove a domain — the confirm
         8   non-admin — read-only
         9   narrow (390 x 844) and dark
+        10  RELEASE — the Remove control in the claimed state, and its confirm
+        11  RELEASE — the singular case, and the unclaimed state it returns to
+        12  RELEASE — the confirm in zh
+        13  RELEASE — narrow (390 x 844), three hostnames
+
+      ⚠️ PANELS 10-13 ARE APPENDED, NOT INSERTED (MOTIR-4453). They belong beside
+      panel 2 by subject and sit at the end by NUMBER, because the numbers are
+      cited from outside this file — `PublicSubdomainCard`'s own header names
+      "design panels 1, 2 and 8" and `design-notes.md` indexes by number — so
+      renumbering to group them would silently re-point every one of those
+      citations at a different picture.
 
       ── INK ─────────────────────────────────────────────────────────────────
       Secondary copy is `--el-text-secondary` throughout (6.18-6.80:1 on every
@@ -1727,6 +1738,416 @@
               horizontal-scroll rule is the repo's: wide content scrolls inside its own container,
               and the page body never scrolls sideways — which for a copy-exactly value is not good
               enough, hence the stack.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel 10 — RELEASE · the Remove control in the claimed state, and its confirm
+        </p>
+        <p class="panelNote">
+          ADR §8 <strong class="strong">Amendment 2</strong> (MOTIR-4452) is what makes this control
+          expressible: never-released is a rule about who may take a name NEXT, not about who must
+          keep serving it, so a workspace may un-claim its own. The control is drawn AGAINST THE
+          SHIPPED CARD — a headless render of the real
+          <code class="mono">PublicSubdomainCard</code> at <code class="mono">origin/main</code>,
+          whose footer row is <code class="mono">justify-between</code> with the renames-left count
+          on the left and a <code class="mono">secondary</code> /
+          <code class="mono">sm</code> Rename on the right.
+          <strong class="strong">Remove</strong> joins that row as a
+          <code class="mono">ghost</code> / <code class="mono">sm</code> button to Rename's left —
+          the exact weight the shipped custom-domain row already gives its own Remove (<code
+            class="mono"
+            >CustomDomainsSection</code
+          >'s <code class="mono">action === 'remove' ? 'ghost' : 'secondary'</code>), so the
+          destructive action reads as the heavier one without becoming the loudest thing on the
+          pane.
+        </p>
+        <div class="row2">
+          <div class="stage">
+            <div class="card">
+              <div class="cardHead">
+                <p class="cardTitle">Workspace subdomain</p>
+                <p class="cardSub">
+                  One address for the whole workspace. Every public project in it answers
+                  underneath.
+                </p>
+              </div>
+              <div class="cardBody">
+                <div class="stack">
+                  <div class="addr">
+                    <span class="host grow">acme.motir.site/ROADMAP</span>
+                    <span class="pill pill-ok"
+                      ><span class="dot" aria-hidden="true"></span> Active</span
+                    >
+                    <button class="btn btn-icon" aria-label="Copy address">⧉</button>
+                    <button class="btn btn-icon" aria-label="Open in a new tab">↗</button>
+                  </div>
+                  <div class="addr">
+                    <span class="host grow">acme-old.motir.site</span>
+                    <span class="pill pill-alias">Redirects here</span>
+                  </div>
+                  <div class="addr">
+                    <span class="host grow">acme-inc.motir.site</span>
+                    <span class="pill pill-alias">Redirects here</span>
+                  </div>
+                  <div class="between">
+                    <span class="sec13"><strong class="strong">3 renames left.</strong></span>
+                    <span class="flex">
+                      <button class="btn btn-ghost">Remove</button>
+                      <button class="btn">Rename</button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="cite">
+              Drawn from the render, not from the source: the shipped footer is one
+              <code>justify-between</code> row, and Remove goes INSIDE its right-hand group rather
+              than becoming a third column — a three-way <code>space-between</code> would push the
+              count, the quiet action and the ordinary action to three edges and read as three
+              peers. Remove stays LEFT of Rename because the pointer travelling to the primary
+              action must not pass over the destructive one.
+            </p>
+          </div>
+          <div class="stage scrim">
+            <div class="modal">
+              <p class="modalTitle">Remove acme.motir.site?</p>
+              <div class="modalBody stack-sm">
+                <div>These three addresses will stop answering:</div>
+                <div class="stack-sm">
+                  <div class="addr">
+                    <span class="host grow">acme.motir.site</span>
+                    <span class="pill pill-ok"
+                      ><span class="dot" aria-hidden="true"></span> Active</span
+                    >
+                  </div>
+                  <div class="addr">
+                    <span class="host grow">acme-old.motir.site</span>
+                    <span class="pill pill-alias">Redirects here</span>
+                  </div>
+                  <div class="addr">
+                    <span class="host grow">acme-inc.motir.site</span>
+                    <span class="pill pill-alias">Redirects here</span>
+                  </div>
+                </div>
+                <div class="callout danger">
+                  <span class="ctitle"
+                    >These names are held for ever. Nobody can claim them again — including
+                    you.</span
+                  >
+                  Motir keeps every released name out of its namespace permanently, so no other
+                  workspace can inherit links that pointed at yours. You will have
+                  <strong>3 renames left</strong> if you claim a subdomain again — releasing does
+                  not give them back.
+                </div>
+                <div>
+                  Your public projects go back to
+                  <code class="mono">motir.co/p/ROADMAP</code>, and appear on
+                  <code class="mono">motir.co</code> again.
+                </div>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Remove subdomain</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="cite">
+          The SIBLING, not a new dialect: this is panel 7's confirm with panel 7's grammar — a plain
+          first line, the consequence in a <code>callout danger</code> on
+          <code>--el-tint-rose</code>, the reversibility last. Three things are added and each is
+          required by MOTIR-4453. (1) <strong>The hostnames are LISTED, not summarised.</strong> A
+          workspace that renamed twice gives up three names in one click, and somebody who forgot a
+          rename from months ago will not think of the old name as theirs to lose until it is gone —
+          so the rows are the shipped <code>AddressRow</code>, with the same pills the card above
+          draws, and never the words <em>"and any previous addresses"</em>. (2)
+          <strong
+            >The permanence sentence is not boilerplate and is not drawn as boilerplate</strong
+          >
+          — <em>"this cannot be undone"</em> would be true and would say nothing; what is unusual
+          here is that the name stays held against everyone, for ever, by design. (3)
+          <strong>The upside is stated</strong>, because release is almost always performed BY
+          somebody who wants their projects back on <code>motir.co</code>, and a confirm describing
+          only destruction makes the correct action feel like a mistake. The renames sentence is ADR
+          Amendment 2's <em>releasing does NOT reset the cap</em> in the customer's words — without
+          it the confirm promises permanence and quietly omits the half a customer meets later as a
+          refusal. The destructive action is <code>Button</code>'s danger variant, the ONE place
+          <code>--el-danger-text</code> is legal, because it sits on <code>bg-(--el-danger)</code>.
+        </p>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel 11 — RELEASE · the singular case, and the unclaimed state it returns to
+        </p>
+        <p class="panelNote">
+          A workspace that never renamed holds ONE name, and the confirm must not read as though it
+          were plural. Both the lead line and the renames sentence are ICU plurals; the list is one
+          row and stays a list, because a single row and three rows are the same element and the
+          count is the message.
+        </p>
+        <div class="row2">
+          <div class="stage scrim">
+            <div class="modal">
+              <p class="modalTitle">Remove acme.motir.site?</p>
+              <div class="modalBody stack-sm">
+                <div>This address will stop answering:</div>
+                <div class="stack-sm">
+                  <div class="addr">
+                    <span class="host grow">acme.motir.site</span>
+                    <span class="pill pill-ok"
+                      ><span class="dot" aria-hidden="true"></span> Active</span
+                    >
+                  </div>
+                </div>
+                <div class="callout danger">
+                  <span class="ctitle"
+                    >This name is held for ever. Nobody can claim it again — including you.</span
+                  >
+                  Motir keeps every released name out of its namespace permanently, so no other
+                  workspace can inherit links that pointed at yours. You will have
+                  <strong>4 renames left</strong> if you claim a subdomain again — releasing does
+                  not give them back.
+                </div>
+                <div>
+                  Your public projects go back to
+                  <code class="mono">motir.co/p/ROADMAP</code>, and appear on
+                  <code class="mono">motir.co</code> again.
+                </div>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Remove subdomain</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <p class="panelLabel" style="margin-top: 0">after · the unclaimed state — UNCHANGED</p>
+            <div class="card">
+              <div class="cardHead">
+                <p class="cardTitle">Workspace subdomain</p>
+                <p class="cardSub">
+                  One address for the whole workspace. Every public project in it answers
+                  underneath.
+                </p>
+              </div>
+              <div class="cardBody">
+                <label class="label" for="p11a">Subdomain</label>
+                <div class="inputGroup">
+                  <div class="input mono" id="p11a"></div>
+                  <div class="suffix">.motir.site</div>
+                </div>
+                <p class="helper">
+                  Your projects will be at <span class="prev">acme.motir.site/ROADMAP</span>.
+                  Lowercase letters, digits and hyphens; 3–63 characters.
+                </p>
+                <div class="flex" style="margin-top: 16px">
+                  <button class="btn btn-primary is-disabled" disabled>Claim subdomain</button>
+                  <span class="sec12">This can be renamed later, a limited number of times.</span>
+                </div>
+              </div>
+            </div>
+            <p class="cite">
+              <strong
+                >DECIDED: byte-for-byte panel 1, with NO "you released <code>acme</code>"
+                trace.</strong
+              >
+              Not an omission and not a rendering accident — the reservation stores a one-way DIGEST
+              and deliberately does not retain the hostname (ADR §8 Amendment 1, the Article 17
+              reconciliation), so a trace would mean keeping the very string the design of that
+              table exists to discard. The consequence a person actually needs is delivered where it
+              is actionable — at the moment they re-type the label, by panel 1's
+              <em>already taken</em> refusal, whose shipped copy (<em
+                >"may belong to a workspace that no longer answers on it"</em
+              >) covers a released name unchanged. CHECKED, and nothing is owed to
+              <code>error.taken</code>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 12 — RELEASE · 简体中文 (zh)</p>
+        <p class="panelNote">
+          Every string this card adds exists in both catalogues, and the zh is drawn rather than
+          promised. Two things it is NOT: a gloss of the English word order, and a softening.
+          永不释放 is the phrase <code class="mono">rename.warningTitle</code> already ships for the
+          same promise one control over, so the release confirm inherits the vocabulary a customer
+          has already read rather than inventing a second way to say it.
+        </p>
+        <div class="row2">
+          <div class="stage scrim">
+            <div class="modal">
+              <p class="modalTitle">要移除 acme.motir.site 吗？</p>
+              <div class="modalBody stack-sm">
+                <div>以下 3 个地址将停止提供访问：</div>
+                <div class="stack-sm">
+                  <div class="addr">
+                    <span class="host grow">acme.motir.site</span>
+                    <span class="pill pill-ok"
+                      ><span class="dot" aria-hidden="true"></span> 使用中</span
+                    >
+                  </div>
+                  <div class="addr">
+                    <span class="host grow">acme-old.motir.site</span>
+                    <span class="pill pill-alias">重定向至此</span>
+                  </div>
+                  <div class="addr">
+                    <span class="host grow">acme-inc.motir.site</span>
+                    <span class="pill pill-alias">重定向至此</span>
+                  </div>
+                </div>
+                <div class="callout danger">
+                  <span class="ctitle"
+                    >这些名称将被永久保留，任何人都无法再认领它们——包括你自己。</span
+                  >
+                  Motir
+                  会把每个已释放的名称永久排除在命名空间之外，因此其他工作区无法继承指向你的链接。若你再次认领子域名，将只剩
+                  <strong>3 次重命名机会</strong>——释放不会把它们还给你。
+                </div>
+                <div>
+                  你的公开项目将回到
+                  <code class="mono">motir.co/p/ROADMAP</code>，并重新出现在
+                  <code class="mono">motir.co</code> 上。
+                </div>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">取消</button>
+                <button class="btn btn-danger">移除子域名</button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <p class="panelLabel" style="margin-top: 0">zh · the claimed card's footer row</p>
+            <div class="card">
+              <div class="cardHead">
+                <p class="cardTitle">工作区子域名</p>
+              </div>
+              <div class="cardBody">
+                <div class="stack">
+                  <div class="addr">
+                    <span class="host grow">acme.motir.site/ROADMAP</span>
+                    <span class="pill pill-ok"
+                      ><span class="dot" aria-hidden="true"></span> 使用中</span
+                    >
+                  </div>
+                  <div class="between">
+                    <span class="sec13"><strong class="strong">还可重命名 3 次。</strong></span>
+                    <span class="flex">
+                      <button class="btn btn-ghost">移除</button>
+                      <button class="btn">重命名</button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="cite">
+              <code>移除</code> / <code>移除子域名</code> reuse the verb
+              <code>domains.action.remove</code> and
+              <code>domains.removeModal.confirm</code> already ship (<code>移除</code> /
+              <code>移除域名</code>), so the pane has one word for one act. The plural line takes
+              zh's single <code>other</code> arm — the count is rendered, never a bare
+              <em>"these addresses"</em>, because zh has no plural morphology to carry it.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 13 — RELEASE · narrow (390 × 844), three hostnames</p>
+        <p class="panelNote">
+          The measurement MOTIR-4453 asks for: the confirm's alias list at the narrowest frame the
+          rest of <code class="mono">design/projects/</code> measures at, with three hostnames in it
+          — one of them the worst case the grammar admits, a long label carrying no hyphen to break
+          at (ADR §8 rule 4 caps a label at 63 characters). It WRAPS, on this asset's own
+          <code class="mono">.addr .host { overflow-wrap: anywhere }</code>, and that is a
+          <strong class="strong">deliberate departure</strong> from the shipped
+          <code class="mono">AddressRow</code>, which truncates (<code class="mono"
+            >min-w-0 flex-1 truncate</code
+          >) — see the citation below.
+        </p>
+        <div class="stage" style="display: flex; gap: 20px; align-items: flex-start">
+          <div class="phone">
+            <p class="crumb" style="margin-bottom: 8px">Settings › Public address</p>
+            <div class="modal" style="box-shadow: none; width: auto; margin-top: 8px">
+              <p class="modalTitle" style="font-size: 15px">Remove acme.motir.site?</p>
+              <div class="modalBody stack-sm">
+                <div>These three addresses will stop answering:</div>
+                <div class="stack-sm">
+                  <div class="addr">
+                    <span class="host grow">acme.motir.site</span>
+                    <span class="pill pill-ok"
+                      ><span class="dot" aria-hidden="true"></span> Active</span
+                    >
+                  </div>
+                  <div class="addr">
+                    <span class="host grow">acme-old.motir.site</span>
+                    <span class="pill pill-alias">Redirects</span>
+                  </div>
+                  <div class="addr">
+                    <span class="host grow"
+                      >averyverylongworkspacesubdomainlabelnobodyshouldhavetyped.motir.site</span
+                    >
+                    <span class="pill pill-alias">Redirects</span>
+                  </div>
+                </div>
+                <div class="callout danger">
+                  <span class="ctitle"
+                    >These names are held for ever. Nobody can claim them again — including
+                    you.</span
+                  >
+                  You will have <strong>3 renames left</strong> if you claim a subdomain again.
+                </div>
+                <div>Your projects go back to <code class="mono">motir.co/p/ROADMAP</code>.</div>
+              </div>
+              <div class="modalFoot" style="flex-wrap: wrap">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Remove subdomain</button>
+              </div>
+            </div>
+          </div>
+          <div class="grow">
+            <div class="callout">
+              <span class="ctitle">What 390 px changes, and what it does not.</span>
+              Nothing is removed and nothing is summarised: every hostname is still its own row, and
+              the permanence callout keeps both its sentences. The three that DO change are named so
+              a builder does not have to guess. The
+              <strong>row WRAPS rather than truncating</strong> — a long label runs onto a second
+              line inside its own row, its pill staying on the first, and the page never scrolls
+              sideways. The <strong>alias pill loses its verb</strong> (<em>Redirects here</em> →
+              <em>Redirects</em>), because at this width the deictic costs a line and points at a
+              row directly above it. And the
+              <strong>renames sentence drops its second clause</strong>; the permanence title
+              carries the load, and <em>releasing does not give them back</em> is an explanation a
+              reader on a phone will not stop for.
+            </div>
+            <p class="cite">
+              <strong
+                >WHY THE CONFIRM DOES NOT TRUNCATE, WHEN THE CARD DOES — a decision, not a
+                divergence to tidy up.</strong
+              >
+              The shipped <code>AddressRow</code> truncates, and it is right to: on the card the
+              hostname is a LABEL for a row a reader can copy, open or scroll to. In the confirm the
+              hostname IS the message — it is the thing being given up for ever, and a name a person
+              cannot finish reading is a name they cannot decide about. So
+              <code>MOTIR-4455</code> must NOT reuse <code>AddressRow</code> unchanged inside the
+              modal: it needs the same row with <code>truncate</code> replaced by
+              <code>break-words</code> / <code>overflow-wrap: anywhere</code>. This asset’s own
+              <code>.addr .host</code> has carried that rule since MOTIR-4211, so the departure is
+              consistent with every other confirm on this board rather than new here.
+              <strong>Measured, not assumed:</strong> rendered at 390 px with a 56-character label
+              carrying no hyphen to break at — the case a hyphenated example silently passes — and
+              read back off the export. The footer wraps rather than compressing the destructive
+              button: a <code>Remove subdomain</code> squeezed to two lines inside its own box is
+              how a confirm’s most important control becomes its least legible.
             </p>
           </div>
         </div>
