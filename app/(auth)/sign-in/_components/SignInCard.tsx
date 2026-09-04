@@ -23,7 +23,12 @@ import {
   TWO_FACTOR_OTP_PERIOD_MINUTES,
   TWO_FACTOR_TRUST_DEVICE_MAX_AGE_SECONDS,
 } from '@/lib/auth/twoFactorConfig';
-import { ONBOARDING_ENTRY_PATH, resolvePostAuthDestination } from '@/lib/navigation/landing';
+import {
+  ONBOARDING_ENTRY_PATH,
+  ONBOARDING_SIGNUP_DOOR_PATH,
+  isOnboardingDestination,
+  resolvePostAuthDestination,
+} from '@/lib/navigation/landing';
 
 // ⚠️ THE DESTINATIONS ARE IMPORTED NOW (MOTIR-3373). This file used to carry
 // its own `ONBOARDING_ENTRY_PATH` constant and a hardcoded home default, under a
@@ -104,6 +109,19 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
   // what makes the round trip feel like one flow rather than two. `null` means
   // "not a device hand-off"; `''` means a bare `/device` return with no code yet.
   const deviceUserCode = readDeviceUserCode(callbackURL);
+  // ⚠️ IS THIS SURFACE ALREADY SERVING THE ONBOARDING INTENT? (MOTIR-4402)
+  //
+  // `/onboarding` is authenticated, so the layout bounces a signed-out visitor
+  // back here with `next=/onboarding` — and until this line the card rendered
+  // that return byte-for-byte identically to the arrival: same headline, same
+  // form, same "Plan with AI" door. The net observable effect of pressing the
+  // door was that the URL gained a query string.
+  //
+  // Two things follow from knowing, and they are the same fact from both sides:
+  // the card SAYS what it is carrying (the banner below, the third instance of
+  // `IdeaCarried` — an idea, a device code, and now an intent), and it does NOT
+  // re-offer a door onto the thing it is already serving.
+  const carryingOnboardingIntent = isOnboardingDestination(callbackURL);
 
   // Claim the draft ONCE on mount: POST swaps the opaque id for the idea text and
   // plants the `motir_pending_idea` cookie server-side. On any failure (missing /
@@ -273,6 +291,11 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
             : tDevice('signInCarried.valueNoCode')}
         </IdeaCarried>
       ) : null}
+      {carryingOnboardingIntent ? (
+        <IdeaCarried label={t('onboardingCarriedLabel')}>
+          {t('onboardingCarriedSignIn')}
+        </IdeaCarried>
+      ) : null}
       {pageError ? <FormAlert>{pageError}</FormAlert> : null}
 
       {step === 'email' ? (
@@ -372,24 +395,37 @@ function SignInForm({ sessionActive }: { sessionActive: boolean }) {
         </form>
       )}
 
-      {/* Plan with AI — the onboarding door (Subtask 7.22.1 / MOTIR-1457). The
-          entry into the start-fresh AI planning flow from the login surface,
-          the front-door role the relocated marketing hero used to hold. Routes
-          to /onboarding: the onboarding layout gates auth (preserving
-          `next=/onboarding`), then a cloud deployment begins discovery while a
-          self-hosted one shows the deferred Connect-Motir-AI gate. */}
-      <div className="flex flex-col gap-3 border-t border-(--el-border) pt-6">
-        <p className="text-center font-sans text-sm text-(--el-text-muted)">
-          {t('planWithAiLead')}
-        </p>
-        <Link
-          href="/onboarding"
-          className={`${buttonVariants({ variant: 'secondary', size: 'lg' })} w-full`}
-        >
-          <Sparkles className="h-4 w-4" aria-hidden />
-          {t('planWithAI')}
-        </Link>
-      </div>
+      {/* Plan with AI — the onboarding door (Subtask 7.22.1 / MOTIR-1457).
+          The entry into the start-fresh AI planning flow from the login
+          surface, the front-door role the relocated marketing hero used to
+          hold.
+
+          ⚠️ IT TARGETS SIGN-UP, NOT `/onboarding` (MOTIR-4402). Its lead is
+          "Have a project idea?" — it addresses somebody who does NOT have an
+          account, and onboarding is authenticated, so pointing it at the
+          entrance sent the one reader who could see it round a loop that
+          rendered identically to where they started. The destination is
+          composed in `lib/navigation/landing.ts`, which owns the entrance, and
+          the intent travels in `?next=` — the carrier both auth surfaces
+          already honour and sanitize. Do NOT add a second one.
+
+          And it is NOT rendered when this card is already serving that intent:
+          re-offering a door onto the surface you are standing on is how the
+          original loop read as a working control. */}
+      {carryingOnboardingIntent ? null : (
+        <div className="flex flex-col gap-3 border-t border-(--el-border) pt-6">
+          <p className="text-center font-sans text-sm text-(--el-text-muted)">
+            {t('planWithAiLead')}
+          </p>
+          <Link
+            href={ONBOARDING_SIGNUP_DOOR_PATH}
+            className={`${buttonVariants({ variant: 'secondary', size: 'lg' })} w-full`}
+          >
+            <Sparkles className="h-4 w-4" aria-hidden />
+            {t('planWithAI')}
+          </Link>
+        </div>
+      )}
     </AuthShell>
   );
 }

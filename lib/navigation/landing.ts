@@ -75,3 +75,49 @@ export function resolvePostAuthDestination({
   if (explicit) return explicit;
   return draftId ? ONBOARDING_ENTRY_PATH : AUTHED_LANDING_PATH;
 }
+
+/**
+ * IS THIS DESTINATION THE ONBOARDING ENTRANCE? (MOTIR-4402)
+ *
+ * A credential surface that is CARRYING an onboarding intent has to be able to
+ * say so, and the only thing it holds is the resolved destination — a string
+ * that may be the entrance itself or the entrance with a query or a sub-path on
+ * it. Comparing `=== ONBOARDING_ENTRY_PATH` answers the first and misses the
+ * other two; comparing `startsWith('/onboarding')` also matches
+ * `/onboardingsomething`, which is a different route.
+ *
+ * It lives HERE rather than in the card that asks, for the reason the module's
+ * own docstring gives: a surface that re-types the entrance is the seventh file
+ * free to be independently right, stale, or absent.
+ */
+export function isOnboardingDestination(destination: string): boolean {
+  return (
+    destination === ONBOARDING_ENTRY_PATH ||
+    destination.startsWith(`${ONBOARDING_ENTRY_PATH}?`) ||
+    destination.startsWith(`${ONBOARDING_ENTRY_PATH}/`)
+  );
+}
+
+/**
+ * THE ONBOARDING DOOR FOR A READER WITH NO ACCOUNT (MOTIR-4402).
+ *
+ * `/sign-in`'s "Have a project idea? · Plan with AI" control used to point
+ * straight at `ONBOARDING_ENTRY_PATH`. Onboarding is authenticated, so the
+ * layout bounced the visitor back to `/sign-in?next=/onboarding` — and the
+ * sign-in card rendered that return IDENTICALLY. The only reader who could see
+ * the control was the one it round-tripped (`app/(auth)/sign-in/page.tsx` sends
+ * a signed-in reader away unless `?draft=` is present), so there was no reader
+ * for whom the door visibly worked.
+ *
+ * The copy says *"Have a project idea?"* — it addresses somebody who does not
+ * have an account — so the door goes where that reader has to go first, carrying
+ * the intent in the ONE carrier both auth surfaces already honour. Completing
+ * sign-up then lands on the entrance through `resolvePostAuthDestination`, which
+ * is the same precedence every other deep link bounced through auth relies on.
+ *
+ * Composed from `ONBOARDING_ENTRY_PATH` rather than written out, so this file
+ * stays the one place that spells the entrance.
+ */
+export const ONBOARDING_SIGNUP_DOOR_PATH = `/sign-up?next=${encodeURIComponent(
+  ONBOARDING_ENTRY_PATH,
+)}`;

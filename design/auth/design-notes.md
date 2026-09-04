@@ -138,8 +138,26 @@ first in the DOM and not merely first visually.
 ends with a `border-t border-(--el-border) pt-6` divider, a centred
 `--el-text-muted` lead — "Have a project idea?" (`auth.planWithAiLead`) — and a
 full-width secondary link, "Plan with AI" (`auth.planWithAI`) with a `Sparkles`
-glyph, to `/onboarding`. It is the onboarding door, and this card is where it is
-reached from.
+glyph. It is the onboarding door, and this card is where it is reached from.
+
+**⚠️ THE DOOR TARGETS `/sign-up`, NOT `/onboarding` — and it is NOT DRAWN AT ALL
+on the arrival that is already serving it (MOTIR-4402).** It used to link
+straight to the entrance, and the entrance is authenticated: the layout bounced
+the visitor back to `/sign-in?next=/onboarding`, and this card rendered that
+return identically to the arrival — same headline, same form, same door. The
+lead addresses somebody who has NO account, so the door goes to account
+creation carrying the intent in `?next=`, which both credential surfaces already
+honour. The href is `ONBOARDING_SIGNUP_DOOR_PATH`, composed in
+`lib/navigation/landing.ts` from the entrance constant that file owns — the card
+spells neither route out.
+
+**And a card that IS carrying the intent says so, in a THIRD `IdeaCarried`
+banner** — the same quiet `--el-surface-soft` block as the other two, label
+"Where you're headed" (`auth.onboardingCarriedLabel`) over
+`auth.onboardingCarriedSignIn`. The whole block above is then suppressed: a door
+onto the surface the reader is standing on is what made the original loop read
+as a working control. `/sign-up` renders the same banner with
+`auth.onboardingCarriedSignUp`, because that is where the door now lands.
 
 ## 02 — Sign-in · desktop · step 2 (password)
 
@@ -380,13 +398,16 @@ artboard that does not exist.
    `../cli-connect/design-notes.md` + `cli-connect.mock.html`. It is also the
    one screen that widens this layout (`data-auth-wide`) and suppresses the
    lockup.
-3. **The two `IdeaCarried` banners on `/sign-in`** — a quiet
+3. **The `IdeaCarried` banners on `/sign-in`, and one on `/sign-up`** — a quiet
    `--el-surface-soft` block with an `--el-text-secondary` uppercase label and
    an `--el-text` body, `line-clamp-4`, at `--radius-input` with an
    `--el-border` hairline. One carries an idea handed off from the marketing
-   hero (`?draft=`), the other the device code from the CLI hand-off, rendered
+   hero (`?draft=`), one the device code from the CLI hand-off, rendered
    through `CodeChip` (`--el-code-bg` / `--el-code-text`, `--radius-control`,
-   `font-mono`). Both sit between the header and the form.
+   `font-mono`), and the third the ONBOARDING INTENT a `?next=/onboarding`
+   arrival is carrying (MOTIR-4402) — the only one of the three that also
+   renders on `/sign-up`, since that is where the Plan-with-AI door now lands.
+   All sit between the header and the form.
 4. **`/unsubscribe/filter-subscription`** — a signed-out unsubscribe
    confirmation that inherits this card and nothing else from this asset.
 
