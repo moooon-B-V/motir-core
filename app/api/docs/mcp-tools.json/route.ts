@@ -13,6 +13,32 @@ import { mcpToolCatalogueDocument } from '@/lib/apiDocs/mcp';
 // repository never keeps a copy of a registry only this one can hold true
 // (MOTIR-4180 removed exactly such a copy; this is what lets the page come back).
 //
+// ── THE EMITTED SHAPE: each tool's FULL JSON Schema, verbatim (MOTIR-4389) ──
+// A tool's `inputSchema` is the draft-07 JSON Schema the MCP protocol's own
+// `tools/list` serves for it, copied without re-shaping: the same `properties`,
+// the same `required`, the same `enum` members, the same `anyOf` arms, the same
+// nested object and array schemas, `additionalProperties` and `$schema` included.
+//
+// The alternative was a FLATTENED parameter list — name, type, required, a
+// description — which is what the one consumer renders and would be perhaps a
+// third of the bytes. It is not what is served, for one reason: flattening
+// DROPS something, and what it drops is invisible from here. `anyOf` (every
+// nullable field), item schemas (`targetRepos`, `writes`), nested objects
+// (`query.where`) and per-arm constraints all collapse to a type name, and the
+// next consumer — an MCP client generator, an agent reading the surface, a
+// second page — has no way to recover them and no signal that they were ever
+// there. Carrying the schema whole makes the artifact a projection that loses
+// nothing, and leaves the choice of how DEEP to render where it belongs: with
+// the reader. The cost is measured and small — 55 schemas are ~70 KB, beside
+// the 720 KB of `/api/openapi/v1.json`, which the same consumer already fetches
+// per request.
+//
+// The VALUES are generated: `lib/apiDocs/mcpToolSchemas.ts`, written by
+// `pnpm generate:mcp-tool-schemas` and pinned byte-for-byte against a live
+// handshake by `tests/mcp/tool-schema-truth.test.ts`. That indirection exists so
+// this handler keeps the four properties below — the registry cannot be
+// imported here, and the schemas only the registry can produce still arrive.
+//
 // ── Why a PUBLISHED document, and not the live `tools/list` ─────────────────
 // `app/api/mcp/route.ts` wraps every request in `withMcpAuth(…, { required:
 // true })`, so `tools/list` is a 401 to an anonymous caller. A consumer reading
@@ -44,9 +70,11 @@ import { mcpToolCatalogueDocument } from '@/lib/apiDocs/mcp';
 // deprecation obligation without buying a reader. What a consumer may rely on:
 // this path, and the field names (`endpoint`, `toolCount`, `groups[]` with
 // `permission` / `label` / `gates` / `grantedByDefault` / `tools[]`, each tool
-// with `name` / `permission` / `summary`). What may change without notice: the
-// tool set, every summary, every label, group membership and the count — and
-// new fields may appear, which the consumer must tolerate.
+// with `name` / `permission` / `summary` / `inputSchema`). What may change
+// without notice: the tool set, every summary, every label, group membership,
+// the count, and every argument schema — and new fields may appear, which the
+// consumer must tolerate. `inputSchema` was one such addition (MOTIR-4389), and
+// the consumer that had to tolerate it did.
 //
 // ── It remains available on self-hosted builds — the SAME answer as ─────────
 // `/api/openapi/public.json` (MOTIR-4042), and for the same reason: `MOTIR_CLOUD`

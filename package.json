@@ -18,6 +18,7 @@
     "typecheck": "tsc -b tsconfig.solution.json",
     "assert:nft-trace": "node scripts/assert-nft-trace-scope.mjs",
     "generate:cli-api": "tsx --tsconfig tsconfig.node.json scripts/generate-cli-api.ts",
+    "generate:mcp-tool-schemas": "tsx --tsconfig tsconfig.node.json scripts/generate-mcp-tool-schemas.ts",
     "db:seed": "tsx --tsconfig tsconfig.node.json scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx --tsconfig tsconfig.node.json scripts/seed-large.ts",
     "db:seed:collab": "tsx --tsconfig tsconfig.node.json scripts/seed-collab.ts",
