@@ -1,6 +1,10 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import {
+  RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
+  resolveRecordPlanningMistakesForJob,
+} from '@/lib/ai/lessonCapture';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -93,6 +97,18 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // May this project's planner record what it got wrong (MOTIR-3350 producer ·
+    // MOTIR-4343 the gap)? Resolved HERE rather than inherited, because THIS
+    // submit is one of the two that call `submitJob` directly instead of going
+    // through `aiPlanEditsService`'s `submitPlanEditJob` — which is where the
+    // other four resolve it. That bypass IS the defect: from the setting's own
+    // first commit (2026-08-25, MOTIR-3331) a project that switched capture off
+    // still had its first generation captured, because an absent field reads on
+    // the far side as "the producer predates this contract", i.e. as ON.
+    const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     const tenant = {
       organizationId,
       isMeta,
@@ -114,6 +130,14 @@ export const aiGenerationService = {
         // `ai_draft` `explanationMd` per proposal (MOTIR-1468). motir-ai never
         // reads motir-core config directly; the flag rides the envelope.
         generateExplanations: ctx.project.aiGenerateExplanations,
+        // ALWAYS present, `false` when off — never spread-conditionally like
+        // `code` and `repositories` below. Those two use ABSENCE to mean "this
+        // workspace/project has none"; here absence means "the producer predates
+        // the field" and `mayRecordPlanningMistakes` reads it as ON, so omitting
+        // it when the setting is off would silently keep capturing. The key is
+        // the exported constant, not a literal: there is no shared type across
+        // the boundary and a typo is not a type error.
+        [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
       },

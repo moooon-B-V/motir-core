@@ -232,46 +232,49 @@ describe('EVERY planning entrance puts ONE kind on the wire (MOTIR-3943)', () =>
       ).toBe(true);
     }
 
-    // ⚠️ `recordPlanningMistakes` RIDES FOUR OF THE SIX, AND THE TWO THAT DROP IT
-    // ARE EXACTLY THE TWO THAT BYPASS THE SHARED SUBMIT (MOTIR-4326).
+    // ⚠️ `recordPlanningMistakes` NOW RIDES ALL SIX — ⚠️ CORRECTED (MOTIR-4343).
+    // KEPT AS A PARTITION, with `dropsFlag` EMPTY, because the shape of the
+    // defect is what this assertion is about and a flat "all six carry it" loop
+    // cannot say it.
     //
-    // The card's criterion asks for it on all six. It is not there, and the
-    // pattern is not random: the flag is resolved inside `submitPlanEditJob`, so
-    // the four submits that route through it carry it, and the two that call
-    // `submitJob` DIRECTLY — `aiGenerationService.startGeneration` and
-    // `aiPlanEditsService.submitRevise` — never resolve it at all.
+    // ~~It rode FOUR of the six, and the two that dropped it were exactly the two
+    // that bypass the shared submit.~~ That was true when this story shipped and
+    // it is the finding this gate produced: the flag was resolved INSIDE
+    // `submitPlanEditJob`, so the four submits routing through it carried it and
+    // the two calling `submitJob` DIRECTLY —
+    // `aiGenerationService.startGeneration` and
+    // `aiPlanEditsService.submitRevise` — never resolved it at all. Filed as
+    // MOTIR-4343 rather than absorbed here, and fixed there by resolving the flag
+    // at each bypassing site (NOT by routing them through the shared submit —
+    // both bypass it for real reasons).
     //
-    // Verified on `origin/main`: `aiGenerationService.ts` mentions the field zero
-    // times, and `submitRevise`'s context bag is `{ planId, prompt,
-    // generateExplanations, code?, repositories? }`. The omission predates this
-    // story and is unchanged by it, so it is FILED rather than absorbed into a
-    // test card.
+    // ⚠️ The stale member is REMOVED rather than left in `dropsFlag`, and the old
+    // failure message went with it: it named MOTIR-4326 — an unrelated `low`
+    // drawer bug under Epic 8 — where it meant MOTIR-4343, so the one reader it
+    // was written for would have been sent to the wrong card.
     //
-    // Why it matters: `mayRecordPlanningMistakes` reads ABSENT as ON, and the
-    // gate lives in `assemblePlannerInputs` — the one shared assembler BOTH arms
-    // have always called. So a project that switched capture OFF still has its
-    // planning mistakes captured on the generation and revision paths.
-    //
-    // The partition is asserted in BOTH directions, so the gap can neither widen
-    // unnoticed nor be quietly fixed without this test being read.
-    const carriesFlag = ['augment', 'contextual', 'expand', 'replan'];
-    const dropsFlag = ['generation', 'revise'];
+    // Why the partition still earns its place: `mayRecordPlanningMistakes` reads
+    // ABSENT as ON, and the gate lives in `assemblePlannerInputs` — the one
+    // shared assembler BOTH arms have always called. An entrance that stops
+    // carrying the field does not fail anywhere; it silently resumes capturing
+    // for a project that switched capture off. So the list that must stay empty
+    // is asserted as a list, and a seventh entrance that bypasses the shared
+    // submit again is caught by the CALL-SITE guard in
+    // `tests/integration/ai/planningSubmitCarriesConsentFlag.test.ts`, which this
+    // seam test cannot see.
+    const carriesFlag = ['augment', 'contextual', 'expand', 'generation', 'replan', 'revise'];
+    const dropsFlag: string[] = [];
     for (const name of carriesFlag) {
       expect(
         Object.prototype.hasOwnProperty.call(ctxOf(sent[name]!), 'recordPlanningMistakes'),
-        `${name} routes through submitPlanEditJob and must carry the flag`,
+        `${name} dropped recordPlanningMistakes — an absent field reads as ON on the far side, so this silently re-enables capture for a project that switched it off (MOTIR-4343)`,
       ).toBe(true);
     }
-    for (const name of dropsFlag) {
-      expect(
-        Object.prototype.hasOwnProperty.call(ctxOf(sent[name]!), 'recordPlanningMistakes'),
-        `${name} now SENDS recordPlanningMistakes — MOTIR-4326 is fixed; move it to carriesFlag`,
-      ).toBe(false);
-    }
-    // …and the discriminator is the SHARED SUBMIT, not the kind: all six send
-    // `plan`, and four of them carry the flag. That is what makes this a routing
-    // defect rather than a per-operation one.
+    expect(dropsFlag, 'no planning entrance may drop the consent flag (MOTIR-4343)').toEqual([]);
+    // …and the partition is TOTAL over the six, which is what stops an entrance
+    // being dropped from both lists rather than moved between them.
     expect(carriesFlag.length + dropsFlag.length).toBe(Object.keys(sent).length);
+    expect([...carriesFlag].sort()).toEqual(Object.keys(sent).sort());
   });
 });
 
