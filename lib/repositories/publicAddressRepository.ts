@@ -345,4 +345,28 @@ export const publicAddressRepository = {
   async remove(addressId: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.publicAddress.delete({ where: { id: addressId } });
   },
+
+  /**
+   * Remove a SET of addresses in one statement — the release path's delete
+   * (ADR §8 Amendment 2, MOTIR-4454).
+   *
+   * A release takes the live subdomain AND every retained alias, so the loop
+   * that would otherwise sit in the service is one `deleteMany` here instead:
+   * still a single Prisma operation, still no rule about WHICH ids belong in
+   * the set. The service chooses them through `reservesItsHostname`, which is
+   * where the custom-domain exclusion lives.
+   *
+   * The `SET NULL` on `project.primary_address_id` applies exactly as it does
+   * to {@link remove}, so a project whose primary was the released subdomain
+   * falls back to §7's default rather than being deleted with it. That is why
+   * there is no companion `setPrimary(null)` sweep: adding one would be a
+   * second, hand-run copy of a constraint the database already enforces.
+   */
+  async removeMany(addressIds: readonly string[], tx: Prisma.TransactionClient): Promise<number> {
+    if (addressIds.length === 0) return 0;
+    const { count } = await tx.publicAddress.deleteMany({
+      where: { id: { in: [...addressIds] } },
+    });
+    return count;
+  },
 };

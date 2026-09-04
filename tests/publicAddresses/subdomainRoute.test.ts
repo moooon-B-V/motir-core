@@ -4,6 +4,7 @@ import {
   NoSubdomainClaimedError,
   ReservedLabelError,
   SubdomainForbiddenError,
+  SubdomainNotFoundError,
   SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
@@ -20,8 +21,9 @@ import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDoma
 const getForWorkspace = vi.fn();
 const claim = vi.fn();
 const rename = vi.fn();
+const release = vi.fn();
 vi.mock('@/lib/services/publicSubdomainService', () => ({
-  publicSubdomainService: { getForWorkspace, claim, rename },
+  publicSubdomainService: { getForWorkspace, claim, rename, release },
   roleMayManageAddress: () => true,
 }));
 
@@ -31,7 +33,8 @@ vi.mock('@/lib/workspaces', () => ({ getWorkspaceContext }));
 const refuseIfNonCompliant = vi.fn();
 vi.mock('@/lib/auth/requireCompliantSession', () => ({ refuseIfNonCompliant }));
 
-const { GET, PUT } = await import('@/app/api/workspaces/[workspaceId]/public-subdomain/route');
+const { GET, PUT, DELETE } =
+  await import('@/app/api/workspaces/[workspaceId]/public-subdomain/route');
 
 const CTX = { userId: 'u_1', workspaceId: 'ws_1' };
 const params = { params: Promise.resolve({ workspaceId: 'ws_1' }) };
@@ -157,5 +160,59 @@ describe('the mapper, on this surface', () => {
     await expect(GET(new Request('https://app.motir.co/x'), params)).rejects.toThrow(
       'the database fell over',
     );
+  });
+});
+
+// ── DELETE — RELEASE (Story MOTIR-4451 · Subtask MOTIR-4454, ADR §8 Am. 2) ──
+
+describe('DELETE', () => {
+  const del = () => new Request('https://app.motir.co/x', { method: 'DELETE' });
+
+  it('answers 204 with NO body, and calls release exactly once', async () => {
+    release.mockResolvedValue(undefined);
+    const res = await DELETE(del(), params);
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe('');
+    expect(release).toHaveBeenCalledExactlyOnceWith('ws_1', 'u_1');
+  });
+
+  it('answers 404 when the workspace has no subdomain — NOT the rename path 409', async () => {
+    // Two typed errors, two statuses, one mapping each. A `DELETE` names a
+    // resource, so absent is 404; `PUT`'s rename refuses a premise, so 409.
+    release.mockRejectedValue(new SubdomainNotFoundError());
+    const res = await DELETE(del(), params);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ code: 'SUBDOMAIN_NOT_FOUND' });
+
+    rename.mockRejectedValue(new NoSubdomainClaimedError());
+    getForWorkspace.mockResolvedValue(DTO);
+    expect((await PUT(put({ label: 'acme' }), params)).status).toBe(409);
+  });
+
+  it('refuses a member who may not manage addresses, exactly as PUT does', async () => {
+    release.mockRejectedValue(new SubdomainForbiddenError());
+    expect((await DELETE(del(), params)).status).toBe(403);
+  });
+
+  it('answers 404 to a NON-MEMBER, leaking no existence', async () => {
+    release.mockRejectedValue(new WorkspaceNotVisibleError());
+    expect((await DELETE(del(), params)).status).toBe(404);
+  });
+
+  it('401s with no session and asks the service nothing', async () => {
+    getWorkspaceContext.mockResolvedValue(null);
+    expect((await DELETE(del(), params)).status).toBe(401);
+    expect(release).not.toHaveBeenCalled();
+  });
+
+  it('is held by the compliance gate before it releases anything', async () => {
+    refuseIfNonCompliant.mockResolvedValue(new Response(null, { status: 451 }));
+    expect((await DELETE(del(), params)).status).toBe(451);
+    expect(release).not.toHaveBeenCalled();
+  });
+
+  it('rethrows what it does not know, so a real fault is a real 500', async () => {
+    release.mockRejectedValue(new Error('boom'));
+    await expect(DELETE(del(), params)).rejects.toThrow('boom');
   });
 });

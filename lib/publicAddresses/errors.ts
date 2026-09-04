@@ -100,12 +100,45 @@ export function isHostnameUniqueViolation(err: unknown): boolean {
 // `instanceof` branches, and a single type would make every branch a nested
 // switch on a field.
 
-/** A rename was asked for on a workspace that has never claimed a subdomain. */
+/**
+ * A rename was asked for on a workspace that has never claimed a subdomain.
+ *
+ * 409, not 404: the caller asked to CHANGE something, and the refusal is about
+ * the state that request met. Compare {@link SubdomainNotFoundError}, which is
+ * the same situation reached by a DELETE and answers 404 — see its comment for
+ * why the two are separate types rather than one type mapped two ways.
+ */
 export class NoSubdomainClaimedError extends Error {
   readonly code = 'NO_SUBDOMAIN_CLAIMED' as const;
   constructor() {
     super('This workspace has not claimed a subdomain yet.');
     this.name = 'NoSubdomainClaimedError';
+  }
+}
+
+/**
+ * A RELEASE was asked of a workspace that holds no subdomain (§8 Amendment 2,
+ * MOTIR-4454). Answered **404**.
+ *
+ * ⚠️ A SEPARATE TYPE FROM {@link NoSubdomainClaimedError} ON PURPOSE, and the
+ * alternative is what makes it worth a comment. The two describe the identical
+ * database state and want different statuses — 409 for the rename, 404 for the
+ * delete — because a `DELETE` names a RESOURCE and the honest answer for a
+ * resource that is not there is that it is not there, while a `PUT` that renames
+ * is a request whose premise the state refuses.
+ *
+ * The other way to express that is to keep one type and let the DELETE route map
+ * it to a different status than the shared mapper does. That is exactly what
+ * `errorResponse.ts`'s own header forbids — the mappers fall through to one
+ * another *"so the two surfaces cannot answer the same typed error two different
+ * ways"* — and a per-verb override is that hazard with a smaller radius, not a
+ * different one. Two types, two codes, one mapping each.
+ */
+export class SubdomainNotFoundError extends Error {
+  readonly code = 'SUBDOMAIN_NOT_FOUND' as const;
+  constructor() {
+    super('This workspace has no public subdomain to release.');
+    this.name = 'SubdomainNotFoundError';
   }
 }
 

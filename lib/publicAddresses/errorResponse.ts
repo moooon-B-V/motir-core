@@ -19,6 +19,7 @@ import {
   PublicAddressesUnavailableError,
   ReservedLabelError,
   SubdomainForbiddenError,
+  SubdomainNotFoundError,
   SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
@@ -44,6 +45,11 @@ import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDoma
 //       caller's side both mean the name they asked for is not available.
 //   422 for a REFUSED LABEL and a REACHED CAP — well-formed requests that fail a
 //       domain rule, which is exactly what 422 is for.
+//   404 for a RELEASE of a workspace with no subdomain (§8 Amendment 2) — a
+//       DELETE names a resource, and the honest answer for one that is not there
+//       is that it is not there. It is deliberately a DIFFERENT typed error from
+//       the rename's 409 rather than the same error mapped twice; the reasoning
+//       is on `SubdomainNotFoundError`.
 //   503 for an unconfigured base domain — an OPERATOR problem, never the
 //       caller's, and the one case here where retrying later may work.
 export function mapPublicAddressError(err: unknown): NextResponse | null {
@@ -76,6 +82,9 @@ export function mapPublicAddressError(err: unknown): NextResponse | null {
   }
   if (err instanceof NoSubdomainClaimedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  if (err instanceof SubdomainNotFoundError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
   if (err instanceof TenantDomainNotConfiguredError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
