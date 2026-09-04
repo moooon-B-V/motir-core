@@ -22,7 +22,9 @@ import {
   FLEET_CONTAINER_SIZE,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
+  exitCodeOf,
   fakeOrchestrator,
+  toFlyMachine,
 } from '@motir/orchestrator';
 import { RepoTarballUrlNotRedirectedError, RepoTarballUrlUnsupportedError } from '@/lib/git';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
@@ -1025,6 +1027,61 @@ describe('the exit code is CLASSIFIED — the number is the whole diagnostic cha
       verdict: { exitClass: 'out_of_memory', indexed: false },
     });
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
+  });
+
+  // ⚠️ THE GUARD MOTIR-4519 LEAVES BEHIND, and the one thing this whole block was
+  // missing: every assertion above starts from a number ALREADY IN HAND, so it
+  // cannot see the classifier being handed the WRONG number. That is precisely
+  // what happened — `exitCodeOfEvent` preferred `guest_exit_code`, which Fly sets
+  // to `0` on every clean guest shutdown, so a container that exited 40 reached
+  // `classifyIndexExit` as a 0 and the ledger recorded `indexed: true`. 601
+  // settle memos and 313 `succeeded` rows carried that claim between 2026-08-28
+  // and 2026-09-04, against a pointer table whose newest row is 2026-08-21.
+  //
+  // So this walks the SAME table through the real adapter parse, from the event
+  // shape Fly actually sends, and pins the ledger's `indexed` claim to
+  // `classifyIndexExit`'s verdict about the CONTAINER's own code — never to the
+  // step having completed. The two can no longer drift without failing here.
+  it("classifies the code FLY REPORTED — the adapter's parse and the verdict cannot drift", () => {
+    for (const { code, exitClass, indexed } of CASES) {
+      // The verbatim production pair (MOTIR-4519, machine `8e3143b7164118`): the
+      // container's code in `exit_code`, a flat 0 in `guest_exit_code`. A null
+      // code is Fly answering with no exit event at all — the `auto_destroy`
+      // machine that took its code with it.
+      const machine = toFlyMachine({
+        id: 'm1',
+        events: [
+          { type: 'start', timestamp: Date.parse('2026-09-04T15:16:28.609Z') },
+          {
+            type: 'exit',
+            timestamp: Date.parse('2026-09-04T15:35:18.299Z'),
+            request:
+              code === null
+                ? {}
+                : {
+                    exit_event: {
+                      requested_stop: false,
+                      restarting: false,
+                      guest_exit_code: 0,
+                      guest_signal: -1,
+                      exit_code: code,
+                      signal: -1,
+                      oom_killed: false,
+                    },
+                  },
+          },
+        ],
+      });
+
+      const verdict = classifyIndexExit(exitCodeOf(machine!));
+      expect(verdict.exitCode, `exit_code ${code}`).toBe(code);
+      expect(verdict.exitClass, `exit_code ${code}`).toBe(exitClass);
+      expect(verdict.indexed, `exit_code ${code}`).toBe(indexed);
+    }
+
+    // And the claim is granted to exactly ONE code out of the whole taxonomy —
+    // the property §6's "permanent claim that the repo is indexed" rests on.
+    expect(CASES.filter((c) => c.indexed).map((c) => c.code)).toEqual([0]);
   });
 
   it('never reports a container whose exit was unobservable as indexed', async () => {

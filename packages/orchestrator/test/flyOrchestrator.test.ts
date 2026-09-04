@@ -839,35 +839,85 @@ describe('the §5 instants, read from Fly’s event log', () => {
   });
 });
 
-describe('the exit CODE, read from Fly’s event log (MOTIR-2025)', () => {
+describe('the exit CODE, read from Fly’s event log (MOTIR-2025 · MOTIR-4519)', () => {
   const at = (iso: string) => Date.parse(iso);
 
-  it("prefers the GUEST's own code over the machine-level one", () => {
-    // They agree on the ordinary paths and diverge exactly where it matters. The
-    // guest's is what the container's own `exit(n)` returned — the indexer's
-    // taxonomy value; the machine-level one is a number about Fly's supervisor.
+  /**
+   * ⚠️ THE VERBATIM PRODUCTION PAYLOAD (MOTIR-4519), and it is the whole reason
+   * the preference below runs the way it does.
+   *
+   * Read from the fleet's own Machines API on 2026-09-04 for machine
+   * `8e3143b7164118` — one of the containers MOTIR-4518 watched die at
+   * `getaddrinfo ENOTFOUND motir-ai.internal`, whose logs read
+   * `{"ok":false,"failure":"UPLOAD","exitCode":40}`. **180 of 180 exit events in
+   * the fleet app carried this exact pair**: the indexer's own
+   * `src/indexer/exitCodes.ts` value in `exit_code`, and a flat `0` in
+   * `guest_exit_code`.
+   *
+   * So the fixture is not an illustration — it is the shape production sends,
+   * and any parse that prefers `guest_exit_code` reports every one of those
+   * containers as a success.
+   */
+  const PRODUCTION_EXIT_EVENT = {
+    requested_stop: false,
+    restarting: false,
+    guest_exit_code: 0,
+    guest_signal: -1,
+    guest_error: '',
+    exit_code: 40,
+    signal: -1,
+    error: '',
+    oom_killed: false,
+    exited_at: '2026-09-04T15:35:18.203Z',
+  } as const;
+
+  it("reports the CONTAINER's code — the pair Fly really sends, guest 0 / exit 40", () => {
+    // The regression MOTIR-4519 measured: this machine did not index anything,
+    // and `exitCodeOf` answering 0 is what let `classifyIndexExit` call it
+    // `indexed` and put a permanent claim in the ledger.
     const parsed = toFlyMachine({
-      id: 'm1',
+      id: '8e3143b7164118',
       events: [
+        { type: 'start', timestamp: at('2026-09-04T15:16:28.609Z') },
         {
           type: 'exit',
-          timestamp: at('2026-08-02T10:04:00.000Z'),
-          request: { exit_event: { guest_exit_code: 50, exit_code: 0 } },
+          timestamp: at('2026-09-04T15:35:18.299Z'),
+          request: { exit_event: PRODUCTION_EXIT_EVENT },
         },
       ],
     });
-    expect(exitCodeOf(parsed!)).toBe(50);
+    expect(exitCodeOf(parsed!)).toBe(40);
   });
 
-  it('falls back to the machine-level code when Fly sent no guest code', () => {
-    // A code we could have had is worse lost than approximated.
+  it("prefers the machine-level `exit_code` over the guest's, on every code in the taxonomy", () => {
+    // Every member of `classifyIndexExit`'s taxonomy, each carried the way
+    // production carries it. A parse that reads `guest_exit_code` first turns
+    // ALL of them into 0 — the one value that means "indexed".
+    for (const code of [10, 20, 30, 40, 41, 50, 137] as const) {
+      const parsed = toFlyMachine({
+        id: 'm1',
+        events: [
+          {
+            type: 'exit',
+            timestamp: at('2026-08-02T10:04:00.000Z'),
+            request: { exit_event: { guest_exit_code: 0, exit_code: code } },
+          },
+        ],
+      });
+      expect(exitCodeOf(parsed!), `exit_code ${code}`).toBe(code);
+    }
+  });
+
+  it('falls back to the GUEST code when Fly sent no machine-level one', () => {
+    // A code we could have had is worse lost than approximated — the fallback
+    // survives the correction, only its direction changed.
     const parsed = toFlyMachine({
       id: 'm1',
       events: [
         {
           type: 'exit',
           timestamp: at('2026-08-02T10:04:00.000Z'),
-          request: { exit_event: { exit_code: 137 } },
+          request: { exit_event: { guest_exit_code: 137 } },
         },
       ],
     });

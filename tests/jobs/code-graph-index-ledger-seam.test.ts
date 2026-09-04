@@ -207,6 +207,73 @@ describe('four repos produce four runs with four DISTINCT repoRefs', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 2b · A CONTAINER THAT DID NOT INDEX LEAVES NOTHING A READER CAN READ AS A
+//      CLAIM (MOTIR-4519).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('a container that did not exit 0 writes no claim the ledger’s readers can see', () => {
+  // ⚠️ THE ROW THIS FILE EXISTS FOR, AND THE ONE IT DID NOT COVER. Section 3
+  // below pins the no-op verdicts — `succeeded` rows that carry no `repoRef`.
+  // This is the other half: a container that RAN, was billed, and FAILED. For
+  // eight days it produced `succeeded` rows carrying `{ indexed: true, repoRef,
+  // projectsIndexed }` — indistinguishable from an earned index to both readers
+  // — because the exit code reaching `classifyIndexExit` was not the container's
+  // (`packages/orchestrator/src/adapters/fly/flyMachines.ts`'s `exitCodeOfEvent`,
+  // corrected by MOTIR-4519). 313 such rows stood against a motir-ai pointer
+  // table whose newest row predated every one of them.
+  //
+  // Both arms drive the SHIPPED job on a real Postgres and read back through the
+  // SHIPPED consumers, because the claim §6 forbids is a claim a READER makes:
+  // "no output" is not the assertion, "the enqueue gate does not see this repo"
+  // is.
+  it.each([
+    [40, 'upload_failed', 'the graph was built and object storage refused it'],
+    [null, 'exit_unobserved', 'the machine destroyed itself before its code was read'],
+  ] as const)(
+    'exit %s (%s) leaves the repo un-indexed to every reader — %s',
+    async (exitCode, _exitClass, _why) => {
+      const { workspaceId, ownerUserId, projectIds, installationId } = await seedIndexWorkspace(
+        `seam-noclaim${exitCode ?? 'null'}`,
+        1,
+      );
+      stubIndexFleet();
+      containerExitsWith(exitCode);
+
+      const engine = new JobTestEngine({ function: codeGraphIndex });
+      const { result } = (await engine.execute({
+        events: [indexEventFor({ installationId, workspaceId })],
+      })) as { result?: unknown };
+
+      // The handler THREW, so there is no `IndexRepoResult` at all — the ledger
+      // contract's own mechanism (`indexEveryProject` refuses a non-`indexed`
+      // verdict) rather than a diminished success.
+      expect(result).toBeUndefined();
+
+      // READER 1 — the enqueue gate. An entry here is a permanent claim, and the
+      // sweep would stop re-indexing a repo that has no graph at all.
+      expect(await indexedRepoRefs(workspaceId)).toEqual([]);
+
+      // READER 2 — the onboarding wizard's per-repo rows, keyed by a DIFFERENT
+      // repository method. The Next button must stay disabled.
+      const ctx = { userId: ownerUserId, workspaceId };
+      const run = await migrateOnboardingService.startMigration(projectIds[0]!, ctx);
+      const status = await migrateOnboardingService.getIndexStatus(run.id, ctx);
+      expect(status.repos).toEqual([
+        { provider: 'github', repoRef: INDEX_REPO_REF, status: 'pending' },
+      ]);
+      expect(status.allIndexed).toBe(false);
+
+      // And the row itself carries no output to be read the wrong way later.
+      const rows = await indexJobRuns();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.status).not.toBe('succeeded');
+      expect(rows[0]!.output).toBeNull();
+    },
+    30_000,
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 3 · THE NO-OP VERDICTS — `succeeded`, and still NOT an index.
 // ─────────────────────────────────────────────────────────────────────────────
 

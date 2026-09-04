@@ -217,23 +217,54 @@ function parseDate(value: unknown): Date | null {
 /**
  * The container's own exit status out of one Fly machine event.
  *
- * ⚠️ THE GUEST'S CODE WINS, AND THE DISTINCTION IS THE WHOLE POINT. Fly's
- * `request.exit_event` carries two numbers: `guest_exit_code` is what the
- * process INSIDE the machine returned — the indexer's own
- * `src/indexer/exitCodes.ts` value, the thing the dispatcher has to classify —
- * while `exit_code` is the machine-level code its init reports. They agree on
- * the ordinary paths and diverge exactly where it matters (a signalled or
- * OOM-killed guest), so reading the machine-level one would quietly turn "the
- * indexer refused the credential" into a number about Fly's supervisor.
+ * ⚠️ `exit_code` IS THE CONTAINER'S. ⚠️ CORRECTED 2026-09-04 (MOTIR-4519) — the
+ * struck reading stood here for five weeks and was BACKWARDS, in the one
+ * direction that manufactures a success.
  *
- * Both are read because Fly has populated the pair differently over time and a
- * missing `guest_exit_code` must degrade to the other number rather than to
- * `null` — a code we could have had is worse lost than approximated.
+ * ~~THE GUEST'S CODE WINS … `guest_exit_code` is what the process INSIDE the
+ * machine returned — the indexer's own `src/indexer/exitCodes.ts` value, the
+ * thing the dispatcher has to classify — while `exit_code` is the machine-level
+ * code its init reports.~~ **Production says the opposite, unanimously.** Read
+ * from the fleet's Machines API on 2026-09-04, over every exit event it held —
+ * **180 of 180** carried:
+ *
+ *     "exit_event": { "guest_exit_code": 0, "guest_signal": -1,
+ *                     "exit_code": 40, "signal": -1, "oom_killed": false }
+ *
+ * on containers whose own logs read `{"ok":false,"failure":"UPLOAD","exitCode":40}`
+ * (MOTIR-4518). `exit_code` carries the indexer's taxonomy value; `guest_exit_code`
+ * is the guest VM's own status, which is `0` whenever the guest shut down cleanly
+ * — i.e. on every ordinary container exit, successful or not.
+ *
+ * ⚠️ AND THE OLD ORDER WAS NOT MERELY WRONG, IT WAS UNCONDITIONALLY WRONG. The
+ * fallback only fires when the preferred key is ABSENT, and `guest_exit_code` is
+ * always present — so the second key was never reached and every failed container
+ * classified as `0`, the one code {@link classifyIndexExit} grants `indexed: true`.
+ * The measured cost: **601 `index-settle` memos between 2026-08-28 and
+ * 2026-09-04 recording `exitCode: 0`, and 313 `succeeded` ledger rows claiming
+ * `indexed: true`, against a pointer table whose newest row is 2026-08-21** —
+ * §6's *"a `succeeded` row is a permanent claim that the repo is indexed"*, made
+ * 313 times about repos nothing had indexed.
+ *
+ * ⚠️ AND THIS REPOSITORY ALREADY HELD THE CONTROLLED EXPERIMENT — the correction
+ * is a record-vs-record contradiction, not a new finding.
+ * `docs/decisions/fleet-image-pull.md` §2.4 ran `sh -c 'exit 99'` and
+ * `sh -c 'exit 0'` inside a fleet Machine and recorded: *"Read `exit_code` in the
+ * machine's `exit` event, **not** `guest_exit_code`, which read `0` in every
+ * probe including the `exit 99` control — a trap worth recording for
+ * MOTIR-2006."* MOTIR-2006 is the card family this function was written under.
+ * The record was right, this comment was wrong, and nothing compared them; that
+ * is why the correction is written HERE rather than only in the ledger's ADR.
+ *
+ * Both keys are still read, and the FALLBACK's reason survives the correction
+ * unchanged: a payload that omits the machine-level number must degrade to the
+ * guest's rather than to `null` — a code we could have had is worse lost than
+ * approximated. Only its direction moved.
  */
 function exitCodeOfEvent(event: Record<string, unknown>): number | null {
   const exitEvent = asRecord(asRecord(event['request'])?.['exit_event']);
   if (!exitEvent) return null;
-  for (const key of ['guest_exit_code', 'exit_code']) {
+  for (const key of ['exit_code', 'guest_exit_code']) {
     const value = exitEvent[key];
     if (typeof value === 'number' && Number.isFinite(value)) return value;
   }
