@@ -376,6 +376,65 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 **Asset:** `planning-workspace.mock.html` (source) + `planning-workspace.png`
 (full-page export). A five-sheet review board:
 
+> **⚠️ AMENDED 2026-09-04 (MOTIR-4428, under MOTIR-4318) — the asset is on the
+> `--el-*` TOKEN LAYER, and until this sweep it was not.**
+>
+> Its own opening comment described the arrangement accurately and read as a
+> decision rather than as debt: _"this sheet is an older light-only sketch that
+> inlines the default Motir palette by hand as its own `--text`/`--accent`/
+> `--border` names"_, with **THE ORB** carved out as the one thing drawn from the
+> token chain (MOTIR-3217). So the file declared exactly **three** `--el-*`
+> properties — `--el-accent`, `--el-accent-text`, `--el-highlight`, for the orb
+> alone — against **THIRTY** private colour aliases, work-type limb included.
+>
+> **Why MOTIR-4318's sweep did not reach it, and why that was correct.** Its
+> population predicate is _declares NO `--el-_` at all*; three declarations
+> satisfy it, so this asset fell outside the eleven — and MOTIR-4318's own card
+> names this file in exactly that role, AND predicts this shape as the reason its
+> limb (b) had to exist (*"an asset that declares one token and aliases the rest
+> — a file that passes the guard and is exactly as unmeasurable as the eleven"*).
+> Both sentences are in the same card. What was never done is MEASURE limb (b)'s
+> population, so the file named as *outside the eleven* and the shape named as
+> *what limb (b) is for\* were never put beside each other. That measurement gap
+> is a separate planning bug; this is the sweep.
+>
+> **What it cost, measured rather than described.** Both ink scanners classify an
+> ink by reading an `--el-*` name off the declaration AT THE POINT OF USE, so
+> `color: var(--muted)` is unmeasured however `--muted` is defined. Run against
+> this asset:
+>
+> |                                        | `design-ink-contrast` (RESTING)                             | `design-state-ink-contrast` (STATE)  |
+> | -------------------------------------- | ----------------------------------------------------------- | ------------------------------------ |
+> | **before the sweep**                   | **0 sites scanned**, 0 violations                           | 0 state background rules, 0 findings |
+> | after the token swap, before re-inking | 55 sites scanned, **55 muted violations**, 24 faint counted | 0 rules, 0 findings                  |
+> | **after**                              | 0 sites scanned, 0 violations                               | 0 rules, 0 findings                  |
+>
+> The middle row is the point: the asset was green about thirty-two ink sites it
+> had never been asked about, and its `--muted` / `--faint` inks are precisely the
+> two `CLAUDE.md`'s measured table (MOTIR-2455) exists to police. It carries no
+> `:hover` / `:focus` state background rule, so the STATE arm has nothing to rule
+> on either way — that zero is a real reading, not an abstention.
+>
+> **What the swap changed on the record, token by token:**
+>
+> | was                                                                                                 | is                                                                                                         | why                                                                                                                                                                                                                                                                                                                                                                                                |
+> | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | `--surface: #ffffff`                                                                                | `--el-card`                                                                                                | mapped by VALUE and ROLE: `--el-surface` is `#f6f5f4`, so a name-based substitution would have repainted every white panel                                                                                                                                                                                                                                                                         |
+> | `--hub: #f6f5f4`                                                                                    | `--el-surface`                                                                                             | the board ground — the other half of the same correction                                                                                                                                                                                                                                                                                                                                           |
+> | `--text` / `--strong` / `--soft` / `--mutedfill` / `--border` / `--hair`                            | `--el-text` / `--el-text-strong` / `--el-surface-soft` / `--el-muted` / `--el-border` / `--el-border-soft` | unchanged values, now measurable                                                                                                                                                                                                                                                                                                                                                                   |
+> | `--secondary: #54514b` · `--rose: #fce4ea` · `--yellow: #fbf2cc`                                    | `--el-text-secondary` `#5d5b54` · `--el-tint-rose` `#fde0ec` · `--el-tint-yellow` `#fef7d6`                | three hand-inlined values a few units off the system's own; the asset now states the ROLE and the system states the value                                                                                                                                                                                                                                                                          |
+> | `--accent-soft: #ece9fb`                                                                            | `--el-accent-wash`, a `color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg))`                        | a frozen tint of ONE palette's accent. No `--el-*` exposes a wash this light, so it is a mix whose inputs are BOTH tokens, declared in the `[data-palette]`-aware block so it re-tints with the accent it is drawn from                                                                                                                                                                            |
+> | `--pink: #ff64c8`                                                                                   | `--el-highlight`                                                                                           | the same value the orb block already read from `--color-accent`                                                                                                                                                                                                                                                                                                                                    |
+> | `--type-epic` / `-story` / `-task` / `-bug` / `-subtask`                                            | `--el-type-epic` / `-story` / `-task` / `-bug` / `-subtask`                                                | **NOT** the allowlist case MOTIR-4318 predicted for a work-type palette: `theme.css` declares all five and MOTIR-4350's swept `design/roadmap/roadmap.mock.html:67`–`71` declares exactly these names. The old block's own comment already named them                                                                                                                                              |
+> | the `TYPE` map in the sheet's `<script>`, five raw hexes painted onto an inline `style=` at runtime | `var(--el-type-*)`, with the `+ '22'` alpha trick replaced by `color-mix(in srgb, <hue> 13%, transparent)` | the one set of colours in this sheet that NO static scanner reads either way, which is why they were the last five raw hues left. `0x22 / 255` is 13%, and a `var()` cannot carry an 8-digit-hex alpha                                                                                                                                                                                             |
+> | 20 `color: var(--muted)` + 12 `color: var(--faint)` ink sites                                       | `--el-text-secondary`                                                                                      | what the swap EXPOSED. `--el-text-muted` is 4.12–4.34:1 on every tinted surface and `--el-text-faint` clears AA on none; secondary is 6.18–6.80:1 on all four surfaces in both themes, which is `CLAUDE.md`'s own advice for exactly this case. Both tokens stay DECLARED — `mockStateInkScan` resolves a token by planting a probe, and an asset declaring neither reports its faint ink as muted |
+>
+> **What is unchanged:** the ORB's colour chain (MOTIR-3217) and the ten
+> `[data-palette]` Tier-0 blocks under it — that half was already the Tier-0 →
+> Tier-3 → paint form this sweep gives the rest of the sheet, and it is where the
+> pattern for the rest came from. The `.png` re-exported at byte-identical
+> dimensions (`EXACT 1200x900@2x`, 2400×10856).
+
 | Sheet | What it shows                                                                                                                                   |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                               |
@@ -724,7 +783,11 @@ dedicated journey), not this dismissable overlay.
 The three-file set under `design/ai-chat/` for this surface:
 `design-notes.md` (this section) · `planning-workspace.mock.html` (source) ·
 `planning-workspace.png` (full-page export, Playwright chromium — light,
-`deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Grounded in
+`deviceScaleFactor: 2`, 1200px wide — re-export with
+`node scripts/render-design-mock.mjs … --width 1200 --height 900`, passing both
+explicitly per MOTIR-4374); `prettier --check` clean. **Colour is on the `--el-*`
+token layer at every paint site** (MOTIR-4428 — see the amendment above; before
+that sweep this clause would have been false of everything except the orb). Grounded in
 `7.4`/`7.11`/`7.12`/`7.19` (the modes) + `7.20.3`/`MOTIR-1299` (the launcher it
 gates); supersedes `MOTIR-898` + `MOTIR-907`.
 
