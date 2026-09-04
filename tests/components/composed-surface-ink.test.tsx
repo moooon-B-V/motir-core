@@ -16,8 +16,9 @@ import {
   surfacesUnderAA,
   themesThatBind,
 } from '../helpers/renderedInkContrast';
+import { planReviewItem } from '../helpers/planReview';
+import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type { CommandGroup } from '@/components/ui/CommandPalette';
-import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
 // MOTIR-4251 — the render-time ink guard, pointed at COMPOSED surfaces.
 //
@@ -44,9 +45,10 @@ import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 // class's five bug cards FIXED, and none of them had a regression guard: revert
 // any one of those fixes and the corresponding case below goes red, which is the
 // property being bought. MOTIR-4246's `/items` row is the one member of the five
-// that is NOT yet fixed here, so it is not here — that card owns both its fix and
-// its guard (its own acceptance criterion 3), and pre-empting it would be
-// building another card's deliverable.
+// that is not here, and it never will be: that card shipped (#2543) with its own
+// guard — `tests/components/items-row-ink.test.tsx`, its acceptance criterion 3 —
+// and its fix moved both sites OFF `--el-text-muted` entirely, so neither module
+// is in the abstention this file is pointed at any more.
 //
 // ── What the guard found on its first run: MOTIR-4260 ──────────────────────
 // Pointing it at the plan canvas node in its `remove` state returned a SIXTH
@@ -126,45 +128,6 @@ describe('MOTIR-4251 · the rule this guard enforces, as resolved values', () =>
   });
 });
 
-function planItem(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
-  return {
-    planItemId: 'pi_1',
-    op: 'add',
-    nodeId: 'pi_1',
-    parentNodeId: null,
-    parentIdentifier: null,
-    parentTitle: null,
-    parentKind: null,
-    parentTrail: [],
-    blockedByNodeIds: [],
-    blockedByRemovedNodeIds: [],
-    identifier: null,
-    title: 'A proposed item',
-    kind: 'task',
-    priority: null,
-    type: null,
-    descriptionMd: null,
-    explanationMd: null,
-    explanationSource: null,
-    storyPoints: null,
-    estimateMinutes: null,
-    targetRepo: null,
-    targetRepoRole: null,
-    executor: null,
-    planningProvenance: null,
-    status: null,
-    statusLabel: null,
-    statusCategory: null,
-    hasChildren: false,
-    changes: [],
-    stale: false,
-    staleReasons: [],
-    revised: false,
-    targetMissing: false,
-    ...over,
-  };
-}
-
 describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
   it('the plan canvas node — components/planning/PlanItemNode.tsx (MOTIR-4030)', async () => {
     const { PlanItemNode } = await import('@/components/planning/PlanItemNode');
@@ -173,7 +136,7 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
     // written in a module that never sees that tint.
     const { container } = renderWithIntl(
       <PlanItemNode
-        item={planItem({
+        item={planReviewItem({
           op: 'modify',
           nodeId: 'wi_1',
           identifier: 'PROD-14',
@@ -186,6 +149,15 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
             { field: 'priority', from: 'medium', to: 'high' },
             { field: 'title', from: 'old', to: 'new' },
           ],
+          // The peek envelope (MOTIR-4183) restates the op and the moved field
+          // set the `changes` above carry — the builder's default describes an
+          // `add`, which this case is not.
+          proposal: {
+            op: 'modify',
+            identifier: 'PROD-14',
+            changedFields: ['priority', 'title'],
+            settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+          },
         })}
       />,
     );

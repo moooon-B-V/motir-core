@@ -50,19 +50,20 @@ export const COVERED_MODULES: Readonly<Record<string, string>> = {
 // it) and it is not COVERAGE of the hole, which is the distinction this file
 // exists to hold. Claiming it here was the first thing this test failed on.
 
+// ⚠️ MOTIR-4246's two `/items` modules — `issueColumns.tsx` and
+// `IssueTreeTable.tsx` — were entries here until that card shipped (#2543). They
+// are gone rather than re-pointed: the fix moved both sites OFF `--el-text-muted`
+// (to `--el-text-identifier` and `--el-text-secondary`), so neither module carries
+// a muted site at all any more and neither is in the abstention for this guard to
+// defer on. Its own render-time guard is `tests/components/items-row-ink.test.tsx`.
+// This test is what caught the stale pointer, which is the job it was written for.
+
 /**
  * Composed surfaces the sweep does NOT cover, each with the card that owns it or
  * the reason it is out. AC 5 of MOTIR-4251: a coverage claim owes its population,
  * and the half of a population you did not cover is the half nobody re-reads.
  */
 export const UNCOVERED_WITH_OWNERS: Readonly<Record<string, string>> = {
-  'app/(authed)/items/_components/issueColumns.tsx':
-    'MOTIR-4246 — the `/items` row identifier at 4.17:1 on the row hover tint. ' +
-    'That card owns both the fix and its render-time guard (its acceptance ' +
-    'criterion 3); covering it here would build another card’s deliverable and ' +
-    'would ship RED, since the defect is open.',
-  'app/(authed)/items/_components/IssueTreeTable.tsx':
-    'MOTIR-4246 — the `Loading children…` caption, same card, same reason.',
   'components/planning/PlanItemNode.tsx#remove':
     'MOTIR-4260 — the module IS covered (the render sweep mounts its `modify` ' +
     'state), but its `remove` STATE paints the title in `--el-text-muted` on the ' +
@@ -72,11 +73,15 @@ export const UNCOVERED_WITH_OWNERS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Entries in `UNCOVERED_WITH_OWNERS` that name a STATE rather than a module —
- * `path#state`. The membership check below is about modules, so these are
- * excluded from it and are here only so the residue is legible to a reader.
+ * The MODULE an `UNCOVERED_WITH_OWNERS` key names. An entry may be scoped to one
+ * STATE of a module — `path#state` — and the membership check below is about
+ * modules, so a state-scoped key is checked by its module half rather than
+ * skipped. A `path#state` deferral whose module has left the abstention is
+ * exactly as stale a pointer as a bare one, and skipping it would also let this
+ * check go VACUOUSLY green the moment the last bare entry is resolved — the
+ * shape this file's own header is written against.
  */
-const STATE_SCOPED = (file: string) => file.includes('#');
+const moduleOf = (file: string) => file.split('#')[0]!;
 
 describe('MOTIR-4251 · the abstention this guard is pointed at', () => {
   const sites = abstainedMutedSites();
@@ -106,10 +111,14 @@ describe('MOTIR-4251 · the abstention this guard is pointed at', () => {
     // deferral pointing at nothing — the shape `run.md`'s "a recorded deviation
     // that names an open defect is a card, never a paragraph" warns about, with
     // the paragraph dressed as a citation.
-    const notAbstained = Object.keys(UNCOVERED_WITH_OWNERS)
-      .filter((f) => !STATE_SCOPED(f))
-      .filter((f) => !modules.has(f));
+    const keys = Object.keys(UNCOVERED_WITH_OWNERS);
+    const notAbstained = keys.filter((f) => !modules.has(moduleOf(f)));
     expect(notAbstained).toEqual([]);
+    // …and the check above has something to rule on. An empty deferral list
+    // satisfies it for free, which is the one way it can pass without meaning
+    // anything: when the residue is finally all owned or all fixed, this fails
+    // and a person retires the list rather than leaving a tautology behind.
+    expect(keys.length).toBeGreaterThan(0);
   });
 
   it('every covered module carries abstained sites, and the residue is reported', () => {
