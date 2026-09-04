@@ -130,7 +130,7 @@ function itemFor(op: PlanItemOpDto) {
 }
 
 async function openFromList(op: PlanItemOpDto) {
-  render(<PlanProposalList items={[itemFor(op)]} decided={false} />);
+  render(<PlanProposalList items={[itemFor(op)]} outcome={null} />);
   fireEvent.click(screen.getByRole('button', { name: /Open / }));
   await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
   return screen.getByTestId('proposal-peek');
@@ -217,7 +217,7 @@ describe('the story gate for MOTIR-4181 — the seams, not a fourth pass', () =>
         settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
       },
     });
-    render(<PlanProposalList items={[item]} decided={false} />);
+    render(<PlanProposalList items={[item]} outcome={null} />);
     // The node is a SIGNAL and the list is where a change is SPELLED (Part VIII
     // §3). This story adds a reading; it must not move one.
     expect(screen.getByText('Invoice templates')).toBeTruthy();

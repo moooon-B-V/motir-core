@@ -16,7 +16,24 @@ import type { Prisma } from '@/generated/prisma/client';
 // (`docs/decisions/public-tenant-addresses.md` §8); the only path that can
 // release one is an operator under `app.system_admin`, which the migration's
 // policy split is what enforces. A method here would be a door the product does
-// not have.
+// not have. **Amendment 2 does not open one**: releasing a SUBDOMAIN removes the
+// ADDRESS rows and WRITES a reservation for each — it never removes a
+// reservation, which is exactly why the release keeps §8's protection intact.
+//
+// ⚠️ AND `retired_from_workspace_id` NO LONGER NAMES ONLY A DELETED WORKSPACE
+// (Amendment 2, MOTIR-4454). The schema's own comment on that column and this
+// table's RLS migration were both written for Amendment 1, where the only writer
+// was `workspacesService.deleteWorkspace` and the workspace was on its way out —
+// so both describe the value as naming a workspace that no longer exists. A
+// release writes it while the workspace is alive. Nothing about the column's
+// shape or its policies changes: it is still not a relation, the
+// `FOR SELECT USING (true)` arm is still what makes a GLOBAL namespace
+// answerable, and the insert arm's
+// `retired_from_workspace_id = current_setting('app.workspace_id')` is satisfied
+// by construction, because a release runs inside `withWorkspaceContext` bound to
+// the workspace it is releasing. **The migration's comment is left alone on
+// purpose** — an applied migration is checksummed, so editing one is drift; the
+// correction lives here and on the schema field.
 
 export const publicHostnameReservationRepository = {
   /**
@@ -28,6 +45,30 @@ export const publicHostnameReservationRepository = {
    */
   async isReservedInTx(hostnameHash: string, tx: Prisma.TransactionClient): Promise<boolean> {
     return (await tx.publicHostnameReservation.count({ where: { hostnameHash } })) > 0;
+  },
+
+  /**
+   * How many hostnames a workspace has RETIRED into the reservation table — the
+   * second half of ADR §8's rename-cap input (Amendment 2, MOTIR-4454).
+   *
+   * The cap used to read `countAliasesForWorkspace` alone, which is a count of
+   * live alias ROWS. A release deletes those rows, so a cap that reads only them
+   * is handed back in full on every release and
+   * `claim → rename ×5 → release`, repeated, burns names out of a shared
+   * namespace without bound. Amendment 2 therefore measures the cap over names
+   * BURNT — aliases held PLUS hostnames this workspace has reserved — and this
+   * is that second term. For a workspace that has never released it is `0`, so
+   * the generalisation returns exactly the old number.
+   *
+   * ⚠️ `retired_from_workspace_id` is NOT only a deleted workspace's id any
+   * more. Amendment 1 wrote it from `workspacesService.deleteWorkspace`, where
+   * the workspace was on its way out; a release writes it while the workspace is
+   * alive, which is what makes this count answerable at all.
+   */
+  async countForWorkspaceInTx(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+    return tx.publicHostnameReservation.count({
+      where: { retiredFromWorkspaceId: workspaceId },
+    });
   },
 
   /**

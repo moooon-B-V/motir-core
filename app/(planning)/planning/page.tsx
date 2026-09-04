@@ -11,6 +11,7 @@ import type { PlanningTarget } from '@/lib/planning/planningTargets';
 import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 // The universal planning-workspace HOST for an ESTABLISHED project (Subtask
 // MOTIR-1729) — what "Plan with AI" opens on a project that already has a plan.
@@ -113,7 +114,7 @@ export default async function PlanningWorkspacePage({
 
   // Never onboarded → onboarding still owns this project (it decides between the
   // start-fresh entrance and the migrate wizard). The host never makes that call.
-  if (gate === 'onboarding') redirect('/onboarding');
+  if (gate === 'onboarding') redirect(ONBOARDING_ENTRY_PATH);
 
   // ── THE ROOT-LEVEL READ IS GONE (Bug MOTIR-2069). It used to sit here,
   // awaited, purely to compute a `hasItems` boolean — and awaiting it is what

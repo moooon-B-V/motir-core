@@ -8836,7 +8836,15 @@ model PublicHostnameReservation {
   /// nothing) without a count-then-write to lose.
   hostnameHash String @unique @map("hostname_hash")
 
-  /// The workspace whose deletion retired it. NOT a relation — see above.
+  /// The workspace that retired it. NOT a relation — see above.
+  ///
+  /// ⚠️ AMENDED (§8 Amendment 2, MOTIR-4454). This read "the workspace whose
+  /// DELETION retired it", which was true when `workspacesService.deleteWorkspace`
+  /// was the only writer. A workspace may now RELEASE its own subdomain, which
+  /// writes this column while the workspace is very much alive — so the id here
+  /// is an orphan only on the delete path, and the count of a LIVING workspace's
+  /// rows is what §8's rename cap reads
+  /// (`publicHostnameReservationRepository.countForWorkspaceInTx`).
   retiredFromWorkspaceId String @map("retired_from_workspace_id")
 
   retiredAt DateTime @default(now()) @map("retired_at")

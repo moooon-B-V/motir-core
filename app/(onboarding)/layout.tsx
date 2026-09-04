@@ -4,7 +4,7 @@ import { getSession } from '@/lib/auth';
 import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { isAiPlanningConfigured } from '@/lib/ai/planningConfig';
 import { ConnectAiGate } from '@/app/_components/ConnectAiGate';
-import { ONBOARDING_ENTRY_PATH } from '@/lib/onboarding/pendingIdea';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 
 // The onboarding route group's layout (Subtask 7.3.5 / MOTIR-833). Onboarding is

@@ -15,7 +15,8 @@ import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 // `options` and the current selection in and reacts to `onSubmit`. This is the
 // ONE shared control behind BOTH link surfaces (no parallel control):
 //   - the detail-page `AddLinkControl` (2.4.9) wraps it with immediate-write
-//     semantics (Add → createLinkAction → refresh) + a Cancel that collapses;
+//     semantics (Add → the panel's optimistic insert → the write → the refresh
+//     that reconciles it, MOTIR-4496) + a Cancel that collapses;
 //   - the create-modal `CreateIssueLinksField` (2.4.10) wraps it with
 //     collect-on-create semantics (Add → push a pending row, written when the
 //     issue is created) and no Cancel (the form stays open inline).

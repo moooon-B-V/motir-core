@@ -8,10 +8,14 @@ import {
   PublicAddressesUnavailableError,
   ReservedLabelError,
   SubdomainForbiddenError,
+  SubdomainNotFoundError,
   SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
-import { hostnameReservationHash } from '@/lib/publicAddresses/hostnameReservation';
+import {
+  hostnameReservationHash,
+  reservesItsHostname,
+} from '@/lib/publicAddresses/hostnameReservation';
 import { MAX_SUBDOMAIN_RENAMES, refuseLabel } from '@/lib/publicAddresses/reservedNames';
 import { tenantBaseDomain, tenantHostname } from '@/lib/publicAddresses/tenantDomain';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
@@ -26,7 +30,21 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //
 // This is the FREE tier's address and it works on every tier. Custom domains are
 // MOTIR-4216's; nothing here touches a certificate, because the wildcard
-// `*.<base>` already covers every label (ADR §6) — claiming one writes a row.
+// `*.<base>` already covers every label (ADR §6) — claiming one writes a row,
+// and RELEASING one deletes a row. `customDomainService.remove` DOES call the
+// provider, and it is the nearest neighbour to this file's `release`; copying it
+// would ask Fly to withdraw a certificate for a hostname it never issued one for.
+//
+// ── RELEASE (ADR §8 AMENDMENT 2 · Story MOTIR-4451 · Subtask MOTIR-4454) ────
+//
+// §8's never-released rule is about who may take a name NEXT, not about who must
+// keep SERVING it — `reservesItsHostname`'s own comment says so — so a workspace
+// may give its subdomain back while the NAME stays out of the namespace for ever.
+// `workspacesService.deleteWorkspace` already had this shape scoped to a whole
+// workspace (list → filter `reservesItsHostname` → `reserveMany` → delete, one
+// transaction); `release` is that path narrowed from *the workspace is going* to
+// *the subdomain is going*, and it follows it deliberately rather than by
+// coincidence.
 //
 // ── AUTHORISATION: a WORKSPACE resource, not a project one ─────────────────
 //
@@ -86,10 +104,10 @@ export const publicSubdomainService = {
   ): Promise<PublicSubdomainDto | null> {
     assertAvailable();
     await assertMember(workspaceId, actorUserId);
-    const addresses = await withWorkspaceContext({ userId: actorUserId, workspaceId }, (tx) =>
-      publicAddressRepository.listForWorkspaceInTx(workspaceId, tx),
-    );
-    return toDto(addresses);
+    return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
+      const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
+      return toDto(addresses, await reservedCount(workspaceId, tx));
+    });
   },
 
   /**
@@ -120,7 +138,7 @@ export const publicSubdomainService = {
       await publicAddressRepository.createSubdomain({ workspaceId, hostname }, tx);
       await assertNotReserved(hostname, tx);
       const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
-      return toDto(addresses)!;
+      return toDto(addresses, await reservedCount(workspaceId, tx))!;
     });
   },
 
@@ -144,7 +162,9 @@ export const publicSubdomainService = {
       const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
       if (!live) throw new NoSubdomainClaimedError();
 
-      const used = await publicAddressRepository.countAliasesForWorkspace(workspaceId, tx);
+      const reserved = await reservedCount(workspaceId, tx);
+      const used =
+        (await publicAddressRepository.countAliasesForWorkspace(workspaceId, tx)) + reserved;
       if (used >= MAX_SUBDOMAIN_RENAMES) {
         throw new SubdomainRenameCapReachedError(used, MAX_SUBDOMAIN_RENAMES);
       }
@@ -165,12 +185,103 @@ export const publicSubdomainService = {
       await assertNotReserved(hostname, tx);
 
       const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
-      return toDto(addresses)!;
+      return toDto(addresses, reserved)!;
+    });
+  },
+
+  /**
+   * RELEASE the workspace's subdomain — the live label AND every retained alias
+   * (ADR §8 Amendment 2, MOTIR-4454).
+   *
+   * ONE transaction, and the ORDER inside it is the whole safety argument:
+   * **reserve, then delete.** The reservation is the only reason a release is
+   * permitted at all — it is what keeps §8's protection while the address goes —
+   * so a release that committed the delete and lost the reserve would hand the
+   * label back to the global namespace, which is the exact outcome §8 exists to
+   * prevent. And it would be unrepairable: the row that knew the hostname is the
+   * row that was deleted, and the table deliberately stores a digest we cannot
+   * read back. Reserving first means a failing reserve rolls the delete back with
+   * it and the workspace keeps its address.
+   *
+   * The rows are chosen by `reservesItsHostname`, never by a hand-written kind
+   * list. That predicate is where the custom-domain exclusion lives, and it
+   * carries its own reason: a customer's domain is theirs whatever happens to
+   * their Motir account, so reserving it would be a hostage rather than a
+   * protection. A workspace with custom domains keeps every one of them, and a
+   * promoted one stays the project's canonical.
+   *
+   * ⚠️ NO CERTIFICATE CALL, and the temptation is structural rather than
+   * hypothetical: the nearest neighbour to this method is
+   * `customDomainService.remove`, which withdraws a certificate post-commit. A
+   * workspace subdomain is covered by the wildcard `*.<base>` (ADR §6) — claiming
+   * one issues nothing, so releasing one withdraws nothing, and asking Fly about
+   * a hostname it never certificated is a call that can only fail.
+   *
+   * ⚠️ NO `setPrimary(null)` SWEEP either. `project.primary_address_id` is
+   * `ON DELETE SET NULL` (`schema.prisma`'s own comment on the relation), so a
+   * project whose primary this was falls back to §7's default — `motir.co/p/<id>`
+   * — on its own. A hand-run sweep here would be a second copy of a constraint
+   * the database already holds, and the test asserts the fallback instead.
+   */
+  async release(workspaceId: string, actorUserId: string): Promise<void> {
+    assertAvailable();
+    await assertAddressAdmin(workspaceId, actorUserId);
+
+    await withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
+      await lockWorkspaceOrRefuse(workspaceId, tx);
+      const rows = (await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx)).filter(
+        (address) => reservesItsHostname(address.kind),
+      );
+      // Nothing claimed. A DELETE names a resource, so this is a 404 and NOT the
+      // rename path's 409 — `SubdomainNotFoundError` carries that reasoning.
+      if (rows.length === 0) throw new SubdomainNotFoundError();
+
+      await publicHostnameReservationRepository.reserveMany(
+        rows.map((address) => ({
+          hostnameHash: hostnameReservationHash(address.hostname),
+          retiredFromWorkspaceId: workspaceId,
+        })),
+        tx,
+      );
+      await publicAddressRepository.removeMany(
+        rows.map((address) => address.id),
+        tx,
+      );
     });
   },
 };
 
 // ── Internals ──────────────────────────────────────────────────────────────
+
+/**
+ * How many hostnames this workspace has RETIRED into the reservation table — the
+ * SECOND term of the ADR §8 rename cap, as Amendment 2 restates it.
+ *
+ * The ADR line this implements, quoted (`docs/decisions/public-tenant-addresses.md`
+ * §8 Amendment 2, *The rename cap: releasing does NOT reset it*):
+ *
+ * > `renamesLeft = MAX_SUBDOMAIN_RENAMES − (aliases held + hostnames this
+ * > workspace has reserved)`
+ *
+ * So the cap counts names BURNT out of a shared namespace, not alias ROWS. Those were the
+ * same number for as long as the only way to stop holding an alias was to delete
+ * the whole workspace. A release deletes the rows while the workspace survives,
+ * so a cap reading only them is handed back in full on every release, and
+ * `claim → rename ×5 → release`, repeated, burns names without bound — giving
+ * back at the exit exactly what the cap holds at the door.
+ *
+ * ⚠️ IT CHARGES THE RELEASED LIVE LABEL TOO, and that is Amendment 2's stated
+ * choice rather than an off-by-one: the live label is permanently burnt as surely
+ * as an alias is, so a workspace that claims once and releases once has spent one
+ * of its five. Not charging it would need a column on the reservation table
+ * marking which kind a row came from, existing only to make the cap kinder.
+ *
+ * For a workspace that has never released this is `0`, so every derived number
+ * is byte-for-byte what it was before Amendment 2.
+ */
+async function reservedCount(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
+  return publicHostnameReservationRepository.countForWorkspaceInTx(workspaceId, tx);
+}
 
 /** Public addresses are a cloud capability — ABSENT off-cloud, not hidden. */
 function assertAvailable(): void {
@@ -262,6 +373,7 @@ function labelOf(hostname: string): string {
  */
 function toDto(
   addresses: Array<{ hostname: string; kind: string; createdAt: Date; updatedAt: Date }>,
+  reservedHostnames: number,
 ): PublicSubdomainDto | null {
   const live = addresses.find((a) => a.kind === 'workspace_subdomain');
   if (!live) return null;
@@ -278,6 +390,10 @@ function toDto(
     url: `https://${live.hostname}`,
     claimedAt: live.createdAt.toISOString(),
     aliases,
-    renamesLeft: Math.max(0, MAX_SUBDOMAIN_RENAMES - aliases.length),
+    // ⚠️ ALIASES *PLUS* RESERVATIONS — the ADR §8 cap counts names BURNT, not
+    // alias ROWS (Amendment 2). `reservedHostnames` is `0` for every workspace
+    // that has never released, so this is the old number wherever the old number
+    // was defined. See {@link reservedCount} for why the difference matters.
+    renamesLeft: Math.max(0, MAX_SUBDOMAIN_RENAMES - aliases.length - reservedHostnames),
   };
 }

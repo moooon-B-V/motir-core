@@ -125,11 +125,18 @@ function actionWrite(page: Page, identifier: string, marker: string) {
  * Resolve when the detail page's own `router.refresh()` re-render lands.
  *
  * The 200 from a write is not the whole signal for anything this page renders
- * from the SERVER: `AddLinkControl.submit()` awaits `createLinkAction`, closes
- * the form, and only THEN calls `router.refresh()` — so the relationships rail
- * is repainted by this request, not by the action's response. (Which is why the
- * MOTIR-3694 error-context snapshot shows a CLOSED dialog above an empty rail:
- * that is what a completed write with an unlanded refresh looks like.)
+ * from the SERVER — the activity feed, the history, every count outside the
+ * relationships panel. Those are repainted by THIS request, not by the action's
+ * response. (Which is why the MOTIR-3694 error-context snapshot shows a CLOSED
+ * dialog above an empty rail: that is what a completed write with an unlanded
+ * refresh looked like.)
+ *
+ * ⚠️ MOTIR-4496 — the RELATIONSHIPS RAIL is no longer one of them, and this
+ * helper is no longer the way to wait for it. `RelationshipsPanel` inserts and
+ * removes its rows OPTIMISTICALLY and takes its readiness verdict from the
+ * action's own response, so a link row is on screen before this GET is even
+ * issued. The refresh still runs, still reconciles, and is still what this
+ * helper waits for — it is simply no longer what paints the rail.
  *
  * The page does not prefetch itself, so a `_rsc` GET of its OWN route is the
  * refresh. Only the writes that call `router.refresh()` may be awaited this way

@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 // The "See how Motir works" explainer placeholder (Subtask 7.22.4 / MOTIR-1462).
 // The entrance header links here. The DETAILED lifecycle explainer (idea → plan →
@@ -26,7 +27,7 @@ export default async function OnboardingHowItWorksPage() {
         title={t('title')}
         description={t('body')}
         action={
-          <Link href="/onboarding">
+          <Link href={ONBOARDING_ENTRY_PATH}>
             <Button variant="secondary">{t('back')}</Button>
           </Link>
         }

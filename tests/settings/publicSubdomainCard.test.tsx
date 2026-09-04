@@ -4,9 +4,11 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PublicSubdomainCard } from '@/app/(authed)/settings/project/public-address/_components/PublicSubdomainCard';
 import type { PublicSubdomainDto } from '@/lib/dto/publicAddresses';
+import zhMessages from '@/messages/zh.json';
 
 // THE WORKSPACE SUBDOMAIN CARD (Story MOTIR-3878 · MOTIR-4221) — design panels
-// 1, 2 and 8, rendered.
+// 1, 2 and 8, rendered. **Panels 10-13 are the RELEASE control** (Story
+// MOTIR-4451 · MOTIR-4455), at the bottom of this file.
 //
 // ⚠️ THE FOUR STATES ARE THE POINT, and three of them are reachable only by
 // combining two inputs that come from DIFFERENT axes: whether a subdomain
@@ -35,15 +37,24 @@ const claimed: PublicSubdomainDto = {
   renamesLeft: 4,
 };
 
-function render(opts: { subdomain?: PublicSubdomainDto | null; canManage?: boolean } = {}) {
+function render(
+  opts: {
+    subdomain?: PublicSubdomainDto | null;
+    canManage?: boolean;
+    messages?: Record<string, unknown>;
+  } = {},
+) {
   return renderWithIntl(
     <PublicSubdomainCard
       workspaceId="ws_1"
       baseDomain="motir.site"
       projectIdentifier="ROADMAP"
+      publicSiteHost="motir.co"
+      fallbackAddress="motir.co/p/ROADMAP"
       subdomain={opts.subdomain ?? null}
       canManage={opts.canManage ?? true}
     />,
+    opts.messages ? { locale: 'zh', messages: opts.messages } : {},
   );
 }
 
@@ -205,5 +216,247 @@ describe('panel 8 — the reader who holds the door key and not the write key', 
     render({ subdomain: null, canManage: false });
     expect(screen.getByText('No subdomain claimed yet.')).toBeTruthy();
     expect(screen.queryByLabelText('Subdomain')).toBeNull();
+  });
+});
+
+// ── PANELS 10-13 — RELEASE (Story MOTIR-4451 · Subtask MOTIR-4455) ─────────
+//
+// The element these exist for is the HOSTNAME LIST. Every instinct in UI work
+// says to collapse three hostnames into "and any previous addresses", and that
+// is exactly the failure the confirm prevents: somebody who renamed twice months
+// ago does not think of the old label as theirs until it is gone. So the list is
+// asserted per-hostname — and the WRAP is asserted too, because a truncating row
+// compiles, renders, and passes a happy-path assertion while hiding the second
+// half of the name it is about to take for ever.
+
+/** Two aliases, one of them with no hyphen to break at — the wrap's hard case. */
+const LONG_ALIAS = 'averyverylongworkspacesubdomainlabelnobodyshouldhavetyped.motir.site';
+const claimedWithTwoAliases: PublicSubdomainDto = {
+  ...claimed,
+  aliases: [
+    { hostname: 'acme-old.motir.site', retiredAt: '2026-09-02T00:00:00.000Z' },
+    { hostname: LONG_ALIAS, retiredAt: '2026-09-03T00:00:00.000Z' },
+  ],
+  renamesLeft: 3,
+};
+
+function openRelease(name = 'Remove'): void {
+  fireEvent.click(screen.getByRole('button', { name }));
+}
+
+describe('panel 10 — the Remove control', () => {
+  it('offers Remove BEFORE Rename, so the pointer never crosses it', () => {
+    render({ subdomain: claimedWithTwoAliases });
+    const remove = screen.getByRole('button', { name: 'Remove' });
+    const rename = screen.getByRole('button', { name: 'Rename' });
+    expect(remove.compareDocumentPosition(rename) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('is ABSENT for a reader who may not change the address', () => {
+    render({ subdomain: claimedWithTwoAliases, canManage: false });
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  });
+
+  it('is still offered once the rename cap is spent — the cap bounds coming BACK, not leaving', () => {
+    // ADR §8 Amendment 2: release is not a claim and is not capped. Rename is
+    // disabled at zero; Remove must not be.
+    render({ subdomain: { ...claimedWithTwoAliases, renamesLeft: 0 } });
+    expect(screen.getByRole('button', { name: 'Remove' })).not.toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Rename' })).toHaveProperty('disabled', true);
+  });
+});
+
+describe('panel 10 — the confirm', () => {
+  it('LISTS every hostname individually — the live one and BOTH aliases', () => {
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    expect(screen.getByText('Remove acme.motir.site?')).toBeTruthy();
+    expect(screen.getByText('These 3 addresses will stop answering:')).toBeTruthy();
+    for (const host of ['acme.motir.site', 'acme-old.motir.site', LONG_ALIAS]) {
+      expect(screen.getAllByText(host).length).toBeGreaterThan(0);
+    }
+    // The sentence this list exists INSTEAD of.
+    expect(screen.queryByText(/any previous addresses/i)).toBeNull();
+  });
+
+  it('WRAPS the hostname rows rather than truncating them', () => {
+    // The long, hyphen-less label is the one this matters for: `truncate` would
+    // render it as an ellipsis, and the name is the whole message here.
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    const row = screen.getAllByText(LONG_ALIAS).at(-1)!;
+    expect(row.className).toContain('break-words');
+    expect(row.className).not.toContain('truncate');
+  });
+
+  it('carries the permanence sentence, the cap sentence and the fallback', () => {
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    expect(
+      screen.getByText(
+        'These names are held for ever. Nobody can claim them again — including you.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/keeps every released name out of its namespace permanently/),
+    ).toBeTruthy();
+    // ⚠️ THE NUMBER IS THE DTO'S. `renamesLeft` counts names BURNT (ADR §8
+    // Amendment 2) and is no longer a function of the alias rows, so two aliases
+    // with `renamesLeft: 3` must render 3 — a browser-side re-derivation would
+    // print 3 here by coincidence and the wrong number after a release.
+    expect(
+      screen.getByText(/You will have 3 renames left if you claim a subdomain again/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Your public projects go back to motir.co/p/ROADMAP, and appear on motir.co again.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('reads in the SINGULAR for a workspace that never renamed', () => {
+    render({ subdomain: { ...claimed, aliases: [], renamesLeft: 5 } });
+    openRelease();
+    expect(screen.getByText('This address will stop answering:')).toBeTruthy();
+    expect(
+      screen.getByText('This name is held for ever. Nobody can claim it again — including you.'),
+    ).toBeTruthy();
+  });
+
+  it("says 'no renames' rather than '0 renames' at the cap", () => {
+    render({ subdomain: { ...claimedWithTwoAliases, renamesLeft: 0 } });
+    openRelease();
+    expect(screen.getByText(/You will have no renames left/)).toBeTruthy();
+  });
+
+  it('renders in zh, with the COUNT rendered rather than a bare plural', () => {
+    // zh carries no plural morphology, so the number is the message.
+    render({
+      subdomain: claimedWithTwoAliases,
+      messages: zhMessages as unknown as Record<string, unknown>,
+    });
+    openRelease('移除');
+    expect(screen.getByText('要移除 acme.motir.site 吗？')).toBeTruthy();
+    expect(screen.getByText('以下 3 个地址将停止提供访问：')).toBeTruthy();
+    expect(
+      screen.getByText('这些名称将被永久保留，任何人都无法再认领它们——包括你自己。'),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: '移除子域名' })).toBeTruthy();
+  });
+});
+
+describe('panel 11 — confirming, cancelling, and the three refusals', () => {
+  it('CANCEL changes nothing — no request, no refresh', () => {
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it('DELETEs the route and REFRESHES rather than patching what it derived', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/ws_1/public-subdomain', {
+      method: 'DELETE',
+    });
+    // Release empties BOTH server-derived fields at once, and `renamesLeft` is
+    // not a function of the alias rows any more — so there is nothing a browser
+    // could correctly reconstruct.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a 404 as a STALE TAB — refreshes, and shows no complaint', async () => {
+    // `SUBDOMAIN_NOT_FOUND` means somebody already released it. An error about a
+    // subdomain that no longer exists is a worse answer than the current state.
+    // It is also a DIFFERENT code from the rename path's NO_SUBDOMAIN_CLAIMED.
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ code: 'SUBDOMAIN_NOT_FOUND' }) });
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('renders the permission refusal, and does NOT refresh', async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ code: 'SUBDOMAIN_FORBIDDEN' }) });
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Only a workspace owner or admin can change this address.',
+      ),
+    );
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it('renders the generic refusal for an unknown code, and for a thrown request', async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ code: 'SOMETHING_NEW' }) });
+    const first = render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe(
+        'That did not work. Try again in a moment.',
+      ),
+    );
+    first.unmount();
+
+    fetchMock.mockRejectedValue(new Error('offline'));
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe(
+        'That did not work. Try again in a moment.',
+      ),
+    );
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it('CLEARS the claim field, which the refresh alone cannot reach', async () => {
+    // The page-state contract's case 3. `label` is client-island state seeded
+    // once at mount, so `router.refresh()` hands down `subdomain: null` while the
+    // field keeps the released label — an unclaimed pane offering to claim the
+    // one name that can never be claimed again. The E2E walk is what found it
+    // (MOTIR-4457); this is the cheap guard that keeps it fixed, and it needs the
+    // RERENDER because a mount would hide the bug.
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const view = render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <PublicSubdomainCard
+        workspaceId="ws_1"
+        baseDomain="motir.site"
+        projectIdentifier="ROADMAP"
+        publicSiteHost="motir.co"
+        fallbackAddress="motir.co/p/ROADMAP"
+        subdomain={null}
+        canManage
+      />,
+    );
+    expect(screen.getByRole('textbox', { name: 'Subdomain' })).toHaveProperty('value', '');
+    expect(
+      screen.queryByText(/acme-inc\.motir\.site/),
+      'the live preview must not promise an address the next click refuses as taken',
+    ).toBeNull();
+  });
+
+  it('clears a refusal when the confirm closes, so re-opening starts clean', async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ code: 'SUBDOMAIN_FORBIDDEN' }) });
+    render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    openRelease();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

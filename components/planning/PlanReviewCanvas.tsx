@@ -429,7 +429,7 @@ export function PlanReviewCanvas({
       {/* Every PROPOSAL — `add`, `modify` and `remove` — opens the shipped peek in
           proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the
           ordinary work-item peek below, unchanged. */}
-      <ProposalPeek item={peeked.proposal} onClose={closePeek} />
+      <ProposalPeek item={peeked.proposal} outcome={outcome} onClose={closePeek} />
       <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
     </>
   );

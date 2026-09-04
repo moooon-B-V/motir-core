@@ -25,9 +25,12 @@ vi.mock('@/app/(authed)/items/[key]/actions', () => ({
 // usePeekOpen (usePathname / useSearchParams). Stub next/navigation — happy-dom
 // has no App Router context — and assert the shallow `?peek=` push.
 let searchParamsString = '';
+// MOTIR-4496: the panel itself is a client island now and owns the write, so
+// it calls `useRouter().refresh()` as well as the peek's two hooks.
 vi.mock('next/navigation', () => ({
   usePathname: () => '/items/PROD-1',
   useSearchParams: () => new URLSearchParams(searchParamsString),
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';

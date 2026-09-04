@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
 // MOTIR-3373 — the guard that keeps "where does a reader land" owned by one file.
@@ -15,9 +15,16 @@ import { join, relative, resolve, sep } from 'node:path';
 //
 // Each repair enumerated the population by hand, and MOTIR-3171's own sweep
 // missed a site because it searched `app/` while the constant lived under
-// `components/`. `lib/navigation/landing.ts` is now the single owner; these two
+// `components/`. `lib/navigation/landing.ts` is now the single owner; these
 // assertions are what stop a seventh file from re-typing the answer, and they
 // are deliberately dumb — a string scan with a named allowlist, not an AST walk.
+//
+// MOTIR-4403 added the THIRD scan. The module owns three destinations and only
+// two were defended; `ONBOARDING_ENTRY_PATH` was already spelled twice, which is
+// the ROTTED shape one step before it rots. That card also gave the scans a
+// test of their own (the last describe below) — a guard asserted only by passing
+// is a guard nobody has watched fire, and the two false-positive shapes the
+// existing scans handle by construction were never written down as assertions.
 //
 // ⚠️ It is NOT a member of the guards lane, and that is a measurement rather
 // than an omission: `tests/ci-structural-guards-lane.test.ts` derives lane
@@ -40,6 +47,50 @@ const HOME_LITERAL = /(['"`])\/home(\?[^'"`]*)?\1/;
 
 /** A `/dashboard` string literal, same shape. */
 const DASHBOARD_LITERAL = /(['"`])\/dashboard(\/[^'"`]*)?\1/;
+
+/**
+ * An `/onboarding` ENTRANCE literal — `'/onboarding'`, `"/onboarding"`, or a
+ * template opening `` `/onboarding?…` `` (MOTIR-4403).
+ *
+ * `lib/navigation/landing.ts` owns THREE destinations and the two scans above
+ * defended two of them. `ONBOARDING_ENTRY_PATH` arrived in that module as a
+ * neighbour rather than as a subject, so it inherited the ownership claim
+ * without the enforcement — and was already spelled twice (a second
+ * `export const` in `lib/onboarding/pendingIdea.ts`, which
+ * `app/(onboarding)/layout.tsx` imported instead of the owner). Both copies
+ * said `/onboarding`, which is exactly the pre-MOTIR-2654 state the three
+ * ROTTED repairs above were in: separate copies, each correct when written.
+ *
+ * ⚠️ IT DELIBERATELY DOES NOT MATCH A SUB-PATH — `'/onboarding/discovery'`,
+ * `'/onboarding/migrate'`, `'/onboarding/import'` and the rest are their own
+ * routes, not the entrance, and `HOME_LITERAL` above draws the same line for
+ * the same reason (it matches `/home` and `/home?…` and not `/home/…`). The
+ * question this module answers is *where does a reader LAND*; a link between
+ * two pages inside a route group is not an answer to it, and a scan that
+ * claimed all seventeen of them would need an allowlist longer than the guard.
+ * `lib/onboarding/resumeVisibility.ts`'s `ONBOARDING_RESUME_PATH` is a
+ * sub-path constant of exactly that kind and is untouched by this rule.
+ * It does not fire on `/onboardings` either — the closing quote is part of the
+ * pattern, the same guard `/homepage` gets.
+ */
+const ONBOARDING_LITERAL = /(['"`])\/onboarding(\?[^'"`]*)?\1/;
+
+/**
+ * Files allowed to spell the onboarding ENTRANCE out, each with the reason it
+ * is allowed. A named allowlist rather than a bare list of paths: an entry
+ * whose reason has stopped being true is the thing a reader can spot, and the
+ * `.png` note in `lib/workItems/proseVsGraph.ts` is the register.
+ *
+ * There is exactly one, and that is the point of the rule.
+ */
+const ONBOARDING_LITERAL_ALLOWLIST: ReadonlyArray<{ file: string; because: string }> = [
+  {
+    file: 'lib/navigation/landing.ts',
+    because:
+      'THE OWNER — `ONBOARDING_ENTRY_PATH` is declared here, and ' +
+      '`ONBOARDING_SIGNUP_DOOR_PATH` is composed from it rather than written out.',
+  },
+];
 
 /**
  * The claim that made three repairs necessary: a comment calling something the
@@ -86,8 +137,17 @@ function lines(file: string): string[] {
  * hand-swept site, which is the state this whole card is leaving behind.
  */
 function codeLines(file: string): string[] {
+  return codeLinesOf(readFileSync(file, 'utf8'));
+}
+
+/**
+ * The same blanking, over SOURCE TEXT rather than a path — so the scans can be
+ * exercised against synthetic files that are not in the tree (MOTIR-4403). A
+ * guard asserted only by passing is a guard nobody has seen fire.
+ */
+export function codeLinesOf(source: string): string[] {
   let inBlock = false;
-  return lines(file).map((raw) => {
+  return source.split('\n').map((raw) => {
     let line = raw;
     if (inBlock) {
       const end = line.indexOf('*/');
@@ -157,5 +217,91 @@ describe('the landing has ONE owner (MOTIR-3373)', () => {
         "product's position and copies it:\n  " +
         offenders.join('\n  '),
     ).toEqual([]);
+  });
+
+  it('no file outside the named allowlist spells the onboarding ENTRANCE out (MOTIR-4403)', () => {
+    const allowed = new Set(ONBOARDING_LITERAL_ALLOWLIST.map((entry) => entry.file));
+    const offenders: string[] = [];
+
+    for (const file of sourceFiles()) {
+      const rel = relative(ROOT, file).split(sep).join('/');
+      if (allowed.has(rel)) continue;
+      codeLinesOf(readFileSync(file, 'utf8')).forEach((line, i) => {
+        if (ONBOARDING_LITERAL.test(line)) offenders.push(`${rel}:${i + 1} — ${line.trim()}`);
+      });
+    }
+
+    expect(
+      offenders,
+      'The onboarding ENTRANCE is decided ONCE, in lib/navigation/landing.ts. Import ' +
+        'ONBOARDING_ENTRY_PATH — or isOnboardingDestination / resolvePostAuthDestination ' +
+        'where the question is whether a resolved destination IS the entrance — rather ' +
+        'than re-typing the route. A second copy is how lib/onboarding/pendingIdea.ts came ' +
+        'to declare it too (MOTIR-4403), which is the state MOTIR-2921 / MOTIR-3171 / ' +
+        'MOTIR-3173 were each a separate repair of. A sub-path (/onboarding/discovery and ' +
+        'friends) is a different route and does not match:\n  ' +
+        offenders.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('every onboarding allowlist entry names a file that exists and says WHY', () => {
+    for (const entry of ONBOARDING_LITERAL_ALLOWLIST) {
+      expect(existsSync(join(ROOT, entry.file)), `${entry.file} is allowlisted and absent`).toBe(
+        true,
+      );
+      expect(entry.because.length, `${entry.file} is allowlisted with no reason`).toBeGreaterThan(
+        20,
+      );
+    }
+  });
+});
+
+/**
+ * THE SCANS, EXERCISED (MOTIR-4403).
+ *
+ * Everything above asserts an EMPTY offender list over the real tree, so it
+ * passes identically whether the regex works or matches nothing at all. These
+ * run the same two functions over synthetic sources: one that must be caught,
+ * and the two shapes that must not be.
+ */
+describe('the onboarding scan itself (MOTIR-4403)', () => {
+  const scan = (source: string): number[] =>
+    codeLinesOf(source)
+      .map((line, i) => (ONBOARDING_LITERAL.test(line) ? i + 1 : 0))
+      .filter((n) => n > 0);
+
+  it('fires on an /onboarding literal introduced in code', () => {
+    expect(scan(`export const X = '/onboarding';`)).toEqual([1]);
+    expect(scan(`<Link href="/onboarding">go</Link>`)).toEqual([1]);
+    expect(scan('const to = `/onboarding?seed=1`;')).toEqual([1]);
+    expect(scan(`redirect('/onboarding');`)).toEqual([1]);
+  });
+
+  it('does NOT fire on /onboardings — the closing quote is part of the pattern', () => {
+    expect(scan(`export const X = '/onboardings';`)).toEqual([]);
+    expect(scan(`<Link href="/onboardingsomething">go</Link>`)).toEqual([]);
+  });
+
+  it('does NOT fire on /onboarding inside a comment, in either comment form', () => {
+    expect(scan(`// the entrance is '/onboarding', imported from the owner`)).toEqual([]);
+    expect(scan(`const a = 1; // bounced to "/onboarding" after auth`)).toEqual([]);
+    expect(scan(['/**', " * lands on '/onboarding' (MOTIR-1458).", ' */'].join('\n'))).toEqual([]);
+    expect(scan(`/* inline "/onboarding" */ const a = 1;`)).toEqual([]);
+  });
+
+  it('does NOT fire on a SUB-PATH — those are their own routes', () => {
+    expect(scan(`redirect('/onboarding/discovery');`)).toEqual([]);
+    expect(scan(`<Link href="/onboarding/migrate">go</Link>`)).toEqual([]);
+    expect(scan('href={`/onboarding/direction/${tier}`}')).toEqual([]);
+  });
+
+  it('the /home scan draws the same two lines — the shape this one was copied from', () => {
+    const home = (source: string): number[] =>
+      codeLinesOf(source)
+        .map((line, i) => (HOME_LITERAL.test(line) ? i + 1 : 0))
+        .filter((n) => n > 0);
+    expect(home(`redirect('/home');`)).toEqual([1]);
+    expect(home(`redirect('/homepage');`)).toEqual([]);
+    expect(home(`// sends the reader to '/home'`)).toEqual([]);
   });
 });

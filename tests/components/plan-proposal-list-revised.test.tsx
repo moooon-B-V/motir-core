@@ -24,7 +24,7 @@ describe('the Revised pill', () => {
           planReviewItem({ planItemId: 'a', nodeId: 'a', title: 'Untouched', revised: false }),
           planReviewItem({ planItemId: 'b', nodeId: 'b', title: 'Moved', revised: true }),
         ]}
-        decided={false}
+        outcome={null}
       />,
     );
     expect(screen.getAllByText('Revised')).toHaveLength(1);
@@ -38,7 +38,7 @@ describe('the Revised pill', () => {
     renderWithIntl(
       <PlanProposalList
         items={[planReviewItem({ planItemId: 'b', nodeId: 'b', title: 'Moved', revised: true })]}
-        decided={false}
+        outcome={null}
       />,
     );
     const row = screen.getByText('Moved').closest('li')!;
@@ -53,7 +53,7 @@ describe('the Revised pill', () => {
     renderWithIntl(
       <PlanProposalList
         items={[planReviewItem({ planItemId: 'b', nodeId: 'b', title: 'Moved', revised: true })]}
-        decided={false}
+        outcome={null}
       />,
     );
     expect(screen.getByText('Revised').textContent).toContain('Revised');
@@ -63,7 +63,7 @@ describe('the Revised pill', () => {
     renderWithIntl(
       <PlanProposalList
         items={[planReviewItem({ planItemId: 'a', nodeId: 'a', title: 'Untouched' })]}
-        decided={false}
+        outcome={null}
       />,
     );
     expect(screen.queryByText('Revised')).toBeNull();

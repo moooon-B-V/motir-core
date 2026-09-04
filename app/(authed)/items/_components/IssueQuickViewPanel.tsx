@@ -57,6 +57,8 @@ import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { Locale } from '@/lib/i18n/locales';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { PlanProposalPeekDto } from '@/lib/dto/planReview';
+import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
+import { cn } from '@/lib/utils/cn';
 import { ChangedMark, ProposalRailFoot } from '@/components/workItems/ProposalPeekMarks';
 import {
   QuickViewBody,
@@ -120,6 +122,21 @@ type IssueQuickViewPanelProps = {
        * whole reason `ProposalQuickView` can be deleted at all.
        */
       proposal?: PlanProposalPeekDto;
+      /**
+       * The PLAN's decision, when this peek is reading a proposal — `'accepted'`
+       * / `'declined'` / `null` (Part XIV §16.1, MOTIR-4472).
+       *
+       * ⚠️ AN OUTCOME, NEVER A `decided` BOOLEAN, and §16.1 is explicit about
+       * why: `op` and `outcome` are INDEPENDENT, so there are six renderings and
+       * not four, and a two-valued prop has to pick one decided arm as the
+       * default for both. The list picked the approve arm and was wrong on every
+       * declined plan (MOTIR-4495).
+       *
+       * Absent (or `null`) is the `planned` arm — every string on this surface
+       * as it shipped. Ignored entirely when `proposal` is absent: the six
+       * committed hosts pass neither.
+       */
+      proposalOutcome?: PlanItemOutcome | null;
     }
 );
 
@@ -131,25 +148,65 @@ type IssueQuickViewPanelProps = {
  * `notYetCreated` rather than `opAdd` on the `add` arm: it is the stronger
  * statement and it is the copy that head already shipped.
  */
-function ProposalOpChip({ op }: { op: PlanProposalPeekDto['op'] }) {
+function ProposalOpChip({
+  op,
+  outcome,
+}: {
+  op: PlanProposalPeekDto['op'];
+  outcome: PlanItemOutcome | null;
+}) {
   const t = useTranslations('planReview');
   const label = op === 'add' ? t('notYetCreated') : op === 'remove' ? t('opRemove') : t('opModify');
-  if (op === 'add')
-    return (
+  const pill =
+    op === 'add' ? (
       <Pill severity="info" data-testid="quick-view-op">
         {label}
       </Pill>
-    );
-  if (op === 'remove')
-    return (
+    ) : op === 'remove' ? (
       <Pill tone="archived" data-testid="quick-view-op">
         {label}
       </Pill>
+    ) : (
+      <Pill status="planned" data-testid="quick-view-op">
+        {label}
+      </Pill>
     );
+  if (!outcome) return pill;
+  // ── DECIDED: the chip gains a SECOND SEGMENT (Part XIV §16.3) ─────────────
+  // The word is not CHANGED, it is FUSED — exactly the construction
+  // `PlanItemNode`'s `OpBadge` already draws (`:192-250`), which is the node the
+  // canvas's `View` pill sits on. Segment 1 is the shipped `Pill` byte for byte;
+  // segment 2 takes Part VI §3's own two pairs, seamed with a 1px rule rather
+  // than a gap.
+  //
+  // ⚠️ NOT the LIST's `applied` / `archived` word, and §16.3 says why: Part VI's
+  // `accepted` / `declined` is what happened to the PROPOSAL, Part VIII's
+  // `created` / `applied` / `archived` is what happened to the WORK ITEM — and
+  // this slot is where the proposal's own state lives, with the work item's own
+  // state already rendering beside it as the `StatusValue` and the `Archived`
+  // pill. Saying `archived` here would be the surface saying one thing twice and
+  // the other thing not at all.
+  //
+  // NO NEW COPY KEY: `outcomeAccepted` / `outcomeDeclined` were authored by
+  // Part VI for this exact word.
   return (
-    <Pill status="planned" data-testid="quick-view-op">
-      {label}
-    </Pill>
+    <span
+      className="inline-flex shrink-0 items-stretch overflow-hidden rounded-(--radius-badge)"
+      data-testid="quick-view-op-chip"
+    >
+      {pill}
+      <span
+        data-testid="quick-view-outcome"
+        className={cn(
+          'inline-flex items-center gap-1 border-s border-(--el-border-soft) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium',
+          outcome === 'accepted'
+            ? 'bg-(--el-tint-mint) text-(--el-text-strong)'
+            : 'bg-(--el-muted) text-(--el-text-secondary)',
+        )}
+      >
+        {t(outcome === 'accepted' ? 'outcomeAccepted' : 'outcomeDeclined')}
+      </span>
+    </span>
   );
 }
 
@@ -268,6 +325,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // stable across states (the loading / notfound arms carry no proposal).
   const tPlan = useTranslations('planReview');
   const proposal = props.state === 'ready' ? (props.proposal ?? null) : null;
+  // The PLAN's decision — resolved beside the proposal for the same reason (hook
+  // order), and `null` on every committed host (Part XIV §16.1, MOTIR-4472).
+  const proposalOutcome: PlanItemOutcome | null =
+    props.state === 'ready' ? (props.proposalOutcome ?? null) : null;
   const edit = useQuickViewRailEdit(
     props.state === 'ready' ? props.data : null,
     props.onEdited,
@@ -469,18 +530,50 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // Naming the DENOMINATOR is what makes the silence readable: an unmarked row
   // means EITHER *the plan is not changing this* OR *no plan can change this*,
   // and a marker cannot separate those without a second marker on every row.
+  //
+  // ⚠️ AND THE TENSE IS THE PLAN'S OUTCOME (Part XIV §16.5, MOTIR-4472). This is
+  // the only element on the surface that states what the plan DOES, so it is the
+  // whole of the tense — a chip 500px above it is not read by somebody who has
+  // scrolled the rail, which is why the declined arms NAME the decline in words
+  // rather than leaving it to the chip.
+  //
+  // Three decisions inside the table, each of which could have gone the other
+  // way: the COUNT survives on `declined` (a marker without its denominator
+  // cannot be read — the ambiguity the line exists to remove, restored one state
+  // over); `would have` rather than a bare past, because a declined `modify` did
+  // not change two fields and did not change none of them, it proposed two and
+  // was refused; and `remove` × approved reads *this plan archived {key}* rather
+  // than *{key} is archived*, because the `Archived` pill and banner already say
+  // the work item IS archived and only this line can say WHO did it.
   const proposalFootLine = !proposal
     ? null
     : proposal.op === 'add'
-      ? tPlan('railAddAll')
+      ? proposalOutcome === 'declined'
+        ? tPlan('railAddDeclined')
+        : tPlan('railAddAll')
       : proposal.op === 'remove'
-        ? tPlan('railRemoveArchives', { key: data.identifier })
+        ? proposalOutcome === 'accepted'
+          ? tPlan('railRemoveArchived', { key: data.identifier })
+          : proposalOutcome === 'declined'
+            ? tPlan('railRemoveDeclined', { key: data.identifier })
+            : tPlan('railRemoveArchives', { key: data.identifier })
         : railChangeCount === 0
-          ? tPlan('railChangeNone')
-          : tPlan('railChangeCount', {
-              n: railChangeCount,
-              m: proposal.settableRailFields.length,
-            });
+          ? proposalOutcome === 'accepted'
+            ? tPlan('railChangeNoneApplied')
+            : proposalOutcome === 'declined'
+              ? tPlan('railChangeNoneDeclined')
+              : tPlan('railChangeNone')
+          : tPlan(
+              proposalOutcome === 'accepted'
+                ? 'railChangeCountApplied'
+                : proposalOutcome === 'declined'
+                  ? 'railChangeCountDeclined'
+                  : 'railChangeCount',
+              {
+                n: railChangeCount,
+                m: proposal.settableRailFields.length,
+              },
+            );
   return (
     // MOTIR-2593 — the peek provides its OWN estimation config, from the payload.
     // Only three pages mount `EstimationConfigProvider` and none of them wraps
@@ -516,7 +609,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             The op chip comes FIRST and the target's live status follows, so the
             header reads *what the plan does* → *where it is now*. An `add` has
             no status at all, so the two never crowd. */}
-        {proposal ? <ProposalOpChip op={proposal.op} /> : null}
+        {proposal ? <ProposalOpChip op={proposal.op} outcome={proposalOutcome ?? null} /> : null}
         {proposal && proposal.identifier == null ? null : (
           <StatusValue
             statusKey={data.status}
@@ -570,7 +663,18 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             to the delivery, comments and children this mode suppresses — and
             LABELLED for the tense, because that page shows the work item as it
             stands, not as the plan will leave it (Part XIV §7). */}
-        {proposal && proposal.identifier == null ? null : proposal ? (
+        {proposal && proposal.identifier == null ? null : proposal &&
+          proposalOutcome !== 'accepted' ? (
+          // ⚠️ THE OVERRIDE LIFTS ON `approved` AND STAYS ON `declined`
+          // (Part XIV §16.4). `openTargetAsItStands` is a WARNING about a
+          // divergence between this peek and the destination page, so it is
+          // right exactly while the divergence exists. Approved: the plan HAS
+          // been applied, the destination IS the projection, and §7's own
+          // "only there" has stopped being here — keeping the label would
+          // assert a disagreement that no longer exists. Declined: the
+          // divergence is MAXIMAL, and that is the state the label was written
+          // for. A REUSED key either way; the label retires on the state it was
+          // drawn against and survives on the one nobody had drawn.
           <OpenTargetLink identifier={data.identifier} />
         ) : (
           <OpenFullPageLink identifier={data.identifier} />

@@ -1476,6 +1476,61 @@ describe('workItemsService.validateWorkItem — the SELF-BLOCKING-DESIGN advisor
     ]);
   });
 
+  it('MOTIR-4477: an AMENDMENT to an existing design document is a design criterion too', async () => {
+    // The false NEGATIVE this widening closes. Criterion 1 is MOTIR-4472's own,
+    // quoted verbatim and held here as a literal — it names no `design/<area>/`
+    // path, no `.mock.html`, no `design-notes.md` and no *mock* / *artboard* /
+    // *design asset*, so every one of the eight ASSET matchers missed it and the
+    // card sealed with `advisories: []` while being its own design blocker.
+    const fx = await makeWorkItemFixture();
+    const item = await card(
+      fx,
+      'A decided plan peek',
+      [
+        '## Acceptance criteria',
+        '',
+        '1. A design section exists amending Part XIV with the decided axis for `modify`',
+        '   and `remove`, naming the chosen answer and the copy for every string that',
+        '   changes — read before the code is written.',
+        '2. The peek opened from a DECIDED plan renders the past tense, asserted as a',
+        '   component test over the rendered dialog.',
+        '3. The same assertion runs through the CANVAS door on the same proposal.',
+      ].join('\n'),
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, item.identifier, fx.ctx);
+    expect(result.advisories).toContainEqual({
+      kind: 'shape',
+      item: item.identifier,
+      severity: 'likely-self-blocking-design',
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+  });
+
+  it('MOTIR-4477: a DOCS card amending a decision record is NOT a design criterion', async () => {
+    // The false-positive floor, at the advisory tier. Both strings carry an
+    // amendment verb and a section reference and neither commissions a drawing —
+    // the first is drawn from MOTIR-3687, a real `type: content` card.
+    const fx = await makeWorkItemFixture();
+    const item = await card(
+      fx,
+      'Amend the transfer-basis ADR',
+      [
+        '## Acceptance criteria',
+        '',
+        '1. `docs/decisions/ai-upstream-transfer-basis.md` is amended: §6 item 4 records',
+        '   that D2 and D3 are SUPERSEDED, with the date the finding was withdrawn.',
+        '2. The settings page renders the subprocessor list from the amended record.',
+      ].join('\n'),
+    );
+
+    const result = await workItemsService.validateWorkItem(fx.projectId, item.identifier, fx.ctx);
+    expect(result.advisories.filter((a) => a.severity === 'likely-self-blocking-design')).toEqual(
+      [],
+    );
+  });
+
   it('says nothing when only ONE of the two roles is present — the quiet direction', async () => {
     const fx = await makeWorkItemFixture();
     const designOnly = await card(
