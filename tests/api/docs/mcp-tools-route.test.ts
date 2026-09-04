@@ -6,6 +6,7 @@ import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { permissionSlug, type PermissionKey } from '@/lib/permissions/catalog';
 import type { McpCatalogueToolName, McpToolCatalogueDocument } from '@/lib/apiDocs/mcp';
+import { MCP_TOOL_INPUT_SCHEMAS } from '@/lib/apiDocs/mcpToolSchemas';
 import enMessages from '@/messages/en.json';
 
 // GET /api/docs/mcp-tools.json — the PUBLISHED MCP tool catalogue (MOTIR-4194;
@@ -27,6 +28,12 @@ import enMessages from '@/messages/en.json';
 //   4. DERIVATION. The grouping is each tool's own permission and the labels are
 //      the shipped `permissions.*` copy; the only authored thing is the ORDER,
 //      and this file says which is which.
+//   5. ARGUMENTS (MOTIR-4389). Every tool object carries its `inputSchema`, and
+//      the three facts a reader came for — which arguments exist, which are
+//      required, which are closed enums — survive into the served bytes. That
+//      the schema is the one the SERVER serves is `tests/mcp/tool-schema-truth.test.ts`'s
+//      guard, over a live handshake; this file's job is the SERIALIZATION —
+//      whether what the module holds reaches the document.
 
 const REPO_ROOT = process.cwd();
 const ROUTE = join('app', 'api', 'docs', 'mcp-tools.json', 'route.ts');
@@ -152,6 +159,73 @@ describe('GET /api/docs/mcp-tools.json', () => {
   });
 });
 
+describe('ARGUMENTS — the served document answers "what do I send?" (MOTIR-4389)', () => {
+  it('every tool object carries an `inputSchema`, and it is an object schema', async () => {
+    const { document } = await fetchDocument();
+    for (const group of document.groups) {
+      for (const tool of group.tools) {
+        expect(tool.inputSchema, tool.name).toBeDefined();
+        expect(tool.inputSchema.type, tool.name).toBe('object');
+      }
+    }
+  });
+
+  it('REQUIRED, OPTIONAL and ENUM all survive the serialization — `create_work_item`', async () => {
+    // The card's named subject: three facts, one tool, checked on the BYTES a
+    // consumer receives rather than on the module they came from. Anything that
+    // is true of the module and false here is exactly the class of defect this
+    // artifact shipped with — a source that has the answer and a document that
+    // does not.
+    const { document } = await fetchDocument();
+    const tool = document.groups
+      .flatMap((group) => group.tools)
+      .find((entry) => entry.name === 'create_work_item');
+    expect(tool).toBeDefined();
+
+    const schema = tool!.inputSchema;
+    const properties = schema.properties as Record<string, { enum?: unknown[] }>;
+    // REQUIRED — and the negative arm, because "everything is required" would
+    // pass a containment check while telling a reader the opposite of the truth.
+    expect(schema.required).toEqual(expect.arrayContaining(['projectKey', 'kind', 'title']));
+    expect(schema.required).not.toContain('storyPoints');
+    // OPTIONAL — present as an argument, absent from `required`.
+    expect(Object.keys(properties)).toContain('storyPoints');
+    // ENUM — closed, and its members are the ones the tool accepts.
+    expect(properties.kind?.enum).toEqual(['epic', 'story', 'task', 'bug', 'subtask']);
+  });
+
+  it('a tool with NO arguments publishes an empty property set, not a missing key', async () => {
+    // "takes nothing" and "arguments not published" must not look the same to a
+    // consumer that renders one of them as an empty block.
+    const { document } = await fetchDocument();
+    const tool = document.groups
+      .flatMap((group) => group.tools)
+      .find((entry) => entry.name === 'whoami');
+    expect(tool?.inputSchema.properties).toEqual({});
+  });
+
+  it('the EXISTING keys are untouched, so the consuming page keeps working', async () => {
+    // The widening is ADDITIVE by contract — `motir.co` renders the old fields
+    // and must keep rendering them across the deploy that adds this one.
+    const { document } = await fetchDocument();
+    expect(Object.keys(document).sort()).toEqual(['endpoint', 'groups', 'toolCount']);
+    const [group] = document.groups;
+    expect(Object.keys(group!).sort()).toEqual([
+      'gates',
+      'grantedByDefault',
+      'label',
+      'permission',
+      'tools',
+    ]);
+    expect(Object.keys(group!.tools[0]!).sort()).toEqual([
+      'inputSchema',
+      'name',
+      'permission',
+      'summary',
+    ]);
+  });
+});
+
 describe('TOTALITY — every TOOL_PERMISSIONS key reaches the served document', () => {
   const expected = Object.keys(TOOL_PERMISSIONS).sort();
 
@@ -196,6 +270,7 @@ describe('TOTALITY — every TOOL_PERMISSIONS key reaches the served document', 
               name: 'not_a_tool' as McpCatalogueToolName,
               permission: head!.permission,
               summary: '',
+              inputSchema: { type: 'object', properties: {} },
             },
           ],
         },
@@ -243,6 +318,17 @@ describe('DERIVATION — what is derived, and the one thing that is authored', (
     expect(document.groups.map((group) => group.permission)).toEqual(
       GRANTABLE_PERMISSIONS.filter((permission) => gating.has(permission)),
     );
+  });
+
+  it('DERIVED: every tool carries the argument schema the generated map holds', async () => {
+    const { document } = await fetchDocument();
+    for (const group of document.groups) {
+      for (const tool of group.tools) {
+        expect(tool.inputSchema, tool.name).toEqual(
+          MCP_TOOL_INPUT_SCHEMAS[tool.name as McpCatalogueToolName],
+        );
+      }
+    }
   });
 
   it('no group label is authored as a free string in the route', () => {
