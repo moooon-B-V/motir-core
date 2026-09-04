@@ -320,9 +320,15 @@ export function PlanDetail({
   // MOTIR-833 / MOTIR-1377 / MOTIR-3161 / MOTIR-3578 are what this replaces:
   // MOTIR-1377 stopped the empty state shadowing a DECLINED plan's outcome, and
   // MOTIR-3578 kept `stale` out of `decided` for the same reason. Both were
-  // narrowing a branch whose real defect was that it could suppress the rail;
-  // `decided` survives because the CANVAS still reads it.
-  const decided = review.status === 'approved' || review.status === 'declined';
+  // narrowing a branch whose real defect was that it could suppress the rail.
+  //
+  // ⚠️ THE `decided` BOOLEAN THAT STOOD HERE IS GONE (MOTIR-4495). It survived
+  // one consumer past its usefulness: `PlanProposalList` swapped BOTH its
+  // vocabularies on it, so a DECLINED plan's list rendered the APPROVED past
+  // tense — `Created` / `Applied` / `Archived` about work that never happened,
+  // the `add` row contradicting itself inside one line. Both bodies now read the
+  // three-valued `outcome` eleven lines below, which is the value the canvas has
+  // taken since MOTIR-3161 and the reason the canvas never had this bug.
   // The plan's decision, drawn on every node the plan contributes (MOTIR-3161).
   // WHICH BODY the pane shows. THE URL IS THE SINGLE SOURCE OF TRUTH (MOTIR-3239),
   // derived on every render exactly as `ChildPanel` derives `?children=` — so a
@@ -420,7 +426,7 @@ export function PlanDetail({
                   The canvas answers where a proposal LANDS; the list answers what
                   exactly is being approved, which is a question about a SET. */}
               {view === 'list' ? (
-                <PlanProposalList items={review.items} decided={decided} />
+                <PlanProposalList items={review.items} outcome={outcome} />
               ) : (
                 <PlanReviewCanvas
                   items={review.items}
