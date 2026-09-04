@@ -8,7 +8,7 @@ import {
   pointingRecordsFor,
 } from '@/lib/publicAddresses/pointingRecords';
 
-// THE POINTING RECORDS — Story MOTIR-3878 · MOTIR-4278.
+// THE POINTING RECORDS — Story MOTIR-3878 · MOTIR-4278 · MOTIR-4315.
 //
 // The defect this module closes was invisible because every layer was
 // individually right: the adapter parsed the requirements, the DTO's type union
@@ -42,13 +42,63 @@ describe('isApexHostname — which side of RFC 1034 §3.6.2 a hostname is on', (
     }
   });
 
-  it('⚠️ a MULTI-LABEL public suffix reads as a subdomain — the documented limit', () => {
-    // `acme.co.uk` IS a root domain and cannot take a CNAME, and a label count
-    // cannot know that without a public-suffix list. Asserted rather than left
-    // implicit so the day the detection improves, this expectation is what says
-    // where to look — and so the limitation cannot be quietly re-introduced as a
-    // surprise. Logged as its own bug against MOTIR-4278.
-    expect(isApexHostname('acme.co.uk')).toBe(false);
+  it('a MULTI-LABEL public suffix IS a root domain — the label count\u2019s limit, inverted (MOTIR-4315)', () => {
+    // This case is the previous one turned round rather than a new one. It used
+    // to assert `acme.co.uk` reading as a SUBDOMAIN — the label count's
+    // documented limit, written down so that the day the detection improved,
+    // the expectation would say where to look. This is that day, so it says the
+    // true thing instead: each of these is three or four labels and every one of
+    // them is a zone apex a registrant bought, so none of them can take a CNAME.
+    for (const apex of ['acme.co.uk', 'acme.com.au', 'acme.co.jp', 'acme.org.uk']) {
+      expect(isApexHostname(apex), apex).toBe(true);
+    }
+  });
+
+  it('a subdomain UNDER a multi-label public suffix is still a subdomain', () => {
+    // The half the fix must not break: `roadmap.acme.co.uk` has four labels and
+    // sits inside `acme.co.uk`'s zone, so it takes a CNAME. A rule that read
+    // "three or more labels" would have got this right by accident and
+    // `acme.co.uk` wrong for the same reason.
+    for (const sub of ['roadmap.acme.co.uk', 'a.b.acme.com.au']) {
+      expect(isApexHostname(sub), sub).toBe(false);
+    }
+  });
+
+  it('reads the ICANN section ONLY — a name under a PRIVATE suffix takes a CNAME', () => {
+    // `github.io` is on the PSL's PRIVATE section: nobody delegated
+    // `myapp.github.io` as its own zone, so it is an ordinary record inside
+    // GitHub's and a CNAME there is legal. Honouring the private section would
+    // call it an apex and hand it address records — this bug pointing the other
+    // way, which is why `allowPrivateDomains: false` is a decision and not a
+    // default left in place.
+    expect(isApexHostname('myapp.github.io')).toBe(false);
+    expect(isApexHostname('github.io')).toBe(true);
+  });
+
+  // ── the NEW mechanism's own limits, asserted the way the old one's was ─────
+
+  it('\u26a0\ufe0f a public suffix NEWER than our list degrades to the label count — limit 1', () => {
+    // A suffix the pinned `tldts` has never heard of falls back to "the last
+    // label is the suffix", which is exactly the rule MOTIR-4315 replaced. So a
+    // registrable domain under a multi-label suffix added to the PSL after our
+    // version still reads as a subdomain and is still offered a CNAME it cannot
+    // create. Asserted, not merely written in the doc comment, so that the
+    // refresh (`pnpm up tldts`) has something that says where to look — and so
+    // that the limit cannot come back as a surprise.
+    expect(isApexHostname('acme.co.example-suffix-not-in-the-list')).toBe(false);
+    // The one-label half of the same fallback is right for the same reason it
+    // was right before: two labels under an unknown suffix IS the apex.
+    expect(isApexHostname('acme.example-suffix-not-in-the-list')).toBe(true);
+  });
+
+  it('\u26a0\ufe0f a privately DELEGATED subzone is invisible to any list — limit 2', () => {
+    // A customer who delegated `roadmap.acme.co.uk` with NS records has a zone
+    // apex there, carrying SOA, and it cannot take a CNAME either. No public
+    // list can know a delegation nobody published; only a live SOA lookup on the
+    // name can, which is the option MOTIR-4315 weighed and did not take. This
+    // asserts the WRONG answer on purpose, so that it is a decision on the
+    // record rather than a case nobody enumerated.
+    expect(isApexHostname('roadmap.acme.co.uk')).toBe(false);
   });
 });
 
@@ -65,6 +115,26 @@ describe('pointingRecordsFor — the record set follows the hostname’s SHAPE (
     expect(pointingRecordsFor('acme-roadmap.com')).toEqual([
       { type: 'A', name: 'acme-roadmap.com', value: '66.241.125.217' },
       { type: 'AAAA', name: 'acme-roadmap.com', value: '2a09:8280:1::17d:93fd:0' },
+    ]);
+  });
+
+  it('a multi-label-suffix ROOT domain gets A + AAAA and no CNAME (MOTIR-4315)', () => {
+    // The customer-facing statement of the defect: this is the record set
+    // `acme.co.uk` was NOT being offered, and a CNAME is what it was offered
+    // instead — a record its DNS provider refuses at an apex.
+    configure();
+    for (const apex of ['acme.co.uk', 'acme.com.au']) {
+      expect(pointingRecordsFor(apex), apex).toEqual([
+        { type: 'A', name: apex, value: '66.241.125.217' },
+        { type: 'AAAA', name: apex, value: '2a09:8280:1::17d:93fd:0' },
+      ]);
+    }
+  });
+
+  it('a subdomain under a multi-label suffix still gets exactly one CNAME', () => {
+    configure();
+    expect(pointingRecordsFor('roadmap.acme.co.uk')).toEqual([
+      { type: 'CNAME', name: 'roadmap.acme.co.uk', value: 'motir-marketing.fly.dev' },
     ]);
   });
 
