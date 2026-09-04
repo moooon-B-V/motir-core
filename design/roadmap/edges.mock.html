@@ -19,36 +19,38 @@
     <title>Roadmap canvas — dependency edges (MOTIR-1331)</title>
     <style>
       :root {
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --muted: #787671;
-        --faint: #a4a097;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        --border: #e5e3df;
-        --borderstrong: #d3cfc8;
-        --hair: #ede9e4;
-        --accent: #5645d4;
-        --accent-text: #ffffff;
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --warning-surface: #ffe8d4;
-        --warning-text: #8a3d00;
-        --danger: #e03131;
-        --danger-surface: #fde0ec;
-        --info: #0075de;
-        --sky: #dcecfa;
-        --lavender: #e6e0f5;
-        --mint: #d9f3e1;
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --t-epic: #ff64c8;
-        --t-story: #1aae39;
-        --t-task: #0075de;
-        --t-subtask: #2a9d99;
-        --t-bug: #e03131;
+        /* ink */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        /* surfaces */
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-canvas: #ecebe7;
+        /* borders */
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+        /* accent */
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        /* status */
+        --el-danger: #e03131;
+        /* danger ink ON a page is the MOTIR-3663 trap: raw --el-danger is
+           1.00:1 there. These are the derived tokens, inputs all tokens. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-danger-surface: #fde0ec;
+        --el-danger-surface-text: #37352f;
+        /* feature tints */
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        /* work-item KIND identity (--el-type-*, theme.css § Issue-type hues) */
+        --el-type-subtask: #2a9d99;
         font-family:
           ui-sans-serif,
           system-ui,
@@ -62,8 +64,8 @@
       }
       body {
         margin: 0;
-        background: #efeee9;
-        color: var(--text);
+        background: var(--el-canvas);
+        color: var(--el-text);
         padding: 28px 22px 60px;
       }
       .pagehead {
@@ -73,20 +75,20 @@
       .pagehead h1 {
         font-size: 21px;
         margin: 0 0 4px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .pagehead p {
         margin: 0;
         font-size: 13.5px;
         line-height: 1.55;
-        color: var(--muted);
+        color: var(--el-text-muted);
         max-width: 920px;
       }
       .sheet {
         max-width: 1180px;
         margin: 0 auto 26px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         box-shadow: 0 1px 3px #0000000d;
         overflow: hidden;
@@ -96,16 +98,16 @@
         align-items: baseline;
         gap: 12px;
         padding: 13px 18px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .sheethead .n {
         flex: none;
         width: 22px;
         height: 22px;
         border-radius: 999px;
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         font-size: 12.5px;
         font-weight: 700;
         display: flex;
@@ -115,18 +117,18 @@
       .sheethead h2 {
         font-size: 14.5px;
         margin: 0;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .sheethead .cap {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-left: auto;
       }
       .viewport {
         position: relative;
         background:
           radial-gradient(circle, #00000010 1px, transparent 1.4px) 0 0 / 22px 22px,
-          var(--hub);
+          var(--el-surface);
         overflow: hidden;
       }
       .world,
@@ -142,8 +144,8 @@
       .node {
         position: absolute;
         width: 244px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         box-shadow: 0 1px 2px #0000000a;
         padding: 11px 12px;
@@ -169,12 +171,12 @@
       .node .id {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 11px;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .node .ttl {
         font-size: 13px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         line-height: 1.25;
         margin-top: 1px;
       }
@@ -192,33 +194,33 @@
         padding: 2px 8px;
         font-size: 11.5px;
         font-weight: 500;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .pill svg {
         width: 13px;
         height: 13px;
       }
       .pill.done {
-        background: var(--mint);
+        background: var(--el-tint-mint);
       }
       .pill.prog {
-        background: var(--sky);
+        background: var(--el-tint-sky);
       }
       .pill.todo {
-        background: var(--mutedfill);
-        color: var(--muted);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .node.flagged {
-        border-color: var(--danger);
-        box-shadow: 0 0 0 1px var(--danger) inset;
+        border-color: var(--el-danger);
+        box-shadow: 0 0 0 1px var(--el-danger) inset;
       }
       .crossbadge {
         margin-left: auto;
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        background: var(--danger-surface);
-        color: #9b1c4b;
+        background: var(--el-danger-surface);
+        color: var(--el-danger-surface-text);
         border-radius: 999px;
         padding: 2px 7px;
         font-size: 11px;
@@ -232,13 +234,13 @@
       .ghost {
         position: absolute;
         width: 180px;
-        border: 1.5px dashed var(--danger);
+        border: 1.5px dashed var(--el-danger);
         background: repeating-linear-gradient(
           135deg,
-          #fff,
-          #fff 7px,
-          var(--danger-surface) 7px,
-          var(--danger-surface) 9px
+          var(--el-page-bg),
+          var(--el-page-bg) 7px,
+          var(--el-danger-surface) 7px,
+          var(--el-danger-surface) 9px
         );
         border-radius: 12px;
         padding: 9px 11px;
@@ -247,7 +249,7 @@
       .ghost .gid {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 11px;
-        color: #9b1c4b;
+        color: var(--el-danger-surface-text);
         font-weight: 600;
         display: flex;
         align-items: center;
@@ -259,32 +261,32 @@
       }
       .ghost .gsub {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 3px;
       }
       .ghost .gwhere {
-        color: var(--danger);
+        color: var(--el-danger-on-surface);
         font-weight: 600;
       }
       /* ── edge end-label (the convention call-out) ── */
       .elabel {
         position: absolute;
         font-size: 11px;
-        color: var(--muted);
-        background: #ffffffcc;
+        color: var(--el-text-muted);
+        background: color-mix(in srgb, var(--el-page-bg) 80%, transparent);
         border-radius: 6px;
         padding: 1px 6px;
       }
       .elabel b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       /* ── on-canvas LEGEND (edge key) ── */
       .legend {
         position: absolute;
         bottom: 14px;
         left: 14px;
-        background: #ffffffee;
-        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--el-page-bg) 93%, transparent);
+        border: 1px solid var(--el-border);
         border-radius: 11px;
         box-shadow: 0 2px 8px #00000012;
         padding: 9px 12px;
@@ -297,14 +299,14 @@
         font-weight: 700;
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .legend .lrow {
         display: flex;
         align-items: center;
         gap: 9px;
         font-size: 12px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .legend .swatch {
         flex: none;
@@ -312,7 +314,7 @@
         height: 14px;
       }
       .legend em {
-        color: var(--muted);
+        color: var(--el-text-muted);
         font-style: normal;
       }
       .zoom {
@@ -320,8 +322,8 @@
         bottom: 14px;
         right: 14px;
         display: inline-flex;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         overflow: hidden;
         box-shadow: 0 1px 3px #0000000d;
@@ -332,11 +334,11 @@
         width: 30px;
         height: 30px;
         font-size: 16px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         cursor: default;
       }
       .zoom button + button {
-        border-left: 1px solid var(--hair);
+        border-left: 1px solid var(--el-border-soft);
       }
     </style>
   </head>
@@ -371,7 +373,7 @@
               markerHeight="7"
               orient="auto-start-reverse"
             >
-              <path d="M0 0L10 5L0 10z" fill="#d3cfc8" />
+              <path d="M0 0L10 5L0 10z" style="fill: var(--el-border-strong)" />
             </marker>
             <marker
               id="aPend"
@@ -382,14 +384,14 @@
               markerHeight="7"
               orient="auto-start-reverse"
             >
-              <path d="M0 0L10 5L0 10z" fill="#a4a097" />
+              <path d="M0 0L10 5L0 10z" style="fill: var(--el-text-faint)" />
             </marker>
           </defs>
           <!-- PROD-3 (done) → PROD-4 : FIRM (solid) -->
           <path
             d="M300,150 C360,150 360,150 420,150"
             fill="none"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2.2"
             marker-end="url(#aFirm)"
           />
@@ -397,7 +399,7 @@
           <path
             d="M664,168 C724,210 724,250 724,286"
             fill="none"
-            stroke="#a4a097"
+            style="stroke: var(--el-text-faint)"
             stroke-width="2.2"
             stroke-dasharray="2 7"
             stroke-linecap="round"
@@ -407,7 +409,7 @@
           <path
             d="M188,182 C188,250 360,250 480,300"
             fill="none"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2.2"
             marker-end="url(#aFirm)"
           />
@@ -417,8 +419,13 @@
           <!-- PROD-3 done -->
           <div class="node" style="left: 56px; top: 122px">
             <div class="top">
-              <span class="tile" style="background: var(--lavender)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-lavender)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--el-type-subtask)"
+                  stroke-width="2"
+                >
                   <rect x="3" y="3" width="18" height="18" rx="2" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>
@@ -440,8 +447,13 @@
           <!-- PROD-4 in progress -->
           <div class="node" style="left: 420px; top: 122px">
             <div class="top">
-              <span class="tile" style="background: var(--lavender)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-lavender)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--el-type-subtask)"
+                  stroke-width="2"
+                >
                   <rect x="3" y="3" width="18" height="18" rx="2" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>
@@ -464,8 +476,13 @@
           <!-- PROD-6 todo (the blocked one) -->
           <div class="node" style="left: 480px; top: 286px">
             <div class="top">
-              <span class="tile" style="background: var(--lavender)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-lavender)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--el-type-subtask)"
+                  stroke-width="2"
+                >
                   <rect x="3" y="3" width="18" height="18" rx="2" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>
@@ -501,8 +518,8 @@
           <span class="lh">Dependencies</span>
           <span class="lrow">
             <svg class="swatch" viewBox="0 0 40 14">
-              <path d="M2 7H32" stroke="#d3cfc8" stroke-width="2.2" />
-              <path d="M30 3 36 7 30 11z" fill="#d3cfc8" />
+              <path d="M2 7H32" style="stroke: var(--el-border-strong)" stroke-width="2.2" />
+              <path d="M30 3 36 7 30 11z" style="fill: var(--el-border-strong)" />
             </svg>
             blocks <em>· blocker done (ready)</em>
           </span>
@@ -510,19 +527,19 @@
             <svg class="swatch" viewBox="0 0 40 14">
               <path
                 d="M2 7H32"
-                stroke="#a4a097"
+                style="stroke: var(--el-text-faint)"
                 stroke-width="2.2"
                 stroke-dasharray="2 6"
                 stroke-linecap="round"
               />
-              <path d="M30 3 36 7 30 11z" fill="#a4a097" />
+              <path d="M30 3 36 7 30 11z" style="fill: var(--el-text-faint)" />
             </svg>
             pending <em>· blocker not done</em>
           </span>
           <span class="lrow">
             <svg class="swatch" viewBox="0 0 40 14">
-              <path d="M2 7H32" stroke="#e03131" stroke-width="2.4" />
-              <path d="M30 3 36 7 30 11z" fill="#e03131" />
+              <path d="M2 7H32" style="stroke: var(--el-danger)" stroke-width="2.4" />
+              <path d="M30 3 36 7 30 11z" style="fill: var(--el-danger)" />
             </svg>
             blocked elsewhere <em>· blocker sits elsewhere in the plan (bad plan)</em>
           </span>
@@ -551,14 +568,14 @@
               markerHeight="7.5"
               orient="auto-start-reverse"
             >
-              <path d="M0 0L10 5L0 10z" fill="#e03131" />
+              <path d="M0 0L10 5L0 10z" style="fill: var(--el-danger)" />
             </marker>
           </defs>
           <!-- ghost anchor (off-level blocker) → PROD-12 : RED cross edge -->
           <path
             d="M300,150 C400,150 470,180 556,182"
             fill="none"
-            stroke="#e03131"
+            style="stroke: var(--el-danger)"
             stroke-width="2.4"
             marker-end="url(#aCross)"
           />
@@ -580,8 +597,13 @@
           <!-- PROD-12 — blocked across stories -->
           <div class="node flagged" style="left: 556px; top: 142px">
             <div class="top">
-              <span class="tile" style="background: var(--lavender)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-lavender)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--el-type-subtask)"
+                  stroke-width="2"
+                >
                   <rect x="3" y="3" width="18" height="18" rx="2" />
                   <path d="m9 12 2 2 4-4" />
                 </svg>

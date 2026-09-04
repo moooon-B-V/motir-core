@@ -361,6 +361,76 @@ off on its own with a `STANDALONE` chip). Part of the 7.15 migrate flow.
   dashed distinction never rests on line-style alone.
 - **AA holds** — tint-background + strong-text chips by construction; the
   warning edge's flag badge uses peach tint + `#8a3d00` text.
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4350) — the two bullets above were both FALSE for
+> `roadmap.mock.html`, `grid-init.mock.html` and `edges.mock.html`, and one of them
+> names the invented hue that proves it.**
+>
+> "Colour strictly via `--el-*`" was true of the VALUES and false of the NAMES. Each of
+> these three assets opened with a `:root` block that copied the design system's values
+> onto PRIVATE aliases — `--text`, `--strong`, `--muted`, `--faint`, `--surface`,
+> `--soft`, `--hub`, `--mutedfill`, `--border`, `--hair`, `--t-epic` … — and painted
+> through them at all 259 sites. `tests/theme/inkContrastMockScan.ts` and
+> `tests/theme/mockStateInkScan.ts` classify ink by reading an `--el-*` name off the
+> declaration AT THE PAINT SITE, so all three sat outside every ink guard in the tree by
+> construction, and the guards' tree-wide greens said nothing about them.
+>
+> **Declaring the ink under its real name made it measurable, and the three assets were
+> carrying 55 sub-AA elements** — 22 on `--el-text-faint`, which clears AA on **no**
+> surface (2.37–2.61:1), and 33 on `--el-text-muted` at 4.12–4.34:1 on `--el-surface` /
+> `--el-surface-soft`. All 55 now take **`--el-text-secondary`** (6.18–6.80:1 on all four
+> surfaces, both themes). The rules re-inked:
+>
+> - `roadmap` — `.sheethead .cap` · `.search kbd` · `.chip .car` · `.crumbs .sep` ·
+>   `.reuse` · `.statecard p` · `.estate p`
+> - `grid-init` — `.sheethead .cap` · `.em .eid` · `.em .ec` · `.zoomlvl`
+> - `edges` — `.sheethead .cap` · `.node .id` · `.pill.todo` · `.legend .lh`
+> - Everything the scanner did NOT report keeps the ink it had: `--el-text-faint` on a
+>   decorative glyph and `--el-text-muted` on the white page both clear the rule.
+>
+> **So "AA holds … by construction" is retired.** It held for the chips it was written
+> about and was never measured anywhere else, because nothing could measure it. Both arms
+> now report **0 findings** over these three assets, which is a check rather than a claim.
+>
+> **The `#8a3d00` in that bullet has no token twin and is gone** — every ink the sweep
+> kept is now `color-mix(in srgb, var(--el-<hue>) N%, var(--el-text))`, inputs all tokens.
+>
+> **⚠️ AND THE FIVE WORK-TYPE HUES ARE EXACT `--el-type-*` TWINS — the bullet above already
+> named the tokens and the assets still hard-coded them.** Read off
+> `packages/design-system/theme.css` § _Issue-type hues_: `--el-type-epic` is
+> `var(--color-accent)` = `#ff64c8`, `--el-type-story` = `#1aae39`,
+> `--el-type-task` = `#0075de`, `--el-type-bug` = `#e03131`, `--el-type-subtask` =
+> `#2a9d99`. Not one of them needed a `color-mix()` or a judgement call.
+>
+> **Three hues genuinely have no twin, and each is named rather than dropped:**
+>
+> | was                                                                          | is                                                | why                                                                                                                                                                                                |
+> | ---------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | `--borderstrong: #d3cfc8`                                                    | `--el-border-strong` (`#c8c4be`)                  | role exact; the value was an invented intermediate                                                                                                                                                 |
+> | `#9b1c4b` on `edges`' `.crossbadge` / `.ghost .gid`                          | `--el-danger-surface-text` (`#37352f`)            | the design system's own ink FOR `--el-danger-surface` — and § _CROSS-LEVEL signal_ below already specified "strong text" on that tint, so the asset had been diverging from its own note           |
+> | `grid-init`'s three pre-plan tier glyphs — `#b58a00` · `#6a5acd` · `#d6336c` | `--el-warning` · `--el-accent` · `--el-highlight` | no token, and no `color-mix()` over tokens, reproduces gold / slate-blue / crimson-pink; these are the tokens `roadmap.mock.html` already uses for the SAME element, so the three assets now agree |
+>
+> **One disagreement is recorded and NOT resolved here.** `roadmap.mock.html`'s work-TYPE
+> legend (`epic` · `story` · `design` · `code` · `test` · `plan`) predates theme.css's
+> `--el-type-<work-type>` family and no longer agrees with it — the design system assigns
+> `--el-type-design` pink, `--el-type-test` green, where the legend draws them orange and
+> teal. The sweep preserved the DRAWN hues (`--el-warning`, `--el-type-subtask`) rather
+> than re-mapping the legend, because re-mapping is a design decision and this card only
+> moves the declaration layer. `--el-type-code` was the one row where value and role
+> already agreed, and it takes that token.
+>
+> **What stayed a literal, deliberately:** the black-alpha shadows and the canvas
+> dot-grid / cell-guide textures (`#0000000a` … `#00000033`). They carry no palette
+> colour — the same disposition MOTIR-4352 took with its `--sh-*` block — and `CLAUDE.md`
+> § _NEVER INVENT A COLOUR_ names the grid-dot texture and the body backdrop as its own
+> exemption. The body backdrop itself did NOT stay: `#efeee9` is now `--el-canvas`
+> (`#ecebe7`), the token for the recessed board behind raised cards.
+>
+> **Renders.** `grid-init` and `edges` re-export `EXACT` (2400×2430 and 2400×2290).
+> `roadmap` reports `DRIFT` at 2400×8002 against a committed 2400×8012 — and the drift is
+> NOT this diff: the asset AS IT STANDS AT `HEAD` also renders 8002, so the 10px belongs
+> to the render-environment gap the committed PNG predates. Nothing reflowed.
+
 - **A11y** — the canvas + chat are labelled regions (`role="application"`,
   `aria-label` — shipped on `PlanningCanvas`); nodes are keyboard-focusable;
   zoom / pan have keyboard equivalents (`+` / `−` / `0` / arrows — shipped);
