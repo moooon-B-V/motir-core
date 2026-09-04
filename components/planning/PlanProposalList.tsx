@@ -439,7 +439,7 @@ export function PlanProposalList({ items, outcome }: PlanProposalListProps) {
           work-item peek for an `add` that approval has already materialized
           (MOTIR-3161, bug MOTIR-4471). Each renders nothing when its half is null, so
           only one is ever open. */}
-      <ProposalPeek item={peeked.proposal} onClose={closePeek} />
+      <ProposalPeek item={peeked.proposal} outcome={outcome} onClose={closePeek} />
       <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
     </div>
   );

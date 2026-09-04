@@ -295,6 +295,13 @@
     "railChangeNone": "This plan changes none of these fields — only the description and the explanation.",
     "railAddAll": "Every value here is what approval will create.",
     "railRemoveArchives": "Approving this plan archives {key}.",
+    "railChangeCountApplied": "This plan changed {n} of the {m} fields it can set.",
+    "railChangeCountDeclined": "This plan would have changed {n} of the {m} fields it can set. It was declined, so none of them moved.",
+    "railChangeNoneApplied": "This plan changed none of these fields — only the description and the explanation.",
+    "railChangeNoneDeclined": "This plan would have changed none of these fields — only the description and the explanation.",
+    "railAddDeclined": "This plan was declined — none of these values was created.",
+    "railRemoveArchived": "This plan archived {key}.",
+    "railRemoveDeclined": "This plan would have archived {key}. It was declined, so it was not.",
     "peekNoActivity": "A proposal has no comments, children or activity until it is approved."
   },
   "planEdits": {
