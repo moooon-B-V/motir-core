@@ -91,6 +91,17 @@ export default defineConfig({
       // `design/**` and nothing else, so a design PR is both the only thing that
       // can break it and the only thing that can fix it.
       'tests/design-state-ink-contrast.test.ts',
+      // `design-token-layer` (MOTIR-4353) is the CLASS guard for MOTIR-4318: it
+      // rules that every `*.mock.html` DECLARES the `--el-*` layer, and that
+      // none of them declares a privately-named colour alias — the pattern
+      // eleven assets carried, which both ink arms above are structurally
+      // unable to see because they classify ink by reading an `--el-*` name off
+      // the declaration at the paint site. It reads `design/**` and
+      // `packages/design-system/theme.css` and nothing else — no database, no
+      // browser, plain string work — so a design PR is both the only thing that
+      // can break it and the only thing that can fix it, which is this lane's
+      // whole predicate.
+      'tests/design-token-layer.test.ts',
       // `scripts/render-design-mock-search` (MOTIR-4374) guards the viewport
       // SEARCH inside `scripts/render-design-mock.mjs` — the tool every design
       // PR uses to re-export a `.png`, and the one whose silent failure mode is
