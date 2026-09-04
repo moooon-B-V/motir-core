@@ -30,11 +30,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@v6
-    - uses: actions/setup-node@v6
-      with:
-        node-version: 22
-        cache: pnpm
+    - uses: ./.github/actions/pnpm
     - name: Cache node_modules
       id: cache-node-modules-e2e
       uses: actions/cache@v4

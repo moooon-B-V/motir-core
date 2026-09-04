@@ -113,13 +113,11 @@ jobs:
           # push that has to trigger the release lanes.
           token: ${{ steps.app-token.outputs.token }}
 
-      # Bare, so the version comes from the root `packageManager` field — the
-      # same way every sibling release lane pins it.
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      # The version comes from the root `packageManager` field — the same way
+      # every sibling release lane pins it. The shared action READS that field
+      # rather than taking a version input, so there is no longer a bare-vs-
+      # pinned distinction to get wrong here (MOTIR-4449).
+      - uses: ./.github/actions/pnpm
 
       # `changesets/action` runs the version command with the repository's own
       # package manager, so the workspace has to be installed first.

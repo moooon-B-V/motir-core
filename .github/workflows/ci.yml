@@ -328,11 +328,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-lint
         uses: actions/cache@v4
@@ -375,11 +371,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-structural-guards
         uses: actions/cache@v4
@@ -408,11 +400,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-typecheck
         uses: actions/cache@v4
@@ -538,11 +526,7 @@ jobs:
     # services needed — the suite is pure (no server, no Postgres).
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-ds
         uses: actions/cache@v4
@@ -576,11 +560,7 @@ jobs:
     # where Postgres is; the sandbox's docker build/smoke matrix is 7.9.7c's.
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       # No node_modules cache here on purpose: the shared cache key covers only
       # the ROOT node_modules, while a filtered run also needs
       # packages/cli/node_modules — a cache hit would skip the install that
@@ -620,11 +600,7 @@ jobs:
     # that setup.
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       # No node_modules cache here, for the reason the `cli` job gives: the
       # shared key covers only the ROOT node_modules, while a filtered run also
       # needs packages/orchestrator/node_modules, and a cache hit would skip the
@@ -681,11 +657,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-design-guards
         uses: actions/cache@v4
@@ -733,11 +705,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Start Postgres
         uses: ./.github/actions/postgres
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-build
         uses: actions/cache@v4
@@ -1018,11 +986,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Start Postgres
         uses: ./.github/actions/postgres
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-test
         uses: actions/cache@v4
@@ -1111,11 +1075,7 @@ jobs:
       HUSKY: '0'
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-coverage
         uses: actions/cache@v4
