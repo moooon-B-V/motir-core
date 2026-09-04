@@ -237,6 +237,20 @@
      CONTROL, and the rail follows it (MOTIR-4232). */
   --width-rail-chrome: 20px;
 
+  /* The inset a FLOATING rail is held away from the frame on all four sides, so
+     the shell canvas reads around it (MOTIR-4253). ZERO here, and that is the
+     point: the rail has a shared right EDGE in ten of the eleven styles, and an
+     edge is flush by definition. Only a style that turns the rail into a panel
+     with a shadow moves it.
+
+     It is composed into `AppLayout`'s two grid columns rather than applied to
+     the rail alone, because the rail FILLS its cell — a margin would shrink the
+     rail inside an unchanged column and take the collapsed rail's content box
+     below one `--height-control` square, which is exactly the invariant
+     MOTIR-4232 established. At `0px` both sums compile to the numbers every
+     other style already had. */
+  --spacing-rail-inset: 0px;
+
   /* ── Interaction ────────────────────────────────────────────────── */
   --transition-duration: 150ms;
   --transition-fast: 100ms;
@@ -420,6 +434,9 @@
   --spacing-kbd-y: 2px;
   --spacing-tooltip-x: 8px;
   --spacing-tooltip-y: 4px;
+  /* The rail keeps its shared edge under this style, so it is flush — the
+     default's mirror of the Tier-0 value, not an override (MOTIR-4253). */
+  --spacing-rail-inset: 0px;
   --height-btn-sm: 32px;
   --height-btn-md: 40px;
   --height-btn-lg: 48px;
@@ -1218,6 +1235,13 @@
   --height-control: 40px;
   --height-input: 46px;
 
+  /* The rail FLOATS in this style, so it is held off the frame on all four
+     sides and the immersive atmosphere reads around it (MOTIR-4253). The base
+     layer is `0px`, so this is the only override — every other style's rail
+     stays flush against its shared edge, and both of `AppLayout`'s grid sums
+     compile to the numbers they have today. */
+  --spacing-rail-inset: 10px;
+
   /* Motion — smooth and floaty. A slower ease for the depth to feel weighty.
      The signature INTERACTION is the pointer-parallax TILT below (the standard
      "3D card" effect — cards tip toward the cursor), driven by the
@@ -1721,6 +1745,107 @@
   @scope ([data-style='3d-immersive']) to ([data-style]) {
     [data-surface='popover'][data-side='top'] {
       transform-origin: bottom center;
+    }
+  }
+}
+
+/* 3D / Immersive — THE SHELL CHROME (MOTIR-4253, drawn by MOTIR-4252).
+   docs/styles/3d-immersive.md §4's `shell chrome` row + design/shell/
+   3d-immersive-shell.mock.html, which injects this block verbatim so a frame in
+   the asset cannot flatter a rule the implementation could not write.
+
+   ── The defect this closes ─────────────────────────────────────────────────
+   The plane ladder named ten surfaces and stopped before the FRAME: this block
+   carried no [data-surface='header'] and no [data-surface='sidebar'] rule at
+   all, while both hooks are emitted and five of the eleven styles already use
+   them. So roughly a quarter of every signed-in screen rendered byte-identically
+   to the default style — and §4's own `Quiet control / row` row was left
+   asserting that a sidebar nav link is flat *because the surface it sits in
+   floats*, of a surface no rule made float. §4b is the closure rule that keeps
+   the ladder from going silent about a surface again.
+
+   ── TWO OBJECTS, TWO PLANES, and the ladder says which ─────────────────────
+   How far a surface floats is how far you can see UNDER its edges. The rail has
+   four edges in the scene, so it can be an object at a distance: --shadow-card.
+   The bar has exactly one — its bottom — so the only thing it can express is a
+   CONTACT, which is --shadow-subtle, the ladder's tightest rung. A bar wearing
+   --shadow-card would out-float the panel it frames on the strength of one
+   visible edge.
+
+   Four things here are DECISIONS rather than syntax:
+   1. box-shadow ONLY on the bar, never `position`. hand-drawn-indie carries the
+      same guard explicitly a few hundred lines below — the sticky header is
+      already a containing block and overriding it breaks the sticky — and the
+      pleasing part is that the property is also the MECHANISM: TopNav's
+      `sticky … z-30` is the stacking context that lets the lid's shadow paint
+      over the region beneath it. A static header's downward shadow is painted
+      behind the next sibling's background and is invisible. The constraint and
+      the mechanism are the same line of the component.
+   2. The rail's shared edge goes `border-right-color: transparent`, NOT
+      `border: none`. The 1px stays in the box, so --width-rail-chrome (the
+      rail's px-2 gutters plus that border) is unchanged. A floating panel has a
+      shadow instead of a shared edge; it does not have a different width.
+   3. Both a11y fallbacks restore a LINE the treatment made transparent, and
+      NEITHER MOVES A PIXEL. The rail's hairline comes back as an `outline` at
+      `outline-offset: -1px` — drawn outside the box, follows the radius, costs
+      no layout — and the bar's `border-bottom` already has its width; only its
+      colour was taken away. This is neumorphism's pattern (its own
+      prefers-contrast / forced-colors blocks) applied to a treatment whose
+      structure rests on a shadow.
+   4. --spacing-rail-inset is `0px` in the base layer, so every other style is
+      untouched and AppLayout's two sums compile to today's numbers everywhere
+      else. That is what makes this a style-axis change rather than a shell one.
+
+   Colour: every value is an existing --el-* or an existing style-axis shadow
+   token. The block adds and changes NO colour token, so the style and palette
+   axes stay disjoint. */
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  /* The RAIL — a floating PANEL, inset from the frame on all four sides so the
+     immersive atmosphere reads around it. */
+  [data-surface='sidebar'] {
+    margin: var(--spacing-rail-inset);
+    height: calc(100% - 2 * var(--spacing-rail-inset));
+    border-radius: var(--radius-card);
+    border-right-color: transparent;
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  /* The TOP BAR — the LID. No fill (the atmosphere runs under it), no hairline,
+     and a contact shadow cast down onto the region below. It keeps full-bleed
+     edges and square corners: a bar with a radius and a margin is a second
+     floating slab, not a lid. */
+  [data-surface='header'] {
+    background-color: transparent;
+    border-bottom-color: transparent;
+    box-shadow: var(--shadow-subtle);
+  }
+}
+
+/* Accessibility fallbacks — where STRUCTURE rests on a shadow, restore a solid
+   line. Both are geometry-neutral by construction (see decision 3 above), so a
+   high-contrast or forced-colours user gets the same layout, not a shifted one. */
+@media (prefers-contrast: more) {
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-surface='sidebar'] {
+      outline: 1px solid var(--el-border-strong);
+      outline-offset: -1px;
+    }
+    [data-surface='header'] {
+      border-bottom-color: var(--el-border-strong);
+    }
+  }
+}
+@media (forced-colors: active) {
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-surface='sidebar'] {
+      outline: 1px solid var(--el-border-strong);
+      outline-offset: -1px;
+      box-shadow: none;
+    }
+    [data-surface='header'] {
+      border-bottom-color: var(--el-border-strong);
+      box-shadow: none;
     }
   }
 }
