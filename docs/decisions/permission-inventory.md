@@ -414,6 +414,10 @@ It is the only instrument that can put an acceptance recording through both arms
 
 **It is deliberately NOT under `/api/public/*`.** That surface is a versioned contract with a deprecation policy and third-party readers (AMENDMENT 1 §D). This is an internal artifact between two repositories under one owner — AMENDMENT 2 §G says so — so it carries a plain integer `version` in its body and takes on none of those obligations.
 
+**R62.** The DOCS-URL TEST DOOR (Story MOTIR-4237 · MOTIR-4241) — _move this running server between the configured and unconfigured arms of the Help menu's `Docs` row._ **R61's argument, unchanged and by citation rather than restated**: a `%5Ftest` route that `productionGate()` 404s in any real production build, deliberately UNGATED within that boundary because the state it changes is a property of the PROCESS rather than of a tenant, and driven by a spec whose first act is at `/sign-up`. It writes one environment variable, touches no database, and reports back through the SHIPPED resolver (`docsIndexUrl()`), which is what makes its answer a mount check rather than an echo of the request — and is why a value the resolver REFUSES (a relative `/docs`, the defect MOTIR-4167 cured the row of) reads back `null` instead of as a 200 that hid it.
+
+It exists for the same reason R61 does, one row over: `MOTIR_DOCS_URL` is a process-wide server read resolved in `app/(authed)/layout.tsx`, with no per-request override and no client seam a `page.route()` stub can reach. **Every** Playwright lane in this repository CONFIGURES one — `acceptance-legal-manifest.spec.ts` reads the `Docs` row as its CONTROL for Legal's absence — so without this door the unconfigured arm is unreachable from any spec, and a spec asserting it would pass on unfixed code for ever. It adds a `GET` its sibling has no need of, because the legal manifest already has a shipped health route (`/api/health/legal`) to read the arm back from and the docs url has none.
+
 The R41 argument, one tier up. `lib/permissions/catalog.ts` keys all resolve against a PROJECT the actor already belongs to, and neither of these operations resolves a project: the question is "may you set a rule for this whole tenant", which no project permission can answer without either under- or over-granting. Both rows therefore name the service method rather than an `assert*` call in the action file, because that is where the gate actually is — the action is a thin transport and the page derives `canManage` only to decide what to DRAW (pinned in `tests/permissions/storyGate.test.ts`).
 
 READING the policy is ungated on purpose, and that is a decision rather than an omission: a member must be able to see the rule that governs them, so the pane renders the switch READ-ONLY for somebody who may not set it instead of refusing the whole surface.
@@ -427,55 +431,57 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `ai`
 
-| Operation                                        | Verbs     | Gate today                                                                                                                                         | Permission           | Decision    | Why |
-| ------------------------------------------------ | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ----------- | --- |
-| `/api/ai/access`                                 | GET       | route → `assertPermission`; degrades to `not applicable`                                                                                           | `project:browse`     | existing    | R5  |
-| `/api/ai/augment`                                | POST      | `aiPlanEditsService.submitAugment` → `assertPermission`                                                                                            | `ai:plan`            | existing    | R5  |
-| `/api/ai/augment/[jobId]/stream`                 | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/chat`                                   | POST      | `aiChatService.submitDiscoveryTurn` → `assertPermission`                                                                                           | `ai:plan`            | existing    | R5  |
-| `/api/ai/chat/[jobId]/stream`                    | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/coding-convention/audit`                | GET       | `aiConventionService.getAudit` → `assertPermission`                                                                                                | `ai:configure`       | existing    | R5  |
-| `/api/ai/coding-convention/audit-coverage`       | GET       | `auditCoverageService.getCoverage` → `assertPermission`                                                                                            | `ai:configure`       | existing    | R5  |
-| `/api/ai/coding-convention/convention`           | GET       | `aiConventionService.getConvention` → `assertPermission`                                                                                           | `ai:configure`       | existing    | R5  |
-| `/api/ai/coding-convention/refresh`              | POST      | `aiConventionService.reaudit` → `assertPermission`                                                                                                 | `ai:configure`       | existing    | R5  |
-| `/api/ai/expand`                                 | POST      | `aiPlanEditsService.submitExpand` → `assertPermission`                                                                                             | `ai:plan`            | existing    | R5  |
-| `/api/ai/expand/[jobId]/stream`                  | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/explanation`                            | POST      | `aiExplanationService.submitExplanationDraft` → `assertPermission`                                                                                 | `ai:plan`            | existing    | R5  |
-| `/api/ai/explanation/[jobId]/stream`             | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/jobs/[jobId]`                           | GET       | route → `assertPermission`; sends `?coreProjectId=`                                                                                                | `ai:plan`            | existing    | R5  |
-| `/api/ai/ask`                                    | POST      | `aiAskService.submitTurn` / `.resubmit` → `assertPermission` (an ask turn spends the workspace's AI credits, exactly as a plan-change submit does) | `ai:plan`            | new         | R5  |
-| `/api/ai/ask/settle`                             | POST      | `aiAskService.settle` → `planChangeSessionsService` → `assertPermission`                                                                           | `ai:plan`            | new         | R5  |
-| `/api/ai/ask/[jobId]/stream`                     | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | new         | R5  |
-| `/api/ai/plan-change/session`                    | POST      | `planChangeSessionsService.getOrCreateForProject` → `assertPermission`                                                                             | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan-change/session/planner-turn`       | POST      | `planChangeSessionsService.recordPlannerTurn` → `assertPermission`                                                                                 | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan-change/session/submit`             | POST      | `planChangeSessionsService.submit` → `assertPermission`                                                                                            | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan-change/session/turns`              | POST      | `planChangeSessionsService.appendTurn` → `assertPermission`                                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan/generate`                          | POST      | `aiGenerationService.startGeneration` → `assertPermission`                                                                                         | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan/generate/[jobId]/stream`           | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan/sprint`                            | POST      | `aiSprintPlanningService.submitSprintPlan` → `assertPermission`                                                                                    | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan/sprint/[jobId]/review`             | GET       | `aiSprintPlanningService.reviewSprintPlan` → `assertPermission`                                                                                    | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan/sprint/[jobId]/stream`             | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/plan/sprint/approve`                    | POST      | `aiSprintPlanningService.approveSprintPlan` → `assertPermission`                                                                                   | `ai:plan`            | existing    | R5  |
-| `/api/ai/pre-plan`                               | GET/PATCH | `aiPreplanService.{getPreplanState,saveDesignChoice}` → `assertPermission` (`project:browse` on the READ, `ai:plan` on the WRITE)                  | `ai:plan`            | existing    | R5  |
-| `/api/ai/replan`                                 | POST      | `aiPlanEditsService.submitReplan` → `assertPermission`                                                                                             | `ai:plan`            | existing    | R5  |
-| `/api/ai/replan/[jobId]/stream`                  | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
-| `/api/ai/revise`                                 | POST      | `aiPlanEditsService.submitRevise` → `assertCanPlan` → `assertPermission`; the target is a PLAN id, not a work-item key (MOTIR-3599)                | `ai:plan`            | existing    | R5  |
-| `/api/ai/revise/[jobId]/stream`                  | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=` — the same relay every plan-edit surface uses                          | `ai:plan`            | existing    | R5  |
-| `/api/canvas-layout`                             | GET/PATCH | `canvasLayoutService.{getLayout,savePositions}` → `assertPermission`                                                                               | `project:browse`     | existing    | R50 |
-| `/api/idea-draft`                                | POST      | — none — origin-allowlisted + per-IP rate-limited, pre-auth                                                                                        | —                    | no-gate     | R48 |
-| `/api/idea-draft/[id]/claim`                     | POST      | — none — consumes a single-use draft id at sign-in                                                                                                 | —                    | user-scoped | R49 |
-| `/api/plans/[id]`                                | GET       | `planReviewService.getPlanReview` → `plansService.getPlan` → `assertCanBrowse`                                                                     | `ai:view_plan`       | existing    | R11 |
-| `/api/plans/[id]/approve`                        | POST      | `plansService.approvePlan` → `assertPermission`                                                                                                    | `ai:decide_plan`     | existing    | R11 |
-| `/api/plans/[id]/decline`                        | POST      | `plansService.declinePlan` → `assertPermission`                                                                                                    | `ai:decide_plan`     | existing    | R11 |
-| `/api/plans/[id]/items/[itemId]`                 | PATCH     | `plansService.updateProposal` → `assertPermission`                                                                                                 | `ai:view_plan`       | existing    | R11 |
-| `/api/projects/[key]/ai-settings`                | GET       | `assertCanBrowse`                                                                                                                                  | `project:browse`     | existing    | R17 |
-| `/api/projects/[key]/ai-settings`                | PATCH     | `assertPermission(ai:configure)`                                                                                                                   | `ai:configure`       | existing    | R17 |
-| `/api/projects/[key]/public-overview`            | PATCH     | `publicProjectsService.setPublicOverview` → `NotProjectAdminError`, then the delegate's `assertCanManage` inside the write transaction             | `project:administer` | new         | R33 |
-| `/api/projects/[key]/lessons`                    | GET       | `projectLessonsService.listLessons` → `assertPermission` BEFORE the motir-ai call                                                                  | `lesson:view`        | existing    | R17 |
-| `/api/projects/[key]/lessons/[lessonId]`         | GET       | `projectLessonsService.getLesson` → `assertPermission` BEFORE the motir-ai call                                                                    | `lesson:view`        | existing    | R17 |
-| `/api/projects/[key]/lessons/[lessonId]/applied` | PUT       | `projectLessonsService.setLessonApplied` → `assertPermission` BEFORE the motir-ai call                                                             | `lesson:manage`      | existing    | R17 |
-| `/api/work-items/[id]/ai/plan`                   | GET/POST  | `contextualPlanningService` → `planChangeSessionsService` → `assertPermission`                                                                     | `ai:plan`            | existing    | R5  |
-| `/api/work-items/[id]/ai/plan/[jobId]/stream`    | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                        | `ai:plan`            | existing    | R5  |
+| Operation                                        | Verbs     | Gate today                                                                                                                                                  | Permission           | Decision    | Why |
+| ------------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ----------- | --- |
+| `/api/ai/access`                                 | GET       | route → `assertPermission`; degrades to `not applicable`                                                                                                    | `project:browse`     | existing    | R5  |
+| `/api/ai/augment`                                | POST      | `aiPlanEditsService.submitAugment` → `assertPermission`                                                                                                     | `ai:plan`            | existing    | R5  |
+| `/api/ai/augment/[jobId]/stream`                 | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/chat`                                   | POST      | `aiChatService.submitDiscoveryTurn` → `assertPermission`                                                                                                    | `ai:plan`            | existing    | R5  |
+| `/api/ai/chat/[jobId]/stream`                    | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/coding-convention/audit`                | GET       | `aiConventionService.getAudit` → `assertPermission`                                                                                                         | `ai:configure`       | existing    | R5  |
+| `/api/ai/coding-convention/audit-coverage`       | GET       | `auditCoverageService.getCoverage` → `assertPermission`                                                                                                     | `ai:configure`       | existing    | R5  |
+| `/api/ai/coding-convention/convention`           | GET       | `aiConventionService.getConvention` → `assertPermission`                                                                                                    | `ai:configure`       | existing    | R5  |
+| `/api/ai/coding-convention/refresh`              | POST      | `aiConventionService.reaudit` → `assertPermission`                                                                                                          | `ai:configure`       | existing    | R5  |
+| `/api/ai/expand`                                 | POST      | `aiPlanEditsService.submitExpand` → `assertPermission`                                                                                                      | `ai:plan`            | existing    | R5  |
+| `/api/ai/expand/[jobId]/stream`                  | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/explanation`                            | POST      | `aiExplanationService.submitExplanationDraft` → `assertPermission`                                                                                          | `ai:plan`            | existing    | R5  |
+| `/api/ai/explanation/[jobId]/stream`             | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/jobs/[jobId]`                           | GET       | route → `assertPermission`; sends `?coreProjectId=`                                                                                                         | `ai:plan`            | existing    | R5  |
+| `/api/ai/ask`                                    | POST      | `aiAskService.submitTurn` / `.resubmit` → `assertPermission` (an ask turn spends the workspace's AI credits, exactly as a plan-change submit does)          | `ai:plan`            | new         | R5  |
+| `/api/ai/ask/settle`                             | POST      | `aiAskService.settle` → `planChangeSessionsService` → `assertPermission`                                                                                    | `ai:plan`            | new         | R5  |
+| `/api/ai/ask/[jobId]/stream`                     | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | new         | R5  |
+| `/api/ai/plan-change/session`                    | POST      | `planChangeSessionsService.getOrCreateForProject` → `assertPermission`                                                                                      | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan-change/session/planner-turn`       | POST      | `planChangeSessionsService.recordPlannerTurn` → `assertPermission`                                                                                          | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan-change/session/submit`             | POST      | `planChangeSessionsService.submit` → `assertPermission`                                                                                                     | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan-change/session/turns`              | POST      | `planChangeSessionsService.appendTurn` → `assertPermission`                                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan-change/session/mailbox`            | POST/GET  | `planChangeMailboxService.attachTurn` / `.peekForJob` → `assertPermission` (a turn attached to a RUNNING job is a plan-change write, exactly as `turns` is) | `ai:plan`            | new         | R5  |
+| `/api/ai/plan-change/session/mailbox/stop`       | POST      | `planChangeMailboxService.raiseStop` → `assertPermission` (ending a run is a plan-change write)                                                             | `ai:plan`            | new         | R5  |
+| `/api/ai/plan/generate`                          | POST      | `aiGenerationService.startGeneration` → `assertPermission`                                                                                                  | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan/generate/[jobId]/stream`           | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan/sprint`                            | POST      | `aiSprintPlanningService.submitSprintPlan` → `assertPermission`                                                                                             | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan/sprint/[jobId]/review`             | GET       | `aiSprintPlanningService.reviewSprintPlan` → `assertPermission`                                                                                             | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan/sprint/[jobId]/stream`             | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/plan/sprint/approve`                    | POST      | `aiSprintPlanningService.approveSprintPlan` → `assertPermission`                                                                                            | `ai:plan`            | existing    | R5  |
+| `/api/ai/pre-plan`                               | GET/PATCH | `aiPreplanService.{getPreplanState,saveDesignChoice}` → `assertPermission` (`project:browse` on the READ, `ai:plan` on the WRITE)                           | `ai:plan`            | existing    | R5  |
+| `/api/ai/replan`                                 | POST      | `aiPlanEditsService.submitReplan` → `assertPermission`                                                                                                      | `ai:plan`            | existing    | R5  |
+| `/api/ai/replan/[jobId]/stream`                  | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
+| `/api/ai/revise`                                 | POST      | `aiPlanEditsService.submitRevise` → `assertCanPlan` → `assertPermission`; the target is a PLAN id, not a work-item key (MOTIR-3599)                         | `ai:plan`            | existing    | R5  |
+| `/api/ai/revise/[jobId]/stream`                  | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=` — the same relay every plan-edit surface uses                                   | `ai:plan`            | existing    | R5  |
+| `/api/canvas-layout`                             | GET/PATCH | `canvasLayoutService.{getLayout,savePositions}` → `assertPermission`                                                                                        | `project:browse`     | existing    | R50 |
+| `/api/idea-draft`                                | POST      | — none — origin-allowlisted + per-IP rate-limited, pre-auth                                                                                                 | —                    | no-gate     | R48 |
+| `/api/idea-draft/[id]/claim`                     | POST      | — none — consumes a single-use draft id at sign-in                                                                                                          | —                    | user-scoped | R49 |
+| `/api/plans/[id]`                                | GET       | `planReviewService.getPlanReview` → `plansService.getPlan` → `assertCanBrowse`                                                                              | `ai:view_plan`       | existing    | R11 |
+| `/api/plans/[id]/approve`                        | POST      | `plansService.approvePlan` → `assertPermission`                                                                                                             | `ai:decide_plan`     | existing    | R11 |
+| `/api/plans/[id]/decline`                        | POST      | `plansService.declinePlan` → `assertPermission`                                                                                                             | `ai:decide_plan`     | existing    | R11 |
+| `/api/plans/[id]/items/[itemId]`                 | PATCH     | `plansService.updateProposal` → `assertPermission`                                                                                                          | `ai:view_plan`       | existing    | R11 |
+| `/api/projects/[key]/ai-settings`                | GET       | `assertCanBrowse`                                                                                                                                           | `project:browse`     | existing    | R17 |
+| `/api/projects/[key]/ai-settings`                | PATCH     | `assertPermission(ai:configure)`                                                                                                                            | `ai:configure`       | existing    | R17 |
+| `/api/projects/[key]/public-overview`            | PATCH     | `publicProjectsService.setPublicOverview` → `NotProjectAdminError`, then the delegate's `assertCanManage` inside the write transaction                      | `project:administer` | new         | R33 |
+| `/api/projects/[key]/lessons`                    | GET       | `projectLessonsService.listLessons` → `assertPermission` BEFORE the motir-ai call                                                                           | `lesson:view`        | existing    | R17 |
+| `/api/projects/[key]/lessons/[lessonId]`         | GET       | `projectLessonsService.getLesson` → `assertPermission` BEFORE the motir-ai call                                                                             | `lesson:view`        | existing    | R17 |
+| `/api/projects/[key]/lessons/[lessonId]/applied` | PUT       | `projectLessonsService.setLessonApplied` → `assertPermission` BEFORE the motir-ai call                                                                      | `lesson:manage`      | existing    | R17 |
+| `/api/work-items/[id]/ai/plan`                   | GET/POST  | `contextualPlanningService` → `planChangeSessionsService` → `assertPermission`                                                                              | `ai:plan`            | existing    | R5  |
+| `/api/work-items/[id]/ai/plan/[jobId]/stream`    | GET       | route → `assertPermission` before the stream opens; sends `?coreProjectId=`                                                                                 | `ai:plan`            | existing    | R5  |
 
 ### `api`
 
@@ -592,48 +598,51 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `infra`
 
-| Operation                                    | Verbs                 | Gate today                                                        | Permission | Decision | Why |
-| -------------------------------------------- | --------------------- | ----------------------------------------------------------------- | ---------- | -------- | --- |
-| `/api/%5Ftest/db-role`                       | GET                   | — none, deliberately —                                            | —          | no-gate  | R53 |
-| `/api/%5Ftest/legal-manifest`                | PUT                   | — none, deliberately —                                            | —          | no-gate  | R61 |
-| `/api/%5Ftest/pull-request-links`            | POST                  | `assertCanBrowse`, `assertPermission`                             | —          | finding  | R8  |
-| `/api/%5Ftest/work-item-links`               | DELETE/GET/POST       | `assertCanBrowse`, `assertCanEdit`                                | —          | finding  | R8  |
-| `/api/%5Ftest/work-items`                    | DELETE/GET/PATCH/POST | `assertCanBrowse`, `assertCanEdit`                                | —          | finding  | R8  |
-| `/api/auth/[...all]`                         | —                     | — none —                                                          | —          | no-gate  | R12 |
-| `/api/github/webhook`                        | POST                  | — none —                                                          | —          | no-gate  | R6  |
-| `/api/gitlab/webhook`                        | POST                  | — none —                                                          | —          | no-gate  | R6  |
-| `/api/health/legal`                          | GET                   | — none, deliberately —                                            | —          | no-gate  | R59 |
-| `/api/health/queue`                          | GET                   | — none, deliberately —                                            | —          | no-gate  | R57 |
-| `/api/health/release`                        | GET                   | — none, deliberately —                                            | —          | no-gate  | R58 |
-| `/api/inngest`                               | —                     | — none —                                                          | —          | no-gate  | R13 |
-| `/api/legal/egress-manifest`                 | GET                   | — none, deliberately —                                            | —          | no-gate  | R60 |
-| `/api/internal/ai/code-scanning/analyses`    | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/code-scanning/sarif`       | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/dev/noop`                  | GET/POST              | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/get-item`                  | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/get-subtree`               | GET                   | `aiBoundaryService.getSubtree` (transitive)                       | —          | no-gate  | R29 |
-| `/api/internal/ai/job-token/refresh`         | POST                  | serviceAuth + a LIVE job token (`authenticateAndLimitJobRequest`) | —          | no-gate  | R29 |
-| `/api/internal/ai/live-projects`             | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/log-bug`                   | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/org-context`               | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/pending-plans`             | GET                   | `aiBoundaryService.readPendingPlans` (transitive)                 | —          | no-gate  | R29 |
-| `/api/internal/ai/plan-proposals`            | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/plan-proposals/[itemId]`   | PATCH                 | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/plan-tree`                 | GET                   | `aiBoundaryService.readPlanTree` (transitive)                     | —          | no-gate  | R29 |
-| `/api/internal/ai/search-work-items`         | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/similar-work-items`        | POST                  | `aiBoundaryService.findSimilarWorkItems` (transitive)             | —          | no-gate  | R29 |
-| `/api/internal/ai/skeleton`                  | GET                   | `aiBoundaryService.readPlanTree` (transitive)                     | —          | no-gate  | R29 |
-| `/api/internal/ai/validate-plan`             | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/validate-plan-forest`      | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/validate-plan-sprint`      | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/walk-blocking`             | GET                   | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/ai/work-items`                | POST                  | `aiWorkItemsService.fileBug` (transitive)                         | —          | no-gate  | R29 |
-| `/api/internal/billing/ai-included-seat`     | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/internal/billing/scaled-tracker-state` | POST                  | serviceAuth                                                       | —          | no-gate  | R29 |
-| `/api/docs/mcp-tools.json`                   | GET                   | — none —                                                          | —          | no-gate  | R32 |
-| `/api/openapi/v1.json`                       | GET                   | — none —                                                          | —          | no-gate  | R32 |
-| `/api/openapi/public.json`                   | GET                   | — none —                                                          | —          | no-gate  | R32 |
-| `/api/resend/webhook`                        | POST                  | — none —                                                          | —          | no-gate  | R6  |
+| Operation                                    | Verbs                 | Gate today                                                                                                                      | Permission | Decision | Why |
+| -------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------- | --- |
+| `/api/%5Ftest/db-role`                       | GET                   | — none, deliberately —                                                                                                          | —          | no-gate  | R53 |
+| `/api/%5Ftest/docs-url`                      | GET/PUT               | — none, deliberately —                                                                                                          | —          | no-gate  | R62 |
+| `/api/%5Ftest/legal-manifest`                | PUT                   | — none, deliberately —                                                                                                          | —          | no-gate  | R61 |
+| `/api/%5Ftest/pull-request-links`            | POST                  | `assertCanBrowse`, `assertPermission`                                                                                           | —          | finding  | R8  |
+| `/api/%5Ftest/work-item-links`               | DELETE/GET/POST       | `assertCanBrowse`, `assertCanEdit`                                                                                              | —          | finding  | R8  |
+| `/api/%5Ftest/work-items`                    | DELETE/GET/PATCH/POST | `assertCanBrowse`, `assertCanEdit`                                                                                              | —          | finding  | R8  |
+| `/api/auth/[...all]`                         | —                     | — none —                                                                                                                        | —          | no-gate  | R12 |
+| `/api/github/webhook`                        | POST                  | — none —                                                                                                                        | —          | no-gate  | R6  |
+| `/api/gitlab/webhook`                        | POST                  | — none —                                                                                                                        | —          | no-gate  | R6  |
+| `/api/health/legal`                          | GET                   | — none, deliberately —                                                                                                          | —          | no-gate  | R59 |
+| `/api/health/queue`                          | GET                   | — none, deliberately —                                                                                                          | —          | no-gate  | R57 |
+| `/api/health/release`                        | GET                   | — none, deliberately —                                                                                                          | —          | no-gate  | R58 |
+| `/api/inngest`                               | —                     | — none —                                                                                                                        | —          | no-gate  | R13 |
+| `/api/legal/egress-manifest`                 | GET                   | — none, deliberately —                                                                                                          | —          | no-gate  | R60 |
+| `/api/internal/ai/code-scanning/analyses`    | GET                   | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/code-scanning/sarif`       | GET                   | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/dev/noop`                  | GET/POST              | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/get-item`                  | GET                   | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/get-subtree`               | GET                   | `aiBoundaryService.getSubtree` (transitive)                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/job-token/refresh`         | POST                  | serviceAuth + a LIVE job token (`authenticateAndLimitJobRequest`)                                                               | —          | no-gate  | R29 |
+| `/api/internal/ai/live-projects`             | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/log-bug`                   | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/org-context`               | GET                   | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/pending-plans`             | GET                   | `aiBoundaryService.readPendingPlans` (transitive)                                                                               | —          | no-gate  | R29 |
+| `/api/internal/ai/plan-change-mailbox`       | POST                  | serviceAuth + a LIVE job token (`authenticateAndLimitJobRequest`) — the mailbox is read AS the token's user at a phase boundary | —          | no-gate  | R29 |
+| `/api/internal/ai/plan-proposals`            | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/plan-proposals/[itemId]`   | PATCH                 | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/plan-tree`                 | GET                   | `aiBoundaryService.readPlanTree` (transitive)                                                                                   | —          | no-gate  | R29 |
+| `/api/internal/ai/search-work-items`         | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/similar-work-items`        | POST                  | `aiBoundaryService.findSimilarWorkItems` (transitive)                                                                           | —          | no-gate  | R29 |
+| `/api/internal/ai/skeleton`                  | GET                   | `aiBoundaryService.readPlanTree` (transitive)                                                                                   | —          | no-gate  | R29 |
+| `/api/internal/ai/terminal-statuses`         | GET                   | `aiBoundaryService.readTerminalStatuses` (transitive)                                                                           | —          | no-gate  | R29 |
+| `/api/internal/ai/validate-plan`             | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/validate-plan-forest`      | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/validate-plan-sprint`      | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/walk-blocking`             | GET                   | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/ai/work-items`                | POST                  | `aiWorkItemsService.fileBug` (transitive)                                                                                       | —          | no-gate  | R29 |
+| `/api/internal/billing/ai-included-seat`     | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/internal/billing/scaled-tracker-state` | POST                  | serviceAuth                                                                                                                     | —          | no-gate  | R29 |
+| `/api/docs/mcp-tools.json`                   | GET                   | — none —                                                                                                                        | —          | no-gate  | R32 |
+| `/api/openapi/v1.json`                       | GET                   | — none —                                                                                                                        | —          | no-gate  | R32 |
+| `/api/openapi/public.json`                   | GET                   | — none —                                                                                                                        | —          | no-gate  | R32 |
+| `/api/resend/webhook`                        | POST                  | — none —                                                                                                                        | —          | no-gate  | R6  |
 
 ### `integration`
 
@@ -649,14 +658,19 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `member`
 
-| Operation                              | Verbs        | Gate today                                                          | Permission              | Decision | Why |
-| -------------------------------------- | ------------ | ------------------------------------------------------------------- | ----------------------- | -------- | --- |
-| `/api/projects/[key]/access`           | PATCH        | `projectMembersService.setAccessLevel` → `assertPermission`         | `project:manage_access` | existing | R18 |
-| `/api/projects/[key]/members`          | GET          | `projectMembersService.listMembers` → `assertPermission`            | `project:browse`        | existing | R27 |
-| `/api/projects/[key]/members`          | POST         | `projectMembersService.addMember` → `assertPermission`              | `member:manage`         | existing | R27 |
-| `/api/projects/[key]/members/[userId]` | DELETE/PATCH | `projectMembersService.{removeMember,setRole}` → `assertPermission` | `member:manage`         | existing | R27 |
-| `/api/projects/[key]/roles`            | POST         | `projectRoleDefinitionService.create` → `assertPermission`          | `project:manage_access` | existing | R51 |
-| `/api/projects/[key]/roles/[roleId]`   | PATCH/DELETE | `projectRoleDefinitionService.{update,delete}` → `assertPermission` | `project:manage_access` | existing | R51 |
+| Operation                                                  | Verbs        | Gate today                                                            | Permission              | Decision | Why |
+| ---------------------------------------------------------- | ------------ | --------------------------------------------------------------------- | ----------------------- | -------- | --- |
+| `/api/projects/[key]/access`                               | PATCH        | `projectMembersService.setAccessLevel` → `assertPermission`           | `project:manage_access` | existing | R18 |
+| `/api/projects/[key]/members`                              | GET          | `projectMembersService.listMembers` → `assertPermission`              | `project:browse`        | existing | R27 |
+| `/api/projects/[key]/members`                              | POST         | `projectMembersService.addMember` → `assertPermission`                | `member:manage`         | existing | R27 |
+| `/api/projects/[key]/members/[userId]`                     | DELETE/PATCH | `projectMembersService.{removeMember,setRole}` → `assertPermission`   | `member:manage`         | existing | R27 |
+| `/api/projects/[key]/roles`                                | POST         | `projectRoleDefinitionService.create` → `assertPermission`            | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/roles/[roleId]`                       | PATCH/DELETE | `projectRoleDefinitionService.{update,delete}` → `assertPermission`   | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses`                     | GET          | `customDomainService.list` → `assertPermission`                       | `project:browse`        | existing | R51 |
+| `/api/projects/[key]/public-addresses`                     | POST         | `customDomainService.add` → `assertPermission`                        | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses/[addressId]`         | DELETE       | `customDomainService.remove` → `assertPermission`                     | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses/[addressId]/verify`  | POST         | `customDomainService.verify` → `assertPermission`                     | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/public-addresses/[addressId]/primary` | POST/DELETE  | `customDomainService.{makePrimary,clearPrimary}` → `assertPermission` | `project:manage_access` | existing | R51 |
 
 ### `project`
 
@@ -675,6 +689,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/public/categories`                               | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
 | `/api/public/explore`                                  | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
 | `/api/public/projects`                                 | GET    | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
+| `/api/public/hosts/[host]`                             | GET    | — none — anonymous; the CLOUD gate, then a hostname the store says is LIVE        | —                        | no-gate  | R33 |
 | `/api/public/p/[identifier]`                           | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
 | `/api/public/p/[identifier]/changelog`                 | GET    | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
 | `/api/public/p/[identifier]/changelog.xml`             | GET    | `resolvePublicProject` → `resolvePublicBrowse`                                    | `public_request:submit`  | new      | R33 |
@@ -871,24 +886,25 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `workspace`
 
-| Operation                                     | Verbs        | Gate today        | Permission | Decision         | Why |
-| --------------------------------------------- | ------------ | ----------------- | ---------- | ---------------- | --- |
-| `/api/invites/[token]`                        | GET          | — none —          | —          | workspace-scoped | R38 |
-| `/api/invites/[token]/accept`                 | POST         | session only      | —          | workspace-scoped | R38 |
-| `/api/onboarding/migrate`                     | POST         | session only      | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]`                | GET          | `assertCanBrowse` | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]/advance`        | POST         | workspace only    | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]/index-status`   | GET          | `assertCanBrowse` | —          | workspace-scoped | R45 |
-| `/api/onboarding/migrate/[id]/skip-import`    | POST         | `assertCanEdit`   | —          | workspace-scoped | R45 |
-| `/api/organizations/[orgId]`                  | PATCH        | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/billing`          | GET          | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/billing/checkout` | POST         | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/billing/portal`   | POST         | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/members`          | GET/POST     | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/members/[userId]` | DELETE/PATCH | session only      | —          | workspace-scoped | R3  |
-| `/api/organizations/[orgId]/usage`            | GET          | session only      | —          | workspace-scoped | R3  |
-| `/api/workspaces/[workspaceId]/invites`       | POST         | session only      | —          | workspace-scoped | R3  |
-| `/api/workspaces/current`                     | GET          | session only      | —          | workspace-scoped | R3  |
+| Operation                                        | Verbs        | Gate today                                                   | Permission | Decision         | Why |
+| ------------------------------------------------ | ------------ | ------------------------------------------------------------ | ---------- | ---------------- | --- |
+| `/api/invites/[token]`                           | GET          | — none —                                                     | —          | workspace-scoped | R38 |
+| `/api/invites/[token]/accept`                    | POST         | session only                                                 | —          | workspace-scoped | R38 |
+| `/api/onboarding/migrate`                        | POST         | session only                                                 | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]`                   | GET          | `assertCanBrowse`                                            | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]/advance`           | POST         | workspace only                                               | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]/index-status`      | GET          | `assertCanBrowse`                                            | —          | workspace-scoped | R45 |
+| `/api/onboarding/migrate/[id]/skip-import`       | POST         | `assertCanEdit`                                              | —          | workspace-scoped | R45 |
+| `/api/organizations/[orgId]`                     | PATCH        | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/billing`             | GET          | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/billing/checkout`    | POST         | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/billing/portal`      | POST         | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/members`             | GET/POST     | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/members/[userId]`    | DELETE/PATCH | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/organizations/[orgId]/usage`               | GET          | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/workspaces/[workspaceId]/invites`          | POST         | session only                                                 | —          | workspace-scoped | R3  |
+| `/api/workspaces/[workspaceId]/public-subdomain` | GET/PUT      | workspace ROLE (`owner`/`admin`) → `SubdomainForbiddenError` | —          | workspace-scoped | R3  |
+| `/api/workspaces/current`                        | GET          | session only                                                 | —          | workspace-scoped | R3  |
 
 ### `'use server'` actions
 

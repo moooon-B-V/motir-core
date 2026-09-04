@@ -65,6 +65,19 @@ function normalizeRepo(value: unknown): NormalizedRepo | null {
 }
 
 /** Map a GitHub `check_run.conclusion` (or commit-status state) to ours. */
+/**
+ * GitHub's own conclusion vocabulary → the normalized one.
+ *
+ * ⚠️ EXPORTED (MOTIR-4199) so the REST read of a commit's check runs maps its
+ * answer exactly as the webhook parser maps a delivery's. The two describe the
+ * same checks arriving by two transports, and a second mapping here would be a
+ * second opinion about a commit — the thing `liveCheckRows`' own header says was
+ * removed.
+ */
+export function mapGithubCiConclusion(raw: string): CiConclusion {
+  return mapConclusion(raw);
+}
+
 function mapConclusion(raw: string): CiConclusion {
   switch (raw) {
     case 'success':

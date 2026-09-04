@@ -59,6 +59,15 @@ import { REPO_ROOT, stripComments } from '../helpers/importGraph';
 // (the reports page, the plan-edits review dock, the run section) and the remedy
 // each time was another comment on the fixed site.
 //
+// ⚠️ FOUR of those five carriers remain (MOTIR-4258). `PlanEditsLauncher.tsx` was
+// deleted with the affordance that mounted it, taking its comment along — which
+// is the one way a carrier may legitimately go, and it is NOT the failure mode
+// the next section is about: nothing was blunted to satisfy a guard, the
+// annotated line ceased to exist. The dock's own reasoning is not lost with it —
+// `ReportPageChrome.tsx:36` explains the same trap on the same class of site, and
+// the deleted comment cross-referenced it by name. **A carrier is removed from
+// the list below only when its FILE goes; never because the comment went.**
+//
 // ── COMMENTS ARE NOT CODE, and here that is load-bearing ───────────────────
 // Those five comments NAME the class they warn about, so a guard built on a raw
 // `grep` would fail on the documentation that exists to prevent the defect —
@@ -177,7 +186,7 @@ describe('named `max-w-*` steps (MOTIR-4084)', () => {
     }
   });
 
-  it('COMMENTS explaining the trap are not offences — the five warnings survive', () => {
+  it('COMMENTS explaining the trap are not offences — the four warnings survive', () => {
     // The guard must not be satisfiable by deleting the documentation that
     // exists to prevent the defect. These files carry the class name in prose
     // and nowhere else; if `stripComments` ever stops being applied, they are
@@ -186,7 +195,6 @@ describe('named `max-w-*` steps (MOTIR-4084)', () => {
       'app/(auth)/layout.tsx',
       'app/(authed)/reports/_components/ReportPageChrome.tsx',
       'app/tokens/markdown-editor/page.tsx',
-      'components/planning/PlanEditsLauncher.tsx',
       'packages/design-system/src/components/ui/Modal.tsx',
     ];
     for (const file of documented) {

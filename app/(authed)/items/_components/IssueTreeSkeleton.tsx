@@ -21,7 +21,11 @@
 // `flat` (the List view) drops the per-row indent + the chevron slot — the one
 // delta between the Tree skeleton and the List skeleton (the List is un-nested).
 // It is a delta INSIDE the Title cell, not a track: both variants stand in for
-// tables built from the same nine columns, so both emit the same grid.
+// tables built from the same EIGHT columns, so both emit the same grid.
+// (Nine until MOTIR-4258 removed the 76px Actions cell. Note which way the
+// derivation cut this time: a column LEAVING is the same sweep failure as one
+// arriving, and it cost nothing here because the template is derived rather
+// than restated — the eighty-day defect above could not recur.)
 
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
@@ -114,13 +118,6 @@ function ShimmerCell({
       );
     case 'status':
       return <span className="block h-5 w-20 rounded-full bg-(--el-muted)" aria-hidden />;
-    case 'actions':
-      // The trailing ⋯ actions trigger — one right-aligned icon button.
-      return (
-        <span className="flex justify-end">
-          <span className="block h-5 w-5 rounded-(--radius-control) bg-(--el-muted)" aria-hidden />
-        </span>
-      );
     default:
       return (
         <span className={cn('flex', column.align === 'end' && 'justify-end')}>
@@ -150,8 +147,9 @@ export function IssueTreeSkeleton({ flat = false }: { flat?: boolean } = {}) {
     >
       <div className="w-full animate-pulse text-sm">
         {/* Header — the registry's labels, in the registry's order. A column
-        with no `sortColumn` (the trailing actions cell) has no visible caption
-        in either real table, so it has none here either. */}
+        with no `sortColumn` has no visible caption in either real table, so it
+        has none here either. No column declares that today (MOTIR-4258 removed
+        the trailing actions cell, which was the only one). */}
         <div
           className="grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
           style={{ gridTemplateColumns: gridTemplate, height: 40 }}

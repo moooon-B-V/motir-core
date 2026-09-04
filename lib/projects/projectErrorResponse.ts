@@ -13,6 +13,9 @@ import {
   PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
+  ProjectOverviewTooLongError,
+  ProjectTaglineTooLongError,
+  ProjectTagsInvalidError,
 } from '@/lib/projects/errors';
 
 // Shared typed-error → HTTP-status translation for the project-details +
@@ -41,6 +44,30 @@ import {
 //       a non-boolean for one of the two status-derivation switches; same 422
 //       family, same `field` payload)
 export function projectErrorResponse(err: unknown): NextResponse | null {
+  // The public hero's three FIELD errors (MOTIR-4171). Each names the field it
+  // refuses — `field` is the body key the `public-overview` PATCH takes — so the
+  // Public page room can land the refusal under that field's own slot (the
+  // AI-settings 422 idiom above, `AiPlanningSettingsEditor.tsx`) instead of a
+  // generic toast. Until this arm existed the three surfaced as an unmapped
+  // throw, i.e. a 500, from the one route that reaches them.
+  if (err instanceof ProjectOverviewTooLongError) {
+    return NextResponse.json(
+      { error: err.message, code: err.code, field: 'publicOverviewMd', max: err.max },
+      { status: 422 },
+    );
+  }
+  if (err instanceof ProjectTaglineTooLongError) {
+    return NextResponse.json(
+      { error: err.message, code: err.code, field: 'publicTagline', max: err.max },
+      { status: 422 },
+    );
+  }
+  if (err instanceof ProjectTagsInvalidError) {
+    return NextResponse.json(
+      { error: err.message, code: err.code, field: 'publicTags', reason: err.reason },
+      { status: 422 },
+    );
+  }
   if (
     err instanceof InvalidAiSettingsError ||
     err instanceof InvalidStatusAutomationSettingsError

@@ -2122,6 +2122,39 @@ with a fifth value in the world and renders something wrong.
 waited, and no check taken at the close can foresee that. The whole point of D4 is that Class B is real
 and permanent; the status makes it _legible_, not preventable.
 
+### ⚠️ ADDENDUM (MOTIR-4129, 2026-09-03) — D3's widening had a SECOND consumer, and this amendment named only the first
+
+D3 widened `computePlanStaleness`'s short-circuit from `planned` to `planned | stale`, and stated the
+class in one sentence: _"the guard's predicate was a proxy for **is this plan still awaiting a
+decision?**, and adding a fifth status is what makes the proxy and the intent come apart."_
+
+**`planRepository.findUndecidedByProject` is the same proxy for the same question, and it was not
+widened.** It reads `status: { in: ['generating', 'planned'] }` and is THE pending-proposal gate: the
+cadence tick skips a project with one (`autoPlanCadenceService`, gate 1) and MOTIR-1740's paused
+indicator reports one. So a plan a reviewer was holding read as decided — the tick fired a second
+expand beside it, and the settings page showed no pause while a Stale pill sat on the Plans list. It is
+the mirror of MOTIR-3051 / MOTIR-3064 / MOTIR-3189, which each took a plan that gated when it should
+NOT have; this is the more expensive direction, because the failure is a SECOND plan arriving rather
+than a silence. It is now `['generating', 'planned', 'stale']`.
+
+**Why the enumeration missed it, and the general lesson for the next member.** D6 above lists twelve
+surfaces a `PlanStatus` member obliges, by file. Every one of them **DISPLAYS** a status. Not one
+**ASKS A QUESTION** of one. That is not a lapse in care: a display surface announces itself by breaking
+a `Record`, a switch or the translation-parity gate, while a predicate keeps compiling, keeps returning
+a plausible answer, and answers a slightly different question than it did yesterday. **A sixth member
+owes a sweep of every hardcoded `PlanStatus` list classified by the QUESTION it asks — _is this
+decided?_ (widen) versus anything else (leave) — and D6's table is the wrong instrument for it.**
+
+That sweep, run for this addendum, also found the SIBLING the point repair would have left:
+`autoPlanCadenceService`'s own `staleCountFor` — whose doc comment says it _mirrors_
+`app/(authed)/plans/planRowView.ts`'s function of the same name, which D3's card widened while this
+copy stayed at `planned`. The divergence was unreachable until `findUndecidedByProject` could hand that
+consumer a `stale` plan at all, so fixing the gate is exactly what made it live. Both are widened here.
+Every other `PlanStatus` predicate in the repository was classified and left: they ask _is generation
+finished?_, _may this proposal set still change?_ (`assertPlanProposalsEditable`, whose narrowness D4
+records as a decision for MOTIR-3579 to re-take, not an oversight), or _can this plan go stale?_ — none
+of which is _is this decided?_.
+
 ---
 
 ## AMENDMENT 11 — a `modify` may RE-PARENT its target: the patch carries D3's `SITS` half at last (MOTIR-3859, 2026-08-29)

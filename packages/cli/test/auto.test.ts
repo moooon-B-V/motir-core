@@ -719,6 +719,7 @@ describe('motir auto --include-planning', () => {
       repos: [],
       prs: [],
       approvals: [],
+      lanes: [],
       stopReason: 'drained',
     });
 
@@ -1048,6 +1049,7 @@ describe('the summary reports every pull-request outcome distinctly', () => {
       // MOTIR-3023's approvals lane, empty for the same reason
       // (`--auto-approve-replan` is what fills it).
       approvals: [],
+      lanes: [],
       stopReason: 'drained',
     });
 
@@ -1330,6 +1332,7 @@ describe('records with missing pieces still render honestly', () => {
         { repoName: 'motir-gateway', branch: BRANCH, url: null, outcome: 'failed' },
       ],
       approvals: [],
+      lanes: [],
       stopReason: 'drained',
     };
 
@@ -1648,6 +1651,7 @@ describe('landedWork — the partition that used to be `!== failed` (MOTIR-3018)
       repos: [],
       prs: [],
       approvals: [],
+      lanes: [],
       stopReason: 'replanned',
     };
     const text = renderAutoSummary(summary);
@@ -1682,6 +1686,7 @@ describe('the summary says what the run APPROVED (MOTIR-3023)', () => {
     repos: [],
     prs: [],
     approvals,
+    lanes: [],
     stopReason: 'drained',
   });
 

@@ -22,13 +22,18 @@ import {
 /**
  * The versions currently published, for the three documents re-consent covers.
  *
- * ⚠️ READ FROM DISK AT THE MOMENT OF THE CALL, deliberately — no module-level
- * cache. `listLegalDocuments` is a `readdirSync` + up to seven small
- * `readFileSync`s out of the deployed bundle, which is cheap next to the
- * database round trip it shares a transaction with; and the alternative is a
- * cache that serves the PREVIOUS version of the Terms for the lifetime of a
- * server process after a deploy. On a screen whose entire job is to be current
- * about what a person is agreeing to, stale is the failure that matters.
+ * ⚠️ READ AT THE MOMENT OF THE CALL, deliberately — no module-level cache.
+ * `listLegalDocuments` parses `MOTIR_LEGAL_DOCUMENTS`, one `JSON.parse` of a
+ * process-wide environment value, which is nothing next to the database round
+ * trip it shares a transaction with; and the alternative is a cache that serves
+ * the PREVIOUS version of the Terms for the lifetime of a server process after a
+ * deploy. On a screen whose entire job is to be current about what a person is
+ * agreeing to, stale is the failure that matters.
+ *
+ * (This sentence described a `readdirSync` + seven `readFileSync`s out of
+ * `content/legal/` until MOTIR-4104 corrected it. The source swapped in
+ * MOTIR-4007 and the directory left the repository in MOTIR-4103; the
+ * no-cache decision is unchanged and its reason is now stronger, not weaker.)
  */
 function reconsentDocuments(): LegalDocument[] {
   return listLegalDocuments().filter((document) =>

@@ -32,6 +32,24 @@ function lifecycleKinds(history: { kind: string }[]): string[] {
   return history.map((h) => h.kind).filter((k) => LIFECYCLE_KINDS.has(k));
 }
 
+/**
+ * The ONE event of a given lifecycle kind (MOTIR-4136).
+ *
+ * `lifecycleKinds` above answers *which lifecycle events happened, and in what
+ * order*; this answers *what does THAT event say*. An assertion about a
+ * particular decision event has to select it BY KIND, never by position:
+ * `mergeTimeline` sorts on `at` and puts the DERIVED event first at an equal
+ * timestamp, so whenever a fixture's content event lands in the same
+ * millisecond as the decision — which on a loaded box it does — the decision is
+ * not the last row and `history.at(-1)` reads the content event instead. The
+ * assertion then measures the fixture's append rather than the ending it names.
+ */
+function lifecycleEvent<T extends { kind: string }>(history: T[], kind: string): T {
+  const matches = history.filter((h) => h.kind === kind);
+  expect(matches).toHaveLength(1);
+  return matches[0]!;
+}
+
 // Integration tests for Subtask 7.4.5 / MOTIR-847 — `planReviewService`, the
 // READ assembly behind the plan-detail UI. Real Postgres (no mocks), per
 // CLAUDE.md. Proves the assembly the canvas + review rail bind to:
@@ -1776,7 +1794,16 @@ describe('planReviewService.getPlanReview', () => {
       expect(review.decisionReason).toBe('discarded');
       // A PERSON discarded it, so the decider is named — which is exactly what
       // separates this ending from the sweep's.
-      expect(review.history.at(-1)!.byName).not.toBeNull();
+      //
+      // ⚠️ Selected BY KIND (MOTIR-4136), and this one was PASSING FOR THE
+      // WRONG REASON. It read `history.at(-1)`, and the last row is
+      // `halfWritten`'s own `appended` event whenever that ties with the
+      // decision on the millisecond — a content event carries an actor too, so
+      // `not.toBeNull()` was satisfied by the row this assertion is not about.
+      // Green either way, which is why nothing ever drew attention to it; the
+      // `abandoned` sibling below is the same shape with the polarity that
+      // fails.
+      expect(lifecycleEvent(review.history, 'discarded').byName).not.toBeNull();
       // And the proposal it managed to produce survives to be read.
       expect(review.itemCount).toBe(1);
       expect(review.items).toHaveLength(1);
@@ -1798,7 +1825,13 @@ describe('planReviewService.getPlanReview', () => {
       expect(lifecycleKinds(review.history)).toEqual(['created', 'abandoned']);
       expect(review.decisionReason).toBe('abandoned');
       expect(review.decidedByName).toBeNull();
-      expect(review.history.at(-1)!.byName).toBeNull();
+      // The `abandoned` event ITSELF, not the last row (MOTIR-4136).
+      // `halfWritten` appends a proposal attributed to the Owner, and
+      // `mergeTimeline` puts the derived event FIRST at an equal timestamp — so
+      // in the millisecond where the two collide, `abandoned` is never last and
+      // `history.at(-1)` read the append. Nothing in the product was wrong: the
+      // question was.
+      expect(lifecycleEvent(review.history, 'abandoned').byName).toBeNull();
     });
 
     it('a `declined` row with NO recorded reason keeps the ORIGINAL event — a null is not a fourth ending', async () => {

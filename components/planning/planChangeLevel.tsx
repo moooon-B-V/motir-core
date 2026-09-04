@@ -7,6 +7,7 @@ import {
   proposedAddsForLevel,
   type PlanChangeDiffIndex,
 } from '@/lib/planning/planChangeDiff';
+import { proposedParentNodeIds } from '@/lib/planning/planShape';
 import type { ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 
@@ -39,9 +40,10 @@ export function decoratePlanChangeLevel(
   // item that the run proposes a child for MUST become drillable, or the proposal
   // is unreachable — and "propose work under an existing story" is the commonest
   // thing the engine does.
-  const gainsChildren = new Set(
-    index.adds.map((add) => add.parentNodeId).filter((id): id is string => id !== null),
-  );
+  // One predicate, three callers (bug MOTIR-4266) — this set was written out
+  // here, in `indexPlanReview`, and NOT AT ALL on the plan-review canvas. Same
+  // answer as before: only an `add` places new work on this canvas.
+  const gainsChildren = proposedParentNodeIds(index.adds);
 
   // The adds that belong on this level, keyed by the node they draw ON. A
   // MATERIALIZED add (the plan is decided and it became a work item) carries that

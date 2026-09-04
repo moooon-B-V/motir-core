@@ -269,23 +269,10 @@
     "writtenByMotir": "由 Motir AI 撰写",
     "autoPlannedNobodyAsked": "自动规划 — 无人发起",
     "notYetCreated": "尚未创建",
-    "sectionDescription": "描述",
     "sectionExplanation": "为何重要",
-    "descriptionAria": "提议描述",
-    "explanationAria": "该提议为何重要",
     "noDescription": "暂无描述。",
     "noExplanation": "暂无说明。",
     "aiDrafted": "AI 起草",
-    "railType": "类型",
-    "railPriority": "优先级",
-    "railPoints": "点数",
-    "railEstimate": "预估",
-    "railRepository": "代码库",
-    "railExecutor": "执行者",
-    "railParent": "父项",
-    "executorHuman": "人工",
-    "executorAgent": "编码智能体",
-    "minutes": "{n} 分钟",
     "viewTriggerAria": "查看提议",
     "revisePlaceholder": "请 Motir 修改此计划…",
     "reviseNote": "Motir 会修改此计划。在你批准之前，不会有任何内容进入你的待办列表。",
@@ -301,7 +288,14 @@
     "searchLabel": "搜索本计划",
     "showChangesAll": "此层级的每一项都来自本计划",
     "locateChange": "定位到本计划的下一项",
-    "rowOpenAria": "打开 {name}"
+    "rowOpenAria": "打开 {name}",
+    "openTargetAsItStands": "查看工作项的当前状态",
+    "railChangedMark": "将变更",
+    "railChangeCount": "此计划将变更它可设置的 {m} 个字段中的 {n} 个。",
+    "railChangeNone": "此计划不变更这些字段，只变更描述与说明。",
+    "railAddAll": "此处的每个值都是批准后将创建的内容。",
+    "railRemoveArchives": "批准此计划将归档 {key}。",
+    "peekNoActivity": "提案在获得批准之前没有评论、子项或动态。"
   },
   "planEdits": {
     "submitting": "提交中…",
@@ -334,10 +328,6 @@
     "actionError": "出了点问题，请重试。",
     "immutableRejection": "一个或多个工作项处于终止状态，无法更改。这些项在审阅中已被锁定。",
     "decidedRejection": "该提案已被处理，未做任何更改。",
-    "expandAction": "展开",
-    "expandTooltip": "为此工作项生成子项",
-    "replanAction": "重新规划",
-    "replanTooltip": "重新规划此 epic/story — 已完成的工作保持不变",
     "creditsError": "你的 AI 积分已用尽",
     "emptyError": "没有返回建议 — 请尝试更具体的提示或目标",
     "failedError": "任务未完成。你的待办列表未受影响。"
@@ -591,7 +581,6 @@
       "estimate": "预估",
       "points": "故事点",
       "status": "状态",
-      "actions": "操作",
       "unassigned": "未分配"
     },
     "list": {
@@ -964,14 +953,12 @@
       "jobRuns": "任务运行",
       "git": "Git",
       "github": "GitHub",
-      "docs": "文档",
       "backlog": "待办列表",
       "triage": "分流",
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
       "resumeOnboardingInProgress": "继续引导，进行中",
-      "legal": "法律条款",
       "security": "安全"
     },
     "topNav": {
@@ -1027,6 +1014,12 @@
       "platformAdmin": "平台管理",
       "platformAdminHint": "运维控制台·全部租户",
       "staffOnly": "仅限员工"
+    },
+    "help": {
+      "label": "帮助",
+      "docs": "文档",
+      "shortcuts": "键盘快捷键",
+      "legal": "法律文件"
     },
     "account": {
       "signOut": "退出登录",
@@ -1197,6 +1190,14 @@
     "archivedBannerMeta": "由 <strong>{name}</strong> 于 {date} 归档 · 已从看板和列表中隐藏，但其历史会被保留。",
     "archivedBannerRestoreTail": "恢复即可重新启用。",
     "archivedByUnknownActor": "已离开的成员",
+    "pendingPlanModifyHeadline": "有一个计划提议修改此工作项",
+    "pendingPlanRemoveHeadline": "有一个计划提议归档此工作项",
+    "pendingPlanMeta": "此处尚未发生任何更改——提议仅在计划获批准后才会生效。",
+    "pendingPlanReview": "查看计划",
+    "pendingPlanReviewAria": "查看提及 {key} 的计划",
+    "pendingPlanCountHeadline": "{count, plural, other {# 个待定计划提及此工作项}}",
+    "pendingPlanRowModify": "——提议修改",
+    "pendingPlanRowRemove": "——提议将其归档",
     "edit": "编辑",
     "description": "描述",
     "descriptionGloss": "做什么",
@@ -1598,6 +1599,8 @@
       },
       "details": "详情",
       "members": "成员与访问",
+      "publicPage": "公开页面",
+      "publicAddress": "公开地址",
       "roles": "角色与权限",
       "codeAccess": "代码访问",
       "workflow": "工作流",
@@ -2156,6 +2159,189 @@
       "errorLastAdmin": "这是唯一的项目管理员——请先指定另一名管理员。",
       "errorGeneric": "出了点问题，请重试。"
     },
+    "publicPage": {
+      "title": "公开页面",
+      "subtitle": "<strong>{projectName}</strong> 公开页面上的标语、标签和 README。",
+      "card": {
+        "title": "横幅与 README",
+        "subtitle": "一起保存。保存后立即在公开页面生效。"
+      },
+      "viewPublicPage": "查看公开页面",
+      "tagline": {
+        "label": "标语",
+        "placeholder": "用一句话介绍这个项目",
+        "help": "显示在项目名称下方。最多 {max} 个字符。"
+      },
+      "tags": {
+        "label": "标签",
+        "help": "最多 {maxCount} 个标签，每个最多 {maxLength} 个字符。",
+        "count": "{count} / {maxCount} 个标签",
+        "add": "添加标签",
+        "addPlaceholder": "新标签",
+        "empty": "暂无标签",
+        "remove": "移除{tag}"
+      },
+      "readme": {
+        "label": "README",
+        "help": "Markdown 格式，最多 {max, number} 个字符。你在这里看到的就是访客看到的。",
+        "emptyHelp": "尚未撰写。在你写 README 之前，公开页面会显示一段简短的自动介绍。"
+      },
+      "footer": {
+        "dirty": "有未保存的更改",
+        "saving": "正在保存…",
+        "saved": "已保存",
+        "invalid": "请修正标出的字段后再保存",
+        "save": "保存更改"
+      },
+      "error": {
+        "taglineTooLong": "太长了——最多 {max} 个字符。",
+        "tagsInvalid": "每个标签不能超过 {maxLength} 个字符，且最多 {maxCount} 个。",
+        "overviewTooLong": "太长了——最多 {max, number} 个字符。",
+        "saveFailed": "无法保存公开页面，请重试。"
+      },
+      "notPublic": {
+        "lead": "尚未公开构建。",
+        "body": "你在这里保存的内容会被保留，并在你于<link>成员与访问</link>中开始公开构建时立即生效。"
+      },
+      "discard": {
+        "title": "放弃未保存的更改？",
+        "keep": "继续编辑",
+        "discard": "放弃"
+      }
+    },
+    "publicAddress": {
+      "title": "公开地址",
+      "subtitle": "<strong>{projectName}</strong> 在公开网络上的访问地址。",
+      "unavailable": {
+        "title": "尚未配置公开命名空间",
+        "description": "此部署未设置租户基础域名，因此暂时无法认领子域名。请由运维人员设置 MOTIR_PUBLIC_TENANT_DOMAIN。"
+      },
+      "subdomain": {
+        "title": "工作区子域名",
+        "subtitle": "整个工作区共用一个地址，其中每个公开项目都在它下面提供访问。",
+        "label": "子域名",
+        "helper": "你的项目将位于 {preview}。仅限小写字母、数字和连字符；3–63 个字符。",
+        "claim": "认领子域名",
+        "claimable": "之后可以重命名，但次数有限。",
+        "active": "使用中",
+        "alias": "重定向至此",
+        "copy": "复制地址",
+        "copied": "地址已复制",
+        "open": "在新标签页中打开",
+        "rename": "重命名",
+        "renamesLeft": "{count, plural, =0 {没有剩余的重命名次数。} other {还可重命名 # 次。}}",
+        "readOnly": "由工作区所有者或管理员管理。",
+        "none": "尚未认领子域名。"
+      },
+      "rename": {
+        "title": "要重命名此子域名吗？",
+        "warningTitle": "旧地址将继续有效，并且永不释放。",
+        "warningBody": "{old} 将永久重定向到此处，任何人都无法再认领它——包括你自己。",
+        "remaining": "此次之后你还可重命名 {count} 次。",
+        "cancel": "取消",
+        "confirm": "重命名"
+      },
+      "domains": {
+        "title": "你自己的域名",
+        "subtitle": "使用你拥有的域名来提供此项目。",
+        "add": "添加域名",
+        "empty": {
+          "title": "尚未连接域名",
+          "body": "添加类似 roadmap.acme.com 的域名，此项目将在其根路径提供访问。你需要创建两条 DNS 记录；证书由 Motir 签发。"
+        },
+        "state": {
+          "unverified": {
+            "label": "未验证",
+            "hint": "已添加，但尚未看到 _motir-verify TXT 记录，也尚未申请证书。"
+          },
+          "verifying": {
+            "label": "检查中…",
+            "hint": "正在查找 TXT 记录。DNS 生效可能需要几分钟。"
+          },
+          "pending_certificate": {
+            "label": "签发中…",
+            "hint": "所有权已验证，证书已申请，通常需要一两分钟。"
+          },
+          "issued": {
+            "label": "已生效",
+            "hint": "证书已签发，该域名正在提供此项目，并会自动续期。"
+          },
+          "failed": {
+            "label": "失败",
+            "hint": "证书签发失败。"
+          },
+          "expired": {
+            "label": "已过期",
+            "hint": "证书已过期且续期未成功——几乎总是因为 DNS 记录发生了更改。该域名当前无法访问。"
+          },
+          "revoked": {
+            "label": "已吊销",
+            "hint": "证书已被吊销。该域名当前无法访问，需要重新申请证书。"
+          },
+          "active": {
+            "label": "使用中",
+            "hint": "工作区子域名可解析并提供此项目。"
+          },
+          "alias": {
+            "label": "重定向",
+            "hint": "被重命名后的子域名。它会永久重定向到当前地址，并且永不释放。"
+          }
+        },
+        "action": {
+          "showDns": "查看 DNS 记录",
+          "checkAgain": "重新检查",
+          "requestAgain": "重新申请",
+          "makePrimary": "设为主地址",
+          "remove": "移除",
+          "copy": "复制值",
+          "copied": "已复制"
+        },
+        "primary": {
+          "badge": "主地址",
+          "consequence": "其他所有地址都会重定向到这里。",
+          "disabledReason": "证书生效后，域名才能设为主地址"
+        },
+        "addModal": {
+          "title": "添加域名",
+          "label": "域名",
+          "helper": "此项目将在该域名的根路径提供访问。",
+          "recordsHeading": "请创建以下 {count} 条记录",
+          "type": "类型",
+          "name": "名称",
+          "value": "值",
+          "apexNote": "根域名会绑定到我们的 IP 地址。子域名则使用 CNAME，若这些地址将来变更也会自动跟随。",
+          "verify": "验证",
+          "later": "稍后再说",
+          "cancel": "取消",
+          "submit": "添加域名"
+        },
+        "removeModal": {
+          "title": "要移除 {hostname} 吗？",
+          "warningTitle": "正在使用该地址的访问者将会看到错误。",
+          "warningBody": "已分享出去的 {hostname} 链接将失效。此项目在其他地址上仍然保持公开。",
+          "cancel": "取消",
+          "confirm": "移除域名"
+        },
+        "upgrade": {
+          "title": "自定义域名属于付费方案。",
+          "body": "工作区子域名在所有方案中都包含，并会继续可用。升级后即可使用你自己的域名提供此项目。",
+          "cta": "查看方案"
+        },
+        "lastChecked": "上次检查：{when}",
+        "error": "操作未成功，请稍后重试。"
+      },
+      "error": {
+        "reserved": "{label} 是保留名称。Motir 保留了一小组名称，用于自己的主机以及读者可能误认的名称。",
+        "structurallyReserved": "{label} 是保留名称。以下划线、xn-- 或 motir- 开头的名称属于 Motir 或 DNS 本身。",
+        "tooShort": "太短——子域名至少需要 3 个字符。",
+        "tooLong": "太长——子域名最多 63 个字符。",
+        "badGrammar": "仅限小写字母、数字和连字符，且需以字母或数字开头和结尾。",
+        "taken": "{label} 已被使用。被重命名后的子域名同样会保留其名称，因此它可能属于一个已不再使用它的工作区。",
+        "capReached": "此工作区的重命名次数已用完，地址无法再更改。",
+        "forbidden": "只有工作区所有者或管理员才能更改此地址。",
+        "generic": "操作未成功，请稍后重试。"
+      }
+    },
     "codeAccess": {
       "title": "代码访问",
       "subtitle": "谁可以克隆并推送到 Motir 为 <strong>{projectName}</strong> 创建的仓库。",
@@ -2270,10 +2456,11 @@
       "copied": "已复制",
       "copyError": "无法复制链接。",
       "linkNote": "任何人都可以无需登录打开此链接，页面也可被搜索引擎抓取。访客仅在提交、点赞或评论时才需要登录。若要停止分享，请将上方的访问级别设为“公开构建”以外的任意级别。",
+      "setUpOwnAddress": "设置你自己的地址",
       "heroOverviewHeading": "横幅与概览",
-      "heroOverviewSubheading": "直接在公开页面上编辑标语、标签和 README——你编辑的内容就是访客看到的内容。",
-      "editOnPublicPage": "在公开页面上编辑",
-      "heroOverviewNote": "在公开“概览”页打开页内编辑器。项目未公开时将隐藏。"
+      "heroOverviewSubheading": "访客在你的公开页面上看到的标语、标签和 README。",
+      "editOnPublicPage": "编辑公开页面",
+      "heroOverviewNote": "打开“设置 › 公开页面”。项目公开前也可以先写好。"
     },
     "jobs": {
       "title": "任务运行",
@@ -3313,6 +3500,8 @@
         "details": "项目详情，以及更改它们的操作——名称、标识、头像、归档——由项目管理员管理。如需修改，请联系管理员。",
         "repositories": "本项目代码所在的位置，以及由谁接管，由项目管理员管理。如需连接或迁移仓库，请联系管理员。",
         "members": "谁在本项目中、每个人能做什么，由项目管理员管理。如需添加成员或调整角色，请联系管理员。",
+        "public-page": "本项目公开页面上展示的内容——标语、标签和 README——由项目管理员撰写。如需调整，请联系管理员。",
+        "public-address": "你需要管理此项目访问权限的权限，才能打开其公开地址。",
         "roles": "本项目中每个角色能做什么，由项目管理员管理。如需调整角色，请联系管理员。",
         "code-access": "谁可以克隆和推送本项目的代码，由项目管理员管理。你仍可在 Git 设置中连接自己的 GitHub 账号。",
         "workflow": "状态及其之间的流转由项目管理员管理。如需调整工作流，请联系管理员。",
@@ -6004,7 +6193,12 @@
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
         "validating": "正在对照你的计划校验提议…",
         "reading": "正在理解你的请求……",
-        "redirected": "正在生成方案……"
+        "redirected": "正在生成方案……",
+        "retrieval": "正在读取计划…",
+        "laying": "正在铺开层级…",
+        "authoring": "正在撰写工作项…",
+        "note": "正在思考…",
+        "unknown": "进行中…"
       },
       "error": {
         "body": "这次没有成功。对话已保存 —— 可以重试，或换种说法。",
@@ -6042,7 +6236,42 @@
       "correcting": "正在重新理解……",
       "correctedToPlan": "已改按计划变更理解",
       "correctedToAsk": "已改按提问理解",
-      "handoff": "按计划变更理解 — 正在生成方案"
+      "handoff": "按计划变更理解 — 正在生成方案",
+      "stop": "停止",
+      "stoppingAction": "正在停止…",
+      "stopping": "正在停止 —— 先完成当前这个工作项。",
+      "stopped": "你停止了这次运行。",
+      "queuedLabel": "待读",
+      "queuedRead": "已读",
+      "queuedMarker": "已排队 —— Motir AI 写完当前这个工作项后会读到。",
+      "queuedReadMarker": "已在阶段边界读取 —— 已并入本次运行。",
+      "act": {
+        "submitted": "提交",
+        "reading": "阅读",
+        "redirected": "转交",
+        "retrieval": "检索",
+        "searching": "搜索",
+        "drilling": "下钻",
+        "laying": "铺层",
+        "authoring": "撰写",
+        "note": "说明",
+        "proposed": "提案",
+        "validating": "校验",
+        "unknown": "帧",
+        "retrievalLine": "读取 {family}",
+        "retrievalBlockedLine": "检索额度已用尽 —— 以现有信息继续。",
+        "layingLine": "正在铺开 {target}",
+        "authoringLine": "正在撰写 {title}",
+        "unknownLine": "帧：{frame}",
+        "retrievalLineBare": "读取了计划的来源",
+        "family": {
+          "planTree": "计划树",
+          "codeGraph": "代码图谱",
+          "codeHealth": "代码健康度",
+          "web": "网页",
+          "lessons": "经验教训"
+        }
+      }
     },
     "targets": {
       "sectionLabel": "工作项",

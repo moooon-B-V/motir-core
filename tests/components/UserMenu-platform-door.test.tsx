@@ -84,4 +84,24 @@ describe('the account menu for a PLATFORM-STAFF user', () => {
     expect(screen.getByRole('link', { name: /workspace settings/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeTruthy();
   });
+
+  it('opens the panel at the 336px the staff row is derived to need', () => {
+    // ⚠️ THIS PINS A NUMBER; IT DOES NOT MEASURE THE WRAP. happy-dom has no
+    // layout engine, so nothing here can see a hint line take two rows — which
+    // is exactly how MOTIR-4270 shipped: `width={240}` was correct for 1.2.6's
+    // one-line rows, MOTIR-2896 added this row's hint + pill, and the width was
+    // never re-derived, so the hint wrapped for every staff user (a 68px row
+    // where `design/shell/account-menu.mock.html` draws 52px).
+    //
+    // The number's derivation lives in the comment beside the prop. What this
+    // test buys is that the constant cannot be quietly rounded back down — a
+    // real one-line assertion needs a browser AND Inter loaded, because the
+    // fallback face needs only 320px and would pass a wrong value.
+    renderWithIntl(<UserMenu name="Ops" email="ops@moooon.net" platformStaff />);
+    openMenu();
+
+    const panel = document.querySelector('[data-surface="popover"]');
+    expect(panel).not.toBeNull();
+    expect((panel as HTMLElement).style.width).toBe('336px');
+  });
 });

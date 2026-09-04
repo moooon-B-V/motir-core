@@ -41,6 +41,8 @@ const req = (path: string) => new Request(`https://app.motir.co${path}`);
 
 const feed = {
   project: { identifier: 'PROD', name: 'Prodect' },
+  // The project's PRIMARY address, which the service now resolves (MOTIR-4222).
+  canonicalBase: 'https://motir.co/p/PROD',
   entries: [
     {
       identifier: 'PROD-3',
@@ -89,19 +91,37 @@ describe('GET /api/public/p/{identifier}/changelog.xml — the orphaned builder 
     );
   });
 
-  it('builds every URL against the PUBLIC site, not this host', async () => {
-    // publicProjectUrl resolves publicSiteOrigin(), which falls back to the
-    // application origin while MOTIR_PUBLIC_SITE_URL is unset — the ordering
-    // guarantee in lib/publicProjects/urls.ts. What matters here is that the
-    // route asks THAT module rather than hard-coding a host, so the feed's own
-    // links move with the cutover instead of needing a second change.
-    expect(feedSrc).toContain("from '@/lib/publicProjects/urls'");
+  it('builds every URL against the project’s PRIMARY ADDRESS, not this host', async () => {
+    // ⚠️ THIS ASSERTION USED TO PIN `publicProjectUrl()` (MOTIR-4111), and it
+    // was right for as long as `motir.co/p/<id>` was every project's only
+    // address. MOTIR-4222 gives a project a canonical that may live on a
+    // workspace subdomain or a customer domain, and a feed is the one document
+    // that outlives every redirect — it is copied into a reader and polled for
+    // years. So the route asks the SERVICE for the primary rather than
+    // rebuilding the `motir.co` URL, and what is pinned is that it does.
     getChangelogFeed.mockResolvedValue(feed);
     const body = await (
       await feedGET(req('/api/public/p/PROD/changelog.xml'), params('PROD'))
     ).text();
     expect(body).toContain('/p/PROD/changelog.xml');
     expect(body).toContain('/p/PROD/items/PROD-3');
+  });
+
+  it('and FOLLOWS the primary when it moves off motir.co', async () => {
+    // The behaviour the change is for, asserted rather than inferred from the
+    // one above — which passes on either implementation, because that fixture's
+    // primary IS the motir.co URL.
+    getChangelogFeed.mockResolvedValue({
+      ...feed,
+      canonicalBase: 'https://roadmap.acme.com',
+    });
+    const body = await (
+      await feedGET(req('/api/public/p/PROD/changelog.xml'), params('PROD'))
+    ).text();
+
+    expect(body).toContain('https://roadmap.acme.com/changelog.xml');
+    expect(body).toContain('https://roadmap.acme.com/items/PROD-3');
+    expect(body).not.toContain('motir.co/p/PROD');
   });
 
   it('reuses the shipped builder rather than reimplementing it', () => {

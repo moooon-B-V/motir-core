@@ -249,6 +249,11 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/design',
     why: 'The `Design` showcase nav item, a motir-marketing route (MOTIR-3861) that does not live in motir-core. The unified chrome keeps the shipped nav item; the address resolves on motir.co, not in this repo, so the route inventory cannot resolve it.',
   },
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/design',
+    why: "The same `Design` showcase nav item, in the same chrome — the not-found room is drawn INSIDE that bar (MOTIR-4245), so it carries the bar's three nav items verbatim. Permanent for the same reason as the row above: the route ships, in the other repository.",
+  },
   // ── `/legal*` LEFT THIS HOST ENTIRELY (MOTIR-4103) ────────────────────────
   // Two different reasons wearing one address, and the split matters because
   // only one of them is history.
@@ -297,6 +302,26 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/legal/terms',
     why: 'A footer link in the motir.co chrome the asset draws. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
   },
+  // The SAME three footer rows, in the not-found room (MOTIR-4245). It draws
+  // the identical motir.co chrome around a 404, so it inherits the chrome's
+  // Legal column verbatim — and the room's own argument leans on that column:
+  // an unknown `/legal/<slug>` is one of the four arrivals, and the footer is
+  // what answers it, which is why it earns no door of its own.
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/legal',
+    why: 'A footer link in the motir.co chrome the not-found room is drawn inside. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/legal/privacy',
+    why: 'A footer link in the motir.co chrome the not-found room is drawn inside. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/legal/terms',
+    why: 'A footer link in the motir.co chrome the not-found room is drawn inside. Resolves on the brand host; MOTIR-4103 removed the route from this one.',
+  },
   {
     file: 'design/auth/legal-agreement.mock.html',
     address: '/legal/terms',
@@ -317,22 +342,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/api-docs/design-notes.md',
     address: '/api-docs',
     why: "The asset's own ⚠️ block recording that these addresses moved twice — the correction MOTIR-2316 was filed about, so it must name the old address.",
-  },
-  // ── FORWARD-LOOKING: an asset drawn before its route exists ───────────────
-  // TEMPORARY, and it names the card that deletes it — the distinction the
-  // block below insists on. `design/projects/public-address.mock.html` +
-  // `design-notes.md` (MOTIR-4211) draw the Public address room for Story
-  // MOTIR-3878; the design gate requires the asset BEFORE the page is built, so
-  // the route it names is drawn and not yet mounted.
-  //
-  // ⚠️ DELETE THIS ROW IN MOTIR-4221, the card that mounts
-  // `app/(authed)/settings/project/public-address/page.tsx`. The suite asserts
-  // this table tight in both directions, so leaving it behind fails the lane —
-  // which is the mechanism, not a hazard: the row cannot rot into a mute button.
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/settings/project/public-address',
-    why: 'Forward-looking. The Public address room is designed (MOTIR-4211) before it is built; MOTIR-4221 mounts the route and DELETES this row.',
   },
   // ── An address a design asset RECORDED, which the app has since moved ──────
   // A DIFFERENT KIND of row from every other entry in this table, and the
@@ -825,6 +834,16 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
   },
   {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/docs',
+    why: "The public reading surface lives on motir-marketing (MOTIR-3932). The not-found room (MOTIR-4245) draws the shipped motir.co bar and footer around it, so it names that host's addresses; motir-core serves neither.",
+  },
+  {
+    file: 'design/public-site/not-found.mock.html',
+    address: '/explore',
+    why: "The public reading surface lives on motir-marketing (MOTIR-3932). `/explore` is this room's PRIMARY door as well as a nav and footer row (MOTIR-4245) — the destination the asset argues for — and it resolves on motir.co, not in this repo.",
+  },
+  {
     file: 'design/roadmap/root-non-epic-rows.mock.html',
     address: '/explore/topic/[slug]',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
@@ -838,23 +857,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/shell/navigation-pending.mock.html',
     address: '/docs',
     why: 'The public reading surface moved to motir-marketing (MOTIR-3932); this asset is a point-in-time record of the route as it was on app.motir.co.',
-  },
-  // ── Forward-looking: the Public page room (MOTIR-4205 draws it, MOTIR-4171 builds it) ──
-  // The settings room where a project admin edits the public page's tagline,
-  // tags and README. The asset is the design MOTIR-4171 builds to, so it names
-  // the route before the page exists. Both rows self-destruct: the moment
-  // `app/(authed)/settings/project/public/page.tsx` lands, `carries no KNOWN
-  // entry that has stopped applying` goes red until they are deleted — MOTIR-4171
-  // deletes them in the same commit.
-  {
-    file: 'design/projects/public-page.mock.html',
-    address: '/settings/project/public',
-    why: 'Forward-looking: the Public page room MOTIR-4171 mounts. This asset (MOTIR-4205) is its design; the row dies with the route.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/settings/project/public',
-    why: 'Forward-looking: same route, cited by the notes section that specifies it. Dies with the route.',
   },
   // ── Historical: the app-host public path the retargets REMOVE ─────────────
   // The same section names `/p/<key>` (and `/p/<key>?edit=1`) as the dead
@@ -1616,14 +1618,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/shell/navigation-pending.mock.html',
     path: 'app/(public)/explore/(square)/loading.tsx',
     why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
-  },
-  // ── Forward-looking: the Public page room's page file (MOTIR-4205 → MOTIR-4171) ──
-  // The notes name the page the registry entry mounts before MOTIR-4171 creates
-  // it. Self-destructing: delete this row in the commit that adds the file.
-  {
-    file: 'design/projects/design-notes.md',
-    path: 'app/(authed)/settings/project/public/page.tsx',
-    why: 'Forward-looking: MOTIR-4171 creates the page this design (MOTIR-4205) specifies; delete the row with the file.',
   },
 ];
 

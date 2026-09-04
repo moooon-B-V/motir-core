@@ -64,3 +64,39 @@ describe('PM_ENTITLEMENTS.meta', () => {
     expect(PM_ENTITLEMENTS.meta).toBe(meta);
   });
 });
+
+describe('the custom-domain cap (Story MOTIR-3878 · `public-tenant-addresses.md` §9)', () => {
+  it('gates the CUSTOMER DOMAIN and nothing else — the subdomain has no cap', () => {
+    // The split every mirror in the category draws, and the one this story
+    // ships: a working default address for everyone, an owned address for
+    // customers who pay. There is deliberately no `workspace_subdomains` kind.
+    expect(PM_ENTITLEMENTS.free.maxCustomDomains).toBe(0);
+    expect(PM_ENTITLEMENTS.scaled.maxCustomDomains).toBe(5);
+    expect(PM_ENTITLEMENTS.enterprise.maxCustomDomains).toBeNull();
+    expect(PM_ENTITLEMENTS.meta.maxCustomDomains).toBeNull();
+  });
+
+  it('is TOTAL over PmTier — every row carries a value', () => {
+    // `PM_ENTITLEMENTS` is `Record<PmTier, PmEntitlements>`, so a missing row is
+    // a compile error rather than a runtime `undefined`. This asserts the
+    // property at runtime too, because a `Record` cannot catch a row that
+    // carries the key with `undefined` behind a loosened type.
+    for (const [tier, caps] of Object.entries(PM_ENTITLEMENTS)) {
+      expect(caps, `${tier} must carry maxCustomDomains`).toHaveProperty('maxCustomDomains');
+      const value = caps.maxCustomDomains;
+      expect(
+        value === null || typeof value === 'number',
+        `${tier}.maxCustomDomains must be a number or null, got ${String(value)}`,
+      ).toBe(true);
+    }
+  });
+
+  it('makes `free: 0` refuse the FIRST domain, not the sixth', () => {
+    // The value is 0 rather than absent on purpose: it makes the refusal the
+    // upgrade prompt's trigger instead of an empty state the pane has to
+    // special-case. `0` and `null` are opposite meanings here and a reader
+    // skimming the table could take either for "no cap".
+    expect(PM_ENTITLEMENTS.free.maxCustomDomains).toBe(0);
+    expect(PM_ENTITLEMENTS.free.maxCustomDomains).not.toBeNull();
+  });
+});

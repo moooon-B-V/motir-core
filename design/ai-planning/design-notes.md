@@ -1606,31 +1606,39 @@ rather than twice. Leaving it undrawn is how a pane ends up with two control bar
 the Children list has read this one. Shape routes through `--radius-control` /
 `--spacing-control-x|y`, exactly as that row does.
 
-| element           | reads                                                                         | primitive / treatment                                                                                          |
-| ----------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| the kind glyph    | `kind`                                                                        | `IssueTypeIcon`, `--el-type-{epic,story,task,bug,subtask}`                                                     |
-| the key           | `identifier`                                                                  | the row's monospace key, `--el-text-muted`; **`no key yet`** in `--el-text-faint` for an un-materialized `add` |
-| the title         | `title`                                                                       | the row's title ink, single-line ellipsis                                                                      |
-| the facts line    | `kind` · `type` · `storyPoints` · `estimateMinutes` · `targetRepo`            | `--el-text-secondary`, the row's own `text-xs`                                                                 |
-| where it lands    | `parentIdentifier` / `parentTitle`, or `parentNodeId` naming another proposal | `under <b>…</b>`; an INTRA-PLAN parent is marked _(proposed)_                                                  |
-| the live status   | `statusLabel` / `statusCategory`                                              | the shipped `StatusPill` — only where the row HAS one (never an `add`)                                         |
-| the op            | `op`                                                                          | panel B's own `add` / `modify` / `remove` chips, unchanged                                                     |
-| the stale flag    | `stale` / `staleReasons`                                                      | the row's shipped warning `Pill`, as the rail draws it                                                         |
-| a `modify`'s diff | `changes[]`                                                                   | §3's two-line text form, below                                                                                 |
+| element           | reads                                                                         | primitive / treatment                                                                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| the kind glyph    | `kind`                                                                        | `IssueTypeIcon`, `--el-type-{epic,story,task,bug,subtask}`                                                                                               |
+| the key           | `identifier`                                                                  | the row's monospace key, `--el-text-identifier`; **`no key yet`** in `--el-text-secondary` for an un-materialized `add` (⚠️ AMENDED — MOTIR-4277, below) |
+| the title         | `title`                                                                       | the row's title ink, single-line ellipsis                                                                                                                |
+| the facts line    | `kind` · `type` · `storyPoints` · `estimateMinutes` · `targetRepo`            | `--el-text-secondary`, the row's own `text-xs`                                                                                                           |
+| where it lands    | `parentIdentifier` / `parentTitle`, or `parentNodeId` naming another proposal | `under <b>…</b>`; an INTRA-PLAN parent is marked _(proposed)_                                                                                            |
+| the live status   | `statusLabel` / `statusCategory`                                              | the shipped `StatusPill` — only where the row HAS one (never an `add`)                                                                                   |
+| the op            | `op`                                                                          | panel B's own `add` / `modify` / `remove` chips, unchanged                                                                                               |
+| the stale flag    | `stale` / `staleReasons`                                                      | the row's shipped warning `Pill`, as the rail draws it                                                                                                   |
+| a `modify`'s diff | `changes[]`                                                                   | §3's two-line text form, below                                                                                                                           |
 
 - **An `add` has NO KEY, and the list says so rather than leaving a gap.** `identifier` is null until
   approve materializes it. An empty slot in a column of keys reads as a missing value; `no key yet`
-  reads as the fact it is. (`--el-text-faint` is legitimate here — it is a LABEL about absence
+  reads as the fact it is. ~~(`--el-text-faint` is legitimate here — it is a LABEL about absence
   beside a value the row also carries in words, and the row's meaning does not depend on it. Where
-  it must carry meaning alone, use `--el-text-secondary`.)
+  it must carry meaning alone, use `--el-text-secondary`.)~~ **⚠️ AMENDED (MOTIR-4277): it is
+  `--el-text-secondary`, by this sentence's OWN test.** Nothing else occupies that slot — the row
+  carries the key or it carries `no key yet` — so the label DOES carry its meaning alone, which is
+  the case the parenthetical already routed to `--el-text-secondary`. The clause that read the
+  other way was written about a row where the absence is also legible from the words beside it,
+  and this row is not that.
 - **A `modify`'s diff is TWO-LINE TEXT, per changed field — deliberately NOT the canvas's inline
   overlay.** The canvas overlay answers _this node is changing_, inside a node card ~280px wide: it
   is a SIGNAL. The list answers _changing to WHAT_, at the full width of the pane, for a reader
   deciding whether to approve. So **the list is the only surface that spells a change out and the
   canvas is the only surface that marks a node** — neither is built twice.
   - the field NAME in the row's monospace label ink; the OLD value struck through in
-    `--el-text-muted`; an arrow in `--el-text-faint` (`aria-hidden`, decorative); the NEW value in
-    `--el-text-strong` at `font-semibold`.
+    `--el-text-secondary`; an arrow in `--el-text-secondary`; the NEW value in `--el-text-strong`
+    at `font-semibold`. (⚠️ AMENDED — MOTIR-4277, below. It read `--el-text-muted` for the old
+    value and `--el-text-faint` for the arrow, the arrow "`aria-hidden`, decorative". The asset
+    never carried that `aria-hidden`, so the exemption the faint ink depended on was never
+    earned — and the strike-through already says _old_ without help from a lighter ink.)
   - **A field whose new value is a BODY (`description`, `explanation`) is NAMED, not quoted** —
     _"rewritten — open the card to read it"_. A rewritten description is not a diff a review list
     can carry, and a truncated one is worse than a pointer.
@@ -1747,6 +1755,41 @@ The canvas and its node treatments; **which level the canvas arrives at**; **the
 for a PROPOSED parent**; **the Show-changes control's own behaviour and treatment** — all three are
 Part IX's. Also: the drill-down, the review rail's layout, the establish step's own content, the
 approve/decline flow for a `planned` plan, and the `/plans` list surface (Part VII).
+
+## 8. ⚠️ AMENDMENT — the asset now consumes the `--el-*` layer, and three inks moved with it (MOTIR-4277)
+
+**The asset's `:root` used to alias the design system's values onto PRIVATE names** — `--muted:
+#787671`, `--faint: #a4a097`, `--soft: #fafaf9`, and eleven more. Every value was correct, copied
+from the token layer at some past moment, which is exactly what made it look harmless. What a raw
+hex cannot do is flip with `data-palette`, follow a re-skin, or be MEASURED: every ink guard in the
+tree keys on `--el-*`, so an asset that aliases hexes is outside all of them by construction.
+
+**What that hid.** `.prow:hover` paints `--soft` and the row's monospace key was inked `--muted`:
+`#787671` on `#fafaf9` is **4.34:1**, the exact pairing `CLAUDE.md`'s measured table forbids and the
+exact pairing [MOTIR-4255](motir:cmtkyfo51007bhvn88k9qcooo) had just swept out of 22 other assets —
+here, under a green `design-ink-contrast`. Sixteen elements in this asset failed 4.5:1 under that
+hover tint. The state arm could only COUNT them (`unTokenisedInkCount`), because the remedy it
+applies is a token SWAP and there was no token to swap.
+
+**Three inks moved, and each is the token that names the job:**
+
+| element                                                            | was                                             | is                         | why                                                                                                                       |
+| ------------------------------------------------------------------ | ----------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| the row's monospace key (`.prow .ttl .key`)                        | `--el-text-muted` (4.34:1 under the hover tint) | **`--el-text-identifier`** | the token `theme.css` names for a monospace item key                                                                      |
+| `no key yet` (`.prow .ttl .nokey`)                                 | `--el-text-faint` (2.50:1)                      | **`--el-text-secondary`**  | §3's own test: nothing else fills that slot, so the label carries its meaning alone                                       |
+| a `modify`'s OLD value and its arrow (`.chg .from`, `.chg .arrow`) | `--el-text-muted` / `--el-text-faint`           | **`--el-text-secondary`**  | the strike-through already says _old_; the arrow's `aria-hidden` exemption was specified but never written into the asset |
+
+The same swap moved every other ink, fill, border and radius in the asset onto `--el-*` /
+element-semantic shape tokens. Three values changed as a consequence of consuming the layer rather
+than a copy of it, and all three are named in the pull request: the review sheet's backdrop and the
+tab track/pressed pair (the asset's own §2 comment already named `--el-tabnav-track` and
+`--el-page-bg`, and the aliases had them inverted), `--el-border-strong` (`#d3cfc8` → `#c8c4be`),
+and the tint CHIP inks, which take `--el-text-strong` per `CLAUDE.md`'s coloured-chip rule instead
+of six hand-darkened hues. **The `.png` is re-exported at unchanged dimensions.**
+
+**The asset has no `[data-theme='dark']` block and did not gain one** — it is a light-only board, so
+`design-dark-parity` has nothing here to rule on; the tokens it now consumes are the ones that would
+carry a dark block if one is ever drawn.
 
 ---
 
@@ -3541,6 +3584,38 @@ sources, and the op decides which exist:
 | **`modify`**                | the TARGET's live `QuickViewData` | the patch's own fields                  | the card as it will stand, with the changed fields MARKED                      |
 | **`remove`**                | the TARGET's live `QuickViewData` | none — a `remove` carries no patch      | the card as it stands, marked nowhere, plus the archive statement              |
 
+### ⚠️ AMENDED 2026-09-02, WHILE BUILDING MOTIR-4183 — the merge is RIGHT and its OWNER was wrong
+
+The table above says the projection's base is the target's live `QuickViewData`. **The rendered result
+it describes is correct and unchanged; where that merge HAPPENS is not.** Measured before implementing:
+
+|                                         |                                                                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `planReviewService.getPlanReview` today | reads every `modify` / `remove` target in **ONE batched, workspace-scoped read** — its own header comment says _"no N+1"_                 |
+| `workItemsService.getQuickView`         | **~14 reads per item** (the detail aggregate, members, sprints, components, estimation config, the sprint name, the refs, the deliveries) |
+
+So building the merge inside `getPlanReview` puts **~14 × N reads on the plan-review load** — roughly
+280 for a plan with twenty `modify`s — to serve a peek the reviewer opens at most one of. That is a
+surface whose no-N+1 property is stated in code, traded away for a panel that is closed.
+
+**The merge therefore happens where the shipped peek already fetches: ON OPEN, in the client.**
+
+| op                    | on open                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modify` / `remove`   | the host fetches the TARGET's payload from `GET /api/work-items/peek?key=<identifier>` — the request `WorkItemQuickView.tsx:75` and `IssueQuickViewController.tsx:70` already make — and overlays the proposal envelope |
+| un-materialized `add` | **no key, so no fetch.** The envelope IS the payload; the short rail in §2's table is what that produces                                                                                                                |
+
+**One request per opened proposal, which is what opening any work item costs today**, and the
+plan-review read gains nothing but the envelope. §2's row-by-row table is unchanged — it describes what
+the reader SEES, and they see the same thing either way.
+
+**The boundary this moves:** MOTIR-4183 emits the **envelope** (`op`, the target's `identifier`, the
+proposed values, `changedFields`, `settableFields`) and adds `explanationMd` to the payload — which is
+what its own criteria already say, _"a small `proposal` envelope carrying what only a proposal has"_.
+**MOTIR-4184 owns the overlay**, because the overlay is a render-time composition of two payloads and
+that card is the one that mounts them. Neither card gains scope it did not have; the design had put the
+join in the wrong half.
+
 **Why a merge and not the proposal's fields alone.** Today a `modify` opened from the CANVAS renders
 `WorkItemQuickView` — the target's full rail. A proposal mode built only from
 `PlanItemProposedFields` would take `Assignee`, `Reporter`, `Labels`, `Components`, `Due date`,
@@ -3599,11 +3674,36 @@ the rail's other mounted components — none of which belongs in a design card o
 surface is painted in a third module), which is why the tree is green and why a design pass is what
 found it.
 
-**Nine markable fields**, and that number is the denominator §3's foot line names: `targetRepo` /
-`targetRepoRole` (one row), `type`, `executor`, `priority`, `parent`, `storyPoints`,
-`estimateMinutes`, plus `title` and the two bodies, which are marked in the main column rather than in
-the rail. The rail's own denominator is therefore **9** as drawn; a build that changes
-`PlanItemProposedFields` changes it, which is why the line computes it rather than stating a constant.
+**⚠️ AMENDED 2026-09-02, WHILE BUILDING MOTIR-4183 — the first draft of this paragraph said NINE and
+was wrong twice.** It counted `executor`, which a `modify` cannot patch, and it mixed rail fields with
+body fields under a number the rail's own foot line reads. Both were settled by reading the TYPE and
+`plansService.applyModify`, not the DTO's field list:
+
+- **`PlanItemPatch` has no `executor` key** and `applyModify` never writes one. `executor` is settable
+  on an `add` (`PlanItemProposedFields`, deepenable since `agent-authored-plans.md` AMENDMENT 4 D3a)
+  and is the TARGET's on every other op. The row above is corrected to `add`-ONLY.
+- **`targetRepo` / `targetRepoRole` ARE patchable** — and a grep for `patch.targetRepo` inside
+  `applyModify` returns NOTHING, because they are applied through `repoPins`. A reader checking this
+  the obvious way concludes the opposite of the truth, which is why it is recorded here.
+
+**So the rail's denominator is SIX** — the rail rows a patch can move:
+
+| #   | rail row     | patch key                                           |
+| --- | ------------ | --------------------------------------------------- |
+| 1   | Repositories | `targetRepo` / `targetRepoRole` (one row, two keys) |
+| 2   | Type         | `type`                                              |
+| 3   | Priority     | `priority`                                          |
+| 4   | Parent       | `parentRef`                                         |
+| 5   | Story points | `storyPoints`                                       |
+| 6   | Estimate     | `estimateMinutes`                                   |
+
+`title`, `descriptionMd` and `explanationMd` are patchable too and are **excluded on purpose**: they
+are marked in the MAIN COLUMN, and a line at the foot of the rail that counted them would answer about
+fields the reader cannot see from where the line sits. `blockedByAdd` / `blockedByRemove` are edges and
+belong to the canvas (Part IX).
+
+**The line therefore reads `2 of 6`.** It is COMPUTED from the patch key set rather than stated as a
+constant, so a key added to `PlanItemPatch` moves it with no edit here — MOTIR-4183's criterion 9.
 
 ## 3. §3 · The CHANGED marker — `--el-diff-moved` — and the PINNED line that reads the silence
 
@@ -3665,7 +3765,7 @@ marker on fourteen rows. **So the rail does not try; one line at the rail's foot
 | **`modify`**, n = 0 | `This plan changes none of these fields — only the description and the explanation.` |
 | **`remove`**        | `Approving this plan archives {key}.`                                                |
 
-**Naming the DENOMINATOR is what makes the silence readable.** `2 of 9` says both that seven settable
+**Naming the DENOMINATOR is what makes the silence readable.** `2 of 6` says both that four settable
 fields are untouched and that everything outside the nine is beyond the plan's reach — which is what
 the `add` arm's short rail and the `modify` arm's never-marked rows are each half of.
 
@@ -3834,9 +3934,20 @@ card**.
 | foot line    | `Approving this plan archives {key}.`                                                                                                                                |
 | the link out | present, labelled `Open the work item as it stands →` (§7)                                                                                                           |
 
-**`targetMissing`.** A `remove` whose target is already archived or hard-deleted (the DTO's own flag)
-shows the peek's shipped NOT-FOUND panel rather than an empty proposal — the state
+**`targetMissing`.** A `remove` whose target is ~~already archived or~~ hard-deleted (the DTO's own
+flag) shows the peek's shipped NOT-FOUND panel rather than an empty proposal — the state
 `IssueQuickViewPanel state="notfound"` already draws, reused rather than re-invented.
+
+> **⚠️ CORRECTED 2026-09-03 (MOTIR-4256) — the ARCHIVED half of that sentence was wrong.**
+> `planReviewService` computes `targetMissing = item.op !== 'add' && !target`, and the batched read
+> behind `target` is `workItemRepository.findByIdsInWorkspace` — a plain
+> `findMany({ where: { id: { in: ids }, workspaceId } })` that does **not** filter `archivedAt`. So an
+> archived target IS resolved, `targetMissing` stays `false`, and the peek renders the `remove`
+> normally; only a hard-DELETED target reaches the NOT-FOUND panel. Nothing about the drawn state
+> changes and no asset is re-exported — what changes is which cards reach it. It matters one surface
+> over: `design/work-items/design-notes.md` § _The PENDING-PLAN indicator on the item page_ draws the
+> archived-item-plus-`remove`-proposal STACK, and that panel is only real because an archived target
+> keeps its proposal readable.
 
 ## 9. §9 · The two ENTRANCES — unchanged in shape, re-pointed in target
 

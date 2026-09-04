@@ -9,13 +9,16 @@ vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
   getJob: vi.fn(),
 }));
 
-import { POST as APPROVE } from '@/app/api/v1/work-items/[key]/plan-approval/route';
+import {
+  GET as READ_PLAN,
+  POST as APPROVE,
+} from '@/app/api/v1/work-items/[key]/plan-approval/route';
 import { POST as SESSION_SUBMIT } from '@/app/api/v1/projects/[projectKey]/plan-session/submissions/route';
 import { POST as SESSION_TURN } from '@/app/api/v1/projects/[projectKey]/plan-session/turns/route';
 import { submitJob } from '@/lib/ai/motirAiClient';
 import { DOMAIN_ERROR_STATUS } from '@/lib/api/v1/errors';
 import { WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
-import { planSchema, type V1Plan } from '@/lib/api/v1/workLoop/schema';
+import { planSchema, workItemPlanSchema, type V1Plan } from '@/lib/api/v1/workLoop/schema';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -72,6 +75,13 @@ function approve(caller: V1ProjectCaller, key: string): Promise<Response> {
       method: 'POST',
       headers: caller.headers,
     }),
+    { params: Promise.resolve({ key }) },
+  );
+}
+
+function readPlan(caller: V1ProjectCaller, key: string): Promise<Response> {
+  return READ_PLAN(
+    new Request(`${BASE}/work-items/${key}/plan-approval`, { headers: caller.headers }),
     { params: Promise.resolve({ key }) },
   );
 }
@@ -343,6 +353,23 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
 
   // ── the contract ──────────────────────────────────────────────────────────
 
+  it('RETHROWS a real failure — a 409 is ONE refusal, not a bucket for everything', async () => {
+    // ⚠️ THE NARROWING IS THE POINT, on both verbs. This catch exists for exactly
+    // one typed refusal — the plan is not in a decidable status — and a loop
+    // branches on that 409's `planStatus` to WAIT. Collapsing any failure into it
+    // would tell an unattended run to sit patiently through an outage.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+    vi.spyOn(plansService, 'approvePlanForWorkItem').mockRejectedValueOnce(
+      new Error('the database went away'),
+    );
+
+    const res = await approve(caller, key);
+
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { code?: string }).code).not.toBe('PLAN_NOT_IN_EXPECTED_STATUS');
+  });
+
   it('is DECLARED in the operation registry, with the permission the route enforces', () => {
     const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'approveWorkItemPlan');
     expect(op).toBeDefined();
@@ -363,5 +390,256 @@ describe('POST /api/v1/work-items/{key}/plan-approval', () => {
     const { planId } = await refusedCardWithPlan(caller);
 
     expect((await plansService.approvePlan(planId, caller.ctx)).status).toBe('approved');
+  });
+});
+
+// GET /api/v1/work-items/{key}/plan-approval (MOTIR-4085) — the READ beside the
+// decision, so an unattended loop can BOUND what it is about to approve.
+//
+// The three properties that make it safe to add an approval-shaped read at all:
+//
+//   • IT IS THE SAME PLAN, resolved by the same walk. A read on a different path
+//     resolved a second way would let a loop check the lane of one plan and
+//     approve another, which is the exact failure the lane check exists to stop.
+//   • IT DECIDES NOTHING. The plan is byte-identical afterwards, so a run that
+//     looks and declines has cost the operator's tree nothing at all.
+//   • IT WIDENS NOTHING FOR AN AGENT. `ai:view_plan` reads; `ai:decide_plan`
+//     decides; `CLI_TOKEN_GRANT` holds neither.
+describe('GET /api/v1/work-items/{key}/plan-approval', () => {
+  beforeEach(async () => {
+    await truncateAuthTables();
+    vi.clearAllMocks();
+  });
+
+  it('returns the plan the card produced, in the same shape the approve answers', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller);
+
+    const res = await readPlan(caller, key);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { plan: V1Plan | null };
+    expect(() => workItemPlanSchema.parse(body)).not.toThrow();
+    expect(body.plan?.id).toBe(planId);
+    expect(body.plan?.status).toBe('planned');
+    // An un-materialized `add` has no key, and that null IS the contract.
+    expect(body.plan?.proposals[0]?.workItemKey).toBeNull();
+  });
+
+  it('DECIDES NOTHING — the plan is exactly where it was afterwards', async () => {
+    // ⚠️ THE WHOLE REASON A READ MAY SIT ON AN APPROVAL PATH. A run that looks
+    // and then declines must leave the operator's tree untouched, and the proof
+    // is that the plan is still decidable by the ordinary route.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller);
+
+    expect((await readPlan(caller, key)).status).toBe(200);
+    expect((await readPlan(caller, key)).status).toBe(200);
+
+    const after = await plansService.getPlan(planId, caller.ctx);
+    expect(after.status).toBe('planned');
+    expect(after.decidedAt).toBeNull();
+    // …and the approve still works, on the same plan, from the same address.
+    expect((await approve(caller, key)).status).toBe(200);
+  });
+
+  it('reads a plan that is still GENERATING, and says so', async () => {
+    // The state a run actually meets: the agent submits and exits within
+    // milliseconds. A caller has to be able to tell "not finished yet" from
+    // "finished and empty", or it would lane-check a half-written plan.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller, { close: false });
+
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    expect(body.plan?.status).toBe('generating');
+  });
+
+  it('resolves the SAME plan the approve would decide — asserted by id', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+
+    const read = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    const approved = (await (await approve(caller, key)).json()) as V1Plan;
+    expect(approved.id).toBe(read.plan?.id);
+  });
+
+  it('answers `plan: null` for a card with no plan anchored at it — NOT an error', async () => {
+    // ⚠️ THE COMMON CASE, AND THE REASON IT IS A 200. Almost every card in a
+    // project has never been re-planned, so a refusal would make the ordinary
+    // state of the tree read as a fault — and would make this the one GET on the
+    // surface that is unanswerable for most valid keys. The POST beside it keeps
+    // its 422, because there the caller asked for something that cannot be done;
+    // a QUERY answering "none" has done exactly what was asked.
+    //
+    // It is also the SIGNAL: an unattended loop reads `null` as *the agent
+    // anchored its re-plan somewhere else*, which is a lane the dispatch prompt
+    // offers and calls legitimate.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const item = await makeItem(caller, 'a card whose plan is anchored elsewhere');
+
+    const res = await readPlan(caller, item.identifier);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { plan: V1Plan | null };
+    expect(() => workItemPlanSchema.parse(body)).not.toThrow();
+    expect(body.plan).toBeNull();
+  });
+
+  it('RETHROWS a real failure instead of laundering it into `plan: null`', async () => {
+    // ⚠️ THE ARM THAT MAKES THE NULL MEAN ANYTHING. `plan: null` is a positive
+    // claim — *nothing is anchored at this card* — and an unattended loop acts on
+    // it: it reports the agent's election and stops. If ANY error collapsed into
+    // that answer, a database blip would reach the operator as a deliberate
+    // choice their agent made — a value accepted and discarded, which is the
+    // exact failure this card exists to stop, one layer down. So the catch is
+    // narrowed to the ONE typed refusal meaning "nothing is here".
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+    vi.spyOn(plansService, 'readPlanForWorkItem').mockRejectedValueOnce(
+      new Error('the database went away'),
+    );
+
+    const res = await readPlan(caller, key);
+
+    expect(res.status).toBe(500);
+    // …and emphatically NOT the "nothing is anchored here" answer.
+    expect(await res.text()).not.toContain('"plan":null');
+  });
+
+  it('404s an unknown card and another tenant’s card IDENTICALLY', async () => {
+    const mine = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    // A DISTINCT prefix, for the reason the approve's own test gives: both
+    // fixtures default to `PROD`, so the other tenant's key would RESOLVE here.
+    const theirs = await createV1ProjectCaller({
+      permissions: [...OPERATOR],
+      workspaceName: 'the other tenant',
+      identifier: 'ACME',
+    });
+    const { key } = await refusedCardWithPlan(theirs);
+
+    const foreign = await readPlan(mine, key);
+    const invented = await readPlan(mine, 'ACME-9999');
+    expect(foreign.status).toBe(404);
+    expect(invented.status).toBe(404);
+    expect(((await foreign.json()) as { code: string }).code).toBe(
+      ((await invented.json()) as { code: string }).code,
+    );
+  });
+
+  it('403s a token that cannot BROWSE the project', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+    const narrowed = await withTokenFor(caller.fixture.owner, caller.fixture.workspace, {
+      projectId: caller.fixture.projectId,
+      permissions: ['work_item:edit'],
+    });
+
+    expect((await readPlan({ ...caller, ...narrowed }, key)).status).toBe(403);
+  });
+
+  it('a DISPATCHED AGENT CAN read it and CANNOT decide it — the bound is the decision', async () => {
+    // ⚠️ THIS ASSERTION REPLACES ONE THAT CLAIMED THE OPPOSITE, and the
+    // correction is the point rather than an embarrassment. The first draft
+    // gated this read on `ai:view_plan` and asserted a sandboxed agent could not
+    // reach it — a bound that sounded right and bought nothing: the agent that
+    // submitted the plan holds its id from its own tool result, so `get_plan`
+    // answered the identical document for it already. A gate that stops nobody
+    // is worse than no gate, because it is read as protection.
+    //
+    // So the honest pair is asserted instead, from the constant: the agent may
+    // LOOK, exactly as it always could, and may not DECIDE — which is the bound
+    // the whole design rests on, and the one no MCP tool asserts at all.
+    expect(CLI_TOKEN_GRANT).toContain('project:browse');
+    expect(CLI_TOKEN_GRANT).not.toContain('ai:decide_plan');
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+    const agent = await withTokenFor(caller.fixture.owner, caller.fixture.workspace, {
+      projectId: caller.fixture.projectId,
+      permissions: [...CLI_TOKEN_GRANT],
+    });
+
+    expect((await readPlan({ ...caller, ...agent }, key)).status).toBe(200);
+    expect((await approve({ ...caller, ...agent }, key)).status).toBe(403);
+  });
+
+  it('is DECLARED in the operation registry, with the permission the route enforces', () => {
+    const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'getWorkItemPlan');
+    expect(op).toBeDefined();
+    expect(op?.method).toBe('GET');
+    expect(op?.path).toBe('/api/v1/work-items/{key}/plan-approval');
+    // READING is `project:browse` — the key its service asserts, the answer this
+    // API's table gives every GET, and what `getPlan` declares for the identical
+    // document. DECIDING stays `ai:decide_plan` on the POST.
+    expect(op?.permission).toBe('project:browse');
+    expect(
+      WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'approveWorkItemPlan')?.permission,
+    ).toBe('ai:decide_plan');
+    // NOT 422: a card with no plan is `plan: null` at 200.
+    expect(op?.errorStatuses).toEqual([404]);
+  });
+});
+
+describe('a proposal’s parentKey — the resolved parentRef (MOTIR-4085)', () => {
+  beforeEach(async () => {
+    await truncateAuthTables();
+    vi.clearAllMocks();
+  });
+
+  it('resolves a COMMITTED parentRef to its key, beside the raw ref', async () => {
+    // ⚠️ WITHOUT THIS A CLIENT CANNOT ANSWER *where is this proposal putting a
+    // child?* at all: §7 forbids the cuid on the wire, so `parentRef` is opaque
+    // to it. The lane check is a comparison against the iteration's own parent
+    // key, and it has nothing to compare without this field.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller, { close: false });
+    const parent = await makeItem(caller, 'the container the child lands under');
+    await plansService.addProposals(
+      planId,
+      [{ op: 'add', proposedFields: { title: 'a child of the container' }, parentRef: parent.id }],
+      caller.ctx,
+    );
+    await plansService.markPlanned(planId, caller.ctx);
+
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    const child = body.plan?.proposals.find((p) => p.parentRef === parent.id);
+    expect(child?.parentKey).toBe(parent.identifier);
+  });
+
+  it('leaves parentKey NULL for a proposal that names no parent', async () => {
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key } = await refusedCardWithPlan(caller);
+
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    expect(body.plan?.proposals[0]?.parentRef).toBeNull();
+    expect(body.plan?.proposals[0]?.parentKey).toBeNull();
+  });
+
+  it('leaves parentKey NULL for an intra-plan temp ref — a proposal has no key', async () => {
+    // A `planItem:` ref means the plan is growing a subtree of its own. There is
+    // no work item to name, and inventing one would be the opposite of the null
+    // contract `workItemKey` already keeps.
+    const caller = await createV1ProjectCaller({ permissions: [...OPERATOR] });
+    const { key, planId } = await refusedCardWithPlan(caller, { close: false });
+    const plan = await plansService.getPlan(planId, caller.ctx);
+    const first = plan.items[0]!;
+    await plansService.addProposals(
+      planId,
+      [
+        {
+          op: 'add',
+          // The first proposal is a `task`, so a legal child of it is a
+          // `subtask` — the same kind-parent matrix a human create is gated on.
+          proposedFields: { title: 'a child of another proposal', kind: 'subtask' },
+          parentRef: `planItem:${first.id}`,
+        },
+      ],
+      caller.ctx,
+    );
+    await plansService.markPlanned(planId, caller.ctx);
+
+    const body = (await (await readPlan(caller, key)).json()) as { plan: V1Plan | null };
+    const child = body.plan?.proposals.find((p) => p.parentRef?.startsWith('planItem:'));
+    expect(child).toBeDefined();
+    expect(child?.parentKey).toBeNull();
   });
 });

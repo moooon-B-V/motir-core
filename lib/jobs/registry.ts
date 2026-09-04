@@ -14,6 +14,7 @@ import {
   notificationFanInOnTransitioned,
 } from './definitions/notificationFanIn';
 import { attachmentGc } from './definitions/attachmentGc';
+import { publicAddressCertificateRefresh } from './definitions/publicAddressCertificateRefresh';
 import { rateLimitSweep } from './definitions/rateLimitSweep';
 import { codeGraphOffboardSweep } from './definitions/codeGraphOffboardSweep';
 import { filterSubscriptionTick } from './definitions/filterSubscriptionTick';
@@ -82,6 +83,7 @@ export const jobDefinitions = [
   notificationFanInOnWorkItemMentioned,
   notificationFanInOnTransitioned,
   attachmentGc,
+  publicAddressCertificateRefresh,
   rateLimitSweep,
   codeGraphOffboardSweep,
   filterSubscriptionTick,

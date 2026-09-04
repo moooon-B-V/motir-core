@@ -1,5 +1,5 @@
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
-import { publicSiteOrigin } from '@/lib/publicProjects/urls';
+import { isRegisteredPublicOrigin } from '@/lib/publicAddresses/allowedOrigins';
 
 // The HAND-OFF's return destination (MOTIR-4114 · `public-surface-hosts.md`
 // AMENDMENT 4 §F).
@@ -73,7 +73,9 @@ export const HANDOFF_FALLBACK_PATH: string = AUTHED_LANDING_PATH;
  * and the comparison still admits exactly one origin. Nothing widens; the value
  * of the single allowed origin moves.
  */
-export function resolvePublicReturnTarget(raw: string | string[] | undefined): string | null {
+export async function resolvePublicReturnTarget(
+  raw: string | string[] | undefined,
+): Promise<string | null> {
   // A repeated key takes the first value — the same rule `sanitizeNextPath`
   // applies, for the same reason: one of them was intended, and a nonsense value
   // is refused by the check below rather than guessed at.
@@ -91,7 +93,14 @@ export function resolvePublicReturnTarget(raw: string | string[] | undefined): s
     return null;
   }
 
-  if (parsed.origin !== publicSiteOrigin()) return null;
+  // ⚠️ A SET SINCE MOTIR-4218, and still an ORIGIN EQUALITY TEST — the property
+  // this module's header spends its length defending. `isRegisteredPublicOrigin`
+  // parses and compares `URL.origin` against registered rows, so every case that
+  // header enumerates is refused for exactly the reason it gives:
+  // `https://motir.co@evil.test/` parses with origin `https://evil.test`,
+  // `//evil.example` does not parse, and a punycode homograph is simply not a
+  // row. Widening from one origin to a set does not widen the TEST.
+  if (!(await isRegisteredPublicOrigin(parsed.origin))) return null;
   return parsed.toString();
 }
 
@@ -99,6 +108,8 @@ export function resolvePublicReturnTarget(raw: string | string[] | undefined): s
  * The same validation, resolved to something a redirect can always take: the
  * destination when it is allowed, {@link HANDOFF_FALLBACK_PATH} when it is not.
  */
-export function resolveHandoffDestination(raw: string | string[] | undefined): string {
-  return resolvePublicReturnTarget(raw) ?? HANDOFF_FALLBACK_PATH;
+export async function resolveHandoffDestination(
+  raw: string | string[] | undefined,
+): Promise<string> {
+  return (await resolvePublicReturnTarget(raw)) ?? HANDOFF_FALLBACK_PATH;
 }

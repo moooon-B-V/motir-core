@@ -79,39 +79,9 @@ describe('the map is TOTAL over both surfaces', () => {
     // The onboarding resume row is deliberately outside the map — it is gated on
     // there BEING a session of the actor's own, which is a state, not a permission.
     //
-    // The Docs row (MOTIR-2570) is outside it for a different reason: the map
-    // gates PROJECT-scoped destinations, and only `primaryItems` is filtered
-    // through `canOfferNavDestination`. The Docs row lives in the footer group,
-    // which is not gated at all, and its destination is public documentation
-    // readable with no session — so there is no project permission that could
-    // sensibly gate it and a map entry would be a claim nothing enforces.
-    //
-    // ⚠️ IT IS NOT IN THE SET BELOW EITHER, SINCE MOTIR-4167, for the reason the
-    // legal row gives next: its href is `docsIndexUrl` — a prop, not a literal —
-    // because the documentation left this repository with the public reading
-    // surface (MOTIR-3932) and the row reads the operator's own absolute url.
-    // `hrefsIn` cannot see it, so an exemption keyed on the old path would be a
-    // dead entry, and one that would mask the regression this card fixed: a
-    // future edit that puts a LITERAL app-relative docs path back should fail
-    // this test loudly. The property is pinned directly in the test below.
-    //
-    // The legal row is exempt for exactly the reasons `/docs` is, and the two
-    // stand or fall together: same ungated footer group, same off-shell target,
-    // readable with no session at all. A project permission cannot sensibly gate
-    // the Privacy Policy — GDPR Art. 13 owes it to a person who has not signed
-    // up yet — so a map entry would be a claim nothing enforces, and one that
-    // would be WRONG if anything did.
-    //
-    // ⚠️ IT IS NOT IN THE SET BELOW, AND ITS ABSENCE IS NOT AN EXCEPTION BEING
-    // DROPPED (MOTIR-4010). The row's href is `legalIndexUrl` — a prop, not a
-    // literal — because the documents left this repository and live wherever the
-    // operator publishes them. `hrefsIn` scans for `href: '…'` and therefore
-    // cannot see this row at all, so an exemption keyed on `/legal` would be a
-    // dead entry: it would exempt a string the sidebar no longer contains, and
-    // go on doing so silently. The property it stood for is pinned directly in
-    // the test below, against the shape the row actually has now. Leaving the
-    // entry here would also mask a real regression — a future edit that puts a
-    // LITERAL `/legal` back into `primaryItems` should fail this test loudly.
+    // Docs and Legal documents no longer render from this file at all
+    // (MOTIR-4239 moved both into the Help menu), so `hrefsIn(SIDEBAR)` never
+    // sees either — there is nothing left here to exempt.
     const exempt = new Set(['/onboarding', '/settings/project', '/settings/workspace']);
     for (const href of hrefsIn(SIDEBAR)) {
       if (exempt.has(href) || href.startsWith('/settings/')) continue;
@@ -127,55 +97,24 @@ describe('the map is TOTAL over both surfaces', () => {
     // one for public documentation, so pin the section rather than trusting the
     // exemption to stay true.
     //
-    // ⚠️ `/legal` is checked here for a reason beyond symmetry. A Privacy Policy
-    // that disappears from the shell for some actors is worse than one never
-    // linked: the obligation to make it reachable does not vary by role, and a
-    // silent per-actor hole is the kind nobody reports.
+    // ⚠️ DOCS AND LEGAL NO LONGER RENDER FROM THIS FILE AT ALL (MOTIR-4239) —
+    // both left the footer group for the Help menu, and their own coverage
+    // (the configured/absent arms, the off-shell no-`active` shape) lives in
+    // `tests/components/HelpMenu.test.tsx` now. What is still pinned here is
+    // that neither came BACK as a literal in `SidebarNav.tsx`'s rail rows.
     const bottom = SIDEBAR.indexOf("id: 'bottom'");
     expect(bottom, 'the footer section marker moved — re-check the public rows').toBeGreaterThan(
       -1,
     );
-    // ⚠️ THE DOCS ROW IS PINNED BY ITS PROP, NOT BY A LITERAL (MOTIR-4167). It
-    // used to be asserted here as `href: '/docs'` sitting after the footer
-    // marker; that literal pointed at a route this application stopped serving
-    // (MOTIR-3932), and the row now renders from `docsIndexUrl` exactly as the
-    // legal row renders from its resolver. The property is unchanged: the row
-    // sits AFTER the footer marker, so it is never filtered through
-    // `canOfferNavDestination` — and it is spread in conditionally, so an
-    // unconfigured build gets no row rather than a dead one.
-    const docsHref = SIDEBAR.indexOf('href: docsIndexUrl');
-    expect(docsHref, 'the docs row no longer renders from docsIndexUrl').toBeGreaterThan(-1);
-    expect(docsHref, 'the docs row left the ungated footer group').toBeGreaterThan(bottom);
-    expect(
-      SIDEBAR.slice(bottom),
-      'the docs row is no longer conditional on there being somewhere to point it',
-    ).toContain('...(docsIndexUrl');
     expect(SIDEBAR, 'a literal app-relative docs path is back in the rail').not.toContain(
       "href: '/docs'",
     );
-
-    // ⚠️ THE LEGAL ROW IS PINNED SEPARATELY BECAUSE IT NO LONGER HAS A LITERAL
-    // HREF (MOTIR-4010), NOT BECAUSE IT IS HELD TO A WEAKER STANDARD. It renders
-    // from `legalIndexUrl`, so a literal-href scan finds nothing, and the loop
-    // that used to stand above failed at `indexOf` returning -1 — which is
-    // what it did. The property is unchanged and is what is asserted here: the
-    // row sits AFTER the footer marker, so it is never filtered through
-    // `canOfferNavDestination` and cannot disappear for some actors and not
-    // others. That is the whole point of pinning it — a Privacy Policy missing
-    // from the shell for a subset of people is a hole nobody reports.
-    const legalHref = SIDEBAR.indexOf('href: legalIndexUrl');
-    expect(legalHref, 'the legal row no longer renders from legalIndexUrl').toBeGreaterThan(-1);
-    expect(legalHref, 'the legal row left the ungated footer group').toBeGreaterThan(bottom);
-
-    // …and the second half of MOTIR-4010: ABSENT rather than dead. An
-    // unconfigured build has nowhere to point the row, and a link to nothing is
-    // worse than no link, so the row is spread in conditionally. Pinned here
-    // because the conditional is the only thing standing between a self-hosted
-    // build and a rail row that 404s.
-    expect(
-      SIDEBAR.slice(bottom),
-      'the legal row is no longer conditional on there being somewhere to point it',
-    ).toContain('...(legalIndexUrl');
+    expect(SIDEBAR, 'a docs row is back in the rail — it belongs in the Help menu').not.toContain(
+      'href: docsIndexUrl',
+    );
+    expect(SIDEBAR, 'a legal row is back in the rail — it belongs in the Help menu').not.toContain(
+      'href: legalIndexUrl',
+    );
   });
 
   it('every palette navigation goes through offerNav or an explicit requirement', () => {

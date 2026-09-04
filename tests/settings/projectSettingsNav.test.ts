@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs';
+import { Globe, Megaphone } from 'lucide-react';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -46,6 +47,15 @@ const ADMIN = BUILTIN_ROLE_PERMISSIONS.admin;
 const MEMBER = BUILTIN_ROLE_PERMISSIONS.member;
 const VIEWER = BUILTIN_ROLE_PERMISSIONS.viewer;
 const NO_ACCESS = toSettingsNavPermissions([]);
+
+// The registry's SECOND axis (MOTIR-4243) — what the BUILD has, beside what the
+// actor holds. It defaults CLOSED, so every assertion below that expects the
+// whole rail has to say which deployment it is talking about; that is the point
+// of the default rather than a cost of it.
+const ON_CLOUD = { publicProjectsAvailable: true };
+const SELF_HOSTED = { publicProjectsAvailable: false };
+/** The entries that exist on EVERY build — the rail minus the cloud-only rooms. */
+const ALWAYS_PRESENT = PROJECT_SETTINGS_NAV.filter((e) => !e.cloudOnly);
 
 describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29)', () => {
   it('every settings route is accounted for EXACTLY once, and vice versa', () => {
@@ -122,7 +132,16 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     const accessIds = groupSettingsNav(PROJECT_SETTINGS_NAV)
       .find((g) => g.group === 'access')!
       .entries.map((e) => e.id);
-    expect(accessIds).toEqual(['members', 'roles', 'code-access']);
+    // MOTIR-4243 seats **Public page** directly under Members & access — the
+    // room that owns the public concerns and the row a reader arrives from.
+    //
+    // MOTIR-4221 seats **Public address** directly under THAT, which is the
+    // order `design/projects/design-notes.md` § *Public address* draws and NOT
+    // the one its own card asked for: the card says "between Members & access
+    // and Roles", and that slot was taken by Public page while the story was in
+    // flight. Two public rooms either side of one door is the coherent shape,
+    // and the asset reading beats the card text.
+    expect(accessIds).toEqual(['members', 'public-page', 'public-address', 'roles', 'code-access']);
   });
 
   it('has no duplicate hrefs and no duplicate ids', () => {
@@ -163,8 +182,19 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
 
 describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)', () => {
   it('a project admin sees every entry (incl. the admin-only Automation route)', () => {
-    expect(visibleSettingsNav(ADMIN)).toEqual(PROJECT_SETTINGS_NAV);
-    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_ROUTES)).toEqual(PROJECT_SETTINGS_ROUTES);
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual(PROJECT_SETTINGS_NAV);
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_ROUTES, ON_CLOUD)).toEqual(
+      PROJECT_SETTINGS_ROUTES,
+    );
+  });
+
+  it('a project admin on a SELF-HOSTED build sees the rail MINUS the cloud-only rooms', () => {
+    // The same actor, the same keys, a different build (MOTIR-4243 · MOTIR-3908).
+    // Asserted as an EQUALITY against the derived set rather than as "does not
+    // contain public-page": a second cloud-only room added later is covered here
+    // the moment it lands, with no edit.
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_NAV, SELF_HOSTED)).toEqual(ALWAYS_PRESENT);
+    expect(ALWAYS_PRESENT.length).toBeLessThan(PROJECT_SETTINGS_NAV.length);
   });
 
   // ⚠️ THIS ASSERTION WAS INVERTED BY MOTIR-2468, DELIBERATELY. It read "a member
@@ -181,6 +211,94 @@ describe('projectSettingsNav registry — access matrix (rides the 6.4.3 policy)
   it('a no-browse actor sees NOTHING — the whole area filters away (no nav leak)', () => {
     expect(visibleSettingsNav(NO_ACCESS)).toEqual([]);
     expect(visibleSettingsNav(NO_ACCESS, PROJECT_SETTINGS_ROUTES)).toEqual([]);
+  });
+});
+
+describe('the Public page room (Story MOTIR-3875 · MOTIR-4243)', () => {
+  const entry = PROJECT_SETTINGS_NAV.find((e) => e.id === 'public-page');
+
+  it('is registered per the design table, DIRECTLY under Members & access', () => {
+    // `design/projects/design-notes.md` § *The entrance — three doors, and the
+    // registry entry behind the first*, field by field.
+    expect(entry).toBeTruthy();
+    expect(entry!.group).toBe('access');
+    expect(entry!.href).toBe('/settings/project/public');
+    expect(entry!.labelKey).toBe('nav.publicPage');
+    expect(entry!.permission).toBe('project:administer');
+    expect(entry!.cloudOnly).toBe(true);
+    expect(entry!.exact).toBeUndefined();
+
+    const accessIds = groupSettingsNav(PROJECT_SETTINGS_NAV)
+      .find((g) => g.group === 'access')!
+      .entries.map((e) => e.id);
+    expect(accessIds.indexOf('public-page')).toBe(accessIds.indexOf('members') + 1);
+  });
+
+  it('carries `Globe`, and NOT the Building-in-public status glyph', () => {
+    // A room and a STATUS must not share a mark: `Megaphone` is the top bar's
+    // "Building in public" badge.
+    expect(entry!.icon).toBe(Globe);
+    expect(entry!.icon).not.toBe(Megaphone);
+  });
+
+  it('is ABSENT off-cloud for an admin — the row, not merely the affordances', () => {
+    expect(
+      visibleSettingsNav(ADMIN, PROJECT_SETTINGS_NAV, SELF_HOSTED).map((e) => e.id),
+    ).not.toContain('public-page');
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_NAV, ON_CLOUD).map((e) => e.id)).toContain(
+      'public-page',
+    );
+    // The palette reads the same registry through the same filter.
+    expect(
+      visibleSettingsNav(ADMIN, PROJECT_SETTINGS_ROUTES, SELF_HOSTED).map((e) => e.id),
+    ).not.toContain('public-page');
+  });
+
+  it('is absent for a non-admin ON cloud too — the two axes COMPOSE, never substitute', () => {
+    // The failure a single filter produces: a cloud build handing the room to
+    // everyone because "it exists here".
+    expect(visibleSettingsNav(MEMBER, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual([]);
+    expect(visibleSettingsNav(VIEWER, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual([]);
+  });
+
+  it('DEFAULTS CLOSED — a caller that forgets the deployment fact drops the row', () => {
+    // The direction the default has to fail in: a rail row or a ⌘K action on a
+    // self-hosted build opens onto a 404, which is the "door onto a corridor"
+    // `hasVisibleSettingsArea` exists to refuse.
+    expect(visibleSettingsNav(ADMIN).map((e) => e.id)).not.toContain('public-page');
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_ROUTES).map((e) => e.id)).not.toContain(
+      'public-page',
+    );
+  });
+
+  it('the area DOOR reads the same two axes as the rows it opens onto', () => {
+    // The door and the rail must not disagree about what the area contains — so
+    // `hasVisibleSettingsArea` takes the availability too. Asserted over an
+    // actor whose ONLY entry is the cloud-only one, which is the only shape that
+    // can tell the two apart.
+    const cloudOnlyKeys = new Set(
+      PROJECT_SETTINGS_NAV.filter((e) => e.cloudOnly).map((e) => e.permission),
+    );
+    const alsoOpensSomethingElse = ALWAYS_PRESENT.some((e) => cloudOnlyKeys.has(e.permission));
+    // Today `project:administer` also opens Details, so no such actor exists and
+    // the door cannot move. Pinned as a MEASUREMENT rather than assumed: the day
+    // a cloud-only room has a key of its own, this flips and the assertion below
+    // starts doing real work instead of silently passing.
+    expect(alsoOpensSomethingElse).toBe(true);
+    for (const held of [ADMIN, MEMBER, VIEWER, NO_ACCESS]) {
+      for (const available of [ON_CLOUD, SELF_HOSTED]) {
+        expect(hasVisibleSettingsArea(held, available)).toBe(
+          visibleSettingsNav(held, PROJECT_SETTINGS_NAV, available).length > 0,
+        );
+      }
+    }
+  });
+
+  it('the route ↔ registry totality holds REGARDLESS of the flag — the page exists either way', () => {
+    // `PROJECT_SETTINGS_ROUTE_PATHS` is derived from the registry, not from a
+    // filtered view of it, so an off-cloud build still accounts for the file on
+    // disk. The route answers `notFound()` there; it does not vanish.
+    expect(PROJECT_SETTINGS_ROUTE_PATHS).toContain('/settings/project/public');
   });
 });
 
@@ -269,6 +387,27 @@ describe('projectSettingsNav registry — isProjectSettingsPath', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Where each entry's key was read from, and the exact gate that asserts it. */
+/**
+ * Gates that assert their key through an ALIAS instead of naming it (MOTIR-4243).
+ *
+ * `projectAccessService.assertCanManage` IS
+ * `assertPermission(…, 'project:administer')` — so a service that calls it DOES
+ * assert the key, it just does not spell it, and a source grep for the literal
+ * reads that as "asserts nothing". Accepting an alias would be a hole if the
+ * alias could quietly come to mean something else, so the alias itself is pinned
+ * at its definition below, which is the check the literal grep was standing in
+ * for all along.
+ *
+ * ⚠️ KEYED ON THE QUALIFIED CALL, and that is not tidiness. `fields` and
+ * `components` cite gates of their OWN named `assertCanManage` — module-private
+ * helpers that assert `field:manage` and `component:manage`. A bare gate name
+ * would resolve those two to `project:administer` and pass, which is this
+ * mechanism failing in the direction that lets people into rooms.
+ */
+const ALIAS_ASSERTS: Record<string, PermissionKey> = {
+  'projectAccessService.assertCanManage': 'project:administer',
+};
+
 const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; gate: string }> = {
   details: {
     permission: 'project:administer',
@@ -284,6 +423,17 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     permission: 'member:manage',
     source: 'lib/services/projectMembersService.ts',
     gate: 'assertPermission',
+  },
+  // The room's write is `projectsService.setPublicOverview` — the ACTIVE-PROJECT
+  // author, which owns the write transaction and asserts `assertCanManage`
+  // inside it. The key-routed door the room saves through
+  // (`publicProjectsService.setPublicOverview`, `PATCH
+  // /api/projects/{key}/public-overview`) refuses a non-admin ahead of it and
+  // then delegates here, so this is the gate at the bottom of both paths.
+  'public-page': {
+    permission: 'project:administer',
+    source: 'lib/services/projectsService.ts',
+    gate: 'projectAccessService.assertCanManage',
   },
   // Roles has NO write of its own — a judgement, argued at the entry. Its key is
   // asserted by the service that owns the domain it belongs to.
@@ -339,6 +489,16 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/automationRulesService.ts',
     gate: 'assertPermission',
   },
+  // MOTIR-4221 — the Public address room. Its writes live in the customer-domain
+  // lifecycle, which asserts `project:manage_access` on add / verify / remove /
+  // makePrimary / clearPrimary. The room's OTHER half (the workspace subdomain)
+  // is gated on the workspace ROLE, an axis the registry cannot express — see the
+  // entry's own comment for why the project key is the honest one for the rail.
+  'public-address': {
+    permission: 'project:manage_access',
+    source: 'lib/services/customDomainService.ts',
+    gate: 'assertPermission',
+  },
 };
 
 describe('every registry entry names the key its DESTINATION asserts (MOTIR-2468)', () => {
@@ -357,13 +517,40 @@ describe('every registry entry names the key its DESTINATION asserts (MOTIR-2468
       expect(source, `${evidence.source} no longer contains ${evidence.gate}`).toContain(
         evidence.gate,
       );
-      expect(
-        source,
-        `${evidence.source} no longer asserts '${evidence.permission}' — the rail row now gates ` +
-          'on a key nothing checks. Re-read the gate and re-key the entry.',
-      ).toContain(`'${evidence.permission}'`);
+      const aliased = ALIAS_ASSERTS[evidence.gate];
+      if (aliased) {
+        // The gate names no key because it IS one — see ALIAS_ASSERTS, and the
+        // test below that pins what the alias resolves to.
+        expect(
+          aliased,
+          `${evidence.source} reaches '${evidence.permission}' through ${evidence.gate}, which ` +
+            `asserts '${aliased}' instead. Re-read the gate and re-key the entry.`,
+        ).toBe(evidence.permission);
+      } else {
+        expect(
+          source,
+          `${evidence.source} no longer asserts '${evidence.permission}' — the rail row now gates ` +
+            'on a key nothing checks. Re-read the gate and re-key the entry.',
+        ).toContain(`'${evidence.permission}'`);
+      }
     },
   );
+
+  it('every ALIAS gate still asserts the key it is accepted for', () => {
+    // What makes accepting an alias safe. Read at the DEFINITION, so an alias
+    // that is re-pointed at another key fails here rather than silently widening
+    // every entry that cites it.
+    const src = readFileSync(join(process.cwd(), 'lib/services/projectAccessService.ts'), 'utf8');
+    for (const [qualified, key] of Object.entries(ALIAS_ASSERTS)) {
+      const gate = qualified.split('.').pop()!;
+      const at = src.indexOf(`async ${gate}(`);
+      expect(at, `${gate} is no longer defined in projectAccessService`).toBeGreaterThan(-1);
+      const body = src.slice(at, at + 400);
+      expect(body, `${gate} no longer resolves to '${key}'`).toContain(
+        `this.assertPermission(projectId, ctx, '${key}'`,
+      );
+    }
+  });
 
   it('names only real catalog keys', () => {
     for (const entry of PROJECT_SETTINGS_NAV) {
@@ -375,10 +562,12 @@ describe('every registry entry names the key its DESTINATION asserts (MOTIR-2468
 describe('what each actor is offered (MOTIR-2468)', () => {
   it("an ADMIN's rail is byte-for-byte the rail that ships today", () => {
     // The regression that matters most: nothing an admin could reach was taken.
-    expect(visibleSettingsNav(ADMIN)).toEqual(PROJECT_SETTINGS_NAV);
-    expect(groupSettingsNav(visibleSettingsNav(ADMIN)).map((g) => g.group)).toEqual(
-      SETTINGS_NAV_GROUP_ORDER,
-    );
+    expect(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_NAV, ON_CLOUD)).toEqual(PROJECT_SETTINGS_NAV);
+    expect(
+      groupSettingsNav(visibleSettingsNav(ADMIN, PROJECT_SETTINGS_NAV, ON_CLOUD)).map(
+        (g) => g.group,
+      ),
+    ).toEqual(SETTINGS_NAV_GROUP_ORDER);
   });
 
   it('a built-in MEMBER is offered NOTHING — so the area door goes with it', () => {

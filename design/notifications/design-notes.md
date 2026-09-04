@@ -129,7 +129,9 @@ Each row is a horizontal flex:
   key in `--el-text-strong`) with the **relative time** pushed right (absolute
   on hover/`title`); line 2 = the denormalized excerpt, single-line truncated.
 - **Read treatment** — read rows persist in the feed (NOT purged): greyed via
-  `--el-text-muted`/`--el-text-faint`, no dot. Unread rows take a faint
+  `--el-text-secondary`/`--el-text-faint`, no dot (the summary was
+  `--el-text-muted` until MOTIR-4255 — 4.17:1 once the row takes its `:hover`
+  tint, which is the state a row being read is in). Unread rows take a faint
   `--el-surface-soft` wash.
 
 **Clickable target + the no-nested-interactive rule.** The whole row is ONE

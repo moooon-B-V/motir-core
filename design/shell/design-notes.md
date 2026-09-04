@@ -975,11 +975,21 @@ frame shares one document, the compiled `@media (width >= …)` blocks are re-em
 
 ---
 
-## The rail's bottom section — every row it renders (MOTIR-4130)
+## The rail's bottom section — every row it renders (MOTIR-4130 · MOTIR-4254)
 
 `rail-bottom-section.mock.html` / `.png` is **the design of record for the authed rail's bottom
-section**: the six rows it carries, at all three widths the shell draws, in both arms of every
+section**: the four rows it carries, at all three widths the shell draws, in both arms of every
 conditional row.
+
+**⚠️ It carried SIX until MOTIR-4254, and two of them LEFT rather than changed.** `Docs` and `Legal`
+moved to the shell's **Help menu** — MOTIR-4238's asset in this area is the design of record for both
+doors now,
+and **their absent-arm reasoning moved with them**, because it describes those rows rather than this
+section. **The FLOOR did not move**: it was _Job runs · Git_ before and after, since both departing
+rows were already conditional — so what shortened is the COMPLETE arm, and a deployment that
+configures neither url loses nothing. The measurement in the next block is left as it was TAKEN, at
+`8d80ac8db`, when six rows shipped: it is the record of the defect this asset was created to fix, and
+re-writing it to today's count would destroy the evidence for it.
 
 ### Why the area owed this
 
@@ -1011,68 +1021,49 @@ section (MOTIR-4163).
 
 Declaration order, from `app/(authed)/_components/SidebarNav.tsx`'s `sections.push({ id: 'bottom' })`:
 
-| #   | Row          | Glyph          | Destination                                         | Rendered                                  |
-| --- | ------------ | -------------- | --------------------------------------------------- | ----------------------------------------- |
-| 1   | **Settings** | `settings`     | `/settings/project`, else the settings home         | CONDITIONAL — `showSettingsDoor`          |
-| 2   | **Security** | `shield-check` | `/settings/workspace/security`                      | CONDITIONAL — `workspaceTierRevealed`     |
-| 3   | **Job runs** | `list-checks`  | `/settings/workspace/jobs`                          | always                                    |
-| 4   | **Git**      | `git-branch`   | `/settings/workspace/github`                        | always                                    |
-| 5   | **Docs**     | `book-open`    | the operator's own ABSOLUTE url — `docsIndexUrl()`  | CONDITIONAL — `docsIndexUrl` is non-null  |
-| 6   | **Legal**    | `scale`        | the operator's own ABSOLUTE url — `legalIndexUrl()` | CONDITIONAL — `legalIndexUrl` is non-null |
+| #   | Row          | Glyph          | Destination                                 | Rendered                              |
+| --- | ------------ | -------------- | ------------------------------------------- | ------------------------------------- |
+| 1   | **Settings** | `settings`     | `/settings/project`, else the settings home | CONDITIONAL — `showSettingsDoor`      |
+| 2   | **Security** | `shield-check` | `/settings/workspace/security`              | CONDITIONAL — `workspaceTierRevealed` |
+| 3   | **Job runs** | `list-checks`  | `/settings/workspace/jobs`                  | always                                |
+| 4   | **Git**      | `git-branch`   | `/settings/workspace/github`                | always                                |
 
-**Four of the six are conditional, and the section's FLOOR is two rows** — Job runs · Git. That
-floor is the open product's common case, not an edge state, which is why the asset draws it beside
-the complete arm at every width rather than describing it. (It was three rows in this asset's first
-revision, when the `Docs` row was unconditional and dead — see MOTIR-4167 below.)
+**Two of the four are conditional, and the section's FLOOR is two rows** — Job runs · Git. That floor
+is the open product's common case, not an edge state, which is why the asset draws it beside the
+complete arm at every width rather than describing it. (It was three rows in this asset's first
+revision, when the `Docs` row was unconditional and dead — see MOTIR-4167 below; and six until
+MOTIR-4254 moved two of them to the Help menu.)
+
+**The floor is where the whole move is cheap, and it is worth stating as arithmetic rather than as
+reassurance.** Both departing rows were CONDITIONAL, so neither was in the floor to begin with. A
+deployment that configured neither url saw two rows before this change and sees two after; a
+deployment that configured both loses two rows here and gains them in a menu that is on screen at
+every width the product supports.
 
 **Nothing marks an absent row.** The rows close up and the section is shorter; there is no disabled
 row, no tooltip and no empty state. `SidebarNav.tsx`'s own comment carries the reason and it is the
 rule for the whole section: _an entry point is a promise about a room, and a disabled row is a promise
 the product then refuses._
 
-**The `Legal` row's absent arm has TWO causes, and the second is easy to miss.** `legalIndexUrl()`
-derives the index from the configured documents' own urls: if every one is `<base>/<slug>` the index
-is `<base>`. An operator publishing at unrelated addresses (`acme.com/terms-of-service`,
-`legal.acme.com/privacy`) has no index for the row to point at, so **the row is absent rather than
-guessed** — sign-up and the re-consent rows still link each document directly, so nothing becomes
-unreachable. A row pointing at the base of SOME of the documents would be worse than no row.
+**Both departing rows' absent-arm reasoning MOVED to § _The Help menu_ (MOTIR-4254).** The `Legal`
+row's two-cause absent arm — the second cause being an operator who publishes at unrelated addresses,
+so there is no index to point at and the row is absent rather than guessed — and the `Docs` row's
+MOTIR-4167 history are both properties of those ROWS, not of this section, so they travel with them.
+They are **moved, not copied**: a second copy here would be the divergence this area's own ledger
+exists to prevent, and the next reader would have no way to tell which was authoritative.
 
-### The `Docs` row reads configuration — MOTIR-4167
-
-The row used to carry a hard-coded app-relative path to the documentation index, and that page left
-this repository when MOTIR-3932 moved the public reading surface to `motir-marketing`; the row was
-not moved with it. Verified at `8d80ac8db`: no route under `app/**`, no redirect source for the docs
-path in `next.config.ts` (`DOCS_REDIRECTS` makes it a DESTINATION, never a source), no `rewrites()`,
-nothing in `middleware.ts` — so `app.motir.co/docs` answered **404** while `motir.co/docs` answered
-**200**. This asset's first revision drew the dead href anyway, because it is the design of record
-for what the rail DOES, and parked the address in `tests/design-asset-addresses.test.ts`'s `KNOWN`
-table with a reason naming the defect — distinct from that table's seven other entries for the same
-address, which are point-in-time records of assets drawn before the move and are left alone.
-
-**The row beside it was the fix, and it is now the same row.** `Legal` lost its destination to the
-same split and was rebuilt around `legalIndexUrl()` — a resolver returning `string | null`, resolved
-in `app/(authed)/layout.tsx` and threaded to the client component as a prop, with the row spread in
-conditionally. `Docs` takes exactly that shape: `lib/docs/links.ts`'s `docsIndexUrl()` reads
-**`MOTIR_DOCS_URL`**, the operator's own ABSOLUTE url of the published documentation
-(`https://motir.co/docs` on the hosted deployment), and answers `null` when it is unset — or when the
-value is not an absolute `http(s)` url, because a relative path is precisely the defect, so it is
-refused and logged rather than rendered. **When it is `null` the row is absent**, not disabled and not
-dead. `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D (its MOTIR-4167 amendment) is the
-record, with the alternatives it rejected; `tests/components/SidebarNav-docs-door.test.tsx` pins both
-arms of the row and `tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal.
-
-**So the floor moved.** With four conditional rows the section's floor is **two** — Job runs · Git —
-and that is what the floor arms now draw at all three widths; the complete arms draw the row at its
-configured absolute url. The two `KNOWN` entries this asset and these notes carried for the dead
-address went with the defect.
+**What stays here is the fact about THIS section**: it is four rows, two of them conditional, and its
+floor did not move.
 
 ### The divergence ledger — which source wins for this element
 
 | #   | The older assets say                                                                                          | This asset says                                                                                                                                                                                                                                       | Since      |
 | --- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 1   | `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` draw **Settings · Docs** and nothing else       | **Six rows**, three of them conditional. **This asset WINS for the bottom section**; those three keep the PRIMARY section, the rail head, the top bar and the drawer chrome, which this asset does not draw.                                          | MOTIR-4130 |
+| 1   | `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` draw **Settings · Docs** and nothing else       | **Four rows**, two of them conditional. **This asset WINS for the bottom section**; those three keep the PRIMARY section, the rail head, the top bar and the drawer chrome, which this asset does not draw.                                           | MOTIR-4130 |
 | 2   | The three `.pen` sources cannot be corrected in place                                                         | **They are not edited.** Pencil is not in this tree, so a `.pen` edit produces a source disagreeing with the `.png` every consumer opens — a second divergence, not a fix. The same call `design/auth/` made for its own legacy artboards.            | MOTIR-4130 |
 | 3   | `navigation-pending.mock.html`, `top-bar.mock.html` and `design/home/home.mock.html` draw four rows, or three | Those rails are **context for something else** — a pending grammar, a control budget, a landing surface — and are not the source for this section. They are re-exportable and may be swept, but a reader asking _what belongs here_ reads THIS asset. | MOTIR-4130 |
+
+| 4 | **This asset's own earlier revisions** drew `Docs` and `Legal` as rail rows, and carried their absent-arm reasoning | **Both rows are GONE from this section, and so is that reasoning** — they moved to the **Help menu**, whose asset (MOTIR-4238) is the design of record for both doors now. A rail answers _where inside this project can I go today_; neither door is a daily-work destination. Nothing else moved: the other four rows keep their destinations and their order, and the floor is unchanged at two. | MOTIR-4254 |
 
 **The toolchain question this card had to answer first, and its evidence.** No `.pen` renderer or
 exporter exists anywhere in the repository: the only files naming `.pen` are two guards, `CLAUDE.md`
@@ -1114,7 +1105,8 @@ Generated, not hand-drawn, so it cannot drift from the app:
 
 1. The real `Sidebar` is rendered through the repo's own vitest setup with `renderToStaticMarkup`, in
    six states — expanded / collapsed / drawer × complete / floor. **Only the SECTION DATA is
-   authored**, and it is the six entries `SidebarNav.tsx` pushes, with the real `messages/en.json`
+   authored**, and it is the entries `SidebarNav.tsx` pushes — six when this asset was generated, four
+   since MOTIR-4254 — with the real `messages/en.json`
    labels, the real hrefs and the real lucide glyphs.
 2. `tailwindcss`'s own `compile()` API runs `app/globals.css` over that markup, so the stylesheet is
    the build's output rather than a retyped token block.
@@ -1125,6 +1117,16 @@ Generated, not hand-drawn, so it cannot drift from the app:
 
 One board property, named here so nobody reads it as design: the frames give the rail a fixed height
 so all ten rows fit, where the real rail is `h-full` in a viewport-height grid column.
+
+**Revised by MOTIR-4254 without re-running the generator either**, for the reason the MOTIR-4167 note
+below gives: the change is entirely SECTION DATA — two rows removed from the three complete arms,
+absent from the three floor arms already — so every rail in the asset is still the real `Sidebar`
+output, edited in the six places the generator's data would have moved. **The frames were re-measured
+in a browser rather than assumed**: every drawn row's box asserted inside its frame at all three
+widths in both arms (7 rows complete / 5 at the floor per width, the abbreviated primary section
+included). Removing rows can only shorten the content, and _"can only"_ is exactly the reasoning that
+produced the defect the measure step exists for. `prettier --write` then
+`scripts/render-design-mock.mjs` re-exported the `.png`.
 
 **Revised by MOTIR-4167 without re-running the generator.** The generator was a temporary harness
 (deleted with MOTIR-4130's run, as the design lane's own rule requires), and the revision changes
@@ -1138,3 +1140,377 @@ so every rail is still the real `Sidebar` output; `prettier --write` then
 The **primary** section (`desktop.pen` still owns it — the four rows above the separator are
 abbreviated context, not a specification), the rail **head** (`context-row.mock.html`), the collapse
 **toggle** in the footer, and the drawer's **utility strip** (`top-bar.mock.html` Panel D, MOTIR-2374).
+
+---
+
+## The account menu — every row it renders (MOTIR-4248)
+
+`account-menu.mock.html` / `.png` is **the design of record for the avatar popover in the authed top
+bar**: its trigger drawn inside the bar at each of the bar's own three states, the menu open, every
+row the component can render, and both arms of every conditional one.
+
+### Why the area owed this
+
+The rail's bottom section owed an asset because it grew a row at a time and nobody owned the list.
+The account menu owed one for the opposite reason: **it never grew at all, so nobody ever had a
+reason to draw it** — and then the first card to reach for it found there was nothing to reach for.
+
+**Neither drawing was a mistake, and that is the point.** Each of the two below was correct about the
+journey it was explaining, and neither was trying to describe the menu. A door drawn in another
+area's asset is evidence that the ROOM is required, not evidence that it is designed — so
+`design/shell/` becomes the design of record for this surface, the way it already is for the rail's
+bottom section.
+
+### The measurement, at `origin/main` `ee8dd322d`
+
+**The population.** Twelve files under `design/` name the string:
+
+```
+git grep -l 'Account settings' origin/main -- 'design/'      # → 12 files
+```
+
+Ten of the twelve are the account-settings **area label**, a different thing entirely — eight in
+`design/settings/` (seven mocks and its `design-notes.md`), plus `design/cli-connect/design-notes.md`
+and `design/platform-admin/design-notes.md`, which describe their own panels. **Exactly two DRAW the
+menu open.**
+
+**⚠️ The count was re-taken under a stricter predicate, because a `git grep` is line-oriented and
+prettier wraps these assets.** `>Account settings<` is written across two lines in both of the assets
+that matter, so a single-line pattern under-reads them — which is exactly how the row inventory below
+was first got wrong (see _Corrections_). Re-run over file CONTENT rather than lines, the file count
+is unchanged at twelve:
+
+```
+git ls-tree -r --name-only origin/main design/ \
+  | xargs -I{} sh -c 'git show origin/main:{} | tr "\n" " " | grep -q "Account  *settings" && echo {}'
+```
+
+**And the PREDICATE was widened as well as the ref**, because the claim quantifies over _assets that
+draw this menu_ while the command enumerates _files naming one of its rows_. Searching `design/` for
+**any** of the four row labels returns fifteen files: the twelve above plus `design/shell/cmd-k.pen`
+(a _Sign out_ row in the command palette's **Account** group, beside _Toggle theme_ — a different
+surface, correctly owned by that asset) and `design/workspaces/design-notes.md` /
+`settings.pen` (_Workspace settings_ as a page name). **The two-asset finding survives the wider
+predicate.**
+
+### What the two passing-through assets actually draw
+
+| Asset                                             | The rows it draws                                                                                           | Why it drew them                                         |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `design/cli-connect/cli-connect.mock.html`        | identity block · Account settings · Workspace settings · Sign out                                           | Panel 0's access path — _avatar menu → Account settings_ |
+| `design/platform-admin/console.mock.html` Panel 1 | an _Account_ head label + the email · Account settings · **Your organizations** · Platform admin · Sign out | the staff-only door into `/admin`                        |
+
+**They disagree with each other, and both disagree with the shipped component — in three separate
+ways, only one of which is an omission:**
+
+1. **Rows that are missing.** `cli-connect` draws no _Platform admin_; `console` draws no
+   _Workspace settings_.
+2. **A row that does not exist.** `console` draws **_Your organizations_** with a `users` glyph.
+   `UserMenu.tsx` has never rendered such a row. A reader taking that asset as the answer to _what is
+   in this menu_ would build a row the product does not have.
+3. **A glyph that is wrong.** `console` gives _Account settings_ the `settings` glyph; the component
+   uses `user-cog`, and `settings` is _Workspace settings_'s glyph — so the one asset that draws
+   neither of those rows correctly is also the one that swaps their icons.
+
+Both are drawn as **hand-built stand-in markup** rather than as the component's own output, which is
+why they could drift without anything noticing. This asset cannot: every menu in it is rendered.
+
+### What the menu actually carries
+
+Declaration order, from `app/(authed)/_components/UserMenu.tsx`:
+
+| #   | Row                    | Glyph      | Destination                                       | Rendered                                             |
+| --- | ---------------------- | ---------- | ------------------------------------------------- | ---------------------------------------------------- |
+| —   | **Identity block**     | —          | — (the name, and the email beneath it when set)   | always                                               |
+| 1   | **Account settings**   | `user-cog` | `/settings/account`                               | always                                               |
+| 2   | **Workspace settings** | `settings` | `/settings/workspace`                             | CONDITIONAL — `workspaceTierRevealed`                |
+| 3   | **Platform admin**     | `shield`   | `/admin`                                          | CONDITIONAL — `platformStaff`, a separator each side |
+| 4   | **Sign out**           | `log-out`  | — (a button; signs out and bounces to `/sign-in`) | always                                               |
+
+**Two of the four are conditional and the menu's FLOOR is two rows** — _Account settings_ ·
+_Sign out_, the pair every session gets. Nothing marks an absent row: the rows close up and the menu
+is shorter, with no disabled row, no tooltip and no empty state. That is the same line the rail draws
+for the same reason — _an entry point is a promise about a room, and a disabled row is a promise the
+product then refuses_ — and here it is load-bearing twice over, because the component's own prop
+documentation makes it so: an absent _Platform admin_ is half of the 404-not-403 posture for `/admin`
+(`docs/decisions/platform-staff-auth.md` §2 / §4), and an absent _Workspace settings_ is the whole of
+the tier disclosure (`docs/decisions/organization-tier.md` §6d). A present-but-dimmed row would
+defeat both.
+
+**Both `role="separator"` rules belong to the staff row and leave with it.** They bracket
+_Platform admin_ rather than dividing the menu, so the two non-staff arms carry none — which is why
+the asset draws four combinations rather than two. **The identity block's bottom border is not one of
+them**: it is a `border-b` on the block, not a `role="separator"`.
+
+### The access path
+
+**Drawn, not described** — Panel A puts the avatar trigger inside the top bar at all three of the
+bar's own states, because a door in this menu is only a door at the widths it survives:
+
+| Bar state         | What the bar draws                                     | Where the avatar is       |
+| ----------------- | ------------------------------------------------------ | ------------------------- |
+| `≥ lg` (1024px)   | all eight controls, labelled                           | last in the right cluster |
+| `md`–`lg` (768px) | all eight, icon-only; the brand replaced the hamburger | last in the right cluster |
+| `< md` (375px)    | **four** controls — palette · create · bell · avatar   | **SLOT 4 of four**        |
+
+At `< md` the rail has folded into a drawer behind the hamburger and the avatar has not moved: it is
+still on screen, holding the last of the four slots `top-bar.mock.html` Panel B's budget allows. **A
+row added to this menu costs no slot at any width** — the menu's own length is not budgeted, only the
+bar's control count is — and that is the whole of this asset's claim on the bar. The budget itself is
+`top-bar.mock.html`'s and is not re-derived here.
+
+### The divergence ledger — which source wins for this surface
+
+| #   | The other assets say                                                                                                                                                                               | This asset says                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Since      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | `cli-connect/cli-connect.mock.html` draws three rows (no _Platform admin_); `platform-admin/console.mock.html` Panel 1 draws four, one of which (_Your organizations_) the product does not render | **Four rows plus the identity block, two of them conditional. This asset WINS for this surface.** Those two are point-in-time records of their own access paths and are **not edited** — the same call `design/shell/` already made for its three `.pen` sources.                                                                                                                                                                                                                                 | MOTIR-4248 |
+| 2   | Both of those draw the menu as hand-built stand-in markup, and one swaps the `user-cog` and `settings` glyphs                                                                                      | **Every menu here is the real `UserMenu`, rendered and opened**, so it cannot drift from the component. A reader asking _what is in this menu_ reads THIS asset.                                                                                                                                                                                                                                                                                                                                  | MOTIR-4248 |
+| 3   | `top-bar.mock.html` draws the avatar trigger at `h-9 w-9` — a FIXED 36px                                                                                                                           | **The trigger is `--height-control` square**, which is what ships (MOTIR-2373 moved it off the fixed size). The two agree at 36px under the default style and under `warm-editorial` and `neo-brutalism`, and **diverge under the other nine of the eleven shipped `[data-style]` values**, where `--height-control` is 34, 38 or 40px. **`top-bar.mock.html` still wins for the bar's COMPOSITION and its control budget**; this asset wins for the avatar's own box and for the menu behind it. | MOTIR-4248 |
+
+### Primitives and tokens
+
+The asset composes **no new primitive and no new token**. The menu is `components/ui/Popover.tsx`
+(`data-surface="popover"`, so a material style can frost it) at `UserMenu`'s own `width={240}`; every
+row is `UserMenu.tsx`'s own treatment — `--radius-control`, `--el-text` ink, `--el-text-muted` glyph,
+`--el-surface` hover/focus field — the rules are `role="separator"` on `--el-border`, the staff row's
+glyph is `--el-info` and its hint line `--el-text-secondary`, its chip is the shipped `Pill`
+(`tone="neutral"`), and the trigger is an `--el-text` circle with `--el-text-inverted` ink at
+`--height-control` square.
+
+Board chrome routes every colour through `--el-*` and takes `--el-text-secondary` for body ink rather
+than `--el-text-muted`, which fails AA on three of the four surfaces it could land on
+(`docs/decisions/design-board-chrome-aa.md`).
+
+### How the render was produced
+
+Generated, not hand-drawn, so it cannot drift from the app:
+
+1. The real `UserMenu` is rendered through the repo's own vitest setup (happy-dom + the real `en`
+   catalog via `renderWithIntl`) and the menu is **OPENED**, so what the asset carries is Radix's own
+   portal output. **Only the STATE is authored** — which of the two conditionals are on — in the
+   four combinations they have between them. The attributes Radix writes at RUNTIME (generated ids,
+   the focus trap's `tabindex`, the popper's inline custom properties, and the `data-side` /
+   `data-align` its collision detector resolved against a zero-size test viewport) are stripped, so
+   the asset is a drawing of the component rather than a snapshot of one mount.
+2. The three top bars in Panel A are **lifted from `top-bar.mock.html`**, which owns the bar's
+   composition — this asset draws the access path and composes that asset rather than re-specifying
+   it. The one substitution is the avatar BUTTON, for the reason ledger row 3 gives; the generator
+   asserts the freshly rendered trigger's `--height-control` box appears in all three bars before
+   lifting them, so the bars cannot be a stale drawing of a trigger that has moved.
+3. `tailwindcss`'s own `compile()` API runs `app/globals.css` (with its two package imports resolved
+   through node's resolver) over the assembled markup, so the stylesheet is the build's output rather
+   than a retyped token block.
+4. **Each bar renders at its own width inside one document**, so the compiled `@media (width >= …)`
+   blocks are re-emitted scoped to `[data-vw="W"]` — the same rules, resolved per frame. That is
+   `top-bar.mock.html`'s own mechanism, reproduced here because this asset lifts that asset's bars;
+   it is a property of the BOARD, not of the app.
+5. **The frames are measured after rendering, in a browser**, and the measurement is what makes the
+   panels' claims checkable rather than captioned: every drawn row's box is asserted inside its own
+   popover and inside its frame, the avatar is asserted square in each bar, and the `< md` bar's
+   right cluster is asserted to hold **exactly four** controls with the avatar last. The measure
+   separates _not drawn at this width_ (a control the bar's breakpoints correctly hide — a zero box)
+   from _clipped_ (a drawn box outside its frame); conflating the two is what made an earlier pass on
+   the rail asset report false failures on a correct render.
+
+The generator and the measurement script were temporary harnesses and are **deleted with this card's
+run**, as the design lane's own rule requires.
+
+**Three caption sentences were amended after generation, without re-running the generator**, and the
+distinction is the one that matters: they are authored prose in `<p class="panel-n">` /
+`<p class="legend">`, never rendered markup, so every menu and every bar in the asset is still
+component output untouched by hand. Two of them carried an argument belonging to the story this
+asset's work was originally cut from (a row being moved into this menu, which is not happening here);
+the third claimed Panel C's Glyph column renders the `lucide-react` element, when it names it and
+Panel B renders it. `prettier --write` and then `scripts/render-design-mock.mjs` re-exported the
+`.png`, and the browser measurement was re-run against the file that ships.
+
+### Corrections
+
+**The card that commissioned this asset (MOTIR-4248) got one cell of its evidence table wrong, and
+the correction is recorded here rather than only on the card**, because the table is what a later
+reader will copy. It said `platform-admin/console.mock.html` Panel 1 draws _"identity block · Account
+settings · Platform admin"_ and that it _"omits Workspace settings and Sign out"_. It draws **Sign
+out**, and it draws a fifth row — **Your organizations** — that the shipped component has never
+rendered. The under-read has one cause and it is worth naming: the inventory was taken with a
+line-oriented `grep` for `>Account settings<`, and prettier wraps these assets so that the label and
+its closing tag sit on different lines. **A row inventory over a formatted HTML asset is taken over
+file CONTENT, not over lines.** Both corrections make the card's finding stronger rather than weaker,
+which is why the asset ships: the two drawings disagree with the component more than the card claimed,
+not less.
+
+### What this asset does NOT draw
+
+The **top bar's own composition** and its control budget (`top-bar.mock.html` owns both; Panel A
+composes that asset), the **drawer's utility strip** (`top-bar.mock.html` Panel D), the destinations
+behind any of the rows (`design/settings/`, `design/platform-admin/`), the **rail** in any form
+(`rail-bottom-section.mock.html`, `desktop.pen`, `context-row.mock.html`), and the **command
+palette's own Account group** (`cmd-k.pen`), which carries a _Sign out_ row of its own on a different
+surface.
+
+---
+
+## The Help menu — its two homes, and the three doors it holds (MOTIR-4238)
+
+`help-menu.mock.html` / `.png` is **the design of record for the shell's Help menu**: a control in the
+rail's footer at `≥ md` and in the drawer's utility strip below it, opening a popover with three rows.
+
+### Why the shell owes this surface
+
+The rail's bottom section carried `Docs` and `Legal`, and `SidebarNav.tsx`'s own comment said why:
+_"It sits HERE rather than in a footer because the authed shell has no footer to put it in."_ That is an
+honest note about a missing slot, not an argument for the rail — and it had been standing in for a
+decision ever since. **This asset draws the slot.**
+
+**The mirror, read from source rather than recalled** (rung 1 of the decision-authority ladder — a
+citation from memory is not a check):
+
+| product        | where these doors live                                                                                     | read from                                                                                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **GitLab**     | the **Help menu** in the super-sidebar — `GitLab documentation`, `Keyboard shortcuts`, `Terms and privacy` | [`help_center.vue`](https://github.com/gitlabhq/gitlabhq/blob/master/app/assets/javascripts/super_sidebar/components/help_center.vue)                  |
+| **Sentry**     | the **Help menu** in the primary nav — a `Legal` submenu over `Privacy Policy` / `Terms of Use`            | [`helpMenu.tsx`](https://github.com/getsentry/sentry/blob/master/static/app/views/navigation/primary/helpMenu.tsx)                                     |
+| **Plane**      | a **help menu in the sidebar** — Documentation · Contact sales · Keyboard shortcuts · What's new · Forum   | [`help-section/root.tsx`](https://github.com/makeplane/plane/blob/preview/apps/web/core/components/workspace/sidebar/help-section/root.tsx)            |
+| **Mattermost** | the auth footer + the **About** dialog                                                                     | [`about_build_modal.tsx`](https://github.com/mattermost/mattermost/blob/master/webapp/channels/src/components/about_build_modal/about_build_modal.tsx) |
+
+**Two things are unanimous.** None puts these doors in the product navigation, and none puts them in
+the account menu — all four keep that surface for _acts on your account_. Three of the four put help in
+the **sidebar**; not one puts it in a top bar.
+
+### Where the control lives, and why there
+
+**At `≥ md`: the rail's FOOTER** — `Sidebar`'s `footer` slot, which holds
+`<SidebarToggle variant="footer" />` alone today (`SidebarNav.tsx:226 · 253 · 572`). The footer is
+**chrome, not a destination list**, which is the whole distinction: the rail answers _where inside this
+project can I go today_, and none of these three doors is a daily-work destination.
+
+**Below `md`: the DRAWER'S UTILITY STRIP.** `SidebarNav` passes `footer={isDrawer ? undefined : …}`, so
+**the drawer renders no footer at all** and a footer-only control would vanish at phone width — the
+exact failure this story exists to remove, not to repeat. The strip (`SidebarDrawer`'s own `footer`,
+rendered at `app/(authed)/layout.tsx:455`) is the shipped home for a displaced control: MOTIR-2373 moved
+the build-in-public slot, the report button and the theme toggle there when the top bar's budget closed,
+and its rule is that the displaced control lands there **drawn, not cited**. This asset draws it.
+
+**NOT a new top-bar control.** The below-`md` bar is closed at four slots and this would be the ninth
+(`top-bar.mock.html` Panel B). That ceiling is arithmetic, not taste.
+
+### The two widths need two arrangements, and both are drawn
+
+The footer is the one region that survives the collapse, and it now holds two controls rather than one.
+
+- **Expanded (240px)** — a row: Help leading, the collapse toggle keeping the trailing edge it has today.
+- **Collapsed (56px)** — **stacked and centred.** 56px minus the rail's own gutters leaves about 32px of
+  content box, and two `--height-control` controls cannot sit side by side in it. The collapsed toggle
+  already centres itself (`mx-auto w-9 px-0`); Help sits above it on the same axis.
+
+**The trigger takes each container's OWN grammar rather than one shared shape.** In the footer it is a
+ghost `Button` with a `h-4 w-4` glyph — what `SidebarToggle variant="footer"` is — so the two controls
+beside each other read as one pair. In the strip it is the `ICON_BTN` box `ReportButton` and
+`ThemeToggle` use (`--height-control` square, `h-5 w-5` glyph, `--el-text-muted` ink). Making both homes
+identical would have made one of them wrong.
+
+### What the menu carries
+
+| #   | Row                    | Glyph       | What it does                                            | Rendered                                  |
+| --- | ---------------------- | ----------- | ------------------------------------------------------- | ----------------------------------------- |
+| 1   | **Docs**               | `book-open` | anchor — the operator's ABSOLUTE url, `docsIndexUrl()`  | CONDITIONAL — `docsIndexUrl` is non-null  |
+| 2   | **Keyboard shortcuts** | `keyboard`  | **button** — opens `ShortcutsCheatsheet`, as `?` does   | always                                    |
+| 3   | **Legal documents**    | `scale`     | anchor — the operator's ABSOLUTE url, `legalIndexUrl()` | CONDITIONAL — `legalIndexUrl` is non-null |
+
+**Two of the three are conditional and the FLOOR is one row** — and that floor is the reason the menu is
+worth building rather than a reason to doubt it. A self-hosted deployment that has configured neither url
+still gets a Help menu, because **Keyboard shortcuts** is unconditional. Nothing marks an absent row: the
+rows close up and the menu is shorter, with no disabled row, no tooltip and no empty state — the same line
+the rail draws for the same reason.
+
+### Why each conditional row is absent — MOVED here with the rows
+
+Both paragraphs below came from § _The rail's bottom section_, which owned them while the rows lived
+there. They are **moved, not copied**: the reasoning describes the ROW, so it belongs wherever the row
+is, and a second copy left behind is exactly what this area's divergence ledger exists to prevent.
+MOTIR-4254 landed first and removed them from that section, so they stand here and nowhere else.
+
+**The `Legal` row's absent arm has TWO causes, and the second is easy to miss.** `legalIndexUrl()`
+derives the index from the configured documents' own urls: if every one is `<base>/<slug>` the index is
+`<base>`. An operator publishing at unrelated addresses (`acme.com/terms-of-service`,
+`legal.acme.com/privacy`) has no index for the row to point at, so **the row is absent rather than
+guessed** — sign-up and the re-consent rows still link each document directly, so nothing becomes
+unreachable. A row pointing at the base of SOME of the documents would be worse than no row.
+
+**The `Docs` row reads configuration, and it is the same shape (MOTIR-4167).** The row used to carry a
+hard-coded app-relative path to a documentation index that left this repository when MOTIR-3932 moved
+the public reading surface to `motir-marketing` — so `app.motir.co/docs` answered **404** while
+`motir.co/docs` answered **200**. It was rebuilt around `lib/docs/links.ts`'s `docsIndexUrl()`, which
+reads **`MOTIR_DOCS_URL`** — the operator's own ABSOLUTE url — and answers `null` when it is unset, or
+when the value is not an absolute `http(s)` url, because a relative path is precisely the defect: it is
+refused and logged rather than rendered. **When it is `null` the row is absent**, not disabled and not
+dead. `docs/decisions/public-surface-hosts.md` AMENDMENT 2 §D is the record;
+`tests/components/HelpMenu.test.tsx` pins both arms of the row (re-homed here from
+`SidebarNav-docs-door.test.tsx` by MOTIR-4239, which built this menu) and
+`tests/docs/docsLinks.test.ts` both arms of the resolver plus the refusal.
+
+**Row 2 is the one this story ADDS rather than moves, and it is a button, not a link.**
+`ShortcutsCheatsheet` is a finished, translated dialog enumerating every global shortcut, and at
+`847d44ec9` the only way to open it is to press `?` — a key you find out about by opening the cheatsheet.
+It is worse than undiscoverable: `CommandPaletteContextValue` is `{ open, setOpen, openCommandPalette }`
+and `cheatsheetOpen` / `setCheatsheetOpen` are local state, so **no surface _could_ offer the door**
+without widening that context first. Both GitLab and Plane carry the same row in their help menus.
+
+**Rows 1 and 3 are off-shell targets** — ordinary anchors to absolute urls, **no `active` arm** (this menu
+is never on screen at the destination, so `pathname` can never match), no external-link glyph and no
+`target`. That is the treatment the rail rows carry today, moved rather than redesigned.
+
+**The label is `Legal documents`, not `Legal`.** `labels.workItemType.legal` is already the string `Legal`
+in the same English catalog — the work-item type, meaning _legal work to be done_ — and it renders on
+`WorkItemTypeChip`, the type picker and the quick-view panel to the same signed-in user. One word, two
+senses; and inside a menu called **Help** the bare noun reads as an offer of legal help. The `zh` catalog
+already separates them (`法务` for the work, `法律条款` for the documents); English never did. The
+collision itself is filed separately — this asset only stops adding to it.
+
+### The divergence ledger — which source wins for this element
+
+| #   | The other assets say                                                                               | This asset says                                                                                                                                                                                                                          | Since      |
+| --- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | `rail-bottom-section.mock.html`'s revisions before MOTIR-4254 drew `Docs` and `Legal` as rail rows | **Both rows live here now**, and their absent-arm reasoning arrived with them. MOTIR-4254 landed first and removed both from that section; its own ledger row 4 records the move from the other side. **This asset wins for the doors.** | MOTIR-4238 |
+| 2   | `top-bar.mock.html` Panel D draws the drawer's utility strip with three controls                   | **Four.** Help leads them. That asset still wins for the drawer's composition and for the bar's control budget; this one wins for the strip's membership.                                                                                | MOTIR-4238 |
+| 3   | `desktop.pen` / `desktop-collapsed.pen` draw a footer holding the collapse toggle alone            | **Two controls**, arranged differently at the two widths. Those `.pen` sources cannot be re-exported and are not edited — the same call this area already made for them.                                                                 | MOTIR-4238 |
+
+### Primitives and tokens
+
+**No new primitive and no new token.** The menu is `components/ui/Popover.tsx` (`data-surface="popover"`)
+at its own `width={240}`; every row is `UserMenu.tsx`'s treatment — `--radius-control`, `--el-text` ink,
+`--el-text-muted` glyph, `--el-surface` hover/focus field. The footer trigger is `components/ui/Button.tsx`
+`variant="ghost" size="sm"`; the strip trigger is the `ICON_BTN` string `ReportButton` defines. The rails
+are `components/ui/Sidebar.tsx` unchanged. Board chrome routes every colour through `--el-*` and takes
+`--el-text-secondary` for body ink rather than `--el-text-muted`, which fails AA on three of the four
+surfaces it could land on (`docs/decisions/design-board-chrome-aa.md`).
+
+### How the render was produced
+
+Generated, not hand-drawn, so it cannot drift from the app:
+
+1. The real `Sidebar` is rendered through the repo's own vitest setup at both widths, with the bottom
+   section already down to its four remaining rows and the two-control footer in place. The primary
+   section is abbreviated context with its real glyphs — `desktop.pen` owns it.
+2. The popover shell is Radix's own output, taken from the shipped `UserMenu` opened in the same setup.
+3. **The one thing composed rather than rendered is the menu's three rows**, because the component that
+   will render them is MOTIR-4239's. They are not hand-written either: each is a rendered `UserMenu` row
+   **cloned**, with its href, label and glyph swapped for a real `lucide-react` element. Every row in
+   `UserMenu` carries one identical class string, so the clone IS the row treatment.
+4. The strip is `SidebarDrawer`'s footer geometry verbatim, holding buttons built from `ReportButton`'s
+   own `ICON_BTN` constant.
+5. `tailwindcss`'s own `compile()` runs `app/globals.css` (with its two package imports resolved through
+   node's resolver) over the assembled markup, so the stylesheet is the build's output.
+6. Each frame renders at its own width in one document, so the compiled `@media (width >= …)` blocks are
+   re-emitted scoped to `[data-vw="W"]` — `top-bar.mock.html`'s mechanism, a property of the board.
+7. **The frames are measured in a browser**, which is what makes the panels' claims checkable rather than
+   captioned: every drawn row's box inside its frame, the rail footer asserted to hold **two** controls at
+   both widths, and the strip asserted to hold **four** slots with Help leading the three icon buttons.
+
+The generator was a temporary harness and is **deleted with this card's run**.
+
+### What this asset does NOT draw
+
+The **rail's bottom section as a specification** (`rail-bottom-section.mock.html` owns it; the rails here
+show it as context, as it stands after MOTIR-4254), the **drawer** itself (`top-bar.mock.html` Panel D), the
+**top bar** and its control budget, the **rail head** (`context-row.mock.html`), the **account menu**
+(`account-menu.mock.html`), and the `ShortcutsCheatsheet` dialog that row 2 opens — which ships today and
+is unchanged by this story.

@@ -156,11 +156,69 @@ debited this month (emphasised). Card foot totals tokens + credits. Shown at
 ### Panel 5 — recent activity / per-run log (PAGINATED)
 
 A `Card` with a **table** of recent planning **runs**, newest first: **when**,
-the **run** (a job-kind `Pill` — generate / expand / augment — + the project),
-the **model** (chip), **tokens**, and **credits debited**. A card-foot **pager**
-(`.pager`: "Showing 1–6 of 2,914" + Prev / "Page 1 of 486" / Next, Prev disabled
-on page 1) — **at-scale, NOT load-all** (finding #57). Scoped to the active drill
-level (a "Scope: moooon (org)" note in the head).
+the **run** (a job-kind `Pill` — see below — + the project), the **model**
+(chip), **tokens**, and **credits debited**. A card-foot **pager** (`.pager`:
+"Showing 1–6 of 2,914" + Prev / "Page 1 of 486" / Next, Prev disabled on page 1)
+— **at-scale, NOT load-all** (finding #57). Scoped to the active drill level (a
+"Scope: moooon (org)" note in the head).
+
+#### ⚠️ AMENDED (MOTIR-4303, 2026-09-03) — the ONE planning pill, BESIDE the four it keeps
+
+[MOTIR-3943](motir:cmtf1eu0l002vhvn8g359yhxr) collapses the five planning job
+kinds to one, `plan`, so every run submitted after that switch records the same
+kind. This panel is a caller of the mechanism that story replaces, and without
+this amendment every planning run would fall to the shipped renderer's generic
+`kindOther` default ("Planning run").
+
+- **The new pill.** Copy **"Planning"** — the noun the ADR settles on ("THE ONE
+  PLANNING KIND"), not a verb phrase, because it no longer names an operation.
+  Class `.pill-plan`, role **`--el-tint-peach` bg + `--el-text-strong`** — the
+  one remaining tint in the `--el-tint-*` family that this asset does not
+  already spend (lavender = generate + tier chip, sky = expand, mint = augment,
+  yellow = warn/low-balance, rose = the panel-8c error icon). It is an
+  **addition**, not a replacement.
+- **⚠️ THE FOUR OLDER LABELS ARE RETAINED, and this is the load-bearing
+  decision.** `AiUsage.jobKind` is **persisted history**: rows written before the
+  switch keep their old value for ever, and the shipped renderer takes a plain
+  `string`. Those rows are what an organization was **billed** for, so an asset
+  that replaced the old pills would specify a surface that mislabels every run
+  already paid for. They are historical values, not a vocabulary the product
+  still emits.
+- **The run log is drawn holding a MIX** — two `plan` rows above the older ones,
+  with a comment marking where the switch falls — so the reader sees the table as
+  it looks the week after the cutover rather than in a hypothetical steady state.
+- **"Re-plan" is drawn with the NEUTRAL pill**, because that is what actually
+  renders: `OrgUsageClient`'s `jobKindLabel` has a `replan` case and
+  `jobKindTint` does not, so a re-plan row falls to `bg-(--el-surface)`. Drawn as
+  it ships, not as a fourth tint it never had.
+- **Everything else in Panel 5 is UNCHANGED** — the columns, the pagination, the
+  scope note, and the access path (already drawn in Panel 1; this amends a panel
+  inside a surface that is already reachable).
+- **⚠️ WHAT THIS PANEL DOES NOT SHOW, recorded because it is not obvious from the
+  drawing and the amendment sits right next to it (MOTIR-4325).** The run log is
+  **planning runs only, by construction** — every figure in Panels 2, 4 and 5
+  joins `PlanningTurn`, which `motir-ai`'s `usageService` states outright. But
+  the ledger has **three** debit kinds: `debit` (a planning turn), `ci_overage`
+  (CI minutes past the pool) and `search` (a web search on the grounding
+  channel). CI has its own card on the _billing_ panel; **search is rendered
+  nowhere at all**, and the `balance` this area's Panel 2 draws is the WHOLE
+  ledger — so the spend shown here and the balance above it are measured over
+  different sets, with nothing on the surface saying so.
+  **That is NOT this card's to fix and is deliberately not drawn here** — it
+  predates the wire change, it reaches Panel 2 (out of scope), and where a
+  non-AI charge belongs is a real design question rather than something to
+  improvise. It is filed as MOTIR-4325, and it is named here so the next reader
+  of this asset — including the code card MOTIR-4305 — does not re-derive it or
+  read the run log as a complete account of what burns credits. It will widen:
+  hosted-agent runtime and code-graph indexing are the same shape, arriving.
+- **Shipped-reality check.** The pill markup mirrors the shipped renderer
+  one-for-one: `OrgUsageClient.tsx` renders `<Pill className={jobKindTint(kind)}
+text-(--el-text-strong) border-transparent>` and the mock's `.pill-*` classes
+  are that same background/colour/border triple, so the asset cannot specify a
+  pill the component cannot produce. The code that consumes this amendment is
+  [the usage-label card](motir-ref:cmtl1i03o00o7hun8zfl7kigr), which is
+  `blocked_by` this one; nothing under `app/`, `components/` or `messages/` is
+  touched here.
 
 ### Panel 6 — limited member view (role gating · 6.10.4)
 
@@ -243,26 +301,28 @@ workaround.
 
 ## Colour roles (`--el-*` — palette, not grey-only · finding #54)
 
-| Element                                   | Token                                                                          | Why                                                                   |
-| ----------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| **Balance hero figure / medium figures**  | `--el-text` (serif) · unit in `--el-text-muted`                                | The primary numbers; the unit is quiet so "credits" reads as a label. |
-| **Tier chip**                             | `--el-tint-lavender` bg + `--el-text-strong`                                   | The org/plan tier — the brand-purple family, matches the org avatar.  |
-| **Allotment meter fill (healthy)**        | `--el-accent`                                                                  | Primary "credits remaining" share.                                    |
-| **Allotment meter fill (low)**            | `--el-warning`                                                                 | Low-balance variant (panel 7a).                                       |
-| **Monthly-trend bars**                    | current `--el-accent` · prior `--el-tint-lavender`                             | The latest month stands out; history is quieter.                      |
-| **Spend delta — up / down**               | `--el-warning` (up) · `--el-success` (down)                                    | Coloured by direction (more spend = warning hue), not grey.           |
-| **Model: Claude Opus**                    | dot + bar `--el-accent`                                                        | The priciest/heaviest model — the strongest hue, biggest drain.       |
-| **Model: Claude Sonnet**                  | dot + bar `--el-info`                                                          | Distinct blue, clearly the mid tier.                                  |
-| **Model: Claude Haiku** (reserved)        | dot + bar `--el-success`                                                       | Green — the cheapest tier (token present for future Haiku rows).      |
-| **Model: DeepSeek**                       | dot + bar `--color-accent-teal` (`--el-type-subtask` hue)                      | The teal family — the non-Claude channel, visibly distinct.           |
-| **Job-kind: generate / expand / augment** | `--el-tint-lavender` / `--el-tint-sky` / `--el-tint-mint` + `--el-text-strong` | Three planning verbs, three tints — readable at a glance.             |
-| **Low-balance banner**                    | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`                | Warning hue in the BANNER tint, not the page (finding #35).           |
-| **Out-of-credits / blocked icon**         | `--el-tint-yellow` + `--el-warning`                                            | The paused state — warning, not danger (nothing is broken).           |
-| **Error icon tint**                       | `--el-tint-rose` + `--el-danger-text`                                          | Fetch-error state (panel 8c).                                         |
-| **Read-only chip / member lock note**     | neutral `Pill` (`--el-surface`) · lock note `i-lock`                           | The limited member view's gating affordance.                          |
-| **Primary CTAs / active scope segment**   | `--el-accent` (+ `--el-accent-text`) · `--el-tint-lavender`                    | Open-planner / Retry / the active drill segment.                      |
-| Count / scope-level / "Credits" chips     | `--el-surface` + `--el-text-secondary` (neutral `Pill`)                        | Genuinely neutral metadata.                                           |
-| Text / surfaces / borders                 | `--el-text*`, `--el-surface*`, `--el-border*`                                  | Standard element tokens — never Tier-0 `--color-*`.                   |
+| Element                                                | Token                                                                          | Why                                                                                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Balance hero figure / medium figures**               | `--el-text` (serif) · unit in `--el-text-muted`                                | The primary numbers; the unit is quiet so "credits" reads as a label.                                         |
+| **Tier chip**                                          | `--el-tint-lavender` bg + `--el-text-strong`                                   | The org/plan tier — the brand-purple family, matches the org avatar.                                          |
+| **Allotment meter fill (healthy)**                     | `--el-accent`                                                                  | Primary "credits remaining" share.                                                                            |
+| **Allotment meter fill (low)**                         | `--el-warning`                                                                 | Low-balance variant (panel 7a).                                                                               |
+| **Monthly-trend bars**                                 | current `--el-accent` · prior `--el-tint-lavender`                             | The latest month stands out; history is quieter.                                                              |
+| **Spend delta — up / down**                            | `--el-warning` (up) · `--el-success` (down)                                    | Coloured by direction (more spend = warning hue), not grey.                                                   |
+| **Model: Claude Opus**                                 | dot + bar `--el-accent`                                                        | The priciest/heaviest model — the strongest hue, biggest drain.                                               |
+| **Model: Claude Sonnet**                               | dot + bar `--el-info`                                                          | Distinct blue, clearly the mid tier.                                                                          |
+| **Model: Claude Haiku** (reserved)                     | dot + bar `--el-success`                                                       | Green — the cheapest tier (token present for future Haiku rows).                                              |
+| **Model: DeepSeek**                                    | dot + bar `--color-accent-teal` (`--el-type-subtask` hue)                      | The teal family — the non-Claude channel, visibly distinct.                                                   |
+| **Job-kind: `plan`** (MOTIR-4303)                      | `--el-tint-peach` + `--el-text-strong`                                         | The ONE planning kind, post-switch. The last unspent tint in the family.                                      |
+| **Job-kind: generate / expand / augment** (historical) | `--el-tint-lavender` / `--el-tint-sky` / `--el-tint-mint` + `--el-text-strong` | Three planning verbs, three tints — readable at a glance. RETAINED: persisted history, not a live vocabulary. |
+| **Job-kind: re-plan** (historical)                     | neutral `Pill` (`--el-surface`)                                                | Labelled but untinted — `jobKindTint` has no `replan` case, so this is what ships.                            |
+| **Low-balance banner**                                 | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`                | Warning hue in the BANNER tint, not the page (finding #35).                                                   |
+| **Out-of-credits / blocked icon**                      | `--el-tint-yellow` + `--el-warning`                                            | The paused state — warning, not danger (nothing is broken).                                                   |
+| **Error icon tint**                                    | `--el-tint-rose` + `--el-danger-text`                                          | Fetch-error state (panel 8c).                                                                                 |
+| **Read-only chip / member lock note**                  | neutral `Pill` (`--el-surface`) · lock note `i-lock`                           | The limited member view's gating affordance.                                                                  |
+| **Primary CTAs / active scope segment**                | `--el-accent` (+ `--el-accent-text`) · `--el-tint-lavender`                    | Open-planner / Retry / the active drill segment.                                                              |
+| Count / scope-level / "Credits" chips                  | `--el-surface` + `--el-text-secondary` (neutral `Pill`)                        | Genuinely neutral metadata.                                                                                   |
+| Text / surfaces / borders                              | `--el-text*`, `--el-surface*`, `--el-border*`                                  | Standard element tokens — never Tier-0 `--color-*`.                                                           |
 
 > **One deliberate Tier-0 reach:** the DeepSeek dot/bar uses `--color-accent-teal`
 > because there is no dedicated `--el-*` teal element token beyond `--el-type-subtask`
@@ -303,8 +363,10 @@ confirm token parity (every colour flips through Tier-0 under `--el-*`).
 - Activity: **"Recent activity"** / **"Every planning run that debited credits,
   newest first. Filtered to the current scope ({scope}). Older runs load a page
   at a time."**; **"Runs"** / **"{n} total"**; columns **"When"**, **"Run"**,
-  **"Model"**, **"Tokens"**, **"Credits"**; job kinds **"Generate plan"** /
-  **"Expand story"** / **"Augment tree"**; pager **"Showing {from}–{to} of
+  **"Model"**, **"Tokens"**, **"Credits"**; job kinds — the live one
+  **"Planning"** (MOTIR-4303), and the historical **"Generate plan"** /
+  **"Expand story"** / **"Augment tree"** / **"Re-plan"**, which stay because
+  `AiUsage.jobKind` is persisted history; pager **"Showing {from}–{to} of
   {total}"**, **"Page {n} of {m}"**, **"Prev"** / **"Next"**.
 - Member view: **"{project} · your project"** / **"Read-only"**; **"This project
   · this month"** / **"Your project's share. No org total, no other

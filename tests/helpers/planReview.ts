@@ -1,4 +1,5 @@
 import type { PlanReviewDto, PlanReviewItemDto } from '@/lib/dto/planReview';
+import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 
 // Builders for the plan-REVIEW model the plan-change conversation now reviews
 // (MOTIR-1746). The rail, its canvas and the confirm bar all read the Plan the
@@ -46,6 +47,15 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     changes: [],
     stale: false,
     staleReasons: [],
+    // The PROPOSAL envelope (MOTIR-4183) — the default describes the builder's
+    // own default op, an `add` with no target and nothing changed, so every
+    // existing case keeps meaning what it meant. A `modify` case overrides it.
+    proposal: {
+      op: 'add',
+      identifier: null,
+      changedFields: [],
+      settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+    },
     // MOVED in the plan's latest revision (MOTIR-3601) — false by default, so
     // every existing case keeps describing a plan nobody has revised.
     revised: false,

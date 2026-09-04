@@ -144,6 +144,9 @@ const overview = {
   stats: { publicRequests: 2, upvotes: 5, planned: 1, shipped: 3, inProgress: 0 },
   links: { website: 'https://acme.test' },
   viewerCanManage: false,
+  // MOTIR-4217 — the canonical address and its alternates. `primary` is never
+  // empty: a project that has claimed nothing still has its motir.co URL.
+  addresses: { primary: 'https://motir.co/p/ACME', alternates: [] },
 };
 
 const page = {
@@ -439,8 +442,15 @@ describe('the published schema matches what the route actually returns', () => {
   it('GET /api/public/projects', async () => {
     listPublicIndex.mockResolvedValue({
       projects: [
-        { identifier: 'ACME', updatedAt: '2026-08-30T00:00:00.000Z' },
-        { identifier: 'OPEN-CORE', updatedAt: '2026-08-29T00:00:00.000Z' },
+        // MOTIR-4217 — one row on the default host and one that has moved to a
+        // tenant host, which is the whole point of the field: `motir.co`'s
+        // sitemap lists the first and omits the second.
+        { identifier: 'ACME', updatedAt: '2026-08-30T00:00:00.000Z', primaryHost: 'motir.co' },
+        {
+          identifier: 'OPEN-CORE',
+          updatedAt: '2026-08-29T00:00:00.000Z',
+          primaryHost: 'acme.motir.site',
+        },
       ],
       nextCursor: 'cmt_last',
     });

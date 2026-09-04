@@ -9,6 +9,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
+import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProjectMembersSettings } from './_components/ProjectMembersSettings';
 import { CodeAccessDoorCard } from './_components/CodeAccessDoorCard';
@@ -102,6 +103,14 @@ export default async function ProjectMembersPage() {
         // Whether this BUILD publishes at all (MOTIR-4035). Read on the server,
         // where `MOTIR_CLOUD` lives, and threaded to the client island.
         publicAccessAvailable={isCloud()}
+        // The project's address ON THE PUBLIC SITE (MOTIR-4242), resolved by the
+        // one module that owns that question (`publicSiteOrigin()` →
+        // `MOTIR_PUBLIC_SITE_URL`, MOTIR-3881). Threaded for the same reason
+        // `publicAccessAvailable` is: that variable is a server variable and the
+        // editor is a client island, so the island cannot read it — and the
+        // value it used to build instead (`window.location.origin`) is the
+        // APPLICATION's origin, which is exactly the defect.
+        publicPageUrl={publicProjectUrl(ctx.project.identifier)}
       />
 
       <CodeAccessDoorCard

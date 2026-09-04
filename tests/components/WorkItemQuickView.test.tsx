@@ -22,6 +22,7 @@ const DATA: QuickViewData = {
   statusLabel: 'In Progress',
   statusCategory: 'in_progress',
   descriptionMd: 'Render the project roadmap as a spatial canvas.',
+  explanationMd: null,
   type: 'code',
   executor: 'coding_agent',
   assigneeName: 'Marco Ortiz',

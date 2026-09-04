@@ -34,11 +34,27 @@ export interface PrCheckRunSlice extends SuiteScopedCheckRow {
  * surface renders no CI pill).
  */
 export function derivePrCiState(checkRuns: PrCheckRunSlice[]): PrCiState {
-  if (checkRuns.length === 0) return null;
-  const newest = checkRuns.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
-  const atHead = liveCheckRows(checkRuns.filter((r) => r.commitSha === newest.commitSha));
+  const atHead = liveRowsAtLatestSha(checkRuns);
+  if (atHead.length === 0) return null;
   if (atHead.some((r) => r.conclusion === 'failure')) return 'failing';
   if (atHead.some((r) => r.conclusion === 'pending')) return 'running';
   if (atHead.some((r) => r.conclusion === 'success')) return 'passing';
   return null;
+}
+
+/**
+ * The rows this derivation actually reads: the LATEST recorded sha's rows, minus
+ * every run a later run replaced.
+ *
+ * Extracted from `derivePrCiState` (MOTIR-4199) rather than re-derived beside
+ * it, because the check-set reconcile has to name the SAME window this verdict
+ * is formed over — a reconcile that filled in a different sha's set would leave
+ * the two disagreeing about which commit is being judged, which is the class of
+ * defect `liveCheckRows`' header says was removed. Empty when there are no rows
+ * at all.
+ */
+export function liveRowsAtLatestSha<T extends PrCheckRunSlice>(checkRuns: T[]): T[] {
+  if (checkRuns.length === 0) return [];
+  const newest = checkRuns.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
+  return liveCheckRows(checkRuns.filter((r) => r.commitSha === newest.commitSha));
 }

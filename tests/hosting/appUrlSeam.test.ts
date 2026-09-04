@@ -108,6 +108,25 @@ describe('seam: the PUBLIC-SITE origin ← its own variable (MOTIR-3881)', () =>
     // answer once — the drift `lib/baseUrl.ts`'s own comment was written against.
     expect(readers('MOTIR_BASE_URL')).toEqual(['lib/baseUrl.ts']);
     expect(readers('MOTIR_PUBLIC_SITE_URL')).toEqual(['lib/publicProjects/urls.ts']);
+    // The tenant BASE domain (Story MOTIR-3878 · MOTIR-4215) — the namespace
+    // every customer subdomain hangs off. Same rule, and it matters more here
+    // than for the two above: this value is not merely where a link points, it
+    // is what HOSTNAMES ARE MINTED FROM — into the database, into DNS
+    // instructions a customer follows, into a certificate request. Two readers
+    // disagreeing would mint addresses under two namespaces.
+    expect(readers('MOTIR_PUBLIC_TENANT_DOMAIN')).toEqual(['lib/publicAddresses/tenantDomain.ts']);
+    // The records that POINT a customer hostname at us (MOTIR-4278, ADR §10
+    // AMENDMENT 1). The rule bites hardest here of all four: these values are
+    // not minted into anything of ours, they are COPIED BY A CUSTOMER into a
+    // zone we do not control, and a second reader answering differently sends
+    // one customer's domain somewhere the other reader does not know about.
+    for (const name of [
+      'MOTIR_PUBLIC_ADDRESS_CNAME_TARGET',
+      'MOTIR_PUBLIC_ADDRESS_A_RECORDS',
+      'MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS',
+    ]) {
+      expect(readers(name), name).toEqual(['lib/publicAddresses/pointingRecords.ts']);
+    }
   });
 });
 

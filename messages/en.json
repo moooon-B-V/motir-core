@@ -269,23 +269,10 @@
     "writtenByMotir": "written by Motir AI",
     "autoPlannedNobodyAsked": "Auto-planned — nobody requested this",
     "notYetCreated": "not yet created",
-    "sectionDescription": "Description",
     "sectionExplanation": "Why this matters",
-    "descriptionAria": "Proposal description",
-    "explanationAria": "Why this proposal matters",
     "noDescription": "No description yet.",
     "noExplanation": "No explanation yet.",
     "aiDrafted": "AI-drafted",
-    "railType": "Type",
-    "railPriority": "Priority",
-    "railPoints": "Points",
-    "railEstimate": "Estimate",
-    "railRepository": "Repository",
-    "railExecutor": "Executor",
-    "railParent": "Parent",
-    "executorHuman": "Human",
-    "executorAgent": "Coding agent",
-    "minutes": "{n} min",
     "viewTriggerAria": "View proposal",
     "revisePlaceholder": "Ask Motir to change this plan…",
     "reviseNote": "Motir changes this plan. Nothing reaches your backlog until you approve.",
@@ -301,7 +288,14 @@
     "searchLabel": "Search this plan",
     "showChangesAll": "Every item on this level is this plan's",
     "locateChange": "Locate the next of this plan's items",
-    "rowOpenAria": "Open {name}"
+    "rowOpenAria": "Open {name}",
+    "openTargetAsItStands": "Open the work item as it stands",
+    "railChangedMark": "changed",
+    "railChangeCount": "This plan changes {n} of the {m} fields it can set.",
+    "railChangeNone": "This plan changes none of these fields — only the description and the explanation.",
+    "railAddAll": "Every value here is what approval will create.",
+    "railRemoveArchives": "Approving this plan archives {key}.",
+    "peekNoActivity": "A proposal has no comments, children or activity until it is approved."
   },
   "planEdits": {
     "submitting": "Submitting…",
@@ -334,10 +328,6 @@
     "actionError": "Something went wrong. Please try again.",
     "immutableRejection": "One or more items are in a terminal status and cannot be changed. They've been locked in the review.",
     "decidedRejection": "This proposal has already been decided — nothing was changed.",
-    "expandAction": "Expand",
-    "expandTooltip": "Generate children for this work item",
-    "replanAction": "Re-plan",
-    "replanTooltip": "Re-plan this epic/story — completed work stays untouched",
     "creditsError": "You're out of planning credits",
     "emptyError": "No proposals came back — try a more specific prompt or target",
     "failedError": "The job didn't finish. Your backlog is untouched."
@@ -591,7 +581,6 @@
       "estimate": "Est.",
       "points": "Points",
       "status": "Status",
-      "actions": "Actions",
       "unassigned": "Unassigned"
     },
     "list": {
@@ -964,14 +953,12 @@
       "jobRuns": "Job runs",
       "git": "Git",
       "github": "GitHub",
-      "docs": "Docs",
       "backlog": "Backlog",
       "triage": "Triage",
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
       "resumeOnboardingInProgress": "Resume onboarding, in progress",
-      "legal": "Legal",
       "security": "Security"
     },
     "topNav": {
@@ -1027,6 +1014,12 @@
       "platformAdmin": "Platform admin",
       "platformAdminHint": "Operator console · the whole estate",
       "staffOnly": "Staff only"
+    },
+    "help": {
+      "label": "Help",
+      "docs": "Docs",
+      "shortcuts": "Keyboard shortcuts",
+      "legal": "Legal documents"
     },
     "account": {
       "signOut": "Sign out",
@@ -1197,6 +1190,14 @@
     "archivedBannerMeta": "Archived by <strong>{name}</strong> · {date} · It’s hidden from boards and lists but kept with its history.",
     "archivedBannerRestoreTail": "Restore it to bring it back.",
     "archivedByUnknownActor": "a former member",
+    "pendingPlanModifyHeadline": "A plan proposes changes to this item",
+    "pendingPlanRemoveHeadline": "A plan proposes to archive this item",
+    "pendingPlanMeta": "Nothing here has changed yet — the proposal applies only if the plan is approved.",
+    "pendingPlanReview": "Review plan",
+    "pendingPlanReviewAria": "Review the plan that names {key}",
+    "pendingPlanCountHeadline": "{count, plural, other {# pending plans name this item}}",
+    "pendingPlanRowModify": "— proposes changes",
+    "pendingPlanRowRemove": "— proposes to archive it",
     "edit": "Edit",
     "description": "Description",
     "descriptionGloss": "what to do",
@@ -1598,6 +1599,8 @@
       },
       "details": "Details",
       "members": "Members & access",
+      "publicPage": "Public page",
+      "publicAddress": "Public address",
       "roles": "Roles & permissions",
       "codeAccess": "Code access",
       "workflow": "Workflow",
@@ -2156,6 +2159,189 @@
       "errorLastAdmin": "This is the only project admin — assign another admin first.",
       "errorGeneric": "Something went wrong. Please try again."
     },
+    "publicPage": {
+      "title": "Public page",
+      "subtitle": "The tagline, tags and README of <strong>{projectName}</strong> on its public page.",
+      "card": {
+        "title": "Hero & README",
+        "subtitle": "Saved together. Live on the public page the moment you save."
+      },
+      "viewPublicPage": "View public page",
+      "tagline": {
+        "label": "Tagline",
+        "placeholder": "One sentence about what this project is",
+        "help": "Shown under the project’s name. Up to {max} characters."
+      },
+      "tags": {
+        "label": "Tags",
+        "help": "Up to {maxCount} tags, {maxLength} characters each.",
+        "count": "{count} / {maxCount} tags",
+        "add": "Add tag",
+        "addPlaceholder": "New tag",
+        "empty": "No tags yet",
+        "remove": "Remove {tag}"
+      },
+      "readme": {
+        "label": "README",
+        "help": "Markdown. Up to {max, number} characters. What you see here is what visitors see.",
+        "emptyHelp": "Nothing written yet. Until you write a README, the public page shows a short automatic introduction."
+      },
+      "footer": {
+        "dirty": "Unsaved changes",
+        "saving": "Saving…",
+        "saved": "Saved",
+        "invalid": "Fix the highlighted fields to save",
+        "save": "Save changes"
+      },
+      "error": {
+        "taglineTooLong": "Too long — {max} characters at most.",
+        "tagsInvalid": "Each tag must be {maxLength} characters or fewer, and there can be at most {maxCount}.",
+        "overviewTooLong": "Too long — {max, number} characters at most.",
+        "saveFailed": "Couldn’t save the public page. Try again."
+      },
+      "notPublic": {
+        "lead": "Not building in public yet.",
+        "body": "What you save here is kept, and goes live the moment you start building in public in <link>Members & access</link>."
+      },
+      "discard": {
+        "title": "Discard unsaved changes?",
+        "keep": "Keep editing",
+        "discard": "Discard"
+      }
+    },
+    "publicAddress": {
+      "title": "Public address",
+      "subtitle": "Where <strong>{projectName}</strong> answers on the public web.",
+      "unavailable": {
+        "title": "No public namespace is configured",
+        "description": "This deployment has no tenant base domain set, so a subdomain cannot be claimed yet. An operator sets MOTIR_PUBLIC_TENANT_DOMAIN."
+      },
+      "subdomain": {
+        "title": "Workspace subdomain",
+        "subtitle": "One address for the whole workspace. Every public project in it answers underneath.",
+        "label": "Subdomain",
+        "helper": "Your projects will be at {preview}. Lowercase letters, digits and hyphens; 3–63 characters.",
+        "claim": "Claim subdomain",
+        "claimable": "This can be renamed later, a limited number of times.",
+        "active": "Active",
+        "alias": "Redirects here",
+        "copy": "Copy address",
+        "copied": "Address copied",
+        "open": "Open in a new tab",
+        "rename": "Rename",
+        "renamesLeft": "{count, plural, =0 {No renames left.} one {# rename left.} other {# renames left.}}",
+        "readOnly": "Managed by a workspace owner or admin.",
+        "none": "No subdomain claimed yet."
+      },
+      "rename": {
+        "title": "Rename this subdomain?",
+        "warningTitle": "The old address keeps working, and is never released.",
+        "warningBody": "{old} will redirect here permanently and cannot be claimed by anyone else — including you, later.",
+        "remaining": "You have {count, plural, one {# rename} other {# renames}} left after this one.",
+        "cancel": "Cancel",
+        "confirm": "Rename"
+      },
+      "domains": {
+        "title": "Your own domain",
+        "subtitle": "Serve this project from a domain you own.",
+        "add": "Add a domain",
+        "empty": {
+          "title": "No domain connected",
+          "body": "Add a domain like roadmap.acme.com and this project will answer at its root. You will create two DNS records; Motir issues the certificate."
+        },
+        "state": {
+          "unverified": {
+            "label": "Not verified",
+            "hint": "Added, but the _motir-verify TXT record has not been seen yet. No certificate has been requested."
+          },
+          "verifying": {
+            "label": "Checking…",
+            "hint": "We are looking for the TXT record now. DNS can take a few minutes."
+          },
+          "pending_certificate": {
+            "label": "Issuing…",
+            "hint": "Ownership is proven and the certificate has been requested. This usually takes a minute or two."
+          },
+          "issued": {
+            "label": "Live",
+            "hint": "The certificate is issued and the domain serves this project. It renews on its own."
+          },
+          "failed": {
+            "label": "Failed",
+            "hint": "The certificate could not be issued."
+          },
+          "expired": {
+            "label": "Expired",
+            "hint": "The certificate lapsed and renewal did not succeed — almost always because the DNS record changed. The domain is not serving."
+          },
+          "revoked": {
+            "label": "Revoked",
+            "hint": "The certificate was withdrawn. The domain is not serving and a new certificate must be requested."
+          },
+          "active": {
+            "label": "Active",
+            "hint": "The workspace subdomain resolves and serves this project."
+          },
+          "alias": {
+            "label": "Redirects",
+            "hint": "A subdomain renamed away from. It redirects to the current one, permanently, and is never released."
+          }
+        },
+        "action": {
+          "showDns": "Show DNS records",
+          "checkAgain": "Check again",
+          "requestAgain": "Request again",
+          "makePrimary": "Make primary",
+          "remove": "Remove",
+          "copy": "Copy value",
+          "copied": "Copied"
+        },
+        "primary": {
+          "badge": "Primary",
+          "consequence": "Every other address redirects here.",
+          "disabledReason": "A domain can be primary once its certificate is live"
+        },
+        "addModal": {
+          "title": "Add a domain",
+          "label": "Domain",
+          "helper": "The project will answer at the root of this domain.",
+          "recordsHeading": "{count, plural, one {Create this record} other {Create these # records}}",
+          "type": "Type",
+          "name": "Name",
+          "value": "Value",
+          "apexNote": "A root domain is pinned to our IP addresses. A subdomain uses a CNAME instead, which follows us if those addresses ever change.",
+          "verify": "Verify",
+          "later": "I’ll do this later",
+          "cancel": "Cancel",
+          "submit": "Add domain"
+        },
+        "removeModal": {
+          "title": "Remove {hostname}?",
+          "warningTitle": "Anyone using this address will get an error.",
+          "warningBody": "Links already shared to {hostname} will stop working. The project stays public at its other addresses.",
+          "cancel": "Cancel",
+          "confirm": "Remove domain"
+        },
+        "upgrade": {
+          "title": "Custom domains are on the paid plan.",
+          "body": "Your workspace subdomain is included on every plan and keeps working. Upgrade to serve this project from a domain you own.",
+          "cta": "See plans"
+        },
+        "lastChecked": "Last checked {when}",
+        "error": "That did not work. Try again in a moment."
+      },
+      "error": {
+        "reserved": "{label} is reserved. Motir keeps a small set of names for its own hosts and for names a reader could mistake for one.",
+        "structurallyReserved": "{label} is reserved. Names beginning with an underscore, xn-- or motir- belong to Motir or to the DNS itself.",
+        "tooShort": "Too short — a subdomain is at least 3 characters.",
+        "tooLong": "Too long — a subdomain is at most 63 characters.",
+        "badGrammar": "Lowercase letters, digits and hyphens only, starting and ending with a letter or digit.",
+        "taken": "{label} is already in use. A subdomain that has been renamed away from also keeps its name, so this one may belong to a workspace that no longer answers on it.",
+        "capReached": "You have used every rename for this workspace. The address cannot be changed again.",
+        "forbidden": "Only a workspace owner or admin can change this address.",
+        "generic": "That did not work. Try again in a moment."
+      }
+    },
     "codeAccess": {
       "title": "Code access",
       "subtitle": "Who on <strong>{projectName}</strong> can clone and push to the repositories Motir made for it.",
@@ -2270,10 +2456,11 @@
       "copied": "Copied",
       "copyError": "Couldn't copy the link.",
       "linkNote": "Anyone can open this link with no sign-in, and the page is crawlable by search engines. Visitors sign in only to submit, upvote, or comment. To stop sharing, set the access level above to anything other than Building in public.",
+      "setUpOwnAddress": "Set up your own address",
       "heroOverviewHeading": "Hero & overview",
-      "heroOverviewSubheading": "Edit the tagline, tags, and README right on the public page — what you change is what visitors see.",
-      "editOnPublicPage": "Edit on the public page",
-      "heroOverviewNote": "Opens the public Overview with the on-page editor. It's hidden while the project isn't public."
+      "heroOverviewSubheading": "The tagline, tags and README visitors see on your public page.",
+      "editOnPublicPage": "Edit the public page",
+      "heroOverviewNote": "Opens Settings › Public page. You can write it before the project is public."
     },
     "jobs": {
       "title": "Job runs",
@@ -3313,6 +3500,8 @@
         "details": "Project details, and the acts that change them — the name, the key, the avatar, archiving — are managed by project admins. Ask an admin if something here needs to change.",
         "repositories": "Where this project's code lives, and who takes it over, is managed by project admins. Ask an admin if a repository needs connecting or moving.",
         "members": "Who is on this project, and what each of them can do, is managed by project admins. Ask an admin if you need someone added or a role changed.",
+        "public-page": "What this project shows on its public page — its tagline, tags and README — is written by project admins. Ask an admin if something there needs changing.",
+        "public-address": "You need permission to manage this project’s access to open its public address.",
         "roles": "What each role in this project can do is managed by project admins. Ask an admin if a role needs changing.",
         "code-access": "Who on this team can clone and push this project's code is managed by project admins. You can still connect your own GitHub account from Git settings.",
         "workflow": "Statuses and the transitions between them are managed by project admins. Ask an admin if the workflow needs changing.",
@@ -6008,7 +6197,12 @@
         "proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
         "validating": "Checking the proposal against your plan…",
         "reading": "Reading your request…",
-        "redirected": "Working on the proposal…"
+        "redirected": "Working on the proposal…",
+        "retrieval": "Reading the plan…",
+        "laying": "Laying out a level…",
+        "authoring": "Writing a work item…",
+        "note": "Thinking it through…",
+        "unknown": "Working…"
       },
       "error": {
         "body": "That didn't go through. Your conversation is saved — try again, or rephrase the change.",
@@ -6046,7 +6240,42 @@
       "correcting": "Re-reading…",
       "correctedToPlan": "Re-read as a plan change",
       "correctedToAsk": "Re-read as a question",
-      "handoff": "Reading it as a plan change — working on the proposal"
+      "handoff": "Reading it as a plan change — working on the proposal",
+      "stop": "Stop",
+      "stoppingAction": "Stopping…",
+      "stopping": "Stopping — finishing this work item first.",
+      "stopped": "You stopped this run.",
+      "queuedLabel": "queued",
+      "queuedRead": "read",
+      "queuedMarker": "Queued — Motir AI reads this when it finishes the work item it is writing.",
+      "queuedReadMarker": "Read at the boundary — folded into this run.",
+      "act": {
+        "submitted": "submit",
+        "reading": "reading",
+        "redirected": "hand-off",
+        "retrieval": "retrieval",
+        "searching": "search",
+        "drilling": "drill",
+        "laying": "lay",
+        "authoring": "author",
+        "note": "note",
+        "proposed": "proposed",
+        "validating": "validate",
+        "unknown": "frame",
+        "retrievalLine": "Read the {family}",
+        "retrievalBlockedLine": "Out of lookups — carrying on with what it has.",
+        "layingLine": "Laying out {target}",
+        "authoringLine": "Writing {title}",
+        "unknownLine": "frame: {frame}",
+        "retrievalLineBare": "Read from the plan's sources",
+        "family": {
+          "planTree": "plan tree",
+          "codeGraph": "code graph",
+          "codeHealth": "code health",
+          "web": "web",
+          "lessons": "lessons"
+        }
+      }
     },
     "targets": {
       "sectionLabel": "Work items",

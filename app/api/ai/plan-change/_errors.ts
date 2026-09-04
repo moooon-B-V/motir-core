@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import {
   EmptyPlanChangeIntentError,
   EmptyPlanChangeTurnError,
+  PlanChangeJobNotRunningError,
+  PlanChangeMailboxJobMismatchError,
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
   PlanChangeTurnNotFoundError,
@@ -20,7 +22,15 @@ import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 // can rethrow (a 500). Kept out of the route files so open / append / submit map
 // identically.
 export function mapPlanChangeError(err: unknown): NextResponse | null {
-  if (err instanceof PlanChangeSessionNotFoundError || err instanceof PlanChangeTurnNotFoundError) {
+  // A mailbox turn addressed at a job this thread is not on joins the 404s
+  // (MOTIR-4067): from the caller's side that job simply is not on their
+  // conversation, and telling "no such thread" apart from "not that run" would
+  // answer a question about somebody else's job.
+  if (
+    err instanceof PlanChangeSessionNotFoundError ||
+    err instanceof PlanChangeTurnNotFoundError ||
+    err instanceof PlanChangeMailboxJobMismatchError
+  ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }
   if (err instanceof EmptyPlanChangeTurnError) {
@@ -30,6 +40,17 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // the thread's current state, not malformed requests.
   if (err instanceof PlanChangeTurnConflictError || err instanceof EmptyPlanChangeIntentError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+  }
+  // A mailbox turn addressed at a job that has already finished (MOTIR-4067).
+  // 409 for the same reason as the two above — a state conflict, not a malformed
+  // request — and it CARRIES THE STATUS, because "that run is over" leaves the
+  // client guessing whether to resubmit as a new turn (succeeded / stopped) or to
+  // surface a failure, and those are opposite next steps.
+  if (err instanceof PlanChangeJobNotRunningError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, jobStatus: err.status },
+      { status: 409 },
+    );
   }
   // Another session holds one of the scope's targets (MOTIR-2787). 409, not 403:
   // the caller MAY plan this item, it is simply taken — and the body names which

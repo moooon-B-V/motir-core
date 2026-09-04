@@ -13,7 +13,7 @@ import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { workItemCrumbLabel } from '@/lib/planning/projectCanvasModel';
 import { fullestContainer } from '@/lib/planning/planShape';
-import { ProposalQuickView } from '@/components/planning/ProposalQuickView';
+import { ProposalPeek } from '@/components/planning/ProposalPeek';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 
@@ -125,6 +125,22 @@ export function arrivalLevel(
  * Walks UP from the container: each PROPOSED ancestor contributes one crumb
  * labelled `<proposedWord> · <title>`; the first COMMITTED one contributes the
  * `parentTrail` any item naming it carries, which is the whole committed chain.
+ *
+ * ⚠️ "PROPOSED" IS `identifier === null`, NOT "in this plan" (bug MOTIR-4266).
+ * Being in `byNodeId` says the plan has something to SAY about the node, not
+ * that the node is new: a `modify` / `remove` keys by the WORK ITEM it targets
+ * (MOTIR-3160's one keying rule) and a materialized `add` re-keys to the card it
+ * became (MOTIR-3161), so all three carry a real `MOTIR-<n>`. Labelling those
+ * `New` inverts the substitution it belongs to — Part IX §1.3 puts the word in
+ * the key's SLOT precisely because an un-materialized `add` has no key *"by
+ * construction"*, and saying it about a card that HAS one asserts, on the one
+ * surface whose promise is that nothing is real until approve, that something
+ * real is not. The design says the same thing from the other side: Part XIII
+ * names a row `<identifier> · <title>` for a `modify` / `remove` and
+ * `New · <title>` for an `add`.
+ *
+ * Same rule as the View door and `heldNodeByPlanItemId` below, in the same
+ * expression: an item carrying an identifier is a committed card.
  */
 function trailTo(
   items: PlanReviewItemDto[],
@@ -164,7 +180,7 @@ function trailTo(
     }
     proposed.unshift({
       id: proposal.nodeId,
-      label: workItemCrumbLabel(proposedWord, proposal.title),
+      label: workItemCrumbLabel(proposal.identifier ?? proposedWord, proposal.title),
     });
     cursor = proposal.parentNodeId;
   }
@@ -229,11 +245,22 @@ export function PlanReviewCanvas({
       // the pre-approval view of a card that now exists — a label that lies about
       // what clicking it does. An `add` with an identifier is a committed card;
       // peek it as one (MOTIR-3161).
-      if (proposal && proposal.op === 'add' && !proposal.identifier)
-        setPeeked({ proposal, key: null });
-      // A `modify` / `remove` names its live target itself; a committed sibling is
-      // resolved from the level it arrived on. A node that is neither opens
-      // nothing rather than a peek for a key no work item has.
+      // EVERY PROPOSAL opens the shipped peek in PROPOSAL MODE (MOTIR-4185,
+      // Part XIV §9). This used to branch on `op === 'add'`, which sent a
+      // `modify` / `remove` to the committed peek — the shipped surface, showing
+      // the target's CURRENT values with no sign a plan was about to change
+      // them. That was half the defect this story closes; the other half was the
+      // list door opening a different component altogether.
+      //
+      // ⚠️ The ONE `op === 'add'` test that SURVIVES is the materialized one
+      // (MOTIR-3161), and it is below rather than here: an `add` that HAS an
+      // identifier has become a work item, so peeking it as a proposal would
+      // open the pre-approval view of a card that now exists.
+      const materializedAdd = proposal?.op === 'add' && proposal.identifier != null;
+      if (proposal && !materializedAdd) setPeeked({ proposal, key: null });
+      // A COMMITTED sibling node — and a materialized `add`, which has become
+      // one — opens the ordinary work-item peek, unchanged. A node that is
+      // neither opens nothing rather than a peek for a key no work item has.
       else
         setPeeked({
           proposal: null,
@@ -399,7 +426,10 @@ export function PlanReviewCanvas({
         rootLabel={t('breadcrumbRoot')}
         ariaLabel={ariaLabel ?? 'Proposed plan'}
       />
-      <ProposalQuickView item={peeked.proposal} onClose={closePeek} />
+      {/* Every PROPOSAL — `add`, `modify` and `remove` — opens the shipped peek in
+          proposal mode (MOTIR-4185). A COMMITTED sibling node still opens the
+          ordinary work-item peek below, unchanged. */}
+      <ProposalPeek item={peeked.proposal} onClose={closePeek} />
       <WorkItemQuickView peekKey={peeked.key} onClose={closePeek} />
     </>
   );

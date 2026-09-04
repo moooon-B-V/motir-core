@@ -40,7 +40,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.waitForURL('**/home');
 }
 
-test('@smoke shell: zero-projects sidebar shows the CTA, hides project nav, keeps Settings/Docs', async ({
+test('@smoke shell: zero-projects sidebar shows the CTA, hides project nav, keeps Settings/Git', async ({
   page,
 }) => {
   await signUp(page, USER_EMAIL);
@@ -56,7 +56,8 @@ test('@smoke shell: zero-projects sidebar shows the CTA, hides project nav, keep
   await expect(page.getByRole('link', { name: 'Boards' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Reports' })).toHaveCount(0);
 
-  // Settings + Docs (the bottom section) stay visible.
+  // Settings + Git (the bottom section) stay visible. Docs and Legal
+  // documents left this section for the Help menu (MOTIR-4239).
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Docs' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Git' })).toBeVisible();
 });

@@ -131,6 +131,27 @@ export const STRUCTURAL_GUARD_SPECS = [
   // still opens no database, renders nothing, and imports only a data module
   // from `lib/`, so it carries no meaningful coverage into the merged report.
   'tests/legal/egress-manifest-guard.test.ts',
+  // ── tests/legal/ — the content/legal ABSENCE guard (MOTIR-4104) ──────────
+  // The same shape as its neighbour above and as `abandonedPath` further up: it
+  // walks `app/` + `lib/` + `components/` through `contentLegalReaderGuard.ts`,
+  // comment-stripping every file, and asks whether anything still reaches the
+  // document source MOTIR-4103 deleted. It also asks git for `content/`'s
+  // population, which is a second whole-tree entry point in the same file.
+  //
+  // It opens no database, renders nothing, and imports only
+  // `tests/helpers/importGraph`, so it carries no coverage into the merged
+  // report. Its scanner module is not listed here for the same reason
+  // `abandonedPathGuard.ts` is not: the lane runs SPECS, and the scanner reaches
+  // the tree only through this one.
+  'tests/legal/contentLegalReader.test.ts',
+  // ── tests/legal/ — the `legal.*` CATALOGUE SPLIT guard (MOTIR-4104) ──────
+  // Same profile as the entry above, through `legalCatalogueGuard.ts`: it walks
+  // `app/` + `components/` (reusing that guard's tree walker), comment-strips
+  // every file and extracts the message keys each namespace binding reads, then
+  // sets that population against `messages/en.json`. It opens no database,
+  // renders nothing, and imports only `tests/helpers/importGraph` and its
+  // sibling scanner, so it carries no coverage into the merged report.
+  'tests/legal/legalCatalogueSplit.test.ts',
   // ── the 2FA-enforcement guards (Story MOTIR-1215 · MOTIR-3649) ────────────
   // Four at once, and they were DERIVED rather than remembered — which is the
   // whole argument for a mechanical membership predicate. Each walks the tree

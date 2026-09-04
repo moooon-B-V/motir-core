@@ -401,6 +401,26 @@ export default defineConfig({
         'lib/settings/projectNavAccess.ts',
         'app/**/_components/ProjectAccessProvider.tsx',
 
+        // Story MOTIR-3878 · Subtask MOTIR-4223 — customer-owned addresses, the
+        // whole surface the story's ten motir-core cards added. MEASURED first
+        // and pinned below, the sequence this block follows everywhere.
+        //
+        // ⚠️ `app/**/`, NOT `app/(authed)/`, for the reason the block above
+        // records: a route group's parentheses are extglob syntax to the
+        // matcher, so a literal path matches nothing and the file silently never
+        // enters the report.
+        'lib/publicAddresses/**',
+        'lib/repositories/publicAddressRepository.ts',
+        'lib/services/publicSubdomainService.ts',
+        'lib/services/customDomainService.ts',
+        'lib/services/publicAddressesService.ts',
+        'lib/services/publicAddressCertificatesService.ts',
+        'lib/jobs/definitions/publicAddressCertificateRefresh.ts',
+        'app/api/public/hosts/**/route.ts',
+        'app/api/workspaces/**/public-subdomain/route.ts',
+        'app/api/projects/**/public-addresses/**/route.ts',
+        'app/**/settings/project/public-address/_components/*.tsx',
+
         // Story MOTIR-1215 · Subtask MOTIR-3646 — the require-2FA control and
         // its Server Action. MEASURED at 100/100/100/100 each before being
         // pinned below, the sequence this block follows everywhere.
@@ -707,6 +727,12 @@ export default defineConfig({
         'app/**/items/_components/fieldChipEditing.ts',
         'app/**/items/_components/customFieldEditing.tsx',
         'app/**/items/_components/IssueQuickViewPanel.tsx',
+        // Story MOTIR-4181 — the proposal peek's own two files. Added to
+        // `include` and deliberately NOT to `thresholds`, by this config's own
+        // rule: the number comes off the first CI run, and pinning a floor
+        // before measuring one is how a gate ends up asserting a guess.
+        'components/planning/ProposalPeek.tsx',
+        'components/workItems/ProposalPeekMarks.tsx',
         'app/**/items/_components/IssueQuickViewController.tsx',
         // …and the SEAM the payload widening landed in. `workItemsService.ts`
         // (the other half) is already included + gated above.
@@ -1779,6 +1805,43 @@ export default defineConfig({
         'app/**/items/\\[key\\]/edit/page.tsx',
         'app/**/code-health/page.tsx',
         'app/**/invite/accept/page.tsx',
+        // Story MOTIR-4237 · Subtask MOTIR-4240 — THE HELP MENU, and the context
+        // the story widened to give it a door. Both were built by MOTIR-4239 and
+        // neither was in this report, so the per-file floor did not reach the
+        // one surface this story actually adds.
+        //
+        // MEASURED FIRST, on this branch, before either was pinned — this list's
+        // own sequence. `pnpm vitest run --coverage` over the fifteen component
+        // specs that reach them:
+        //
+        //   HelpMenu.tsx               100 stmts · 100 branch · 100 fn · 100 lines
+        //   CommandPaletteProvider.tsx 100 stmts · 100 branch · 100 fn · 100 lines
+        //
+        // Both GATED in `thresholds` below, at the 90 floor rather than at the
+        // measured 100, so a later refactor has room without anyone loosening a
+        // gate to make a build pass.
+        'app/**/_components/HelpMenu.tsx',
+        'app/**/_components/CommandPaletteProvider.tsx',
+        // ⚠️ `SidebarNav.tsx` is REPORT-ONLY — it is in `include` and
+        // deliberately NOT in `thresholds`, and the reason is a FINDING rather
+        // than a gap to close later. MEASURED across every component spec that
+        // reaches it (292 files, 3 405 tests, on this branch):
+        //
+        //   SidebarNav.tsx  97.22 stmts · 84 branch · 88.88 fn · 97.22 lines
+        //
+        // The one uncovered function is `SoonChip`, the Automation slot's
+        // placeholder badge. It renders only for a registry entry carrying
+        // `placeholder: true`, and `grep -rn 'placeholder: true' lib/ app/
+        // components/` returns NOTHING — both settings registries have since
+        // flipped every placeholder they reserved into a real entry. So the
+        // function is unreachable from the product, and the only way to a 90%
+        // function figure is to fabricate a registry entry no shipped surface
+        // has, which asserts the fixture rather than the code. A number below
+        // the floor is a finding to state, not a bar to lower, and it is not
+        // MOTIR-4237's to close: this story edited the file by DELETION (the
+        // `Docs` and `Legal` rows left for the Help menu) and added nothing to
+        // it. Filed as its own bug.
+        'app/**/_components/SidebarNav.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -2088,6 +2151,42 @@ export default defineConfig({
         },
         'lib/mappers/permissionMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/settings/projectSettingsNav.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-3878 · Subtask MOTIR-4223 — MEASURED on this branch over
+        // tests/publicAddresses + tests/settings + tests/api/public + tests/rls
+        // + tests/jobs, then pinned. These EIGHT clear the floor on all three
+        // metrics:
+        //
+        //   publicAddressCertificateRefresh  100 / 100 / 100
+        //   allowedOrigins                   100 /  95 / 100
+        //   certificateProvider              100 / 100 / 100
+        //   dnsResolver                      100 / 100 / 100
+        //   errorResponse                    100 / 100 / 100
+        //   reservedNames                    100 / 100 / 100
+        //   tenantDomain                     100 / 100 / 100
+        //   publicSubdomainService          98.1 / 90.9 / 100
+        //
+        // ⚠️ THE REST OF THE STORY'S SURFACE IS IN `include` AND DELIBERATELY
+        // NOT HERE, which is this file's own established pattern ("so CI
+        // publishes a number without gating on one") — and MOTIR-4223 records
+        // the shortfall rather than hiding it. What is missing is BRANCH
+        // coverage, on files whose LINES are already 85–100: the four lifecycle
+        // routes sit at 66.7% branches because each has three arms and the
+        // rethrow is exercised on one route rather than four, and the
+        // repository at 33.3% has an `InTx`/non-`InTx` pair per method. Both are
+        // real gaps and neither is a hole in the SHIPPED behaviour — every route
+        // now has a test where none had one before this card.
+        'lib/jobs/definitions/publicAddressCertificateRefresh.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/publicAddresses/allowedOrigins.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/certificateProvider.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/dnsResolver.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/errorResponse.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/reservedNames.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/publicAddresses/tenantDomain.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/publicSubdomainService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2258 · Subtask MOTIR-2476 — both MEASURED before being
         // pinned, on this branch, with the story's own suites: the nav map at
         // 100/100/100 and the provider at 100/100/100.
@@ -3373,6 +3472,7 @@ export default defineConfig({
         // (see the `include` note above for why these five and not the three
         // pre-existing files the story also widened). MEASURED on this branch
         // first, with `tests/workflows/`, `tests/github/ciGreenPromotion`,
+        // `tests/github/ciExpectedCheckSet`,
         // `tests/github/changeRequestSessionCloseOut`,
         // `tests/components/status-pill` and
         // `tests/integration/implemented-lifecycle`:
@@ -3383,12 +3483,25 @@ export default defineConfig({
         //   lib/workflows/statusColor.ts            100 · 100 · 100 · 100
         //   components/issues/StatusPill.tsx        100 · 100 · 100 · 100
         //
-        // `ciPromotion`'s one uncovered branch is the rethrow of an error that is
-        // NOT one of the three refusals a per-card skip tolerates — reachable
-        // only by injecting a fault into the shipped service, which would assert
-        // the mock rather than the code. Pinned at the 90 floor rather than at
-        // the measured number, so a later refactor has room without anyone
-        // loosening a gate to make a build pass.
+        // ⚠️ RE-MEASURED (MOTIR-4199): `ciPromotion.ts` is now
+        // **97.7 stmts · 93.1 branch · 100 fn · 100 lines**, with
+        // `tests/github/ciExpectedCheckSet` added to the list above. The
+        // sentence that stood here said it had **one** uncovered branch; it has
+        // two, and the count is stated rather than left to be re-derived:
+        //
+        //   * the rethrow of an error that is NOT one of the refusals a per-card
+        //     skip tolerates — the original, unchanged, reachable only by
+        //     injecting a fault into the shipped service, which would assert the
+        //     mock rather than the code;
+        //   * `if (!subject) continue` in the check-set reconcile — a pull
+        //     request row that vanishes between being listed and being read,
+        //     inside ONE transaction. Kept because the read is nullable and the
+        //     compiler says so; not reachable from a test that does not fabricate
+        //     the race.
+        //
+        // Pinned at the 90 floor rather than at the measured number, so a later
+        // refactor has room without anyone loosening a gate to make a build pass
+        // — which is what that headroom just paid for.
         'lib/services/ciPromotion.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/changeRequestWorkItems.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workflows/defaultWorkflow.ts': { branches: 90, functions: 90, lines: 90 },
@@ -3406,6 +3519,26 @@ export default defineConfig({
         // Pinned at the 90 floor rather than at the measured number, so a later
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/github/checkSuites.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-4237 · Subtask MOTIR-4240 — the Help menu and the context
+        // widened to give it a door, both MEASURED at 100 on all four axes
+        // before being pinned (see the `include` block). Pinned at the 90 floor
+        // rather than at the measured 100, so a later refactor has room without
+        // anyone loosening a gate to make a build pass.
+        //
+        // ⚠️ `SidebarNav.tsx` is NOT here, on purpose — it is report-only, for
+        // the reason its `include` entry states.
+        'app/**/_components/HelpMenu.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/CommandPaletteProvider.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
       },
     },
   },

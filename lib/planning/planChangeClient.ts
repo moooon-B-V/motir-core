@@ -121,6 +121,99 @@ export async function submitPlanChange(signal?: AbortSignal): Promise<PlanChange
   return post<PlanChangeSubmitResponse>('/api/ai/plan-change/session/submit', undefined, signal);
 }
 
+// ─── The BOUNDARY MAILBOX — reaching a run that is already going ─────────────
+//
+// The submit door above STARTS a run. These reach one already in flight, through
+// the store MOTIR-4067 shipped, at the phase boundary `runWalk` already has.
+
+/** What one boundary check finds — motir-ai's own shape, mirrored back to the
+ *  client so the composer can say how much is still queued. */
+export interface MailboxDeliveryResponse {
+  turns: Array<{
+    id: string;
+    text: string;
+    receivedAt: string;
+    disposition: 'fold' | 'restart';
+    target: string | null;
+  }>;
+  stopped: boolean;
+}
+
+/**
+ * ATTACH one turn to the RUNNING job (Story MOTIR-4054 · MOTIR-4274).
+ *
+ * ⚠️ THIS IS NOT `submitPlanChange`, AND THE CHOICE IS THE RUN'S PHASE. Outside a
+ * run a turn is appended and submitted, which STARTS a job; during a run it goes
+ * here, which starts nothing. Sending a mid-run turn down the submit path would
+ * open a SECOND planning job on a thread that already has one, and sending a
+ * between-runs turn here would put it in a box nothing will ever check. Both
+ * failures are silent, which is why the branch lives in one place.
+ *
+ * ⚠️ `idempotencyKey` IS PER SEND, not per render. The door REQUIRES one and
+ * refuses without it, so a double-click or a retry of the same click delivers
+ * once — but a genuinely new sentence must carry a new key or it is swallowed as
+ * a replay of the last one.
+ */
+export async function attachMidRunTurn(
+  jobId: string,
+  body: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<MailboxDeliveryResponse> {
+  return post<MailboxDeliveryResponse>(
+    '/api/ai/plan-change/session/mailbox',
+    { jobId, body, idempotencyKey },
+    signal,
+  );
+}
+
+/**
+ * WHAT IS STILL WAITING for the run — the read that lets the composer say a
+ * queued turn has been taken (Story MOTIR-4054 · MOTIR-4274).
+ *
+ * ⚠️ A POLL, because there is nothing to push. `motir-ai` consumes a turn at a
+ * phase boundary and emits no frame for it, and the ids it records never reach
+ * motir-core, so absence from this answer is the only evidence a turn was read.
+ * The caller keeps it bounded: it asks only while a run is streaming AND
+ * something is queued, so an ordinary run makes no requests at all.
+ */
+export async function peekMailbox(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<MailboxDeliveryResponse> {
+  const res = await fetch(
+    `/api/ai/plan-change/session/mailbox?jobId=${encodeURIComponent(jobId)}`,
+    { headers: JSON_HEADERS, signal },
+  );
+  if (!res.ok) throw new PlanEditsClientError(res.status, await readErrorCode(res));
+  return (await res.json()) as MailboxDeliveryResponse;
+}
+
+/**
+ * END the run (Story MOTIR-4054 · MOTIR-4068).
+ *
+ * ⚠️ `idempotencyKey` IS THE CALLER'S, and it is per-CLICK rather than per-render:
+ * a double-clicked Stop must raise ONE stop, and the server cannot recognise the
+ * second request as the same act unless the client says so. Reuse the key across
+ * a retry of the SAME click; mint a new one for a new one.
+ *
+ * ⚠️ IT RETURNS AS SOON AS THE FLAG IS STORED. The run ends when the walk reads
+ * it at its next phase boundary, which can be a whole authoring session away — so
+ * a resolved promise here means *the stop is recorded*, never *the run is over*,
+ * and the surface has to keep saying "stopping" until the stream actually ends.
+ */
+export async function stopPlanChangeRun(
+  jobId: string,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<MailboxDeliveryResponse> {
+  return post<MailboxDeliveryResponse>(
+    '/api/ai/plan-change/session/mailbox/stop',
+    { jobId, idempotencyKey },
+    signal,
+  );
+}
+
 // ─── The ASK door — one entrance for every turn on the PROJECT thread ─────────
 //
 // `POST /api/ai/ask` is not an "ask-only" endpoint the client picks when it

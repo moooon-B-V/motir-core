@@ -35,6 +35,7 @@ import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
+import { readReportedCheckSet } from './checkSetReconcile';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -611,6 +612,17 @@ async function resolveGithubCiContext(
     repo,
     buildChecksUrl: (number) =>
       `https://github.com/${repo.owner}/${repo.name}/pull/${number}/checks`,
+    // MOTIR-4199 — the GitHub half of "how many checks does this commit have?".
+    // The consumer calls it only when the recorded set claims to be complete,
+    // and reads a `null` as "could not establish", so an unreachable host costs
+    // the sharper verdict rather than stalling the card.
+    readReportedCheckSet: (commitSha) =>
+      readReportedCheckSet({
+        installationId: installation.installationId,
+        owner: repo.owner,
+        name: repo.name,
+        commitSha,
+      }),
   };
 }
 

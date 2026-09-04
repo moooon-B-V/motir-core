@@ -293,112 +293,19 @@ describe('WorkItemActionsMenu — Add to active sprint (Subtask 2.4.14)', () => 
     expect(screen.queryByRole('menuitem', { name: 'Add to active sprint' })).toBeNull();
   });
 });
-
-// bug MOTIR-2097 — the /items row ⋯ menu is the THIRD planning affordance, and
-// MOTIR-2084's blast-radius grep never saw it (it goes through PlanEditsTrigger,
-// not `planningWorkspaceHref`). It offered Re-plan on a DONE epic (no status
-// gate at all) and on a CHILDLESS one (no `hasChildren` gate). It now asks the
-// same shared rule the detail page and the peek do.
-describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () => {
-  function openPlanMenu(
-    planEdits: Partial<{
-      kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask';
-      hasChildren: boolean;
-      hasDescription: boolean;
-      statusCategory: 'todo' | 'in_progress' | 'done' | null;
-    }> = {},
-    canEdit = true,
-  ) {
-    render(
-      <WorkItemActionsMenu
-        itemId="wi-1"
-        identifier="PROD-1"
-        title="An epic"
-        canEdit={canEdit}
-        canArchive={canEdit}
-        canDelete={false}
-        onDeleted={vi.fn()}
-        onArchived={vi.fn()}
-        planEdits={{
-          kind: 'epic',
-          hasChildren: true,
-          hasDescription: false,
-          statusCategory: 'todo',
-          onExpand: vi.fn(),
-          onReplan: vi.fn(),
-          ...planEdits,
-        }}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /Actions for PROD-1/ }));
-  }
-
-  const expand = () => screen.queryByRole('menuitem', { name: 'Expand' });
-  const replan = () => screen.queryByRole('menuitem', { name: 'Re-plan' });
-
-  it('rule 1 — a DONE epic offers neither door', () => {
-    openPlanMenu({ statusCategory: 'done' });
-    expect(replan()).toBeNull();
-    expect(expand()).toBeNull();
-  });
-
-  it('rule 1 — a CANCELLED item offers neither either (the gate is category-based)', () => {
-    openPlanMenu({ statusCategory: 'done', hasChildren: false });
-    expect(replan()).toBeNull();
-    expect(expand()).toBeNull();
-  });
-
-  it('rule 3 — a CHILDLESS epic offers Expand, NOT Re-plan', () => {
-    // The old gate was `kind === 'epic' || kind === 'story'` with no children
-    // check, so a childless epic showed BOTH.
-    openPlanMenu({ hasChildren: false });
-    expect(expand()).toBeTruthy();
-    expect(replan()).toBeNull();
-  });
-
-  it('rule 3 — an epic WITH children offers Re-plan, not Expand', () => {
-    openPlanMenu({ hasChildren: true });
-    expect(replan()).toBeTruthy();
-    expect(expand()).toBeNull();
-  });
-
-  // MOTIR-2098 — rule 2 on THIS surface. Until the list row carried a
-  // description signal the menu was handed a hardcoded `hasDescription: false`,
-  // so a described leaf read as undescribed here while the detail page and the
-  // peek got it right.
-  it('rule 2 — a LEAF WITH a description offers Re-plan, not Expand', () => {
-    openPlanMenu({ kind: 'task', hasChildren: false, hasDescription: true });
-    expect(replan()).toBeTruthy();
-    expect(expand()).toBeNull();
-  });
-
-  it('rule 2 — a LEAF WITHOUT a description offers Expand, not Re-plan', () => {
-    openPlanMenu({ kind: 'task', hasChildren: false, hasDescription: false });
-    expect(expand()).toBeTruthy();
-    expect(replan()).toBeNull();
-  });
-
-  it('rules 2 vs 3 disagree — a described CONTAINER with no children is still Expand', () => {
-    openPlanMenu({ kind: 'epic', hasChildren: false, hasDescription: true });
-    expect(expand()).toBeTruthy();
-    expect(replan()).toBeNull();
-  });
-
-  it('exactly one door at a time, never both', () => {
-    for (const hasChildren of [true, false]) {
-      cleanup();
-      openPlanMenu({ hasChildren });
-      expect([expand(), replan()].filter(Boolean)).toHaveLength(1);
-    }
-  });
-
-  it('offers nothing to an actor who cannot edit', () => {
-    openPlanMenu({}, false);
-    expect(replan()).toBeNull();
-    expect(expand()).toBeNull();
-  });
-
-  it('offers nothing when the host opts out entirely (no planEdits)', () => {
+// MOTIR-2097 filed the /items row ⋯ menu as the THIRD planning affordance: it
+// went through `PlanEditsTrigger` rather than `planningWorkspaceHref`, so
+// MOTIR-2084's blast-radius grep never saw it, and it offered Re-plan on a DONE
+// epic and on a CHILDLESS one. The fix put it on the shared `planEntranceFace`
+// rule; MOTIR-4258 removed the affordance instead.
+//
+// This menu now offers NO plan door on ANY of its mounts, and this is the guard
+// that keeps it that way. The per-item Plan / Re-plan entrance is
+// `WorkItemPlanEntrance` (the detail header and the quick-view peek), which is
+// the one place that decides the mode — a fourth affordance appearing here is
+// the regression MOTIR-2097 was filed about, one surface further on.
+describe('WorkItemActionsMenu — no plan doors, on any mount', () => {
+  it('offers neither Expand nor Re-plan to a fully capable actor', () => {
     render(
       <WorkItemActionsMenu
         itemId="wi-1"
@@ -406,13 +313,17 @@ describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () =
         title="An epic"
         canEdit
         canArchive
-        canDelete={false}
+        canDelete
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Actions for PROD-1/ }));
-    expect(replan()).toBeNull();
-    expect(expand()).toBeNull();
+
+    // The menu opened and carries its surviving rows...
+    expect(screen.getByRole('menuitem', { name: 'Copy link' })).toBeTruthy();
+    // ...and neither plan row, under any casing the two labels ever used.
+    expect(screen.queryByRole('menuitem', { name: /expand/i })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /re-?plan/i })).toBeNull();
   });
 });

@@ -252,8 +252,46 @@ export default defineConfig({
         MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
         MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
         MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
+        // ⚠️ THE DOCS ROW IS CONFIGURATION NOW (MOTIR-4167 / #2530, MOTIR-4257).
+        //
+        // `lib/docs/links.ts` resolves the rail's Docs row from an operator's
+        // absolute `MOTIR_DOCS_URL` and returns `null` when it is unset, so the
+        // row does not render at all — the shape the Legal row beside it already
+        // took when MOTIR-3932 moved the public reading surface to
+        // motir-marketing.
+        //
+        // `acceptance-legal-manifest.spec.ts` reads that row as its CONTROL: its
+        // chapter asserts the rail offers Docs and NOT Legal, and the Docs half
+        // is what makes Legal's absence mean *this build did not configure it*
+        // rather than *the rail is empty*. Once the row became conditional, a
+        // lane that configures no URL had no control — and the spec went red on
+        // `main` for reasons that had nothing to do with legal documents.
+        //
+        // This lane is the CLOUD-ON arm, and a cloud build has its docs
+        // configured, so setting it is what the arm is supposed to represent.
+        // The ASSERTION is untouched: a receipt records what was accepted, and
+        // relaxing it to match today is the reflex `acceptance-receipt-lifecycle.md`
+        // forbids.
+        MOTIR_DOCS_URL: 'https://motir.co/docs',
         // Cloud billing + the motir-ai boundary mock (the billing-lane vocabulary).
         MOTIR_CLOUD: 'true',
+        // ── The public-address story's two seams (MOTIR-3878 · MOTIR-4225) ──
+        //
+        // ⚠️ WITHOUT THESE THE SPEC CANNOT REACH THE STATES IT ASSERTS, and
+        // `plan-rules/type-test.md` tell (d) is exactly that: a lane that cannot
+        // reach the asserted state stays green for ever.
+        //
+        // The BASE DOMAIN, because the pane renders an operator explanation and
+        // no claim field when it is unset — the walk would film that instead of
+        // the room.
+        MOTIR_PUBLIC_TENANT_DOMAIN: 'motir.e2e',
+        // The two PORTS the flow crosses that leave this machine: the certificate
+        // platform and public DNS. `lib/publicAddresses/providers.ts` binds
+        // in-memory versions on this flag — and REFUSES to, whatever the flag
+        // says, when `NODE_ENV === 'production'`, which is what makes an env var
+        // an operator could set by accident harmless. Asserted in
+        // `tests/publicAddresses/dnsResolverPort.test.ts`.
+        MOTIR_E2E_FAKE_PUBLIC_ADDRESS_PROVIDERS: '1',
         E2E_TEST_BILLING: '1',
         MOTIR_AI_URL,
         E2E_TEST_CODE_HEALTH: '1',

@@ -53,6 +53,9 @@ function render(
         currentUserId={SELF}
         canManage
         publicAccessAvailable={false}
+        // MOTIR-4242 — required, and inert here: this file's subject is the
+        // self-hosted access control, which never renders the public cards.
+        publicPageUrl="https://motir.co/p/PROD"
         {...overrides}
       />
     </ToastProvider>,

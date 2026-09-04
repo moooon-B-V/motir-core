@@ -105,10 +105,10 @@ function publicSiteRedirect(request: NextRequest): NextResponse | null {
  * response — the browser refuses it, which is where CORS is enforced. A caller
  * that sends no `Origin` at all (a crawler, a feed reader, `curl`) is untouched.
  */
-function publicSurfaceCors(request: NextRequest): NextResponse | null {
+async function publicSurfaceCors(request: NextRequest): Promise<NextResponse | null> {
   if (!request.nextUrl.pathname.startsWith('/api/public/')) return null;
 
-  const allow = publicCorsHeaders(request.headers.get('origin'));
+  const allow = await publicCorsHeaders(request.headers.get('origin'));
 
   // A PREFLIGHT is answered here and goes no further: it is a question about
   // the NEXT request, so running it through a route handler would execute a
@@ -130,12 +130,12 @@ function publicSurfaceCors(request: NextRequest): NextResponse | null {
   return response;
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // The public READ API's cross-origin answer (MOTIR-4114) — first, because a
   // preflight is answered here and never reaches a handler, and because these
   // paths are an API rather than a page: none of the page logic below applies
   // to them.
-  const cors = publicSurfaceCors(request);
+  const cors = await publicSurfaceCors(request);
   if (cors) return cors;
 
   // The moved public surfaces leave this application first (MOTIR-3884): they

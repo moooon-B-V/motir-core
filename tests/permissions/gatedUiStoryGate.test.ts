@@ -45,10 +45,34 @@ const PAGES = collectPages(SETTINGS_DIR, PROJECT_SETTINGS_ROOT);
  * authoring time by opening each destination; the assertions below re-read the
  * source, so a service that stops asserting its key fails here.
  */
+/**
+ * Keys a service may assert through a NAMED ALIAS instead of spelling
+ * (MOTIR-4243). `projectAccessService.assertCanManage` IS
+ * `assertPermission(…, 'project:administer')`, so a service that calls it does
+ * assert the key — a literal grep just cannot see it.
+ *
+ * The value is the QUALIFIED call, never the bare method name: `fields` and
+ * `components` have module-private `assertCanManage` helpers of their own that
+ * assert entirely different keys, and a bare name would silently accept those.
+ * The alias's own meaning is pinned in `tests/settings/projectSettingsNav.test.ts`,
+ * at its definition.
+ */
+const ALIAS_ASSERTS: Partial<Record<PermissionKey, string>> = {
+  'project:administer': 'projectAccessService.assertCanManage',
+};
+
 const SERVICE_OF: Record<string, string> = {
   details: 'lib/services/projectAccessService.ts',
   repositories: 'lib/services/projectRepoSetService.ts',
   members: 'lib/services/projectMembersService.ts',
+  'public-page': 'lib/services/projectsService.ts',
+  // MOTIR-4221. The room's WRITES are the customer-domain lifecycle's —
+  // add / verify / remove / makePrimary / clearPrimary — every one of which
+  // asserts `project:manage_access`. The subdomain half of the same room is
+  // gated on the WORKSPACE role instead (`publicSubdomainService`), which is a
+  // different axis and not expressible as a project permission at all; the
+  // rail names the project key its destination checks, which is this one.
+  'public-address': 'lib/services/customDomainService.ts',
   roles: 'lib/services/projectMembersService.ts',
   'code-access': 'lib/services/projectRepoAccessService.ts',
   workflow: 'lib/services/workflowsService.ts',
@@ -82,11 +106,22 @@ describe('the three-way key agreement — rail ↔ page ↔ service (MOTIR-2476)
 
       // 3 · THE SERVICE. The key the destination's own writes assert.
       const service = read(SERVICE_OF[id]!);
-      expect(
-        service,
-        `${SERVICE_OF[id]} no longer asserts '${railKey}' — the rail now hides ` +
-          `"${id}" on a key its own service does not check.`,
-      ).toContain(`'${railKey}'`);
+      if (ALIAS_ASSERTS[railKey] && !service.includes(`'${railKey}'`)) {
+        // The service asserts the key through an ALIAS that does not spell it
+        // (MOTIR-4243) — see ALIAS_ASSERTS, and the pin below.
+        expect(
+          service,
+          `${SERVICE_OF[id]} neither names '${railKey}' nor reaches it through ` +
+            `${ALIAS_ASSERTS[railKey]} — the rail now hides "${id}" on a key its own ` +
+            'service does not check.',
+        ).toContain(`${ALIAS_ASSERTS[railKey]}(`);
+      } else {
+        expect(
+          service,
+          `${SERVICE_OF[id]} no longer asserts '${railKey}' — the rail now hides ` +
+            `"${id}" on a key its own service does not check.`,
+        ).toContain(`'${railKey}'`);
+      }
     },
   );
 
@@ -100,13 +135,32 @@ describe('no second gating list — every gated surface resolves through its reg
   const SIDEBAR = read('app/(authed)/_components/SidebarNav.tsx');
   const PALETTE = read('app/(authed)/_components/AppCommandPalette.tsx');
 
+  // ⚠️ THESE THREE MATCH A PREFIX, NOT A WHOLE CALL — CHANGED BY MOTIR-4243, and
+  // the reason is worth stating so the next widening does not read as a
+  // loosening. They asserted the exact strings `visibleSettingsNav(held)` /
+  // `hasVisibleSettingsArea(held)` / `visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES)`,
+  // which pinned the ARITY as a side effect of pinning the SOURCE. The registry
+  // now takes a second axis — what this BUILD has, beside what the actor holds —
+  // so every one of those calls grew an argument. What these tests are for is
+  // that the gated surfaces read the registry rather than keeping a list of
+  // their own; the prefix is exactly that claim, and the arity is pinned where
+  // it belongs, in the registry's own suite.
   it('the settings rail reads the registry', () => {
-    expect(SIDEBAR).toContain('visibleSettingsNav(held)');
-    expect(SIDEBAR).toContain('hasVisibleSettingsArea(held)');
+    expect(SIDEBAR).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_NAV, availability)');
+    expect(SIDEBAR).toContain('hasVisibleSettingsArea(held, availability)');
   });
 
   it('the palette settings block reads the SAME registry', () => {
-    expect(PALETTE).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES)');
+    expect(PALETTE).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES, {');
+  });
+
+  it('BOTH gated surfaces filter on the DEPLOYMENT axis too, not only on the actor', () => {
+    // The failure this catches: a surface that reads the registry correctly and
+    // then offers a room the build does not have. It is invisible to the three
+    // assertions above, because such a surface reads the registry perfectly.
+    for (const source of [SIDEBAR, PALETTE]) {
+      expect(source).toContain('publicProjectsAvailable');
+    }
   });
 
   it('the project nav and the palette navigations read the SAME map', () => {

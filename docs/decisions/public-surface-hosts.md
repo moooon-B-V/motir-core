@@ -225,6 +225,42 @@ it the right moment:
 refinement** that only adds isolation _between_ tenants. Nothing here needs to
 wait on a PSL submission.
 
+> ⚠️ **AND THAT SENTENCE IS SCOPED TO THIS DECISION — it is not a general
+> statement about the tenant namespace.** It holds because the only thing served
+> at `*.<base>` under §2 is a public project page whose customer-authored
+> Markdown **cannot execute script**: `motir-marketing` renders it with
+> `react-markdown` + `remark-gfm` and NO `rehype-raw`, so raw HTML is escaped and
+> `javascript:` hrefs are stripped by the default URL transform (measured
+> 2026-09-03 — zero `script`, `iframe` and `img` elements from hostile input).
+> With no script on a tenant host there is no way to set a cookie at the base
+> domain, which is the entire class a listing defends.
+>
+> **THE MOMENT ANYTHING ON `*.<base>` COULD RUN CUSTOMER CODE, THAT STOPS
+> HOLDING** — cookies are DOMAIN-scoped, not origin-scoped, so one tenant's
+> script could set `Domain=<base>` and every other tenant would receive it on
+> every request. The same-origin policy does not cover it (the origins are
+> already separate; the cookie jar is not) and no application-level fix reaches
+> it.
+>
+> **AND THE ANSWER WOULD STILL NOT BE TO LIST `<base>`.** Every platform that
+> hosts customer code already carries the listing — verified against
+> `https://publicsuffix.org/list/public_suffix_list.dat` on 2026-09-03:
+> `fly.dev`, `vercel.app`, `netlify.app`, `pages.dev`, `workers.dev`,
+> `github.io` and `herokuapp.com` are all public suffixes. **Serving a customer's
+> application at the platform's own hostname INHERITS the isolation** instead of
+> applying for it: no submission, no volunteer-paced review, and — the part that
+> cannot be recovered — no wait for browsers to ship an updated list before the
+> first request is served. Owning the namespace buys branding and nothing else,
+> and if branding is ever worth it the answer is a SEPARATE registrable domain
+> with its own single entry, not `<base>`: apps at `acme.app.<base>` would need
+> `<base>` **and** `app.<base>` listed, and either one alone is a silent no-op
+> that looks like a fix.
+>
+> So this note records a CONDITION and its answer, and no card is owed. No
+> decision to host customer code is taken here or anywhere else in this record.
+> **MOTIR-4213 — the submission for `<base>` — was cancelled on 2026-09-03 for
+> exactly this reasoning.**
+
 ---
 
 ## §5 — Q4: what a SELF-HOSTED build serves
@@ -743,8 +779,9 @@ documentation, at a mirror of their own, or leave it unset and have no row. A
 relative value is REFUSED and logged at error level naming the variable, never
 rendered, because a relative path is precisely the defect this amendment
 removes. `tests/docs/docsLinks.test.ts` pins both arms and the refusal;
-`tests/components/SidebarNav-docs-door.test.tsx` pins the row;
-`design/shell/rail-bottom-section.mock.html` draws both arms.
+`tests/components/HelpMenu.test.tsx` pins the row (re-homed off the rail into
+the Help menu by MOTIR-4239); `design/shell/help-menu.mock.html` draws both
+arms.
 
 | Alternative                                                                 | Why rejected                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1306,8 +1343,11 @@ row 8 went this way.
   parameter, or one per act. **MOTIR-4114**, within §F's constraints.
 - **Whether a self-hoster ever gets public projects.** §5 is unchanged; the two
   newly-gated routes join the capability, they do not re-open it.
-- **Per-tenant addressing and a separate registrable domain.** **MOTIR-3878**,
-  with §4's reversal condition and §G's first bullet as inputs.
+- ~~**Per-tenant addressing and a separate registrable domain.** **MOTIR-3878**,
+  with §4's reversal condition and §G's first bullet as inputs.~~ **DECIDED —
+  AMENDMENT 5 (MOTIR-4206, 2026-09-03):** a separate registrable domain, recorded
+  in `docs/decisions/public-tenant-addresses.md`. §4's reversal condition is
+  closed. What remains under MOTIR-3878 is implementation.
 
 ### Sources
 
@@ -1515,3 +1555,73 @@ naming the card that decided each — one policy, two routes, no second rule.
 - MOTIR-4042 (PR #2494) — the off-cloud disposition of `/api/openapi/public.json`
 - MOTIR-4180 — the hand-copy this artifact replaces; MOTIR-4165 — the truth gate
   this artifact does not restore
+
+---
+
+## AMENDMENT 6 — §4's reversal condition is CLOSED: tenant addresses move to a separate registrable domain, and the accepted exposure is retired one project at a time (MOTIR-4206, 2026-09-03)
+
+§4 accepted a deviation it named as a deviation — tenant-authored content on
+`motir.co`, the parent domain of the host that holds the session, where every
+mirror puts tenant content on a separate registrable domain. It accepted the
+residual exposure **on a condition** (the session cookie stays host-only) and it
+wrote a reversal condition naming MOTIR-3878 as where the arrangement is
+revisited. **This amendment is that revisit, and it closes the condition.**
+
+### §A — The decision
+
+**Per-tenant addresses hang off a SEPARATE REGISTRABLE DOMAIN, never a subdomain
+of `motir.co`.** `docs/decisions/public-tenant-addresses.md` is the record; §2 of
+it fixes the shape the domain must have and ranks RDAP-checked candidates, and
+MOTIR-4208 buys one.
+
+Both of §4's own reasons are honoured rather than argued with:
+
+1. **The exposure is not multiplied — it is REDUCED, one project at a time.**
+   §4's fear was that _"one origin of user content becomes one per customer, all
+   under the session's registrable domain."_ Under the new record, a tenant
+   origin is `<workspace>.<base>`, which is a different **site** from
+   `app.motir.co` by the browser's own rule, not merely a different origin. And
+   the canonical rule (that record's §7) means that once a project claims an
+   address, **`motir.co/p/<identifier>` for that project becomes a `301`** and
+   serves no tenant content at all. So each claim removes an origin of tenant
+   content from `motir.co` rather than adding one beside it.
+2. **The certificate arithmetic works.** A two-level base gives `acme.<base>`
+   under one wildcard `*.<base>`, which is §4's second reason satisfied exactly.
+
+### §B — What is UNCHANGED
+
+- **The host-only session cookie stays host-only.** It was the condition on which
+  the residual exposure was accepted, and this amendment does not spend it — it
+  removes the thing it was compensating for. MOTIR-3877's test gate stands.
+- **`motir.co/p/*` survives** for every project that has claimed no address,
+  which is the default and stays free. §4's arrangement remains the arrangement
+  for that population; what changes is that it is no longer the _only_ one.
+- **§5's cloud gate is untouched.** A build with no public projects has no
+  addresses; the new surfaces inherit `publicSurfaceUnavailable()` / `isCloud()`
+  rather than re-deciding.
+- **No subprocessor row.** The base domain is registered at Spaceship, which
+  already holds `motir.co`, and the certificates are issued by Fly on the
+  `motir-marketing` app — both already in the stack. `marketing-site-hosting.md`
+  §5's reasoning is what rejects the alternative (Cloudflare for SaaS) that would
+  have added one.
+
+### §C — What §9's entry becomes
+
+§9's bullet _"Per-tenant addressing and a separate registrable domain — MOTIR-3878"_
+is **discharged**. The question is decided here and in
+`public-tenant-addresses.md`; what remains under MOTIR-3878 is implementation,
+not a decision this record is waiting on. §9 is updated in place.
+
+### §D — What this amendment does NOT do
+
+- It does **not** move `app.motir.co` or `motir.co`. Both keep answering exactly
+  what §2 says they answer.
+- It does **not** decide the base domain's string — that is
+  `public-tenant-addresses.md` §2 plus MOTIR-4208, and no code contains it either
+  way.
+- It does **not** depend on the Public Suffix List. §4 already said so —
+  _"A separate domain gets the isolation immediately; PSL listing is a later
+  refinement"_ — and §4's note now records why no submission is owed at all:
+  nothing on this namespace can execute script, and if that ever changes the
+  isolation is INHERITED from the hosting platform's own already-listed domain
+  rather than applied for. MOTIR-4213 was cancelled on that reasoning.

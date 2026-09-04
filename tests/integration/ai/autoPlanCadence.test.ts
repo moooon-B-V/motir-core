@@ -21,6 +21,9 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { plansService } from '@/lib/services/plansService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { planRepository } from '@/lib/repositories/planRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { PlanTargetImmutableError } from '@/lib/plans/errors';
 import { makeWorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -157,6 +160,27 @@ async function seedPlan(
     },
   });
   return plan.id;
+}
+
+/** Attach `count` proposal items to a plan, so the meta line has a size. */
+async function seedItems(
+  fx: WorkItemFixture,
+  planId: string,
+  count: number,
+  parentRef?: string,
+): Promise<void> {
+  for (let i = 0; i < count; i++) {
+    await adminDb.planItem.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        planId,
+        op: 'add',
+        proposedFields: { title: `Proposed ${i}`, kind: 'subtask' },
+        blockedByRefs: [],
+        ...(parentRef ? { parentRef } : {}),
+      },
+    });
+  }
 }
 
 describe('Auto-plan cadence — the opt-in and the drain threshold (MOTIR-916)', () => {
@@ -446,27 +470,6 @@ describe('Auto-plan cadence — an UNFILLABLE plan is not a pending proposal (MO
 });
 
 describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
-  /** Attach `count` proposal items to a plan, so the meta line has a size. */
-  async function seedItems(
-    fx: WorkItemFixture,
-    planId: string,
-    count: number,
-    parentRef?: string,
-  ): Promise<void> {
-    for (let i = 0; i < count; i++) {
-      await adminDb.planItem.create({
-        data: {
-          workspaceId: fx.workspaceId,
-          planId,
-          op: 'add',
-          proposedFields: { title: `Proposed ${i}`, kind: 'subtask' },
-          blockedByRefs: [],
-          ...(parentRef ? { parentRef } : {}),
-        },
-      });
-    }
-  }
-
   it('reports NOT paused when the project has no undecided plan', async () => {
     const { fx } = await makeDrainedProject();
     await seedPlan(fx, 'declined');
@@ -616,6 +619,156 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
     expect(gated).toEqual([paused.fx.projectId]);
     // …and the other two really did fire, so "not paused" means "cadence runs".
     expect(summary).toMatchObject({ scanned: 3, fired: 2, skipped: 1 });
+  });
+});
+
+describe('Auto-plan cadence — a STALE plan is UNDECIDED, and still pauses (MOTIR-4129)', () => {
+  // `stale` is the FIFTH `PlanStatus` member (MOTIR-3574 / MOTIR-3578,
+  // AMENDMENT 9), and `prisma/schema.prisma` says what it is in one sentence:
+  // "It is NOT terminal and NOT decided: the plan is live and awaiting action."
+  // It is reachable only from `planned`, so a plan wearing it is BY
+  // CONSTRUCTION one that already reached a reviewer and is being held.
+  //
+  // The gate spells "undecided" as a MEMBERSHIP LIST, and that list was not
+  // widened when the enum grew — so the plan for which the question matters
+  // MOST read as decided. AMENDMENT 9 met the same proxy once, for
+  // `computePlanStaleness`, and named it: "the guard's predicate was a proxy
+  // for *is this plan still awaiting a decision?*, and adding a fifth status is
+  // what makes the proxy and the intent come apart."
+  //
+  // The harm is the MIRROR of MOTIR-3051 / MOTIR-3064 / MOTIR-3189, which each
+  // took a plan that gated when it should not have. This one did not gate when
+  // it should: the tick fires a second expand beside a proposal a reviewer is
+  // already holding, and — one predicate, two consumers — the paused indicator
+  // reports nothing while a Stale pill sits on the Plans list.
+
+  /**
+   * Reach `stale` the way production does — the LAZY BACKSTOP (AMENDMENT 9 D5),
+   * which is the card's own reproduction: a `modify` target reaches a terminal
+   * status under a `planned` plan, `approvePlan` refuses with
+   * `PlanTargetImmutableError`, and its catch writes the status on the way out.
+   *
+   * Every other case here seeds the row directly, which is cheaper and asserts
+   * the same predicate. This one exists so the suite carries at least one plan
+   * that no test put into the status.
+   */
+  async function staleByApproveRefusal(fx: WorkItemFixture): Promise<string> {
+    const target = await makeItem(fx, { kind: 'task', title: 'Finished under the plan' });
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Rework' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { title: 'A new title' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.workItem.update({ where: { id: target.id }, data: { status: 'done' } });
+
+    await expect(plansService.approvePlan(plan.id, fx.ctx)).rejects.toBeInstanceOf(
+      PlanTargetImmutableError,
+    );
+    const row = await adminDb.plan.findUnique({ where: { id: plan.id } });
+    expect(row!.status).toBe('stale');
+    return plan.id;
+  }
+
+  it('the REPOSITORY read returns a project whose only plan is `stale` — it is undecided', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'stale');
+
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planRepository.findUndecidedByProject(fx.projectId, fx.workspaceId, tx),
+    );
+
+    expect(row).toMatchObject({ id: planId, status: 'stale' });
+  });
+
+  it.each<[PlanStatus]>([['approved'], ['declined']])(
+    'and still returns null for a project holding only a %s plan — the arm that keeps the widening honest',
+    async (status) => {
+      const { fx } = await makeDrainedProject();
+      await seedPlan(fx, status);
+
+      const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planRepository.findUndecidedByProject(fx.projectId, fx.workspaceId, tx),
+      );
+
+      expect(row).toBeNull();
+    },
+  );
+
+  it('the TICK skips such a project with `pending_proposal` — no second plan beside the first', async () => {
+    const { fx } = await makeDrainedProject();
+    await seedPlan(fx, 'stale');
+
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+
+    expect(summary.outcomes[0]).toEqual({
+      projectId: fx.projectId,
+      status: 'skipped',
+      reason: 'pending_proposal',
+    });
+    expect(submitJob).not.toHaveBeenCalled();
+  });
+
+  it('and `getPendingPlan` returns it — the indicator and the trigger still cannot disagree', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'stale');
+
+    await expect(
+      autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx),
+    ).resolves.toMatchObject({ id: planId, status: 'stale' });
+    await expect(
+      autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx),
+    ).resolves.toMatchObject({ pending: true, planId });
+  });
+
+  it('end to end through the SHIPPED path — approve refuses, and cadence stays paused', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await staleByApproveRefusal(fx);
+
+    const summary = await autoPlanCadenceService.runCadenceSweep();
+
+    expect(summary.outcomes[0]).toMatchObject({ status: 'skipped', reason: 'pending_proposal' });
+    expect(submitJob).not.toHaveBeenCalled();
+    await expect(
+      autoPlanCadenceService.getPendingPlan(fx.projectId, fx.ctx),
+    ).resolves.toMatchObject({ id: planId, status: 'stale' });
+  });
+
+  it('and the indicator still COUNTS its drift — the SIBLING guard the widening reaches', async () => {
+    // ⚠️ THE SWEEP HIT. `staleCountFor` here is the mirror of
+    // `app/(authed)/plans/planRowView.ts`'s function of the same name, and its
+    // own doc comment says so — but the mirror widened to `planned | stale`
+    // with AMENDMENT 9 D3 and this copy did not. The divergence was
+    // unreachable while the predicate above could never hand this consumer a
+    // `stale` plan; widening that predicate is what makes it live. Left alone,
+    // the settings page would report the project paused and its drift as ZERO,
+    // on the one plan most likely to carry some.
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'planned', { items: 0 });
+    const parent = await makeItem(fx, { kind: 'story', title: 'Parent that goes away' });
+    await adminDb.plan.update({
+      where: { id: planId },
+      data: { status: 'stale', plannedAt: new Date() },
+    });
+    await seedItems(fx, planId, 2, parent.id);
+    await adminDb.workItem.update({ where: { id: parent.id }, data: { archivedAt: new Date() } });
+
+    const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    expect(state).toMatchObject({ pending: true, planId, stale: true, staleCount: 2 });
+  });
+
+  it('a DECIDED plan still short-circuits that count — the widening did not become "always ask"', async () => {
+    const { fx } = await makeDrainedProject();
+    const planId = await seedPlan(fx, 'planned', { items: 1 });
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'declined' } });
+    const engine = vi.spyOn(planStalenessService, 'computePlanStaleness');
+
+    const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
+
+    expect(state).toMatchObject({ pending: false, staleCount: 0 });
+    expect(engine).not.toHaveBeenCalled();
   });
 });
 

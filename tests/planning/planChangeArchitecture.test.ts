@@ -242,6 +242,13 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
     'app/api/ai/plan-change/session/route.ts',
     'app/api/ai/plan-change/session/turns/route.ts',
     'app/api/ai/plan-change/session/submit/route.ts',
+    // The BOUNDARY MAILBOX's two doors (Story MOTIR-4054 · MOTIR-4067) — the
+    // INGEST a session posts a mid-run turn to, and the READ DOOR motir-ai
+    // consumes at a phase boundary. Listed here rather than left implicit: the
+    // read door WRITES (it stamps what it returns as consumed), which is exactly
+    // the shape most likely to grow a `$transaction` in the route.
+    'app/api/ai/plan-change/session/mailbox/route.ts',
+    'app/api/internal/ai/plan-change-mailbox/route.ts',
   ];
 
   it.each(STORY_ROUTES)('%s calls no db.* and opens no $transaction', (rel) => {
@@ -265,10 +272,16 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
   it('the transaction lives in the SERVICE, and every repository write requires a tx', () => {
     const service = read(join(ROOT, 'lib/services/planChangeSessionsService.ts'));
     expect(service).toMatch(/withWorkspaceContext/);
+    // Same for the mailbox's service (MOTIR-4067): the `seq` allocation is
+    // read-derived, so its transaction and its row lock live here or nowhere.
+    const mailbox = read(join(ROOT, 'lib/services/planChangeMailboxService.ts'));
+    expect(mailbox).toMatch(/withWorkspaceContext/);
+    expect(mailbox).toMatch(/lockById/);
 
     for (const rel of [
       'lib/repositories/planChangeSessionRepository.ts',
       'lib/repositories/planChangeTurnRepository.ts',
+      'lib/repositories/planChangeMailboxRepository.ts',
     ]) {
       const repo = read(join(ROOT, rel));
       // No optional `tx?` on a write — the compile-time guarantee the 4-layer
@@ -397,13 +410,19 @@ describe('retiring “Augment from prompt” left no dangling key or import', ()
     const offenders = SOURCE_FILES.filter((file) => /AugmentPromptButton/.test(read(file))).map(
       (f) => relative(ROOT, f),
     );
-    // The only surviving mention is the NOTE in the launcher recording why the
-    // door was retired — a breadcrumb, not an import.
-    expect(offenders).toEqual([join('components', 'planning', 'PlanEditsLauncher.tsx')]);
+    // The only surviving mention is the NOTE recording why the door was retired
+    // — a breadcrumb, not an import. It sat in `PlanEditsLauncher.tsx` until
+    // MOTIR-4258 deleted that file with the ⋯ menu that mounted it, and moved to
+    // `WorkItemPlanEntrance` — the door that REPLACED both retired ones, and so
+    // the file a reader asking "why is there only one?" actually opens. The
+    // assertion is pinned to exactly one carrier on purpose: a breadcrumb in two
+    // places is a breadcrumb that can rot in one of them.
+    const carrier = join('components', 'planning', 'WorkItemPlanEntrance.tsx');
+    expect(offenders).toEqual([carrier]);
 
-    const launcher = read(join(ROOT, 'components/planning/PlanEditsLauncher.tsx'));
-    expect(launcher).not.toMatch(/^import[^\n]*AugmentPromptButton/m);
-    expect(launcher).not.toMatch(/<AugmentPromptButton/);
+    const entrance = read(join(ROOT, carrier));
+    expect(entrance).not.toMatch(/^import[^\n]*AugmentPromptButton/m);
+    expect(entrance).not.toMatch(/<AugmentPromptButton/);
   });
 
   it('the surfaces it was mounted on no longer reference it', () => {

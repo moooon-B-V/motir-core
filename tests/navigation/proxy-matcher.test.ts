@@ -121,7 +121,7 @@ describe('proxy config.matcher', () => {
     expect(source).toContain('404-not-403');
   });
 
-  it('the seventeen (authed) segments are the ones measured, not a copied list', () => {
+  it('the seventeen (authed) segments are the ones measured, not a copied list', async () => {
     // A regression guard on the ENUMERATION, not on the matcher: if this number
     // moves, a segment was added or removed and the first test above is the one
     // that should have failed. Kept because the card's own measurement is the
@@ -188,7 +188,7 @@ describe('proxy()', () => {
     const { NextRequest } = await import('next/server');
     const { proxy } = await import('@/proxy');
 
-    const res = proxy(new NextRequest('https://app.motir.co/items'));
+    const res = await proxy(new NextRequest('https://app.motir.co/items'));
 
     expect(res.status).toBe(307);
     const location = new URL(res.headers.get('location')!);
@@ -201,7 +201,7 @@ describe('proxy()', () => {
     const { NextRequest } = await import('next/server');
     const { proxy, CURRENT_PATH_HEADER } = await import('@/proxy');
 
-    const res = proxy(new NextRequest('https://app.motir.co/items?status=open&assignee=me'));
+    const res = await proxy(new NextRequest('https://app.motir.co/items?status=open&assignee=me'));
 
     expect(forwardedHeaders(res).get(CURRENT_PATH_HEADER)).toBe('/items?status=open&assignee=me');
   });
@@ -213,7 +213,7 @@ describe('proxy()', () => {
     const { NextRequest } = await import('next/server');
     const { proxy, CURRENT_PATH_HEADER } = await import('@/proxy');
 
-    const res = proxy(
+    const res = await proxy(
       new NextRequest('https://app.motir.co/roadmap', {
         headers: { [CURRENT_PATH_HEADER]: 'https://evil.example/phish' },
       }),
@@ -230,7 +230,7 @@ describe('proxy()', () => {
     const { NextRequest } = await import('next/server');
     const { proxy, CURRENT_PATH_HEADER } = await import('@/proxy');
 
-    const res = proxy(new NextRequest('https://app.motir.co/dashboard'));
+    const res = await proxy(new NextRequest('https://app.motir.co/dashboard'));
 
     expect(res.headers.get(CURRENT_PATH_HEADER)).toBeNull();
     expect(res.headers.get('cache-control')).toBeNull();
@@ -241,7 +241,7 @@ describe('proxy()', () => {
     const { NextRequest } = await import('next/server');
     const { proxy } = await import('@/proxy');
 
-    const res = proxy(
+    const res = await proxy(
       new NextRequest('https://app.motir.co/home', {
         headers: { 'accept-language': 'zh-CN' },
       }),

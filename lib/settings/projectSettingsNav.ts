@@ -4,7 +4,9 @@ import {
   Columns3,
   FolderGit2,
   Gauge,
+  Globe,
   KeyRound,
+  Link2,
   Shield,
   SlidersHorizontal,
   Sparkles,
@@ -60,6 +62,41 @@ export function toSettingsNavPermissions(
   return new Set<PermissionKey>(keys);
 }
 
+/**
+ * What this DEPLOYMENT has, as distinct from what this ACTOR holds (Story
+ * MOTIR-3875 · MOTIR-4243). The registry is static and the permission set is
+ * per-actor; a capability that a whole BUILD does not have is neither, so the
+ * caller supplies it.
+ *
+ * Today it carries one fact, deliberately typed as a named field rather than a
+ * bare boolean so the next capability joins it without changing a signature.
+ */
+export interface SettingsNavAvailability {
+  /**
+   * Whether public projects exist on this build — `isCloud()`, resolved on the
+   * SERVER (`app/(authed)/layout.tsx` already resolves it for the header slot)
+   * and threaded to the client surfaces that filter the registry.
+   */
+  publicProjectsAvailable: boolean;
+}
+
+/**
+ * The DEFAULT, and it fails CLOSED on purpose: a caller that forgets to thread
+ * the deployment fact drops every {@link SettingsNavEntry.cloudOnly} row rather
+ * than offering one. The opposite default would put a rail row and a ⌘K action
+ * on a self-hosted build in front of a route that answers 404 — the "door onto a
+ * corridor" {@link hasVisibleSettingsArea} exists to refuse, one row down.
+ *
+ * The same shape as `SidebarNav`'s own `workspaceTierRevealed` prop, and for the
+ * same reason.
+ */
+const NO_CLOUD_CAPABILITIES: SettingsNavAvailability = { publicProjectsAvailable: false };
+
+/** Whether `entry` exists at all on a deployment with these capabilities. */
+function isEntryAvailable(entry: SettingsNavEntry, available: SettingsNavAvailability): boolean {
+  return !entry.cloudOnly || available.publicProjectsAvailable;
+}
+
 export interface SettingsNavEntry {
   /** Stable id — also the command-palette action id (`settings-<id>`). */
   id: string;
@@ -94,6 +131,29 @@ export interface SettingsNavEntry {
    * from the command palette. Becomes a normal entry when 6.6 ships its page.
    */
   placeholder?: boolean;
+  /**
+   * This room exists ONLY on a cloud build (`isCloud()`), so the row is ABSENT
+   * off-cloud rather than merely gated — Story MOTIR-3908's ruling that
+   * public projects are not a hidden feature on a self-hosted Motir but an
+   * ABSENT one (`lib/publicProjects/cloudGate.ts`).
+   *
+   * ⚠️ IT IS A SECOND AXIS, NOT A SECOND PERMISSION. {@link permission} answers
+   * *may THIS ACTOR use the room*; this answers *does the room exist on THIS
+   * DEPLOYMENT at all*. They compose — a cloud-only row still needs its key —
+   * and they fail differently: a permission a reader lacks hides a room that is
+   * there, while an absent capability has nothing behind the door. Keeping them
+   * apart is what lets the destination answer `notFound()` off-cloud (the
+   * billing page's precedent) rather than the refusal state, which would say
+   * *this exists and you may not see it* about a build where it does not exist.
+   *
+   * The registry is static, so the DEPLOYMENT fact has to be supplied by the
+   * caller: {@link visibleSettingsNav} and {@link hasVisibleSettingsArea} take a
+   * {@link SettingsNavAvailability} and it DEFAULTS CLOSED, so a surface that
+   * forgets to thread it drops the row rather than offering a door onto a
+   * corridor. The route ↔ registry totality test pairs the route with this entry
+   * regardless of the flag: the page exists in the tree either way.
+   */
+  cloudOnly?: true;
   /**
    * Routes reached by DRILLING DOWN from this entry, which deliberately get no
    * rail row of their own (Subtask MOTIR-2263 — the role DETAIL screen). Each
@@ -173,6 +233,90 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // is the one that makes the page useful at all — the access control is a
     // single card on it.
     permission: 'member:manage',
+  },
+  {
+    id: 'public-page',
+    group: 'access',
+    href: '/settings/project/public',
+    icon: Globe,
+    labelKey: 'nav.publicPage',
+    // Story MOTIR-3875 · MOTIR-4243, drawn by MOTIR-4205
+    // (`design/projects/public-page.mock.html` Panel A frame ①,
+    // `design/projects/design-notes.md` § *The entrance — three doors*). Where a
+    // project admin edits the tagline, tags and README that `motir.co/p/<key>`
+    // renders. It sits DIRECTLY UNDER Members & access: that room owns the
+    // public concerns (the make-public control, the share link, the Hero &
+    // overview door) and is the row a reader arrives from.
+    //
+    // `Globe`, and NOT `Megaphone` — that glyph is the *Building in public*
+    // STATUS badge in the top bar, and a room and a status must not share a mark.
+    //
+    // VERIFIED: the room's write is `projectsService.setPublicOverview`, which
+    // asserts `projectAccessService.assertCanManage` — an alias for
+    // `assertPermission(…, 'project:administer')` (`projectAccessService.ts`).
+    // The key-routed door the room saves through
+    // (`publicProjectsService.setPublicOverview`, `PATCH
+    // /api/projects/{key}/public-overview`) refuses a non-admin ahead of it and
+    // re-runs the same assertion inside the write transaction. Read off the
+    // destination's own gate, per this file's rule. No read-only view: the
+    // 2026-08-08 amendment supersedes read-only administrative rooms.
+    permission: 'project:administer',
+    // CLOUD-ONLY (MOTIR-3908). Off-cloud there are no public projects, so this
+    // is a room with nothing behind it — the row is absent and the page 404s.
+    cloudOnly: true,
+  },
+  {
+    id: 'public-address',
+    group: 'access',
+    href: '/settings/project/public-address',
+    icon: Link2,
+    labelKey: 'nav.publicAddress',
+    // Story MOTIR-3878 · MOTIR-4221, drawn by MOTIR-4211
+    // (`design/projects/public-address.mock.html` panels 0–2, 8, 9 ·
+    // `design/projects/design-notes.md` § *Public address*). Where a workspace
+    // claims its subdomain and a project connects a domain the customer owns.
+    //
+    // ⚠️ THE ORDER IS THE ASSET'S, NOT THE CARD'S, AND THAT IS A RUNG-2 READING
+    // BEATING A RUNG-3 ONE. MOTIR-4221 says the row goes "between Members &
+    // access and Roles"; that slot was taken by *Public page* (MOTIR-4243) while
+    // this story was in flight. Two public rooms either side of one door is the
+    // coherent shape, so the asset draws — and this is —
+    //   Members & access → Public page → Public address → Roles → Code access
+    // The card's intent (the `access` group, adjacent to Members & access) is
+    // honoured; only the neighbour changed.
+    //
+    // `Link2`, and NOT `Globe` — that glyph is *Public page*, one row up. Two
+    // rooms in the same group sharing a mark is exactly what MOTIR-4243's own
+    // note refuses between a room and a status badge, applied between two rooms.
+    //
+    // VERIFIED, and this key is the one thing the design asset deliberately did
+    // NOT decide (its planning flag 1: "MOTIR-4221's to READ OFF its own service
+    // gate"). The room's writes are `customDomainService.{add,verify,remove,
+    // makePrimary,clearPrimary}`, every one of which asserts
+    // `assertPermission(…, 'project:manage_access')`; its list asserts
+    // `project:browse`. So the key the room's WRITES assert is this one, read off
+    // the destination rather than inferred from the row's name.
+    //
+    // ⚠️ AND `project:browse` WOULD HAVE BEEN THE WRONG READING, though the
+    // subdomain half of the room is readable by any workspace member. No settings
+    // entry is gated on it, so adding the first one would hand every project
+    // VIEWER a settings door — the 2026-08-08 amendment's "no read-only
+    // administrative rooms" refuses that, and the asset's panel 8 says so in
+    // terms: a member who can read but not administer never reaches this row.
+    //
+    // THE READ-ONLY ARM IS THE OTHER CASE, and it is real rather than defensive:
+    // the subdomain's own writes are gated on the WORKSPACE role (owner/admin,
+    // `publicSubdomainService`), which is a different axis from the project
+    // permission above. A project admin who is a workspace *member* holds the
+    // door key and not the write key, so the pane renders the address with every
+    // control ABSENT (panel 8). `roleMayManageAddress` is exported from that
+    // service so the rule has one home.
+    permission: 'project:manage_access',
+    // CLOUD-ONLY (ADR §11): a self-hosted build has no public projects, so this
+    // is a room with nothing behind it. The flag is MOTIR-4243's — this entry
+    // USES it and does not re-introduce it, which the asset flagged as a build
+    // dependency precisely so two cards could not add one field twice.
+    cloudOnly: true,
   },
   {
     id: 'roles',
@@ -406,26 +550,39 @@ export function isSettingsEntryActive(entry: SettingsNavEntry, pathname: string)
  * reachable by URL; what refuses it is the destination's own guard (MOTIR-2469)
  * and, behind that, the service gate whose key the entry names. Do not read a
  * filtered rail as a security boundary.
+ *
+ * `available` is the second axis (MOTIR-4243): a {@link SettingsNavEntry.cloudOnly}
+ * row is dropped on a build that does not have the capability, whatever the
+ * actor holds. It DEFAULTS CLOSED — see {@link SettingsNavAvailability}.
  */
 export function visibleSettingsNav(
   held: SettingsNavPermissions,
   entries: SettingsNavEntry[] = PROJECT_SETTINGS_NAV,
+  available: SettingsNavAvailability = NO_CLOUD_CAPABILITIES,
 ): SettingsNavEntry[] {
-  return entries.filter((entry) => held.has(entry.permission));
+  return entries.filter(
+    (entry) => isEntryAvailable(entry, available) && held.has(entry.permission),
+  );
 }
 
 /**
  * Whether the project-settings AREA has anything behind it for this actor — the
  * predicate the shell's **Project settings** door gates on (design panel 1).
  *
- * A per-entry filter does not cover this on its own: filtering all twelve
- * entries away leaves a perfectly valid EMPTY rail behind a perfectly valid
- * link, which is a door onto a corridor. Expressed here, beside the filter it
- * quantifies over, so the door and the rows can never disagree about what the
- * area contains.
+ * A per-entry filter does not cover this on its own: filtering every entry away
+ * leaves a perfectly valid EMPTY rail behind a perfectly valid link, which is a
+ * door onto a corridor. Expressed here, beside the filter it quantifies over, so
+ * the door and the rows can never disagree about what the area contains — which
+ * is why it takes the SAME `available` argument (MOTIR-4243) rather than
+ * quantifying over a rail the caller is not going to render.
  */
-export function hasVisibleSettingsArea(held: SettingsNavPermissions): boolean {
-  return PROJECT_SETTINGS_NAV.some((entry) => held.has(entry.permission));
+export function hasVisibleSettingsArea(
+  held: SettingsNavPermissions,
+  available: SettingsNavAvailability = NO_CLOUD_CAPABILITIES,
+): boolean {
+  return PROJECT_SETTINGS_NAV.some(
+    (entry) => isEntryAvailable(entry, available) && held.has(entry.permission),
+  );
 }
 
 /**

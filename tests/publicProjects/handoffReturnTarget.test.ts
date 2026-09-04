@@ -29,24 +29,26 @@ describe('resolvePublicReturnTarget', () => {
     else process.env['MOTIR_PUBLIC_SITE_URL'] = previous;
   });
 
-  it('admits a URL on the configured public origin', () => {
-    expect(resolvePublicReturnTarget('https://motir.co/p/ACME')).toBe('https://motir.co/p/ACME');
+  it('admits a URL on the configured public origin', async () => {
+    expect(await resolvePublicReturnTarget('https://motir.co/p/ACME')).toBe(
+      'https://motir.co/p/ACME',
+    );
   });
 
-  it('admits a path, a query and a fragment on that origin', () => {
-    expect(resolvePublicReturnTarget('https://motir.co/p/ACME/items?page=2#top')).toBe(
+  it('admits a path, a query and a fragment on that origin', async () => {
+    expect(await resolvePublicReturnTarget('https://motir.co/p/ACME/items?page=2#top')).toBe(
       'https://motir.co/p/ACME/items?page=2#top',
     );
   });
 
-  it('takes the FIRST value of a repeated parameter, then judges it on its merits', () => {
+  it('takes the FIRST value of a repeated parameter, then judges it on its merits', async () => {
     // The same rule `sanitizeNextPath` applies. Note the second value is
     // hostile: taking the last one would be a way past the check.
-    expect(resolvePublicReturnTarget(['https://motir.co/p/ACME', 'https://evil.example'])).toBe(
-      'https://motir.co/p/ACME',
-    );
     expect(
-      resolvePublicReturnTarget(['https://evil.example', 'https://motir.co/p/ACME']),
+      await resolvePublicReturnTarget(['https://motir.co/p/ACME', 'https://evil.example']),
+    ).toBe('https://motir.co/p/ACME');
+    expect(
+      await resolvePublicReturnTarget(['https://evil.example', 'https://motir.co/p/ACME']),
     ).toBeNull();
   });
 
@@ -76,24 +78,24 @@ describe('resolvePublicReturnTarget', () => {
     ];
 
     for (const [value, why] of HOSTILE) {
-      it(`${JSON.stringify(value)} — ${why}`, () => {
-        expect(resolvePublicReturnTarget(value)).toBeNull();
+      it(`${JSON.stringify(value)} — ${why}`, async () => {
+        expect(await resolvePublicReturnTarget(value)).toBeNull();
       });
     }
 
-    it('undefined and an empty array', () => {
-      expect(resolvePublicReturnTarget(undefined)).toBeNull();
-      expect(resolvePublicReturnTarget([])).toBeNull();
+    it('undefined and an empty array', async () => {
+      expect(await resolvePublicReturnTarget(undefined)).toBeNull();
+      expect(await resolvePublicReturnTarget([])).toBeNull();
     });
   });
 
-  it('the allowed origin MOVES with the configuration — it is not a literal', () => {
+  it('the allowed origin MOVES with the configuration — it is not a literal', async () => {
     process.env['MOTIR_PUBLIC_SITE_URL'] = 'https://public.example';
 
-    expect(resolvePublicReturnTarget('https://public.example/p/ACME')).toBe(
+    expect(await resolvePublicReturnTarget('https://public.example/p/ACME')).toBe(
       'https://public.example/p/ACME',
     );
-    expect(resolvePublicReturnTarget('https://motir.co/p/ACME')).toBeNull();
+    expect(await resolvePublicReturnTarget('https://motir.co/p/ACME')).toBeNull();
   });
 });
 
@@ -109,15 +111,19 @@ describe('resolveHandoffDestination', () => {
     else process.env['MOTIR_PUBLIC_SITE_URL'] = previous;
   });
 
-  it('returns the destination when it is allowed', () => {
-    expect(resolveHandoffDestination('https://motir.co/p/ACME')).toBe('https://motir.co/p/ACME');
+  it('returns the destination when it is allowed', async () => {
+    expect(await resolveHandoffDestination('https://motir.co/p/ACME')).toBe(
+      'https://motir.co/p/ACME',
+    );
   });
 
-  it('falls back to a FIXED path when it is not — never to something nearby', () => {
+  it('falls back to a FIXED path when it is not — never to something nearby', async () => {
     // Salvaging a refused URL into "the same path on our own host" would be
     // trusting a value we have just decided not to trust.
-    expect(resolveHandoffDestination('https://evil.example/p/ACME')).toBe(HANDOFF_FALLBACK_PATH);
-    expect(resolveHandoffDestination(undefined)).toBe(HANDOFF_FALLBACK_PATH);
+    expect(await resolveHandoffDestination('https://evil.example/p/ACME')).toBe(
+      HANDOFF_FALLBACK_PATH,
+    );
+    expect(await resolveHandoffDestination(undefined)).toBe(HANDOFF_FALLBACK_PATH);
     expect(HANDOFF_FALLBACK_PATH.startsWith('/')).toBe(true);
   });
 });
