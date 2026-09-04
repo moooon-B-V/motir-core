@@ -26,10 +26,21 @@
   // MOTIR-4293 split one 4.42 GB `tsc` program into project references and left
   // the ceiling as ONE project — the tests project, at 84.6% of node 22's
   // default heap, with the other three summing to less than it. MOTIR-4294's
-  // tripwire fires at 90%, so the lane was green with about five stories of
-  // growth left. `tsconfig.base.json`'s header states the rule this answers:
-  // every further heap bump moves the cliff by one story and none removes it,
-  // so the remedy is a project boundary.
+  // tripwire fires at 90%, so the lane was green with room to grow.
+  // `tsconfig.base.json`'s header states the rule this answers: every further
+  // heap bump moves the cliff by one story and none removes it, so the remedy is
+  // to shrink the program.
+  //
+  // ⚠️ AND THIS PROJECT IS THE EVIDENCE FOR WHAT A BOUNDARY ACTUALLY BUYS
+  // (MOTIR-4422). It took 182 spec files out of the tests project and left the
+  // ceiling at 7013 files / 82.8%, because everything those specs IMPORT stayed
+  // behind — which is the whole reason the cut is drawn at entry points. Its own
+  // program is 934 files / 0.71 GB: it references the same app project as
+  // `tsconfig.scripts.json`, has MORE bodies, and costs less than half as much,
+  // because a project pays for the declaration closure its bodies import and not
+  // for a shared floor. So do not read "about N stories of growth left" off a
+  // count of test files: read the `files` column
+  // `assert-typecheck-headroom.mjs` prints, at ~0.48 MB each.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,

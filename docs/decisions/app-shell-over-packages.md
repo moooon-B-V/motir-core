@@ -263,6 +263,16 @@ survives, not the row order.
   app project for a project of their own, and the app consumes them through declarations.
   MOTIR-4299 pins that as a criterion: the app project's `--listFilesOnly` count drops by at
   least the files that moved.
+  **⚠️ And that criterion is the right one BECAUSE the file count is the cost (MOTIR-4422).**
+  Checker memory is ~0.48 MB per file in the program, declarations included, so an extraction
+  is worth what it removes from the largest project's program — the bodies that moved, plus
+  only the declarations nothing left behind still imports. It is not worth the bodies alone,
+  and a project pays no floor for merely referencing another: `tsconfig.e2e.json` references
+  the app project, carries more bodies than `tsconfig.scripts.json`, and costs less than half
+  as much. `tsconfig.base.json`'s header carries the model and the readings. So _cheaper per
+  extraction_ holds for the APP project, which genuinely loses those files; whether the SOLUTION
+  gets cheaper depends on how much closure the new project duplicates, and that is measurable in
+  advance rather than assumable.
 - **The import-direction predicates become a gate rather than an observation** (MOTIR-4299),
   so §3's two zeros stay zero.
 - **The order in §5 will go stale, and re-deriving it is one command.** That is why the script

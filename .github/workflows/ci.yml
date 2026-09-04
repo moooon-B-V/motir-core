@@ -517,30 +517,44 @@ jobs:
       #   of those was ALREADY over the line — which is why MOTIR-3878's own
       #   pull request died here with `Ineffective mark-compacts near heap
       #   limit` and no file named (a real type error prints the file).
-      # AFTER, as `tsc -b tsconfig.solution.json --extendedDiagnostics` with
-      # NODE_OPTIONS unset, per project (one cold build, 102 s):
-      #   app      5520 files   2.72 GB   67% of the default
-      #   scripts  1999 files   1.95 GB   48%
-      #   tests    7149 files   3.59 GB   89%   ← the ceiling
-      # The tests project reads the app through its EMITTED DECLARATIONS
-      # (`.tsout/app/**/*.d.ts`), which is why 1814 test files cost less than
-      # the bodies they exercise. See `tsconfig.base.json` for the shape.
+      # AFTER, seven runs of `assert-typecheck-headroom.mjs` over one unchanged
+      # tree at `9d6beace7` — one process per project, NODE_OPTIONS unset, heap
+      # 4.05 GB (MOTIR-4422). Per project, min–max of the seven:
+      #   app        5530 files   1.79–2.26 GB   44.2–55.9%
+      #   scripts    2026 files   1.63–1.64 GB   40.3–40.5%
+      #   tests      7013 files   3.23–3.35 GB   79.9–82.8%   ← the ceiling
+      #   e2e         934 files   0.70–0.71 GB   17.2–17.6%
+      #   orch        773 files        0.16 GB          4.0%
       #
-      # ⚠️ THE TESTS PROJECT IS UNDER THE DEFAULT HEAP BUT NOT COMFORTABLY —
-      # 89%, and MOTIR-4294's headroom tripwire fails at 80%. That gap is the
-      # NEXT two subtasks' work, not slack: MOTIR-4295 gives the repositories
-      # explicit row types and MOTIR-4296 confines Prisma's payload/input
-      # generics to `lib/repositories/**`, and BOTH land in the app project's
-      # emitted declarations — which is the 1.95 GB every other project pays
-      # before it reads a file of its own (the scripts project is 116 files and
-      # 5.6M instantiations, and that is where they come from). If the ceiling
-      # is still over 80% once those have landed, the answer is another project
-      # boundary inside `tests/`, and it is measured before it is drawn.
+      # ⚠️ READ THE `files` COLUMN, NOT THE TEST-FILE COUNT — IT IS THE VARIABLE
+      # (MOTIR-4422). Memory is 0.48 MB per file IN THE PROGRAM, declarations
+      # included, and a project that imports nothing of ours costs 0.14 GB (3.4%),
+      # measured directly by `assert-typecheck-headroom.mjs --baseline`. The tests
+      # project's 7013 files are 1682 bodies and ~5300 declarations, so ~2.5 GB of
+      # its 3.35 is the closure its bodies import — real, and NOT a floor every
+      # project pays: `e2e` references the same app project, has more bodies than
+      # `scripts`, and costs less than half as much. `tsconfig.base.json`'s header
+      # carries the model and the readings.
       #
-      # ⚠️ EVERY FURTHER BUMP MOVES THE CLIFF; NONE REMOVES IT. Two jobs in this
-      # file took one within a fortnight (`build` at MOTIR-1789, this one at
-      # MOTIR-3878). If this lane is ever short of heap again, the answer is
-      # another project boundary — not a bigger number.
+      # ⚠️ AND THE PRESCRIPTION THAT USED TO STAND HERE WAS MEASURED AND FOUND
+      # INSUFFICIENT. This block read: *"If the ceiling is still over 80% once
+      # [MOTIR-4295 and MOTIR-4296] have landed, the answer is another project
+      # boundary inside `tests/`."* Both landed, the ceiling is 82.8%, and the
+      # condition is therefore met — so the prescription was priced. Splitting off
+      # `tests/components/**`, the largest single subdirectory (298 of 1682 bodies),
+      # takes the ceiling to 6212 files / 3.13 GB / 77.3%: **5.5 points, for a new
+      # project and a `TS2742` annotation in `tests/helpers/renderWithIntl.tsx`.**
+      # That is the whole of what a boundary returns here, because both halves go on
+      # importing the same `lib/` surface. Draw one if 5.5 points is what you need;
+      # do not expect a boundary to buy back twenty.
+      #
+      # ⚠️ EVERY FURTHER BUMP MOVES THE CLIFF; NONE REMOVES IT — unchanged, and it
+      # is the half of the old advice that measurement did not touch. Two jobs in
+      # this file took a bump within a fortnight (`build` at MOTIR-1789, this one at
+      # MOTIR-3878). What changed is only the alternative: the lever is the SIZE OF
+      # THE PROGRAM, and a boundary is one way to shrink it — worth what it removes
+      # from the largest project's file count, which is a number you can read before
+      # you draw the line rather than after.
       #
       # ── AND THE NUMBER IS NOW READ, WHICH IS THE WHOLE POINT (MOTIR-4294) ────
       # `assert-typecheck-headroom.mjs` SUBSUMES `pnpm typecheck`: it builds every
@@ -550,17 +564,28 @@ jobs:
       # step's, so a type error still fails the lane exactly as before, with the
       # compiler's own output.
       #
-      # ⚠️ 90%, NOT the 80% the card asked for, and the number is DERIVED. 80% was
-      # reasoned in the pre-split world, where one story (MOTIR-3878) moved the
-      # single program by 0.9 GB — 22 points. After the split a story does not do
-      # that: ~50 new test files are 2.7% of the tests project's bodies, about ONE
-      # point. Measured here: ceiling 84.6% (the tests project), run-to-run spread
-      # ~1.5 points, one story ~1 point. 80% is below the floor the tree already
-      # stands on — it would fail on arrival, and a lane that is red before anyone
-      # has done anything is a broken gate, not a warning. 90% clears the spread,
-      # leaves roughly five stories of growth as warning, and still fires with
-      # ~0.4 GB of real heap left. The script's own header carries the derivation
-      # and `tests/ci-typecheck-headroom.test.ts` pins that this step runs it.
+      # ⚠️ 90%, RE-AFFIRMED ON A RE-MEASURED SPREAD (MOTIR-4422) — the derivation
+      # it used to rest on was falsified, and the number survived it. That
+      # derivation said *"run-to-run spread ~1.5 points"* from four builds; seven
+      # builds of an unchanged tree give **2.9 points on the tests project and 11.7
+      # on the app project**. So the old margin argument was made against a spread
+      # about half the real one. At 82.8% observed maximum, 90% is 7.2 points clear
+      # — 2.5x the measured spread, and about seven to twelve stories at ~0.6–1
+      # point each (50 new test files are 50 program files at 0.48 MB). It still
+      # fires with ~0.3 GB of real heap left. Lowering it to 85% would put the line
+      # 2.2 points above the observed maximum, INSIDE the spread, on one box's
+      # sample of seven — that is a coin toss, not a tighter gate.
+      #
+      # ⚠️ AND THE SPREAD IS ONE-SIDED, WHICH INVERTS WHAT THE THRESHOLD IS FOR.
+      # `Memory used` is the heap in use when the compiler finishes, so a garbage
+      # collection landing just before the end reads LOW; it never reads high. Of
+      # seven readings, six sat within 0.3 points of the top and the outliers were
+      # 2.9 and 11.7 points BELOW. So the risk this gate carries is not a false red
+      # that a bigger threshold would fix — it is a false GREEN, and no threshold
+      # fixes that. A single green reading is weak evidence that a project is under
+      # the line; take the maximum of several (`--help` says so too). The script's
+      # own header carries the derivation and
+      # `tests/ci-typecheck-headroom.test.ts` pins that this step runs it.
       #
       # ⚠️ ONE PROCESS PER PROJECT is a measurement decision, not plumbing. A
       # single `tsc -b tsconfig.solution.json` builds all four in ONE process, so

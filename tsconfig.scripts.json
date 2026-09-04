@@ -28,6 +28,10 @@
     "scripts/**/*.js",
     "prisma.config.ts"
   ],
-  "exclude": ["node_modules", "packages", ".tsout"],
+  // `scripts/ci/typecheck-baseline/` is the BASELINE PROBE (MOTIR-4422) — its own
+  // project, off the solution, reached only by
+  // `assert-typecheck-headroom.mjs --baseline`. Excluded here because a file
+  // belongs to exactly one composite project; its own tsconfig says why it exists.
+  "exclude": ["node_modules", "packages", ".tsout", "scripts/ci/typecheck-baseline/**"],
   "references": [{ "path": "./tsconfig.app.json" }]
 }

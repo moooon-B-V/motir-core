@@ -54,28 +54,44 @@ import ts from 'typescript';
 /**
  * The fraction of the heap a single project may use before this fails.
  *
- * ⚠️ 90%, AND THE NUMBER IS DERIVED RATHER THAN INHERITED (MOTIR-4294). The card
- * asked for 80%, reasoning that it "leaves roughly one story's worth of growth
- * as warning" — which was the right rule read against the PRE-SPLIT world, where
- * MOTIR-3878 moved the one program's reading by 0.9 GB (22 points) in a single
- * story. After MOTIR-4293 a story does not do that: ~50 new test files are 2.7%
- * of the tests project's 1814 bodies, which is about ONE point. Three numbers,
- * all measured on this repository:
+ * ⚠️ 90%, RE-AFFIRMED ON A RE-MEASURED SPREAD (MOTIR-4422). MOTIR-4294 derived it
+ * from three figures — `ceiling 84.4%`, `run-to-run spread ~1.5 points across four
+ * clean builds`, `one story ~1 point` — and the middle one was wrong by about
+ * half. Seven runs over ONE unchanged tree at `9d6beace7`, node 22, heap 4.05 GB:
  *
- *   ceiling today      84.4% — the tests project, the largest of the four
- *   run-to-run spread  ~1.5 points across four clean builds
- *   one story          ~1 point
+ *   project     files    min      max     spread
+ *   app          5530   44.2%    55.9%   11.7 pts
+ *   scripts      2026   40.3%    40.5%    0.2
+ *   tests        7013   79.9%    82.8%    2.9      ← the ceiling
+ *   e2e           934   17.2%    17.6%    0.4
+ *   orch          773    4.0%     4.0%    0.0
  *
- * 80% is therefore below the floor the tree already stands on: it would fail on
- * arrival, and a lane that is red before anyone has done anything is not a
- * warning, it is a broken gate. 90% clears the spread, leaves roughly five
- * stories of growth as warning, and still fires with ~0.4 GB of real heap left —
- * which is the distance between "somebody should split a project" and
- * `Ineffective mark-compacts`.
+ * 90% is 7.2 points clear of the observed maximum — 2.5x the tests project's
+ * measured spread, and roughly seven to twelve stories at ~0.6–1 point each (50
+ * new test files are 50 program files, and a program file costs 0.48 MB). It
+ * still fires with ~0.3 GB of real heap left, which is the distance between
+ * "somebody should look at this" and `Ineffective mark-compacts`. Lowering it to
+ * 85% would put the line 2.2 points above the observed maximum — INSIDE the
+ * measured spread, on one box's sample of seven — and a gate that fires on GC
+ * timing teaches people to re-run it.
  *
- * ⚠️ AND THE RIGHT ANSWER TO THE GAP IS A PROJECT BOUNDARY, NOT A BIGGER NUMBER.
- * The tests project at 84.4% is the one that will hit this first, and splitting
- * it is filed rather than left in this comment.
+ * ⚠️ THE SPREAD IS ONE-SIDED, AND THAT IS THE MORE IMPORTANT HALF. `Memory used`
+ * is the heap in use when the compiler finishes, so a collection landing late
+ * reads LOW and never high: six of the seven readings sat within 0.3 points of
+ * the top, and both outliers were below. The failure this gate is exposed to is
+ * therefore a false GREEN — a project genuinely over the line reading under it —
+ * which no choice of threshold repairs. Treat one green reading as weak evidence
+ * and take the maximum of several; `--help` says so where an operator will see it.
+ *
+ * ⚠️ AND THE GAP IS CLOSED BY SHRINKING THE PROGRAM, OF WHICH A PROJECT BOUNDARY
+ * IS ONE WAY AND NOT AUTOMATICALLY THE BEST. This comment used to say the answer
+ * was a boundary, full stop. Priced (MOTIR-4422): splitting `tests/components/**`
+ * out of the tests project — 298 of its 1682 bodies, the largest single
+ * subdirectory — moves the ceiling 7013 → 6212 files, 82.8% → 77.3%. **5.5
+ * points**, because both halves go on importing the same `lib/` surface and the
+ * declarations stay on both sides. `tsconfig.base.json`'s header carries the model
+ * this rests on; the short form is that the `files` column below is the variable,
+ * so any candidate boundary can be priced before it is drawn.
  */
 const THRESHOLD = 0.9;
 
@@ -85,14 +101,39 @@ const LIMIT_OVERRIDE_ENV = 'MOTIR_TYPECHECK_HEAP_LIMIT_BYTES';
 const ROOT = process.cwd();
 const SOLUTION = 'tsconfig.solution.json';
 
+/**
+ * The BASELINE PROBE (MOTIR-4422) — `tsconfig.tests.json` with the bodies taken
+ * out, measured only under `--baseline`.
+ *
+ * It is NOT in the solution and `pnpm typecheck` never builds it: the `typecheck`
+ * lane's cost is unchanged by its existence. It is here so that the BASELINE in
+ * the derivation above is a figure anybody can re-read in one command, rather
+ * than one inferred from the difference between two configurations — which is
+ * how the model this comment replaces came to be wrong.
+ */
+const BASELINE_PROJECT = 'scripts/ci/typecheck-baseline';
+
 if (process.argv.includes('--help')) {
   console.log(`assert-typecheck-headroom — type-check every project and gate on its heap usage
 
   node scripts/ci/assert-typecheck-headroom.mjs
+  node scripts/ci/assert-typecheck-headroom.mjs --baseline
 
 Fails when any project's \`Memory used\` exceeds ${Math.round(THRESHOLD * 100)}% of the heap
 this process runs under, naming the project and both numbers. Prints the table
 either way, so a green run leaves the readings in the log.
+
+\`--baseline\` measures ${BASELINE_PROJECT} as well — the tests
+project's own options and references with ONE trivial test body instead of 1682.
+The gap between it and \`tsconfig.tests.json\` is what the bodies cost; its own
+reading is what everything else costs. Not in the solution, so CI never pays for
+it; run it when you are about to reason about what a project boundary would buy.
+
+⚠️ READ MORE THAN ONE RUN. \`Memory used\` is the heap in use when the compiler
+finishes, so a garbage collection landing just before the end reads LOW — 11.7
+points low on the app project, measured over four runs of an unchanged tree
+(MOTIR-4422). Take the MAXIMUM of several runs; a single reading can only
+understate.
 
 To watch it FIRE without touching the tree, lower the threshold's basis — the
 children still run at the default heap, so the readings are real:
@@ -242,6 +283,9 @@ function main() {
     console.error(`no projects in ${SOLUTION} — nothing to check, which is itself the finding`);
     process.exit(2);
   }
+  // The probe goes LAST, after the projects it references have each been built in
+  // their own process — so its reading is its own, exactly as every other one is.
+  if (process.argv.includes('--baseline')) projects.push(BASELINE_PROJECT);
 
   // Cold, for the reason in the header: a warm project reports a number about
   // the build state rather than about the tree. Every project's outDir and
@@ -301,9 +345,14 @@ function main() {
   console.error(
     `\n✗ ${worst.project} used ${gb(worst.memoryKb * 1024)} — ${(worst.fraction * 100).toFixed(1)}% ` +
       `of the ${gb(limitBytes)} heap, over the ${Math.round(THRESHOLD * 100)}% line.\n` +
-      `  The answer is another PROJECT BOUNDARY, not a bigger heap: every bump moves the\n` +
-      `  cliff by one story and none removes it. See docs/decisions/app-shell-over-packages.md\n` +
-      `  and tsconfig.base.json for the shape, and MOTIR-4294 for why this number is 90%.`,
+      `  The lever is the PROGRAM — the \`files\` column above, declarations included, at\n` +
+      `  ~0.48 MB each — not a bigger heap: every bump moves the cliff by one story and\n` +
+      `  none removes it. A project boundary is one way to shrink a program and is worth\n` +
+      `  exactly the files it removes from THIS project, which you can price before you\n` +
+      `  draw it (a candidate config's file count; \`--baseline\` for the floor). Read the\n` +
+      `  number twice before acting on it — a late GC reads LOW, never high.\n` +
+      `  See tsconfig.base.json for the model and the readings, MOTIR-4294 for why this\n` +
+      `  number is 90% and MOTIR-4422 for the spread it was re-affirmed against.`,
   );
   process.exit(1);
 }

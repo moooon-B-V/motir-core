@@ -10,6 +10,46 @@
   // (the `build` job at MOTIR-1789, this one at MOTIR-3878) is the tree saying its
   // SHAPE is wrong, not its heap.
   //
+  // ⚠️ "THE PROGRAM" MEANS EVERY FILE THE CHECKER LOADS, DECLARATIONS INCLUDED —
+  // NOT THE FILES YOU WROTE (MOTIR-4422). The sentence above is measured and
+  // correct; what it does not say, and what three documents in this repository
+  // went on to assume, is which files it is counting. Seven runs of
+  // `assert-typecheck-headroom.mjs` over one unchanged tree, node 22, default heap
+  // 4.05 GB:
+  //
+  //   project                       own bodies   files in program      used
+  //   baseline probe                         1                248   0.14 GB
+  //   tsconfig.e2e.json                    185                934   0.71 GB
+  //   tsconfig.scripts.json                116               2026   1.64 GB
+  //   tsconfig.app.json                      —               5530   2.25 GB
+  //   tsconfig.tests.json                 1682               7013   3.35 GB
+  //
+  // Least squares through the origin over those: **0.48 MB per file in the
+  // program**, and the fixed cost of a project that imports nothing of ours is
+  // **0.14 GB (3.4%)** — measured directly, by a project with the tests project's
+  // own options and references and ONE test body
+  // (`assert-typecheck-headroom.mjs --baseline`).
+  //
+  // Two consequences, and the second is the one that has cost cards:
+  //
+  //   1. **There is no floor a project pays for REFERENCING another.**
+  //      Declarations load on demand: `tsconfig.e2e.json` references this same app
+  //      project, has MORE bodies than `tsconfig.scripts.json`, and costs less than
+  //      half as much. A project's cost is its bodies PLUS the declaration closure
+  //      those bodies import — its own closure, not a shared surcharge.
+  //   2. **So what a project BOUNDARY buys is whatever it removes from the
+  //      PROGRAM** — the bodies it moves, plus only those declarations that nothing
+  //      left behind still imports. A line drawn where the two halves import the
+  //      same `lib/` surface moves bodies and keeps declarations, and returns
+  //      little. Measured: splitting `tests/components/**` (298 of 1682 bodies, the
+  //      largest single subdirectory) takes the ceiling from 7013 files / 82.8% to
+  //      6212 files / 77.3% — 801 files, 5.5 points.
+  //
+  // **Price a boundary before you draw it, in one command**: the `files` column
+  // `assert-typecheck-headroom.mjs` already prints IS the variable, so a candidate
+  // config's file count answers what it would cost. Do not estimate a split from a
+  // count of test files.
+  //
   // Nothing extends this file for its own sake. It exists so the four real
   // projects — `tsconfig.json` (Next's product program), `tsconfig.tests.json`,
   // `tsconfig.scripts.json` and the composite `tsconfig.app.json` layered on the
