@@ -257,7 +257,32 @@ describe('surface-material layer in globals.css (the 7.3.35 contract extension)'
   });
 
   it('derives every material colour from the active palette — color-mix/var, never a raw hue', () => {
+    // ⚠️ WIDENED AT MOTIR-4253, ON THE RECORD — a rule that REMOVES a colour is
+    // not a rule that paints one.
+    //
+    // The membership test below matches `border-right-color` and
+    // `background-color` through its `color` arm, which is right: those DO paint
+    // a colour-bearing surface, usually. But 3D / Immersive's shell chrome takes
+    // a colour AWAY — the rail's shared edge goes `border-right-color:
+    // transparent` because a floating panel has a shadow instead of an edge, and
+    // the top bar's fill goes `background-color: transparent` so the immersive
+    // atmosphere runs under the lid. Both were REQUIRED to name a palette token
+    // they have no use for, by a proxy that reads the PROPERTY and never the
+    // VALUE.
+    //
+    // So the value test moved onto the values, and the guarantee is strictly
+    // stronger rather than weaker: a rule that paints ANY hue at all — via a
+    // token, a `color-mix`, an `rgb()` or a hex — still has to derive it from
+    // the palette, and the hex ban below still runs on EVERY rule in the
+    // population including the hueless ones. What is exempted is exactly the set
+    // of rules that pin no hue by construction, and the floor on
+    // `paletteAsserted` is what stops that exemption from quietly swallowing the
+    // population it was carved out of.
+    /** Values that pin NO hue — they remove colour rather than paint it. */
+    const HUELESS = /^(?:transparent|none|inherit|initial|unset|revert|currentColor)$/i;
+
     let materialRulesChecked = 0;
+    let paletteAsserted = 0;
     for (const rule of MATERIAL_RULES) {
       const body = rule.body;
       // Only assert on rules that actually paint a colour-bearing surface.
@@ -265,13 +290,27 @@ describe('surface-material layer in globals.css (the 7.3.35 contract extension)'
         continue;
       }
       materialRulesChecked += 1;
-      // Palette-derived: the rule must take its colour from the active palette —
-      // either a palette token (`var(--color-*|--el-*)`, e.g. glassmorphism's
-      // frosted surfaces + washes) or `currentColor` (the inherited palette hue,
-      // e.g. cybercore-y2k's glow grid). Both pin NO hue of their own.
-      expect(body).toMatch(/var\(--(?:color|el)-|currentColor/i);
+
+      // The colour-bearing declarations WITH their values. The property pattern
+      // is deliberately as loose as the membership test above, so splitting on
+      // the value cannot narrow the population being examined.
+      const paints = [...body.matchAll(/([\w-]*(?:background|color)[\w-]*)\s*:\s*([^;]+)/gi)]
+        .map(([, , value]) => value!.trim())
+        .filter((value) => !HUELESS.test(value));
+
+      if (paints.length > 0) {
+        paletteAsserted += 1;
+        // Palette-derived: the rule must take its colour from the active palette —
+        // either a palette token (`var(--color-*|--el-*)`, e.g. glassmorphism's
+        // frosted surfaces + washes) or `currentColor` (the inherited palette hue,
+        // e.g. cybercore-y2k's glow grid). Both pin NO hue of their own.
+        expect(body, `[data-style='${rule.style}'] paints ${paints.join(', ')}`).toMatch(
+          /var\(--(?:color|el)-|currentColor/i,
+        );
+      }
       // …and must NOT hardcode a raw hue (a hex colour literal). Shadow ink
       // (rgba(15,15,15,…)) lives in the token block, not in a material rule.
+      // Unconditional: a hueless rule has no excuse for a hex either.
       expect(body).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     }
     // Glassmorphism ships the canvas + frosted card/popover/modal/sidebar/input
@@ -281,5 +320,10 @@ describe('surface-material layer in globals.css (the 7.3.35 contract extension)'
     // transform or transition — so the 69 ratchet lives on the population above
     // and this floor stays where it was.
     expect(materialRulesChecked).toBeGreaterThanOrEqual(4);
+    // And the palette assertion must still REACH most of that population. A
+    // widening whose exemption grew to cover everything would leave the test
+    // above green with nothing derived, which is the failure mode of the change
+    // itself rather than of the stylesheet.
+    expect(paletteAsserted).toBeGreaterThanOrEqual(4);
   });
 });

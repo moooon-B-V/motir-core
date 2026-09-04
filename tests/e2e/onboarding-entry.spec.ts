@@ -4,9 +4,16 @@
 // contracts in a real browser:
 //   1. GET / redirects to /sign-in (the marketing hero relocated out; the root
 //      is now just the login door).
-//   2. The "Plan with AI" control on /sign-in is the onboarding door: it links
-//      to /onboarding, and following it while logged out lands on
-//      /sign-in?next=/onboarding (the onboarding auth gate preserves intent).
+//   2. The "Plan with AI" control on /sign-in is the onboarding door. It used to
+//      link to /onboarding and the assertion here used to be that following it
+//      logged out lands back on /sign-in?next=/onboarding — which is the DEFECT
+//      MOTIR-4402 closed, written down as a contract: onboarding is
+//      authenticated, so the only reader who could see the door was the one it
+//      returned to an identical screen. It now goes to /sign-up carrying the
+//      intent, and a surface serving that intent says so instead of re-offering
+//      the door.
+//   3. The auth gate on /onboarding itself is unchanged — a direct arrival with
+//      no session still bounces to /sign-in?next=/onboarding.
 //
 // The self-host Connect gate is opt-in (MOTIR_SELFHOST_CONNECT_GATE, off by
 // default), so /onboarding does NOT show it here — it reaches the auth gate,
@@ -26,7 +33,7 @@ test.describe('motir-core entry rework (7.22.1)', () => {
     await expect(page.getByRole('heading', { name: 'Welcome back!' })).toBeVisible();
   });
 
-  test('"Plan with AI" door routes to /onboarding (preserving next when logged out)', async ({
+  test('"Plan with AI" door takes a visitor with no account to /sign-up (MOTIR-4402)', async ({
     page,
   }) => {
     await page.context().clearCookies();
@@ -34,13 +41,28 @@ test.describe('motir-core entry rework (7.22.1)', () => {
 
     const door = page.getByRole('link', { name: /plan with ai/i });
     await expect(door).toBeVisible();
-    await expect(door).toHaveAttribute('href', '/onboarding');
+    await expect(door).toHaveAttribute('href', '/sign-up?next=%2Fonboarding');
 
     await door.click();
-    // Logged out → the onboarding layout bounces to sign-in, preserving the
-    // onboarding intent so the visitor lands back in onboarding after auth.
+    // The visible change the old door never produced: a different surface, with
+    // the intent still on the URL and now stated on the page.
+    await page.waitForURL(/\/sign-up\?next=%2Fonboarding/);
+    await expect(page.getByRole('heading', { name: 'Welcome to Motir!' })).toBeVisible();
+    await expect(page.getByText("Where you're headed")).toBeVisible();
+  });
+
+  test('/onboarding still bounces a signed-out arrival, and /sign-in then says so', async ({
+    page,
+  }) => {
+    await page.context().clearCookies();
+    // The auth gate is unchanged — this is the round trip the door used to send
+    // every visitor on. What changed is what the return RENDERS.
+    await page.goto('/onboarding');
     await page.waitForURL(/\/sign-in\?next=%2Fonboarding/);
-    await expect(page).toHaveURL(/next=%2Fonboarding/);
+
+    await expect(page.getByText("Where you're headed")).toBeVisible();
+    // …and the door onto the surface already being served is gone.
+    await expect(page.getByRole('link', { name: /plan with ai/i })).toHaveCount(0);
   });
 });
 

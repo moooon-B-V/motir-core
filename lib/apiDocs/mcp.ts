@@ -3,6 +3,8 @@ import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { permissionSlug, type PermissionKey } from '@/lib/permissions/catalog';
 import enMessages from '@/messages/en.json';
 import type { GuideBlock } from '@/lib/apiDocs/guide';
+import type { McpToolInputSchema } from './mcpToolSchema';
+import { MCP_TOOL_INPUT_SCHEMAS } from './mcpToolSchemas';
 
 // The MCP server documentation, AS DATA (Story MOTIR-2309 · Subtask MOTIR-2325 ·
 // design `design/mcp-server/` · ADR `public-api-conventions.md` Amendment 13).
@@ -38,9 +40,20 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 // and that makes {@link TOOL_SUMMARIES} below incomplete, which fails typecheck
 // here. A tool cannot reach the server undocumented.
 //
+// ⚠️ AND THE RULE IS WHY THE ARGUMENT SCHEMAS ARE GENERATED (MOTIR-4389). A
+// tool's `inputSchema` lives in the same `registerTool(...)` call its
+// description does, so reading one means BUILDING the server — exactly what the
+// paragraph above forbids. `mcpToolSchemas.ts` is the seam: a leaf that imports
+// nothing at runtime, written by `pnpm generate:mcp-tool-schemas` from a live
+// handshake and pinned byte-for-byte against a fresh one by
+// `tests/mcp/tool-schema-truth.test.ts`. So the value crosses the boundary and
+// the import does not — and a schema that drifted from the server, or was
+// edited by hand, is red rather than published.
+//
 // ── What is DERIVED and what is AUTHORED (Amendment 13 Q2) ──────────────────
 // Derived: every tool NAME, its gating SCOPE, the catalogue's GROUPING (a tool's
-// group is its own scope), the scope legend and the default grant. Authored: the
+// group is its own scope), the scope legend, the default grant, and each tool's
+// ARGUMENT SCHEMA (generated from the registry, above). Authored: the
 // reader-facing one-line summaries, because a tool's `title` and `description`
 // live inside its `server.registerTool(...)` call and are not data anywhere.
 //
@@ -786,6 +799,21 @@ export interface McpToolRow {
   name: McpCatalogueToolName;
   permission: PermissionKey;
   summary: string;
+  /**
+   * The tool's ARGUMENTS — the draft-07 JSON Schema `tools/list` serves for it,
+   * verbatim (MOTIR-4389).
+   *
+   * ⚠️ IT IS NOT DERIVED HERE, and it could not be. A schema is declared inside
+   * its tool's `registerTool(...)` call, and this module may not import the
+   * registry (the dependency-graph rule in this file's header). It comes from
+   * `mcpToolSchemas.ts`, a GENERATED leaf written from a live handshake and
+   * pinned byte-for-byte against a fresh one by
+   * `tests/mcp/tool-schema-truth.test.ts` — the same relationship
+   * `packages/cli/src/api/` has to the OpenAPI emitter, and a stronger one than
+   * the fingerprint beside it, which pins a hash of the prose rather than the
+   * value.
+   */
+  inputSchema: McpToolInputSchema;
 }
 
 /** One catalogue group — a permission, and the tools it gates. */
@@ -815,6 +843,7 @@ export function mcpCatalogue(): McpCatalogueGroup[] {
       name,
       permission: TOOL_PERMISSIONS[name],
       summary: TOOL_SUMMARIES[name].summary,
+      inputSchema: MCP_TOOL_INPUT_SCHEMAS[name],
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 

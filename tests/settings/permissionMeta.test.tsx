@@ -99,114 +99,64 @@ describe('permissionsByDomainForTokens — the picker’s columns', () => {
     }
   });
 
-  it('splits into two columns balanced by ROWS — the height MOTIR-2578 measured', () => {
-    // The asset measured the modal at 836px resting / 938px at its tallest with
-    // a 3/3 ROW split. Balancing the five domains by group COUNT instead gives
-    // 4 rows against 2 (because `work_item` holds two permissions), which is
-    // both lopsided and taller than what was measured — so the balance is
-    // asserted on rows, and pinned, rather than left to drift with the catalog.
+  it('splits into two columns by the RULE the design states — whole groups, first past half', () => {
+    // ⚠️ THIS ASSERTS A RULE, NOT A COUNT — and that is the disposition
+    // MOTIR-3580 took, on the record, after the count had been renewed five
+    // times.
     //
-    // ⚠️ 2026-08-18 (MOTIR-2988): the grantable set grew from six keys to SEVEN.
-    // `ai:view_plan` was in the catalog but ungrantable, because no
-    // token-reachable operation asserted it; `add_plan_items` is the first that
-    // does, and `GRANTABLE_PERMISSIONS` is DERIVED from exactly that. So the
-    // balanced split is now 4/3 and the taller column carries one more row than
-    // the asset measured. That is a real consequence for the modal's height, and
-    // it is pinned here rather than absorbed: the PROPERTY (balanced within one
-    // row, no group broken across the columns) is what the layout rule is, and
-    // the NUMBERS are what someone has to look at again if the set grows further.
+    // What used to be here: two literals pinning the columns at the row counts
+    // of the day, under a chain of six dated notes each saying the drawing that
+    // measured them should be re-cut "when the set next grows". The set is
+    // DERIVED (`GRANTABLE_PERMISSIONS` is computed from the operations a token
+    // can reach), so it grows whenever a permission is minted — six times, on a
+    // schedule nothing about this layout controls. Each growth turned the
+    // literals red, and each time the note was renewed instead of discharged.
     //
-    // ⚠️ 2026-08-20 (MOTIR-3188): SEVEN to EIGHT, and this is the "someone has to
-    // look again" the note above asked for. `ai:decide_plan` — plan approval,
-    // split off `ai:view_plan` — is grantable through MOTIR-3021's one v1
-    // entrance, so the split is now 4/4: BALANCED, and one row taller on the
-    // shorter column than the asset measured. The `ai` domain group is what grew,
-    // and it is not broken across the columns (the assertion below proves that).
-    // The modal is one row taller than 938px at its tallest; re-measure the asset
-    // when the set next grows, rather than letting the numbers drift untouched.
+    // `design/settings/permission-columns.mock.html` + its `design-notes.md`
+    // section are where that chain now lives, as one statement instead of six:
+    // the asset DERIVES all seven historical splits from the single rule below,
+    // which is the evidence that the rule is the durable half and the numbers
+    // were the perishable one.
     //
-    // ⚠️ 2026-08-25 (MOTIR-3361): EIGHT to NINE, and this is the next "look
-    // again". `add_lesson` is the first MCP tool to assert `lesson:manage`, so
-    // that key became grantable by the same derivation `ai:view_plan` arrived
-    // through. The group that grew is **project** — `project:browse` +
-    // `lesson:manage`, since a lesson belongs to a project — and the split is now
-    // 5/4: still balanced within one row, still no group broken across the
-    // columns, and one row taller again on the LEFT.
+    // THE RULE, exactly as `permissionColumnsForTokens` implements it:
+    //   1. the unit is a domain GROUP, never a row — a group is never broken
+    //      across the columns (asserted in the sibling test below);
+    //   2. groups are taken in CATALOG ORDER, and the cut is the FIRST boundary
+    //      at which the left column holds at least half the rows;
+    //   3. balance is what that BUYS, not a constraint it is held to — the
+    //      imbalance is whatever the group sizes allow.
     //
-    // The same card also had to MOVE the two lesson keys in the catalog to sit
-    // beside `project:browse`. They were appended at the end while carrying
-    // `domain: 'project'`, which broke the contiguity every other domain keeps —
-    // harmless only for as long as neither key was grantable. The two
-    // order-preservation assertions in this file are what caught it.
+    // ⚠️ It is GREEDY, not minimal-imbalance, and the previous version of this
+    // test said otherwise. MOTIR-3629 replaced a `<= 1` balance assertion —
+    // correctly, it had stopped being reachable — with one asserting the split
+    // takes "the one with the SMALLEST imbalance", described as "the rule the
+    // splitter actually implements". It is not. At group sizes 5·5·1 the
+    // implementation cuts 10/1 where the best non-breaking boundary is 5/6; the
+    // two coincide at every cardinality the set has actually had, which is the
+    // same kind of coincidence the `<= 1` assertion was retired for being. What
+    // is asserted below is what the code does, so it cannot go stale against it.
+    const groups = permissionsByDomainForTokens();
     const [left, right] = permissionColumnsForTokens();
     const rows = (gs: PermissionDomainGroup[]) => gs.reduce((n, g) => n + g.permissions.length, 0);
-    expect(rows(left) + rows(right)).toBe(GRANTABLE_PERMISSIONS.length);
-    // ⚠️ THE INVARIANT IS RESTATED, NOT RELAXED (MOTIR-3629). It read
-    // `Math.abs(rows(left) - rows(right)) <= 1`, and that stopped being a
-    // property of the layout the moment a group grew past what the boundaries
-    // could absorb: with groups of 4·3·1·1·3 the best boundary is 7/5, and no
-    // arrangement of THESE groups does better. A `<= 1` that happens to hold is
-    // a coincidence being asserted as a rule.
-    //
-    // The rule the splitter actually implements — and the one worth pinning,
-    // because it stays true at every cardinality — is: no group is broken across
-    // the columns (asserted below), and of the boundaries that satisfies, the
-    // split takes the one with the SMALLEST imbalance. The numbers are the
-    // tripwire; this is the rule.
-    const sizes = permissionsByDomainForTokens().map((g) => g.permissions.length);
-    const total = sizes.reduce((n, x) => n + x, 0);
-    const bestImbalance = Math.min(
-      ...sizes.map((_, i) => {
-        const head = sizes.slice(0, i + 1).reduce((n, x) => n + x, 0);
-        return Math.abs(head - (total - head));
-      }),
-    );
-    expect(Math.abs(rows(left) - rows(right))).toBe(bestImbalance);
-    //
-    // ⚠️ 2026-08-25 (MOTIR-3480): NINE to TEN, and the next "look again".
-    // `search_lessons` is the first MCP tool to assert `lesson:view`, so that key
-    // became grantable by the same derivation `lesson:manage` and `ai:view_plan`
-    // arrived through — and the **project** group grew again, to three
-    // (`project:browse` + the two lesson keys, which the catalog keeps contiguous
-    // beside it). The split is now 5/5: EXACTLY balanced for the first time since
-    // MOTIR-2578 measured the asset, with the RIGHT column taking the new row and
-    // the left unchanged. No group is broken across the columns (the assertion
-    // below proves that).
-    //
-    // ⚠️ 2026-08-26 (MOTIR-3553): TEN to ELEVEN, and the next "look again".
-    // `reinforce_lesson` is the first MCP tool to assert `lesson:reinforce`, so
-    // that key became grantable by the same derivation the three before it
-    // arrived through — and the **project** group grew again, to four
-    // (`project:browse` + the three lesson keys, which the catalog keeps
-    // contiguous beside it). The split is 6/5, with the LEFT column taking the
-    // new row and the right unchanged: still balanced within one row, still no
-    // group broken across the columns (the assertion below proves it), and the
-    // three invariants above — balance, totality, no split group — are what
-    // actually hold this. The two literals are a TRIPWIRE on the numbers, not a
-    // second statement of the rule.
-    //
-    // ⚠️ 2026-08-26 (MOTIR-3629): ELEVEN to TWELVE, and the next "look again" —
-    // the one that broke the old invariant rather than merely moving its numbers.
-    // This is NOT a key that became grantable by a new tool asserting it; it is a
-    // key SPLIT OUT of one that was already grantable. `work_item:archive` takes
-    // the reversible half of `work_item:delete` (the two archive tools and the
-    // two `/api/v1` archive operations move onto it), so the **work_item** group
-    // grows from two to three and both halves stay grantable.
-    //
-    // The groups are now 4·3·1·1·3 = 12, and the boundaries a non-breaking split
-    // can use give 4/8, 7/5 or 8/4. The best is **7/5**, so the columns are
-    // 7 and 5 and the `<= 1` balance the asset was drawn to is no longer
-    // REACHABLE — see the restated invariant above. That is a real, visible
-    // consequence for the modal and it is pinned here rather than absorbed.
-    //
-    // ⚠️ THE ASSET IS NOW FIVE ROWS BEHIND AND VISIBLY LOPSIDED. The note above
-    // asked for a re-measure "when the set next grows", and it has now grown four
-    // times since MOTIR-2578 measured it — this time changing the SHAPE, not only
-    // the height. That is a DESIGN card, not this one; it is recorded here and
-    // surfaced on the pull request, because the numbers below going green is
-    // exactly what would otherwise hide it.
-    expect(rows(left)).toBe(7);
-    expect(rows(right)).toBe(5);
+    const total = GRANTABLE_PERMISSIONS.length;
+
+    // Totality: nothing is lost or duplicated by the split.
+    expect(rows(left) + rows(right)).toBe(total);
+
+    // Whole groups, in catalog order, cut at one boundary.
+    expect([...left, ...right].map((g) => g.domain)).toEqual(groups.map((g) => g.domain));
+    expect(left.length).toBeGreaterThan(0);
+
+    // The cut is PAST half…
+    expect(rows(left) * 2).toBeGreaterThanOrEqual(total);
+    // …and it is the FIRST such boundary: dropping the left column's last group
+    // would put it under half. Together these two pin the boundary uniquely, at
+    // every cardinality, which is what the literals could only do at one.
+    expect(rows(left.slice(0, -1)) * 2).toBeLessThan(total);
+
+    // The consequence the design draws: the left column is never the shorter
+    // one, so it is the column that sets the modal's height.
+    expect(rows(left)).toBeGreaterThanOrEqual(rows(right));
   });
 
   it('loses no permission to the column split, and never breaks a group across one', () => {

@@ -721,8 +721,20 @@ the supported door (`docs/decisions/design-result.md` AMENDMENT 2 Q1).
 AFTER `prettier --write` on the mock.** It recovers the viewport width from the
 committed export, renders the asset as it stands at `HEAD` first, and tells you
 whether what changed in the PNG is your diff or the render environment
-(`EXACT` / `DIMS` / `DRIFT`). A new asset with no committed export takes
-`--width` (~1200 is the tree's convention).
+(`EXACT` / `DIMS` / `DRIFT`, the last carrying its `Δbaseline=`). A new asset
+with no committed export takes `--width` (~1200 is the tree's convention).
+
+**⚠️ A fourth verdict, `REFLOW`, is a REFUSAL — nothing is written (MOTIR-4374).**
+The viewport is SEARCHED, and a width match does not identify one: at
+`deviceScaleFactor: 2` the search probes half the committed width and the scale
+factor doubles the output back to it, so a 1×-exported asset has a second,
+document-REFLOWING candidate that passes the width test. It used to keep the
+first match it found and prefer 2×, which re-exported
+`design/ai-chat/target-picker.png` (1200×2932) at **1200×8206** under an ordinary
+`DRIFT` — a plausible image, three times too tall, of a design nobody drew. It
+now takes the HEIGHT-NEAREST candidate, and reports `REFLOW` instead of writing
+when even that one is more than 25% from the committed height. If the delta is
+genuinely real, re-run with `--width <the viewport it was exported at>`.
 
 **⚠️ The ink rules apply to a mock's OWN `<style>` block and its board chrome,
 not only to its utility classes.** `--el-text-muted` fails AA on `--el-surface` /

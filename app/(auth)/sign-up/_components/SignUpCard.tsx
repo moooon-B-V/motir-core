@@ -8,9 +8,9 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { signUp } from '@/lib/auth/client';
-import { AuthShell, OrDivider, FormAlert } from '../../_components/AuthShell';
+import { AuthShell, OrDivider, FormAlert, IdeaCarried } from '../../_components/AuthShell';
 import { GoogleButton } from '../../_components/GoogleButton';
-import { resolvePostAuthDestination } from '@/lib/navigation/landing';
+import { isOnboardingDestination, resolvePostAuthDestination } from '@/lib/navigation/landing';
 
 /**
  * Sign-up. Two-step, following mockup 03 + the Clay pattern.
@@ -100,6 +100,15 @@ function SignUpForm({ legal }: { legal: LegalLinks }) {
   //
   // An explicit `?next=` still WINS, exactly as on sign-in.
   const callbackURL = resolvePostAuthDestination({ next: searchParams.get('next') });
+  // ⚠️ THIS IS WHERE THE ONBOARDING DOOR NOW LANDS (MOTIR-4402), so this card is
+  // the one that has to acknowledge the intent it is carrying. A visitor who
+  // pressed "Have a project idea? · Plan with AI" on `/sign-in` arrives here
+  // with `next=/onboarding`; without the banner the only evidence that their
+  // intention survived is a query string, which is the shape of the defect that
+  // sent them here in the first place. `IdeaCarried` is the area's shipped
+  // primitive for exactly this — an intent that crossed the auth boundary
+  // (`design/auth/design-notes.md`, "beyond the artboards", item 3).
+  const carryingOnboardingIntent = isOnboardingDestination(callbackURL);
 
   const [step, setStep] = useState<'identity' | 'password'>('identity');
   const [email, setEmail] = useState('');
@@ -177,6 +186,11 @@ function SignUpForm({ legal }: { legal: LegalLinks }) {
 
   return (
     <AuthShell headline={t('welcomeToMotir')} subhead={t('signUpSubhead')}>
+      {carryingOnboardingIntent ? (
+        <IdeaCarried label={t('onboardingCarriedLabel')}>
+          {t('onboardingCarriedSignUp')}
+        </IdeaCarried>
+      ) : null}
       {pageError ? <FormAlert>{pageError}</FormAlert> : null}
 
       {step === 'identity' ? (

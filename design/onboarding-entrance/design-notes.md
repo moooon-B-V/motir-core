@@ -16,6 +16,35 @@ comparable products onboard (below) showed that split is off-pattern for an **id
 the entrance now leads with one full-width idea box and demotes import to a secondary row. This also
 fixes the practical problem that a half-width column can't hold a long first idea.
 
+**⚠️ AMENDED 2026-09-04 (MOTIR-4370) — the asymmetry with motir.co is DELIBERATE, and this is the
+record of it.** `motir-marketing/design/marketing/design-notes.md` draws the public landing as a
+**symmetric fork**: "Start something new" and "I have an existing project" as co-equal doors, with the
+`OR` divider deliberately removed. That asset flagged the seam it opened and said plainly that it could
+not decide another surface's design. MOTIR-4370 carried the question, and the ruling is: **this entrance
+keeps the idea-first shape described above. Neither surface is changed to match the other.**
+
+**Why they differ — the two are met in different moments, by readers who have chosen different amounts.**
+The landing meets a visitor who has committed to nothing, and a symmetric fork is the honest thing to show
+someone still deciding; that page is also answering _what Motir is_, and the co-equal import door is the
+point of the answer. **This entrance is reached by a reader who has already chosen the idea path, by name,
+at the door** — the in-app door is a button reading "Plan a new project with AI" (`ProjectSwitcher` and
+`ProjectsEmptyState`, via `startNewAiProjectAction`), and the cross-origin door carries an idea in the
+`motir_pending_idea` cookie and renders **Panel 2, which drops the import row entirely.** Re-offering a
+symmetric fork here re-asks a question the reader answered with the click.
+
+**The 2026-07-01 width constraint still holds, and only this surface has it.** This entrance's centred
+column is ~660px (~310px a side) — too narrow for a long first idea. The landing's fork sits in a 1080px
+container (~510px a side), wider than this entrance's own full-width box. The constraint was about width.
+
+**Import is not demoted out of reach.** It is a first-class secondary row, and a project that already
+holds work items never meets this entrance at all — MOTIR-1259 routes it to the migrate wizard.
+
+**What this ruling does NOT settle.** The `intent=import` parameter the landing's import door emits has
+no reader on this side, so a visitor who picks that door currently lands on Panel 1 rather than the
+import branch. **That is a routing gap, not a design asymmetry**, and MOTIR-3846 owns it. This ruling
+assumes it lands; if it is ever abandoned, the asymmetry is worth revisiting, because the import door
+would then contradict itself one screen later.
+
 **Scope (deliberately SLIMMED, per the card):** the ENTRANCE ONLY. It draws the idea box, the carried-over
 idea state, and names each destination (with a "How Motir works" link for the full lifecycle) — then hands
 off. **It draws NO repo-connect,
@@ -23,8 +52,9 @@ source-selection, index, or generate UI**; all of that lives downstream in 7.15 
 their own designs (MOTIR-930). Re-drawing it here would duplicate 7.15.
 
 **Asset files (three, shared basename):** `design-notes.md` (this file) · `onboarding-entrance.mock.html`
-(source of truth, standalone — re-states the real `globals.css` `--el-*` values so it renders without
-the Tailwind build, exactly as `design/ai-planning/*.mock.html` does) · `onboarding-entrance.png`
+(source of truth, standalone — re-states the real `globals.css` `--el-*` values, **under the `--el-*`
+names**, so it renders without the Tailwind build, exactly as
+`design/ai-planning/plan-revision.mock.html` does) · `onboarding-entrance.png`
 (full-page export, light theme, `deviceScaleFactor: 2`).
 
 ---
@@ -190,6 +220,42 @@ stroke 2, round caps — matching the shipped hero.
   warm-editorial / motir VALUES). **No invented hues** on any card / pill / state / text — the only raw
   values are non-semantic elevation shadows and the doc-annotation scaffold chrome (panel captions / ref
   chips), which are not product UI.
+
+  > **⚠️ AMENDED 2026-09-03 (MOTIR-4351) — this rule was stated here and NOT held by the asset, in two
+  > ways, and neither was measurable until now.**
+  >
+  > **(a) The names, which are what the guards read.** The mock's `:root` copied the design system's
+  > values onto PRIVATELY-NAMED aliases — `--text`, `--muted`, `--faint`, `--page`, `--hub`, `--soft`,
+  > `--hair` — and painted through those. `tests/theme/inkContrastMockScan.ts` and
+  > `tests/theme/mockStateInkScan.ts` classify ink by reading an `--el-*` name off the declaration AT
+  > THE PAINT SITE, so all 73 paint sites in this asset were outside every ink guard in the tree by
+  > construction, and their greens said nothing about it. The block now declares the real `--el-*`
+  > names and every site consumes them.
+  >
+  > **(b) "No invented hues" was FALSE — there were four**, and the carve-out above was covering one of
+  > them. Each is now a token or a `color-mix()` whose inputs are all tokens:
+  >
+  > | was                                          | is                                                            | note                                                                                                    |
+  > | -------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+  > | `--page: #f4f3f1` (body + `.ob` ground)      | `--el-surface` (`#f6f5f4`)                                    | nearest token by value AND role; a 3-unit shift, and the drawn body/container relationship is unchanged |
+  > | `--border-strong: #d3cfc8` (`.import:hover`) | `--el-border-strong` (`#c8c4be`)                              | the semantic role is exact; the asset's value was an invented intermediate                              |
+  > | `--accent-soft: #f4f2fd` (`.ref` fill)       | `color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg))`  | all-token inputs, so it follows a re-skin                                                               |
+  > | `#e3def8` inline on `.ref`'s border          | `color-mix(in srgb, var(--el-accent) 17%, var(--el-page-bg))` | a raw hex at the point of use, not even routed through an alias                                         |
+  >
+  > **And the swap exposed five sub-AA elements the asset had been carrying unmeasured.** Once the ink
+  > was declared under its real name, `design-ink-contrast` reported `--el-text-muted` at 4.12–4.34:1
+  > on `--el-surface` for three `.note` and two `.hint` elements — under AA, and exactly the pairing
+  > `CLAUDE.md`'s measured table forbids ([MOTIR-2455]). Both rules now take **`--el-text-secondary`**
+  > (6.18–6.80:1 on all four surfaces in both themes). Separately, `--el-text-faint` — which clears AA
+  > on NO surface — carried three active informational labels (`.idea-card .lbl`, the `.or` divider,
+  > `.state .st-cap`); all three now take `--el-text-secondary`, and the `.idea-card` placeholder takes
+  > `--el-text-muted`, which the guard confirms clears AA on the white card it sits in.
+  >
+  > **The composition table below was RIGHT and the mock was wrong** — its "OR divider" row already
+  > specified an `--el-text-secondary` label, and the asset painted a faint alias. The sweep restores
+  > the specification rather than changing it. Nothing else in the drawn design moved: the `.png`
+  > re-export reports `EXACT` at 2560×4866.
+
 - Shape flows through element-semantic tokens (`--radius-card`/`-btn`/`-input`/`-badge`/`-control`,
   `--spacing-card-padding`, `--height-btn-md`) — never a raw `rounded-md`/`p-2`/`h-9`, so a `data-style`
   swap re-shapes it.
