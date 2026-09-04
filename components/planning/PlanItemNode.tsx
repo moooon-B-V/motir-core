@@ -172,7 +172,16 @@ export function PlanItemNode({
           </span>
           <span
             className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
-              item.op === 'remove' ? 'text-(--el-text-muted) line-through' : 'text-(--el-text)'
+              // MOTIR-4260 — `--el-text-secondary`, not `--el-text-muted`: the
+              // `remove` frame six elements up paints `bg-(--el-muted)`, where
+              // the muted ink is 4.12:1 in light (AA is 4.5) and secondary is
+              // 6.18:1. Secondary clears AA on every background in both themes,
+              // so this ink does not have to know which frame the node drew.
+              // It is also what `design/ai-planning`'s `.node.remove .ttl`
+              // specified; the implementation had drifted. The `line-through`
+              // is unchanged — it is the second signal for `removed`, and a
+              // strike RULE is a graphic rather than text.
+              item.op === 'remove' ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
             }`}
           >
             {item.title}

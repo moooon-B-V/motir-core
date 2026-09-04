@@ -34,8 +34,6 @@ export const COVERED_MODULES: Readonly<Record<string, string>> = {
   'app/(authed)/items/_components/IssueQuickViewPanel.tsx':
     'the quick view peek and its rail — MOTIR-4196, guarded by ' +
     'tests/components/quick-view-rail-ink.test.tsx',
-  'components/planning/PlanItemNode.tsx':
-    'the plan canvas node and its inline diff overlay — MOTIR-4030',
   'components/ui/CommandPalette.tsx':
     'a portalled dialog body: the group headings and the footer hint are painted ' +
     'by the dialog primitive in another module',
@@ -50,6 +48,19 @@ export const COVERED_MODULES: Readonly<Record<string, string>> = {
 // it) and it is not COVERAGE of the hole, which is the distinction this file
 // exists to hold. Claiming it here was the first thing this test failed on.
 
+// ⚠️ `components/planning/PlanItemNode.tsx` was an entry here until MOTIR-4260
+// shipped, and it is GONE rather than re-pointed — the same disposition, for the
+// same reason, as MOTIR-4246's two modules below. That card re-inked the `remove`
+// node's title from `--el-text-muted` to `--el-text-secondary` (4.12:1 → 6.18:1
+// on the node's own `--el-muted` frame), and that title was the module's ONLY
+// non-exempt muted site: what remains is a `bg-(--el-text-muted)` spine and an
+// `aria-hidden` chevron, so the static arm rules rather than abstains and the
+// module is not in the population any more. **Its two mounts stay** in
+// `tests/components/composed-surface-ink.test.tsx` — they are the regression
+// guard for MOTIR-4030's and MOTIR-4260's fixes, which is a different claim from
+// coverage of the hole, and holding those two apart is what this file is for.
+// This test is what caught the stale pointer, on the run that made it stale.
+
 // ⚠️ MOTIR-4246's two `/items` modules — `issueColumns.tsx` and
 // `IssueTreeTable.tsx` — were entries here until that card shipped (#2543). They
 // are gone rather than re-pointed: the fix moved both sites OFF `--el-text-muted`
@@ -58,30 +69,38 @@ export const COVERED_MODULES: Readonly<Record<string, string>> = {
 // defer on. Its own render-time guard is `tests/components/items-row-ink.test.tsx`.
 // This test is what caught the stale pointer, which is the job it was written for.
 
-/**
- * Composed surfaces the sweep does NOT cover, each with the card that owns it or
- * the reason it is out. AC 5 of MOTIR-4251: a coverage claim owes its population,
- * and the half of a population you did not cover is the half nobody re-reads.
- */
-export const UNCOVERED_WITH_OWNERS: Readonly<Record<string, string>> = {
-  'components/planning/PlanItemNode.tsx#remove':
-    'MOTIR-4260 — the module IS covered (the render sweep mounts its `modify` ' +
-    'state), but its `remove` STATE paints the title in `--el-text-muted` on the ' +
-    'node’s own `--el-muted` frame at 4.12:1. Found by this guard on its first ' +
-    'run; the state is not mounted because the case would ship red. That card ' +
-    'carries the fix and the mount.',
-};
-
-/**
- * The MODULE an `UNCOVERED_WITH_OWNERS` key names. An entry may be scoped to one
- * STATE of a module — `path#state` — and the membership check below is about
- * modules, so a state-scoped key is checked by its module half rather than
- * skipped. A `path#state` deferral whose module has left the abstention is
- * exactly as stale a pointer as a bare one, and skipping it would also let this
- * check go VACUOUSLY green the moment the last bare entry is resolved — the
- * shape this file's own header is written against.
- */
-const moduleOf = (file: string) => file.split('#')[0]!;
+// ── ⚠️ THE OWNED-DEFERRAL LIST IS RETIRED, AS ITS OWN TRIP-WIRE ASKED ───────
+//
+// `UNCOVERED_WITH_OWNERS` recorded composed surfaces the sweep did not cover,
+// each with the card that owned it — AC 5 of MOTIR-4251: a coverage claim owes
+// its population, and the half you did not cover is the half nobody re-reads.
+// It held ONE entry, `components/planning/PlanItemNode.tsx#remove`, owned by
+// MOTIR-4260. Its `it` carried a deliberate trip-wire beside the staleness
+// check — `expect(keys.length).toBeGreaterThan(0)` — with its own disposition
+// written into the comment above it: *"when the residue is finally all owned or
+// all fixed, this fails and a person retires the list rather than leaving a
+// tautology behind."*
+//
+// MOTIR-4260 fixed that entry, the list emptied, and the trip-wire fired on the
+// very run that emptied it. This is that retirement. Deleting the limb is the
+// disposition the author chose over an empty object, and it is the right one:
+// an empty registry passes its own staleness check for free, which is precisely
+// the vacuous green this file exists to refuse.
+//
+// **What still holds the coverage claim honest, so nothing was traded away:**
+// the residue assertion in the last `it` (`expect(residue.length)
+// .toBeGreaterThan(0)`) measures the ~190 abstained modules `COVERED_MODULES`
+// does NOT name, and it is the check that stops "the composed surfaces the
+// static walk abstains on" from ever reading as total. The list retired here
+// was the OWNED subset of that residue, not the residue itself.
+//
+// **To reinstate it, when a card next DEFERS a composed surface:** restore the
+// `UNCOVERED_WITH_OWNERS` record, keyed by module path (or `path#state` for one
+// state of a module), valued with the card that owns it; restore `moduleOf =
+// (file: string) => file.split('#')[0]!` so a state-scoped key is checked by its
+// module half; and restore the `it` asserting every key is a module the static
+// walk really abstains on. A deferral is a card, never a paragraph — this
+// registry is how one is pinned to a check that goes red when it goes stale.
 
 describe('MOTIR-4251 · the abstention this guard is pointed at', () => {
   const sites = abstainedMutedSites();
@@ -106,20 +125,10 @@ describe('MOTIR-4251 · the abstention this guard is pointed at', () => {
     ).toEqual([]);
   });
 
-  it('every module named as UNCOVERED is one the static walk really abstains on', () => {
-    // The mirror of the check above. An entry here that is NOT in the hole is a
-    // deferral pointing at nothing — the shape `run.md`'s "a recorded deviation
-    // that names an open defect is a card, never a paragraph" warns about, with
-    // the paragraph dressed as a citation.
-    const keys = Object.keys(UNCOVERED_WITH_OWNERS);
-    const notAbstained = keys.filter((f) => !modules.has(moduleOf(f)));
-    expect(notAbstained).toEqual([]);
-    // …and the check above has something to rule on. An empty deferral list
-    // satisfies it for free, which is the one way it can pass without meaning
-    // anything: when the residue is finally all owned or all fixed, this fails
-    // and a person retires the list rather than leaving a tautology behind.
-    expect(keys.length).toBeGreaterThan(0);
-  });
+  // The mirror of the check above — 'every module named as UNCOVERED is one the
+  // static walk really abstains on' — is RETIRED with the list it read, on the
+  // run that emptied it. See the block above `COVERED_MODULES`'s consumers for
+  // why deletion rather than an empty object, and for the shape to restore.
 
   it('every covered module carries abstained sites, and the residue is reported', () => {
     const covered = byModule.filter(([file]) => file in COVERED_MODULES);
