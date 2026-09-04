@@ -139,7 +139,7 @@ describe('PlanningCanvas', () => {
     expect(document.querySelectorAll('marker')).toHaveLength(5);
   });
 
-  it('emphasises a selected node’s edges in the accent (so a dashed one still pops)', () => {
+  it('emphasises a selected node’s edges in the accent INK (so a dashed one still pops)', () => {
     // edges: a→b (firm), b→c (pending). Select b → both are b’s connections.
     const { container } = render(
       <PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} selectedId="b" />,
@@ -148,8 +148,13 @@ describe('PlanningCanvas', () => {
     // every lit edge (here both) points at the accent emphasis marker…
     paths.forEach((p) => expect(p.getAttribute('marker-end')).toContain('-emphasis'));
     // …including the pending (dashed) one, which is now accent-stroked.
+    // ⚠️ `--el-accent-on-surface`, the INK — not `--el-accent`, the FILL, which is
+    // what this line asserted until MOTIR-4474. A token-NAME assertion cannot see
+    // a token's VALUE, so this case passed at 1.26:1 on the board and pinned the
+    // defect in place. It still pins the name; the VALUE is measured next door, in
+    // `tests/theme/canvasEmphasisInkContrast.test.ts`.
     const dashed = paths.find((p) => p.getAttribute('stroke-dasharray'));
-    expect(dashed?.getAttribute('class')).toContain('stroke-(--el-accent)');
+    expect(dashed?.getAttribute('class')).toContain('stroke-(--el-accent-on-surface)');
   });
 
   it('renders no cross-flag layer content when there are no cross edges', () => {
@@ -277,7 +282,10 @@ describe('the RUNNING edge variant', () => {
     );
     const [runningPath, crossPath] = paths();
     expect(runningPath!.getAttribute('class')).toContain('stroke-(--el-status-in-progress)');
-    expect(runningPath!.getAttribute('class')).not.toContain('stroke-(--el-accent)');
+    // the EMPHASIS ink, which is what a selected node's other edges take — so this
+    // negative stays capable of going red (MOTIR-4474 moved the token; asserting
+    // the retired `stroke-(--el-accent)` here would now be true of every path).
+    expect(runningPath!.getAttribute('class')).not.toContain('stroke-(--el-accent-on-surface)');
     expect(crossPath!.getAttribute('class')).toContain('stroke-(--el-warning)');
   });
 });
