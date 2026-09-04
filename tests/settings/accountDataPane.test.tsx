@@ -189,8 +189,9 @@ describe('the access path — a FOURTH rail group, ordered LAST', () => {
     const entry = ACCOUNT_SETTINGS_NAV.find((e) => e.id === 'data')!;
     expect(entry.href).toBe('/settings/account/data');
     expect(entry.labelKey).toBe('data');
-    // A real route, not a reserved "Soon" slot: the pane ships with its entry.
-    expect(entry.placeholder).toBeUndefined();
+    // A real route: the pane ships with its entry. This USED to also assert the
+    // absence of a reserved-slot flag; MOTIR-4324 retired that flag, so
+    // membership of the destination set is the whole of the claim now.
     expect(ACCOUNT_SETTINGS_ROUTES).toContainEqual(entry);
   });
 

@@ -110,7 +110,10 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     expect(roles?.href).toBe('/settings/project/roles');
     expect(roles?.group).toBe('access');
     expect(roles?.labelKey).toBe('nav.roles');
-    expect(roles?.placeholder).toBeUndefined();
+    // A real route, which since MOTIR-4324 retired the reserved-slot flag is
+    // asserted as membership of the destination set rather than as the absence
+    // of that flag.
+    expect(PROJECT_SETTINGS_ROUTES).toContainEqual(roles);
     // MOTIR-2468 retired the browse gate this entry shipped with, and MOTIR-2257
     // moved the key it left to `project:manage_access`: that entry's own
     // reasoning turned on the screen having "no write of its own", and this story
@@ -154,10 +157,12 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
   it('the Automation slot is now a real admin-only route (Story 6.6 lit it up)', () => {
     const automation = PROJECT_SETTINGS_NAV.find((e) => e.id === 'automation');
     expect(automation?.permission).toBe('automation:manage');
-    expect(automation?.placeholder).toBeUndefined();
     expect(automation?.href).toBe('/settings/project/automation');
-    // It joins the real route set (the totality test pairs it with the
-    // on-disk automation/page.tsx).
+    // It joins the route set (the totality test pairs it with the on-disk
+    // automation/page.tsx). This membership USED to be the other half of an
+    // `expect(automation?.placeholder).toBeUndefined()` above; MOTIR-4324 retired
+    // that flag — this slot was the last one it was written for — so the
+    // membership is now the whole assertion.
     expect(PROJECT_SETTINGS_ROUTES).toContainEqual(expect.objectContaining({ id: 'automation' }));
   });
 
@@ -165,7 +170,9 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     const aiPlanning = PROJECT_SETTINGS_NAV.find((e) => e.id === 'ai-planning');
     expect(aiPlanning?.href).toBe('/settings/project/ai-planning');
     expect(aiPlanning?.labelKey).toBe('nav.aiPlanning');
-    expect(aiPlanning?.placeholder).toBeUndefined();
+    // A real route — membership of the destination set, since MOTIR-4324 retired
+    // the reserved-slot flag this used to assert the absence of.
+    expect(PROJECT_SETTINGS_ROUTES).toContainEqual(aiPlanning);
     // MOTIR-2468: `ai:configure`, read off `projectAiSettingsService`. NOT
     // `ai:plan` — a member holds that and it gates RUNNING the planner, not
     // configuring it, which is exactly the name-similarity trap the card warns
