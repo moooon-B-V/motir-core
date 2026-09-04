@@ -17,6 +17,8 @@ import {
   overGateSizing,
   resolvePathRepo,
   selfBlockingDesignCriteria,
+  namesDesignAsset,
+  namesDesignDocumentAmendment,
   type RepoCandidate,
 } from '@/lib/workItems/proseVsGraph';
 
@@ -1049,5 +1051,125 @@ describe('selfBlockingDesignCriteria — a card that is its OWN design blocker (
       designCriterionIndex: 2,
       surfaceCriterionIndex: 4,
     });
+  });
+});
+
+describe('an AMENDMENT to an existing design document is a design criterion (MOTIR-4477)', () => {
+  /**
+   * THE FIXTURE, quoted verbatim and held HERE as a literal — this file owns it.
+   *
+   * It is MOTIR-4472's acceptance criterion 1 as authored on 2026-09-04, on the
+   * card the false negative was observed on. It is inlined rather than read from
+   * the tenant because that card's body was being re-scoped by a plan in the
+   * same hour: a fixture that reads a work item rots the moment the plan is
+   * approved, and this one has to keep meaning what it meant.
+   */
+  const AMENDMENT_CRITERION =
+    'A design section exists amending Part XIV with the decided axis for `modify` and ' +
+    '`remove`, naming the chosen answer and the copy for every string that changes — ' +
+    'read before the code is written.';
+
+  it('every asset matcher MISSES the fixture — the diagnosis, asserted', () => {
+    // The eight matchers are all ASSET tells: a file, a path, or a word for a
+    // drawing. The fixture says "a design SECTION" and "Part XIV" and names no
+    // file, so `namesDesignAsset` is silent on it — which is why
+    // `designCriterionIndex` stayed null and the pair was never formed.
+    expect(namesDesignAsset(AMENDMENT_CRITERION)).toBe(false);
+  });
+
+  it('the amendment compound RECOGNISES it', () => {
+    expect(namesDesignDocumentAmendment(AMENDMENT_CRITERION)).toBe(true);
+  });
+
+  it('recognises the other natural phrasings of the same commission', () => {
+    for (const criterion of [
+      'The design notes gain a decided arm for the peek, with the copy for every string.',
+      'Part XIV of the design document is amended to cover the declined case.',
+      'The design notes section is extended with the decided axis for `modify`.',
+      'A new section is added to the design spec naming the chosen answer.',
+      'The design of record is revised: §16 names the three-valued prop.',
+    ]) {
+      expect(namesDesignDocumentAmendment(criterion), criterion).toBe(true);
+    }
+  });
+
+  it('an AMBIGUOUS growth verb needs the DOCUMENT as its subject, not merely nearby', () => {
+    // `gains` / `extends` / `adds` describe a card changing a COMPONENT at least
+    // as often as a document, and the two readings sit the same distance apart in
+    // the sentence — so proximity cannot separate them and the subject does.
+    expect(namesDesignDocumentAmendment('The design notes gain a decided arm.')).toBe(true);
+    expect(
+      namesDesignDocumentAmendment('The peek gains a decided arm, per the design notes.'),
+    ).toBe(false);
+    expect(
+      namesDesignDocumentAmendment(
+        'The component adds a `decided` prop, matching the design spec.',
+      ),
+    ).toBe(false);
+  });
+
+  it('THE FALSE-POSITIVE FLOOR — a document section with no design commission stays silent', () => {
+    // Neither half is a tell on its own, which is the same asymmetry the bare
+    // `.png` note in `DESIGN_ASSET_MATCHERS` records. `amend` and `section` are
+    // two of the commonest words in this corpus.
+    for (const criterion of [
+      // Drawn from MOTIR-3687, a real non-design card (`type: content`): amend a
+      // decision record, no design anywhere in it.
+      'Amend `docs/decisions/ai-upstream-transfer-basis.md` — §6 item 4 records that D2 and ' +
+        'D3 are SUPERSEDED, with the date the finding behind them was withdrawn.',
+      'The behaviour matches §3 of the decision record, quoted in the PR body.',
+      'A section is added to `README.md` describing the work loop.',
+      'The migration extends the `work_item` table with a nullable column.',
+      // CONSUMING a design is the other half of the finding and must not read as
+      // producing one — the module note's own distinction.
+      'The treatment the design notes specify is followed at every call site.',
+      'The rail is drawn in the treatment `design/ai-planning/design-notes.md` names.',
+    ]) {
+      expect(namesDesignDocumentAmendment(criterion), criterion).toBe(false);
+    }
+  });
+
+  it('a criteria list carrying the fixture reports a correct 1-based pair', () => {
+    // Criterion 1 commissions the design; 2, 3 and 4 build the surface it
+    // decides. The list is a LITERAL — it reads no work item.
+    const card = [
+      '## Acceptance criteria',
+      '',
+      `1. ${AMENDMENT_CRITERION}`,
+      '2. The peek opened from a DECIDED plan renders the past tense, asserted as a component',
+      '   test over the rendered dialog.',
+      '3. The same assertion runs through the CANVAS door — both doors, one test.',
+      '4. `messages/en.json` and `messages/zh.json` stay in step over the new keys.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(card)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+  });
+
+  it('reads the compound across a WRAPPED bullet — the noun and the verb on two lines', () => {
+    // The compound is evaluated over the whole criterion, not per line, because
+    // its two halves land on different lines of a wrapped bullet as often as not.
+    const wrapped = [
+      '## Acceptance criteria',
+      '',
+      '1. A design section exists',
+      '   amending Part XIV with the decided axis, read before the code is written.',
+      '2. The plan-detail canvas draws one node per approved `add`.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(wrapped)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+  });
+
+  it('a card that only AMENDS a design document is still quiet — the design card itself', () => {
+    const designOnly = [
+      '## Acceptance criteria',
+      '',
+      `1. ${AMENDMENT_CRITERION}`,
+      '2. The design notes are extended with the copy table for every string that moves.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(designOnly)).toBeNull();
   });
 });
