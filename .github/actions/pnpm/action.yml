@@ -1,0 +1,133 @@
+name: pnpm + Node
+description: >-
+  Put the repository's pinned pnpm and Node 22 on PATH WITHOUT running `npm`.
+  Replaces the `pnpm/action-setup@v6` + `actions/setup-node@v6` pair that stood
+  at all 17 call sites under `.github/**` (MOTIR-4449).
+
+  ⚠️ WHY THIS EXISTS — a measurement, not a preference. `pnpm/action-setup`
+  bootstraps itself with `npm ci`, and on 2026-09-04 that step took up to SEVEN
+  MINUTES per job: run 33864238803 spent 3646 s of runner time across 21 jobs
+  on it (mean 173 s, min 5 s, max 437 s — an 80x spread on the same action in
+  the same run, i.e. registry contention, not a slow action). `design-guards`
+  is the shortest job with a real ceiling, so it absorbed the least and was
+  CANCELLED at its `timeout-minutes: 10`; `CI complete` needs it and is the only
+  required status check on `main`, so any pull request could be barred from
+  merging at random by an npm install that had nothing to do with it.
+
+  ⚠️ AND WHY NOT THE OBVIOUS INPUT. `standalone: true` is MEASURED AND
+  REJECTED, not merely unproven. `standalone` selects which bootstrap LOCKFILE
+  `npm ci` installs, never whether npm runs — `src/install-pnpm/run.ts` at
+  `0977fd99725f1db4007ccb2928dbb4e90d06cc86` (= `@v6` = v6.0.10) calls
+  `runCommand('npm', ['ci'], ...)` unconditionally — and on `linux/x64` that
+  lockfile resolves FIVE packages totalling 51,377,700 bytes, because
+  `@pnpm/exe` is a 3.99 MB meta-package whose platform binary
+  `@pnpm/linux-x64` is 47,159,229 bytes. The default path fetches 8,776,044
+  bytes in one request. It is a 5.85x payload INCREASE through exactly the
+  mechanism that is stalling.
+
+  ⚠️ WHAT THIS DOES INSTEAD. corepack ships with the runner's Node, reads
+  `packageManager` from package.json, and fetches ONE tarball with Node's own
+  client — no `npm` process anywhere. For the pinned `pnpm@11.2.2` that tarball
+  is 4,242,949 bytes / 449 files, against the 8,776,044 bytes / 891 files
+  `npm ci` pulls for the action's own pinned bootstrap 11.19.0. So the cold path
+  already halves the bytes and drops the redundant 11.19.0 -> 11.2.2
+  `self-update`, and the corepack cache below makes the warm path fetch nothing
+  at all.
+
+inputs:
+  node-version:
+    description: >-
+      Node major to put on PATH. Every call site passed 22; it is an input only
+      so a future lane can differ without forking this action.
+    required: false
+    default: '22'
+
+runs:
+  using: composite
+  steps:
+    # ⚠️ NODE FIRST, AND WITHOUT `cache: pnpm` — THE ORDER IS THE WHOLE DESIGN.
+    #
+    # `corepack enable` writes its shims into the bin directory of the Node
+    # install that is CURRENTLY on PATH. Run it before `setup-node` and the
+    # shims land in the runner's preinstalled Node, `setup-node` then switches
+    # PATH to the toolcache copy, and `pnpm` is gone — a failure that would
+    # surface as `pnpm: command not found` in every job at once.
+    #
+    # `cache: pnpm` is what forced the old ordering (it shells out to `pnpm` to
+    # resolve the store path, so pnpm had to exist BEFORE setup-node, which is
+    # why `pnpm/action-setup` was first at all 17 sites). It is replaced by the
+    # explicit store cache at the end of this action, which runs after corepack.
+    - uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    # The pin has ONE home — `packageManager` in package.json — and it is read
+    # rather than restated so this action cannot drift from it. It feeds the
+    # cache key as well as the activation, so a version bump invalidates the
+    # cache by construction instead of serving a stale pnpm.
+    - name: Read the pinned pnpm from packageManager
+      id: pin
+      shell: bash
+      run: |
+        set -euo pipefail
+        spec=$(node -p "require('./package.json').packageManager")
+        case "${spec}" in
+          pnpm@*) ;;
+          *) echo "::error::packageManager is '${spec}', expected pnpm@<version>"; exit 1 ;;
+        esac
+        echo "spec=${spec}" >> "$GITHUB_OUTPUT"
+        echo "version=${spec#pnpm@}" >> "$GITHUB_OUTPUT"
+
+    # Corepack keeps downloaded package managers here (XDG cache on Linux). A
+    # hit makes the activation below a pure filesystem operation: no registry,
+    # no npm, nothing on the critical path at all.
+    #
+    # ⚠️ Unlike the cache-in-front-of-`pnpm/action-setup` shape this action
+    # replaces, a MISS here is not silent and not a no-op. That action opens
+    # `runSelfInstaller` with `rm -rf <dest>`, so a restored cache is deleted
+    # before it is used and a broken cache looks exactly like a working one.
+    # corepack reads its cache instead of clearing it, and the `pnpm --version`
+    # assertion below fails loudly if anything went wrong either way.
+    - name: Cache the corepack download
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/node/corepack
+        key: ${{ runner.os }}-corepack-${{ steps.pin.outputs.version }}
+
+    - name: Activate pnpm through corepack
+      shell: bash
+      env:
+        # Non-interactive: corepack otherwise prompts before its first download
+        # and hangs the step until the job's ceiling cancels it.
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+        PNPM_SPEC: ${{ steps.pin.outputs.spec }}
+      run: |
+        set -euo pipefail
+        corepack enable pnpm
+        corepack prepare "${PNPM_SPEC}" --activate
+        # An ASSERTION, not an echo: it is what turns a wrong PATH into a red
+        # step here instead of a confusing failure in whatever ran next.
+        installed=$(pnpm --version)
+        expected="${PNPM_SPEC#pnpm@}"
+        if [ "${installed}" != "${expected}" ]; then
+          echo "::error::pnpm ${installed} is on PATH, expected ${expected}"
+          exit 1
+        fi
+        echo "pnpm ${installed} active (no npm process ran)"
+
+    # The store cache `cache: pnpm` used to provide. Same content, same key
+    # shape (the lockfile hash), moved after corepack because it needs pnpm on
+    # PATH to resolve the path at all — which is the constraint that decided
+    # this action's step order.
+    - name: Resolve the pnpm store path
+      id: store
+      shell: bash
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache the pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-

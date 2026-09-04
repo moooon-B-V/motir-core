@@ -78,16 +78,14 @@ jobs:
       PKG_DIR: packages/cli
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-          # Deliberately NO `registry-url`. On a Trusted Publish npm resolves the
-          # registry itself and mints its own credential from the OIDC token;
-          # setup-node's .npmrc exists only to map NODE_AUTH_TOKEN, and writing
-          # one with no token is how you get an anonymous publish (npm's masked
-          # 404 — see the header).
+      # Deliberately NO `registry-url` — a property of `./.github/actions/pnpm`,
+      # which passes none to the `actions/setup-node` it wraps (MOTIR-4449 moved
+      # that step in there; this note moved with it). On a Trusted Publish npm
+      # resolves the registry itself and mints its own credential from the OIDC
+      # token; setup-node's .npmrc exists only to map NODE_AUTH_TOKEN, and
+      # writing one with no token is how you get an anonymous publish (npm's
+      # masked 404 — see the header).
+      - uses: ./.github/actions/pnpm
 
       # OIDC Trusted Publishing needs npm >= 11.5.1; node 22 ships npm 10.x.
       # Same step, same reason, as release-design-system.yml.

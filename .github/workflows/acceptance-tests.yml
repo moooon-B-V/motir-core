@@ -533,11 +533,7 @@ jobs:
       # even though nothing queries it — same reason ci.yml's build job has one.
       - name: Start Postgres
         uses: ./.github/actions/postgres
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
+      - uses: ./.github/actions/pnpm
       - name: Cache node_modules
         id: cache-node-modules-acceptance-build
         uses: actions/cache@v4
