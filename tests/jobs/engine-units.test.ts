@@ -3,10 +3,8 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { readFileSync } from 'node:fs';
 import { defineJob, type DefineJobOptions } from '@/lib/jobs/defineJob';
-import { CATCH_UP_POLICY_NAMES, type CatchUpPolicy } from '@/lib/jobs/catchUp';
-import { jobSchedules } from '@/lib/jobs/schedules';
+import { CATCH_UP_POLICY_NAMES } from '@/lib/jobs/catchUp';
 import { jobEventRepository } from '@/lib/repositories/jobEventRepository';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
@@ -164,42 +162,22 @@ describe('the catch-up disposition is DECLARED and cannot be omitted (MOTIR-3470
     }
   });
 
-  it('each disposition MATCHES the amendment — the code and the record cannot drift', () => {
-    // The value on each job is taken from `docs/decisions/job-queue-foundation.md`
-    // §11.4, so this reads that table back rather than restating it. Both
-    // directions are checked: a job in the registry and absent from the table is
-    // the defect the amendment says it exists to prevent, and a row in the table
-    // naming a job that no longer exists is the same defect inverted.
-    const adr = readFileSync('docs/decisions/job-queue-foundation.md', 'utf8');
-    const section = adr.slice(adr.indexOf('### §11.4'), adr.indexOf('### §11.5'));
-    expect(section.length).toBeGreaterThan(0);
-
-    const tabled = new Map<string, { cron: string; catchUp: CatchUpPolicy }>();
-    for (const line of section.split('\n')) {
-      const m =
-        /^\|\s*`(system\.[a-z0-9.-]+)`\s*\|\s*`([^`]+)`\s*\|\s*\*{0,2}`?([a-z]+)`?\*{0,2}\s*\|/.exec(
-          line,
-        );
-      if (m) tabled.set(m[1]!, { cron: m[2]!, catchUp: m[3] as CatchUpPolicy });
-    }
-
-    const registry = new Map(engineScheduledJobs().map((d) => [d.id, d]));
-    expect([...tabled.keys()].sort()).toEqual([...registry.keys()].sort());
-    for (const [id, def] of registry) {
-      expect(def.catchUp, `${id}'s disposition matches §11.4`).toBe(tabled.get(id)?.catchUp);
-      // The CRON too — §11.9 promises no schedule changes, and a table quoting a
-      // stale expression would make that promise unverifiable from the record.
-      expect(def.cron, `${id}'s cron matches §11.4`).toBe(tabled.get(id)?.cron);
-    }
-
-    // The schedule table `jobScheduleHealthService` reads is the same population,
-    // so the two registries cannot disagree about which jobs are scheduled.
-    expect(
-      jobSchedules()
-        .map((s) => s.functionId)
-        .sort(),
-    ).toEqual([...registry.keys()].sort());
-  });
+  // ⚠️ THE THIRD ASSERTION OF THIS BLOCK LIVES IN
+  // `tests/jobs/catch-up-disposition-adr.test.ts` (MOTIR-4408) — *each
+  // disposition MATCHES the amendment*, which read §11.4 off disk and held the
+  // registry against it. It moved because its SUBJECT is a `docs/**` file, and
+  // a guard whose subject is a document has to run on the one diff shape this
+  // file cannot: `ci.yml`'s `changes` job reads a documentation-only pull
+  // request as `app=false` and skips the sharded Vitest job entirely, so the
+  // §11.4 edit that falsifies that assertion was the one edit never to execute
+  // it. The docs-guard lane runs unconditionally and has no database, and THIS
+  // file needs one — `@/lib/db`, `../helpers/adminDb` and a file-scoped
+  // `beforeEach` truncation — so only the assertion moved, not the file.
+  //
+  // The block's three assertions are still three different KINDS and still
+  // check each other: one holds at compile time (above), one walks the real
+  // registry (above), and one reads the record itself (there). Neither the code
+  // nor the document can move alone.
 
   it('carries `catchUp` on the registered definition, beside the cron it qualifies', () => {
     // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT IT WAS (MOTIR-3418). It read "does

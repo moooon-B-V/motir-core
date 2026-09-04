@@ -291,6 +291,13 @@ const PUSH_LANE = [
   // something a bypassed merge should be able to skip. It measured 1m2s in CI,
   // so the invariant above is intact — the lane's length is still `lint`'s.
   'orchestrator',
+  // The docs-guard lane (MOTIR-4408), here for the same reason the two guard
+  // lanes above it are: it carries no `if:`, because a lane that exists to run
+  // on the diff shape every other lane skips is not something a bypassed merge
+  // should be able to skip either. Its cost is an install, a `prisma generate`
+  // and ~2 s of vitest over seven specs, so the deploy-starvation window this
+  // list also measures is not materially widened — `build` remains the pole.
+  'docs-guards',
   'build',
 ];
 /**

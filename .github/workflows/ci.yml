@@ -775,6 +775,65 @@ jobs:
           HUSKY: '0'
       - run: pnpm vitest run --config vitest.design.config.ts
 
+  # MOTIR-4408 — the DOCS-GUARD lane, and the third instance of one mechanism.
+  #
+  # The `changes` job above reads a pull request touching only `docs/**` as
+  # `app=false`, and the sharded Vitest job, the coverage merge and the E2E legs
+  # are gated on that boolean. THAT CLASSIFICATION IS CORRECT and this card does
+  # not change it: prose about the application has no app code to exercise, and
+  # making the most common cheap diff in this repository pay for twelve Vitest
+  # legs, their Postgres and a coverage merge would be a real cost for nothing.
+  #
+  # The defect was on the other side. EIGHT specs in `tests/**` read a `docs/**`
+  # file as their SUBJECT — the §4b surface ladder from two sides, the
+  # permission inventory from three, the MCP tool count, the catch-up ADR, and
+  # the reader-facing-noun sweep — and seven of the eight lived in the lane a
+  # `docs/**` diff switches off. So each ran on every pull request except the
+  # ones that could break it: delete a §4b row and `CI complete` passed having
+  # executed none of the guards written to catch that edit. (The eighth is
+  # already held by `design-guards`, which is why this job runs seven and the
+  # rule its guard enforces is *an* unconditional lane rather than *this* one.)
+  #
+  # Same remedy as `design-guards` one diff class over (MOTIR-2441 /
+  # MOTIR-2442), and deliberately so — that lane is the shape that worked.
+  # `tests/ci-docs-guards-lane.test.ts` guards this job's presence, its absent
+  # `if:`, and the DERIVED completeness of the lane's membership, so the next
+  # docs-reading guard cannot be written outside an unconditional lane.
+  #
+  # `prisma generate` and NO Postgres, deliberately. Nothing in the lane opens a
+  # database — `vitest.docs.config.ts` sets a `DATABASE_URL` that points at a
+  # port nothing listens on, so a spec that tried would fail loudly — but
+  # `catch-up-disposition-adr.test.ts` holds ADR §11.4 against the job registry,
+  # and importing that registry reaches `@/generated/prisma/client` at module
+  # scope. Generating a client is local codegen against a schema file; standing
+  # up a database is what makes the sharded job expensive, and that stays out.
+  docs-guards:
+    name: Docs guards
+    runs-on: ubuntu-latest
+    # No observation yet — this job is new. Sized against `design-guards`, the
+    # lane it is modelled on, whose install-plus-vitest shape it shares with one
+    # extra `prisma generate`: 10 minutes, the same ceiling, to be re-derived
+    # from its own first green runs per MOTIR-3569's bar rather than left as a
+    # projection. A ceiling is not a performance target.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-docs-guards
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-docs-guards.outputs.cache-hit != 'true'
+        env:
+          HUSKY: '0'
+      - run: pnpm prisma generate
+      - run: pnpm test:docs-guards
+
   build:
     name: Next.js build
     runs-on: ubuntu-latest
@@ -2062,6 +2121,7 @@ jobs:
         typecheck,
         design-system,
         design-guards,
+        docs-guards,
         cli,
         orchestrator,
         build,
