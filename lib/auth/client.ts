@@ -16,7 +16,23 @@ import { passkeyClient } from '@better-auth/passkey/client';
 // BETTER_AUTH_URL (the server var) — that one isn't exposed to the browser
 // and would be undefined at runtime, silently falling back to current origin.
 
-export const authClient = createAuthClient({
+// ⚠️ THE CLIENT'S TYPE IS WRITTEN DOWN, AND THE ANNOTATION IS LOAD-BEARING
+// (MOTIR-4293) — the same reason `lib/auth/index.ts` names its options, and
+// this file is the harder half: the inferred client type is not merely
+// UNNAMEABLE, it is too long for `tsc` to serialize at all (TS7056 alongside
+// TS2742), so the module emits no declaration and the app project's build stops.
+// `createAuthClient` is generic over its options and only the plugin TUPLE
+// shapes what the client exposes, so naming that tuple reproduces exactly the
+// type inference produced — the assignment below is what proves it, and
+// `twoFactor` / `passkey` re-exported at the bottom of this file are what would
+// break first if it ever stopped being true.
+export type AuthClient = ReturnType<
+  typeof createAuthClient<{
+    plugins: [ReturnType<typeof twoFactorClient>, ReturnType<typeof passkeyClient>];
+  }>
+>;
+
+export const authClient: AuthClient = createAuthClient({
   baseURL: process.env['NEXT_PUBLIC_BETTER_AUTH_URL'] ?? '',
   // twoFactorClient (Story MOTIR-1213 · Subtask MOTIR-1217) is the browser half
   // of the server's `twoFactor` plugin: it types `authClient.twoFactor.*`

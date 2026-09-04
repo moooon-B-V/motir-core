@@ -68,6 +68,13 @@ export const fixtureService = {
     return fixtureRepository.findWidget(id);
   },
 
+  // (D') the same finding through a read whose fallback names `dbRead`
+  //      (MOTIR-4295). A FINDING, and the one that proves the widened recogniser
+  //      bites rather than merely not-crashing.
+  async noContextViaDbRead(id: string) {
+    return fixtureRepository.findWidgetViaDbRead(id);
+  },
+
   // (E) raw SQL, no context. A FINDING — the policy is on the table, not on the
   //     query style.
   async rawNoContext(id: string) {

@@ -3,7 +3,7 @@ import {
   type AutomationRuleExecution,
   type AutomationExecutionStatus,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 /** A rule execution joined to the triggering item's key + title (the audit-log
  * read shape). `workItem` is null when the item was deleted after the run
@@ -38,7 +38,7 @@ export const automationRuleExecutionRepository = {
     eventId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
-    const row = await (tx ?? db).automationRuleExecution.findFirst({
+    const row = await (tx ?? dbRead).automationRuleExecution.findFirst({
       where: { ruleId, eventId },
       select: { id: true },
     });
@@ -84,7 +84,7 @@ export const automationRuleExecutionRepository = {
     opts: { skip: number; take: number },
     tx?: Prisma.TransactionClient,
   ): Promise<AutomationRuleExecutionWithItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.automationRuleExecution.findMany({
       where: { ruleId },
       orderBy: { createdAt: 'desc' },
@@ -97,7 +97,7 @@ export const automationRuleExecutionRepository = {
   /** Total execution rows for a rule — the audit-log pager's `total`. Read-only
    * (uses the `db` singleton). */
   async countByRule(ruleId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.automationRuleExecution.count({ where: { ruleId } });
   },
 

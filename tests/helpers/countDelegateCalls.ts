@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 // instrument — counting the SINGLETON and any TRANSACTION client alike.
 //
 // ── Why it cannot just spy on `db.<model>.<method>` (MOTIR-2846) ─────────────
-// A repository resolves `(tx ?? db).<model>`. Before a call site is bound, `tx`
+// A repository resolves `(tx ?? dbRead).<model>`. Before a call site is bound, `tx`
 // is undefined and the singleton spy sees every query. Once it IS bound, the
 // read runs on the transaction client — a DIFFERENT object, created inside
 // `db.$transaction` and therefore impossible to spy ahead of time — and the

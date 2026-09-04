@@ -18,12 +18,12 @@ import {
   indexSlotRef,
   type IndexAdmission,
 } from '@/lib/services/codeGraphIndexAdmissionService';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import {
+  FLEET_CONTAINER_SIZE,
   OrchestratorImageUnpullableError,
   OrchestratorNotConfiguredError,
-} from '@/lib/orchestrator/errors';
-import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
+  fakeOrchestrator,
+} from '@motir/orchestrator';
 import { RepoTarballUrlNotRedirectedError, RepoTarballUrlUnsupportedError } from '@/lib/git';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';

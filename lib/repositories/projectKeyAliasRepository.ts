@@ -1,5 +1,5 @@
 import { Prisma, type ProjectKeyAlias } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Project-key-alias repository — single Prisma operations on the
 // `project_key_alias` table (Story 6.8 · Subtask 6.8.1). A row records a
@@ -40,7 +40,7 @@ export const projectKeyAliasRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectKeyAlias[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectKeyAlias.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },

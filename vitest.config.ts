@@ -1086,19 +1086,17 @@ export default defineConfig({
         // an invoice or as another tenant's CI — so the branch that decides each
         // one is the only place the guarantee is checkable at all.
         //
-        // The PORT is included alongside the services on purpose: §4 calls the
-        // swappable interface "the single most load-bearing output: it is what
-        // makes this decision reversible", and an adapter half of which is
-        // unexercised is an interface with one caller rather than a port.
-        'lib/orchestrator/types.ts',
+        // ⚠️ THE PORT ITSELF LEFT THIS GATE, AND ITS FLOOR WENT WITH IT
+        // (MOTIR-4299). Ten of the eleven files that used to be listed here are
+        // now `packages/orchestrator/src/**` and are gated by that package's own
+        // `vitest.config.ts` at the SAME ≥90 per-file floor, run by `ci.yml`'s
+        // `orchestrator` job. The reason they were listed is unchanged — §4 calls
+        // the swappable interface "the single most load-bearing output: it is
+        // what makes this decision reversible", and an adapter half of which is
+        // unexercised is an interface with one caller rather than a port — so the
+        // gate MOVED rather than being dropped. What stays here is the one file
+        // that did not move: the app's COMPOSITION ROOT.
         'lib/orchestrator/index.ts',
-        'lib/orchestrator/errors.ts',
-        'lib/orchestrator/rates.ts',
-        'lib/orchestrator/usage.ts',
-        'lib/orchestrator/usageSink.ts',
-        'lib/orchestrator/adapters/fake/index.ts',
-        'lib/orchestrator/adapters/fly/index.ts',
-        'lib/orchestrator/adapters/fly/flyMachines.ts',
         // Story MOTIR-1916 · MOTIR-2006 — THE BOOT PREFLIGHT, joining the same
         // surface for the same reason, stated at its sharpest by the fault it
         // exists to catch: MOTIR-1980's fleet shipped code-complete and unable to
@@ -1106,7 +1104,6 @@ export default defineConfig({
         // "configured". The preflight is the one thing that would have said
         // otherwise, so an unexercised branch in it is the guarantee going
         // missing exactly where it went missing before.
-        'lib/orchestrator/imagePull.ts',
         'lib/services/fleetPreflightService.ts',
         // Story MOTIR-1981 · MOTIR-1992 — THE INDEX FLEET, joining the gate for
         // the reason §6 states: this path's whole output is a `job_run` row that
@@ -1123,7 +1120,6 @@ export default defineConfig({
         'lib/services/codeGraphIndexAdmissionService.ts',
         'lib/jobs/indexFleetSteps.ts',
         'lib/jobs/definitions/codeGraphIndex.ts',
-        'lib/orchestrator/adapters/fly/indexImage.ts',
         'lib/ciFleet/config.ts',
         'lib/ciFleet/limits.ts',
         'lib/ciFleet/workloads.ts',
@@ -2675,15 +2671,7 @@ export default defineConfig({
         },
         // Story MOTIR-1916 · MOTIR-1927 — the rest of the fleet (see the
         // include list for why the port ships gated alongside the services).
-        'lib/orchestrator/types.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/orchestrator/index.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/errors.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/rates.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/usage.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/usageSink.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fake/index.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fly/index.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fly/flyMachines.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1981 · MOTIR-1992 — the index fleet (see the include list).
         'lib/services/codeGraphIndexDispatchService.ts': {
           branches: 90,
@@ -2697,7 +2685,6 @@ export default defineConfig({
         },
         'lib/jobs/indexFleetSteps.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/codeGraphIndex.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fly/indexImage.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/config.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/limits.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/workloads.ts': { branches: 90, functions: 90, lines: 90 },

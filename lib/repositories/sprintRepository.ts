@@ -1,5 +1,12 @@
 import { Prisma, type Sprint, type SprintState } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
+
+/**
+ * The `Sprint` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.SprintUncheckedUpdateInput` itself is named only here.
+ */
+export type SprintUpdateInput = Prisma.SprintUncheckedUpdateInput;
 
 // Data access for the `sprint` table (Story 4.1 · Subtask 4.1.2). Single-
 // Prisma-op leaves per CLAUDE.md — no business logic, no DTO mapping, no
@@ -32,7 +39,7 @@ export const sprintRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Sprint | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprint.findFirst({ where: { id, workspaceId } });
   },
 
@@ -49,7 +56,7 @@ export const sprintRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Sprint[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprint.findMany({ where: { id: { in: ids }, workspaceId } });
   },
 
@@ -65,7 +72,7 @@ export const sprintRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Sprint | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprint.findFirst({
       where: { projectId, workspaceId, state: 'active' },
     });
@@ -104,7 +111,7 @@ export const sprintRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Sprint[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprint.findMany({
       where: { projectId, workspaceId },
       orderBy: { sequence: 'asc' },
@@ -127,7 +134,7 @@ export const sprintRepository = {
     limit: number,
     tx?: Prisma.TransactionClient,
   ): Promise<Sprint[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprint.findMany({
       where: { projectId, workspaceId, state: 'complete' },
       orderBy: [{ completedAt: 'desc' }, { sequence: 'desc' }],
@@ -145,7 +152,7 @@ export const sprintRepository = {
     state: SprintState,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprint.count({ where: { projectId, workspaceId, state } });
   },
 
@@ -159,7 +166,7 @@ export const sprintRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const result = await client.sprint.aggregate({
       where: { projectId, workspaceId },
       _max: { sequence: true },
@@ -186,11 +193,7 @@ export const sprintRepository = {
    * REQUIRED; the caller (sprintsService) has already tenant-gated the sprint by
    * id + workspaceId, so this is a plain id-keyed update.
    */
-  async update(
-    id: string,
-    data: Prisma.SprintUncheckedUpdateInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<Sprint> {
+  async update(id: string, data: SprintUpdateInput, tx: Prisma.TransactionClient): Promise<Sprint> {
     return tx.sprint.update({ where: { id }, data });
   },
 

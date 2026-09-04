@@ -395,8 +395,17 @@ jobs:
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
-    # Observed 2.0–2.6 min → 10 (~4x, the short-job floor).
-    timeout-minutes: 10
+    # Observed 2.0–2.6 min for the old single `tsc --noEmit`. `tsc -b` also
+    # EMITS the app project's declarations, which is what the tests and scripts
+    # projects consume: measured locally at 151 s cold against 68 s for the old
+    # command on the same box (2.2x), so the same job should land near 4.5–5.7
+    # min. Ceiling raised 10 → 15 to keep ~2.6x headroom over that estimate
+    # rather than ~1.7x over a number nobody has observed yet (MOTIR-4293).
+    # ⚠️ RE-DERIVE THIS FROM THE FIRST GREEN RUNS: the durations above are a
+    # projection from one box, and MOTIR-3569's bar asks for the job's own
+    # observed range. A ceiling is not a performance target — if this lane hits
+    # 15 minutes, ask whether the work grew or the runner wedged.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -423,20 +432,98 @@ jobs:
       # Prisma client is generated, not committed — typecheck needs it.
       - run: pnpm prisma generate
         if: steps.cache-prisma-typecheck.outputs.cache-hit != 'true'
-      # ⚠️ THE HEAP IS RAISED IN THE `typecheck` SCRIPT (MOTIR-3878, 2026-09-03),
-      # for the reason the `build` job's comment below gives for `next build`,
-      # and this job crossed the same edge a story later. Measured on one box,
-      # same toolchain, same node_modules, `tsc --noEmit --extendedDiagnostics`
-      # used 4.19GB on `main` — node's default old-space is ~4.1GB — and 5.08GB
-      # with MOTIR-3878 on top: ONE Prisma model and 52 files, whose own check
-      # time is 1.7s of 98s. The tree had grown to the edge; the next story to
-      # add a model would have crossed it whichever one that was. The failure
-      # reads `Ineffective mark-compacts near heap limit` with no file named —
-      # a real type error prints the file and the diagnostic. Set in the script
-      # rather than as `env:` here so a local `pnpm typecheck` gets it too;
-      # package.json cannot carry a comment, which is why the reasoning lives
-      # at this call site.
-      - run: pnpm typecheck
+      # ⚠️ THE WORKSPACE PACKAGES ARE BUILT HERE, UNCONDITIONALLY, AND THE
+      # `if:` TWO STEPS UP IS WHY (MOTIR-4292, 2026-09-03).
+      #
+      # `components/ui/*` and `components/brand/*` are four-line re-export shims
+      # over `@motir/design-system` / `@motir/brand` (MOTIR-1527), and a workspace
+      # link resolves to `packages/<pkg>`, whose `exports` point at `./dist`.
+      # `dist` is git-ignored, so a fresh checkout has none: it is built by the
+      # ROOT `postinstall`. On a node_modules CACHE HIT the install above is
+      # skipped, the postinstall never runs, and the type-check then answers
+      # `TS2305: Module '"@/components/ui/Button"' has no exported member
+      # 'Button'` — dozens of times, across app files the diff never touched.
+      # It reads exactly like a broken tree and is a missing build step.
+      #
+      # Measured on this pull request's first run: install skipped on a cache
+      # hit, and the same errors reproduce locally by moving
+      # `packages/design-system/dist` aside. The `design-system` and `cli` jobs
+      # have always avoided this by carrying NO node_modules cache at all — their
+      # comments give the same reason — and this job keeps the cache and pays 25 s
+      # for the build instead.
+      #
+      # `-r --filter './packages/*'` rather than three named packages: a fourth
+      # workspace package is then covered without anybody remembering this step
+      # exists, and `-r` skips a package that declares no `build`.
+      # `tests/ci-typecheck-headroom.test.ts` pins that this step is here.
+      - run: pnpm -r --filter './packages/*' build
+      # ⚠️ THE HEAP BUMP IS GONE FROM THIS LANE (MOTIR-4293, 2026-09-03), AND
+      # THAT IS THE MEASUREMENT — a split that still needed the bump would have
+      # proven nothing. `pnpm typecheck` is now `tsc -b tsconfig.solution.json`:
+      # three project references — an app project (what `next build` reads), a
+      # tests project and a scripts project — so the ceiling is the LARGEST
+      # project rather than the sum of all of them.
+      #
+      # ── The two readings, one box, same toolchain, same node_modules ────────
+      # BEFORE, as ONE `tsc --noEmit` program (`--extendedDiagnostics`):
+      #   4.19 GB on `main` at `8ebc62f0d`, 5.08 GB with MOTIR-3878's branch on
+      #   top at `f6f8695c7`, and 4.42 GB at `9c077d4c1` (that story merged).
+      #   Node 22's default old-space on the same box is ~4.05 GB, so the last
+      #   of those was ALREADY over the line — which is why MOTIR-3878's own
+      #   pull request died here with `Ineffective mark-compacts near heap
+      #   limit` and no file named (a real type error prints the file).
+      # AFTER, as `tsc -b tsconfig.solution.json --extendedDiagnostics` with
+      # NODE_OPTIONS unset, per project (one cold build, 102 s):
+      #   app      5520 files   2.72 GB   67% of the default
+      #   scripts  1999 files   1.95 GB   48%
+      #   tests    7149 files   3.59 GB   89%   ← the ceiling
+      # The tests project reads the app through its EMITTED DECLARATIONS
+      # (`.tsout/app/**/*.d.ts`), which is why 1814 test files cost less than
+      # the bodies they exercise. See `tsconfig.base.json` for the shape.
+      #
+      # ⚠️ THE TESTS PROJECT IS UNDER THE DEFAULT HEAP BUT NOT COMFORTABLY —
+      # 89%, and MOTIR-4294's headroom tripwire fails at 80%. That gap is the
+      # NEXT two subtasks' work, not slack: MOTIR-4295 gives the repositories
+      # explicit row types and MOTIR-4296 confines Prisma's payload/input
+      # generics to `lib/repositories/**`, and BOTH land in the app project's
+      # emitted declarations — which is the 1.95 GB every other project pays
+      # before it reads a file of its own (the scripts project is 116 files and
+      # 5.6M instantiations, and that is where they come from). If the ceiling
+      # is still over 80% once those have landed, the answer is another project
+      # boundary inside `tests/`, and it is measured before it is drawn.
+      #
+      # ⚠️ EVERY FURTHER BUMP MOVES THE CLIFF; NONE REMOVES IT. Two jobs in this
+      # file took one within a fortnight (`build` at MOTIR-1789, this one at
+      # MOTIR-3878). If this lane is ever short of heap again, the answer is
+      # another project boundary — not a bigger number.
+      #
+      # ── AND THE NUMBER IS NOW READ, WHICH IS THE WHOLE POINT (MOTIR-4294) ────
+      # `assert-typecheck-headroom.mjs` SUBSUMES `pnpm typecheck`: it builds every
+      # project in the solution — one process each, dependencies first, at the
+      # DEFAULT heap — and fails when any reading exceeds **90%** of the heap it
+      # runs under, naming the project and both numbers. Its exit code is this
+      # step's, so a type error still fails the lane exactly as before, with the
+      # compiler's own output.
+      #
+      # ⚠️ 90%, NOT the 80% the card asked for, and the number is DERIVED. 80% was
+      # reasoned in the pre-split world, where one story (MOTIR-3878) moved the
+      # single program by 0.9 GB — 22 points. After the split a story does not do
+      # that: ~50 new test files are 2.7% of the tests project's bodies, about ONE
+      # point. Measured here: ceiling 84.6% (the tests project), run-to-run spread
+      # ~1.5 points, one story ~1 point. 80% is below the floor the tree already
+      # stands on — it would fail on arrival, and a lane that is red before anyone
+      # has done anything is a broken gate, not a warning. 90% clears the spread,
+      # leaves roughly five stories of growth as warning, and still fires with
+      # ~0.4 GB of real heap left. The script's own header carries the derivation
+      # and `tests/ci-typecheck-headroom.test.ts` pins that this step runs it.
+      #
+      # ⚠️ ONE PROCESS PER PROJECT is a measurement decision, not plumbing. A
+      # single `tsc -b tsconfig.solution.json` builds all four in ONE process, so
+      # its later `Memory used` lines carry the earlier projects' retained memory
+      # — 92% on this tree, which is the SUM the split exists to remove rather
+      # than any project's own cost. `pnpm typecheck` still does that (it is one
+      # command and it passes), and this step is what reports the honest number.
+      - run: node scripts/ci/assert-typecheck-headroom.mjs
 
   design-system:
     name: Design-system package
@@ -507,6 +594,47 @@ jobs:
       # confusing runtime failure inside a spawned child process over there.
       - run: pnpm --filter @motir/cli build
       - run: pnpm --filter @motir/cli test:coverage
+
+  orchestrator:
+    name: Orchestrator package
+    runs-on: ubuntu-latest
+    # No healthy run on record yet — this job is new (MOTIR-4299). Sized on the
+    # `design-system` / `cli` jobs it is modelled on, whose observed range is
+    # 1.1–1.6 min over the same install-then-build-then-vitest shape, and which
+    # both take the 10-minute short-job floor. Re-derive it from this lane's own
+    # runs once there are four, per MOTIR-3569's bar.
+    timeout-minutes: 10
+    # Same gap as the two package jobs above, and the reason `@motir/orchestrator`
+    # needed one the day it was extracted: its suite lives at
+    # `packages/orchestrator/test/**`, which the root Vitest lane does NOT glob
+    # (`vitest.config.ts`'s `include` is `tests/**`), so those three specs — the
+    # rate table and the usage arithmetic, the fake adapter, the Fly adapter's
+    # request shaping and state mapping — would have stopped gating a merge at
+    # the moment they moved out of `tests/ciFleet/`. It also carries the per-FILE
+    # coverage floor those files used to have in the root gate, which is the half
+    # of an extraction that goes missing quietly.
+    #
+    # Pure unit tests: no Postgres, no Next app, no `prisma generate`. The
+    # package has no Prisma dependency at all, which is asserted by
+    # `tests/packages/importDirection.test.ts` and is why this lane needs none of
+    # that setup.
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      # No node_modules cache here, for the reason the `cli` job gives: the
+      # shared key covers only the ROOT node_modules, while a filtered run also
+      # needs packages/orchestrator/node_modules, and a cache hit would skip the
+      # install that creates it.
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+      - run: pnpm --filter @motir/orchestrator typecheck
+      - run: pnpm --filter @motir/orchestrator build
+      - run: pnpm --filter @motir/orchestrator test -- --coverage
 
   # ── The design-asset guards (MOTIR-2442) ──────────────────────────────────
   # The one lane in this file with NO branch-prefix `if:`, and that absence is
@@ -636,6 +764,12 @@ jobs:
       # ephemeral Postgres service container.
       - run: pnpm prisma generate
         if: steps.cache-prisma-build.outputs.cache-hit != 'true'
+      # ⚠️ THE PACKAGES' `dist` IS GIT-IGNORED AND BUILT BY THE ROOT `postinstall`,
+      # which the cache-hit `if:` above skips — so on a warm runner this lane
+      # resolves `@motir/*` against a directory that does not exist. It is
+      # UNCONDITIONAL for that exact reason. See `tests/ci-package-build.test.ts`,
+      # which pins this step in every lane that resolves a package at run time.
+      - run: pnpm -r --filter './packages/*' build
       # ⚠️ THE BUILD'S HEAP IS RAISED IN THE `build` SCRIPT, and it is worth
       # knowing why here, because this is the job that goes red. `next build`
       # COMPILES and then runs TypeScript in a build worker, and node's default
@@ -649,15 +783,25 @@ jobs:
       # 54 added files. The tree had simply grown to the edge, and the next story
       # to land would have crossed it whichever one that was.
       #
-      # The `typecheck` job above WAS the tell: it runs the SAME `tsc --noEmit`
-      # and passed, because it pays for the type check alone. Only the build
-      # paid for both, so only the build needed the ceiling raised — until
-      # MOTIR-3878 (2026-09-03), when the check alone reached the default heap
-      # and that job's script took the same ceiling; its comment carries the
-      # numbers. It is set in the `build` script rather than as `env:` here so
-      # that Vercel — which runs that script too — gets it as well;
-      # package.json cannot carry a comment, which is why the reasoning lives
-      # at this call site.
+      # The `typecheck` job above WAS the tell: it runs the SAME type check and
+      # passed, because it pays for the check alone. Only the build paid for
+      # both, so only the build needed the ceiling raised — until MOTIR-3878
+      # (2026-09-03), when the check alone reached the default heap and that
+      # job's script took the same ceiling.
+      #
+      # ⚠️ THAT JOB HAS SINCE GIVEN THE CEILING BACK (MOTIR-4293, the same day).
+      # It no longer runs one `tsc` over the whole repository: `pnpm typecheck`
+      # builds `tsconfig.solution.json`, three project references whose largest
+      # member measures 3.50 GB against a ~4.05 GB default. Its comment carries
+      # the per-project numbers. THIS bump stays, and the asymmetry is the point
+      # — `next build` runs TypeScript in a build WORKER on top of the compile,
+      # in one process, over the app project alone. Splitting the program did
+      # not split that worker.
+      #
+      # It is set in the `build` script rather than as `env:` here so that
+      # Vercel — which runs that script too — gets it as well; package.json
+      # cannot carry a comment, which is why the reasoning lives at this call
+      # site.
       - run: pnpm build
       # MOTIR-3219 — the WHOLE-PROJECT-TRACE gate. Turbopack traces each server
       # entry's files into a `*.nft.json`, and `copyTracedFiles` ships exactly
@@ -882,6 +1026,12 @@ jobs:
       - run: pnpm prisma generate
         if: steps.cache-prisma-test.outputs.cache-hit != 'true'
       - run: pnpm prisma migrate deploy
+      # ⚠️ THE PACKAGES' `dist` IS GIT-IGNORED AND BUILT BY THE ROOT `postinstall`,
+      # which the cache-hit `if:` above skips — so on a warm runner this lane
+      # resolves `@motir/*` against a directory that does not exist. It is
+      # UNCONDITIONAL for that exact reason. See `tests/ci-package-build.test.ts`,
+      # which pins this step in every lane that resolves a package at run time.
+      - run: pnpm -r --filter './packages/*' build
       # Run this leg of the test suite, COLLECTING coverage into a per-leg blob
       # report (MOTIR-1711). `--config vitest.collect.config.ts` is the base
       # vitest.config.ts with the per-file thresholds STRIPPED (a leg only
@@ -1773,6 +1923,7 @@ jobs:
         design-system,
         design-guards,
         cli,
+        orchestrator,
         build,
         test,
         coverage,

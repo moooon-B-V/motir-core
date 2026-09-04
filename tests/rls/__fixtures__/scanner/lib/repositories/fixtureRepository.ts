@@ -15,6 +15,10 @@ interface Client {
 }
 
 declare const db: Client;
+// The SAME client under a narrower type (MOTIR-4295) — what `lib/db.ts` exports
+// as `dbRead` so a `tx ?? dbRead` fallback does not form a union of two whole
+// Prisma clients. Declared here for the same reason `db` is.
+declare const dbRead: Omit<Client, '$transaction'>;
 
 export const fixtureRepository = {
   // (1) UNBOUND read of a workspace-scoped model — the scanner MUST flag this.
@@ -43,5 +47,21 @@ export const fixtureRepository = {
   // (5) `$transaction` / `$disconnect` are not reads. MUST NOT be flagged.
   async notARead() {
     return db.$transaction(async () => undefined);
+  },
+
+  // (6) BINDABLE through `dbRead` (MOTIR-4295) — the same fallback under the
+  //     narrowed client. MUST NOT be flagged, for exactly the reason (2) is not:
+  //     a scanner that read only `db` would have called all 247 swept sites
+  //     newly unbound, which is the loudest possible way to be wrong.
+  async findWidgetBindableViaDbRead(id: string, tx?: Client) {
+    const client = tx ?? dbRead;
+    return client.widget.findUnique({ where: { id } });
+  },
+
+  // (7) UNBOUND through `dbRead`. MUST be flagged: the narrowing is a fact about
+  //     the TYPE, not about the tenant GUC, so a bare read off it is as blind as
+  //     (1). This is the half a name-keyed scanner silently loses.
+  async findWidgetUnboundViaDbRead(id: string) {
+    return dbRead.widget.findUnique({ where: { id } });
   },
 };

@@ -1,5 +1,5 @@
 import { Prisma, type EstimationStatistic, type WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the `sprint_report_entry` table
 // (bug-sprint-report-incomplete-list-zero-after-carry-over). Single-Prisma-op
@@ -63,7 +63,7 @@ export const sprintReportEntryRepository = {
     completed: boolean,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprintReportEntry.count({
       where: { sprintId, workspaceId, completed },
     });
@@ -87,7 +87,7 @@ export const sprintReportEntryRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     const { completed, take, cursor } = params;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.sprintReportEntry.findMany({
       where: { sprintId, workspaceId, completed },
       orderBy: [{ backlogRank: 'asc' }, { workItemId: 'asc' }],
@@ -112,7 +112,7 @@ export const sprintReportEntryRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.sprintReportEntry.count({
       where: { sprintId, workspaceId, addedAfterStart: true },
     });
@@ -144,7 +144,7 @@ export const sprintReportEntryRepository = {
         : statistic === 'story_points'
           ? Prisma.sql`COALESCE(w."storyPoints", 0)`
           : Prisma.sql`COALESCE(w."estimateMinutes", 0)`;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ completed: number; not_completed: number }>>`
       SELECT COALESCE(SUM(${stat}) FILTER (WHERE e."completed"), 0)::float8 AS "completed",
              COALESCE(SUM(${stat}) FILTER (WHERE NOT e."completed"), 0)::float8 AS "not_completed"

@@ -1,5 +1,5 @@
 import { Prisma, type CustomFieldValue } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Custom-field-value repository — single Prisma operations on the typed-EAV
 // `custom_field_value` table (Story 5.3 · Subtask 5.3.1), the shape Jira's
@@ -45,7 +45,7 @@ export const customFieldValueRepository = {
    * item's FOR UPDATE lock. Served by the [workItemId, fieldId] unique.
    */
   /**
-   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? dbRead` fallback until every
    * caller bound its read; the arm then had no caller, so it was dead code that
    * returned an EMPTY result under `motir_app` and raised nothing — the exact
    * silent failure this cutover exists to remove. A branch that cannot be
@@ -124,7 +124,7 @@ export const customFieldValueRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldValue[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldValue.findMany({
       where: { workItemId, workspaceId },
     });
@@ -142,7 +142,7 @@ export const customFieldValueRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldValue.count({ where: { fieldId, workspaceId } });
   },
 
@@ -155,7 +155,7 @@ export const customFieldValueRepository = {
    * no query.
    */
   /**
-   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? dbRead` fallback until every
    * caller bound its read; the arm then had no caller, so it was dead code that
    * returned an EMPTY result under `motir_app` and raised nothing — the exact
    * silent failure this cutover exists to remove. A branch that cannot be
@@ -186,7 +186,7 @@ export const customFieldValueRepository = {
    * with no query. Served by [fieldId, valueOptionId]'s second column.
    */
   /**
-   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? dbRead` fallback until every
    * caller bound its read; the arm then had no caller, so it was dead code that
    * returned an EMPTY result under `motir_app` and raised nothing — the exact
    * silent failure this cutover exists to remove. A branch that cannot be
@@ -222,7 +222,7 @@ export const customFieldValueRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldValue.count({
       where: { valueOptionId: optionId, workspaceId },
     });

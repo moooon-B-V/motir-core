@@ -2,15 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getOrchestrator,
   isOrchestratorConfigured,
+  recordContainerUsage,
   selectedOrchestratorProvider,
 } from '@/lib/orchestrator';
-import { flyOrchestrator } from '@/lib/orchestrator/adapters/fly';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
-import { OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
-import { recordContainerUsage } from '@/lib/orchestrator/usageSink';
-import { buildContainerUsage } from '@/lib/orchestrator/usage';
-import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
-import type { ContainerHandle, UsageAttribution } from '@/lib/orchestrator/types';
+import {
+  FLEET_CONTAINER_SIZE,
+  OrchestratorNotConfiguredError,
+  buildContainerUsage,
+  fakeOrchestrator,
+  flyOrchestrator,
+  type ContainerHandle,
+  type UsageAttribution,
+} from '@motir/orchestrator';
 
 // The COMPOSITION ROOT and the usage SINK (Story MOTIR-1916 · MOTIR-1921).
 //

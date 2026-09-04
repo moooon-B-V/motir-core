@@ -20,7 +20,11 @@ import { assertValidParent, allowedParentKinds, type IssueType } from '@/lib/iss
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { promoteIfCiAlreadyGreen } from './ciPromotion';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type WorkItemCreateInput,
+  type WorkItemUpdateInput,
+} from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { labelRepository } from '@/lib/repositories/labelRepository';
@@ -1400,7 +1404,7 @@ export const workItemsService = {
         }
       }
 
-      const data: Prisma.WorkItemUncheckedCreateInput = {
+      const data: WorkItemCreateInput = {
         workspaceId,
         projectId: input.projectId,
         parentId: input.parentId ?? null,
@@ -1851,7 +1855,7 @@ export const workItemsService = {
         }
       }
 
-      const update: Prisma.WorkItemUncheckedUpdateInput = {};
+      const update: WorkItemUpdateInput = {};
       const diff: Record<string, DiffCell> = {};
 
       // Plain scalar fields (string / nullable-string / number / enum):
@@ -2584,7 +2588,7 @@ export const workItemsService = {
     // sets it). The revision diff stays status-only — `sessionBranch` is dispatch
     // bookkeeping, not a content edit, so it never lands in the activity feed (and
     // keeping it out avoids the activity totality guard).
-    const update: Prisma.WorkItemUncheckedUpdateInput = { status: toStatusKey };
+    const update: WorkItemUpdateInput = { status: toStatusKey };
     if (target.category === 'done') {
       update.sessionBranch = null;
       // Manual implementation lane (MOTIR-1685, docs/decisions/work-item-provenance.md):
@@ -3387,7 +3391,7 @@ export const workItemsService = {
         return { dto: toWorkItemDto(current), movedBetween: null }; // true no-op
       }
 
-      const update: Prisma.WorkItemUncheckedUpdateInput = {
+      const update: WorkItemUpdateInput = {
         parentId: targetParentId,
         position: newPosition,
       };

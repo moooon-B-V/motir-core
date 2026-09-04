@@ -8,7 +8,7 @@ import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';

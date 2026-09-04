@@ -1,5 +1,5 @@
 import { Prisma, type DashboardWidget } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import type { DashboardWidgetWithNames } from '@/lib/mappers/dashboardMappers';
 
 // Dashboard-widget data access (Story 6.3 · Subtask 6.3.1). Single Prisma
@@ -22,7 +22,7 @@ export const dashboardWidgetRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<DashboardWidgetWithNames[]> {
     if (!dashboardId) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.dashboardWidget.findMany({
       where: { dashboardId },
       include: namesInclude,
@@ -38,7 +38,7 @@ export const dashboardWidgetRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<DashboardWidgetWithNames | null> {
     if (!dashboardId || !widgetId) return null;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.dashboardWidget.findFirst({
       where: { id: widgetId, dashboardId },
       include: namesInclude,
@@ -55,7 +55,7 @@ export const dashboardWidgetRepository = {
    * delete would STALE (SetNull, never cascade). Pure read. */
   async countBySavedFilter(savedFilterId: string, tx?: Prisma.TransactionClient): Promise<number> {
     if (!savedFilterId) return 0;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.dashboardWidget.count({ where: { savedFilterId } });
   },
 

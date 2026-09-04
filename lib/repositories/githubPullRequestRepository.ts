@@ -5,7 +5,7 @@ import {
   type GithubPullRequest,
   type GithubRepo,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // GitHub pull-request repository — single Prisma operations on the
 // `github_pull_request` table (Story 7.10 · MOTIR-891). `repoId` is the INTERNAL
@@ -249,7 +249,7 @@ export const githubPullRequestRepository = {
     headRef: string,
     tx?: Prisma.TransactionClient,
   ): Promise<GithubPullRequestWithChecks[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.githubPullRequest.findMany({
       where: { headRef },
       include: { checkRuns: true },
@@ -361,7 +361,7 @@ export const githubPullRequestRepository = {
     take: number,
     tx?: Prisma.TransactionClient,
   ): Promise<GithubPullRequestCandidate[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const trimmed = query.trim();
     const asNumber = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
     const match: Prisma.GithubPullRequestWhereInput[] = [
@@ -478,7 +478,7 @@ export const githubPullRequestRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<GithubPullRequestWithRepo[]> {
     if (paths.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.githubPullRequest.findMany({
       where: {
         repo: { is: { workspaceId } },

@@ -1,5 +1,5 @@
 import type { CodeGraphOffboarding, Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the CODE-GRAPH OFFBOARDING QUEUE (MOTIR-2166 ·
 // `docs/decisions/code-graph-index-fleet.md` §14.5) — one row per pending removal
@@ -119,7 +119,7 @@ export const codeGraphOffboardingRepository = {
     coreProjectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CodeGraphOffboarding[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.codeGraphOffboarding.findMany({
       where: { coreWorkspaceId, coreProjectId },
       orderBy: { dueAt: 'asc' },

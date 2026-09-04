@@ -1,0 +1,45 @@
+{
+  "name": "@motir/orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The container-orchestrator port for Motir's CI runner fleet: the ContainerHandle/ContainerUsage types, the cost rates, the usage sink, and the Fly and fake adapters. The app binds its ports at lib/orchestrator/index.ts.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moooon-B-V/motir-core.git",
+    "directory": "packages/orchestrator"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -b tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.19",
+    "tsup": "^8.5.0",
+    "typescript": "^5",
+    "vitest": "^4.1.7"
+  }
+}

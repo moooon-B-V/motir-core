@@ -13,10 +13,13 @@ import {
 } from '@/lib/repositories/ciContainerUsageSliceRepository';
 import { periodStartFor } from '@/lib/ciMetering/period';
 import { containerWorkloadFor, FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
-import { buildContainerAccrual } from '@/lib/orchestrator/usage';
-import { recordContainerAccrual, recordContainerUsage } from '@/lib/orchestrator/usageSink';
+import {
+  buildContainerAccrual,
+  type ContainerAccrual,
+  type ContainerUsage,
+} from '@motir/orchestrator';
+import { recordContainerAccrual, recordContainerUsage } from '@/lib/orchestrator';
 import { withSystemContext } from '@/lib/workspaces/context';
-import type { ContainerAccrual, ContainerUsage } from '@/lib/orchestrator/types';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';

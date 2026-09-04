@@ -20,7 +20,7 @@ import {
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { FLEET_TIME_BUDGETS } from '@/lib/services/ciRunnerBootService';
 import { SCHEDULE_CLUSTER_MINUTES } from '@/lib/jobs/schedules';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';

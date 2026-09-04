@@ -9,7 +9,7 @@ import {
   type WorkItemPriority,
   type WorkItemType,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { db, dbRead } from '@/lib/db';
 import { PUBLIC_NOT_SHIPPED_DONE_KEY } from '@/lib/publicProjects/shippedStatus';
 import type { BuiltInFilterFieldId, FilterAst, FilterCondition } from '@/lib/filters/ast';
 import {
@@ -21,6 +21,20 @@ import {
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
+
+/**
+ * The `WorkItem` create shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.WorkItemUncheckedCreateInput` itself is named only here.
+ */
+export type WorkItemCreateInput = Prisma.WorkItemUncheckedCreateInput;
+
+/**
+ * The `WorkItem` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.WorkItemUncheckedUpdateInput` itself is named only here.
+ */
+export type WorkItemUpdateInput = Prisma.WorkItemUncheckedUpdateInput;
 import {
   CrossProjectParentError,
   DepthLimitExceededError,
@@ -578,7 +592,7 @@ function pointsAggExpr(
 
 export const workItemRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<WorkItem | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findUnique({ where: { id } });
   },
 
@@ -664,7 +678,7 @@ export const workItemRepository = {
       deliveries: Array<{ id: string }>;
     }>
   > {
-    return (tx ?? db).workItem.findMany({
+    return (tx ?? dbRead).workItem.findMany({
       where: {
         projectId,
         workspaceId,
@@ -737,7 +751,7 @@ export const workItemRepository = {
     identifier: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findUnique({
       where: { projectId_identifier: { projectId, identifier } },
     });
@@ -758,7 +772,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (identifiers.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: { projectId, identifier: { in: identifiers } },
     });
@@ -800,7 +814,7 @@ export const workItemRepository = {
    */
   async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({ where: { id: { in: ids } } });
   },
 
@@ -820,7 +834,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({ where: { id: { in: ids }, workspaceId } });
   },
 
@@ -986,7 +1000,7 @@ export const workItemRepository = {
     }>
   > {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.workItem.findMany({
       where: { id: { in: ids } },
       select: {
@@ -1021,7 +1035,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: { sessionBranch, workspaceId },
       orderBy: { key: 'asc' },
@@ -1057,7 +1071,7 @@ export const workItemRepository = {
       parentIds === null
         ? Prisma.sql`w."parentId" IS NULL`
         : Prisma.sql`w."parentId" = ANY(${parentIds})`;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<ReadyLayerRow[]>`
       SELECT w.*,
              ws."category"::text AS "statusCategory",
@@ -1104,7 +1118,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ identifier: string; title: string; kind: string; priority: string }>> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<
       Array<{ identifier: string; title: string; kind: string; priority: string }>
     >`
@@ -1385,7 +1399,7 @@ export const workItemRepository = {
     options: { limit: number; cursor?: TriageQueueCursor },
     tx?: Prisma.TransactionClient,
   ): Promise<TriageQueueRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     // The snooze cutoff is a BOUND `Date` param, not SQL `NOW()`: Prisma stores
     // `DateTime` as a naive-UTC `timestamp` (no tz), so a `timestamp <= now()
     // [timestamptz]` comparison reinterprets the column through the session
@@ -1637,7 +1651,7 @@ export const workItemRepository = {
     const excludeSql = excludeIds.length
       ? Prisma.sql`AND w."id" <> ALL(${excludeIds})`
       : Prisma.empty;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<WorkItem[]>`
       SELECT w.*
         FROM "work_item" w
@@ -1723,7 +1737,7 @@ export const workItemRepository = {
     parentId: string | null,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: { projectId, parentId, archivedAt: null },
       orderBy: { position: 'asc' },
@@ -1747,7 +1761,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.count({
       where: { projectId, workspaceId, parentId, archivedAt: null },
     });
@@ -1765,7 +1779,7 @@ export const workItemRepository = {
     filter: { kind?: WorkItemKind; status?: string; assigneeId?: string | null } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: {
         projectId,
@@ -1795,7 +1809,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (kinds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       // triagedAt: null — a triage item is never a candidate parent (read-exclusion, 6.11.3).
       where: {
@@ -1824,7 +1838,7 @@ export const workItemRepository = {
     title: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findFirst({
       where: { projectId, kind, title, archivedAt: null },
       orderBy: { key: 'asc' },
@@ -1845,7 +1859,7 @@ export const workItemRepository = {
     options: { take?: number; cursor?: string; excludeIds?: readonly string[] } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { take = 50, cursor, excludeIds } = options;
     return client.workItem.findMany({
       where: {
@@ -1889,7 +1903,7 @@ export const workItemRepository = {
       projectId: string;
     }>
   > {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: { projectId, workspaceId, archivedAt: null, triagedAt: null },
       select: {
@@ -1930,7 +1944,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<string[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ id: string }>>`
       WITH RECURSIVE hidden AS (
         SELECT c."id", c."parentId"
@@ -1987,7 +2001,7 @@ export const workItemRepository = {
     statusKey: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.count({ where: { projectId, status: statusKey } });
   },
 
@@ -2004,7 +2018,7 @@ export const workItemRepository = {
     statusKey: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({ where: { projectId, status: statusKey } });
   },
 
@@ -2013,7 +2027,7 @@ export const workItemRepository = {
    * `position`. One level only — for the full subtree use `findSubtree`.
    */
   async findChildren(parentId: string, tx?: Prisma.TransactionClient): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       // triagedAt: null is a no-op in practice (a triage item is always
       // parentless, so never a child) but documents + enforces the read-exclusion
@@ -2031,7 +2045,7 @@ export const workItemRepository = {
    * `$queryRaw` returns the plain enum label.
    */
   async findSubtree(rootId: string, tx?: Prisma.TransactionClient): Promise<WorkItemSubtreeRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
@@ -2078,7 +2092,7 @@ export const workItemRepository = {
     maxDepth: number,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemSubtreeRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
@@ -2134,7 +2148,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ id: string; identifier: string; status: string; parentId: string | null }>> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<
       Array<{ id: string; identifier: string; status: string; parentId: string | null }>
     >`
@@ -2197,7 +2211,7 @@ export const workItemRepository = {
     // only children were archived reads as the leaf it now is — the same live
     // slice `findSubtreeMembersForValidity` walks, rather than a second opinion
     // about what a child is.
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
       select: {
@@ -2243,7 +2257,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ id: string; type: string | null }>> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
       select: { id: true, type: true },
@@ -2266,7 +2280,7 @@ export const workItemRepository = {
     rootId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ kind: WorkItemKind; count: number }>> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ kind: WorkItemKind; count: number }>>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."archivedAt", 1 AS depth
@@ -2307,7 +2321,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ rootId: string; total: number; done: number; verified: number }>> {
     if (rootIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     // `verified` (Subtask 7.10.6 / MOTIR-894) rides the SAME recursive CTE as
     // done/total — the Story-level "N of M verified" roll-up is NOT a parallel
     // aggregation, it is one extra `COUNT(... FILTER)` over the subtree that
@@ -2359,7 +2373,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<WorkItem[]>`
       WITH RECURSIVE ancestors AS (
         SELECT w.*, 0 AS depth
@@ -2394,7 +2408,7 @@ export const workItemRepository = {
   ): Promise<Map<string, string[]>> {
     const byItem = new Map<string, string[]>(itemIds.map((id) => [id, []]));
     if (itemIds.length === 0) return byItem;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ seedId: string; ancestorId: string }>>`
       WITH RECURSIVE chain AS (
         SELECT w."id" AS "seedId", w."parentId" AS "ancestorId"
@@ -2447,7 +2461,7 @@ export const workItemRepository = {
     }>
   > {
     if (parentIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.workItem.findMany({
       where: {
         parentId: { in: parentIds },
@@ -2503,7 +2517,7 @@ export const workItemRepository = {
     filter: RepoIssueFilter = {},
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemForestRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     // The facet axes, as a bound-param predicate over the forest alias `f`
     // (shared with the flat List read — see buildIssueFilterSql). The 6.1.1
     // AST axis is stripped here and compiled over a joined full `work_item`
@@ -2594,7 +2608,7 @@ export const workItemRepository = {
     page?: { limit: number; offset: number },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemListRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const orderCol = ISSUE_SORT_SQL[sort.column];
     const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
     // Server-side window (Subtask 2.5.12): the List is LIMIT/OFFSET-paged so it
@@ -2660,7 +2674,7 @@ export const workItemRepository = {
     page: { after?: { createdAt: Date; id: string }; limit: number },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemKeysetRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     // "Strictly after this position" in `(createdAt, id)` order — the standard
     // tuple comparison, spelled out rather than using the row-constructor form
     // so both halves bind as PARAMETERS.
@@ -2708,7 +2722,7 @@ export const workItemRepository = {
     filter: RepoIssueFilter = {},
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const matched = buildIssueFilterSql(filter, 'w');
     const rows = await client.$queryRaw<Array<{ count: number }>>`
       SELECT COUNT(*)::int AS "count"
@@ -2750,7 +2764,7 @@ export const workItemRepository = {
     page: { limit: number; offset: number },
     tx?: Prisma.TransactionClient,
   ): Promise<ArchivedWorkItemRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<ArchivedWorkItemRow[]>`
       SELECT w."id",
              w."kind"::text       AS "kind",
@@ -2800,7 +2814,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ count: number }>>`
       SELECT COUNT(*)::int AS "count"
         FROM "work_item" w
@@ -2861,7 +2875,7 @@ export const workItemRepository = {
     opts: { excludeIds?: readonly string[] } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<{ todo: number; in_progress: number; done: number }> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ category: string; count: number }>>`
       SELECT ws."category"::text AS "category", COUNT(*)::int AS "count"
         FROM "work_item" w
@@ -2949,7 +2963,7 @@ export const workItemRepository = {
     done: number;
     lastChangedAt: Date | null;
   }> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { reviewStatusKey, implementedStatusKey } = ladderKeys;
     const rows = await client.$queryRaw<
       Array<{
@@ -3033,7 +3047,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.count({
       where: { projectId, workspaceId, archivedAt: null, triagedAt: { not: null } },
     });
@@ -3083,7 +3097,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (statusKeys.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
 
     // Advanced filter active (Story 6.15.2): AND the compiled FilterAST (alias
     // `w`) into the column read. The AST can't be expressed through the Prisma
@@ -3184,7 +3198,7 @@ export const workItemRepository = {
     sprintId: string | null = null,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemTreeRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const orderCol = ISSUE_SORT_SQL[sort.column];
     const dir = sort.direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`;
     // Sprint scope (MOTIR-1381): the ROOT level is re-rooted at the TOPMOST
@@ -3266,7 +3280,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
     ids?: readonly string[] | undefined,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     // The SAME level predicate `findProjectTreeLevel` builds, sprint arm included
     // (MOTIR-3490). A count taken with a different predicate than the read it
     // reports on is worse than no count: the roadmap's truncation tile says
@@ -3320,7 +3334,7 @@ export const workItemRepository = {
     excludeIds: readonly string[],
     tx?: Prisma.TransactionClient,
   ): Promise<PublicWorkItemTreeRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const parentPred =
       parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
 
@@ -3427,7 +3441,7 @@ export const workItemRepository = {
     excludeIds: readonly string[],
     tx?: Prisma.TransactionClient,
   ): Promise<PublicChangelogRow[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     // Projected only for the feed (see `PublicChangelogRow.descriptionMd`).
     const descriptionSql = options.withDescription
       ? Prisma.sql`w."descriptionMd" AS "descriptionMd",`
@@ -3524,7 +3538,7 @@ export const workItemRepository = {
     excludeIds: readonly string[],
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const parentPred =
       parentId === null ? Prisma.sql`w."parentId" IS NULL` : Prisma.sql`w."parentId" = ${parentId}`;
     const rows = await client.$queryRaw<Array<{ count: bigint }>>`
@@ -3544,10 +3558,7 @@ export const workItemRepository = {
    * kind-parent matrix + depth on insert; their SQLSTATE-23514 rejections and
    * a P2002 unique violation are translated to typed errors here.
    */
-  async create(
-    data: Prisma.WorkItemUncheckedCreateInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<WorkItem> {
+  async create(data: WorkItemCreateInput, tx: Prisma.TransactionClient): Promise<WorkItem> {
     try {
       return await tx.workItem.create({ data });
     } catch (err) {
@@ -3607,7 +3618,7 @@ export const workItemRepository = {
     // No filter → the fragment is `TRUE`, so the counts are byte-for-byte the
     // 3.3.4 aggregate. Read-exclusion (6.11.3): a triage item never counts.
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ assigneeId: string | null; count: number }>>`
       SELECT w."assigneeId" AS "assigneeId", COUNT(*)::int AS "count"
         FROM "work_item" w
@@ -3640,7 +3651,7 @@ export const workItemRepository = {
     // string value (= the WorkItemPriority union members), so the shape matches
     // the prior `groupBy` result. No filter → `TRUE` (byte-for-byte 3.3.4).
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ priority: WorkItemPriority; count: number }>>`
       SELECT w."priority"::text AS "priority", COUNT(*)::int AS "count"
         FROM "work_item" w
@@ -3682,7 +3693,7 @@ export const workItemRepository = {
     // is structural) — so the epic lanes/counts track the FILTERED board. No
     // filter → `TRUE` (byte-for-byte the 3.3.4 epic aggregate).
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ epicId: string; count: number }>>`
       WITH RECURSIVE up AS (
         SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
@@ -3723,7 +3734,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
     const astSql = compileFilterConditionsSql(ast, referents);
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ ok: number }>>`
       SELECT 1 AS ok FROM "work_item" w
       WHERE w."id" = ${workItemId} AND (${astSql})
@@ -3755,7 +3766,7 @@ export const workItemRepository = {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ bucket: string; count: number }>>`
       SELECT
         to_char(date_trunc(${period}, w."createdAt"), 'YYYY-MM-DD') AS "bucket",
@@ -3804,7 +3815,7 @@ export const workItemRepository = {
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
     const { idExpr, labelExpr, joinSql } = distributionGroupBySql(groupBy);
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ id: string | null; label: string | null; count: number }>>`
       SELECT ${idExpr} AS "id", ${labelExpr} AS "label", COUNT(*)::int AS "count"
       FROM "work_item" w
@@ -3844,7 +3855,7 @@ export const workItemRepository = {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<
       Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>
     >`
@@ -3882,7 +3893,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ cardId: string; epicId: string }>> {
     if (itemIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ cardId: string; epicId: string }>>`
       WITH RECURSIVE up AS (
         SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
@@ -3906,7 +3917,7 @@ export const workItemRepository = {
    */
   async update(
     id: string,
-    patch: Prisma.WorkItemUncheckedUpdateInput,
+    patch: WorkItemUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<WorkItem> {
     try {
@@ -4058,7 +4069,7 @@ export const workItemRepository = {
     statistic: EstimationStatistic,
     tx?: Prisma.TransactionClient,
   ): Promise<{ committed: number; completed: number }> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const committed = pointsAggExpr(statistic, 'w', false);
     const completed = pointsAggExpr(statistic, 'w', true);
     const rows = await client.$queryRaw<Array<{ committed: number; completed: number }>>`
@@ -4097,7 +4108,7 @@ export const workItemRepository = {
         : statistic === 'story_points'
           ? Prisma.sql`COALESCE(SUM(w."storyPoints")${startedFilter}, 0)`
           : Prisma.sql`COALESCE(SUM(w."estimateMinutes")${startedFilter}, 0)`;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ started: number }>>`
       SELECT ${expr}::float8 AS "started"
         FROM "work_item" w
@@ -4127,7 +4138,7 @@ export const workItemRepository = {
     statistic: EstimationStatistic,
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ status: string; points: number }>> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const points = pointsAggExpr(statistic, 'w', false);
     return client.$queryRaw<Array<{ status: string; points: number }>>`
       SELECT w."status" AS "status",
@@ -4156,7 +4167,7 @@ export const workItemRepository = {
     statistic: EstimationStatistic,
     tx?: Prisma.TransactionClient,
   ): Promise<{ total: number }> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const total = pointsAggExpr(statistic, 's', false);
     const rows = await client.$queryRaw<Array<{ total: number }>>`
       WITH RECURSIVE subtree AS (
@@ -4200,7 +4211,7 @@ export const workItemRepository = {
     },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { take, cursor, excludeStatusKeys = [], filter } = options;
 
     // Advanced filter active (Subtask 8.8.17): AND the compiled FilterAST (alias
@@ -4289,7 +4300,7 @@ export const workItemRepository = {
     filter?: { ast: FilterAst; referents?: ProjectFilterReferents },
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
 
     // Filtered total (Subtask 8.8.17): COUNT over the SAME base predicates as
     // `findBacklogPage`'s raw read with the compiled FilterAST AND-ed in, so the
@@ -4345,7 +4356,7 @@ export const workItemRepository = {
     },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { take, cursor, filter } = options;
 
     // Advanced filter active (Subtask 8.8.20): AND the compiled FilterAST (alias
@@ -4404,7 +4415,7 @@ export const workItemRepository = {
     filter?: { ast: FilterAst; referents?: ProjectFilterReferents },
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
 
     // Filtered total (Subtask 8.8.20): COUNT over the SAME base predicates as
     // `findSprintIssues`'s raw read with the compiled FilterAST AND-ed in.
@@ -4441,7 +4452,7 @@ export const workItemRepository = {
     excludeStatusKeys: string[],
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: {
         sprintId,
@@ -4468,7 +4479,7 @@ export const workItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Prisma.Decimal | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const result = await client.workItem.aggregate({
       where: { sprintId, workspaceId, archivedAt: null },
       _sum: { storyPoints: true },
@@ -4498,7 +4509,7 @@ export const workItemRepository = {
     params: { statusKeys: string[]; include: boolean; take: number; cursor?: string },
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { take, cursor } = params;
     return client.workItem.findMany({
       where: {
@@ -4526,7 +4537,7 @@ export const workItemRepository = {
     params: { statusKeys: string[]; include: boolean },
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.count({
       where: {
         sprintId,
@@ -4551,7 +4562,7 @@ export const workItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ id: string; backlogRank: string | null }>> {
     if (itemIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItem.findMany({
       where: { id: { in: itemIds }, workspaceId },
       select: { id: true, backlogRank: true },
@@ -4574,7 +4585,7 @@ export const workItemRepository = {
     edge: 'min' | 'max',
     tx?: Prisma.TransactionClient,
   ): Promise<string | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const row = await client.workItem.findFirst({
       where: { projectId, workspaceId, sprintId, archivedAt: null },
       orderBy: { backlogRank: edge === 'min' ? 'asc' : 'desc' },

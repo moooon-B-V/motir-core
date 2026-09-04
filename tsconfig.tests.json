@@ -1,0 +1,41 @@
+{
+  // ── The TESTS project (MOTIR-4293) ──────────────────────────────────────────
+  //
+  // 1814 files that import almost all of `lib/`. Checked on its own it would be
+  // nearly the whole tree again — which is why it REFERENCES the app project
+  // instead of including it: `@/lib/x` redirects to `.tsout/app/lib/x.d.ts`, so
+  // this program pays for its own bodies plus the app's declarations.
+  //
+  // The four vitest configs and the three Playwright configs live here because
+  // they are the tests' own entry points, and each file belongs to EXACTLY ONE
+  // project — a file in two composite projects is emitted twice and checked twice.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/tests",
+    "tsBuildInfoFile": ".tsout/tests/tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "tests/**/*.mts",
+    "vitest.config.ts",
+    "vitest.collect.config.ts",
+    "vitest.design.config.ts",
+    "vitest.guards.config.ts",
+    "playwright.config.ts",
+    "playwright.acceptance.config.ts",
+    "playwright.cloud.config.ts"
+  ],
+  "exclude": ["node_modules", "packages", ".tsout"],
+  // BOTH, because a test importing `@/scripts/plan-seed/…` (the seed fixtures) or
+  // `../../scripts/deployFreshness.mjs` must redirect into the scripts project
+  // rather than pull those files into this program as sources of its own — a file
+  // belongs to exactly one project.
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.scripts.json" }]
+}

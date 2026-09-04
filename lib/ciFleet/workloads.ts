@@ -2,6 +2,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import type { CiContainerWorkload } from '@/lib/repositories/ciContainerUsageRepository';
+import type { FleetWorkloadKind } from '@motir/orchestrator';
 
 // THE FLEET WORKLOAD REGISTRY (Story MOTIR-1916 · MOTIR-1997) — the list of
 // everything that can be running a container on Motir's fleet, and where each
@@ -32,20 +33,22 @@ import type { CiContainerWorkload } from '@/lib/repositories/ciContainerUsageRep
 // an array.
 
 /**
- * Every kind of container the fleet can be running.
+ * Every kind of container the fleet can be running — DECLARED BY THE PACKAGE and
+ * re-exported here (MOTIR-4299).
  *
- * All three are declared NOW, before two of them ship, and that is deliberate:
- * the seam has to exist before the workload does, or the workload lands and the
- * ceiling silently does not see it — exactly how the runner-only ceiling stopped
- * being a bound.
+ * The union is the orchestrator port's own vocabulary (three of its types carry
+ * a `workload` field, and every adapter tags a machine with it), so it moved
+ * into `@motir/orchestrator` with the port. What stays here is the half that
+ * could not go: the COUNTERS below need repositories and a transaction, and a
+ * package may not import the app.
+ *
+ * ⚠️ THE TOTALITY GUARD IS STILL THIS FILE'S `Record<FleetWorkloadKind, …>`, and
+ * the move does not weaken it by one inch: a member added to the union in the
+ * package without a counter here is a COMPILE error, in this file, on the next
+ * type-check. Do not weaken it to a `Partial`, a lookup with a fallback, or an
+ * array.
  */
-export type FleetWorkloadKind =
-  /** MOTIR-1921/1922: one ephemeral GitHub Actions runner per queued job. */
-  | 'ci_runner'
-  /** MOTIR-1981/1990: one container per code-graph index run. */
-  | 'code_graph_index'
-  /** Epic 9: one container per hosted agent run. */
-  | 'hosted_agent';
+export type { FleetWorkloadKind };
 
 export interface FleetWorkload {
   readonly kind: FleetWorkloadKind;

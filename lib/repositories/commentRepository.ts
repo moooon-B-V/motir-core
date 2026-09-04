@@ -1,5 +1,5 @@
 import { Prisma, type Comment } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Comment repository — single Prisma operations on the `comment` table
 // (Story 5.1 · Subtask 5.1.1). The persistence leaf under commentsService
@@ -93,7 +93,7 @@ export const commentRepository = {
   },
 
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<Comment | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.comment.findUnique({ where: { id } });
   },
 
@@ -119,7 +119,7 @@ export const commentRepository = {
     options: { take?: number; cursor?: string; order?: 'asc' | 'desc' } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<CommentWithReplies[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { take = 20, cursor, order = 'desc' } = options;
     return client.comment.findMany({
       where: { workItemId, parentCommentId: null },
@@ -197,7 +197,7 @@ export const commentRepository = {
    * `db` singleton.
    */
   async countByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.comment.count({ where: { workItemId } });
   },
 
@@ -226,7 +226,7 @@ export const commentRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<{ workItemId: string; count: number }[]> {
     if (workItemIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.comment.groupBy({
       by: ['workItemId'],
       where: { workItemId: { in: workItemIds }, workspaceId },
@@ -242,7 +242,7 @@ export const commentRepository = {
    * when read inside the delete transaction.
    */
   async countByParent(parentCommentId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.comment.count({ where: { parentCommentId } });
   },
 
@@ -252,7 +252,7 @@ export const commentRepository = {
    * another page" is a root count, not a total count).
    */
   async countRootsByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.comment.count({ where: { workItemId, parentCommentId: null } });
   },
 
@@ -265,7 +265,7 @@ export const commentRepository = {
    * transaction.
    */
   async listReplies(parentCommentId: string, tx?: Prisma.TransactionClient): Promise<Comment[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.comment.findMany({
       where: { parentCommentId },
       orderBy: { createdAt: 'asc' },
@@ -285,7 +285,7 @@ export const commentRepository = {
     text: string,
     tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const row = await client.comment.findFirst({
       where: { workItemId, bodyMd: { contains: text } },
       select: { id: true },
@@ -307,7 +307,7 @@ export const commentRepository = {
    * `applyStatusTransition`'s transaction, where the row is already
    * `FOR UPDATE`-locked and the workspace binding is set — so the read must see
    * THAT snapshot (a comment posted in the same transaction counts), and the
-   * `tx ?? db` arm every optional-`tx` read carries would have no caller at all.
+   * `tx ?? dbRead` arm every optional-`tx` read carries would have no caller at all.
    */
   async listBodiesByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<string[]> {
     const rows = await tx.comment.findMany({

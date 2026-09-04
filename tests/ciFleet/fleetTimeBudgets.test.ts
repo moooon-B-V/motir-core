@@ -5,7 +5,7 @@ import {
   ciRunnerBootService,
 } from '@/lib/services/ciRunnerBootService';
 import { RUNNER_JIT_REQUEST_TIMEOUT_MS } from '@/lib/github/runnerJitConfig';
-import { ORCHESTRATOR_REQUEST_TIMEOUT_MS } from '@/lib/orchestrator/errors';
+import { ORCHESTRATOR_REQUEST_TIMEOUT_MS } from '@motir/orchestrator';
 
 // THE FLEET'S TIME BUDGETS (MOTIR-2007; re-based by MOTIR-3418).
 //

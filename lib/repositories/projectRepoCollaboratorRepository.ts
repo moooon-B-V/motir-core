@@ -1,5 +1,5 @@
 import { Prisma, type ProjectRepoCollaborator } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Single Prisma operations on `project_repository_collaborator` — ONE person's
 // access to ONE repository Motir made (Story MOTIR-1775 · MOTIR-1910).
@@ -34,7 +34,7 @@ export const projectRepoCollaboratorRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectRepoCollaborator[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectRepoCollaborator.findMany({
       where: { projectRepoId, workspaceId },
       orderBy: { createdAt: 'asc' },
@@ -56,7 +56,7 @@ export const projectRepoCollaboratorRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<ProjectRepoCollaborator[]> {
     if (projectRepoIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.projectRepoCollaborator.findMany({
       where: { projectRepoId: { in: projectRepoIds }, workspaceId },
       orderBy: { createdAt: 'asc' },

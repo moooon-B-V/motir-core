@@ -426,8 +426,10 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
       .sort();
 
     expect(keys).toEqual([
-      // (1) unbound read of a workspace-scoped model, and (4) raw SQL.
+      // (1) unbound read of a workspace-scoped model, (7) the same through the
+      // narrowed `dbRead` client, and (4) raw SQL.
       'fixtureRepository.ts#findWidgetUnbound',
+      'fixtureRepository.ts#findWidgetUnboundViaDbRead',
       'fixtureRepository.ts#rawUnbound',
     ]);
 
@@ -441,6 +443,13 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
       'fixtureRepository.ts#findGlobalSetting',
     );
     expect(keys, '$transaction is not a read').not.toContain('fixtureRepository.ts#notARead');
+    // MOTIR-4295, both directions. `dbRead` is `db` under a narrower TYPE, so the
+    // scanner must read it exactly as it reads `db`: a fallback through it is
+    // bindable, and a BARE read off it is unbound. Keying on one name only would
+    // have gone quiet on 247 swept call sites without a single assertion failing.
+    expect(keys, 'a `tx ?? dbRead` read is bindable, not unbound').not.toContain(
+      'fixtureRepository.ts#findWidgetBindableViaDbRead',
+    );
   });
 
   it('the scanner actually finds the reads it is pointed at (a live negative)', () => {

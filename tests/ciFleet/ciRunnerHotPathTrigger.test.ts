@@ -11,7 +11,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { ciRunnerProvisionSweep } from '@/lib/jobs/definitions/ciRunnerFleet';
 import { ciRunnerBootEvent, dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';

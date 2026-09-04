@@ -1,0 +1,70 @@
+# Captured from a real run on this repository (MOTIR-4294):
+#   node_modules/.bin/tsc -b tsconfig.tests.json --extendedDiagnostics
+# The TESTS project — the largest of the four, and the one a lowered heap
+# puts OVER the line.
+Files:                         7139
+Lines of Library:             53142
+Lines of Definitions:        849893
+Lines of TypeScript:         563697
+Lines of JavaScript:              0
+Lines of JSON:                14976
+Lines of Other:                   0
+Identifiers:                2083155
+Symbols:                    3113806
+Types:                      1754735
+Instantiations:             7672472
+Memory used:               3576854K
+Assignability cache size:    581411
+Identity cache size:          44547
+Subtype cache size:           53986
+Strict subtype cache size:    13254
+I/O Read time:                1.91s
+Parse time:                   3.03s
+ResolveModule time:           1.30s
+ResolveTypeReference time:    0.01s
+ResolveLibrary time:          0.02s
+Program time:                 7.02s
+Bind time:                    1.53s
+Check time:                  37.41s
+transformTime time:           0.56s
+Source Map time:              0.02s
+commentTime time:             0.05s
+I/O Write time:               0.85s
+printTime time:               1.83s
+Emit time:                    1.85s
+Total time:                  47.81s
+Projects in scope:                          3
+Projects built:                             1
+Aggregate Files:                         7139
+Aggregate Lines of Library:             53142
+Aggregate Lines of Definitions:        849893
+Aggregate Lines of TypeScript:         563697
+Aggregate Lines of JavaScript:              0
+Aggregate Lines of JSON:                14976
+Aggregate Lines of Other:                   0
+Aggregate Identifiers:                2083155
+Aggregate Symbols:                    3113806
+Aggregate Types:                      1754735
+Aggregate Instantiations:             7672472
+Aggregate Memory used:               3576854K
+Aggregate Assignability cache size:    581411
+Aggregate Identity cache size:          44547
+Aggregate Subtype cache size:           53986
+Aggregate Strict subtype cache size:    13254
+Aggregate I/O Read time:                1.91s
+Aggregate Parse time:                   3.03s
+Aggregate ResolveModule time:           1.30s
+Aggregate ResolveTypeReference time:    0.01s
+Aggregate ResolveLibrary time:          0.02s
+Aggregate Program time:                 7.02s
+Aggregate Bind time:                    1.53s
+Aggregate Check time:                  37.41s
+Aggregate transformTime time:           0.56s
+Aggregate Source Map time:              0.02s
+Aggregate commentTime time:             0.05s
+Aggregate I/O Write time:               0.85s
+Aggregate printTime time:               1.83s
+Aggregate Emit time:                    1.85s
+Config file parsing time:               0.26s
+Up-to-date check time:                  0.08s
+Build time:                            48.93s

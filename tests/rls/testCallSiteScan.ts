@@ -185,8 +185,14 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
     'behaviour is proved separately, under the role, in the *-rls suites.',
 };
 
-/** Client identifiers a repository method may address a model through. */
-const CLIENTS = new Set(['db', 'tx', 'client', 'adminDb', 't']);
+/** Client identifiers a repository method may address a model through.
+ *
+ * `dbRead` (MOTIR-4295) is the module-scope client under a narrower TYPE — the
+ * same object as `db`, minus `$transaction`, so a `tx ?? dbRead` fallback does
+ * not hand every call a union of two whole Prisma clients (`lib/db.ts` carries
+ * the measurement). Nothing about binding differs, so it belongs in this set for
+ * exactly the reason `db` does. */
+const CLIENTS = new Set(['db', 'dbRead', 'tx', 'client', 'adminDb', 't']);
 
 /**
  * The identifiers `testSingletonStatementScan` treats as a client. It is a
@@ -194,7 +200,7 @@ const CLIENTS = new Set(['db', 'tx', 'client', 'adminDb', 't']);
  * here so both scanners share ONE unwrapping rule (the MOTIR-2911 fix) and
  * differ only in the set of names, which is the part that legitimately differs.
  */
-export const SINGLETON_ONLY = new Set(['db']);
+export const SINGLETON_ONLY = new Set(['db', 'dbRead']);
 
 export type TestCallSiteVerdict =
   /** Gated, bindable today, and this call passes no `tx`. THE STORY'S WORK. */

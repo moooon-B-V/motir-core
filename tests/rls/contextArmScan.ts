@@ -533,7 +533,7 @@ export function repositoryQueryModels(
           (p) => ts.isIdentifier(p.name) && p.name.text === 'tx',
         );
         if (takesTx) {
-          const found = queryModels(node.body, ['tx', 'client', 'db', 'c'], map, tables);
+          const found = queryModels(node.body, ['tx', 'client', 'db', 'dbRead', 'c'], map, tables);
           if (found.models.size > 0 || found.raw) {
             out.set(`${repository}.${node.name.text}`, {
               models: [...found.models].sort(),

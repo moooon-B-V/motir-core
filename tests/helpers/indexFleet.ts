@@ -6,7 +6,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { adminDb } from './adminDb';
 
 // THE `system.code-graph-index` TEST WORLD (Story MOTIR-1981 · MOTIR-1992) —

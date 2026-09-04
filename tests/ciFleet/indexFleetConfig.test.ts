@@ -5,12 +5,7 @@ import {
   isOrchestratorConfigured,
   OrchestratorNotConfiguredError,
 } from '@/lib/orchestrator';
-import {
-  flyIndexerImage,
-  isFlyIndexerImageConfigured,
-  requireFlyIndexerImage,
-  INDEXER_IMAGE_ENV_VAR,
-} from '@/lib/orchestrator/adapters/fly/indexImage';
+import { INDEXER_IMAGE_ENV_VAR } from '@motir/orchestrator';
 
 // The INDEX FLEET's config gate (Story MOTIR-1981 · MOTIR-1989).
 //
@@ -51,50 +46,6 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
-});
-
-describe('the indexer image accessor (the Fly-side read)', () => {
-  it('reads MOTIR_INDEXER_IMAGE at CALL time, not module load', () => {
-    expect(flyIndexerImage()).toBeNull();
-    vi.stubEnv(INDEXER_IMAGE_ENV_VAR, 'registry.fly.io/app@sha256:' + 'c'.repeat(64));
-    // Same module instance, different answer — which is what lets a self-hosted
-    // build import this without crashing on boot.
-    expect(flyIndexerImage()).toBe('registry.fly.io/app@sha256:' + 'c'.repeat(64));
-  });
-
-  it('treats a blank / whitespace value as UNSET', () => {
-    vi.stubEnv(INDEXER_IMAGE_ENV_VAR, '   ');
-    expect(flyIndexerImage()).toBeNull();
-    expect(isFlyIndexerImageConfigured()).toBe(false);
-    // An empty string in a deployment's env is the commonest way a variable is
-    // "set" but useless; it must not produce an image reference of `''`.
-    expect(() => requireFlyIndexerImage()).toThrow(OrchestratorNotConfiguredError);
-  });
-
-  it('requireFlyIndexerImage names the variable in its message', () => {
-    expect(() => requireFlyIndexerImage()).toThrow(new RegExp(INDEXER_IMAGE_ENV_VAR));
-  });
-
-  it('requireFlyIndexerImage RETURNS the configured reference on a wired deployment', () => {
-    // The accessor's success path — the half that actually boots a container.
-    // Asserting only the throw leaves the branch that produces the image
-    // reference unexecuted, so a regression returning the variable's NAME, a
-    // trimmed-to-empty value, or the CI runner's image would go unnoticed here
-    // and surface as an image-pull refusal at boot.
-    const reference = 'registry.fly.io/motir-fleet@sha256:' + 'd'.repeat(64);
-    vi.stubEnv(INDEXER_IMAGE_ENV_VAR, `  ${reference}  `);
-    // Trimmed, and it is the DIGEST-pinned mirror reference — never the GHCR one
-    // (`docs/decisions/fleet-image-pull.md` §0: Fly's create payload has no field
-    // for registry auth, so a private third-party image cannot be pulled at all).
-    expect(requireFlyIndexerImage()).toBe(reference);
-    expect(isFlyIndexerImageConfigured()).toBe(true);
-  });
-
-  it('the predicate never throws, whatever the environment', () => {
-    expect(() => isFlyIndexerImageConfigured()).not.toThrow();
-    vi.stubEnv(INDEXER_IMAGE_ENV_VAR, 'x');
-    expect(() => isFlyIndexerImageConfigured()).not.toThrow();
-  });
 });
 
 describe('isIndexFleetConfigured', () => {

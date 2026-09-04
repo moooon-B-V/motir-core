@@ -13,7 +13,7 @@ import {
   resetCodeGraphMockJournal,
 } from '@/lib/test-code-graph-mock';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { stubAppCredentials } from '../helpers/indexFleet';
 import type { IndexAdmission } from '@/lib/services/codeGraphIndexAdmissionService';

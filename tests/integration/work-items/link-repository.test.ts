@@ -412,7 +412,7 @@ describe('workItemLinkRepository.findAnyBetween — any kind, either direction (
       createdById: fx.owner.id,
     });
 
-    // No tx → exercises the `tx ?? db` fallback. The OR matches a→b…
+    // No tx → exercises the `tx ?? dbRead` fallback. The OR matches a→b…
     expect(
       await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
         workItemLinkRepository.findAnyBetween(a.id, b.id, tx),

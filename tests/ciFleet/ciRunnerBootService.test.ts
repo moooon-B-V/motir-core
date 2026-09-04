@@ -10,9 +10,8 @@ import {
   pollWaitMs,
   type PollResult,
 } from '@/lib/services/ciRunnerBootService';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { OrchestratorNotConfiguredError, fakeOrchestrator } from '@motir/orchestrator';
 import * as orchestrator from '@/lib/orchestrator';
-import { OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import {

@@ -11,7 +11,10 @@ import {
   withWorkspaceContext,
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
-import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
+import {
+  migrateOnboardingRepository,
+  type MigrateOnboardingUpdateInput,
+} from '@/lib/repositories/migrateOnboardingRepository';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -102,7 +105,7 @@ const EXIT_REASON: Record<MigrateOnboardingStep, string> = {
  *  the auto-accept timestamp). */
 interface ExitResult {
   ready: boolean;
-  patch?: Prisma.MigrateOnboardingUncheckedUpdateInput;
+  patch?: MigrateOnboardingUpdateInput;
 }
 
 interface StepInput {
@@ -396,7 +399,7 @@ async function commitAdvance(
      *  the reconciliation can hand in a synthesized `{ from: <wherever the run
      *  is>, to: 'done' }` hop, which has no exit poll of its own. */
     wiring: Pick<StepWiring, 'from' | 'to'>;
-    patch?: Prisma.MigrateOnboardingUncheckedUpdateInput;
+    patch?: MigrateOnboardingUpdateInput;
     /** Also re-assert `status` under the lock (the sweep: a run marked `failed`
      *  between the scan and the commit must not be advanced). */
     requireActive?: boolean;

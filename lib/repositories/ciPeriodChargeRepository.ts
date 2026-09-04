@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, type CiPeriodCharge } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the per-period CI CHARGE row (Story MOTIR-1775 · MOTIR-1901) —
 // the entitlement half's only durable state, and the row a charge LOCKS before
@@ -127,7 +127,7 @@ export const ciPeriodChargeRepository = {
     periodStart: Date,
     tx?: Prisma.TransactionClient,
   ): Promise<CiPeriodChargeState | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const row = await client.ciPeriodCharge.findUnique({
       where: { organizationId_periodStart: { organizationId, periodStart } },
     });

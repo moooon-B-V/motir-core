@@ -1,5 +1,5 @@
 import { Prisma, type AutomationRule, type AutomationTriggerType } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Single-op data access for the `automation_rule` table (Story 6.6 · Subtask
 // 6.6.1), per the 4-layer rule: writes require `tx`; reads that guard a write
@@ -25,7 +25,7 @@ export const automationRuleRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<AutomationRuleWithOwner | null> {
-    return (tx ?? db).automationRule.findFirst({
+    return (tx ?? dbRead).automationRule.findFirst({
       where: { id, projectId },
       include: withOwner,
     });
@@ -38,7 +38,7 @@ export const automationRuleRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<AutomationRuleWithOwner[]> {
-    return (tx ?? db).automationRule.findMany({
+    return (tx ?? dbRead).automationRule.findMany({
       where: { projectId },
       include: withOwner,
       orderBy: { createdAt: 'desc' },
@@ -54,7 +54,7 @@ export const automationRuleRepository = {
     triggerType: AutomationTriggerType,
     tx?: Prisma.TransactionClient,
   ): Promise<AutomationRuleWithOwner[]> {
-    return (tx ?? db).automationRule.findMany({
+    return (tx ?? dbRead).automationRule.findMany({
       where: { projectId, triggerType, enabled: true },
       include: withOwner,
       orderBy: { createdAt: 'asc' },

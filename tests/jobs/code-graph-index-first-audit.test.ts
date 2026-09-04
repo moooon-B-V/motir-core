@@ -39,7 +39,7 @@ const { db } = await import('@/lib/db');
 const { codeGraphIndex } = await import('@/lib/jobs/definitions/codeGraphIndex');
 const { firstAuditTriggerService } = await import('@/lib/services/firstAuditTriggerService');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
-const { fakeOrchestrator } = await import('@/lib/orchestrator/adapters/fake');
+const { fakeOrchestrator } = await import('@motir/orchestrator');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const { truncateAuthTables, truncateJobRuns } = await import('../helpers/db');
 const {

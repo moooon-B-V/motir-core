@@ -13,7 +13,7 @@ import {
   indexInFlightCap,
   workspaceIndexInFlightCap,
 } from '@/lib/ciFleet/limits';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { githubProvider } from '@/lib/git/providers/github';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';

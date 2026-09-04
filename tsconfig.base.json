@@ -1,0 +1,50 @@
+{
+  // ── The SHARED compiler options (MOTIR-4293) ────────────────────────────────
+  //
+  // Moved verbatim out of `tsconfig.json`, which used to be the repository's ONE
+  // program: `include: ["**/*.ts", "**/*.tsx", …]` over app code, tests, scripts
+  // and the generated Prisma client together. Checker memory is proportional to
+  // the program, so tests, scripts and product code each paid for the others'
+  // types — 4.19 GB against node 22's ~4.1 GB default old-space, and 5.08 GB with
+  // one more Prisma model on top (MOTIR-3878). Two heap bumps in one repository
+  // (the `build` job at MOTIR-1789, this one at MOTIR-3878) is the tree saying its
+  // SHAPE is wrong, not its heap.
+  //
+  // Nothing extends this file for its own sake. It exists so the four real
+  // projects — `tsconfig.json` (Next's product program), `tsconfig.tests.json`,
+  // `tsconfig.scripts.json` and the composite `tsconfig.app.json` layered on the
+  // first — state one set of options once. `tsconfig.solution.json` composes them.
+  //
+  // ⚠️ `paths` LIVES HERE, and that is load-bearing: `@/*` maps to `./*` relative
+  // to the file that DECLARES it, so every project resolves `@/lib/x` to the same
+  // place. Under `tsc -b` a tests-project import of `@/lib/x` then redirects to
+  // the app project's emitted `.tsout/app/lib/x.d.ts` rather than re-checking the
+  // source — which is the whole point of the split.
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}

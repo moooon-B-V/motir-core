@@ -8,7 +8,7 @@ import {
   type FlyMachine,
 } from './flyMachines';
 import { buildContainerUsage } from '../../usage';
-import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+import type { FleetWorkloadKind } from '../../types';
 import type {
   ContainerHandle,
   ContainerOrchestrator,

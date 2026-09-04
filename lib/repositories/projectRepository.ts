@@ -7,7 +7,7 @@ import {
   type ProjectRepoOwnership,
   type WorkflowPolicyMode,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { db, dbRead } from '@/lib/db';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectSquareRank } from '@/lib/projectSquare/rank';
 
@@ -114,7 +114,7 @@ export const projectRepository = {
    * sees NULL and hides every row under the non-bypass role.
    */
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<Project | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.project.findUnique({ where: { id } });
   },
 
@@ -140,7 +140,7 @@ export const projectRepository = {
     identifier: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Project | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.project.findUnique({
       where: { workspaceId_identifier: { workspaceId, identifier } },
     });
@@ -170,7 +170,7 @@ export const projectRepository = {
    * which is fine for the BYPASSRLS dev/CI role.
    */
   async findByWorkspace(workspaceId: string, tx?: Prisma.TransactionClient): Promise<Project[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.project.findMany({
       where: { workspaceId, archivedAt: null },
       orderBy: { createdAt: 'asc' },
@@ -191,7 +191,7 @@ export const projectRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<string[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.project.findMany({
       where: { workspaceId },
       select: { id: true },
@@ -223,7 +223,7 @@ export const projectRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<{ workspaceId: string; projectId: string }[]> {
     if (pairs.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.project.findMany({
       where: {
         OR: pairs.map((pair) => ({ id: pair.projectId, workspaceId: pair.workspaceId })),
@@ -743,7 +743,7 @@ export const projectRepository = {
     pointScale: PointScale;
     customScaleValues: number[];
   } | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.project.findUnique({
       where: { id },
       select: { estimationStatistic: true, pointScale: true, customScaleValues: true },
@@ -797,7 +797,7 @@ export const projectRepository = {
     aiGenerateExplanations: boolean;
     aiRecordPlanningMistakes: boolean | null;
   } | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.project.findUnique({
       where: { id },
       select: {
@@ -837,7 +837,7 @@ export const projectRepository = {
     autoRollupParentStatus: boolean;
     autoCompleteChildrenOnParentDone: boolean;
   } | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.project.findUnique({
       where: { id },
       select: { autoRollupParentStatus: true, autoCompleteChildrenOnParentDone: true },

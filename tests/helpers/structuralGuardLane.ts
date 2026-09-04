@@ -107,6 +107,45 @@ export const STRUCTURAL_GUARD_SPECS = [
   // It opens no database, renders nothing, and imports only `node:fs` /
   // `node:path`, so it carries no coverage into the merged report.
   'tests/theme/immersiveShellAtmosphere.test.ts',
+  // ── tests/prisma/ — the Prisma TYPE BOUNDARY (MOTIR-4296) ────────────────
+  // The same shape as the three `tests/theme/` entries above, one layer over: a
+  // comment-stripped text walk of `lib/` + `app/` + `components/` asserting that
+  // the generated client's payload and input generics are named only under
+  // `lib/repositories/**`. It opens no database, renders nothing, and imports
+  // only `node:fs` / `node:path`, so it carries no coverage into the merged
+  // report — and its cost is a function of the tree rather than of what else
+  // happens to be running, which is what this lane is for.
+  'tests/prisma/typeBoundary.test.ts',
+  // ── tests/packages/ — the package IMPORT-DIRECTION guard (MOTIR-4299) ─────
+  // The same shape once more, over one more root: it walks every
+  // `packages/<name>/src` tree it discovers plus `lib/` + `app/` +
+  // `components/`, comment-stripped, asserting that no package imports the app
+  // and nothing reaches past a package barrel. No database, no render, and it
+  // imports only `node:fs` / `node:path`.
+  'tests/packages/importDirection.test.ts',
+  // ── tests/ciFleet/ — the fleet PORT BOUNDARY (MOTIR-4299) ─────────────────
+  // ⚠️ IT WAS ALREADY A WHOLE-TREE SCANNER AND WAS ALREADY IN THE SHARDED JOB,
+  // and the reason it moves NOW is that MOTIR-4299 made it bigger: the fly
+  // adapter left `lib/` for `packages/orchestrator/src`, so the guard gained a
+  // fourth scanned root and reads more of the tree than it did. It walks `lib`,
+  // `app`, `components` and the package's `src`, comment-strips every file and
+  // tests seven patterns against every line — the same cost profile as the three
+  // `tests/theme/` entries above, with no database and no coverage to carry.
+  // Found by the census in `tests/typecheck-program/guards-bite.test.ts`, which
+  // asked the question nobody had: is each of this story's guards in a lane where
+  // its cost is a function of the tree rather than of what else is running?
+  'tests/ciFleet/orchestratorPortBoundary.test.ts',
+  // ── tests/typecheck-program/ — the story's guard CENSUS (MOTIR-4300) ──────
+  // ⚠️ IT IS HERE BY DERIVATION, NOT BY COST, and that is worth saying because
+  // the file itself reads five named files and takes ~10 ms. It imports THIS
+  // MODULE — the lane's membership list — and the candidate predicate keys on a
+  // spec importing a module whose TEXT carries a filesystem entry point. This
+  // file's prose is full of the word `readdirSync`, so anything importing it is
+  // a candidate by construction. `tests/ci-structural-guards-lane.test.ts` has
+  // the same property and has always been in the lane, which is why nobody had
+  // met it. Listing it is cheaper than teaching a text predicate to read
+  // comments, and it costs the lane nothing.
+  'tests/typecheck-program/guards-bite.test.ts',
   // ── tests/legal/ — the EGRESS-MANIFEST guard (MOTIR-3631 · MOTIR-4008) ────
   // Same shape once more: a text walk of `lib/` + `app/` for outbound hosts,
   // read against `package.json` and `lib/legal/egressManifest.ts`.

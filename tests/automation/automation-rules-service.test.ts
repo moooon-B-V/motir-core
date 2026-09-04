@@ -347,7 +347,7 @@ describe('list + get', () => {
     expect(list.map((r) => r.id)).toEqual([b.id, a.id]);
 
     // A direct repo read returns the same set. BOUND (MOTIR-2881): the read has to
-    // be admitted to answer at all; the repository's own `tx ?? db` fallback arm is
+    // be admitted to answer at all; the repository's own `tx ?? dbRead` fallback arm is
     // exercised deliberately, per role, in `tests/rls/tx-fallback-arm.test.ts`.
     const direct = await withWorkspaceServiceContext(s.workspace.id, (tx) =>
       automationRuleRepository.listByProject(s.project.id, tx),

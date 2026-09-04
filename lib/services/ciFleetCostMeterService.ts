@@ -19,11 +19,7 @@ import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageReposit
 import { containerWorkloadFor } from '@/lib/ciFleet/workloads';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { periodStartFor } from '@/lib/ciMetering/period';
-import type {
-  ContainerAccrual,
-  ContainerUsage,
-  ContainerWorkSlice,
-} from '@/lib/orchestrator/types';
+import type { ContainerAccrual, ContainerUsage, ContainerWorkSlice } from '@motir/orchestrator';
 
 // The FLEET COST METER (Story MOTIR-1916 · MOTIR-1924) — the SECOND meter, and
 // the first thing in Motir that measures what Motir's own compute costs.

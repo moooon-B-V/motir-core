@@ -1,5 +1,5 @@
 import { Prisma, type WorkItemRevision } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { ProjectFilterReferents } from '@/lib/filters/registry';
 import { compileFilterConditionsSql } from '@/lib/repositories/workItemRepository';
@@ -53,7 +53,7 @@ export const workItemRevisionRepository = {
    * context, so RLS answers the tenant question.
    */
   async findChangedAtById(revisionId: string, tx?: Prisma.TransactionClient): Promise<Date | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const row = await client.workItemRevision.findUnique({
       where: { id: revisionId },
       select: { changedAt: true },
@@ -83,7 +83,7 @@ export const workItemRevisionRepository = {
     workItemId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Date | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ changed_at: Date }>>`
       SELECT r."changedAt" AS "changed_at"
         FROM "work_item_revision" r
@@ -116,7 +116,7 @@ export const workItemRevisionRepository = {
     workItemId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<{ changedById: string; changedAt: Date } | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ changed_by_id: string; changed_at: Date }>>`
       SELECT r."changedById" AS "changed_by_id", r."changedAt" AS "changed_at"
         FROM "work_item_revision" r
@@ -143,7 +143,7 @@ export const workItemRevisionRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemRevision[]> {
     const { take = 50, cursor, order = 'desc' } = options;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemRevision.findMany({
       where: { workItemId },
       // `id` is a required secondary sort: `changedAt` alone is not a total
@@ -176,7 +176,7 @@ export const workItemRevisionRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Map<string, string>> {
     if (workItemIds.length === 0) return new Map();
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ workItemId: string; id: string }>>`
       SELECT DISTINCT ON ("workItemId") "workItemId", "id"
       FROM "work_item_revision"
@@ -203,7 +203,7 @@ export const workItemRevisionRepository = {
     workItemId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<{ id: string; name: string | null; image: string | null } | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const revision = await client.workItemRevision.findFirst({
       where: { workItemId, changeKind: 'archived' },
       orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
@@ -229,7 +229,7 @@ export const workItemRevisionRepository = {
     suppressedKeys: string[],
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) AS count
       FROM "work_item_revision" r
@@ -268,7 +268,7 @@ export const workItemRevisionRepository = {
     after: Date,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.workItemRevision.findMany({
       where: {
         changeKind: 'updated',
@@ -301,7 +301,7 @@ export const workItemRevisionRepository = {
     after: Date,
     tx?: Prisma.TransactionClient,
   ): Promise<string[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.workItemRevision.findMany({
       where: {
         changeKind: 'updated',
@@ -388,7 +388,7 @@ export const workItemRevisionRepository = {
       ? Prisma.sql`0`
       : Prisma.sql`(COALESCE((r."diff" -> 'storyPoints' ->> 'to')::numeric, 0) - COALESCE((r."diff" -> 'storyPoints' ->> 'from')::numeric, 0))`;
 
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<
       Array<{ day: string; scopeDelta: number; completedDelta: number; startedDelta: number }>
     >`
@@ -475,7 +475,7 @@ export const workItemRevisionRepository = {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ bucket: string; resolved: number }>>`
       SELECT
         to_char(date_trunc(${period}, r."changedAt"), 'YYYY-MM-DD') AS "bucket",
@@ -536,7 +536,7 @@ export const workItemRevisionRepository = {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ bucket: string; avgDays: number; resolvedCount: number }>>`
       SELECT
         to_char(date_trunc(${period}, r."changedAt"), 'YYYY-MM-DD') AS "bucket",
@@ -596,7 +596,7 @@ export const workItemRevisionRepository = {
       : Prisma.sql`TRUE`;
     const keys = buckets.map((b) => b.key);
     const ends = buckets.map((b) => b.end);
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.$queryRaw<Array<{ bucket: string; avgDays: number; openCount: number }>>`
       WITH be AS (
         SELECT * FROM unnest(${keys}::text[], ${ends}::timestamptz[]) AS t("key", "periodEnd")

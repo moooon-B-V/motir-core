@@ -1,0 +1,41 @@
+{
+  // The package's own PROJECT, composite and referenced from
+  // `tsconfig.solution.json` at the repository root (MOTIR-4293) — which is what
+  // puts it in `pnpm typecheck`. A package left off the solution file is simply
+  // never type-checked, silently and greenly.
+  //
+  // It emits into the root `.tsout/` beside the other projects rather than into
+  // `dist/`: `dist/` is tsup's, and two writers on one directory is a race with
+  // no owner. `.tsout/` is git-, prettier- and eslint-ignored already.
+  //
+  // ⚠️ NO `paths` AND NO `@/*`. That absence is the package boundary in the one
+  // place a compiler can enforce it: an `@/lib/…` import inside `src/` does not
+  // resolve here at all, so the ADR's §1 rule 2 fails as a type error rather than
+  // as a review comment. `tests/packages/importDirection.test.ts` asserts the
+  // same thing from the outside, over text, for the case where somebody adds a
+  // mapping back.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "rootDir": ".",
+    "outDir": "../../.tsout/packages/orchestrator",
+    "tsBuildInfoFile": "../../.tsout/packages/orchestrator/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "tsup.config.ts", "vitest.config.ts"]
+}
