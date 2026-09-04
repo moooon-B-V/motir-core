@@ -51,6 +51,15 @@ export const STRUCTURAL_GUARD_SPECS = [
   // repository's answer (the vacuous-pass trap MOTIR-2815 hit).
   'tests/theme/inkContrastLint.test.ts',
   'tests/theme/inkContrastScan.test.ts',
+  // ── tests/theme/ — the ink arm's ABSTENTION, enumerated (MOTIR-4251) ──────
+  // The population guard behind the render-time ink sweep. It runs the muted
+  // arm's own predicates over the same `git ls-files` set the lint scans and
+  // records the sites the arm walks PAST, so a coverage claim about "the
+  // composed surfaces" has a number behind it. Identical cost profile to the two
+  // entries above — one whole-tree parse, no database, no `--coverage` — and it
+  // shares their memoisation-free shape, so it belongs in the same lane rather
+  // than in the sharded job where it would be sized against a database budget.
+  'tests/theme/composedSurfaceInkCoverage.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —
