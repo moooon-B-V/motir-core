@@ -240,6 +240,15 @@ export default defineConfig({
   outputDir: 'out/playwright-output',
   use: {
     baseURL: BASE_URL,
+    // Bounds a navigation independently of the test ceiling (MOTIR-4423).
+    // Playwright's default is `0` — no timeout — so `page.goto` / `page.goBack`
+    // / `page.waitForURL` fall through to whatever the test has left. This
+    // config's own `timeout` is 30s, but 126 specs raise their ceiling with
+    // `test.describe.configure({ timeout: … })` (90s–300s here, 900s in the
+    // cloud lane), and each one silently widens every bare navigation inside it.
+    // The failure mode is not a red check — it is a retry that passes after the
+    // hang has already spent the budget. Same 30s the explicit call sites use.
+    navigationTimeout: 30_000,
     // Trace on failure keeps zips small (one per failing test) while
     // giving full debugging context. `on-first-retry` would also work
     // but we don't always retry; `retain-on-failure` is the safe pick.
