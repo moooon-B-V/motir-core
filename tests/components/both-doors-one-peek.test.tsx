@@ -290,3 +290,124 @@ describe('the target fetch has a TERMINAL state in every direction (MOTIR-4185)'
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+// ─── bug MOTIR-4471 · the LIST door on a DECIDED plan ─────────────────────────
+//
+// ⚠️ WHY THE SUITE ABOVE COULD NOT SEE THIS. It walks the `op` axis exhaustively
+// — add, modify, remove, both doors, one assertion over both — and never varies
+// the SECOND axis at all: every fixture in it is an un-materialized `add`
+// (`identifier: null`) rendered with `decided={false}`. So the arm the defect
+// lives in was not weakly covered, it was structurally unreachable. The fixtures
+// below are that missing second axis, and criteria 4 and 5 hold the arms that
+// were already correct so the fix cannot silently widen.
+//
+// The invariant, stated once: `identifier != null` ON AN `add` IS "this plan has
+// been approved" — approve is what materializes the proposal into a work item
+// and gives it a key. The canvas has read that since MOTIR-3161; the list now
+// does too.
+
+/** A materialized `add`: approved, so it carries the key of the card it became. */
+const MATERIALIZED_ADD: PlanReviewItemDto = planReviewItem({
+  planItemId: 'pi_add_done',
+  op: 'add',
+  // At approve, `materialize` re-keys the node to the work item it became — so a
+  // materialized `add`'s `nodeId` is the card's id, not its own plan-item id.
+  nodeId: 'wi_1',
+  identifier: 'MOTIR-7',
+  title: 'A work item that now exists',
+  proposal: {
+    op: 'add',
+    identifier: 'MOTIR-7',
+    changedFields: [],
+    settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+  },
+});
+
+describe('a DECIDED plan’s list row opens the card that EXISTS (bug MOTIR-4471)', () => {
+  it('a materialized `add` opens the ORDINARY work-item peek, not proposal mode (AC 3)', async () => {
+    render(<PlanProposalList items={[MATERIALIZED_ADD]} decided={true} />);
+    fireEvent.click(screen.getByRole('button', { name: /Open / }));
+
+    // The tell that the right door opened: the link out carries the COMMITTED
+    // label. In proposal mode the same testid renders `Open the work item as it
+    // stands`, whose whole point is the tense — and after approval that tense is
+    // the lie (`design/ai-planning/design-notes.md` Part XIV §7).
+    const link = await screen.findByTestId('quick-view-open-full');
+    expect(link.textContent).toContain('Open full page');
+    expect(link.textContent).not.toContain('Open the work item as it stands');
+
+    // None of proposal mode's three untruths is reachable, because none of
+    // proposal mode is mounted.
+    expect(screen.queryByTestId('quick-view-op')).toBeNull();
+    expect(screen.queryByTestId('quick-view-proposal-new')).toBeNull();
+    expect(screen.queryByTestId('proposal-peek')).toBeNull();
+    expect(screen.queryByText('not yet created')).toBeNull();
+  });
+
+  it('an UN-materialized `add` on an undecided plan still opens proposal mode (AC 4)', async () => {
+    // The counterpart, and the arm that must NOT move: no key yet, so there is
+    // no card to open and `not yet created` is the truth.
+    const pending = planReviewItem({
+      planItemId: 'pi_add_pending',
+      op: 'add',
+      identifier: null,
+      title: 'A proposed work item',
+      proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
+    });
+    render(<PlanProposalList items={[pending]} decided={false} />);
+    fireEvent.click(screen.getByRole('button', { name: /Open / }));
+
+    await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
+    expect(screen.getByTestId('quick-view-op').textContent).toBe('not yet created');
+  });
+
+  it('a `modify` and a `remove` on a DECIDED plan still open the PROPOSAL peek (AC 5)', async () => {
+    // The arm this card EXCLUDES. A decided plan's `modify` / `remove` peek
+    // reading in the future tense is real and is MOTIR-4472's; what must not
+    // happen here is this fix widening into it by routing those rows away from
+    // `ProposalPeek`. `identifier != null` is true of every `modify` and every
+    // `remove` — it names their live target — so only the `op === 'add'` half of
+    // the test keeps them here.
+    for (const [op, expected] of [
+      ['modify', 'change'],
+      ['remove', 'remove'],
+    ] as const) {
+      const item = planReviewItem({
+        planItemId: `pi_${op}_decided`,
+        op,
+        nodeId: 'wi_1',
+        identifier: 'MOTIR-7',
+        title: `A ${op} on a decided plan`,
+        proposal: {
+          op,
+          identifier: 'MOTIR-7',
+          changedFields: [],
+          settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+        },
+      });
+      render(<PlanProposalList items={[item]} decided={true} />);
+      fireEvent.click(screen.getByRole('button', { name: /Open / }));
+
+      await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
+      expect(screen.getByTestId('quick-view-op').textContent).toBe(expected);
+      cleanup();
+    }
+  });
+
+  it('returns focus to the row on the COMMITTED mount too (AC 6)', async () => {
+    // MOTIR-4022's explicit refocus is wired to the ONE `closePeek`, so it has to
+    // hold whichever half was open. The proposal half is covered above; this is
+    // the half the fix adds, and a close that cleared only the half it knew
+    // about would leave the other mounted and focus nowhere.
+    render(<PlanProposalList items={[MATERIALIZED_ADD]} decided={true} />);
+    const row = screen.getByRole('button', { name: /Open / });
+    row.focus();
+    fireEvent.keyDown(row, { key: 'Enter' });
+    fireEvent.click(row);
+    await screen.findByTestId('quick-view-open-full');
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('quick-view-open-full')).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(row));
+  });
+});
