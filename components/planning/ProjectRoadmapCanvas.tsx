@@ -1027,8 +1027,14 @@ export function ProjectRoadmapCanvas({
           // `motion-reduce:transition-none` — turning the emphasis on changes the
           // opacity of most of the screen at once (Part IX §L8).
           'relative rounded-(--radius-card) transition-opacity motion-reduce:transition-none',
+          // ⚠️ The ACCENT INK, never `--el-accent` (the FILL). A ring is a mark ON
+          // `--el-surface-soft`, so it owes 3:1 against that offset — which the
+          // fill missed in citrine (1.37), candy (1.51) and amber (1.74) light and
+          // garnet dark (2.88). MOTIR-4474; measured in
+          // `tests/theme/canvasEmphasisInkContrast.test.ts`, which reads the token
+          // back out of this line.
           selected || matched || emphasised
-            ? 'ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)'
+            ? 'ring-2 ring-(--el-accent-on-surface) ring-offset-2 ring-offset-(--el-surface-soft)'
             : '',
           dimmed ? 'opacity-35' : '',
         ]

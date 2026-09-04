@@ -16,7 +16,8 @@ import type { ProjectCanvasNode } from '@/lib/planning/projectCanvasModel';
 //
 // ⚠️ THE TREATMENT IS NOT NEW AND MUST NOT BE. `ProjectRoadmapCanvas`'s node
 // wrapper already rings a selected or search-matched node
-// (`ring-2 ring-(--el-accent) ring-offset-2 ring-offset-(--el-surface-soft)`) and
+// (`ring-2 ring-(--el-accent-on-surface) ring-offset-2 ring-offset-(--el-surface-soft)`)
+// — the accent INK since MOTIR-4474, never the fill — and
 // already dims everything outside the connected set (`opacity-35`). This applies
 // THAT PAIR to a SET — one ring value, one dim value, one vocabulary — so the
 // assertions below are on the shipped class strings, and a second dim or a second
@@ -101,7 +102,7 @@ describe('the emphasis (MOTIR-3261)', () => {
 
     for (const id of ['P1', 'P2', 'P3']) {
       const cls = box(id).className;
-      expect(cls).toContain('ring-2 ring-(--el-accent)');
+      expect(cls).toContain('ring-2 ring-(--el-accent-on-surface)');
       expect(cls).not.toContain('opacity-35');
       expect(box(id).getAttribute('data-emphasised')).toBe('true');
     }
