@@ -726,13 +726,117 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
   })();
 
   /**
+   * The KEY SET `GET /repos/{owner}/{repo}/pulls/{n}/files` actually returns,
+   * measured rather than remembered (moooon-B-V/motir-core#2578, 2026-09-04):
+   *
+   *   $ gh api "repos/moooon-B-V/motir-core/pulls/2578/files" --jq '.[0] | keys'
+   *   ["additions","blob_url","changes","contents_url","deletions","filename",
+   *    "patch","raw_url","sha","status"]
+   *
+   * ⚠️ `path` IS NOT IN IT, and the absence is the fixture's entire content. The
+   * assertion below pins the set so that the obvious way to make a red case
+   * green — teaching the fixture a `path` key — fails here instead, naming what
+   * it is doing. `gh pr view --json files` is where the other name comes from:
+   * that is gh's own normalised projection over the same pull request, and it
+   * does call the field `path`.
+   */
+  const PR_FILE_KEYS = [
+    'additions',
+    'blob_url',
+    'changes',
+    'contents_url',
+    'deletions',
+    'filename',
+    'patch',
+    'raw_url',
+    'sha',
+    'status',
+  ] as const;
+
+  /** One entry of that payload. Only `filename` carries information here. */
+  const prFile = (filename: string): Record<string, unknown> => ({
+    additions: 1,
+    blob_url: `https://github.com/moooon-B-V/motir-core/blob/deadbeef/${filename}`,
+    changes: 1,
+    contents_url: `https://api.github.com/repos/moooon-B-V/motir-core/contents/${filename}`,
+    deletions: 0,
+    filename,
+    patch: '@@ -0,0 +1 @@\n+x',
+    raw_url: `https://github.com/moooon-B-V/motir-core/raw/deadbeef/${filename}`,
+    sha: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+    status: 'modified',
+  });
+
+  const PR_FILES_FIXTURE = 'pr-files.json';
+
+  /**
+   * The `gh` stub: `gh api <endpoint> [--paginate] -q <expr>`.
+   *
+   * Three behaviours, each of them load-bearing:
+   *
+   *  1. IT APPLIES THE SELECTOR to the fixture above, so the field the gate asks
+   *     for is the field it gets. A key the payload does not carry yields an
+   *     EMPTY LINE — which is what `gh`'s jq does, measured, and not what plain
+   *     `jq -r` does (that prints the four letters `null`). The distinction is
+   *     the defect: empty lines are what let `grep -c .` report 0 while the
+   *     command looked like it had answered.
+   *  2. IT PAGES. `pulls/N/files` returns 30 entries a page and only yields the
+   *     rest when asked to follow them, so the pagination case below is a test
+   *     of `--paginate` rather than of the stub's generosity.
+   *  3. IT FAILS CLOSED. Anything outside `.[].<field>` — a pipe, a `select`, a
+   *     second endpoint — exits non-zero with a message telling the reader to
+   *     teach the stub. A stub that shrugged and printed something plausible
+   *     would be this card's own defect, one layer out.
+   *
+   * Written for plain node (no extension, no deps) because it has to run from a
+   * `PATH` entry inside a temp directory, where neither this repo's toolchain
+   * nor `jq` can be assumed.
+   */
+  const GH_STUB = [
+    '#!/usr/bin/env node',
+    "'use strict';",
+    "const { readFileSync } = require('node:fs');",
+    "const { join } = require('node:path');",
+    'const args = process.argv.slice(2);',
+    'const die = (m) => { process.stderr.write(`gh stub: ${m}\\n`); process.exit(1); };',
+    "if (args[0] !== 'api') die(`only \\`gh api\\` is stubbed; got: ${args.join(' ')}`);",
+    'if (!/\\/pulls\\/\\d+\\/files$/.test(args[1] || ""))',
+    '  die(`only the pull-request files endpoint is stubbed; got: ${args[1]}`);',
+    "const qAt = args.findIndex((a) => a === '-q' || a === '--jq');",
+    'if (qAt === -1 || !args[qAt + 1]) die("the gate must select a field with -q/--jq");',
+    'const expr = args[qAt + 1];',
+    'const field = /^\\.\\[\\]\\.([A-Za-z_][A-Za-z0-9_]*)$/.exec(expr);',
+    'if (!field) die(`this stub understands only \\`.[].<field>\\`, and the gate asked for ` +',
+    '  `\\`${expr}\\` — teach the stub rather than loosening it`);',
+    `const all = JSON.parse(readFileSync(join(__dirname, '${PR_FILES_FIXTURE}'), 'utf8'));`,
+    "const page = args.includes('--paginate') ? all : all.slice(0, 30);",
+    'const key = field[1];',
+    "process.stdout.write(page.map((f) => (f[key] == null ? '' : String(f[key]))).join('\\n'));",
+    "if (page.length) process.stdout.write('\\n');",
+    '',
+  ].join('\n');
+
+  /**
    * Run the shipped gate over a lane holding `specCount` members.
    *
    * Since MOTIR-4257 the `pull_request` arm also reads the PR's CHANGED FILES,
-   * so the harness stubs `gh` on PATH with a script that prints `changedFiles`.
-   * That is the whole of the API contact: `gh api … -q '.[].path'` emits one
-   * path per line, which is what the stub emits. Without it the gate exits
-   * non-zero under `set -e` and every case below fails for the wrong reason.
+   * so the harness stubs `gh` on PATH with a script that SERVES THE ENDPOINT'S
+   * REAL PAYLOAD and applies the gate's own `--jq` selector to it. Without a
+   * stub the gate exits non-zero under `set -e` and every case below fails for
+   * the wrong reason.
+   *
+   * ⚠️ THE STUB APPLIES THE SELECTOR, AND THAT IS THE WHOLE POINT OF IT
+   * (MOTIR-4327). Until this card it printed `changedFiles` verbatim, one path
+   * per line, whatever `-q` expression the gate passed — so every case in this
+   * describe answered the same way for `.[].path`, `.[].filename` and
+   * `.[].nonsense`, and the field name the gate reads was the one thing these
+   * assertions could not see. The gate shipped asking for `.[].path`, which the
+   * endpoint does not return; `gh`'s jq prints an empty line rather than an
+   * error for a missing key, so the grep matched nothing and RUN was `false` on
+   * EVERY pull request while these tests stayed green. A stub that answers
+   * whatever it is asked turns the suite around it into a tautology, so this one
+   * holds the API's real object shape and FAILS CLOSED on any selector it does
+   * not understand rather than guessing.
    *
    * `changedFiles` defaults to a lane member, so the existing sizing cases keep
    * asking what they always asked — how many legs — rather than accidentally
@@ -742,26 +846,17 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     specCount: number,
     eventName: 'pull_request' | 'push' | 'merge_group',
     changedFiles: readonly string[] = ['tests/e2e/acceptance-story-1.spec.ts'],
-  ) {
+  ): Record<string, string> & { stdout: string; summary: string } {
     const dir = mkdtempSync(join(tmpdir(), 'acceptance-gate-'));
     try {
       const binDir = join(dir, 'stub-bin');
       mkdirSync(binDir, { recursive: true });
-      // The stub PAGES like the real endpoint: `pulls/N/files` returns 30 entries
-      // and only yields the rest when asked to follow the pages. Emitting the
-      // whole list unconditionally would make the pagination case below pass
-      // whether or not the gate says `--paginate` — a test of nothing.
+      // The payload the endpoint would return for this PR, in its real shape.
       writeFileSync(
-        join(binDir, 'gh'),
-        [
-          '#!/bin/sh',
-          'for a in "$@"; do [ "$a" = "--paginate" ] && all=1; done',
-          `cat <<'EOF' | { [ -n "\${all:-}" ] && cat || head -30; }`,
-          changedFiles.join('\n'),
-          'EOF',
-          '',
-        ].join('\n'),
+        join(binDir, PR_FILES_FIXTURE),
+        JSON.stringify(changedFiles.map(prFile), null, 2),
       );
+      writeFileSync(join(binDir, 'gh'), GH_STUB);
       chmodSync(join(binDir, 'gh'), 0o755);
       mkdirSync(join(dir, 'tests/e2e'), { recursive: true });
       for (let i = 1; i <= specCount; i++) {
@@ -775,20 +870,32 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
       const summaryPath = join(dir, 'github-step-summary');
       writeFileSync(outPath, '');
       writeFileSync(summaryPath, '');
-      execFileSync('bash', ['-c', gateScript], {
-        cwd: dir,
-        env: {
-          ...process.env,
-          PATH: `${binDir}:${process.env.PATH ?? ''}`,
-          GITHUB_REPOSITORY: 'moooon-B-V/motir-core',
-          PR_NUMBER: '1',
-          EVENT_NAME: eventName,
-          GITHUB_OUTPUT: outPath,
-          GITHUB_STEP_SUMMARY: summaryPath,
-        },
-        stdio: 'pipe',
-      });
-      return Object.fromEntries(
+      let stdout: string;
+      try {
+        stdout = execFileSync('bash', ['-c', gateScript], {
+          cwd: dir,
+          env: {
+            ...process.env,
+            PATH: `${binDir}:${process.env.PATH ?? ''}`,
+            GITHUB_REPOSITORY: 'moooon-B-V/motir-core',
+            PR_NUMBER: '1',
+            EVENT_NAME: eventName,
+            GITHUB_OUTPUT: outPath,
+            GITHUB_STEP_SUMMARY: summaryPath,
+          },
+          stdio: 'pipe',
+          encoding: 'utf8',
+        });
+      } catch (error) {
+        // `execFileSync`'s own message is the command line and an exit code, and
+        // the stub's refusal (an unrecognised selector, a second endpoint) is the
+        // thing a reader needs. Surface it or the failure reads as "bash died".
+        const { stderr, stdout: out } = error as { stderr?: string; stdout?: string };
+        throw new Error(
+          `the gate exited non-zero\n--- stderr ---\n${stderr ?? ''}\n--- stdout ---\n${out ?? ''}`,
+        );
+      }
+      const outputs = Object.fromEntries(
         readFileSync(outPath, 'utf8')
           .split('\n')
           .filter(Boolean)
@@ -796,7 +903,11 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
             const at = line.indexOf('=');
             return [line.slice(0, at), line.slice(at + 1)] as const;
           }),
-      );
+      ) as Record<string, string>;
+      // `stdout` carries the two lines the job LOG shows a human — the spec count
+      // and `changed files: N` — which is the surface the defect was first read
+      // off, so it is returned rather than discarded.
+      return { ...outputs, stdout, summary: readFileSync(summaryPath, 'utf8') };
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -868,6 +979,80 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     // one-spec lane to two legs — and hold the `push` baseline permanently on.
     expect(runGate(0, 'push').count).toBe('0');
     expect(runGate(1, 'pull_request').count).toBe('1');
+  });
+
+  // ── The SELECTOR, executed (MOTIR-4327) ────────────────────────────────────
+  //
+  // The paths decision below is only worth anything if the gate can SEE the
+  // changed files, and for half a day it could not: it asked the API for a key
+  // the API does not return, got one blank line per file, and answered `false`
+  // on every pull request while printing a summary saying it had looked at the
+  // diff. These three cases are about the reading, not about the matching.
+  it('reads a field the pull-request-files API actually returns', () => {
+    // The card's own symptom, at the surface it was read off: the job log's
+    // `changed files:` line. With `.[].path` it says 0 for every PR ever opened.
+    const files = ['components/x.tsx', 'lib/dto/y.ts', 'tests/e2e/acceptance-story-1.spec.ts'];
+    const out = runGate(1, 'pull_request', files);
+    expect(out.stdout).toContain(`changed files: ${files.length}`);
+    expect(out.stdout).toContain('event=pull_request run=true');
+    expect(out.run).toBe('true');
+  });
+
+  it('never tells a pull request it was considered when it was not', () => {
+    // The expensive half of the defect was not the missing lane run — it was the
+    // job summary asserting, on a PR that touches a spec, that the gate had
+    // looked at the diff and found nothing. A guard whose input is empty by
+    // construction has not reached `false`, it has only ever had one answer.
+    const skipped = runGate(1, 'pull_request', ['components/x.tsx']);
+    expect(skipped.run).toBe('false');
+    expect(skipped.summary).toContain('This PR touches no acceptance spec');
+
+    const owned = runGate(1, 'pull_request', ['tests/e2e/acceptance-story-1.spec.ts']);
+    expect(owned.run).toBe('true');
+    expect(owned.summary).not.toContain('This PR touches no acceptance spec');
+  });
+
+  it('holds the fixture to the API’s real key set — `filename`, and no `path`', () => {
+    // Non-vacuity for everything above, and the reason it is an assertion rather
+    // than a comment: the cheapest way to turn a red case here green is to teach
+    // the fixture the key the gate happens to ask for, and that would restore a
+    // suite agreeing with a workflow that reads nothing. Measured with
+    // `gh api "repos/moooon-B-V/motir-core/pulls/2578/files" --jq '.[0] | keys'`.
+    const sample = prFile('tests/e2e/acceptance-story-1.spec.ts');
+    expect(Object.keys(sample).sort()).toEqual([...PR_FILE_KEYS].sort());
+    expect(sample.filename).toBe('tests/e2e/acceptance-story-1.spec.ts');
+    expect(sample).not.toHaveProperty('path');
+  });
+
+  it('the stub DISCRIMINATES between selectors, and refuses the ones it cannot run', () => {
+    // The other half of non-vacuity, and the half the previous stub failed: a
+    // harness that answers the same way for every selector cannot report on the
+    // selector, so its agreement with the workflow means nothing. Drive the stub
+    // directly, over the two expressions that separate a working gate from the
+    // shipped one, plus a third it must refuse rather than guess at.
+    const dir = mkdtempSync(join(tmpdir(), 'acceptance-gh-stub-'));
+    try {
+      const stub = join(dir, 'gh');
+      writeFileSync(join(dir, PR_FILES_FIXTURE), JSON.stringify(['a.ts', 'b.ts'].map(prFile)));
+      writeFileSync(stub, GH_STUB);
+      chmodSync(stub, 0o755);
+      const ask = (expr: string): string =>
+        execFileSync(
+          process.execPath,
+          [stub, 'api', 'repos/moooon-B-V/motir-core/pulls/1/files', '--paginate', '-q', expr],
+          { encoding: 'utf8', stdio: 'pipe' },
+        );
+
+      expect(ask('.[].filename')).toBe('a.ts\nb.ts\n');
+      // ⚠️ EMPTY LINES, not the literal `null` that plain `jq -r` prints. This is
+      // the shape the defect hid in: `grep -c .` counts 0 and the command looks
+      // as though it answered. Measured against real `gh` on #2578 — five
+      // changed files, five blank lines, `grep -c .` → 0.
+      expect(ask('.[].path')).toBe('\n\n');
+      expect(() => ask('.[] | select(.status == "added") | .filename')).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // ── The PATHS decision, executed (MOTIR-4257) ──────────────────────────────
