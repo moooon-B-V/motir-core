@@ -261,7 +261,7 @@ describe('the planning-job ENVELOPE', () => {
     await aiGenerationService.startGeneration(ctx, { prompt: 'extend the tracker' });
 
     const [jobKind, , context] = vi.mocked(submitJob).mock.calls[0]!;
-    expect(jobKind).toBe('generate_tree');
+    expect(jobKind).toBe('plan');
     // The WHOLE bag, exact shape. The two repository fields are DIFFERENT things
     // at different scopes and both are present, unmerged: `code` is the
     // workspace's grant list (an `owner/name` ref, for code-graph reads),
@@ -317,11 +317,19 @@ describe('the planning-job ENVELOPE', () => {
 
     // Every planning submit this service makes carried it — counted, so a fourth
     // operation added later without the field fails here rather than silently.
-    const planningCalls = vi
-      .mocked(submitJob)
-      .mock.calls.filter(([kind]) => kind !== 'generate_tree');
+    //
+    // ⚠️ THE DISCRIMINATOR MOVED (MOTIR-4304). This filtered `kind !== 'generate_tree'`
+    // to isolate the plan-EDIT calls from the generation one. After the switch
+    // every planning submit sends `plan`, so a filter on the KIND selects
+    // nothing — and a filter written to exclude one kind would silently pass by
+    // matching everything or nothing, which is worse than failing. The three
+    // calls in THIS test are all `aiPlanEditsService`'s, so the count is taken
+    // over the calls this test made, and the kind is asserted rather than used
+    // to partition.
+    const planningCalls = vi.mocked(submitJob).mock.calls;
     expect(planningCalls.length).toBeGreaterThanOrEqual(3);
-    for (const [, , context] of planningCalls) {
+    for (const [kind, , context] of planningCalls) {
+      expect(kind).toBe('plan');
       expect(context).toMatchObject({ repositories: expected });
     }
   });

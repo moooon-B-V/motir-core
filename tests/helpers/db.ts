@@ -25,9 +25,20 @@ import { adminDb as db } from './adminDb';
 // `idea_draft` (Subtask 7.22.2 / MOTIR-1458) is an ANONYMOUS table with no FK to
 // user/workspace, so a workspace/user CASCADE never reaches it — name it here
 // explicitly so its short-lived rows don't leak across tests.
+//
+// `public_hostname_reservation` (Bug MOTIR-4366) is the same class and joins the
+// same statement rather than getting a helper of its own — the raw-statement
+// ratchet in `tests/rls/test-singleton-statement-guard.test.ts` only ever falls,
+// and a table added to an existing TRUNCATE costs it nothing. It carries no FK
+// to workspace DELIBERATELY: the row exists because the workspace was deleted,
+// so a cascade reaching it would be the defect it repairs. That is why it must
+// be named here — and, as with `code_graph_offboarding`, a row surviving
+// `truncateAuthTables` would be the table's load-bearing property observed. Left
+// unnamed, one suite's reserved digest refuses the next suite's claim of the
+// same label, in a file that has nothing to do with either.
 export async function truncateAuthTables(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "user" RESTART IDENTITY CASCADE',
   );
 }
 

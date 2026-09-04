@@ -75,10 +75,16 @@ export interface SidebarItem {
    */
   emphasis?: boolean;
   /**
-   * A designed-for, not-yet-built row (e.g. the settings area's Automation
-   * "Soon" slot). Renders as a non-interactive `<span aria-disabled>` with faint
-   * ink and no hover — its state is conveyed by the row's `badge`, not colour
-   * alone. The `href` is ignored.
+   * A designed-for, not-yet-built row — the admin console's version-tagged rows
+   * (`AdminShell`: Usage & cost, Tenants, Governance) are the live users.
+   * Renders as a non-interactive `<span aria-disabled>` with faint ink and no
+   * hover — its state is conveyed by the row's `badge`, not colour alone. The
+   * `href` is ignored.
+   *
+   * The settings rail was the other user, via a reserved-slot flag on its nav
+   * registries; that mechanism is retired (MOTIR-4324) and the settings rail
+   * passes no `disabled` today. This prop is NOT retired with it — the admin
+   * rows above are a separate, live caller.
    */
   disabled?: boolean;
 }
@@ -171,8 +177,8 @@ function SidebarNavItem({ item, collapsed }: { item: SidebarItem; collapsed: boo
     );
   }
 
-  // Expanded, disabled — a faint non-interactive row; the badge ("Soon") carries
-  // the state in text, not colour alone (a11y).
+  // Expanded, disabled — a faint non-interactive row; the badge (the admin
+  // console's version tag) carries the state in text, not colour alone (a11y).
   if (isDisabled) {
     return (
       <span

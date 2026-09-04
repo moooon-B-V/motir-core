@@ -1,6 +1,9 @@
+import { getDomain } from 'tldts';
+
 import type { DnsInstructionDto } from '@/lib/dto/publicAddresses';
 
-// THE RECORDS THAT POINT A CUSTOMER HOSTNAME AT US — Story MOTIR-3878 · MOTIR-4278.
+// THE RECORDS THAT POINT A CUSTOMER HOSTNAME AT US — Story MOTIR-3878 ·
+// MOTIR-4278 · MOTIR-4315.
 //
 // `docs/decisions/public-tenant-addresses.md` §5's table decides the SET, per
 // hostname shape, and §10 names the variables the values come from:
@@ -35,27 +38,64 @@ export const POINTING_A_RECORDS_ENV_VAR = 'MOTIR_PUBLIC_ADDRESS_A_RECORDS';
 export const POINTING_AAAA_RECORDS_ENV_VAR = 'MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS';
 
 /**
- * Is this hostname a ROOT domain, which cannot take a `CNAME`?
+ * Is this hostname a ZONE APEX, which cannot take a `CNAME`?
  *
  * RFC 1034 §3.6.2: a name carrying a `CNAME` may carry no other record, and a
  * zone apex always carries `SOA` and `NS` — so a root domain has to be pointed
  * with address records. That is the constraint; the question here is only which
  * side of it a given hostname is on.
  *
- * ⚠️ A LABEL COUNT, AND ITS LIMIT IS NAMED RATHER THAN LEFT TO BE FOUND. Two
- * labels (`acme.com`) is a root domain; three or more (`roadmap.acme.com`) is a
- * subdomain. That is wrong for a registrable domain under a MULTI-LABEL public
- * suffix — `acme.co.uk` reads as a subdomain here and would be offered a `CNAME`
- * it cannot create. Deciding it properly needs a public-suffix list, which this
- * repository does not carry, or a live `SOA` lookup on the pane's main read.
- * Filed rather than left in a comment: see the bug logged against MOTIR-4278.
+ * ⚠️ THE HOSTNAME EQUALS ITS OWN REGISTRABLE DOMAIN — a public-suffix reading,
+ * not a label count (MOTIR-4315). `acme.co.uk` is three labels and IS a root
+ * domain; `roadmap.acme.com` is three labels and is not. Nothing about the
+ * NUMBER of labels separates them, so the list that knows where the registry
+ * boundary falls is the only thing that can. `tldts` carries the Public Suffix
+ * List offline, which is what keeps this synchronous — and `toDto` synchronous
+ * with it, over a database row, per the note at the top of this file.
+ *
+ * ⚠️ THE **ICANN** SECTION ONLY, AND THAT IS THE DECISION RATHER THAN THE
+ * DEFAULT. The PSL's PRIVATE section lists names like `github.io` that a
+ * registrar never delegated — DNS-wise they are ordinary records inside their
+ * own zone, and a name beneath one takes a `CNAME` perfectly legally. Reading
+ * them as suffixes (`allowPrivateDomains: true`) would call `myapp.github.io` an
+ * apex and hand a customer address records for a name that wanted a `CNAME`,
+ * which is this bug pointing the other way. Only an ICANN suffix marks the
+ * delegation a registrant's zone actually begins at.
+ *
+ * ⚠️ ITS OWN LIMITS, NAMED RATHER THAN LEFT TO BE FOUND — the label count's
+ * were, and that is the only reason this one was ever findable. Both are
+ * asserted in `tests/publicAddresses/pointingRecords.test.ts`, so neither can be
+ * re-introduced as a surprise.
+ *
+ *   1. **THE LIST AGES, AND IT AGES BACK INTO THIS BUG.** A public suffix added
+ *      to the PSL after the `tldts` version in `package.json` is unknown here,
+ *      and an unknown suffix degrades to exactly the rule this replaced: the
+ *      last label is taken as the suffix, so a registrable domain under a NEW
+ *      multi-label suffix reads as a subdomain and is offered a `CNAME` it
+ *      cannot create. The refresh is a dependency bump (`pnpm up tldts`) rather
+ *      than a schema change, which is why this mechanism was chosen over a live
+ *      lookup.
+ *   2. **A PRIVATELY DELEGATED SUBZONE IS INVISIBLE TO ANY LIST.** A customer
+ *      who has delegated `roadmap.acme.co.uk` with `NS` records has a zone apex
+ *      there, carrying `SOA`, and it cannot take a `CNAME` either. No public
+ *      list can know a delegation nobody published; only a live `SOA` lookup on
+ *      the name itself can, and `list` is the pane's main read, so that answer
+ *      would have to be resolved once at `add` and persisted — a migration, and
+ *      the second option MOTIR-4315 weighed. Filed there rather than left in a
+ *      comment; re-open it if a customer meets it.
  *
  * The design asset's own note is the rung this sits on — panel 4 of
  * `design/projects/public-address.mock.html`: *"The record set follows the
  * hostname's SHAPE, decided by what was typed"*.
  */
 export function isApexHostname(hostname: string): boolean {
-  return normalise(hostname).split('.').length === 2;
+  const name = normalise(hostname);
+  if (!name) return false;
+  // `getDomain` answers `null` for a name with no registrable domain at all — a
+  // single label, an IP literal — and `null` is not `name`, so those read as
+  // subdomains exactly as the label count read them. Neither reaches here in
+  // practice: `normaliseCustomHostname` refuses a single label at the door.
+  return getDomain(name, { allowPrivateDomains: false }) === name;
 }
 
 /**

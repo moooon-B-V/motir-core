@@ -1,4 +1,12 @@
-import { Prisma } from '@/generated/prisma/client';
+import { Decimal } from 'decimal.js';
+
+// ⚠️ `decimal.js` DIRECTLY, not `Prisma.Decimal` (MOTIR-4299). It is the same
+// library — Prisma's `Decimal` IS decimal.js re-exported from its runtime — so
+// the arithmetic and the `toFixed()` string it produces are identical, and this
+// is what makes the package Prisma-free (`docs/decisions/app-shell-over-packages.md`
+// §1 rule 5). Float was never an option here and still is not: a rate is a
+// DECIMAL STRING with twelve significant places, and `0.000031636049 * 900` in
+// binary floating point is not the number anyone is billed.
 import { resolveContainerRate, UNPRICED_USD_PER_SECOND } from './rates';
 import type {
   ContainerAccrual,
@@ -22,9 +30,9 @@ import type {
 // ⚠️ MONEY IS DECIMAL, NEVER FLOAT. `usdPerSecond` is ~3×10⁻⁵ and the second
 // counts run to five digits; in binary floating point that product's error is
 // invisible per row and systematic across a month — exactly the error a
-// reconciliation is worst at catching. `Prisma.Decimal` is already the repo's
-// money type (`ciWorkflowRunUsageRepository`), so this uses it rather than
-// introducing a second convention.
+// reconciliation is worst at catching. `Prisma.Decimal` is the app's money type
+// (`ciWorkflowRunUsageRepository`) and this is the SAME library under its own
+// name, so there is one convention across the boundary rather than two.
 
 /** The provider-reported facts a usage row is built from. */
 export interface ObservedContainerLifecycle {
@@ -88,7 +96,7 @@ export function buildContainerUsage(input: {
   );
 
   const usdPerSecond = rate?.usdPerSecond ?? UNPRICED_USD_PER_SECOND;
-  const costUsd = new Prisma.Decimal(usdPerSecond).mul(billableSeconds).toFixed();
+  const costUsd = new Decimal(usdPerSecond).mul(billableSeconds).toFixed();
 
   return {
     handleId: handle.id,
@@ -176,7 +184,7 @@ export function buildContainerAccrual(input: {
     accruedSeconds,
 
     usdPerSecond,
-    costUsd: new Prisma.Decimal(usdPerSecond).mul(accruedSeconds).toFixed(),
+    costUsd: new Decimal(usdPerSecond).mul(accruedSeconds).toFixed(),
     rateEffectiveFrom: rate?.effectiveFrom ?? null,
   };
 }

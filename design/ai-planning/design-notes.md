@@ -211,6 +211,33 @@ composed canvas as the engine emits PlanItems (respecting drill-down — NOT a w
   `rounded-md`/`p-2`/`h-9`.** The proposed tint, the "will be archived" treatment, and the stale
   badge all route through the semantic intent tokens (accent / warning / danger), not hand-picked
   hex.
+
+  > **⚠️ AMENDED 2026-09-03 (MOTIR-4348) — this bullet was stated here and NOT held by the asset,
+  > and nothing could measure the gap.** `plans-surface.mock.html` declared **no `--el-*` custom
+  > property at all**: its `:root` copied the design system's light values onto PRIVATE names —
+  > `--text`, `--strong`, `--secondary`, `--muted`, `--faint`, `--page`, `--surface`, `--soft`,
+  > `--hub`, `--hair`, `--mutedfill`, `--t-*` — and painted 397 sites through them.
+  >
+  > **Why that is not cosmetic.** Both ink guards classify ink by reading an `--el-*` name off the
+  > declaration **at the paint site** (the resting arm, and the state arm added by MOTIR-4255). A
+  > privately-named alias is invisible to them however faithfully its value is copied, so this
+  > asset — the largest mock in the tree — sat outside every ink guard by construction, and their
+  > tree-wide greens said nothing about it.
+  >
+  > **And "not hand-picked hex" was FALSE.** The `:root` carried six hues with no token twin, and
+  > fifty more raw literals sat at points of use, outside any alias. Each is now a token or a
+  > `color-mix()` whose inputs are all tokens; the table is in the pull request for MOTIR-4348.
+  >
+  > **The swap exposed 59 sub-AA elements** the asset had been carrying unmeasured — 19 painting
+  > `--el-text-muted` on a tinted surface, 40 painting `--el-text-faint`, which clears AA on no
+  > surface at all. Eighteen rules and two inline styles now take `--el-text-secondary`.
+  >
+  > **The drawing did not move.** Layout, copy, elements and access paths are unchanged; only the
+  > declaration layer moved. The re-export reports the committed dimensions unchanged at
+  > 2400x14950. This is a token-layer repair of a frozen asset, which the freeze rule above does
+  > not forbid — that rule is about a NEW SURFACE getting a new asset, and no surface is added
+  > here.
+
 - **Composes ONLY shipped primitives** (`Card` / `Button` / status `Pill`/`Badge` /
   `SectionLabel` / `Modal` / the list row + `useRowWindow`) + the real canvas. The proposed-`add`
   edit form (MOTIR-1370) likewise composes shipped controls only — `Input` / `Textarea` /
@@ -655,6 +682,19 @@ and a placeholder in a scanned list is a value the reader must learn to ignore.
   `CLAUDE.md`'s measured table puts faint at 2.39–2.61 against every surface here — below AA — and
   permits it only where meaning is carried elsewhere. It is: the avatar is `aria-hidden` and the
   NAMES say the whole thing. **Neither party is ever conveyed by icon or colour alone.**
+
+  > **⚠️ AMENDED 2026-09-03 (MOTIR-4348) — TRUE as a design intention, UNIMPLEMENTED in the
+  > markup.** The avatar and the glyphs do carry `aria-hidden`, and the ink guard exempts them.
+  > The **separator does not** — `.attrib .sep` is a bare `<span>` — so once the ink was declared
+  > under its real name the guard ruled on it and reported it, correctly, as active informational
+  > text painted below AA. It now takes `--el-text-secondary`. The alternative disposition, which
+  > this sweep deliberately did not take, was to mark the separator `aria-hidden` and keep the
+  > faint ink: that is an accessibility-semantics change, and it belongs to whoever owns this
+  > surface rather than to a declaration-layer sweep.
+  >
+  > **The table row above is amended with it:** the `·` separators now read `--el-text-secondary`.
+  > The agent glyph's row is unchanged — that element IS `aria-hidden`, and the guard passes it.
+
 - **`--el-text-secondary` for the words** (6.24 on `--el-surface`, AA in both themes) rather than
   `--el-text-muted`, which clears AA only on the white page — and this row sits on `--el-surface`.
 - **Copy** (i18n namespace `aiPlanning`, both catalogs — the parity gate):
@@ -958,10 +998,17 @@ Copy lives in the `planReview` namespace.
 ## 4. Tokens + primitives
 
 Colour via the element/semantic tokens only, inlined here as light values exactly as
-`quick-view.mock.html` does; no Tier-0 `--color-*`, no raw `rounded-md` / `p-2` / `h-9`. Everything
-composes a shipped primitive — `Modal`, `Card`, `Pill`, `SectionLabel`, `IssueQuickViewPanel`,
-`CoreFieldsPanel`, `IssueTypeIcon`. **No new primitive is introduced**; a genuinely new one would be
-its own design subtask.
+`quick-view.mock.html` does; no Tier-0 `--color-*`, no raw `rounded-md` / `p-2` / `h-9`.
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4348).** "Inlined here as light values" was true; "via the
+> element/semantic tokens" was not. Panels E and F live in `plans-surface.mock.html`, whose `:root`
+> declared the values under PRIVATE names rather than `--el-*` ones, so every ink on these two
+> panels was outside both ink guards. The asset now declares the real token names and consumes them
+> at every paint site; see Part I §4's amendment for the full account.
+> Everything
+> composes a shipped primitive — `Modal`, `Card`, `Pill`, `SectionLabel`, `IssueQuickViewPanel`,
+> `CoreFieldsPanel`, `IssueTypeIcon`. **No new primitive is introduced**; a genuinely new one would be
+> its own design subtask.
 
 ## 5. GIVES / TAKES sweep
 
@@ -1207,12 +1254,20 @@ that asked it, which is the whole of MOTIR-3154's report.
 ## 5. Tokens + primitives
 
 Colour via `--el-*` element/semantic tokens only — inlined in the mock as light values exactly as Parts
-I–V do; no Tier-0 `--color-*`, no invented hue. Shape via the element-semantic tokens (`--radius-badge`
-for the chip, `--radius-card` for the pane, `--spacing-chip-x/y`, `--el-border-soft` for the seam); no
-raw `rounded-md` / `p-2` / `h-9`. Everything composes a shipped primitive — `PlanItemNode`, `OpBadge`,
-`Pill`, `SectionLabel`, `PlanReviewCanvas`, `RepositorySetStep`. **No new primitive is introduced**; the
-fused chip is the shipped `OpBadge` with a second segment, and the spine is a border on a box that
-already exists.
+I–V do; no Tier-0 `--color-*`, no invented hue.
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4348) — both limbs were false, and the citation propagated the
+> error.** Parts I–V inlined light values under PRIVATE names, not `--el-*` ones, and the asset
+> carried six invented hues in its `:root` plus fifty raw literals at points of use. "Exactly as
+> Parts I–V do" was therefore an accurate description of a practice that was itself the defect.
+> `plans-surface.mock.html` now declares the real `--el-*` names; Part I §4's amendment carries the
+> account, the AA findings the swap exposed, and the hue-by-hue table's home.
+> Shape via the element-semantic tokens (`--radius-badge`
+> for the chip, `--radius-card` for the pane, `--spacing-chip-x/y`, `--el-border-soft` for the seam); no
+> raw `rounded-md` / `p-2` / `h-9`. Everything composes a shipped primitive — `PlanItemNode`, `OpBadge`,
+> `Pill`, `SectionLabel`, `PlanReviewCanvas`, `RepositorySetStep`. **No new primitive is introduced**; the
+> fused chip is the shipped `OpBadge` with a second segment, and the spine is a border on a box that
+> already exists.
 
 ## 6. GIVES / TAKES sweep
 
@@ -1906,6 +1961,19 @@ shell at reduced opacity. A real
 `<button>` carrying `aria-pressed`. **No raw hex, no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` /
 `h-*`.**
 
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4349) — the LOCAL declaration the sentence above cites no longer
+> exists, and neither does the line it cites it at.** `plan-canvas-arrival.mock.html` has been
+> re-pointed at the `--el-*` element-token layer: its `:root` no longer aliases the design system's
+> values onto private names, so there is no `--accent-soft: #f4f2fd` at `:36` or anywhere else. The
+> wash that hex drew is now **`--el-accent-wash`**, declared as
+> `color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg))` — both inputs are tokens, so it
+> re-tints with `data-palette` instead of freezing one palette's purple.
+> **The correction the sentence makes is UNCHANGED and still binding**: `--el-accent-soft` is
+> defined nowhere, the ACTIVE fill is `--el-tint-lavender`, and a mock-local name must never be
+> transcribed into the `--el-*` namespace. What changed is only that this asset no longer HAS a
+> mock-local colour name to transcribe — which is the class fix, not a reason to re-read the
+> decision above.
+
 ### §L2 · The SET, and why it is orthogonal to the op languages
 
 **Every proposal on the level in view, whatever its `op`** — `add`, `modify` and `remove` alike,
@@ -2443,11 +2511,22 @@ square stays `aria-hidden` exactly as the other four do (the row's meaning is in
 
 **Contrast** — every `Pill` tone puts its hue in the TINT and its ink in `--el-text-strong`
 (charcoal, ~10:1 in both themes — finding #35), and `severity="danger"` is exactly that recipe over
-`--el-tint-rose`. So this adds **no ink and no new pairing**. ⚠️ The four incumbent status pills in
+`--el-tint-rose`. So this adds **no ink and no new pairing**. ~~⚠️ The four incumbent status pills in
 `plans-tabbed-list.mock.html` carry hue-saturated inks (`#0a4fa0`, `#3a2d8a`, `#0f5e29`) that predate
 finding #35 and that the shipped `Pill` no longer paints; the fifth pill is drawn as the component
 actually renders it, which is why its ink reads darker-neutral beside them. Do not "match" the
-mock's legacy inks in code.
+mock's legacy inks in code.~~
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4349) — the four legacy inks are GONE from the asset, so there is
+> nothing left to mis-match.** `plans-tabbed-list.mock.html` has been re-pointed at the `--el-*`
+> layer, and the hand-darkened hues the struck sentence names — `#0a4fa0` (`.pill.generating`),
+> `#3a2d8a` (`.pill.planned`), `#0f5e29` (`.pill.approved`) and `#8a3d00` (`.pill.stale`) — are all
+> replaced by **`--el-text-strong`** over their existing tint, which is finding #35's recipe and
+> exactly what the fifth pill already drew. **The instruction survives its subject:** a build card
+> takes the `Pill` component's tone, never a colour read off a mock. What is no longer true is the
+> observation it rested on — the fifth pill's ink no longer "reads darker-neutral beside them",
+> because all five now carry the same charcoal ink. `plan-canvas-arrival.mock.html` carried the
+> identical four inks on its own copy of these pills and is swept in the same change.
 
 ### §3 — The WHEN label: no new column for the ROW, one needed for the RAIL
 
@@ -2978,6 +3057,17 @@ Tailwind emits `background-color: var(--el-accent-soft)`, an unresolved custom p
 computed-value time, and the declaration is simply dropped. No build error, no lint, no test. **A mock
 that declares its own token names lets a name that exists only in the mock reach production as though it
 were a design-system token** — which is why this asset declares none (§14).
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4349) — step 1's declaration is DELETED, and the chain can no
+> longer start there.** `plan-canvas-arrival.mock.html` now declares the `--el-*` element-token
+> layer and nothing else, so `--accent-soft: #f4f2fd` is gone (with the whole private-alias block it
+> sat in) and the `:36` line reference no longer resolves. The wash is
+> **`--el-accent-wash: color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg))`** — a name that
+> is still local to the asset, but whose VALUE is derived from tokens rather than invented, so
+> transcribing it into a build card yields `color-mix()` over two real tokens instead of a hex that
+> resolves nowhere. **Steps 2–4 and the decision below are unchanged and still correct.** The class
+> fix is `plans-tabbed-list.mock.html` and this asset carrying no privately-named colour at all
+> (MOTIR-4318's population), and the guard that will assert it tree-wide is MOTIR-4353.
 
 **THE DECISION — the ACTIVE fill is `--el-tint-lavender`, and it is defined everywhere:**
 

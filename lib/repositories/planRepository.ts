@@ -1,5 +1,5 @@
 import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 /** A plan the abandoned-plan sweep may act on — every `generating` plan past the
  *  grace, carrying the proposal COUNT read in the same statement.
@@ -31,7 +31,7 @@ export const planRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Plan | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.plan.findFirst({ where: { id, workspaceId } });
   },
 
@@ -47,7 +47,7 @@ export const planRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Plan | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.plan.findFirst({
       where: { sourceJobId, workspaceId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -157,7 +157,7 @@ export const planRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Plan | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.plan.findFirst({
       where: {
         projectId,
@@ -339,7 +339,7 @@ export const planRepository = {
     tx?: Prisma.TransactionClient,
     status?: PlanStatus | readonly PlanStatus[] | null,
   ): Promise<Plan[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const statusWhere =
       status == null ? {} : { status: typeof status === 'string' ? status : { in: [...status] } };
     return client.plan.findMany({
@@ -367,7 +367,7 @@ export const planRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Array<{ status: PlanStatus; count: number }>> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.plan.groupBy({
       by: ['status'],
       where: { projectId, workspaceId },

@@ -1,14 +1,35 @@
-import { flyOrchestrator } from './adapters/fly';
-import { flyFleetConfig, isFlyFleetConfigured } from './adapters/fly/flyMachines';
 import {
+  createUsageSink,
+  fakeOrchestrator,
+  flyFleetConfig,
   flyIndexerImage,
+  flyOrchestrator,
+  isFlyFleetConfigured,
   isFlyIndexerImageConfigured,
   INDEXER_IMAGE_ENV_VAR,
-} from './adapters/fly/indexImage';
-import { fakeOrchestrator } from './adapters/fake';
-import { OrchestratorNotConfiguredError } from './errors';
-import { probeImagePull, type RegistryCredentialResolver } from './imagePull';
-import type { ContainerOrchestrator, OrchestratorProvider } from './types';
+  OrchestratorNotConfiguredError,
+  probeImagePull,
+  type ContainerOrchestrator,
+  type OrchestratorProvider,
+  type RegistryCredentialResolver,
+} from '@motir/orchestrator';
+import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+
+// ⚠️ THIS FILE IS THE PACKAGE'S COMPOSITION ROOT (MOTIR-4299), and it is the ONE
+// app file that names `@motir/orchestrator`'s implementation choices.
+//
+// Everything under `lib/orchestrator/` moved into `packages/orchestrator` —
+// eleven files, the port, both adapters and the fake. What could NOT move is
+// what is written below: choosing an adapter reads THIS DEPLOYMENT's
+// environment, and recording a container's cost calls THIS APP's service. Both
+// are composition, and `docs/decisions/app-shell-over-packages.md` §1 puts
+// composition in the app, precisely so the package can be built and tested
+// without one.
+//
+// So this file does three things and nothing else: it SELECTS (the adapter),
+// it BINDS (the cost meter into the package's `UsageMeter` port), and it
+// RE-EXPORTS the package's surface so no consumer above has to know which half
+// of the boundary a symbol came from.
 
 // WHICH adapter is behind the port on this deployment (Story MOTIR-1916 ·
 // MOTIR-1921).
@@ -361,14 +382,23 @@ export async function verifyIndexFleetBootable(): Promise<FleetBootableVerdict> 
   return probeToVerdict(image);
 }
 
-export * from './types';
-export {
-  OrchestratorApiError,
-  OrchestratorImageUnpullableError,
-  OrchestratorNotConfiguredError,
-  OrchestratorTimeoutError,
-  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
-} from './errors';
-export { resolveContainerRate, FLEET_CONTAINER_SIZE } from './rates';
-export { buildContainerUsage, billableSecondsFor, isUnpriced } from './usage';
-export { recordContainerUsage } from './usageSink';
+// ── The BOUND half: the package's usage sink, closed over the app's meter ────
+//
+// `createUsageSink` takes a `UsageMeter`; `ciFleetCostMeterService` implements
+// it. Binding it HERE rather than importing the service inside the package is
+// the third of MOTIR-4299's three inversions, and it is the one that changes a
+// caller's world least: `recordContainerUsage` / `recordContainerAccrual` are
+// still free functions on `@/lib/orchestrator`, with the same signatures and the
+// same never-throw contract, at the same two call sites.
+const usageSink = createUsageSink(ciFleetCostMeterService);
+
+/** Emit one container's cost record. NEVER THROWS — see the package's sink. */
+export const recordContainerUsage = usageSink.recordContainerUsage;
+/** Emit a CHECKPOINT on a container still running. NEVER THROWS. */
+export const recordContainerAccrual = usageSink.recordContainerAccrual;
+
+// ── The PURE half: re-exported verbatim from the package ─────────────────────
+//
+// So that `@/lib/orchestrator` remains one import for a consumer, and so that
+// moving a symbol across the boundary later is not a change at every call site.
+export * from '@motir/orchestrator';

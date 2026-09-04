@@ -171,7 +171,13 @@ describe('the flag on the SERIALIZED envelope (the only form motir-ai sees)', ()
     vi.stubGlobal('fetch', fetchMock);
     try {
       await submitJob(
-        'replan',
+        // ⚠️ A 15th FILE MOTIR-4304's GREP COULD NOT SEE (found by MOTIR-4308).
+        // That card reconciled 14 test files naming a planning kind; its pattern
+        // requires the literal on the same LINE as `submitJob` / `jobKind` /
+        // `kind`, and this one sits on its own line. The kind is incidental to
+        // what this helper asserts — that the context field crosses the wire —
+        // so it takes the one planning kind like every other submit.
+        'plan',
         tenant,
         { [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: value },
         { userId: 'user_1' },

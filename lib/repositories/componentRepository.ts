@@ -1,5 +1,12 @@
 import { Prisma, type Component } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
+
+/**
+ * The `Component` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.ComponentUncheckedUpdateInput` itself is named only here.
+ */
+export type ComponentUpdateInput = Prisma.ComponentUncheckedUpdateInput;
 
 // Component repository — single Prisma operations on the `component` table
 // (Story 5.4 · Subtask 5.4.1). The persistence leaf under componentsService
@@ -20,7 +27,7 @@ export type ComponentWithCount = Prisma.ComponentGetPayload<{
 
 export const componentRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<Component | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.component.findUnique({ where: { id } });
   },
 
@@ -32,7 +39,7 @@ export const componentRepository = {
    */
   async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<Component[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.component.findMany({ where: { id: { in: ids } } });
   },
 
@@ -47,7 +54,7 @@ export const componentRepository = {
     nameLower: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Component | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.component.findUnique({
       where: { projectId_nameLower: { projectId, nameLower } },
     });
@@ -64,7 +71,7 @@ export const componentRepository = {
     projectId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ComponentWithCount[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.component.findMany({
       where: { projectId },
       include: { _count: { select: { workItems: true } } },
@@ -78,7 +85,7 @@ export const componentRepository = {
    * Relation filter, name order.
    */
   async listByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<Component[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.component.findMany({
       where: { workItems: { some: { workItemId } } },
       orderBy: { nameLower: 'asc' },
@@ -98,7 +105,7 @@ export const componentRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Component | null> {
     if (componentIds.length === 0) return null;
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.component.findFirst({
       where: { id: { in: componentIds }, defaultAssigneeId: { not: null } },
       orderBy: { nameLower: 'asc' },
@@ -129,7 +136,7 @@ export const componentRepository = {
 
   async update(
     id: string,
-    patch: Prisma.ComponentUncheckedUpdateInput,
+    patch: ComponentUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<Component> {
     return tx.component.update({ where: { id }, data: patch });

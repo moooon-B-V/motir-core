@@ -39,7 +39,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
-// The `tx ?? db` FALLBACK ARM (MOTIR-2815 part 1).
+// The `tx ?? dbRead` FALLBACK ARM (MOTIR-2815 part 1).
 //
 // Every read this story bound has two arms and the coverage gate counts both.
 // Binding the production callers left the `db` one with NO caller at all, so it
@@ -342,7 +342,7 @@ describe('workItemRepository — an invalid operator never reaches the SQL compi
 // unbound ones. Moving it lets that file stay fully guarded and puts this one
 // where its adjudication is honest.
 
-describe('the `tx ?? db` fallback arm of the saved-filter reads', () => {
+describe('the `tx ?? dbRead` fallback arm of the saved-filter reads', () => {
   // ⚠️ DELIBERATELY UNBOUND, and both arms are asserted. The optional `tx` is what
   // `tests/rls/singletonReadScan.ts` recognises as BINDABLE, so it has to stay —
   // but once every production call site threads a `tx`, the `db` arm has no
@@ -587,7 +587,7 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
   });
 });
 
-// ── EVERY `tx ?? db` arm in `workItemRepository`, in one table ────────────────
+// ── EVERY `tx ?? dbRead` arm in `workItemRepository`, in one table ────────────────
 //
 // The file has SIXTY-EIGHT of them, and MOTIR-2830 took the last caller off
 // almost all at once by binding the test call sites. Branch coverage fell to
@@ -627,7 +627,7 @@ function isEmptyish(value: unknown): boolean {
 }
 
 describe('workItemRepository — all 67 fallback arms have a caller', () => {
-  it('every `tx ?? db` read resolves unbound, and answers EMPTY under motir_app', async () => {
+  it('every `tx ?? dbRead` read resolves unbound, and answers EMPTY under motir_app', async () => {
     const { fx, itemId } = await seedItem('FBW');
     const ws = fx.workspaceId;
     const pid = fx.projectId;

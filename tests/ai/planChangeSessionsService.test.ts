@@ -337,7 +337,7 @@ describe('planChangeSessionsService — submitting the accumulated intent', () =
       { projectId: string; workspaceId: string },
       { prompt: string },
     ];
-    expect(kind).toBe('augment');
+    expect(kind).toBe('plan');
     expect(tenant.projectId).toBe(fx.projectId);
     expect(tenant.workspaceId).toBe(fx.workspaceId);
     // The ACCUMULATED intent, not just the latest turn.

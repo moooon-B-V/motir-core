@@ -237,8 +237,16 @@ function modelColorVar(model: string | null): string {
   return 'var(--el-text-muted)';
 }
 
+// ⚠️ TOTAL OVER A PERSISTED STRING, NOT OVER A LIVE ENUM (MOTIR-4305). `AiUsage.jobKind`
+// is a `string` column holding what was submitted AT THE TIME, and `aiUsageService`
+// passes it straight through — so this switch must keep answering for values the
+// wire no longer carries. `plan` is the ONE planning kind every submit sends after
+// MOTIR-4304; the four below it are HISTORY, and their rows are what an organization
+// was billed for. Relabelling them would make the org's own record of its spend wrong.
 function jobKindLabel(kind: string, t: T): string {
   switch (kind) {
+    case 'plan':
+      return t('activity.kindPlan');
     case 'generate_tree':
       return t('activity.kindGenerate');
     case 'expand_item':
@@ -252,8 +260,18 @@ function jobKindLabel(kind: string, t: T): string {
   }
 }
 
+// The tints the amended `design/ai-usage/usage.mock.html` specifies, read off the
+// asset rather than chosen here: `.pill-plan` is `--el-tint-peach`, the one tint in
+// the family that panel does not already spend.
+//
+// ⚠️ `replan` HAS A LABEL AND NO TINT, and that is deliberate rather than an
+// omission — it falls to the neutral `--el-surface` default, which is exactly how
+// the asset draws it. Adding a fifth tint here would make the shipped surface and
+// the design disagree.
 function jobKindTint(kind: string): string {
   switch (kind) {
+    case 'plan':
+      return 'bg-(--el-tint-peach)';
     case 'generate_tree':
       return 'bg-(--el-tint-lavender)';
     case 'expand_item':

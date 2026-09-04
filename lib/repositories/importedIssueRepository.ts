@@ -1,5 +1,5 @@
 import { type ImportedIssue, type ImportSource, type Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // ImportedIssue repository — single Prisma operations on the `imported_issue`
 // idempotency MAP (Story 7.16 · MOTIR-939): one row per imported source issue,
@@ -41,7 +41,7 @@ export const importedIssueRepository = {
     externalId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<ImportedIssue | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.importedIssue.findUnique({
       where: { projectId_source_externalId: { projectId, source, externalId } },
     });

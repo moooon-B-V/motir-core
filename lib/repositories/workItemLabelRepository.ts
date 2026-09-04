@@ -1,5 +1,5 @@
 import { Prisma, type WorkItemLabel } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // WorkItemLabel repository — single Prisma operations on the
 // `work_item_label` join table (Story 5.4 · Subtask 5.4.1). The persistence
@@ -91,7 +91,7 @@ export const workItemLabelRepository = {
     workItemId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<WorkItemLabel[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workItemLabel.findMany({ where: { workItemId } });
   },
 };

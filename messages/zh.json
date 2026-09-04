@@ -1590,7 +1590,6 @@
     "nav": {
       "eyebrow": "项目设置",
       "backToProject": "返回{projectName}",
-      "soon": "即将推出",
       "group": {
         "general": "常规",
         "access": "访问",
@@ -2552,8 +2551,7 @@
         "appearance": "外观",
         "twoFactor": "两步验证",
         "apiTokens": "令牌",
-        "data": "数据与隐私",
-        "soon": "即将推出"
+        "data": "数据与隐私"
       },
       "data": {
         "title": "数据与隐私",
@@ -5315,6 +5313,7 @@
       "model": "模型",
       "tokens": "Token",
       "credits": "额度",
+      "kindPlan": "规划",
       "kindGenerate": "生成计划",
       "kindExpand": "展开故事",
       "kindAugment": "扩充树",

@@ -4,7 +4,10 @@ import { getMessagesFor } from '@/lib/i18n/messages';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
+import {
+  workflowsRepository,
+  type WorkflowStatusUpdateInput,
+} from '@/lib/repositories/workflowsRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { toWorkflowStatusDto, toWorkflowTransitionDto } from '@/lib/mappers/workflowMappers';
@@ -637,7 +640,7 @@ export const workflowsService = {
         if (input.isInitial === true) {
           await workflowsRepository.clearInitialForProject(pre.projectId, input.workspaceId, tx);
         }
-        const data: Prisma.WorkflowStatusUncheckedUpdateInput = {};
+        const data: WorkflowStatusUpdateInput = {};
         if (input.label !== undefined) data.label = input.label;
         if (input.category !== undefined) data.category = input.category;
         if (input.color !== undefined) data.color = input.color;

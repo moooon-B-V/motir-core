@@ -411,8 +411,19 @@ jobs:
             # PR whose acceptance spec sorts onto page two would otherwise read
             # as touching nothing — a silent false negative, which is exactly the
             # failure mode this card exists to remove.
+            #
+            # ⚠️ THE FIELD IS `filename`, NOT `path` (MOTIR-4327). The REST
+            # endpoint `GET /repos/{o}/{r}/pulls/{n}/files` returns objects keyed
+            # `filename`; there is no `path` key on them at all, and `gh`'s jq
+            # prints an EMPTY LINE rather than an error for a key that is not
+            # there — so `-q '.[].path'` yielded one blank line per changed file,
+            # the grep below never matched, and RUN was `false` on every single
+            # pull request for half a day while `Acceptance complete` stayed
+            # green. The trap is that `gh pr view --json files` DOES call it
+            # `path`: that is gh's own normalised projection, not this API's
+            # shape, and the two are one command apart.
             CHANGED=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
-              --paginate -q '.[].path')
+              --paginate -q '.[].filename')
             if printf '%s\n' "${CHANGED}" | grep -qE \
               '^tests/e2e/acceptance[^/]*\.spec\.ts$|^\.github/workflows/acceptance-tests\.yml$|^playwright\.acceptance\.config\.ts$|^tests/e2e/_helpers/acceptance-(video|diagnostics)\.ts$'
             then

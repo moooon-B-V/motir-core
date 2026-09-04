@@ -12,27 +12,81 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Spatial onboarding canvas — prototype</title>
     <style>
+      /* ----------------------------------------------------------------------
+         Token block — the `--el-*` ELEMENT-token layer, resolved to the LIGHT /
+         warm-editorial / motir values the running app computes, exactly as the
+         in-area copy of record `design/ai-planning/plan-revision.mock.html`
+         states them. A plain browser paints the real palette without the
+         Tailwind build.
+
+         ⚠️ MOTIR-4346 (2026-09-03) — this block USED to alias those same values
+         onto PRIVATE names (`--muted: #787671`, `--surface: #ffffff`, …), and
+         the asset painted a further 43 raw literals at their points of use. The
+         values were right, and that was the trap: a raw hex does not flip with
+         `data-palette`, does not follow a re-skin, and is invisible to every ink
+         guard in the tree — both `design-ink-contrast` and
+         `design-state-ink-contrast` classify an ink by reading an `--el-*` name
+         off the DECLARATION at the point of use, so `color: var(--el-text-muted)` is
+         unmeasured however `--muted` is defined.
+
+         ⚠️ MAP BY VALUE AND ROLE, NEVER BY NAME. The old `--surface` was
+         `#ffffff` while the design system's `--el-surface` is `#f6f5f4`: the old
+         `--surface` is `--el-card`, and it is the old `--hub` that is
+         `--el-surface`.
+      ---------------------------------------------------------------------- */
       :root {
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --muted: #787671;
-        --faint: #a4a097;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --accent: #5645d4;
-        --accent-text: #ffffff;
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --info: #0075de;
-        --sky: #dcecfa;
-        --lavender: #e6e0f5;
-        --mint: #d9f3e1;
-        --peach: #ffe8d4;
-        --pink: #ff64c8;
+        /* ── Ink ─────────────────────────────────────────────────────────
+           `--el-text-muted` and `--el-text-faint` are DECLARED and used only
+           where the guards allow: muted is 4.12–4.34:1 on every tinted surface
+           and faint clears AA on none (CLAUDE.md's measured table, MOTIR-2455).
+           Declaring them still matters — `mockStateInkScan` resolves a token by
+           planting a probe, and an asset that declares neither reports its faint
+           ink as muted. */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        /* ── Surfaces ─────────────────────────────────────────────────── */
+        --el-page-bg: #ffffff;
+        --el-card: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+
+        /* ── Borders ──────────────────────────────────────────────────── */
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        /* ── Accent + status ──────────────────────────────────────────── */
+        --el-accent: #5645d4;
+        --el-accent-on-surface: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-info: #0075de;
+
+        /* ── Tints ────────────────────────────────────────────────────── */
+        --el-tint-peach: #ffe8d4;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+
+        /* ── The accent WASH, palette-DERIVED rather than invented ──────
+           The first node's icon tile paints a wash lighter than
+           `--el-tint-lavender`, and no `--el-*` token exposes one. It is a
+           `color-mix` whose inputs are BOTH tokens — the form CLAUDE.md
+           blesses — so it re-tints with `data-palette` instead of freezing the
+           old `#ece9fb`. Same derivation as `plan-detail-list-view.mock.html`
+           (MOTIR-4277); the ratio is this asset's own (11% ⇒ #ecebfa). */
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
+
+        /* ── Shape (element-semantic names; warm-editorial values) ────── */
+        --shadow-subtle: 0 1px 2px #0000000d;
+        --shadow-card: 0 2px 6px #0000000f;
+
         font-family:
           ui-sans-serif,
           system-ui,
@@ -46,8 +100,8 @@
       }
       body {
         margin: 0;
-        background: var(--hub);
-        color: var(--text);
+        background: var(--el-surface);
+        color: var(--el-text);
       }
       .frame {
         display: grid;
@@ -60,8 +114,8 @@
         position: relative;
         overflow: hidden;
         background:
-          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
-          var(--hub);
+          radial-gradient(circle at 1px 1px, var(--el-border) 1px, transparent 0) 0 0 / 26px 26px,
+          var(--el-surface);
         cursor: grab;
       }
       .viewport:active {
@@ -97,20 +151,20 @@
         align-items: center;
         gap: 8px;
         padding: 7px 12px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 11px;
         font-size: 13px;
         font-weight: 600;
-        color: var(--strong);
-        box-shadow: 0 1px 2px #0000000d;
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
       }
       .crumb .dot {
         width: 16px;
         height: 16px;
         border-radius: 5px;
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         display: grid;
         place-items: center;
       }
@@ -124,11 +178,11 @@
       }
       .zoom {
         display: inline-flex;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 11px;
         overflow: hidden;
-        box-shadow: 0 1px 2px #0000000d;
+        box-shadow: var(--shadow-subtle);
       }
       .zoom button {
         width: 38px;
@@ -136,19 +190,19 @@
         border: 0;
         background: transparent;
         font-size: 18px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         cursor: pointer;
       }
       .zoom button + button {
-        border-left: 1px solid var(--hair);
+        border-left: 1px solid var(--el-border-soft);
       }
       .zoomlevel {
         font:
           600 12px ui-monospace,
           monospace;
-        color: var(--muted);
-        background: var(--surface);
-        border: 1px solid var(--border);
+        color: var(--el-text-muted);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         padding: 8px 10px;
       }
@@ -158,13 +212,13 @@
         bottom: 16px;
         display: flex;
         gap: 12px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 11px;
         padding: 8px 12px;
         font-size: 11px;
-        color: var(--muted);
-        box-shadow: 0 1px 2px #0000000d;
+        color: var(--el-text-muted);
+        box-shadow: var(--shadow-subtle);
       }
       .legend i {
         width: 9px;
@@ -179,11 +233,11 @@
       .node {
         position: absolute;
         width: 248px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
         border-radius: 16px;
         padding: 12px 13px;
-        box-shadow: 0 2px 6px #0000000f;
+        box-shadow: var(--shadow-card);
       }
       .node.upcoming {
         opacity: 0.66;
@@ -191,10 +245,10 @@
         box-shadow: none;
       }
       .node.active {
-        border-color: var(--accent);
+        border-color: var(--el-accent);
         box-shadow:
-          0 0 0 3px #5645d426,
-          0 4px 12px #5645d41f;
+          0 0 0 3px color-mix(in srgb, var(--el-accent) 15%, transparent),
+          0 4px 12px color-mix(in srgb, var(--el-accent) 12%, transparent);
       }
       .node.compact {
         width: 190px;
@@ -220,12 +274,12 @@
       .ntitle {
         font-size: 13.5px;
         font-weight: 700;
-        color: var(--text);
+        color: var(--el-text);
         line-height: 1.15;
       }
       .nsub {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 1px;
       }
       .pill {
@@ -244,21 +298,21 @@
         height: 12px;
       }
       .pill.reviewed {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
       }
       .pill.here {
-        background: var(--lavender);
-        color: #3a2d8a;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
       }
       .pill.deciding {
-        background: var(--peach);
-        color: #8a3d00;
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
       }
       .capt {
         margin-top: 9px;
         padding-top: 9px;
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
         display: flex;
         flex-direction: column;
         gap: 5px;
@@ -268,7 +322,7 @@
         gap: 6px;
         align-items: flex-start;
         font-size: 11.5px;
-        color: #54514b;
+        color: var(--el-text-secondary);
       }
       .capt svg {
         width: 13px;
@@ -277,15 +331,15 @@
         margin-top: 1px;
       }
       .capt .warn {
-        color: var(--strong);
+        color: var(--el-text-strong);
         font-weight: 600;
       }
       .canskip {
         font:
           600 10px ui-monospace,
           monospace;
-        color: var(--muted);
-        background: var(--mutedfill);
+        color: var(--el-text-muted);
+        background: var(--el-muted);
         padding: 2px 6px;
         border-radius: 6px;
         margin-left: 6px;
@@ -309,9 +363,9 @@
         align-items: center;
         gap: 7px;
         font-size: 11px;
-        color: var(--muted);
-        background: var(--soft);
-        border: 1px solid var(--hair);
+        color: var(--el-text-muted);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
         border-radius: 7px;
         padding: 4px 7px;
       }
@@ -327,15 +381,15 @@
         font:
           600 11px ui-monospace,
           monospace;
-        color: var(--faint);
+        color: var(--el-text-faint);
         text-transform: uppercase;
         letter-spacing: 0.06em;
       }
 
       /* ── chat rail ── */
       .rail {
-        background: var(--surface);
-        border-left: 1px solid var(--border);
+        background: var(--el-card);
+        border-left: 1px solid var(--el-border);
         display: flex;
         flex-direction: column;
       }
@@ -344,20 +398,20 @@
         align-items: center;
         gap: 8px;
         padding: 13px 16px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .railhead .g {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: var(--success);
+        background: var(--el-success);
       }
       .railhead span {
         font:
           600 12px ui-monospace,
           monospace;
         letter-spacing: 0.04em;
-        color: #54514b;
+        color: var(--el-text-secondary);
         text-transform: uppercase;
       }
       .railbody {
@@ -377,24 +431,24 @@
         width: 26px;
         height: 26px;
         border-radius: 50%;
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         font: 700 12px sans-serif;
         display: grid;
         place-items: center;
         flex: none;
       }
       .bubble {
-        background: var(--hub);
+        background: var(--el-surface);
         border-radius: 13px;
         padding: 9px 12px;
         font-size: 13px;
         line-height: 1.45;
-        color: var(--text);
+        color: var(--el-text);
       }
       .decide {
         padding: 12px 16px;
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -412,29 +466,29 @@
         gap: 7px;
       }
       .btn.primary {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .btn.secondary {
-        background: var(--mutedfill);
-        color: var(--text);
+        background: var(--el-muted);
+        color: var(--el-text);
       }
       .composer {
         padding: 12px;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
         display: flex;
         gap: 8px;
       }
       .composer input {
         flex: 1;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 10px;
         padding: 9px 11px;
         font-size: 13px;
       }
       .composer .send {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         border: 0;
         border-radius: 10px;
         width: 38px;
@@ -457,7 +511,7 @@
                 width="11"
                 height="11"
                 fill="none"
-                stroke="#fff"
+                stroke="var(--el-accent-text)"
                 stroke-width="2.4"
               >
                 <path
@@ -465,7 +519,7 @@
                 /></svg></span
             >PayFlow · your project</span
           >
-          <span class="crumb" style="font-weight: 500; color: var(--muted)"
+          <span class="crumb" style="font-weight: 500; color: var(--el-text-muted)"
             >Pre-plan · building your direction</span
           >
         </div>
@@ -477,9 +531,9 @@
           <span class="zoomlevel" id="zl">100%</span>
         </div>
         <div class="legend">
-          <span><i style="background: var(--success)"></i>reviewed</span>
-          <span><i style="background: var(--accent)"></i>you are here</span>
-          <span><i style="background: var(--faint)"></i>upcoming</span>
+          <span><i style="background: var(--el-success)"></i>reviewed</span>
+          <span><i style="background: var(--el-accent)"></i>you are here</span>
+          <span><i style="background: var(--el-text-faint)"></i>upcoming</span>
         </div>
       </div>
 
@@ -551,8 +605,8 @@
           x: 70,
           y: 60,
           cls: 'compact',
-          tile: '#5645d4',
-          tileBg: '#ece9fb',
+          tile: 'var(--el-accent)',
+          tileBg: 'var(--el-accent-wash)',
           icon: 'pin',
           title: 'Your idea',
           sub: '“invoicing + chase late payers”',
@@ -561,8 +615,8 @@
           id: 'disc',
           x: 410,
           y: 50,
-          tileBg: 'var(--sky)',
-          tile: '#0075de',
+          tileBg: 'var(--el-tint-sky)',
+          tile: 'var(--el-info)',
           icon: 'search',
           state: 'done',
           title: 'Understanding your idea',
@@ -577,8 +631,8 @@
           id: 'vis',
           x: 760,
           y: 50,
-          tileBg: 'var(--lavender)',
-          tile: '#5645d4',
+          tileBg: 'var(--el-tint-lavender)',
+          tile: 'var(--el-accent)',
           icon: 'shapes',
           state: 'done',
           title: "What we'll build",
@@ -592,8 +646,8 @@
           id: 'feas',
           x: 760,
           y: 400,
-          tileBg: 'var(--mint)',
-          tile: '#1aae39',
+          tileBg: 'var(--el-tint-mint)',
+          tile: 'var(--el-success)',
           icon: 'shield',
           state: 'done',
           optional: 1,
@@ -608,8 +662,8 @@
           id: 'val',
           x: 410,
           y: 400,
-          tileBg: 'var(--peach)',
-          tile: '#dd5b00',
+          tileBg: 'var(--el-tint-peach)',
+          tile: 'var(--el-warning)',
           icon: 'list',
           state: 'active',
           optional: 1,
@@ -625,8 +679,8 @@
           x: 70,
           y: 420,
           cls: 'compact upcoming',
-          tileBg: 'var(--mutedfill)',
-          tile: '#a4a097',
+          tileBg: 'var(--el-muted)',
+          tile: 'var(--el-text-faint)',
           icon: 'palette',
           title: 'Design the look',
           sub: 'up next · web only',
@@ -637,8 +691,8 @@
           x: 70,
           y: 720,
           cls: 'compact upcoming',
-          tileBg: 'var(--mutedfill)',
-          tile: '#a4a097',
+          tileBg: 'var(--el-muted)',
+          tile: 'var(--el-text-faint)',
           icon: 'net',
           title: 'Plan → your epics',
           sub: 'the roadmap continues →',
@@ -684,9 +738,9 @@
 
       function pill(state) {
         if (state === 'done')
-          return `<span class="pill reviewed">${dot(I.check, '#0f5e29')}Reviewed</span>`;
+          return `<span class="pill reviewed">${dot(I.check, 'var(--el-text-strong)')}Reviewed</span>`;
         if (state === 'active')
-          return `<span class="pill deciding">${dot(I.spark, '#8a3d00')}Deciding</span>`;
+          return `<span class="pill deciding">${dot(I.spark, 'var(--el-text-strong)')}Deciding</span>`;
         return '';
       }
       for (const n of nodes) {
@@ -695,7 +749,9 @@
         const capt = (n.capt || [])
           .map(([txt, kind]) => {
             const ic =
-              kind === 2 ? dot(I.alert, '#dd5b00') : dot(I.check, kind ? '#1aae39' : '#a4a097');
+              kind === 2
+                ? dot(I.alert, 'var(--el-warning)')
+                : dot(I.check, kind ? 'var(--el-success)' : 'var(--el-text-faint)');
             return `<div class="${kind === 2 ? 'warn' : ''}">${ic}<span>${txt}</span></div>`;
           })
           .join('');
@@ -709,7 +765,7 @@
           pill(n.state) +
           `</div>` +
           (n.state === 'active' || (n.optional && n.id === 'val')
-            ? `<span class="pill here" style="position:absolute;top:-10px;left:14px">${dot(I.pin, '#3a2d8a')}You are here</span>`
+            ? `<span class="pill here" style="position:absolute;top:-10px;left:14px">${dot(I.pin, 'var(--el-text-strong)')}You are here</span>`
             : '') +
           (capt ? `<div class="capt">${capt}</div>` : '');
         world.appendChild(el);
@@ -722,8 +778,8 @@
         el.style.left = e.x + 'px';
         el.style.top = e.y + 'px';
         el.innerHTML =
-          `<div class="nhead"><span class="tile" style="background:var(--mutedfill)">${svg(I.net, '#a4a097')}</span><div class="ntitle">${e.title}</div></div>` +
-          `<div class="stories">${e.stories.map((s) => `<div class="story"><i style="background:#a4a097"></i>${s}</div>`).join('')}</div>`;
+          `<div class="nhead"><span class="tile" style="background:var(--el-muted)">${svg(I.net, 'var(--el-text-faint)')}</span><div class="ntitle">${e.title}</div></div>` +
+          `<div class="stories">${e.stories.map((s) => `<div class="story"><i style="background:var(--el-text-faint)"></i>${s}</div>`).join('')}</div>`;
         world.appendChild(el);
         pos[e.id].h = el.offsetHeight;
       }
@@ -779,16 +835,16 @@
       }
       // The linear pre-plan chain (each tier builds on the previous), then plan
       // fans out to the epics. discovery → vision is the link the design needs.
-      edge('idea', 'disc', '#1aae39');
-      edge('disc', 'vis', '#1aae39');
-      edge('vis', 'feas', '#1aae39');
-      edge('feas', 'val', '#5645d4'); // into the active frontier
-      edge('val', 'design', '#cfcac2', 1);
-      edge('design', 'plan', '#cfcac2', 1);
-      edge('plan', 'e1', '#cfcac2', 1); // → Foundation
-      edge('plan', 'e4', '#cfcac2', 1); // → Marketing site (independent → parallel to Foundation)
-      edge('e1', 'e2', '#cfcac2', 1); // Foundation blocks Invoices
-      edge('e1', 'e3', '#cfcac2', 1); // Foundation blocks Reminders
+      edge('idea', 'disc', 'var(--el-success)');
+      edge('disc', 'vis', 'var(--el-success)');
+      edge('vis', 'feas', 'var(--el-success)');
+      edge('feas', 'val', 'var(--el-accent)'); // into the active frontier
+      edge('val', 'design', 'var(--el-border-strong)', 1);
+      edge('design', 'plan', 'var(--el-border-strong)', 1);
+      edge('plan', 'e1', 'var(--el-border-strong)', 1); // → Foundation
+      edge('plan', 'e4', 'var(--el-border-strong)', 1); // → Marketing site (independent → parallel to Foundation)
+      edge('e1', 'e2', 'var(--el-border-strong)', 1); // Foundation blocks Invoices
+      edge('e1', 'e3', 'var(--el-border-strong)', 1); // Foundation blocks Reminders
 
       // ── pan + zoom ──
       let scale = 1,

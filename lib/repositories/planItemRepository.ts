@@ -1,21 +1,32 @@
 import { Prisma, type Plan, type PlanItem, type PlanStatus } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
+
+/**
+ * The `PlanItem` create shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.PlanItemUncheckedCreateInput` itself is named only here.
+ */
+export type PlanItemCreateInput = Prisma.PlanItemUncheckedCreateInput;
+
+/**
+ * The `PlanItem` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.PlanItemUncheckedUpdateInput` itself is named only here.
+ */
+export type PlanItemUpdateInput = Prisma.PlanItemUncheckedUpdateInput;
 
 // PlanItem repository — single Prisma operations on the `plan_item` table
 // (Story 7.21 · MOTIR-1336). Writes require `tx`; pure reads use the `db`
 // singleton. No business logic, no transactions, no DTO mapping.
 export const planItemRepository = {
-  async create(
-    data: Prisma.PlanItemUncheckedCreateInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<PlanItem> {
+  async create(data: PlanItemCreateInput, tx: Prisma.TransactionClient): Promise<PlanItem> {
     return tx.planItem.create({ data });
   },
 
   /** A plan's proposal items in append order (createdAt asc, id asc). Optional
    *  `tx` joins a surrounding transaction (the materialize read in approve). */
   async findByPlan(planId: string, tx?: Prisma.TransactionClient): Promise<PlanItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.findMany({
       where: { planId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -43,7 +54,7 @@ export const planItemRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<PlanItem[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.findMany({
       where: { workItemId, workspaceId, op: { in: ['modify', 'remove'] } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -76,7 +87,7 @@ export const planItemRepository = {
     statuses: readonly PlanStatus[],
     tx?: Prisma.TransactionClient,
   ): Promise<Array<PlanItem & { plan: Pick<Plan, 'id' | 'title' | 'status'> }>> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.findMany({
       where: {
         workItemId,
@@ -90,7 +101,7 @@ export const planItemRepository = {
   },
 
   async countByPlan(planId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.count({ where: { planId } });
   },
 
@@ -101,7 +112,7 @@ export const planItemRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<Map<string, number>> {
     if (planIds.length === 0) return new Map();
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const rows = await client.planItem.groupBy({
       by: ['planId'],
       where: { planId: { in: planIds } },
@@ -113,7 +124,7 @@ export const planItemRepository = {
   /** A single PlanItem by id. Optional `tx` joins a surrounding transaction
    *  (the proposal-edit path re-reads the item under the plan lock). */
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<PlanItem | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planItem.findUnique({ where: { id } });
   },
 
@@ -122,7 +133,7 @@ export const planItemRepository = {
    *  `planned`. A write, so `tx` is required. */
   async update(
     id: string,
-    data: Prisma.PlanItemUncheckedUpdateInput,
+    data: PlanItemUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<PlanItem> {
     return tx.planItem.update({ where: { id }, data });

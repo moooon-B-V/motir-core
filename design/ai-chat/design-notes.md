@@ -322,6 +322,40 @@ Invoices`, `Foundation → Reminders`) — but it is **not a hard rule**, so ind
   canvas + chat are labelled regions; nodes are keyboard-focusable; zoom/pan have
   keyboard equivalents.
 
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4346) — the "colour via `--el-*`" clause above was
+> FALSE of the asset from the day it was written, and is now true.** What
+> `canvas-spatial.mock.html` actually declared was a `:root` of PRIVATE aliases
+> carrying the design system's real values (`--muted: #787671`,
+> `--surface: #ffffff`, `--hub: #f6f5f4`, …), and it painted a further **43 raw
+> literals at their points of use**. Not one `--el-*` custom property appeared in
+> the file. The values were right, and that was the trap: a raw hex does not flip with
+> `data-palette`, does not follow a re-skin, and is invisible to every ink guard in
+> the tree — `design-ink-contrast` and `design-state-ink-contrast` both classify an
+> ink by reading an `--el-*` name off the DECLARATION at the point of use, so
+> `color: var(--muted)` was unmeasured however `--muted` was defined. Both guards
+> were green about this asset and neither had ever ruled on it.
+>
+> **What the swap changed on the record, token by token:**
+>
+> | was                                                                                                                                  | is                                                                                 | why                                                                                                                                                                            |
+> | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | `--surface: #ffffff`                                                                                                                 | `--el-card`                                                                        | the map is by VALUE and ROLE: `--el-surface` is `#f6f5f4`, so a name-based substitution would have repainted every white node                                                  |
+> | `--hub: #f6f5f4`                                                                                                                     | `--el-surface`                                                                     | the canvas + page ground — the other half of the same correction                                                                                                               |
+> | `--muted` / `--faint` / `--strong` / `--text`                                                                                        | `--el-text-muted` / `--el-text-faint` / `--el-text-strong` / `--el-text`           | unchanged values, now measurable                                                                                                                                               |
+> | `#0f5e29` on mint · `#3a2d8a` on lavender · `#8a3d00` on peach (the `Reviewed` / `You are here` / `Deciding` pills and their glyphs) | `--el-text-strong`                                                                 | `CLAUDE.md`'s coloured-chip rule — the hue lives in the tint BACKGROUND and the ink is `--el-text-strong` (finding #35). Three hand-darkened hues that reached no token at all |
+> | `#54514b` (the captured-findings rows, the rail head)                                                                                | `--el-text-secondary`                                                              | the nearest token by value AND the one that clears AA on every surface                                                                                                         |
+> | `#cfcac2` (the not-yet-reached dashed edges)                                                                                         | `--el-border-strong` (`#c8c4be`)                                                   | a 3-unit shift, imperceptible at a 2.5px dashed stroke; it is a quiet hairline and that is the token for one                                                                   |
+> | `#ece9fb` (the first node's icon tile)                                                                                               | `--el-accent-wash` = `color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg))` | no `--el-*` exposes a wash this light; a `color-mix` over two tokens re-tints with the palette instead of freezing the hex                                                     |
+> | `#e3e0db` (the dot-grid backdrop)                                                                                                    | `--el-border`                                                                      | the grid texture is the one raw value `CLAUDE.md` permits, and it costs nothing to route it through the token anyway                                                           |
+> | `#5645d426` / `#5645d41f` (the active node's ring + lift)                                                                            | `color-mix(… var(--el-accent) 15%/12%, transparent)`                               | an alpha hex IS a mix ratio                                                                                                                                                    |
+>
+> The drawn layout, copy, elements and access paths are UNCHANGED — only the layer
+> the colours are declared through moved. `canvas-spatial.png` and
+> `canvas-spatial-overview.png` are both re-exported at `1280×760 @2x`
+> (`2560×1520`, dimensions unchanged); the overview is the `?z=overview` view this
+> section's header describes, and it is re-exported for the same reason the detail
+> is — it draws the same inks.
+
 **Build split (the canvas is a FOUNDATION):** a reusable `PlanningCanvas` component
 (pan/zoom/drag/fit + node + read-only edge rendering — MOTIR-1236), per-user layout
 persistence (MOTIR-1237), composed by the onboarding shell (MOTIR-840) and reused by
@@ -797,7 +831,45 @@ is an ARRANGEMENT of them, never a redesign:
   `--el-muted`; the type icons are `--el-type-*`; the status Pill puts the
   hue in the tint background with `--el-text-strong` (finding #35, AA). The
   map highlight uses the accent ring (`--el-accent`) + glow (`--el-highlight`).
-  The @-trigger button is `--el-muted` text on `--el-surface-soft`.
+  ~~The @-trigger button is `--el-muted` text on `--el-surface-soft`.~~
+  **⚠️ AMENDED (MOTIR-4346): the @-trigger button is `--el-text-secondary` on
+  `--el-surface-soft`.** `--el-muted` is a FILL token (`#f3f4f6`), not an ink, so
+  that sentence named a colour the element could not have been painted in; what
+  the mock actually carried was the private `--muted` alias (`#787671`, the value
+  of `--el-text-muted`), which is 4.34:1 on `--el-surface-soft` and fails AA.
+
+> **⚠️ AMENDED 2026-09-03 (MOTIR-4346) — "strictly via `--el-*`" was FALSE of the
+> asset until this date, and the sentence is what made it invisible.** The mock
+> DID inline the real light-palette values, exactly as the clause says — onto 45
+> PRIVATE names on its own `:root` (`--muted: #787671`, `--soft: #fafaf9`,
+> `--surface: #ffffff`, …), and then painted through those. The values were right
+> and a reader checking this claim against the file would have agreed with it.
+> What a private name cannot do is flip with `data-palette`, follow a re-skin, or
+> be MEASURED: `design-ink-contrast` and `design-state-ink-contrast` classify an
+> ink by reading an `--el-*` name off the DECLARATION at the point of use, so
+> `color: var(--muted)` was unmeasured however `--muted` was defined, and both
+> guards were green about an asset neither had ever ruled on.
+>
+> **Rewriting every site at the point of use put the asset inside the guards, and
+> the RESTING arm immediately reported 42 findings on it.** Each is amended here
+> rather than left to be inferred from a diff:
+>
+> | element                                                                                                                                                               | was                                                       | is                                                                                                                                                                                               |
+> | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | the dropdown row's monospace key (`.dr-key`)                                                                                                                          | `--el-text-muted` on `--el-surface-soft` (4.34:1)         | `--el-text-identifier` — the token that names the job (`theme.css`: _monospace MOTIR-123 keys_). This mock is older than that token, so it had to DECLARE it as well as consume it               |
+> | the panel captions (`.cap`), the dropdown heading (`.drop-head`), the targets-tray label, the mini-panel labels, the canvas label, the state-card and mini-drop heads | `--el-text-faint` / `--el-text-muted`                     | `--el-text-secondary` — 6.18–6.80:1 on all four surfaces in both themes                                                                                                                          |
+> | the composer placeholder (`Message Motir AI…`)                                                                                                                        | `--el-text-faint` (2.37–2.61:1 — clears AA on NO surface) | `--el-text-secondary`. A placeholder is active informational text, not decoration; the `::placeholder` RULE keeps `--el-text-faint`, because a pseudo-element is not what the board renders here |
+> | the accent wash on the selected row, the `@` trigger and the target chips                                                                                             | `--accent-soft: #f4f2fd`                                  | `--el-accent-wash` = `color-mix(in srgb, var(--el-accent) 6%, var(--el-page-bg))` — the same derivation `plan-detail-list-view.mock.html` uses (MOTIR-4277)                                      |
+> | the work-type hues (`--type-epic/story/task/bug/subtask`)                                                                                                             | five private names, incl. `#2a9d99`                       | `--el-type-{epic,story,task,bug,subtask}` — all five have token twins in `theme.css`, `#2a9d99` being `--el-type-subtask` (`--color-accent-teal`)                                                |
+> | the brand gradient, the focus ring, the node glow, the white ink on the accent bubble                                                                                 | raw hexes and `rgba(255,255,255,…)`                       | `--el-accent` / `--el-highlight` / `--el-accent-text`, alpha expressed as `color-mix(… , transparent)`                                                                                           |
+> | the spinner track                                                                                                                                                     | `#d8d4cd`                                                 | `--el-border-strong`                                                                                                                                                                             |
+>
+> Twelve aliases were DEAD — zero uses anywhere in the file — and are DELETED
+> rather than translated: ten colour (`--hair-strong`, `--accent-text`,
+> `--highlight`, `--success`, `--warning`, `--danger`, `--info`, `--rose`,
+> `--yellow`, `--focus`) and two shape (`--r-modal`, `--sh-modal`). The drawn
+> layout, copy, elements and access paths are UNCHANGED.
+
 - **Shape** strictly via element-semantic tokens — the dropdown =
   `--radius-card`, rows = `--radius-control`, the @ button = `--radius-control`,
   chips = `--radius-control`, the send button = `--radius-btn`,
@@ -816,7 +888,12 @@ is an ARRANGEMENT of them, never a redesign:
 The three-file set under `design/ai-chat/` for this surface:
 `design-notes.md` (this section) · `target-picker.mock.html` (source) ·
 `target-picker.png` (full-page export, Playwright chromium — light,
-`deviceScaleFactor: 2`, 1200px wide); `prettier --check` clean. Grounded in
+~~`deviceScaleFactor: 2`, 1200px wide~~ **⚠️ AMENDED (MOTIR-4346): a 1200px
+viewport at `deviceScaleFactor: 1`** — the committed export is 1200px WIDE, which
+at 2× would mean a 600px viewport, and rendering it there reflows the board to
+~2.8× its height. `scripts/render-design-mock.mjs`'s width search picks that
+wrong pair unaided, so re-export this asset as
+`--width 1200`); `prettier --check` clean. Grounded in
 MOTIR-909 (session API) + MOTIR-1489 (entrance) + MOTIR-1399 (work-item-link
 chip, shipped); gates MOTIR-1491 (code implementation).
 
@@ -990,14 +1067,70 @@ continues — a plan change is rarely one change).
 
 ### Token / a11y discipline
 
-- **Colour** strictly via `--el-*` (the real light values inlined at the top of
-  the mock, as the sibling `design/ai-chat/` mocks do). Every non-token fill is a
-  `color-mix()` of two tokens — **no invented hue**; the only raw values are the
-  body backdrop and the canvas grid-dot texture (non-semantic decoration). Tinted
-  chips put the hue in the **background** with `--el-text-strong` (finding #35,
-  AA). Work-item type hues are `--el-type-*`; the hero pill's gradient + glow are
-  palette-derived (`--el-accent` → `--el-highlight`) with the label over the
-  accent-dominant region.
+- **Colour** strictly via `--el-*`, declared under the tokens' **own names** and
+  painted through them at every site. Every non-token fill is a `color-mix()` of
+  two tokens — **no invented hue**. Tinted chips put the hue in the
+  **background** with `--el-text-strong` (finding #35, AA). Work-item type hues
+  are `--el-type-*`; the hero pill's gradient + glow are palette-derived
+  (`--el-accent` → `--el-highlight`) with the label over the accent-dominant
+  region.
+
+### ⚠️ AMENDED 2026-09-03 (MOTIR-4347, under MOTIR-4318) — the colour rule above was FALSE
+
+The bullet above used to read: **strictly via `--el-*` (the real light values
+inlined at the top of the mock, as the sibling `design/ai-chat/` mocks do)**.
+The values were inlined. The NAMES were not.
+
+`plan-change-conversation.mock.html` declared a `:root` block of
+**privately-named aliases** — `--text`, `--muted`, `--surface`, `--hub`,
+`--mutedfill`, and 27 more — each annotated with the token it stood for, like
+`--muted: #787671;` followed by a comment naming `--el-text-muted`. It painted
+through those aliases at all **292** `var()` sites and declared **no**
+`--el-*` custom property at all.
+
+The rendered pixels were right, which is why the pattern survived review, and
+the comments made it read as deliberate. What it could not do is flip with
+`data-palette`, follow a re-skin, or be **measured**: both ink guards
+(`tests/theme/inkContrastMockScan.ts` and `tests/theme/mockStateInkScan.ts`)
+classify ink by reading a token name off the declaration **at the paint site**,
+so every site in this asset sat outside them by construction and their
+tree-wide greens said nothing about it. **A comment naming a token is not a
+token** — the aliases and their annotations are both deleted.
+
+**Superseded with them:** the old clause **the only raw values are the body
+backdrop and the canvas grid-dot texture**. Both are now all-token
+`color-mix()`es:
+
+| was                                             | is                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| `#f1efec` — the body backdrop the sheets sit on | `color-mix(in srgb, var(--el-surface) 50%, var(--el-canvas))`       |
+| `#e0ded8` — the canvas grid-dot texture         | `color-mix(in srgb, var(--el-border) 83%, var(--el-border-strong))` |
+
+The raw values that remain are the ten **box shadows** (alpha-black,
+`#0000000d` through `#00000026`). A shadow is not a hue; the design system
+keeps its own shadows as raw alpha (`--shadow-subtle`), and mixing one from an
+ink token would invert it under a dark palette.
+
+#### The AA findings the swap EXPOSED — 73, in an asset that had never been measured
+
+Declaring the ink under its real name made this asset legible to the guards for
+the first time. The resting arm immediately reported **73 findings across 66
+lines** — 47 on `--el-text-faint`, 26 on `--el-text-muted` — every one of them
+carried unseen since the asset was drawn. The state arm reported none.
+
+`--el-text-faint` is 2.37–2.61:1 and clears AA on **no** surface, so it may
+carry decoration and disabled text only. It was painting eight rules' worth of
+active informational text. `--el-text-muted` is 4.12–4.34:1 on
+`--el-surface-soft` and clears AA only on the white page/card.
+
+| rule                                                                                                                                      | was               | is                    | why                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.chip.ico`, `.tbtn .g`, `.searchbox kbd`, `.crumb .muted`, `.composer .inp`, the two inline `<kbd>` hints, the dock's inline close glyph | `--el-text-faint` | `--el-text-muted`     | all sit on `--el-page-bg`, where muted clears AA — so the drawn hierarchy (glyph quieter than its label) is kept                                                  |
+| `.page-head p`, `.sheethead .cap`, `.legend`, `.nsub`, `.drafting`, `.statecard .sh .k`, `.emptyhint`, the three inline locked-node tiles | `--el-text-muted` | `--el-text-secondary` | each sits on `--el-surface-soft`, on the `--el-muted` tile fill, or on the sheet backdrop, where muted is under AA; secondary is 6.18–6.80:1 on all four surfaces |
+
+Both arms are now **0** findings tree-wide, and for the first time that
+sentence includes this file.
+
 - **Shape** strictly via element-semantic tokens — node = `--radius-card`, pills =
   `--radius-badge`, buttons = `--radius-btn`, the composer input =
   `--radius-input`, toolbar controls + rail rows = `--radius-control`, elevation =

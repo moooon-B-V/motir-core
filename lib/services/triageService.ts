@@ -1,5 +1,8 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import {
+  workItemRepository,
+  type WorkItemUpdateInput,
+} from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
@@ -514,7 +517,7 @@ async function graduate(
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<WorkItem> {
-  const update: Prisma.WorkItemUncheckedUpdateInput = { triagedAt: null };
+  const update: WorkItemUpdateInput = { triagedAt: null };
   const diff: Record<string, { from: unknown; to: unknown }> = {};
 
   // ── Parent (epic/story, or null for the backlog) ──────────────────────────

@@ -160,7 +160,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
     await aiGenerationService.startGeneration(ctx, { prompt: 'extend the tracker' });
 
     const [jobKind, , context] = vi.mocked(submitJob).mock.calls[0]!;
-    expect(jobKind).toBe('generate_tree');
+    expect(jobKind).toBe('plan');
     // The WHOLE context bag, exact shape (the read-back seam-test convention):
     // the code set rides beside the existing fields, nothing else drifts.
     expect(context).toEqual({
@@ -183,7 +183,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
     await aiGenerationService.startGeneration(ctx, { prompt: 'start fresh' });
 
     const [jobKind, , context] = vi.mocked(submitJob).mock.calls[0]!;
-    expect(jobKind).toBe('generate_tree');
+    expect(jobKind).toBe('plan');
     // Exact shape: today's envelope, with NO `code` key (absent, not empty).
     expect(context).toEqual({ prompt: 'start fresh', generateExplanations: false });
     expect(Object.keys(context as object)).not.toContain('code');

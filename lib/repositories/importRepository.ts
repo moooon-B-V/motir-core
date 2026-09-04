@@ -1,5 +1,5 @@
 import { type Import, type Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Import repository — single Prisma operations on the `import` RUN table
 // (Story 7.16 · MOTIR-939). Per CLAUDE.md: write methods require
@@ -33,7 +33,7 @@ export const importRepository = {
   /** One import RUN by id, or null. Optional `tx` joins a surrounding
    *  transaction (the engine re-reads the run under its own tx). */
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<Import | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.import.findUnique({ where: { id } });
   },
 
@@ -45,7 +45,7 @@ export const importRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<Import | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.import.findFirst({
       where: {
         projectId,

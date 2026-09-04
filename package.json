@@ -15,7 +15,7 @@
     "lint": "eslint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "NODE_OPTIONS=--max-old-space-size=6144 tsc --noEmit",
+    "typecheck": "tsc -b tsconfig.solution.json",
     "assert:nft-trace": "node scripts/assert-nft-trace-scope.mjs",
     "generate:cli-api": "tsx --tsconfig tsconfig.node.json scripts/generate-cli-api.ts",
     "db:seed": "tsx --tsconfig tsconfig.node.json scripts/plan-seed/seed.ts",
@@ -39,7 +39,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts",
     "prepare": "husky",
-    "postinstall": "prisma generate && pnpm --filter @motir/design-system build && pnpm --filter @motir/brand build",
+    "postinstall": "prisma generate && pnpm --filter @motir/design-system build && pnpm --filter @motir/brand build && pnpm --filter @motir/orchestrator build",
     "build:worker": "node scripts/build-worker.mjs",
     "changeset": "changeset",
     "changeset:version": "changeset version"
@@ -64,6 +64,7 @@
     "@modelcontextprotocol/sdk": "1.26.0",
     "@motir/brand": "workspace:*",
     "@motir/design-system": "workspace:*",
+    "@motir/orchestrator": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -104,6 +105,7 @@
     "remark-parse": "^11.0.0",
     "tailwind-merge": "^3.6.0",
     "tiptap-markdown": "^0.9.0",
+    "tldts": "^7.4.11",
     "unified": "^11.0.5",
     "zod": "^3.25.76"
   },

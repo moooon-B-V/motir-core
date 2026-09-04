@@ -1,5 +1,5 @@
 import { type Organization, Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import { bindOrganizationContext } from '@/lib/organizations/context';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 
@@ -144,7 +144,7 @@ export const organizationRepository = {
    * Missing/hidden org → the safe default (bounded `free` tier, caps apply).
    */
   async findCapContext(id: string, tx?: Prisma.TransactionClient): Promise<OrgCapContext> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const org = await client.organization.findUnique({
       where: { id },
       select: { isMeta: true, scaledTrackerSubscription: true, aiIncludedSeat: true },

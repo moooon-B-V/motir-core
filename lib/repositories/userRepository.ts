@@ -1,5 +1,5 @@
-import { Prisma, type User } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { Prisma, type Account, type User } from '@/generated/prisma/client';
+import { db, dbRead } from '@/lib/db';
 
 // User repository — single Prisma operations on the `user` table.
 // Per CLAUDE.md: write methods require `tx: Prisma.TransactionClient`.
@@ -18,6 +18,13 @@ function normalizeEmail(email: string): string {
  * MOTIR-3702's explanation names (*"an erasure that quietly skips a table"*),
  * and a named type is what makes the omission visible in a diff.
  */
+/** A user row with its CREDENTIAL account rows — at most one, since the read
+ *  filters `providerId: 'credential'` and takes 1. Named (MOTIR-4295) so the
+ *  shape is derived ONCE here rather than re-inferred at each caller: an
+ *  un-annotated read hands every call site the `include` literal to instantiate
+ *  for itself, which is the cost `CLAUDE.md`'s repository conventions record. */
+export type UserWithCredentialAccount = User & { accounts: Account[] };
+
 export interface AnonymiseUserInput {
   name: string;
   email: string;
@@ -42,7 +49,7 @@ export interface AnonymiseUserInput {
 
 export const userRepository = {
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<User | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.user.findUnique({ where: { id } });
   },
 
@@ -56,7 +63,7 @@ export const userRepository = {
    */
   async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<User[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.user.findMany({ where: { id: { in: ids } } });
   },
 
@@ -94,11 +101,11 @@ export const userRepository = {
    * pure read-only callers omit it and use the `db` singleton.
    */
   async findByEmail(email: string, tx?: Prisma.TransactionClient): Promise<User | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.user.findUnique({ where: { email: normalizeEmail(email) } });
   },
 
-  async findByEmailWithCredentialAccount(email: string) {
+  async findByEmailWithCredentialAccount(email: string): Promise<UserWithCredentialAccount | null> {
     return db.user.findUnique({
       where: { email: normalizeEmail(email) },
       include: {

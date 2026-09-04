@@ -20,7 +20,7 @@ import { truncateAuthTables } from '../helpers/db';
 // files under the per-file gate (≥90% branch/fn/line):
 //
 //   * the repository reads on their DEFAULT client — every service path passes a
-//     `tx`, so the `tx ?? db` arm shipped unexecuted;
+//     `tx`, so the `tx ?? dbRead` arm shipped unexecuted;
 //   * the two ERROR-CLASSIFICATION forks: a non-P2002 failure must propagate
 //     UNTRANSLATED (only a genuine unique violation becomes a typed conflict),
 //     and the create-race recovery must re-read the winner — the shipped
@@ -78,7 +78,7 @@ describe('planChange repositories — the DEFAULT (no-transaction) client', () =
   it('reads a session by project and by id without a surrounding transaction', async () => {
     const opened = await planChangeSessionsService.getOrCreateForProject(ctx(fx));
 
-    // Every service path hands the repository a `tx`; these are the `tx ?? db`
+    // Every service path hands the repository a `tx`; these are the `tx ?? dbRead`
     // arms — the shape any future read-only caller (a route, a report) would use.
     const byProject = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       planChangeSessionRepository.findByProjectAndScope(

@@ -9,7 +9,10 @@ import {
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import {
+  planChangeSessionRepository,
+  type PlanChangeSessionUpdateInput,
+} from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
@@ -237,7 +240,7 @@ async function appendLocked(
     intent?: PlanChangeTurnIntent | null;
     citations?: string[];
   },
-  patch: Prisma.PlanChangeSessionUncheckedUpdateInput = {},
+  patch: PlanChangeSessionUpdateInput = {},
   skipIf?: (tx: Prisma.TransactionClient) => Promise<boolean>,
 ): Promise<PlanChangeSessionDto> {
   return withWorkspaceContext(

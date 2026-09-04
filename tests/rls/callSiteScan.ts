@@ -71,6 +71,19 @@ import { policyGatedModels } from './singletonReadScan';
 const REPO_DIR = 'lib/repositories';
 const SCAN_ROOTS = ['lib', 'app'];
 const SINGLETON = 'db';
+/**
+ * The identifiers a `tx ?? …` fallback may name (MOTIR-4295). `dbRead` is the
+ * SAME object as `db`, narrowed to `Prisma.TransactionClient` so a repository's
+ * `const client = tx ?? dbRead` does not hand every subsequent call a union of
+ * two whole Prisma clients — see `lib/db.ts` for the measurement. It is a
+ * TYPE-level change and nothing about RLS binding differs, so this scanner must
+ * recognise both spellings: reading only `db` would have taken 247 call sites
+ * out of the bindable set silently, which is the failure this guard exists for.
+ *
+ * ⚠️ `$transaction` is deliberately NOT part of this set — `dbRead` does not
+ * have it, and the bare-transaction detection below stays keyed on `db` alone.
+ */
+const READ_SINGLETONS = new Set([SINGLETON, 'dbRead']);
 
 /** The wrappers that bind at least one RLS GUC on the transaction they open. */
 const BINDING_CONTEXTS = new Set([
@@ -151,7 +164,7 @@ function txFallbackAlias(body: ts.Node): string | undefined {
       ts.isBinaryExpression(n.initializer) &&
       n.initializer.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
       ts.isIdentifier(n.initializer.right) &&
-      n.initializer.right.text === SINGLETON
+      READ_SINGLETONS.has(n.initializer.right.text)
     ) {
       alias = n.name.text;
     }
@@ -168,7 +181,7 @@ function isInlineTxFallback(e: ts.Expression): boolean {
     ts.isBinaryExpression(inner) &&
     inner.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
     ts.isIdentifier(inner.right) &&
-    inner.right.text === SINGLETON
+    READ_SINGLETONS.has(inner.right.text)
   );
 }
 

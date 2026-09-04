@@ -16,6 +16,13 @@
   because the brand mark did not exist when it was accepted (MOTIR-1150 landed five
   weeks later). That ADR adds the test §1's import rule cannot make and this one
   never contemplated: **who INSTALLS the package**. Read the two together.
+- **Generalised by:** [`app-shell-over-packages.md`](./app-shell-over-packages.md)
+  (MOTIR-4297, 2026-09-03) — this ADR fixed the boundary for ONE package, chosen because its
+  consumers are other repositories. That one fixes the shape for every package in
+  `packages/*`, including the ones with a single in-repo consumer, and takes §1's import rule
+  and §5's barrel rule as its own. Where the two could differ — whether a context should be a
+  second REPOSITORY rather than a package — it defers to this document's reasoning and names
+  the condition under which a package inherits it.
 - **Builds on:** the three-axis design system shipped by Story 7.3 (Colour /
   Style / Type on `<html>` via `data-theme` + `data-palette` + `data-style` +
   `data-type`), the `@motir/cli` workspace-package precedent (`packages/cli`,

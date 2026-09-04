@@ -29,6 +29,12 @@ import { armedTables, rlsEnabledTables } from './policyArms';
 //
 // **One pair.** A ceiling exists to bound a population nobody can afford to read;
 // a population of one is a verdict to write down, and it is written down below.
+// (It is FOUR now — MOTIR-4366 added a global-namespace table read from three
+// `withWorkspaceContext` sites. The measurement above is kept at its own ref
+// rather than restated, because what it settled is the CHOICE of mechanism, and
+// three more adjudicated pairs is the mechanism working. A ceiling would still
+// be the wrong instrument at four.)
+//
 // The 1201 `context-only` workspace sites are not a backlog — 64 of the 72
 // RLS-protected tables carry an `app.workspace_id` arm, which is what a
 // workspace-tier product should look like, and the guard says so by finding
@@ -64,13 +70,57 @@ type Verdict =
   | 'blind-carded';
 
 /**
+ * The §8 hostname reservation (Bug MOTIR-4366) — one verdict, three sites.
+ *
+ * Written once and shared, because the three findings are not three judgements:
+ * they are the same table, the same policy and the same argument, reached from
+ * the two services that touch it.
+ */
+const HOSTNAME_RESERVATION_WHY =
+  '`public_hostname_reservation_read` is `FOR SELECT USING (true)` and reads NO GUC, so an ' +
+  'inventory keyed on a setting name cannot see it and reports an unconditionally-admitted ' +
+  'read as blind. ⚠️ ARMING IT IS NOT AVAILABLE HERE, which is why this is a verdict rather ' +
+  'than a shortcut: the table holds a GLOBAL namespace, so the read that matters is exactly ' +
+  'the cross-tenant one — workspace B must see the reservation workspace A left behind, or ' +
+  'the ADR §8 never-released rule it implements does not hold. An `app.workspace_id` arm ' +
+  'would admit only the writer and silently release every name to everybody else, which is ' +
+  "this guard's own failure mode with the polarity reversed. The table carries nothing to " +
+  'protect: a one-way digest and a workspace id that no longer resolves. ' +
+  '⚠️ SETTLED BY MEASUREMENT, NOT BY READING THE POLICY, and CI cannot supply it — no ' +
+  'workflow sets `TEST_DB_APP_ROLE`, so the Vitest lane runs as the OWNER and a green shard ' +
+  'is silent about RLS. Run under `TEST_DB_APP_ROLE=1` against a base carrying this ' +
+  'migration, `tests/publicAddresses/hostnameReservation.test.ts` and ' +
+  '`tests/publicAddresses/publicSubdomainService.test.ts` are 36/36. Those tests are the ' +
+  'instrument: a blind SELECT makes `assertNotReserved` find nothing and every refusal case ' +
+  'admits the claim, and a wrong INSERT `WITH CHECK` writes zero reservations — either way ' +
+  'a majority of that file goes red rather than passing quietly.';
+
+/**
  * One entry per (descriptor, site, model). Keyed `<descriptor>::<site.key> :: <model>`.
  *
- * ⚠️ ONE ENTRY, and it is a FALSE POSITIVE OF THE ARM INVENTORY rather than a
+ * ⚠️ EVERY ENTRY HERE IS A FALSE POSITIVE OF THE ARM INVENTORY rather than a
  * blind read — which is exactly the third legitimate shape `contextArmScan`'s
  * header names and the reason these families are adjudicated instead of adopted.
+ * Both verdicts on record are `guc-less-arm`, and neither was earned by reading
+ * a policy: each names the suite that exercises the path under `motir_app` and
+ * would go red if the read were in fact blind. That is the bar for adding a
+ * third — a `blind-carded` verdict, by contrast, owes a card and not a
+ * measurement, because it concedes the read IS blind.
  */
 const DELIBERATELY_UNARMED: Record<string, { verdict: Verdict; why: string }> = {
+  'workspace-user::lib/services/publicSubdomainService.ts#claim :: publicHostnameReservation': {
+    verdict: 'guc-less-arm',
+    why: HOSTNAME_RESERVATION_WHY,
+  },
+  'workspace-user::lib/services/publicSubdomainService.ts#rename :: publicHostnameReservation': {
+    verdict: 'guc-less-arm',
+    why: HOSTNAME_RESERVATION_WHY,
+  },
+  'workspace-user::lib/services/workspacesService.ts#deleteWorkspace :: publicHostnameReservation':
+    {
+      verdict: 'guc-less-arm',
+      why: HOSTNAME_RESERVATION_WHY,
+    },
   'user::lib/services/publicRequestsService.ts#toggleUpvote :: workItem': {
     verdict: 'guc-less-arm',
     why:

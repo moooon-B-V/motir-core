@@ -151,7 +151,7 @@ describe('contextualPlanningService.planFromWorkItem', () => {
     );
 
     expect(submitJobMock).toHaveBeenCalledTimes(1);
-    expect(submittedKind()).toBe('augment');
+    expect(submittedKind()).toBe('plan');
     expect(submittedContext()['targetKeys']).toEqual([story.identifier]);
     // The re-plan REASON is the turn text itself — there is no separate param.
     expect(submittedContext()['prompt']).toBe('Re-plan this because the API changed');
@@ -228,7 +228,7 @@ describe('contextualPlanningService.planFromWorkItem', () => {
     await planChangeSessionsService.appendTurn('Add auth to the billing epic', ctx);
     await planChangeSessionsService.submit(ctx);
 
-    expect(submittedKind()).toBe('augment');
+    expect(submittedKind()).toBe('plan');
     expect(submittedContext()).not.toHaveProperty('targetKeys');
   });
 

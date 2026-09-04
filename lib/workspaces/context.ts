@@ -40,7 +40,7 @@ import { db } from '@/lib/db';
 // `tx` threaded into every read beneath it:
 //
 //   * A repository read of a policy-gated table takes `tx?:
-//     Prisma.TransactionClient` LAST and resolves `const client = tx ?? db`.
+//     Prisma.TransactionClient` LAST and resolves `const client = tx ?? dbRead`.
 //     That is also the form tests/rls/singletonReadScan.ts treats as
 //     BINDABLE, so adding it removes the read from the scan.
 //   * A `Promise.all` inside the boundary collapses to sequential awaits.

@@ -178,6 +178,16 @@ const SELF_WALKING_MEMBERS = [
   // derives it: its own `readdirSync` over `app/`, `components/` and the design
   // system's `src/`, importing no scanner at all.
   'tests/theme/immersiveShellAtmosphere.test.ts',
+  // MOTIR-4296. Same shape and the same reason nothing derives it: its own
+  // `readdirSync` over `lib/`, `app/` and `components/`, importing no scanner.
+  'tests/prisma/typeBoundary.test.ts',
+  // MOTIR-4299. Its own `readdirSync` over the `packages/*` trees it discovers
+  // and over `lib`/`app`/`components`; it imports no scanner, so nothing
+  // derives it.
+  'tests/packages/importDirection.test.ts',
+  // MOTIR-4299 / MOTIR-4300. Its own `readdirSync` over four roots; it imports no
+  // scanner, so nothing derives it.
+  'tests/ciFleet/orchestratorPortBoundary.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

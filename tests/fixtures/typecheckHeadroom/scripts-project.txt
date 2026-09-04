@@ -1,0 +1,100 @@
+# Captured from a real run on this repository (MOTIR-4294):
+#   rm -rf .tsout && node_modules/.bin/tsc -b tsconfig.scripts.json --extendedDiagnostics
+# The SCRIPTS project — the smaller of the two, and the one that is UNDER the line.
+Files:                         5511
+Lines of Library:             53142
+Lines of Definitions:        417929
+Lines of TypeScript:         688409
+Lines of JavaScript:              0
+Lines of JSON:                15155
+Lines of Other:                   0
+Identifiers:                1483997
+Symbols:                    1658523
+Types:                       587001
+Instantiations:             2129031
+Memory used:               1989581K
+Assignability cache size:    259612
+Identity cache size:          23098
+Subtype cache size:            6850
+Strict subtype cache size:     6643
+I/O Read time:                3.05s
+Parse time:                   3.60s
+ResolveTypeReference time:    0.38s
+ResolveModule time:           5.38s
+ResolveLibrary time:          0.01s
+Program time:                13.58s
+Bind time:                    1.96s
+Check time:                  24.43s
+transformTime time:           7.86s
+Source Map time:              0.71s
+commentTime time:             0.64s
+I/O Write time:               2.60s
+printTime time:              15.32s
+Emit time:                   15.35s
+Total time:                  55.32s
+Files:                         1998
+Lines of Library:             53142
+Lines of Definitions:        512576
+Lines of TypeScript:          64513
+Lines of JavaScript:           3671
+Lines of JSON:                    0
+Lines of Other:                   0
+Identifiers:                 838435
+Symbols:                     964379
+Types:                      1390232
+Instantiations:             6232411
+Memory used:               2130498K
+Assignability cache size:    336126
+Identity cache size:           3285
+Subtype cache size:             747
+Strict subtype cache size:    30996
+I/O Read time:                0.34s
+Parse time:                   0.91s
+ResolveModule time:           0.12s
+ResolveTypeReference time:    0.00s
+ResolveLibrary time:          0.00s
+Program time:                 1.51s
+Bind time:                    0.32s
+Check time:                  10.45s
+transformTime time:           0.11s
+Source Map time:              0.00s
+commentTime time:             0.02s
+I/O Write time:               0.08s
+printTime time:               0.26s
+Emit time:                    0.26s
+Total time:                  12.54s
+Projects in scope:                          2
+Projects built:                             2
+Aggregate Files:                         7509
+Aggregate Lines of Library:            106284
+Aggregate Lines of Definitions:        930505
+Aggregate Lines of TypeScript:         752922
+Aggregate Lines of JavaScript:           3671
+Aggregate Lines of JSON:                15155
+Aggregate Lines of Other:                   0
+Aggregate Identifiers:                2322432
+Aggregate Symbols:                    2622902
+Aggregate Types:                      1977233
+Aggregate Instantiations:             8361442
+Aggregate Memory used:               2130498K
+Aggregate Assignability cache size:    595738
+Aggregate Identity cache size:          26383
+Aggregate Subtype cache size:            7597
+Aggregate Strict subtype cache size:    37639
+Aggregate I/O Read time:                3.39s
+Aggregate Parse time:                   4.51s
+Aggregate ResolveTypeReference time:    0.38s
+Aggregate ResolveModule time:           5.50s
+Aggregate ResolveLibrary time:          0.02s
+Aggregate Program time:                15.08s
+Aggregate Bind time:                    2.28s
+Aggregate Check time:                  34.88s
+Aggregate transformTime time:           7.97s
+Aggregate Source Map time:              0.71s
+Aggregate commentTime time:             0.66s
+Aggregate I/O Write time:               2.68s
+Aggregate printTime time:              15.57s
+Aggregate Emit time:                   15.61s
+Config file parsing time:               0.39s
+Up-to-date check time:                  0.00s
+Build time:                            68.89s

@@ -18,7 +18,7 @@ import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunne
 import { ciFleetAdmissionLockRepository } from '@/lib/repositories/ciFleetAdmissionLockRepository';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';

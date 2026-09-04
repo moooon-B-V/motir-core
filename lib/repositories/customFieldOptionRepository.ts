@@ -1,5 +1,5 @@
 import { Prisma, type CustomFieldOption } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Custom-field-option repository — single Prisma operations on the
 // `custom_field_option` table (Story 5.3 · Subtask 5.3.1). The persistence
@@ -67,7 +67,7 @@ export const customFieldOptionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldOption | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldOption.findFirst({
       where: { id, field: { workspaceId } },
     });
@@ -85,7 +85,7 @@ export const customFieldOptionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldOption[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldOption.findMany({
       where: { fieldId, field: { workspaceId } },
       orderBy: { position: 'asc' },
@@ -104,7 +104,7 @@ export const customFieldOptionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldOption[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldOption.findMany({
       where: { field: { projectId, workspaceId } },
       orderBy: { position: 'asc' },
@@ -128,7 +128,7 @@ export const customFieldOptionRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldOption[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldOption.findMany({
       where: { id: { in: ids }, field: { projectId, workspaceId } },
     });
@@ -144,7 +144,7 @@ export const customFieldOptionRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.customFieldOption.count({
       where: { fieldId, field: { workspaceId } },
     });

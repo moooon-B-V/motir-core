@@ -171,7 +171,7 @@ describe('POST /api/ai/plan/generate', () => {
 
     // generate_tree job submitted with the resolved tenant + prompt + actor.
     const [jobKind, tenant, context, actor] = submitJobMock.mock.calls[0]!;
-    expect(jobKind).toBe('generate_tree');
+    expect(jobKind).toBe('plan');
     expect(tenant).toMatchObject({
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -213,7 +213,7 @@ describe('POST /api/ai/plan/generate', () => {
     expect(res.status).toBe(200);
 
     const [jobKind, , context] = submitJobMock.mock.calls[0]!;
-    expect(jobKind).toBe('generate_tree');
+    expect(jobKind).toBe('plan');
     expect(context).toEqual({ prompt: 'with explanations', generateExplanations: true });
   });
 

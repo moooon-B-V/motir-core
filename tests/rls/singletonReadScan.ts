@@ -47,6 +47,16 @@ const SCHEMA = 'prisma/schema.prisma';
 
 /** The Prisma singleton, as imported by every repository. */
 const SINGLETON = 'db';
+/**
+ * Both names the module-scope Prisma client is reachable under (MOTIR-4295):
+ * `db`, and `dbRead` — the same object narrowed to `Prisma.TransactionClient`
+ * so a `tx ?? dbRead` fallback does not form a union of two whole clients (see
+ * `lib/db.ts`). An UNBOUND read is unbound under either name, and a fallback is
+ * a fallback under either, so this scanner reads both. Keying on `db` alone
+ * would have made every swept repository look newly unbindable — and a bare
+ * `dbRead.workItem.findMany(…)` invisible.
+ */
+const SINGLETONS = new Set([SINGLETON, 'dbRead']);
 
 export interface SingletonRead {
   /** e.g. `workItemRepository.ts` */
@@ -139,7 +149,7 @@ function hasTxFallback(node: ts.Node): boolean {
       ts.isBinaryExpression(n) &&
       n.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
       ts.isIdentifier(n.right) &&
-      n.right.text === SINGLETON
+      SINGLETONS.has(n.right.text)
     ) {
       found = true;
     }
@@ -157,7 +167,7 @@ function singletonAccesses(node: ts.Node): { models: Set<string>; raw: boolean }
     if (
       ts.isPropertyAccessExpression(n) &&
       ts.isIdentifier(n.expression) &&
-      n.expression.text === SINGLETON
+      SINGLETONS.has(n.expression.text)
     ) {
       const name = n.name.text;
       if (name.startsWith('$')) {

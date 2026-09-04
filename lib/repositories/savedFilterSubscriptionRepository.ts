@@ -1,5 +1,5 @@
 import { Prisma, type SavedFilterSubscription } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Saved-filter subscription data access (Story 6.2 · Subtask 6.2.5). Single
 // Prisma ops; writes require `tx` (CLAUDE.md). The cron's due scan is bounded +
@@ -25,7 +25,7 @@ export const savedFilterSubscriptionRepository = {
     userId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<SavedFilterSubscription | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.savedFilterSubscription.findUnique({
       where: { savedFilterId_userId: { savedFilterId, userId } },
     });
@@ -37,13 +37,13 @@ export const savedFilterSubscriptionRepository = {
     id: string,
     tx?: Prisma.TransactionClient,
   ): Promise<SavedFilterSubscription | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.savedFilterSubscription.findUnique({ where: { id } });
   },
 
   /** Count a filter's subscriptions — the 6.2.1 dependents warning. */
   async countByFilter(savedFilterId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.savedFilterSubscription.count({ where: { savedFilterId } });
   },
 
@@ -56,7 +56,7 @@ export const savedFilterSubscriptionRepository = {
     args: DueSubscriptionsPageArgs,
     tx?: Prisma.TransactionClient,
   ): Promise<SavedFilterSubscription[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.savedFilterSubscription.findMany({
       where: { hour: args.hour },
       orderBy: { id: 'asc' },

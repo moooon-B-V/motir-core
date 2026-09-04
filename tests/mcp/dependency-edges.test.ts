@@ -92,7 +92,7 @@ const markDone = (id: string) =>
  *
  * …and off the TRANSACTION client too, which is why this delegates to
  * `countDelegateCalls` rather than spying directly (MOTIR-2846): once the call
- * site is bound the read runs on `(tx ?? db)`'s `tx` arm and a singleton-only
+ * site is bound the read runs on `(tx ?? dbRead)`'s `tx` arm and a singleton-only
  * spy reports zero — red for a `toBe(2)` and vacuously green for a `toBe(0)`.
  */
 async function countLinkQueries<T>(run: () => Promise<T>): Promise<{ result: T; queries: number }> {
@@ -116,7 +116,7 @@ const textOf = (r: CallToolResult) => JSON.stringify(r.content);
 /**
  * The repository reads below are the SUBJECT of this block, so they stay on the
  * code-under-test's client and get a BOUND transaction — MOTIR-2911's first
- * disposition. They are `(tx ?? db).workItemLink.findMany`, and `work_item_link`
+ * disposition. They are `(tx ?? dbRead).workItemLink.findMany`, and `work_item_link`
  * is workspace-keyed: called with no `tx` under `motir_app` the policy sees no
  * `app.workspace_id`, admits nothing, and every one of these reads answers `[]`
  * without raising. Moving them to `adminDb` would also make them green — by

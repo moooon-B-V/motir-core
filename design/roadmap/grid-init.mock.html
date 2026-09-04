@@ -16,33 +16,39 @@
     <title>Roadmap canvas — grid + init (MOTIR-1333)</title>
     <style>
       :root {
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --muted: #787671;
-        --faint: #a4a097;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
-        --border: #e5e3df;
-        --borderstrong: #d3cfc8;
-        --hair: #ede9e4;
-        --accent: #5645d4;
-        --accent-soft: #efedfb;
-        --accent-text: #ffffff;
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --info: #0075de;
-        --sky: #dcecfa;
-        --lavender: #e6e0f5;
-        --mint: #d9f3e1;
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --yellow: #fef7d6;
-        --t-epic: #ff64c8;
-        --t-epic-soft: #ffe3f5;
-        --t-story: #1aae39;
-        --t-subtask: #2a9d99;
+        /* ink */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        /* surfaces */
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
+        --el-canvas: #ecebe7;
+        /* borders */
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+        /* accent */
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-highlight: #ff64c8;
+        /* status */
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-info: #0075de;
+        /* feature tints */
+        --el-tint-peach: #ffe8d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-tint-yellow: #fef7d6;
+        /* work-item KIND identity (--el-type-*, theme.css § Issue-type hues) */
+        --el-type-epic: #ff64c8;
         font-family:
           ui-sans-serif,
           system-ui,
@@ -56,8 +62,8 @@
       }
       body {
         margin: 0;
-        background: #efeee9;
-        color: var(--text);
+        background: var(--el-canvas);
+        color: var(--el-text);
         padding: 28px 22px 60px;
       }
       .pagehead {
@@ -67,20 +73,20 @@
       .pagehead h1 {
         font-size: 21px;
         margin: 0 0 4px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .pagehead p {
         margin: 0;
         font-size: 13.5px;
         line-height: 1.55;
-        color: var(--muted);
+        color: var(--el-text-muted);
         max-width: 940px;
       }
       .sheet {
         max-width: 1180px;
         margin: 0 auto 26px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         box-shadow: 0 1px 3px #0000000d;
         overflow: hidden;
@@ -90,16 +96,16 @@
         align-items: baseline;
         gap: 12px;
         padding: 13px 18px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .sheethead .n {
         flex: none;
         width: 22px;
         height: 22px;
         border-radius: 999px;
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         font-size: 12.5px;
         font-weight: 700;
         display: flex;
@@ -109,11 +115,11 @@
       .sheethead h2 {
         font-size: 14.5px;
         margin: 0;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .sheethead .cap {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-left: auto;
       }
       /* ── the canvas viewport: dot grid + faint CELL guides (the grid system) ── */
@@ -124,7 +130,7 @@
           linear-gradient(#0000000a 1px, transparent 1px) 16px 16px / 268px 160px,
           linear-gradient(90deg, #0000000a 1px, transparent 1px) 16px 16px / 268px 160px,
           radial-gradient(circle, #00000010 1px, transparent 1.4px) 0 0 / 22px 22px,
-          var(--hub);
+          var(--el-surface);
       }
       .world,
       .edges {
@@ -139,16 +145,16 @@
       .stn {
         position: absolute;
         width: 230px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         box-shadow: 0 1px 2px #0000000a;
         padding: 10px 12px;
       }
       .stn.here {
-        border-color: var(--accent);
+        border-color: var(--el-accent);
         box-shadow:
-          0 0 0 1px var(--accent) inset,
+          0 0 0 1px var(--el-accent) inset,
           0 1px 3px #0000000f;
       }
       .stn.upcoming {
@@ -175,11 +181,11 @@
       .stn .ti {
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .stn .sub {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 1px;
       }
       .stn .st {
@@ -191,24 +197,24 @@
         padding: 1px 8px;
         font-size: 11px;
         font-weight: 500;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .stn .st svg {
         width: 12px;
         height: 12px;
       }
       .st.done {
-        background: var(--mint);
+        background: var(--el-tint-mint);
       }
       .st.here {
-        background: var(--lavender);
+        background: var(--el-tint-lavender);
       }
       /* ── the PLAN PREVIEW cluster — the partial work-item glimpse ── */
       .planprev {
         position: absolute;
         width: 712px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         box-shadow: 0 2px 10px #00000010;
         padding: 14px 15px 15px;
@@ -223,7 +229,7 @@
         width: 30px;
         height: 30px;
         border-radius: 8px;
-        background: var(--t-epic-soft);
+        background: color-mix(in srgb, var(--el-type-epic) 18%, var(--el-page-bg));
         display: flex;
         align-items: center;
         justify-content: center;
@@ -235,19 +241,19 @@
       .planprev .pt {
         font-size: 14px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .planprev .pmeta {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .planprev .explore {
         margin-left: auto;
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         border-radius: 9px;
         padding: 6px 11px;
         font-size: 12.5px;
@@ -261,14 +267,14 @@
         margin-top: 11px;
         height: 6px;
         border-radius: 999px;
-        background: var(--mutedfill);
+        background: var(--el-muted);
         overflow: hidden;
       }
       .bar > i {
         display: block;
         height: 100%;
         width: 41%;
-        background: var(--success);
+        background: var(--el-success);
       }
       .epics {
         margin-top: 13px;
@@ -277,10 +283,10 @@
         gap: 9px;
       }
       .em {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 10px;
         padding: 9px 10px;
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .em .et {
         display: flex;
@@ -292,17 +298,17 @@
         width: 8px;
         height: 8px;
         border-radius: 999px;
-        background: var(--t-epic);
+        background: var(--el-type-epic);
       }
       .em .eid {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 10px;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .em .en {
         font-size: 11.5px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         margin-top: 4px;
         line-height: 1.25;
         display: -webkit-box;
@@ -312,7 +318,7 @@
       }
       .em .ec {
         font-size: 10.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-top: 5px;
       }
       .em.more {
@@ -320,9 +326,9 @@
         align-items: center;
         justify-content: center;
         text-align: center;
-        background: var(--accent-soft);
-        border: 1px dashed #c7c0ef;
-        color: var(--accent);
+        background: color-mix(in srgb, var(--el-accent) 9.5%, var(--el-page-bg));
+        border: 1px dashed color-mix(in srgb, var(--el-accent) 21%, var(--el-tint-lavender));
+        color: var(--el-accent);
         font-size: 12px;
         font-weight: 600;
       }
@@ -337,12 +343,12 @@
         display: inline-flex;
         align-items: center;
         gap: 7px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         padding: 5px 10px;
         font-size: 12.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         font-weight: 600;
         box-shadow: 0 1px 3px #0000000d;
       }
@@ -350,7 +356,7 @@
         width: 18px;
         height: 18px;
         border-radius: 999px;
-        background: var(--accent);
+        background: var(--el-accent);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -363,8 +369,8 @@
         bottom: 14px;
         right: 14px;
         display: inline-flex;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         overflow: hidden;
         box-shadow: 0 1px 3px #0000000d;
@@ -375,29 +381,29 @@
         width: 30px;
         height: 30px;
         font-size: 16px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .zoom button + button {
-        border-left: 1px solid var(--hair);
+        border-left: 1px solid var(--el-border-soft);
       }
       .zoomlvl {
         bottom: 17px;
         right: 116px;
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .gridnote {
         bottom: 14px;
         left: 14px;
-        background: #ffffffdd;
-        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--el-page-bg) 87%, transparent);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         padding: 6px 10px;
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .gridnote b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
     </style>
   </head>
@@ -432,48 +438,48 @@
               markerHeight="6.5"
               orient="auto-start-reverse"
             >
-              <path d="M0 0L10 5L0 10z" fill="#d3cfc8" />
+              <path d="M0 0L10 5L0 10z" style="fill: var(--el-border-strong)" />
             </marker>
           </defs>
           <!-- journey chain (idea → tiers → design → plan) -->
           <path
             d="M270,75 H300"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2"
             fill="none"
             marker-end="url(#ah)"
           />
           <path
             d="M552,75 H584"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2"
             fill="none"
             marker-end="url(#ah)"
           />
           <path
             d="M836,75 H868"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2"
             fill="none"
             marker-end="url(#ah)"
           />
           <path
             d="M952,98 C952,150 300,150 286,196"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2"
             fill="none"
             marker-end="url(#ah)"
           />
           <path
             d="M270,235 H300"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2"
             fill="none"
             marker-end="url(#ah)"
           />
           <path
             d="M552,235 H584"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2"
             fill="none"
             marker-end="url(#ah)"
@@ -481,7 +487,7 @@
           <!-- plan → the preview cluster -->
           <path
             d="M700,256 C700,300 430,300 430,330"
-            stroke="#d3cfc8"
+            style="stroke: var(--el-border-strong)"
             stroke-width="2"
             fill="none"
             marker-end="url(#ah)"
@@ -492,8 +498,13 @@
           <!-- ROW 0 — idea + the first three tiers -->
           <div class="stn" style="left: 40px; top: 38px">
             <div class="row">
-              <span class="tile" style="background: var(--yellow)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#b58a00" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-yellow)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  style="stroke: var(--el-warning)"
+                  stroke-width="2"
+                >
                   <path
                     d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2Z"
                   />
@@ -504,8 +515,8 @@
           </div>
           <div class="stn here" style="left: 322px; top: 38px">
             <div class="row">
-              <span class="tile" style="background: var(--sky)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-sky)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--el-info)" stroke-width="2">
                   <circle cx="11" cy="11" r="7" />
                   <path d="m21 21-4.3-4.3" />
                 </svg>
@@ -521,8 +532,13 @@
           </div>
           <div class="stn upcoming" style="left: 604px; top: 38px">
             <div class="row">
-              <span class="tile" style="background: var(--lavender)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#6a5acd" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-lavender)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  style="stroke: var(--el-accent)"
+                  stroke-width="2"
+                >
                   <path d="M3 7h18M3 12h18M3 17h12" />
                 </svg>
               </span>
@@ -531,8 +547,8 @@
           </div>
           <div class="stn upcoming" style="left: 886px; top: 38px">
             <div class="row">
-              <span class="tile" style="background: var(--mint)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-mint)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--el-success)" stroke-width="2">
                   <path d="M12 2 4 6v6c0 5 8 8 8 8s8-3 8-8V6Z" />
                 </svg>
               </span>
@@ -543,8 +559,8 @@
           <!-- ROW 1 — last tier + design + plan -->
           <div class="stn upcoming" style="left: 40px; top: 198px">
             <div class="row">
-              <span class="tile" style="background: var(--peach)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-peach)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--el-warning)" stroke-width="2">
                   <path d="M9 11l3 3 8-8M3 12a9 9 0 1 0 9-9" />
                 </svg>
               </span>
@@ -553,8 +569,13 @@
           </div>
           <div class="stn upcoming" style="left: 322px; top: 198px">
             <div class="row">
-              <span class="tile" style="background: var(--rose)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#d6336c" stroke-width="2">
+              <span class="tile" style="background: var(--el-tint-rose)">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  style="stroke: var(--el-highlight)"
+                  stroke-width="2"
+                >
                   <circle cx="13.5" cy="6.5" r="2.5" />
                   <circle cx="17.5" cy="10.5" r="2.5" />
                   <circle cx="8.5" cy="7.5" r="2.5" />
@@ -566,8 +587,11 @@
           </div>
           <div class="stn" style="left: 604px; top: 198px">
             <div class="row">
-              <span class="tile" style="background: var(--accent-soft)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+              <span
+                class="tile"
+                style="background: color-mix(in srgb, var(--el-accent) 9.5%, var(--el-page-bg))"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--el-accent)" stroke-width="2">
                   <path d="M5 3v18M5 8h12l-2-2.5L17 3M5 14h9l-2 2.5L14 19" />
                 </svg>
               </span>
@@ -587,7 +611,7 @@
           <div class="planprev" style="left: 74px; top: 330px">
             <div class="ph">
               <span class="ptile">
-                <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--el-type-epic)" stroke-width="2">
                   <path d="M4 4h16v5H4zM4 13h10v5H4z" />
                 </svg>
               </span>
@@ -631,7 +655,7 @@
 
         <span class="ov crumb"
           ><span class="pin"
-            ><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4">
+            ><svg viewBox="0 0 24 24" fill="none" stroke="var(--el-accent-text)" stroke-width="2.4">
               <path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3-6-3Z" /></svg></span
           >PayFlow · your project</span
         >
@@ -657,7 +681,7 @@
         >
           <div class="ph">
             <span class="ptile">
-              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--el-type-epic)" stroke-width="2">
                 <path d="M4 4h16v5H4zM4 13h10v5H4z" />
               </svg>
             </span>
@@ -696,10 +720,10 @@
             </div>
             <div class="em more">+ 6 more epics</div>
           </div>
-          <p style="margin: 13px 2px 0; font-size: 12px; color: var(--muted)">
-            Click an epic — or <b style="color: var(--accent)">Explore the plan</b> — to drill into
-            the full per-level roadmap (epic → story → subtask, MOTIR-1194). The preview never loads
-            the whole tree; it reads only the epic roots (the per-level read, MOTIR-1010).
+          <p style="margin: 13px 2px 0; font-size: 12px; color: var(--el-text-muted)">
+            Click an epic — or <b style="color: var(--el-accent)">Explore the plan</b> — to drill
+            into the full per-level roadmap (epic → story → subtask, MOTIR-1194). The preview never
+            loads the whole tree; it reads only the epic roots (the per-level read, MOTIR-1010).
           </p>
         </div>
       </div>

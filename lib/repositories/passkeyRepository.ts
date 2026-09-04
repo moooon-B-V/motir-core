@@ -1,5 +1,5 @@
 import type { Passkey, Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the `passkey` table (Story MOTIR-1214 · Subtask MOTIR-3611).
 // Single Prisma operations only; no business logic, no transactions of its own
@@ -29,7 +29,7 @@ export const passkeyRepository = {
    * its client so it reads its own uncommitted state.
    */
   async findManyByUserId(userId: string, tx?: Prisma.TransactionClient): Promise<Passkey[]> {
-    return (tx ?? db).passkey.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
+    return (tx ?? dbRead).passkey.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } });
   },
 
   /**
@@ -41,7 +41,7 @@ export const passkeyRepository = {
    * be work thrown away.
    */
   async countByUserId(userId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    return (tx ?? db).passkey.count({ where: { userId } });
+    return (tx ?? dbRead).passkey.count({ where: { userId } });
   },
 
   /**

@@ -1,28 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  FLEET_CONTAINER_SIZE,
   FLEET_METADATA_KEY,
   FLEET_METADATA_VALUES,
-  flyOrchestrator,
-} from '@/lib/orchestrator/adapters/fly';
-import {
+  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
+  OrchestratorApiError,
+  OrchestratorImageUnpullableError,
+  OrchestratorNotConfiguredError,
+  OrchestratorTimeoutError,
   exitCodeOf,
   flyFleetConfig,
+  flyOrchestrator,
   isFlyFleetConfigured,
   isPreStartState,
   isTerminalState,
   startedAtOf,
   stoppedAtOf,
   toFlyMachine,
-} from '@/lib/orchestrator/adapters/fly/flyMachines';
-import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
-import {
-  ORCHESTRATOR_REQUEST_TIMEOUT_MS,
-  OrchestratorApiError,
-  OrchestratorImageUnpullableError,
-  OrchestratorNotConfiguredError,
-  OrchestratorTimeoutError,
-} from '@/lib/orchestrator/errors';
-import type { ContainerHandle, ContainerSpec, UsageAttribution } from '@/lib/orchestrator/types';
+  type ContainerHandle,
+  type ContainerSpec,
+  type UsageAttribution,
+} from '../src/index';
 
 // The FLY adapter's wire (Story MOTIR-1916 · MOTIR-1921) — what the port turns
 // into on `api.machines.dev`, and what each provider answer means.

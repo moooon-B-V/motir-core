@@ -1,4 +1,29 @@
-import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+/**
+ * Every kind of container the fleet can be running.
+ *
+ * ⚠️ IT LIVES HERE, IN THE PACKAGE, AND `lib/ciFleet/workloads.ts` RE-EXPORTS IT
+ * (MOTIR-4299). It is the PORT'S OWN VOCABULARY — three of this file's types
+ * carry a `workload` field, and every adapter tags a machine with it — so a
+ * package that imported the union from the app would be a package that cannot be
+ * built without the app, which is the one thing a package may not be
+ * (`docs/decisions/app-shell-over-packages.md` §1 rule 2). The app's registry
+ * keeps the COUNTERS, which need repositories and a transaction and could not
+ * come here; it takes the union from the package instead.
+ *
+ * All three members are declared before two of them ship, and that is
+ * deliberate: the seam has to exist before the workload does, or the workload
+ * lands and the ceiling silently does not see it — exactly how the runner-only
+ * ceiling stopped being a bound. The totality guard is the
+ * `Record<FleetWorkloadKind, …>` in `lib/ciFleet/workloads.ts`: adding a member
+ * without giving it a counter is a COMPILE error there.
+ */
+export type FleetWorkloadKind =
+  /** MOTIR-1921/1922: one ephemeral GitHub Actions runner per queued job. */
+  | 'ci_runner'
+  /** MOTIR-1981/1990: one container per code-graph index run. */
+  | 'code_graph_index'
+  /** Epic 9: one container per hosted agent run. */
+  | 'hosted_agent';
 
 // The CONTAINER-ORCHESTRATOR PORT (Story MOTIR-1916 · MOTIR-1921) —
 // `docs/decisions/ci-runner-fleet.md` §4 and §5, transcribed into the codebase

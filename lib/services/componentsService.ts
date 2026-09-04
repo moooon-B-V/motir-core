@@ -1,6 +1,7 @@
 import { Prisma, type Component, type Project, type WorkItem } from '@/generated/prisma/client';
 import {
   componentRepository,
+  type ComponentUpdateInput,
   type ComponentWithCount,
 } from '@/lib/repositories/componentRepository';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
@@ -344,7 +345,7 @@ export const componentsService = {
         const component = await resolveComponent(componentId, ctx, tx);
         await assertCanManage(ctx.userId, ctx.workspaceId, component.projectId, tx);
 
-        const update: Prisma.ComponentUncheckedUpdateInput = {};
+        const update: ComponentUpdateInput = {};
         if (name !== undefined && name.toLowerCase() !== component.nameLower) {
           const conflict = await componentRepository.findByNameLower(
             component.projectId,

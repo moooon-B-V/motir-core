@@ -14,10 +14,6 @@ export const JOB_KINDS = [
   'noop',
   'discovery',
   'generate_explanation',
-  'generate_tree',
-  'expand_item',
-  'augment',
-  'replan',
   // `analyze_bug` (Story 7.6 — MOTIR-967 handler / MOTIR-1481 trigger) — the
   // OUTWARD self-improving loop: motir-core's `work-item/created` trigger
   // dispatches a user-project `kind: bug` here so motir-ai classifies its root
@@ -61,22 +57,26 @@ export const JOB_KINDS = [
   // dispatches the SHIPPED plan-change submit for the same turn. Mirror of the
   // closed motir-ai enum (the open-core boundary).
   'ask_project',
-  // `revise_plan` (Story MOTIR-3595 — MOTIR-3599 submit / MOTIR-3600 handler) —
-  // the FIRST job whose target is a PLAN rather than a tree. Every sibling
-  // resolves a work-item KEY (`targetKeys` / `rootItemKey`) and a proposal on an
-  // unapproved plan has no key, so none of them could ever name one: the AI that
-  // wrote a plan could not change it, on the one surface where the reviewer is
-  // most engaged. Its context carries `planId` + the reviewer's instruction; the
-  // handler reads the plan's OWN proposals, seeds its registry from them, and
-  // emits corrections / withdraws / appends against them by `planItemId` — which
-  // is what makes it a REVISION rather than a re-plan.
+  // `plan` (Story MOTIR-3943 · MOTIR-4304 — ADR `motir-ai/docs/decisions/session-model.md`
+  // §6 step 2) — THE ONE PLANNING KIND. Every planning submit in the product sends
+  // it: `startGeneration`, `submitAugment`, `submitContextual`, `submitExpand`,
+  // `submitReplan` and `submitRevise`, plus the auto-plan cadence trigger, which
+  // reaches the wire only through `submitExpand` and so inherits the switch.
   //
-  // It writes NO work item, opens NO plan and closes none: the plan is `planned`
-  // before, during and after (`docs/decisions/agent-authored-plans.md`
-  // AMENDMENT 10). Mirror of the closed motir-ai enum in `src/envelope.ts` — each
-  // side declares its own types against the shared contract (the open-core
-  // boundary).
-  'revise_plan',
+  // ⚠️ IT REPLACES A DISTINCTION NOTHING CONSUMED. The five planning kinds above
+  // all route through one walk on the far side (MOTIR-3940), so the kind was
+  // transport carrying an operation name — and an operation is derivable from
+  // what the request already says, which is why naming it added no information
+  // and created a second place for the answer to drift. What motir-ai resolves
+  // the run from is the CONTEXT: `context.planId` names a plan, `rootItemKey` /
+  // `targetKeys` a work item, and NEITHER means plan the project.
+  //
+  // ⚠️ THE FIVE ARE GONE (MOTIR-4308). motir-ai stopped ACCEPTING them in
+  // MOTIR-4306, so a copy here would name values the other side refuses — which
+  // is the one thing a mirror must never do. This is the last card of ADR §6's
+  // three-step sequence, and it runs last for a reason: while motir-core still
+  // declared them the switch (MOTIR-4304) stayed revertible on its own.
+  'plan',
 ] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 

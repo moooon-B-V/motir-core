@@ -1,5 +1,5 @@
 import type { DeviceCode, Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the `device_code` table (Story MOTIR-1863 · Subtasks MOTIR-1865 /
 // MOTIR-1888) — the in-flight `motir login` grants. Single-op methods only; writes
@@ -72,7 +72,7 @@ export const deviceCodeRepository = {
     userCode: string,
     tx?: Prisma.TransactionClient,
   ): Promise<DeviceCode | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.deviceCode.findUnique({ where: { userCode } });
   },
 

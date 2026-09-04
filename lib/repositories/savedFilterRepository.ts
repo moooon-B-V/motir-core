@@ -1,5 +1,5 @@
 import { Prisma, type SavedFilter, type SavedFilterVisibility } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import type { SavedFilterWithStars } from '@/lib/mappers/savedFilterMappers';
 
 // Saved-filter data access (Story 6.2 · Subtask 6.2.1). Single Prisma ops;
@@ -63,7 +63,7 @@ export const savedFilterRepository = {
     actorUserId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<SavedFilterWithStars | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.savedFilter.findUnique({
       where: { id },
       include: starsInclude(actorUserId),
@@ -91,7 +91,7 @@ export const savedFilterRepository = {
     args: SavedFilterListArgs,
     tx?: Prisma.TransactionClient,
   ): Promise<SavedFilterWithStars[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.savedFilter.findMany({
       where: listWhere(args),
       include: starsInclude(args.actorUserId),
@@ -106,7 +106,7 @@ export const savedFilterRepository = {
     args: Omit<SavedFilterListArgs, 'cursor' | 'take'>,
     tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.savedFilter.count({ where: listWhere({ ...args, take: 0 }) });
   },
 

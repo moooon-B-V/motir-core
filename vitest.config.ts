@@ -1086,19 +1086,17 @@ export default defineConfig({
         // an invoice or as another tenant's CI — so the branch that decides each
         // one is the only place the guarantee is checkable at all.
         //
-        // The PORT is included alongside the services on purpose: §4 calls the
-        // swappable interface "the single most load-bearing output: it is what
-        // makes this decision reversible", and an adapter half of which is
-        // unexercised is an interface with one caller rather than a port.
-        'lib/orchestrator/types.ts',
+        // ⚠️ THE PORT ITSELF LEFT THIS GATE, AND ITS FLOOR WENT WITH IT
+        // (MOTIR-4299). Ten of the eleven files that used to be listed here are
+        // now `packages/orchestrator/src/**` and are gated by that package's own
+        // `vitest.config.ts` at the SAME ≥90 per-file floor, run by `ci.yml`'s
+        // `orchestrator` job. The reason they were listed is unchanged — §4 calls
+        // the swappable interface "the single most load-bearing output: it is
+        // what makes this decision reversible", and an adapter half of which is
+        // unexercised is an interface with one caller rather than a port — so the
+        // gate MOVED rather than being dropped. What stays here is the one file
+        // that did not move: the app's COMPOSITION ROOT.
         'lib/orchestrator/index.ts',
-        'lib/orchestrator/errors.ts',
-        'lib/orchestrator/rates.ts',
-        'lib/orchestrator/usage.ts',
-        'lib/orchestrator/usageSink.ts',
-        'lib/orchestrator/adapters/fake/index.ts',
-        'lib/orchestrator/adapters/fly/index.ts',
-        'lib/orchestrator/adapters/fly/flyMachines.ts',
         // Story MOTIR-1916 · MOTIR-2006 — THE BOOT PREFLIGHT, joining the same
         // surface for the same reason, stated at its sharpest by the fault it
         // exists to catch: MOTIR-1980's fleet shipped code-complete and unable to
@@ -1106,7 +1104,6 @@ export default defineConfig({
         // "configured". The preflight is the one thing that would have said
         // otherwise, so an unexercised branch in it is the guarantee going
         // missing exactly where it went missing before.
-        'lib/orchestrator/imagePull.ts',
         'lib/services/fleetPreflightService.ts',
         // Story MOTIR-1981 · MOTIR-1992 — THE INDEX FLEET, joining the gate for
         // the reason §6 states: this path's whole output is a `job_run` row that
@@ -1123,7 +1120,6 @@ export default defineConfig({
         'lib/services/codeGraphIndexAdmissionService.ts',
         'lib/jobs/indexFleetSteps.ts',
         'lib/jobs/definitions/codeGraphIndex.ts',
-        'lib/orchestrator/adapters/fly/indexImage.ts',
         'lib/ciFleet/config.ts',
         'lib/ciFleet/limits.ts',
         'lib/ciFleet/workloads.ts',
@@ -1822,25 +1818,38 @@ export default defineConfig({
         // gate to make a build pass.
         'app/**/_components/HelpMenu.tsx',
         'app/**/_components/CommandPaletteProvider.tsx',
-        // ⚠️ `SidebarNav.tsx` is REPORT-ONLY — it is in `include` and
-        // deliberately NOT in `thresholds`, and the reason is a FINDING rather
-        // than a gap to close later. MEASURED across every component spec that
-        // reaches it (292 files, 3 405 tests, on this branch):
+        // `SidebarNav.tsx` — GATED on three axes, report-only on the fourth, and
+        // the split is the whole story of MOTIR-4324.
         //
-        //   SidebarNav.tsx  97.22 stmts · 84 branch · 88.88 fn · 97.22 lines
+        // ⚠️ WHAT THIS COMMENT SAID UNTIL MOTIR-4324, kept because the number it
+        // quotes is the before half of this card's evidence: the file was
+        // report-only at 97.22 stmts · 84 branch · 88.88 fn · 97.22 lines (292
+        // component specs, 3 405 tests), and the ONE uncovered function was
+        // `SoonChip` — a badge that rendered only for a settings-nav entry
+        // carrying a reserved-slot flag no registry set any more. Covering it
+        // meant fabricating a registry entry no shipped surface has, so the
+        // number stood as a finding rather than a bar to lower.
         //
-        // The one uncovered function is `SoonChip`, the Automation slot's
-        // placeholder badge. It renders only for a registry entry carrying
-        // `placeholder: true`, and `grep -rn 'placeholder: true' lib/ app/
-        // components/` returns NOTHING — both settings registries have since
-        // flipped every placeholder they reserved into a real entry. So the
-        // function is unreachable from the product, and the only way to a 90%
-        // function figure is to fabricate a registry entry no shipped surface
-        // has, which asserts the fixture rather than the code. A number below
-        // the floor is a finding to state, not a bar to lower, and it is not
-        // MOTIR-4237's to close: this story edited the file by DELETION (the
-        // `Docs` and `Legal` rows left for the Help menu) and added nothing to
-        // it. Filed as its own bug.
+        // MOTIR-4324 retired that branch instead of covering it: `SoonChip`, the
+        // reserved-slot flag on both nav registries, the filters it fed and its
+        // two `Soon` catalog strings are gone. MEASURED AFTER, over the fourteen
+        // specs that reach this file — a LOWER BOUND on the full-suite number,
+        // since coverage over more specs can only rise:
+        //
+        //   vitest run --coverage \
+        //     --coverage.include='app/**/_components/SidebarNav.tsx' \
+        //     <the 14 specs naming SidebarNav / the authed layout>
+        //   SidebarNav.tsx  100 stmts · 86.95 branch · 100 fn · 100 lines
+        //
+        // Statements, functions and lines are at 100 and GATED at the 90 floor in
+        // `thresholds` below. BRANCHES is not, and the remaining cause is a
+        // different one from the one this card closed: the two uncovered arms are
+        // the DRAWER variant of the account-settings and project-settings rails
+        // (`collapsed={isDrawer ? false : undefined}` at both settings returns),
+        // plus the five-clause `active:` predicate on the workspace-settings row.
+        // Those are reachable, real, and untested — a coverage gap, not dead
+        // code — so they are neither this card's to write nor a bar to lower.
+        // Filed as its own bug: MOTIR-4368.
         'app/**/_components/SidebarNav.tsx',
       ],
       reporter: ['text', 'text-summary'],
@@ -2662,15 +2671,7 @@ export default defineConfig({
         },
         // Story MOTIR-1916 · MOTIR-1927 — the rest of the fleet (see the
         // include list for why the port ships gated alongside the services).
-        'lib/orchestrator/types.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/orchestrator/index.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/errors.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/rates.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/usage.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/usageSink.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fake/index.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fly/index.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fly/flyMachines.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1981 · MOTIR-1992 — the index fleet (see the include list).
         'lib/services/codeGraphIndexDispatchService.ts': {
           branches: 90,
@@ -2684,7 +2685,6 @@ export default defineConfig({
         },
         'lib/jobs/indexFleetSteps.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/codeGraphIndex.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/orchestrator/adapters/fly/indexImage.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/config.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/limits.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/workloads.ts': { branches: 90, functions: 90, lines: 90 },
@@ -3525,8 +3525,19 @@ export default defineConfig({
         // rather than at the measured 100, so a later refactor has room without
         // anyone loosening a gate to make a build pass.
         //
-        // ⚠️ `SidebarNav.tsx` is NOT here, on purpose — it is report-only, for
-        // the reason its `include` entry states.
+        // ⚠️ `SidebarNav.tsx` IS here since MOTIR-4324, and on THREE axes rather
+        // than four — statements / functions / lines, each MEASURED at 100 after
+        // the dead "Soon" badge was retired. `branches` is deliberately absent:
+        // at 86.95 it is under the floor for a cause that is not this file's
+        // dead code (the untested drawer arm of both settings rails), and an axis
+        // is left off rather than pinned below 90, which would be lowering a bar
+        // to make a build pass. Its `include` entry carries the numbers and the
+        // bug. Same shape as `lib/github/checkSuites.ts` above, which pins three.
+        'app/**/_components/SidebarNav.tsx': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+        },
         'app/**/_components/HelpMenu.tsx': {
           lines: 90,
           functions: 90,

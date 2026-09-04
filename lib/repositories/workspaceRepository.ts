@@ -1,5 +1,5 @@
 import { Prisma, type Workspace } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Workspace repository — single Prisma operations on the `workspace` table.
 // Membership operations live in workspaceMembershipRepository — the
@@ -34,12 +34,12 @@ export const workspaceRepository = {
    * overview reads the project's own workspace and got null otherwise.
    */
   async findById(id: string, tx?: Prisma.TransactionClient): Promise<Workspace | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workspace.findUnique({ where: { id } });
   },
 
   async findBySlug(slug: string, tx?: Prisma.TransactionClient): Promise<Workspace | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.workspace.findUnique({ where: { slug } });
   },
 

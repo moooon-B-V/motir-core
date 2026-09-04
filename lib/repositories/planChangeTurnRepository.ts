@@ -4,7 +4,7 @@ import {
   type PlanChangeTurnIntent,
   type PlanChangeTurnRole,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Single Prisma operations on the `plan_change_turn` table (Story 7.30 ·
 // MOTIR-1728). Its own repository, not a corner of the session's: the entity
@@ -81,7 +81,7 @@ export const planChangeTurnRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<PlanChangeTurn[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.planChangeTurn.findMany({
       where: { sessionId, workspaceId },
       orderBy: { seq: 'asc' },

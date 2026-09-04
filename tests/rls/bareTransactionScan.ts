@@ -489,7 +489,11 @@ function classify(
       ? cb.parameters[0].name.text
       : undefined;
   const body: ts.Node = cb ? cb.body : node;
-  const aliases = txName ? [txName] : [SINGLETON];
+  // `dbRead` beside the singleton (MOTIR-4295): it is the same object under a
+  // narrowed type, so an access off it inside the array form is the same
+  // unbound read. `$transaction` itself stays keyed on `db` alone above —
+  // `dbRead` does not carry it.
+  const aliases = txName ? [txName] : [SINGLETON, 'dbRead'];
 
   // ── Where the transaction starts binding ──────────────────────────────────
   //

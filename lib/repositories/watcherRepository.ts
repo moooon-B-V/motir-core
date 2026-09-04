@@ -1,5 +1,5 @@
 import { Prisma, type Watcher } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 import {
   HOME_WORK_ITEM_SELECT,
   homeKeysetWhere,
@@ -65,7 +65,7 @@ export const watcherRepository = {
     options: { take?: number; cursor?: string } = {},
     tx?: Prisma.TransactionClient,
   ): Promise<WatcherWithUser[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const { take = 20, cursor } = options;
     return client.watcher.findMany({
       where: { workItemId },
@@ -189,7 +189,7 @@ export const watcherRepository = {
     userId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     const row = await client.watcher.findUnique({
       where: { workItemId_userId: { workItemId, userId } },
       select: { id: true },
@@ -202,7 +202,7 @@ export const watcherRepository = {
    * on the detail read) and the popover's paging denominator.
    */
   async countByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.watcher.count({ where: { workItemId } });
   },
 };

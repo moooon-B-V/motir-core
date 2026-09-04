@@ -1,5 +1,5 @@
 import { Prisma, type PublicRequestVote } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { db, dbRead } from '@/lib/db';
 
 // publicRequestVoteRepository (Story 6.12) — single-op access to the
 // `public_request_vote` join. One vote per (request, account) is the
@@ -80,7 +80,7 @@ export const publicRequestVoteRepository = {
    * when the project has no public requests / votes.
    */
   async countByProject(projectId: string, tx?: Prisma.TransactionClient): Promise<number> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.publicRequestVote.count({ where: { workItem: { projectId } } });
   },
 

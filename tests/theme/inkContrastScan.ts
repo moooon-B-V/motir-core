@@ -1004,3 +1004,106 @@ export function violations(findings: InkFinding[]): InkFinding[] {
 export function formatFinding(finding: InkFinding): string {
   return `${finding.file}:${finding.line} — ${finding.reason}\n    ${finding.snippet}`;
 }
+
+// ── The ABSTENTION, enumerated (MOTIR-4251) ─────────────────────────────────
+//
+// Everything above answers "which sites does the muted arm REPORT". This answers
+// the question the file header raises and nothing measures: **which sites does
+// it DECLINE to rule on**, and how many are there.
+//
+// It matters because an abstention reads as coverage. The lane is green, and
+// green is read as "the tree is clean"; for the muted arm it means "the tree is
+// clean wherever a component paints its own background", which excludes every
+// composed surface in the product. Five bug cards were filed one site at a time
+// inside that hole before anybody counted it (MOTIR-3523 · MOTIR-3711 ·
+// MOTIR-4030 · MOTIR-4196 · MOTIR-4246).
+//
+// ⚠️ IT CALLS THE SAME PREDICATES THE ARM DOES — `owningElement`,
+// `paintedElements`, `isDecorative`, `isDisabledElement`, `inDisabledBranch`,
+// `nearestSurface`, `enclosingLocalComponent`, `surfacesAtUseSites` — in the same
+// order, so its classification cannot drift from the arm's verdict. What it does
+// differently is RECORD the cases the arm `continue`s past. Change the arm and
+// this follows; the only thing that could put them out of step is reordering the
+// loop below, which is why it is a transcription rather than a paraphrase.
+//
+// It reports NOTHING about the faint arm, deliberately: that arm has no surface
+// walk (`--el-text-faint` clears AA on no background in either theme), so it
+// cannot abstain and has no hole to enumerate.
+
+/** How the muted arm resolved — or failed to resolve — one ink site's surface. */
+export type MutedSurfaceVerdict =
+  /** An ancestor, or a use site in this file, paints a background the ink fails on. */
+  | 'tinted'
+  /** An ancestor paints the white page/card, where the ink clears AA by 0.04. */
+  | 'safe'
+  /** 1.4.3 does not measure it: a decorative glyph or a disabled control. */
+  | 'exempt'
+  /** Nothing in this file paints a background for it — THE ABSTENTION. */
+  | 'abstained';
+
+export interface MutedSurfaceSite {
+  file: string;
+  line: number;
+  element: string | null;
+  /** The `--el-*` background class that decided it, when one did. */
+  surface: string | null;
+  /** The local component the site sits in, when the walk found one. */
+  component: string | null;
+  verdict: MutedSurfaceVerdict;
+}
+
+/**
+ * Every `--el-text-muted` site in one file, with how the muted arm's surface
+ * walk resolved it. The `abstained` rows are the population this file's header
+ * describes and `tests/components/composed-surface-ink.test.tsx` covers.
+ */
+export function scanMutedSurfaceResolution(fileName: string, text: string): MutedSurfaceSite[] {
+  const source = ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const sites: MutedSurfaceSite[] = [];
+
+  for (const token of inkTokens(source, MUTED_CLASS)) {
+    const { node } = token;
+    const line = lineAt(source, token.start);
+    const carrier = owningElement(node);
+    if (!carrier) continue; // the muted rule needs an element to find a surface for
+
+    const painted = paintedElements(carrier, token);
+    if ('unresolved' in painted) continue; // reported as `unattributable`, not abstained
+
+    for (const element of painted.elements) {
+      const base = { file: fileName, line, element: tagNameOf(element) };
+      if (
+        isDecorative(element, paintsText(element, token)) ||
+        isDisabledElement(element) ||
+        inDisabledBranch(node, element)
+      ) {
+        sites.push({ ...base, surface: null, component: null, verdict: 'exempt' });
+        continue;
+      }
+      const surface = nearestSurface(element);
+      const component = surface ? null : enclosingLocalComponent(element);
+      const inherited = component
+        ? surfacesAtUseSites(source, component).find((use) => use.tinted)
+        : undefined;
+      const resolved = surface ?? inherited;
+      if (!resolved) {
+        sites.push({ ...base, surface: null, component, verdict: 'abstained' });
+        continue;
+      }
+      sites.push({
+        ...base,
+        surface: resolved.className,
+        component,
+        verdict: resolved.tinted ? 'tinted' : 'safe',
+      });
+    }
+  }
+
+  return sites;
+}

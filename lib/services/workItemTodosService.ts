@@ -5,7 +5,10 @@
 import type { Prisma, WorkItem, WorkItemTodo } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
+import {
+  workItemTodoRepository,
+  type WorkItemTodoUpdateInput,
+} from '@/lib/repositories/workItemTodoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { toWorkItemTodoDto, toWorkItemTodoListDto } from '@/lib/mappers/workItemTodoMappers';
@@ -361,7 +364,7 @@ export const workItemTodosService = {
     input: UpdateTodoInput,
     ctx: ServiceContext,
   ): Promise<TodoWriteResult> {
-    const patch: Prisma.WorkItemTodoUncheckedUpdateInput = {};
+    const patch: WorkItemTodoUpdateInput = {};
     if (input.text !== undefined) patch.text = requireText(input.text);
     if (input.notesMd !== undefined) patch.notesMd = normalizeNotes(input.notesMd);
     if (input.commandText !== undefined) patch.commandText = normalizeCommand(input.commandText);

@@ -15,58 +15,58 @@
       ---------------------------------------------------------------------- */
       :root {
         /* text */
-        --text: #1a1a1a;
-        --strong: #37352f;
-        --secondary: #5d5b54;
-        --muted: #787671;
-        --faint: #a4a097;
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f;
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+        --el-text-inverted: #ffffff;
         /* surfaces */
-        --page: #f4f3f1;
-        --surface: #ffffff;
-        --soft: #fafaf9;
-        --hub: #f6f5f4;
-        --mutedfill: #f3f4f6;
+        --el-page-bg: #ffffff;
+        --el-surface: #f6f5f4;
+        --el-surface-soft: #fafaf9;
+        --el-muted: #f3f4f6;
         /* borders */
-        --border: #e5e3df;
-        --hair: #ede9e4;
-        --border-strong: #d3cfc8;
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
         /* accent */
-        --accent: #5645d4;
-        --accent-pressed: #4534b3;
-        --accent-soft: #f4f2fd;
-        --highlight: #ff64c8;
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
         /* status / intent */
-        --success: #1aae39;
-        --warning: #dd5b00;
-        --danger: #e03131;
-        --info: #0075de;
+        --el-success: #1aae39;
+        --el-warning: #dd5b00;
+        --el-danger: #e03131;
+        --el-info: #0075de;
         /* tints */
-        --peach: #ffe8d4;
-        --rose: #fde0ec;
-        --mint: #d9f3e1;
-        --lavender: #e6e0f5;
-        --sky: #dcecfa;
-        --danger-surface: #fde0ec;
-        --warning-surface: #ffe8d4;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-danger-surface: #fde0ec;
+        --el-warning-surface: #ffe8d4;
         /* work-item type hues */
-        --t-epic: #ff64c8;
-        --t-epic-soft: #ffe3f5;
-        --t-story: #1aae39;
-        --t-story-soft: #d9f3e1;
-        --t-task: #0075de;
-        --t-task-soft: #dcecfa;
-        --t-bug: #e03131;
-        --t-subtask: #2a9d99;
-        --t-subtask-soft: #d6f0ee;
-        /* shape */
-        --r-card: 12px;
-        --r-btn: 10px;
-        --r-control: 8px;
-        --r-pill: 999px;
-        --sh-subtle: 0 1px 2px #0000000d;
-        --sh-card: 0 2px 6px #0000000f;
-        --sh-elev: 0 4px 14px #00000014;
-        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-subtask: #2a9d99;
+        /* DERIVED fills — a `color-mix()` whose inputs are BOTH tokens, so each
+           follows a re-skin instead of pinning an invented hue. The form
+           `design/ai-planning/plan-detail-list-view.mock.html` is the copy of
+           record for (MOTIR-4277). */
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg));
+        --el-accent-wash-border: color-mix(in srgb, var(--el-accent) 17%, var(--el-page-bg));
+        --el-type-epic-wash: color-mix(in srgb, var(--el-type-epic) 18%, var(--el-page-bg));
+        --el-type-subtask-wash: color-mix(in srgb, var(--el-type-subtask) 18%, var(--el-page-bg));
+        /* shape / elevation / type — no colour, and named as the design system
+           names them */
+        --radius-card: 12px;
+        --radius-btn: 10px;
+        --radius-control: 8px;
+        --radius-badge: 999px;
+        --shadow-subtle: 0 1px 2px #0000000d;
+        --shadow-card: 0 2px 6px #0000000f;
+        --shadow-elevated: 0 4px 14px #00000014;
+        --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
 
       * {
@@ -74,8 +74,8 @@
       }
       body {
         margin: 0;
-        background: var(--page);
-        color: var(--text);
+        background: var(--el-surface);
+        color: var(--el-text);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         -webkit-font-smoothing: antialiased;
       }
@@ -91,7 +91,7 @@
       }
       .doc-head p {
         margin: 0;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 14px;
         line-height: 1.5;
         max-width: 70ch;
@@ -103,17 +103,17 @@
         gap: 6px;
       }
       .ref {
-        font: 600 11px var(--mono);
-        color: var(--accent);
-        background: var(--accent-soft);
-        border: 1px solid #e3def8;
-        border-radius: var(--r-pill);
+        font: 600 11px var(--font-mono);
+        color: var(--el-accent);
+        background: var(--el-accent-wash);
+        border: 1px solid var(--el-accent-wash-border);
+        border-radius: var(--radius-badge);
         padding: 3px 9px;
       }
       .ref.muted {
-        color: var(--secondary);
-        background: var(--hub);
-        border-color: var(--border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface);
+        border-color: var(--el-border);
       }
 
       .panel {
@@ -126,9 +126,9 @@
         margin-bottom: 11px;
       }
       .panel-cap .n {
-        font: 700 12px var(--mono);
-        color: #fff;
-        background: var(--accent);
+        font: 700 12px var(--font-mono);
+        color: var(--el-accent-text);
+        background: var(--el-accent);
         border-radius: 6px;
         padding: 2px 7px;
         letter-spacing: 0.02em;
@@ -139,13 +139,13 @@
       }
       .panel-cap span.note {
         font-size: 13px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .frame {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 16px;
-        background: var(--surface);
-        box-shadow: var(--sh-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
         overflow: hidden;
       }
 
@@ -156,8 +156,8 @@
         height: 560px;
       }
       .nav {
-        background: var(--hub);
-        border-right: 1px solid var(--border);
+        background: var(--el-surface);
+        border-right: 1px solid var(--el-border);
         padding: 14px 10px;
         display: flex;
         flex-direction: column;
@@ -173,8 +173,8 @@
         width: 26px;
         height: 26px;
         border-radius: 8px;
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         display: grid;
         place-items: center;
         font-weight: 800;
@@ -183,20 +183,20 @@
       .nav .brand .who {
         font-size: 13px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
         line-height: 1.1;
       }
       .nav .brand .who small {
         display: block;
         font-weight: 500;
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .nav .sec {
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         padding: 12px 8px 5px;
       }
       .nav a {
@@ -204,29 +204,29 @@
         align-items: center;
         gap: 9px;
         padding: 7px 9px;
-        border-radius: var(--r-control);
+        border-radius: var(--radius-control);
         font-size: 13px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         text-decoration: none;
       }
       .nav a svg {
         width: 16px;
         height: 16px;
-        color: var(--faint);
+        color: var(--el-text-faint);
         flex: none;
       }
       .nav a.on {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent);
         font-weight: 600;
       }
       .nav a.on svg {
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .nav a .count {
         margin-left: auto;
-        font: 600 11px var(--mono);
-        color: var(--muted);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-muted);
       }
 
       .main {
@@ -236,7 +236,7 @@
       }
       .topbar {
         height: 50px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--el-border);
         display: flex;
         align-items: center;
         gap: 10px;
@@ -249,7 +249,7 @@
       }
       .topbar .sub {
         font-size: 12.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .topbar .grow {
         margin-left: auto;
@@ -259,7 +259,7 @@
         align-items: center;
         gap: 7px;
         border: 0;
-        border-radius: var(--r-btn);
+        border-radius: var(--radius-btn);
         padding: 8px 13px;
         font-size: 13px;
         font-weight: 600;
@@ -270,17 +270,17 @@
         height: 15px;
       }
       .btn.primary {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .btn.secondary {
         background: transparent;
-        color: var(--strong);
-        border: 1px solid var(--border-strong);
+        color: var(--el-text-strong);
+        border: 1px solid var(--el-border-strong);
       }
       .btn.ghost {
         background: transparent;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .btn.sm {
         padding: 6px 10px;
@@ -298,14 +298,14 @@
         gap: 13px;
         align-items: center;
         padding: 13px 14px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
         margin-bottom: 9px;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--shadow-subtle);
       }
       .row:hover {
-        border-color: var(--border-strong);
+        border-color: var(--el-border-strong);
       }
       .row .ic {
         width: 22px;
@@ -324,21 +324,21 @@
       .row .idea .t {
         font-size: 13.5px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .row .idea .m {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 2px;
         display: flex;
         gap: 12px;
         flex-wrap: wrap;
       }
       .row .idea .m b {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-weight: 600;
       }
       .row .meta {
@@ -351,7 +351,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         padding: 2px 9px;
         font-size: 11.5px;
         font-weight: 600;
@@ -362,24 +362,24 @@
         height: 12px;
       }
       .pill.generating {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: color-mix(in srgb, var(--el-info) 66%, var(--el-text));
       }
       .pill.planned {
-        background: var(--lavender);
-        color: #3a2d8a;
+        background: var(--el-tint-lavender);
+        color: color-mix(in srgb, var(--el-accent) 59%, var(--el-text));
       }
       .pill.approved {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: color-mix(in srgb, var(--el-success) 46%, var(--el-text));
       }
       .pill.declined {
-        background: var(--mutedfill);
-        color: var(--muted);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .pill.stale {
-        background: var(--warning-surface);
-        color: #8a3d00;
+        background: var(--el-warning-surface);
+        color: color-mix(in srgb, var(--el-warning) 57%, var(--el-text));
       }
       /* --- MOTIR-2985: the authorship attribution (amends A + B) ---------
          An entry in the row's EXISTING meta line, not new chrome: same
@@ -398,10 +398,10 @@
         width: 12px;
         height: 12px;
         flex: none;
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .attrib b {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-weight: 600;
       }
       /* ONLY the harness truncates — the title above keeps its own ellipsis and
@@ -413,7 +413,7 @@
         white-space: nowrap;
       }
       .attrib .model {
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       /* WHO ASKED — the person. The shipped initial-letter `Avatar`
          (app/(authed)/items/_components/issueCellPrimitives.tsx), at the 18px
@@ -422,8 +422,8 @@
         width: 18px;
         height: 18px;
         border-radius: 999px;
-        background: var(--text);
-        color: #fff;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
         font-size: 9.5px;
         font-weight: 600;
         display: inline-grid;
@@ -439,21 +439,21 @@
       /* The hairline that separates WHO ASKED from WHO WROTE inside one entry —
          they are one sentence about provenance, not two facts to scan apart. */
       .attrib .sep {
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       /* WHY the plan started — `Plan.origin = cadence`. A separate entry, never
          merged into the WHO one. */
       .attrib.origin {
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
 
       /* The plan-detail header, as PlanReviewRail renders it. */
       .hdrcard {
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
         padding: 14px 16px;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--shadow-subtle);
       }
       /* MOTIR-3074 — the status tag is an OVERLINE on its own line ABOVE the title,
          not a shrink-0 pill beside it. Plan titles are GENERATED: long by default and
@@ -482,7 +482,7 @@
         overflow-wrap: anywhere;
         font-size: 15px;
         font-weight: 600;
-        color: var(--text);
+        color: var(--el-text);
       }
       /* The long-title case, drawn at the SHIPPED rail width rather than the
          gallery's full width — the collision only exists in a 22rem column. */
@@ -492,7 +492,7 @@
       .hdrcard .sum {
         margin: 6px 0 0;
         font-size: 12.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .hdrmeta {
         margin-top: 8px;
@@ -500,25 +500,25 @@
         flex-wrap: wrap;
         gap: 12px;
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .hdrmeta b {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-weight: 600;
       }
 
       .pill.count {
-        background: var(--hub);
-        color: var(--secondary);
-        border: 1px solid var(--border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border);
         font-weight: 600;
       }
       .spin {
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        border: 2px solid #b9d4f2;
-        border-top-color: var(--info);
+        border: 2px solid color-mix(in srgb, var(--el-info) 28%, var(--el-page-bg));
+        border-top-color: var(--el-info);
         display: inline-block;
         animation: sp 0.9s linear infinite;
       }
@@ -538,8 +538,8 @@
         position: relative;
         overflow: hidden;
         background:
-          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 26px 26px,
-          var(--hub);
+          radial-gradient(circle at 1px 1px, var(--el-border) 1px, transparent 0) 0 0 / 26px 26px,
+          var(--el-surface);
       }
       .ovl {
         position: absolute;
@@ -550,58 +550,58 @@
         align-items: center;
         gap: 7px;
         padding: 6px 11px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-control);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--strong);
-        box-shadow: var(--sh-subtle);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
       }
       .crumb svg {
         width: 13px;
         height: 13px;
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .crumb .dot {
         width: 15px;
         height: 15px;
         border-radius: 5px;
-        background: var(--accent);
+        background: var(--el-accent);
       }
       .search {
         display: inline-flex;
         align-items: center;
         gap: 7px;
         padding: 6px 10px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-control);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
         font-size: 12.5px;
-        color: var(--muted);
-        box-shadow: var(--sh-subtle);
+        color: var(--el-text-muted);
+        box-shadow: var(--shadow-subtle);
         min-width: 190px;
       }
       .search svg {
         width: 14px;
         height: 14px;
-        color: var(--faint);
+        color: var(--el-text-faint);
       }
       .search kbd {
         margin-left: auto;
-        font: 600 10px var(--mono);
-        color: var(--faint);
-        background: var(--mutedfill);
+        font: 600 10px var(--font-mono);
+        color: var(--el-text-secondary);
+        background: var(--el-muted);
         border-radius: 4px;
         padding: 1px 5px;
       }
       .zoom {
         display: inline-flex;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-control);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
         overflow: hidden;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--shadow-subtle);
       }
       .zoom button {
         width: 34px;
@@ -609,47 +609,47 @@
         border: 0;
         background: transparent;
         font-size: 16px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         cursor: pointer;
       }
       .zoom button + button {
-        border-left: 1px solid var(--hair);
+        border-left: 1px solid var(--el-border-soft);
       }
       .zlvl {
-        font: 600 11px var(--mono);
-        color: var(--muted);
-        background: var(--surface);
-        border: 1px solid var(--border);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-muted);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 6px 9px;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--shadow-subtle);
       }
 
       .legend {
         display: flex;
         flex-direction: column;
         gap: 6px;
-        background: #ffffffee;
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
+        background: color-mix(in srgb, var(--el-page-bg) 93%, transparent);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
         padding: 9px 12px;
-        box-shadow: var(--sh-card);
+        box-shadow: var(--shadow-card);
       }
       .legend .lh {
-        font: 700 10px var(--mono);
+        font: 700 10px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .legend .lrow {
         display: flex;
         align-items: center;
         gap: 8px;
         font-size: 11.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .legend .lrow em {
-        color: var(--muted);
+        color: var(--el-text-muted);
         font-style: normal;
       }
       .legend svg {
@@ -673,10 +673,10 @@
       .node {
         position: absolute;
         width: 236px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-card);
-        box-shadow: var(--sh-subtle);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
         padding: 11px 12px;
       }
       .node .top {
@@ -688,7 +688,7 @@
         flex: none;
         width: 30px;
         height: 30px;
-        border-radius: var(--r-control);
+        border-radius: var(--radius-control);
         display: grid;
         place-items: center;
       }
@@ -697,13 +697,13 @@
         height: 17px;
       }
       .node .id {
-        font: 600 11px var(--mono);
-        color: var(--faint);
+        font: 600 11px var(--font-mono);
+        color: var(--el-text-secondary);
       }
       .node .ttl {
         font-size: 13px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         line-height: 1.25;
         margin-top: 1px;
       }
@@ -716,14 +716,14 @@
       .node .who {
         margin-left: auto;
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .opbadge {
         margin-left: auto;
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         padding: 2px 8px;
         font-size: 10.5px;
         font-weight: 700;
@@ -735,13 +735,14 @@
 
       /* op treatments */
       .node.add {
-        border: 1.5px dashed var(--accent);
-        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
-        box-shadow: 0 0 0 3px #5645d41a;
+        border: 1.5px dashed var(--el-accent);
+        background:
+          linear-gradient(0deg, var(--el-accent-wash), var(--el-accent-wash)), var(--el-page-bg);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 10%, transparent);
       }
       .opbadge.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       /* Edit pencil on a proposed `add` node (MOTIR-1370) — opens the edit modal.
          Only an `add` carries it (modify/remove target existing items). */
@@ -752,10 +753,10 @@
         height: 22px;
         display: grid;
         place-items: center;
-        border-radius: var(--r-control);
-        border: 1px solid var(--border);
-        background: var(--surface);
-        color: var(--muted);
+        border-radius: var(--radius-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text-muted);
       }
       .editbtn svg {
         width: 13px;
@@ -768,27 +769,27 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        border: 1px solid var(--border-strong);
-        border-radius: var(--r-control);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-control);
         padding: 0 10px;
         font-size: 13px;
-        color: var(--text);
+        color: var(--el-text);
       }
       .fakeselect .chev {
         width: 16px;
         height: 16px;
         margin-left: auto;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .node.modify {
-        border-color: var(--info);
+        border-color: var(--el-info);
         box-shadow:
-          0 0 0 1px var(--info) inset,
-          var(--sh-subtle);
+          0 0 0 1px var(--el-info) inset,
+          var(--shadow-subtle);
       }
       .opbadge.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: color-mix(in srgb, var(--el-info) 66%, var(--el-text));
       }
       /* REMOVE = "will be archived": a dimmed, fading-out, NEUTRAL treatment.
          Deliberately NOT red/dashed/hatched — that language is reserved for the
@@ -796,51 +797,51 @@
          shipped canvas language we compose. Archive is reversible, not an error,
          so it reads as greyscale + strike-through, like the cancelled status hue. */
       .node.remove {
-        border: 1px solid var(--border-strong);
-        background: var(--mutedfill);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-muted);
         opacity: 0.66;
         filter: grayscale(0.5);
       }
       .node.remove .ttl {
         text-decoration: line-through;
-        text-decoration-color: var(--faint);
-        color: var(--muted);
+        text-decoration-color: var(--el-text-faint);
+        color: var(--el-text-secondary);
       }
       .node.remove .id {
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .opbadge.remove {
-        background: var(--mutedfill);
-        color: var(--secondary);
-        border: 1px solid var(--border-strong);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-border-strong);
       }
 
       .diff {
         margin-top: 9px;
         padding-top: 9px;
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
         display: flex;
         flex-direction: column;
         gap: 4px;
       }
       .diff .dl {
-        font: 600 10px var(--mono);
+        font: 600 10px var(--font-mono);
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .diff .old {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         text-decoration: line-through;
       }
       .diff .new {
         font-size: 11.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         font-weight: 600;
       }
       .diff .new b {
-        color: var(--info);
+        color: var(--el-info);
       }
 
       .stale {
@@ -850,9 +851,9 @@
         gap: 5px;
         font-size: 11px;
         font-weight: 600;
-        color: #8a3d00;
-        background: var(--warning-surface);
-        border-radius: var(--r-pill);
+        color: color-mix(in srgb, var(--el-warning) 57%, var(--el-text));
+        background: var(--el-warning-surface);
+        border-radius: var(--radius-badge);
         padding: 2px 8px;
       }
       .stale svg {
@@ -863,20 +864,20 @@
       .ghost {
         position: absolute;
         width: 184px;
-        border: 1.5px dashed var(--danger);
+        border: 1.5px dashed var(--el-danger);
         background: repeating-linear-gradient(
           135deg,
-          #fff,
-          #fff 7px,
-          var(--danger-surface) 7px,
-          var(--danger-surface) 9px
+          var(--el-page-bg),
+          var(--el-page-bg) 7px,
+          var(--el-danger-surface) 7px,
+          var(--el-danger-surface) 9px
         );
-        border-radius: var(--r-card);
+        border-radius: var(--radius-card);
         padding: 9px 11px;
       }
       .ghost .gid {
-        font: 600 11px var(--mono);
-        color: #9b1c4b;
+        font: 600 11px var(--font-mono);
+        color: color-mix(in srgb, var(--el-danger) 66%, var(--el-text));
         display: flex;
         align-items: center;
         gap: 5px;
@@ -887,11 +888,11 @@
       }
       .ghost .gsub {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 3px;
       }
       .ghost .gwhere {
-        color: var(--danger);
+        color: var(--el-danger);
         font-weight: 600;
       }
 
@@ -901,14 +902,14 @@
         display: inline-flex;
         align-items: center;
         gap: 7px;
-        background: var(--warning-surface);
-        border: 1px solid #f3c9a0;
-        color: #8a3d00;
-        border-radius: var(--r-pill);
+        background: var(--el-warning-surface);
+        border: 1px solid color-mix(in srgb, var(--el-warning) 36%, var(--el-page-bg));
+        color: color-mix(in srgb, var(--el-warning) 57%, var(--el-text));
+        border-radius: var(--radius-badge);
         padding: 6px 12px;
         font-size: 12px;
         font-weight: 600;
-        box-shadow: var(--sh-card);
+        box-shadow: var(--shadow-card);
       }
       .stale-summary svg {
         width: 14px;
@@ -917,8 +918,8 @@
 
       /* ---- review rail ---- */
       .rail {
-        background: var(--surface);
-        border-left: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border-left: 1px solid var(--el-border);
         display: flex;
         flex-direction: column;
         min-width: 0;
@@ -928,19 +929,19 @@
         align-items: center;
         gap: 8px;
         padding: 13px 16px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .railhead .g {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: var(--success);
+        background: var(--el-success);
       }
       .railhead .lab {
-        font: 600 11px var(--mono);
+        font: 600 11px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: #54514b;
+        color: color-mix(in srgb, var(--el-text-secondary) 85%, var(--el-text));
       }
       .railbody {
         flex: 1;
@@ -953,12 +954,12 @@
       .summary .idea {
         font-size: 14px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
         line-height: 1.3;
       }
       .summary .by {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 4px;
       }
       .opcounts {
@@ -972,27 +973,27 @@
         gap: 5px;
         font-size: 11.5px;
         font-weight: 600;
-        border-radius: var(--r-control);
+        border-radius: var(--radius-control);
         padding: 4px 8px;
       }
       .opc.add {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent);
       }
       .opc.mod {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: color-mix(in srgb, var(--el-info) 66%, var(--el-text));
       }
       .opc.rem {
-        background: var(--danger-surface);
-        color: #9b1c4b;
+        background: var(--el-danger-surface);
+        color: color-mix(in srgb, var(--el-danger) 66%, var(--el-text));
       }
 
       .block-h {
-        font: 600 10.5px var(--mono);
+        font: 600 10.5px var(--font-mono);
         letter-spacing: 0.05em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         margin-bottom: 8px;
       }
       .timeline {
@@ -1019,7 +1020,7 @@
       .tl .mk .line {
         flex: 1;
         width: 2px;
-        background: var(--hair);
+        background: var(--el-border-soft);
         margin: 2px 0;
       }
       .tl .body {
@@ -1028,55 +1029,55 @@
       .tl .body .ev {
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .tl .body .at {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 1px;
       }
       .tl.done .mk i {
-        background: var(--success);
+        background: var(--el-success);
       }
       .tl.now .mk i {
-        background: var(--accent);
-        box-shadow: 0 0 0 3px #5645d426;
+        background: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent) 15%, transparent);
       }
       .tl.pending .mk i {
-        background: var(--surface);
-        border: 2px solid var(--border-strong);
+        background: var(--el-page-bg);
+        border: 2px solid var(--el-border-strong);
       }
       .tl.pending .body .ev {
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
 
       /* A NEUTRAL explanatory note (MOTIR-2985) — `.callout` is the warning
          treatment and would read as one. */
       .note-box {
         margin: 14px 18px 4px;
-        border: 1px solid var(--border);
-        background: var(--soft);
-        border-radius: var(--r-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
         padding: 11px 13px;
         font-size: 12.5px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .note-box b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .note-box code {
-        font: 600 11.5px var(--mono);
-        background: var(--hub);
-        border: 1px solid var(--border);
+        font: 600 11.5px var(--font-mono);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
         border-radius: 5px;
         padding: 1px 5px;
       }
 
       .callout {
-        border: 1px solid #f3c9a0;
-        background: var(--warning-surface);
-        border-radius: var(--r-card);
+        border: 1px solid color-mix(in srgb, var(--el-warning) 36%, var(--el-page-bg));
+        background: var(--el-warning-surface);
+        border-radius: var(--radius-card);
         padding: 11px 12px;
       }
       .callout .ch {
@@ -1085,7 +1086,7 @@
         gap: 7px;
         font-size: 12.5px;
         font-weight: 700;
-        color: #8a3d00;
+        color: color-mix(in srgb, var(--el-warning) 57%, var(--el-text));
       }
       .callout .ch svg {
         width: 14px;
@@ -1100,19 +1101,19 @@
       }
       .callout li {
         font-size: 11.5px;
-        color: #7a4a10;
+        color: color-mix(in srgb, var(--el-warning) 51%, var(--el-text));
       }
       .callout li code {
-        font: 600 11px var(--mono);
-        color: #8a3d00;
-        background: #ffffff80;
+        font: 600 11px var(--font-mono);
+        color: color-mix(in srgb, var(--el-warning) 57%, var(--el-text));
+        background: color-mix(in srgb, var(--el-page-bg) 50%, transparent);
         border-radius: 4px;
         padding: 0 4px;
       }
 
       .decide {
         padding: 13px 16px;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -1123,7 +1124,7 @@
       }
       .decide .hint {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         text-align: center;
       }
 
@@ -1137,20 +1138,20 @@
         width: 26px;
         height: 26px;
         border-radius: 50%;
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         font: 700 12px sans-serif;
         display: grid;
         place-items: center;
         flex: none;
       }
       .msg .bubble {
-        background: var(--hub);
+        background: var(--el-surface);
         border-radius: 13px;
         padding: 9px 12px;
         font-size: 12.5px;
         line-height: 1.45;
-        color: var(--text);
+        color: var(--el-text);
       }
 
       /* ---- terminal states ---- */
@@ -1160,9 +1161,9 @@
         gap: 16px;
       }
       .estate {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
-        background: var(--surface);
+        background: var(--el-page-bg);
         min-height: 230px;
         display: flex;
         flex-direction: column;
@@ -1171,7 +1172,7 @@
         gap: 10px;
         text-align: center;
         padding: 26px 22px;
-        box-shadow: var(--sh-subtle);
+        box-shadow: var(--shadow-subtle);
       }
       .estate .glyph {
         width: 46px;
@@ -1179,38 +1180,38 @@
         border-radius: 13px;
         display: grid;
         place-items: center;
-        background: var(--hub);
-        border: 1px solid var(--border);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
       }
       .estate .glyph svg {
         width: 22px;
         height: 22px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .estate.fail .glyph {
-        background: #fdeae3;
-        border-color: #f3b4a0;
+        background: color-mix(in srgb, var(--el-danger) 12%, var(--el-page-bg));
+        border-color: color-mix(in srgb, var(--el-danger) 41%, var(--el-page-bg));
       }
       .estate.fail .glyph svg {
-        color: var(--warning);
+        color: var(--el-warning);
       }
       .estate.credits .glyph {
-        background: var(--accent-soft);
-        border-color: #e3def8;
+        background: var(--el-accent-wash);
+        border-color: var(--el-accent-wash-border);
       }
       .estate.credits .glyph svg {
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .estate h4 {
         margin: 0;
         font-size: 14px;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .estate p {
         margin: 0;
         font-size: 12px;
         line-height: 1.5;
-        color: var(--muted);
+        color: var(--el-text-muted);
         max-width: 260px;
       }
       .estate .acts {
@@ -1226,7 +1227,7 @@
         right: 0;
         z-index: 6;
         height: 3px;
-        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        background: linear-gradient(90deg, transparent, var(--el-accent), transparent);
         background-size: 40% 100%;
         background-repeat: no-repeat;
         animation: scan 1.4s ease-in-out infinite;
@@ -1248,14 +1249,14 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: var(--r-pill);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-badge);
         padding: 7px 14px;
         font-size: 12.5px;
         font-weight: 600;
-        color: var(--strong);
-        box-shadow: var(--sh-card);
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-card);
       }
       .node.streaming {
         opacity: 0;
@@ -1284,12 +1285,12 @@
         position: absolute;
         width: 236px;
         height: 86px;
-        border-radius: var(--r-card);
-        border: 1.5px dashed var(--border-strong);
-        background: var(--soft);
+        border-radius: var(--radius-card);
+        border: 1.5px dashed var(--el-border-strong);
+        background: var(--el-surface-soft);
         display: grid;
         place-items: center;
-        color: var(--faint);
+        color: var(--el-text-secondary);
         font-size: 12px;
       }
 
@@ -1315,14 +1316,14 @@
       .lvledge {
         position: absolute;
         height: 1.5px;
-        background: var(--border-strong);
+        background: var(--el-border-strong);
       }
       .lvledge::after {
         content: '';
         position: absolute;
         right: -1px;
         top: -3.5px;
-        border-left: 7px solid var(--border-strong);
+        border-left: 7px solid var(--el-border-strong);
         border-top: 4px solid transparent;
         border-bottom: 4px solid transparent;
       }
@@ -1332,7 +1333,7 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       /* The View button — the canvas detail-surface door (MOTIR-1351/1352),
          placed LEFT of MOTIR-1370's edit pencil so the pair reads View · Edit. */
@@ -1345,7 +1346,7 @@
         border: 0;
         border-radius: 6px;
         background: transparent;
-        color: var(--muted);
+        color: var(--el-text-muted);
         cursor: pointer;
       }
       .viewbtn svg {
@@ -1353,22 +1354,22 @@
         height: 13px;
       }
       .viewbtn.is-selected {
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent);
       }
       /* A SELECTED node — the accent ring the shipped canvas already uses for
          selection (roadmap panel 1). Selection is what reveals View. */
       .node.selected {
-        box-shadow: 0 0 0 2px var(--accent);
+        box-shadow: 0 0 0 2px var(--el-accent);
       }
       /* Panel F — the peek. The SHIPPED work-item peek shell, reused: Modal
          size="xl", .qv-head / .qv-body / .qv-main + .qv-rail. */
       .qvm {
         width: 720px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
-        background: var(--surface);
-        box-shadow: 0 18px 48px rgb(24 22 20 / 14%);
+        background: var(--el-page-bg);
+        box-shadow: 0 18px 48px color-mix(in srgb, var(--el-text) 14%, transparent);
         overflow: hidden;
       }
       .qvhead {
@@ -1376,7 +1377,7 @@
         align-items: center;
         gap: 8px;
         padding: 12px 14px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .qvhead .sp {
         flex: 1;
@@ -1388,13 +1389,13 @@
       }
       .qvmain {
         padding: 16px 18px;
-        border-right: 1px solid var(--hair);
+        border-right: 1px solid var(--el-border-soft);
       }
       .qvtitle {
         margin: 0 0 12px;
         font-family: Georgia, 'Times New Roman', serif;
         font-size: 19px;
-        color: var(--text);
+        color: var(--el-text);
       }
       .qvsec {
         display: block;
@@ -1403,7 +1404,7 @@
         font-weight: 700;
         letter-spacing: 0.07em;
         text-transform: uppercase;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .qvsec:first-of-type {
         margin-top: 0;
@@ -1411,7 +1412,7 @@
       .qvdesc {
         font-size: 13px;
         line-height: 1.62;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .qvdesc p {
         margin: 0 0 8px;
@@ -1423,19 +1424,19 @@
       .qvdesc code {
         padding: 1px 4px;
         border-radius: 4px;
-        background: var(--mutedfill);
+        background: var(--el-muted);
         font-size: 12px;
       }
       .qvrail {
         padding: 14px 16px;
-        background: var(--soft);
+        background: var(--el-surface-soft);
       }
       .rf {
         display: flex;
         align-items: center;
         gap: 8px;
         padding: 7px 0;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
         font-size: 12px;
       }
       .rf:last-child {
@@ -1444,10 +1445,10 @@
       .rf .lbl {
         width: 78px;
         flex: none;
-        color: var(--faint);
+        color: var(--el-text-secondary);
       }
       .rf .val {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .rf .mono {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1457,8 +1458,8 @@
         margin-left: 6px;
         padding: 1px 6px;
         border-radius: 999px;
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent);
         font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.02em;
@@ -1498,10 +1499,10 @@
         width: 3px;
       }
       .node.dec-ok::before {
-        background: var(--success);
+        background: var(--el-success);
       }
       .node.dec-no::before {
-        background: var(--muted);
+        background: var(--el-text-muted);
       }
       /* A decided `remove` DROPS the fade. `opacity`+`grayscale` mean "this
          is about to happen"; on a decided card it either already happened
@@ -1533,7 +1534,7 @@
       .opchip {
         display: inline-flex;
         align-items: stretch;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         overflow: hidden;
         flex: none;
       }
@@ -1547,39 +1548,39 @@
         white-space: nowrap;
       }
       .opchip .seg + .seg {
-        border-inline-start: 1px solid var(--hair);
+        border-inline-start: 1px solid var(--el-border-soft);
       }
       .opchip .seg svg {
         width: 11px;
         height: 11px;
       }
       .opchip .seg.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .opchip .seg.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: color-mix(in srgb, var(--el-info) 66%, var(--el-text));
       }
       .opchip .seg.remove {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .opchip .seg.ok {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: color-mix(in srgb, var(--el-success) 46%, var(--el-text));
       }
       .opchip .seg.no {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       /* The level caption becomes the plan's outcome, stated once — same
          primitive and placement as Panel E's "Proposed by this plan". */
       .lvlcap.decided-ok {
-        color: #0f5e29;
+        color: color-mix(in srgb, var(--el-success) 46%, var(--el-text));
       }
       .lvlcap.decided-no {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
 
       /* ---- Panel H — the pane STACKS: band above, canvas below -------- */
@@ -1589,7 +1590,7 @@
       }
       .cmp {
         min-width: 0;
-        border-inline-end: 1px solid var(--border);
+        border-inline-end: 1px solid var(--el-border);
       }
       .cmp:last-child {
         border-inline-end: 0;
@@ -1600,33 +1601,33 @@
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--el-border);
       }
       .cmp-cap.bad {
-        background: var(--warning-surface);
-        color: #8a3d00;
+        background: var(--el-warning-surface);
+        color: color-mix(in srgb, var(--el-warning) 57%, var(--el-text));
       }
       .cmp-cap.good {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: color-mix(in srgb, var(--el-success) 46%, var(--el-text));
       }
       .cmp-note {
         padding: 11px 14px;
         font-size: 11.5px;
         line-height: 1.6;
-        color: var(--secondary);
-        border-top: 1px solid var(--border);
+        color: var(--el-text-secondary);
+        border-top: 1px solid var(--el-border);
       }
       /* The establish step, composed from its SHIPPED markup (MOTIR-1782).
          Panel H changes its CONTAINER and not one pixel inside it. */
       .estep {
         padding: 20px 22px;
-        background: var(--surface);
+        background: var(--el-page-bg);
       }
       .estep .eyebrow {
-        font: 700 10.5px var(--mono);
+        font: 700 10.5px var(--font-mono);
         letter-spacing: 0.09em;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .estep h3 {
         margin: 8px 0 6px;
@@ -1636,7 +1637,7 @@
       .estep p {
         margin: 0;
         font-size: 12.5px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         line-height: 1.55;
       }
       .estep .callout {
@@ -1644,21 +1645,21 @@
         display: flex;
         gap: 9px;
         padding: 11px 12px;
-        background: var(--soft);
-        border: 1px solid var(--hair);
-        border-radius: var(--r-card);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
         font-size: 12px;
         line-height: 1.5;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .estep .callout svg {
         flex: none;
         width: 15px;
         height: 15px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .estep .callout b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .estep .erow {
         margin-top: 12px;
@@ -1669,22 +1670,22 @@
       .estep .ebtn {
         display: inline-flex;
         align-items: center;
-        border-radius: var(--r-btn);
+        border-radius: var(--radius-btn);
         padding: 7px 14px;
         font-size: 12.5px;
         font-weight: 600;
       }
       .estep .ebtn-primary {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .estep .ebtn-quiet {
-        color: var(--info);
+        color: var(--el-info);
       }
       /* The BAND: the same step, at the top of the pane, on a hairline. */
       .estep.band {
         padding: 14px 18px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--el-border);
       }
       .estep.band h3 {
         margin: 6px 0 0;
@@ -1714,10 +1715,10 @@
         align-items: flex-start;
         gap: 6px;
         padding: 9px 10px 9px 13px;
-        border-radius: var(--r-card);
-        border: 1px solid var(--border);
-        background: var(--surface);
-        box-shadow: var(--sh-subtle);
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-subtle);
       }
       .mini::before {
         content: '';
@@ -1727,23 +1728,24 @@
         width: 3px;
       }
       .mini.dec-ok::before {
-        background: var(--success);
+        background: var(--el-success);
       }
       .mini.add {
-        border-color: var(--accent);
-        background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--surface);
+        border-color: var(--el-accent);
+        background:
+          linear-gradient(0deg, var(--el-accent-wash), var(--el-accent-wash)), var(--el-page-bg);
       }
       .mini.modify {
-        border-color: var(--info);
+        border-color: var(--el-info);
       }
       .mini .mid {
-        font: 600 10.5px var(--mono);
-        color: var(--secondary);
+        font: 600 10.5px var(--font-mono);
+        color: var(--el-text-secondary);
         white-space: nowrap;
       }
       .mini .mchip {
         display: inline-flex;
-        border-radius: var(--r-pill);
+        border-radius: var(--radius-badge);
         overflow: hidden;
         flex: none;
       }
@@ -1754,36 +1756,36 @@
         padding: 2px 6px;
       }
       .mini .mchip i.add {
-        background: var(--accent);
-        color: #fff;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .mini .mchip i.modify {
-        background: var(--sky);
-        color: #0a4fa0;
+        background: var(--el-tint-sky);
+        color: color-mix(in srgb, var(--el-info) 66%, var(--el-text));
       }
       .mini .mchip i.ok {
-        background: var(--mint);
-        color: #0f5e29;
+        background: var(--el-tint-mint);
+        color: color-mix(in srgb, var(--el-success) 46%, var(--el-text));
       }
       .whyrow {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 22px;
         padding: 16px 18px 18px;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
         font-size: 11.5px;
         line-height: 1.65;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .whyrow strong {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
     </style>
   </head>
   <body>
     <div class="sheet">
       <div class="doc-head">
-        <h1>The Plans surface — <span style="color: var(--accent)">MOTIR-843 · 7.4.1</span></h1>
+        <h1>The Plans surface — <span style="color: var(--el-accent)">MOTIR-843 · 7.4.1</span></h1>
         <p>
           COMPOSES four shipped surfaces and adds only the Plans-substrate chrome (list + nav,
           status &amp; history, op treatments, staleness, and the Approve→materialize / Decline
@@ -1922,7 +1924,9 @@
               <div class="list">
                 <!-- generating -->
                 <div class="row">
-                  <span class="ic" style="background: var(--sky)"><span class="spin"></span></span>
+                  <span class="ic" style="background: var(--el-tint-sky)"
+                    ><span class="spin"></span
+                  ></span>
                   <div class="idea">
                     <div class="t">Add recurring invoices &amp; payment reminders</div>
                     <div class="m">
@@ -1936,13 +1940,16 @@
                 <!-- planned, awaiting review, stale -->
                 <div
                   class="row"
-                  style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
+                  style="
+                    border-color: var(--el-accent);
+                    box-shadow: 0 0 0 1px var(--el-accent-wash);
+                  "
                 >
-                  <span class="ic" style="background: var(--lavender)"
+                  <span class="ic" style="background: var(--el-tint-lavender)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#3a2d8a"
+                      stroke="color-mix(in srgb, var(--el-accent) 59%, var(--el-text))"
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -1989,11 +1996,11 @@
                 </div>
                 <!-- approved -->
                 <div class="row">
-                  <span class="ic" style="background: var(--mint)"
+                  <span class="ic" style="background: var(--el-tint-mint)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#0f5e29"
+                      stroke="color-mix(in srgb, var(--el-success) 46%, var(--el-text))"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2024,11 +2031,11 @@
                 </div>
                 <!-- declined -->
                 <div class="row" style="opacity: 0.78">
-                  <span class="ic" style="background: var(--mutedfill)"
+                  <span class="ic" style="background: var(--el-muted)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#787671"
+                      stroke="var(--el-text-muted)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2099,7 +2106,9 @@
               <div class="list">
                 <!-- generating -->
                 <div class="row">
-                  <span class="ic" style="background: var(--sky)"><span class="spin"></span></span>
+                  <span class="ic" style="background: var(--el-tint-sky)"
+                    ><span class="spin"></span
+                  ></span>
                   <div class="idea">
                     <div class="t">Add recurring invoices &amp; payment reminders</div>
                     <div class="m">
@@ -2116,13 +2125,16 @@
                 <!-- planned, awaiting review, stale -->
                 <div
                   class="row"
-                  style="border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft)"
+                  style="
+                    border-color: var(--el-accent);
+                    box-shadow: 0 0 0 1px var(--el-accent-wash);
+                  "
                 >
-                  <span class="ic" style="background: var(--lavender)"
+                  <span class="ic" style="background: var(--el-tint-lavender)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#3a2d8a"
+                      stroke="color-mix(in srgb, var(--el-accent) 59%, var(--el-text))"
                       stroke-width="2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2185,11 +2197,11 @@
                 </div>
                 <!-- approved -->
                 <div class="row">
-                  <span class="ic" style="background: var(--mint)"
+                  <span class="ic" style="background: var(--el-tint-mint)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#0f5e29"
+                      stroke="color-mix(in srgb, var(--el-success) 46%, var(--el-text))"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2237,11 +2249,11 @@
                 </div>
                 <!-- declined -->
                 <div class="row" style="opacity: 0.78">
-                  <span class="ic" style="background: var(--mutedfill)"
+                  <span class="ic" style="background: var(--el-muted)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#787671"
+                      stroke="var(--el-text-muted)"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2274,11 +2286,11 @@
                 <!-- 5 — NOBODY asked: the cadence watcher fired it. A state panel A
                      has no row for, so it is added rather than substituted. -->
                 <div class="row">
-                  <span class="ic" style="background: var(--sky)"
+                  <span class="ic" style="background: var(--el-tint-sky)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#0a4fa0"
+                      stroke="color-mix(in srgb, var(--el-info) 66%, var(--el-text))"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2341,11 +2353,11 @@
                 <!-- 6 — a REQUESTER with no agent: what a plan authored some other
                      way looks like. The person half stands alone. -->
                 <div class="row">
-                  <span class="ic" style="background: var(--lavender)"
+                  <span class="ic" style="background: var(--el-tint-lavender)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#3a2d8a"
+                      stroke="color-mix(in srgb, var(--el-accent) 59%, var(--el-text))"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2382,11 +2394,11 @@
 
                 <!-- 7 — LONG values in a NARROW row: what truncates, and in what order -->
                 <div class="row" style="width: 430px">
-                  <span class="ic" style="background: var(--lavender)"
+                  <span class="ic" style="background: var(--el-tint-lavender)"
                     ><svg
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#3a2d8a"
+                      stroke="color-mix(in srgb, var(--el-accent) 59%, var(--el-text))"
                       stroke-width="2.2"
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -2680,7 +2692,7 @@
                     markerHeight="7"
                     orient="auto-start-reverse"
                   >
-                    <path d="M0 0L10 5L0 10z" fill="#d3cfc8" />
+                    <path d="M0 0L10 5L0 10z" fill="var(--el-border-strong)" />
                   </marker>
                   <marker
                     id="aPend"
@@ -2691,7 +2703,7 @@
                     markerHeight="7"
                     orient="auto-start-reverse"
                   >
-                    <path d="M0 0L10 5L0 10z" fill="#a4a097" />
+                    <path d="M0 0L10 5L0 10z" fill="var(--el-text-faint)" />
                   </marker>
                   <marker
                     id="aAdd"
@@ -2702,20 +2714,20 @@
                     markerHeight="7"
                     orient="auto-start-reverse"
                   >
-                    <path d="M0 0L10 5L0 10z" fill="#5645d4" />
+                    <path d="M0 0L10 5L0 10z" fill="var(--el-accent)" />
                   </marker>
                 </defs>
                 <path
                   d="M150,120 C220,120 220,250 286,250"
                   fill="none"
-                  stroke="#d3cfc8"
+                  stroke="var(--el-border-strong)"
                   stroke-width="2.2"
                   marker-end="url(#aFirm)"
                 />
                 <path
                   d="M150,120 C230,120 230,392 286,392"
                   fill="none"
-                  stroke="#5645d4"
+                  stroke="var(--el-accent)"
                   stroke-width="2.2"
                   stroke-dasharray="5 5"
                   marker-end="url(#aAdd)"
@@ -2723,7 +2735,7 @@
                 <path
                   d="M522,250 C580,250 580,392 522,392"
                   fill="none"
-                  stroke="#a4a097"
+                  stroke="var(--el-text-faint)"
                   stroke-width="2.2"
                   stroke-dasharray="2 7"
                   stroke-linecap="round"
@@ -2735,8 +2747,13 @@
                 <!-- existing committed epic (context — the modify/remove overlay the committed tree) -->
                 <div class="node" style="left: 24px; top: 86px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-epic-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-type-epic-wash)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-epic)"
+                        stroke-width="2"
+                      >
                         <path d="M4 4h16v5H4zM4 13h10v5H4z" /></svg
                     ></span>
                     <div>
@@ -2745,7 +2762,12 @@
                     </div>
                   </div>
                   <div class="foot">
-                    <span class="pill" style="background: var(--mint); color: #0f5e29"
+                    <span
+                      class="pill"
+                      style="
+                        background: var(--el-tint-mint);
+                        color: color-mix(in srgb, var(--el-success) 46%, var(--el-text));
+                      "
                       >in progress</span
                     ><span class="who">existing</span>
                   </div>
@@ -2754,8 +2776,13 @@
                 <!-- ADD: a brand-new proposed epic (proposed tint, dashed accent, +badge) -->
                 <div class="node add" style="left: 286px; top: 196px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-epic-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-type-epic-wash)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-epic)"
+                        stroke-width="2"
+                      >
                         <path d="M4 4h16v5H4zM4 13h10v5H4z" /></svg
                     ></span>
                     <div>
@@ -2786,7 +2813,9 @@
                     </button>
                   </div>
                   <div class="foot">
-                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-accent-wash); color: var(--el-accent)"
                       >proposed · 9 items</span
                     >
                   </div>
@@ -2795,11 +2824,11 @@
                 <!-- MODIFY: existing node + "proposed change" badge + old→new diff -->
                 <div class="node modify" style="left: 286px; top: 350px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-story-soft)"
+                    <span class="tile" style="background: var(--el-tint-mint)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-story)"
+                        stroke="var(--el-type-story)"
                         stroke-width="2"
                       >
                         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -2838,8 +2867,13 @@
                 <!-- REMOVE: existing node marked "will be archived" -->
                 <div class="node remove" style="left: 560px; top: 196px; width: 200px">
                   <div class="top">
-                    <span class="tile" style="background: var(--mutedfill)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="#787671" stroke-width="2">
+                    <span class="tile" style="background: var(--el-muted)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-text-muted)"
+                        stroke-width="2"
+                      >
                         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                         <path
                           d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"
@@ -2867,9 +2901,9 @@
                     <span
                       class="pill"
                       style="
-                        background: var(--mutedfill);
-                        color: var(--secondary);
-                        border: 1px solid var(--border-strong);
+                        background: var(--el-muted);
+                        color: var(--el-text-secondary);
+                        border: 1px solid var(--el-border-strong);
                       "
                       ><svg
                         viewBox="0 0 24 24"
@@ -2890,11 +2924,11 @@
                 <!-- ADD node carrying a structural stale reason -->
                 <div class="node add" style="left: 560px; top: 350px; width: 200px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-subtask-soft)"
+                    <span class="tile" style="background: var(--el-type-subtask-wash)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-subtask)"
+                        stroke="var(--el-type-subtask)"
                         stroke-width="2"
                       >
                         <path d="M9 11l3 3L22 4" />
@@ -2945,31 +2979,31 @@
                   <span class="lh">Dependencies &amp; ops</span>
                   <span class="lrow"
                     ><svg viewBox="0 0 40 12">
-                      <path d="M2 6H31" stroke="#d3cfc8" stroke-width="2.2" />
-                      <path d="M30 2 36 6 30 10z" fill="#d3cfc8" /></svg
+                      <path d="M2 6H31" stroke="var(--el-border-strong)" stroke-width="2.2" />
+                      <path d="M30 2 36 6 30 10z" fill="var(--el-border-strong)" /></svg
                     >blocks <em>· blocker done</em></span
                   >
                   <span class="lrow"
                     ><svg viewBox="0 0 40 12">
                       <path
                         d="M2 6H31"
-                        stroke="#a4a097"
+                        stroke="var(--el-text-faint)"
                         stroke-width="2.2"
                         stroke-dasharray="2 6"
                         stroke-linecap="round"
                       />
-                      <path d="M30 2 36 6 30 10z" fill="#a4a097" /></svg
+                      <path d="M30 2 36 6 30 10z" fill="var(--el-text-faint)" /></svg
                     >pending <em>· not done yet</em></span
                   >
                   <span class="lrow"
                     ><svg viewBox="0 0 40 12">
                       <path
                         d="M2 6H31"
-                        stroke="#5645d4"
+                        stroke="var(--el-accent)"
                         stroke-width="2.2"
                         stroke-dasharray="5 5"
                       />
-                      <path d="M30 2 36 6 30 10z" fill="#5645d4" /></svg
+                      <path d="M30 2 36 6 30 10z" fill="var(--el-accent)" /></svg
                     >proposed <em>· new in this plan</em></span
                   >
                 </div>
@@ -3085,7 +3119,7 @@
           <span class="n">B</span>
           <h2>
             <s>Edit a proposed <code>add</code> — the inline-edit modal (MOTIR-1370)</s> ·
-            <strong style="color: var(--danger)">SUPERSEDED by Part V</strong>
+            <strong style="color: var(--el-danger)">SUPERSEDED by Part V</strong>
           </h2>
           <span class="note"
             >REMOVED 2026-08-19 — manual editing of a proposal is not needed: a proposal is READ
@@ -3095,7 +3129,12 @@
         </div>
         <div
           class="frame"
-          style="display: grid; place-items: center; background: #2c2a2740; padding: 30px"
+          style="
+            display: grid;
+            place-items: center;
+            background: color-mix(in srgb, var(--el-text) 25%, transparent);
+            padding: 30px;
+          "
         >
           <!-- The shared Modal primitive, composing the same field controls the
                create-issue modal uses (Input · TypePicker · WorkItemTypePicker ·
@@ -3104,32 +3143,34 @@
             style="
               width: 430px;
               max-width: 100%;
-              background: var(--surface);
-              border: 1px solid var(--border);
-              border-radius: var(--r-card);
-              box-shadow: var(--sh-elev);
+              background: var(--el-page-bg);
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-card);
+              box-shadow: var(--shadow-elevated);
               overflow: hidden;
             "
           >
             <div style="padding: 18px 20px 4px">
-              <div style="font-size: 17px; font-weight: 600; color: var(--strong)">
+              <div style="font-size: 17px; font-weight: 600; color: var(--el-text-strong)">
                 Edit proposed item
               </div>
             </div>
             <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 20px 4px">
               <!-- Title (Input) -->
               <div style="display: flex; flex-direction: column; gap: 6px">
-                <span style="font-size: 13px; font-weight: 500; color: var(--strong)">Title</span>
+                <span style="font-size: 13px; font-weight: 500; color: var(--el-text-strong)"
+                  >Title</span
+                >
                 <div
                   style="
                     height: 36px;
                     display: flex;
                     align-items: center;
-                    border: 1px solid var(--border-strong);
-                    border-radius: var(--r-control);
+                    border: 1px solid var(--el-border-strong);
+                    border-radius: var(--radius-control);
                     padding: 0 10px;
                     font-size: 13px;
-                    color: var(--text);
+                    color: var(--el-text);
                   "
                 >
                   Marketplace payouts
@@ -3138,20 +3179,22 @@
               <!-- Type (kind) + Work type — two pickers side by side -->
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
                 <div style="display: flex; flex-direction: column; gap: 6px">
-                  <span style="font-size: 13px; font-weight: 500; color: var(--strong)">Type</span>
+                  <span style="font-size: 13px; font-weight: 500; color: var(--el-text-strong)"
+                    >Type</span
+                  >
                   <div class="fakeselect">
                     <span
                       class="tile"
                       style="
                         width: 18px;
                         height: 18px;
-                        background: var(--t-epic-soft);
+                        background: var(--el-type-epic-wash);
                         border-radius: 5px;
                       "
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-epic)"
+                        stroke="var(--el-type-epic)"
                         stroke-width="2"
                         style="width: 12px; height: 12px"
                       >
@@ -3170,7 +3213,7 @@
                   </div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 6px">
-                  <span style="font-size: 13px; font-weight: 500; color: var(--strong)"
+                  <span style="font-size: 13px; font-weight: 500; color: var(--el-text-strong)"
                     >Work type</span
                   >
                   <div class="fakeselect">
@@ -3189,7 +3232,7 @@
               </div>
               <!-- Priority (picker) -->
               <div style="display: flex; flex-direction: column; gap: 6px">
-                <span style="font-size: 13px; font-weight: 500; color: var(--strong)"
+                <span style="font-size: 13px; font-weight: 500; color: var(--el-text-strong)"
                   >Priority</span
                 >
                 <div class="fakeselect">
@@ -3207,17 +3250,17 @@
               </div>
               <!-- Description (Textarea) -->
               <div style="display: flex; flex-direction: column; gap: 6px">
-                <span style="font-size: 13px; font-weight: 500; color: var(--strong)"
+                <span style="font-size: 13px; font-weight: 500; color: var(--el-text-strong)"
                   >Description</span
                 >
                 <div
                   style="
                     min-height: 64px;
-                    border: 1px solid var(--border-strong);
-                    border-radius: var(--r-control);
+                    border: 1px solid var(--el-border-strong);
+                    border-radius: var(--radius-control);
                     padding: 8px 10px;
                     font-size: 13px;
-                    color: var(--muted);
+                    color: var(--el-text-muted);
                     line-height: 1.45;
                   "
                 >
@@ -3234,7 +3277,7 @@
                 gap: 8px;
                 padding: 14px 20px;
                 margin-top: 6px;
-                border-top: 1px solid var(--border);
+                border-top: 1px solid var(--el-border);
               "
             >
               <button class="btn secondary" style="justify-content: center">Cancel</button>
@@ -3275,8 +3318,8 @@
                   style="
                     width: 14px;
                     height: 14px;
-                    border-color: #cdbcf5;
-                    border-top-color: var(--accent);
+                    border-color: color-mix(in srgb, var(--el-accent) 33%, var(--el-page-bg));
+                    border-top-color: var(--el-accent);
                   "
                 ></span
                 >Generating your plan… 6 of ~14 items
@@ -3284,8 +3327,13 @@
               <div class="world">
                 <div class="node add streaming s1" style="left: 60px; top: 150px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-epic-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-epic)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-type-epic-wash)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-epic)"
+                        stroke-width="2"
+                      >
                         <path d="M4 4h16v5H4zM4 13h10v5H4z" /></svg
                     ></span>
                     <div>
@@ -3304,18 +3352,20 @@
                     >
                   </div>
                   <div class="foot">
-                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-accent-wash); color: var(--el-accent)"
                       >proposed</span
                     >
                   </div>
                 </div>
                 <div class="node add streaming s2" style="left: 350px; top: 110px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-story-soft)"
+                    <span class="tile" style="background: var(--el-tint-mint)"
                       ><svg
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="var(--t-story)"
+                        stroke="var(--el-type-story)"
                         stroke-width="2"
                       >
                         <path
@@ -3338,15 +3388,22 @@
                     >
                   </div>
                   <div class="foot">
-                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-accent-wash); color: var(--el-accent)"
                       >proposed</span
                     >
                   </div>
                 </div>
                 <div class="node add streaming s3" style="left: 350px; top: 250px">
                   <div class="top">
-                    <span class="tile" style="background: var(--t-task-soft)"
-                      ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-task)" stroke-width="2">
+                    <span class="tile" style="background: var(--el-tint-sky)"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--el-type-task)"
+                        stroke-width="2"
+                      >
                         <rect x="3" y="3" width="18" height="18" rx="2" />
                         <path d="m9 12 2 2 4-4" /></svg
                     ></span>
@@ -3366,7 +3423,9 @@
                     >
                   </div>
                   <div class="foot">
-                    <span class="pill" style="background: var(--accent-soft); color: var(--accent)"
+                    <span
+                      class="pill"
+                      style="background: var(--el-accent-wash); color: var(--el-accent)"
                       >proposed</span
                     >
                   </div>
@@ -3383,7 +3442,7 @@
             </div>
             <aside class="rail">
               <div class="railhead">
-                <span class="g" style="background: var(--info)"></span
+                <span class="g" style="background: var(--el-info)"></span
                 ><span class="lab">Generating</span>
               </div>
               <div class="railbody">
@@ -3405,13 +3464,16 @@
                     display: flex;
                     align-items: center;
                     gap: 8px;
-                    color: var(--muted);
+                    color: var(--el-text-muted);
                     font-size: 12.5px;
                   "
                 >
                   <span
                     class="spin"
-                    style="border-color: #cdbcf5; border-top-color: var(--accent)"
+                    style="
+                      border-color: color-mix(in srgb, var(--el-accent) 33%, var(--el-page-bg));
+                      border-top-color: var(--el-accent);
+                    "
                   ></span
                   >Proposing items…
                 </div>
@@ -3561,15 +3623,20 @@
                  because anything depends on them. -->
             <div class="node lvl" style="left: 44px; top: 90px">
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
                   <div class="id">MOTIR-3082</div>
                   <div class="ttl">The plan-review detail surfaces</div>
                 </div>
-                <span class="pill" style="background: var(--sky); color: var(--info)"
+                <span class="pill" style="background: var(--el-tint-sky); color: var(--el-info)"
                   >in review</span
                 >
               </div>
@@ -3577,15 +3644,22 @@
 
             <div class="node lvl" style="left: 292px; top: 90px">
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
                   <div class="id">MOTIR-3083</div>
                   <div class="ttl">The plan canvas renders the level</div>
                 </div>
-                <span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                <span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >to do</span
                 >
               </div>
@@ -3595,7 +3669,7 @@
                  the shipped edge language. Unchanged. -->
             <div class="lvledge" style="left: 264px; top: 126px; width: 28px"></div>
 
-            <span class="lvlcap" style="left: 540px; top: 66px; color: var(--accent)"
+            <span class="lvlcap" style="left: 540px; top: 66px; color: var(--el-accent)"
               >Proposed by this plan</span
             >
 
@@ -3603,8 +3677,13 @@
                  difference is the `add` style Panel B already specifies. -->
             <div class="node lvl add" style="left: 540px; top: 90px">
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -3627,15 +3706,15 @@
                 max-width: 690px;
                 font-size: 11.5px;
                 line-height: 1.65;
-                color: var(--muted);
+                color: var(--el-text-muted);
               "
             >
-              <strong style="color: var(--strong)">Nothing here is new.</strong> This is the shipped
-              roadmap level — the breadcrumb walks the committed ancestors, the parent's children
-              fill the canvas whether or not anything depends on them, and same-level
+              <strong style="color: var(--el-text-strong)">Nothing here is new.</strong> This is the
+              shipped roadmap level — the breadcrumb walks the committed ancestors, the parent's
+              children fill the canvas whether or not anything depends on them, and same-level
               <code>blocked_by</code> edges draw as they always do. The proposal is one more card at
               that level wearing the <code>add</code> style Panel B already specifies. <br /><br />
-              <strong style="color: var(--strong)"
+              <strong style="color: var(--el-text-strong)"
                 >So "root or parented?" stops being a question the reader has to ask.</strong
               >
               A proposal under a committed parent is drawn INSIDE that parent's level, among its
@@ -3643,7 +3722,7 @@
               level, where there is no breadcrumb to walk. The two cases look different because they
               ARE in different places — no badge, no chip, no extra signal to learn.
               <br /><br />
-              <span style="color: var(--faint)"
+              <span style="color: var(--el-text-secondary)"
                 >Edge case — a parent that is archived or hard-deleted: the level cannot be opened,
                 so the proposal falls back to the top level and the breadcrumb has nothing to walk.
                 That is the honest rendering, and it is the same one a genuine root gets.</span
@@ -3670,8 +3749,13 @@
           <div class="viewport" style="height: 132px">
             <div class="node add selected" style="left: 44px; top: 26px; width: 250px">
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -3702,12 +3786,13 @@
                 max-width: 400px;
                 font-size: 11.5px;
                 line-height: 1.6;
-                color: var(--muted);
+                color: var(--el-text-muted);
               "
             >
-              A selected node reveals <strong style="color: var(--strong)">View</strong> — the same
-              select → View → peek the roadmap canvas already ships (MOTIR-1351/1352), on every op.
-              <strong style="color: var(--strong)">There is no edit affordance</strong>: the
+              A selected node reveals <strong style="color: var(--el-text-strong)">View</strong> —
+              the same select → View → peek the roadmap canvas already ships (MOTIR-1351/1352), on
+              every op.
+              <strong style="color: var(--el-text-strong)">There is no edit affordance</strong>: the
               proposal edit modal is removed. A <code>modify</code> / <code>remove</code> peeks its
               LIVE target, i.e. the shipped work-item quick view, unchanged.
             </div>
@@ -3724,7 +3809,9 @@
                 >
                 <!-- No identifier and no status pill: a proposal has neither until
                      it materializes. The `new` the node shows, shown here too. -->
-                <span style="font-size: 12px; color: var(--faint)">new · not yet created</span>
+                <span style="font-size: 12px; color: var(--el-text-secondary)"
+                  >new · not yet created</span
+                >
                 <span class="sp"></span>
                 <!-- No "Open full page →": there IS no page for a proposal. -->
                 <button class="editbtn" aria-label="Close">
@@ -3765,8 +3852,10 @@
                   <div class="rf">
                     <span class="lbl">Type</span
                     ><span class="val"
-                      ><span class="pill" style="background: var(--t-subtask-soft)">Subtask</span> ·
-                      Code</span
+                      ><span class="pill" style="background: var(--el-type-subtask-wash)"
+                        >Subtask</span
+                      >
+                      · Code</span
                     >
                   </div>
                   <div class="rf">
@@ -3838,13 +3927,20 @@
                       <path d="M12 5v14M5 12h14" /></svg
                     >add</span
                   ><span class="seg ok">accepted</span></span
-                ><span class="pill" style="background: var(--mutedfill); color: var(--secondary)"
+                ><span
+                  class="pill"
+                  style="background: var(--el-muted); color: var(--el-text-secondary)"
                   >to do</span
                 >
               </div>
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -3869,8 +3965,13 @@
                 >
               </div>
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -3894,8 +3995,13 @@
                 >
               </div>
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -3928,8 +4034,13 @@
                 >
               </div>
               <div class="top">
-                <span class="tile" style="background: var(--mutedfill)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2">
+                <span class="tile" style="background: var(--el-muted)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-text-muted)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -3954,8 +4065,13 @@
                 >
               </div>
               <div class="top">
-                <span class="tile" style="background: var(--mutedfill)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2">
+                <span class="tile" style="background: var(--el-muted)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-text-muted)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -3978,8 +4094,13 @@
                 >
               </div>
               <div class="top">
-                <span class="tile" style="background: var(--t-subtask-soft)"
-                  ><svg viewBox="0 0 24 24" fill="none" stroke="var(--t-subtask)" stroke-width="2">
+                <span class="tile" style="background: var(--el-type-subtask-wash)"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--el-type-subtask)"
+                    stroke-width="2"
+                  >
                     <path d="M5 12h14M5 7h9M5 17h9" /></svg
                 ></span>
                 <div>
@@ -4002,16 +4123,18 @@
                 max-width: 760px;
                 font-size: 11.5px;
                 line-height: 1.65;
-                color: var(--secondary);
+                color: var(--el-text-secondary);
               "
             >
-              <strong style="color: var(--strong)">The op frame is untouched in all six.</strong>
+              <strong style="color: var(--el-text-strong)"
+                >The op frame is untouched in all six.</strong
+              >
               The outcome rides two channels no op language uses: the chip's second SEGMENT (the
               word <code>accepted</code> / <code>declined</code>, which is the whole of the meaning)
               and a solid 3px spine on the leading edge (decorative reinforcement, so the outcome
               survives a zoom-out where the chip does not). Nothing is carried by colour alone.
               <br /><br />
-              <strong style="color: var(--strong)"
+              <strong style="color: var(--el-text-strong)"
                 >The spine's colours are borrowed, not new.</strong
               >
               They are the review rail's own outcome colours one component down — the
@@ -4141,7 +4264,7 @@
               the pane held a spent artifact and is not once it holds a record. MOTIR-3073 already
               trimmed this swap for a project that ARRIVES with code; Panel H finishes the same
               sentence for a project that does not. <br /><br />
-              <span style="color: var(--secondary)"
+              <span style="color: var(--el-text-secondary)"
                 >A DECLINED plan proposes no repository set, so there is no band at all and the
                 canvas has the pane. Panel H changes nothing for a decline — Panel G is the whole of
                 that state's fix.</span

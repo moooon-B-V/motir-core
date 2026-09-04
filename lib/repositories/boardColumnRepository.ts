@@ -1,5 +1,5 @@
 import { Prisma, type BoardColumn } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
 
 // Data access for the `board_column` table (Story 3.1 · Subtask 3.1.3).
 // Single-Prisma-op leaves per CLAUDE.md — no business logic, no DTO mapping,
@@ -23,7 +23,7 @@ export const boardColumnRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<BoardColumn[]> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.boardColumn.findMany({
       where: { boardId, workspaceId },
       orderBy: { position: 'asc' },
@@ -44,7 +44,7 @@ export const boardColumnRepository = {
     tx?: Prisma.TransactionClient,
   ): Promise<BoardColumn[]> {
     if (boardIds.length === 0) return [];
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.boardColumn.findMany({
       where: { boardId: { in: boardIds }, workspaceId },
       orderBy: [{ boardId: 'asc' }, { position: 'asc' }],
@@ -57,7 +57,7 @@ export const boardColumnRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<BoardColumn | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.boardColumn.findFirst({ where: { id: columnId, workspaceId } });
   },
 

@@ -398,7 +398,7 @@ describe('the REDIRECT — a turn the handler hands back', () => {
     // The SECOND submit is the shipped plan-edit kind — the plan-change path is
     // called, not re-implemented.
     const kinds = submitJobMock.mock.calls.map((c) => (c as unknown as [string])[0]);
-    expect(kinds).toEqual(['ask_project', 'augment']);
+    expect(kinds).toEqual(['ask_project', 'plan']);
     expect(body.jobId).toBe('job-augment-9');
     expect(body.planId).toBeTruthy();
 
@@ -424,7 +424,7 @@ describe('the REDIRECT — a turn the handler hands back', () => {
 
     expect(second.outcome).toBe('silent');
     const kinds = submitJobMock.mock.calls.map((c) => (c as unknown as [string])[0]);
-    expect(kinds).toEqual(['ask_project', 'augment']);
+    expect(kinds).toEqual(['ask_project', 'plan']);
   });
 });
 
@@ -553,7 +553,7 @@ describe('an ask WRITES NO WORK ITEM', () => {
 });
 
 describe('the shipped plan-change path is untouched', () => {
-  it('its submit still opens an `augment` job over the accumulated turns', async () => {
+  it('its submit still opens a PLANNING job over the accumulated turns', async () => {
     const { POST: openSession } = await import('@/app/api/ai/plan-change/session/route');
     const { POST: appendTurnRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
     const { POST: submitRoute } = await import('@/app/api/ai/plan-change/session/submit/route');
@@ -564,7 +564,9 @@ describe('the shipped plan-change path is untouched', () => {
     const res = await submitRoute();
     expect(res.status).toBe(200);
 
-    expect((submitJobMock.mock.calls.at(-1) as unknown as [string])[0]).toBe('augment');
+    // ONE planning kind since MOTIR-4304 — the shipped plan-change path is
+    // untouched in every other respect, which is what this describe asserts.
+    expect((submitJobMock.mock.calls.at(-1) as unknown as [string])[0]).toBe('plan');
     const thread = await planChangeSessionsService.getOrCreateForProject(activeCtx.current!);
     // Its turns carry no intent — the shipped path decides none, and nothing
     // back-filled one onto them.

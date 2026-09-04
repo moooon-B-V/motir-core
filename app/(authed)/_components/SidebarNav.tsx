@@ -149,17 +149,6 @@ function isActive(pathname: string, match: string): boolean {
   return pathname === match || pathname.startsWith(`${match}/`);
 }
 
-/** The Automation slot's "Soon" chip — a yellow-tint badge, AA-safe (hue in the
- *  background, `--el-text-strong` ink; finding #35). State is conveyed by the
- *  text, not colour alone. */
-function SoonChip({ label }: { label: string }) {
-  return (
-    <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-yellow) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-[10px] font-semibold uppercase tracking-wide text-(--el-text-strong)">
-      {label}
-    </span>
-  );
-}
-
 /** The "Resume onboarding" row's in-progress indicator (MOTIR-1533). A compact
  *  accent dot — a text chip would truncate the 17-char label at the 240px rail
  *  width — with a visually-hidden label so the state reaches assistive tech by
@@ -233,13 +222,8 @@ export function SidebarNav({
         items: entries.map((entry) => ({
           icon: <entry.icon />,
           label: ts(`account.nav.${entry.labelKey}`),
-          // Placeholder rows carry an empty href; SidebarItem ignores it for a
-          // disabled row (a non-interactive span) and the React key falls back to
-          // the label, so the empty href is correct (no collision).
           href: entry.href,
           active: isAccountSettingsEntryActive(entry, pathname),
-          disabled: entry.placeholder,
-          badge: entry.placeholder ? <SoonChip label={ts('account.nav.soon')} /> : undefined,
         })),
       }),
     );
@@ -266,8 +250,6 @@ export function SidebarNav({
         label: ts(entry.labelKey),
         href: entry.href,
         active: isSettingsEntryActive(entry, pathname),
-        disabled: entry.placeholder,
-        badge: entry.placeholder ? <SoonChip label={ts('nav.soon')} /> : undefined,
       })),
     }));
     return (

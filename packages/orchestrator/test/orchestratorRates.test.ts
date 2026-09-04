@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   CONTAINER_RATES,
   FLEET_CONTAINER_SIZE,
+  OrchestratorApiError,
+  OrchestratorNotConfiguredError,
+  billableSecondsFor,
+  buildContainerUsage,
+  isUnpriced,
   resolveContainerRate,
+  type ContainerHandle,
   type ContainerRate,
-} from '@/lib/orchestrator/rates';
-import { billableSecondsFor, buildContainerUsage, isUnpriced } from '@/lib/orchestrator/usage';
-import { OrchestratorApiError, OrchestratorNotConfiguredError } from '@/lib/orchestrator/errors';
-import type { ContainerHandle, UsageAttribution } from '@/lib/orchestrator/types';
+  type UsageAttribution,
+} from '../src/index';
 
 // The CONTAINER RATE TABLE and the §5 record's arithmetic (Story MOTIR-1916 ·
 // MOTIR-1921). Pure — no DB, no network.

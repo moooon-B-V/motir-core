@@ -357,7 +357,7 @@ describe('call sites of bindable tenant reads are all accounted for', () => {
     expect(positions.filter((p) => p === 'receives-tx')).toHaveLength(5);
     expect(positions.filter((p) => p === 'in-context')).toHaveLength(1);
     expect(positions.filter((p) => p === 'in-bare-transaction')).toHaveLength(1);
-    expect(positions.filter((p) => p === 'no-context')).toHaveLength(3);
+    expect(positions.filter((p) => p === 'no-context')).toHaveLength(4);
 
     const reads = [...byPosition.keys()].map((k) => k.split('@')[0]);
 
@@ -375,6 +375,15 @@ describe('call sites of bindable tenant reads are all accounted for', () => {
     // a guard that cannot go green is a guard people learn to ignore.
     expect(reads, 'a helper that binds its own fallback is not a gap').not.toContain(
       'resolveWidgetBound',
+    );
+
+    // MOTIR-4295: a read whose fallback names `dbRead` — `db` under a narrower
+    // type — is bindable and policy-gated exactly as one naming `db`, so its
+    // unbound call site is a finding. Without this the widened recogniser would
+    // be asserted only by the ABSENCE of 247 regressions, which is not an
+    // assertion.
+    expect(reads, 'a `tx ?? dbRead` fallback is bindable too').toContain(
+      'fixtureRepository.findWidgetViaDbRead',
     );
 
     // And the three shapes that must NOT be reported at all:

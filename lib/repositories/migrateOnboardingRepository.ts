@@ -3,7 +3,14 @@ import {
   type MigrateOnboarding,
   type MigrateOnboardingStep,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
+import { dbRead } from '@/lib/db';
+
+/**
+ * The `MigrateOnboarding` update shape, NAMED BY THE OWNING REPOSITORY
+ * (MOTIR-4296). Callers above this layer build their write payload against this
+ * alias; `Prisma.MigrateOnboardingUncheckedUpdateInput` itself is named only here.
+ */
+export type MigrateOnboardingUpdateInput = Prisma.MigrateOnboardingUncheckedUpdateInput;
 
 // Single Prisma operations on the `migrate_onboarding` table (Story 7.15 ·
 // MOTIR-1499). Writes require `tx` (a compile-time guarantee they run in a
@@ -28,7 +35,7 @@ export const migrateOnboardingRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<MigrateOnboarding | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.migrateOnboarding.findFirst({ where: { id, workspaceId } });
   },
 
@@ -40,7 +47,7 @@ export const migrateOnboardingRepository = {
     workspaceId: string,
     tx?: Prisma.TransactionClient,
   ): Promise<MigrateOnboarding | null> {
-    const client = tx ?? db;
+    const client = tx ?? dbRead;
     return client.migrateOnboarding.findFirst({ where: { projectId, workspaceId } });
   },
 
@@ -132,7 +139,7 @@ export const migrateOnboardingRepository = {
 
   async update(
     id: string,
-    data: Prisma.MigrateOnboardingUncheckedUpdateInput,
+    data: MigrateOnboardingUpdateInput,
     tx: Prisma.TransactionClient,
   ): Promise<MigrateOnboarding> {
     return tx.migrateOnboarding.update({ where: { id }, data });

@@ -54,7 +54,7 @@ const PAID_AI_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due']);
 // subscription lifecycle (status + renewal) folded from the 8.1.13
 // `/v1/stripe/subscription` read (the seam 8.1.5 did not ship, now landed).
 
-interface OrgActorInput {
+export interface OrgActorInput {
   organizationId: string;
   actorUserId: string;
 }

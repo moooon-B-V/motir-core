@@ -12,9 +12,14 @@ import type { LucideIcon } from 'lucide-react';
 //      guard; `tests/settings/accountSettingsNav.test.ts` enumerates the
 //      filesystem). The area-ROOT redirect page is excluded (see that test).
 //
-// A later story mounts its page by ADDING an entry (or flipping a placeholder to
-// a real one): 7.8.3 lit up the API-tokens slot, 7.3.58 the Appearance slot, and
-// 8.8.24 the Profile slot below — every reserved slot is now a real route. The
+// A later story mounts its page by ADDING an entry here. Three entries below
+// arrived the other way — a slot RESERVED ahead of its pane and lit up when the
+// pane landed (7.8.3 API tokens, 7.3.58 Appearance, 8.8.24 Profile). That
+// reservation mechanism is RETIRED (MOTIR-4324): the last slot flipped in
+// 8.8.24, leaving the flag, its rail rendering and its filter unreachable from
+// the product, so all three were removed rather than left standing. Reserving a
+// slot again is a deliberate re-introduction with its first real user, not a
+// field to set. The
 // area asset of record is `design/settings/account-settings.mock.html` (7.8.2);
 // the Profile pane's own asset is `design/settings/profile.mock.html` (8.8.20).
 //
@@ -24,7 +29,7 @@ import type { LucideIcon } from 'lucide-react';
 // (every entry is always visible to its owner), so adding an `access` field would
 // be complexity for nothing (the decision-ladder "no complexity without a use
 // case" rule). The rest of the shape — id / group / href / icon / labelKey /
-// exact? / placeholder? — matches `SettingsNavEntry` 1:1.
+// exact? — matches `SettingsNavEntry` 1:1.
 //
 // This module is pure data + pure helpers (no JSX, no React state), so it is
 // importable from both the server (the totality test) and the client (SidebarNav,
@@ -55,7 +60,7 @@ export interface AccountSettingsNavEntry {
   /** Stable id — also the command-palette action id (`account-settings-<id>`). */
   id: string;
   group: AccountSettingsNavGroup;
-  /** The route this entry navigates to. Empty for a placeholder slot. */
+  /** The route this entry navigates to. Every entry is a real route. */
   href: string;
   /** The lucide icon COMPONENT (the consumer renders it). */
   icon: LucideIcon;
@@ -67,16 +72,6 @@ export interface AccountSettingsNavEntry {
    * future landing-at-root entry can opt in.
    */
   exact?: boolean;
-  /**
-   * A designed-for, not-yet-built slot — rendered as a disabled "Soon" row so the
-   * area's shape is legible from day one, but NOT a real route (excluded from the
-   * route↔registry totality assertion and from the command palette). No slot is
-   * reserved today: API tokens (7.8.3), Appearance (7.3.58), and Profile (8.8.24)
-   * each shipped its pane + route and flipped to a real entry. The field stays for
-   * the NEXT designed-for-but-unbuilt account pane (shape-parity with
-   * `projectSettingsNav`).
-   */
-  placeholder?: boolean;
 }
 
 /** The account-settings area root — a redirect to the first real pane. */
@@ -96,10 +91,10 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
     labelKey: 'profile',
     // Lit up by Story 8.8.24 (the Profile pane + its route): personal details —
     // name (inline edit) + email, with avatar / email-change / password as the
-    // sibling slices (8.8.24a/b/c) composing in. 7.8.2 reserved this as a "Soon"
-    // placeholder; flipping it to a real entry keeps the route↔registry totality
-    // test green by construction (the new pane has an on-disk route now), exactly
-    // as 7.8.3 did for API tokens and 7.3.58 for Appearance.
+    // sibling slices (8.8.24a/b/c) composing in. 7.8.2 had reserved this slot
+    // ahead of its pane; flipping it to a real entry keeps the route↔registry
+    // totality test green by construction (the new pane has an on-disk route
+    // now), exactly as 7.8.3 did for API tokens and 7.3.58 for Appearance.
   },
   {
     id: 'language',
@@ -123,7 +118,7 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
     labelKey: 'appearance',
     // Lit up by Story 7.3.58 (the Appearance pane + its route): the three-axis
     // design system — theme × style × palette × type — turned on Motir itself.
-    // 7.8.2 reserved this as a "Soon" placeholder; flipping it to a real entry
+    // 7.8.2 had reserved this slot ahead of its pane; flipping it to a real entry
     // here keeps the route↔registry totality test green by construction (the new
     // pane has an on-disk route now), exactly as 7.8.3 did for API tokens.
   },
@@ -148,10 +143,10 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
     href: '/settings/account/tokens',
     icon: KeyRound,
     labelKey: 'apiTokens',
-    // Lit up by Story 7.8.3 (the tokens pane + its route page): 7.8.12 reserved
-    // this as a "Soon" placeholder, and flipping it to a real entry here keeps
-    // the route↔registry totality test green by construction (the new pane has
-    // an on-disk route now).
+    // Lit up by Story 7.8.3 (the tokens pane + its route page): 7.8.12 had
+    // reserved this slot ahead of its pane, and flipping it to a real entry here
+    // keeps the route↔registry totality test green by construction (the new pane
+    // has an on-disk route now).
     //
     // MOTIR-2534 moved the ROUTE from `/settings/account/api-tokens` to
     // `/settings/account/tokens` (the reader-facing rename, Story MOTIR-2532),
@@ -182,13 +177,18 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
 ];
 
 /**
- * The REAL route entries (placeholders excluded) — the set the totality test
- * pairs 1:1 with the on-disk `settings/account/**​/page.tsx` panes (the area-root
- * redirect aside), and the set the command palette deep-links.
+ * The route entries — the set the totality test pairs 1:1 with the on-disk
+ * `settings/account/**​/page.tsx` panes (the area-root redirect aside), and the
+ * set the command palette deep-links.
+ *
+ * This USED to be `ACCOUNT_SETTINGS_NAV` minus the reserved-slot entries, and it
+ * is now the whole registry: MOTIR-4324 retired the reservation mechanism, so
+ * every entry is a real route by construction. The name is kept because it is
+ * what its ~10 call sites read it AS — "the destinations", the question the
+ * totality test and the palette are asking — and because a route/row distinction
+ * returning is a filter to restore here rather than a symbol to re-thread.
  */
-export const ACCOUNT_SETTINGS_ROUTES: AccountSettingsNavEntry[] = ACCOUNT_SETTINGS_NAV.filter(
-  (entry) => !entry.placeholder,
-);
+export const ACCOUNT_SETTINGS_ROUTES: AccountSettingsNavEntry[] = ACCOUNT_SETTINGS_NAV;
 
 /** Whether `pathname` is inside the account-settings area. */
 export function isAccountSettingsPath(pathname: string): boolean {

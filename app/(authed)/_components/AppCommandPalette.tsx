@@ -382,7 +382,8 @@ export function AppCommandPalette({
   // Account settings — per-pane deep links generated FROM the account-settings-nav
   // registry (Subtask 7.8.12), the same source the rail uses. Always available (a
   // personal area, no project/access gating); a new pane appears here automatically
-  // by adding a registry entry. Placeholders are excluded (ACCOUNT_SETTINGS_ROUTES).
+  // by adding a registry entry. `ACCOUNT_SETTINGS_ROUTES` is the destination set —
+  // every entry, since MOTIR-4324 retired the reserved-slot flag it used to exclude.
   groups.push({
     heading: ts('account.eyebrow'),
     actions: ACCOUNT_SETTINGS_ROUTES.map((entry) => ({

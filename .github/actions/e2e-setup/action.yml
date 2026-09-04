@@ -55,6 +55,15 @@ runs:
     - run: pnpm prisma generate
       shell: bash
       if: steps.cache-prisma-e2e.outputs.cache-hit != 'true'
+    # ⚠️ UNCONDITIONAL, and this lane is why the rule exists. `packages/*/dist` is
+    # git-ignored and built by the root `postinstall`, which the cache-hit `if:`
+    # above skips — and Playwright loads `tests/e2e/_helpers/job-registry.ts` in
+    # its own process, which pulls `lib/jobs/registry` → `lib/orchestrator` →
+    # `@motir/orchestrator`. A warm runner would answer `Cannot find module` for
+    # every spec in the leg, at import time, before a single test ran.
+    # `tests/ci-package-build.test.ts` pins it here and in the three ci.yml lanes.
+    - run: pnpm -r --filter './packages/*' build
+      shell: bash
     # Download the pre-built .next/ from the build job so the webServer
     # boots via `next start` without building independently (MOTIR-1706).
     - name: Download .next/ build artifact
