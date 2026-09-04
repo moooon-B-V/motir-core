@@ -166,6 +166,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
     expect(context).toEqual({
       prompt: 'extend the tracker',
       generateExplanations: false,
+      // The consent flag rides every planning submit (MOTIR-4343), generation
+      // included — ON here because this fixture never touches the setting.
+      recordPlanningMistakes: true,
       code: {
         repos: [
           { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
@@ -185,7 +188,14 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
     const [jobKind, , context] = vi.mocked(submitJob).mock.calls[0]!;
     expect(jobKind).toBe('plan');
     // Exact shape: today's envelope, with NO `code` key (absent, not empty).
-    expect(context).toEqual({ prompt: 'start fresh', generateExplanations: false });
+    // `recordPlanningMistakes` is the opposite discipline and is why it appears
+    // in BOTH arms: `code` uses absence to mean "this workspace has none", while
+    // an absent consent flag is read as ON, so it is sent unconditionally.
+    expect(context).toEqual({
+      prompt: 'start fresh',
+      generateExplanations: false,
+      recordPlanningMistakes: true,
+    });
     expect(Object.keys(context as object)).not.toContain('code');
   });
 });
