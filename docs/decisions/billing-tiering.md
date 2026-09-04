@@ -4,6 +4,10 @@
   Stripe sandbox 2026-06-22** per the §3 + §6 reconciliations below). This is the
   rung-1 pricing decision Story 8.1 implements — no billing code ships until it
   is locked. **Amended 2026-06-23 + 2026-06-24 + 2026-09-04 — see below.**
+- **Credit model:** the rates, the token→credit conversion and the ledger this ADR
+  builds on are specified in `motir-ai/docs/credit-model.md`, owned by the closed
+  side (where the ledger lives). Every citation of it below is repo-qualified for
+  that reason — the file is not in this repository.
 - **Amendment (2026-09-04, MOTIR-4331) — the two-lane credit margin is OWNED by
   MOTIR-4331, and the implementation is a `lane` dimension on `ModelCreditRate`.**
   §2's DECISION assigned both the implementation and the calibration to Epic 9
@@ -209,7 +213,7 @@ no credits).
   buy AI.** It is funded by a **flat per-ORG fee, never the seat fee** (the margin
   rule): credits cost real money, so the AI fee — not seats — covers them. AI is
   org-level (one flat `monthlyCreditAllotment` per org, not per seat —
-  `credit-model.md` §4). **A paid AI plan INCLUDES 1 tracker seat** (amended
+  `motir-ai/docs/credit-model.md` §4). **A paid AI plan INCLUDES 1 tracker seat** (amended
   2026-06-24): the org's §4 caps are lifted and the first seat is free, so the solo
   plan-with-AI journey never hits the 250-item wall; members beyond the first bill
   at $5/seat (§4). The Free one-time trial does NOT include a seat.
@@ -239,7 +243,7 @@ task type (design, docs, coding, …) — **per project** (the model catalog + t
 per-project model config live in the AI layers: Epic 7 planning, Epic 9 hosted
 coding). Three billing consequences:
 
-- **Each model carries its own cost-plus `ModelCreditRate`** (`credit-model.md`
+- **Each model carries its own cost-plus `ModelCreditRate`** (`motir-ai/docs/credit-model.md`
   §2), so the **credits a task burns reflect the chosen model's real cost** — a
   Claude turn burns ~3.9× (Opus) to ~7.7× (Fable) the credits of a DeepSeek turn
   for the same work. The user **sees** that and chooses with eyes open; the cost
@@ -294,7 +298,7 @@ pool whatever the seat count.
 **Reconciliation with shipped `motir-ai` (binding on 8.1.4 / MOTIR-1230).** The
 shipped default tier is **`basic` ("Basic"), 1,000 credits/MONTHLY**, seeded in the
 `credit_ledger` migration and auto-assigned by `creditService` (`BASIC_TIER_KEY =
-'basic'`; `credit-model.md` §4). Changes:
+'basic'`; `motir-ai/docs/credit-model.md` §4). Changes:
 
 1. **Rename `basic` → `free`** and **make its grant ONE-TIME** — 300 credits at
    provisioning, never refreshed. Add a **cadence field** on `PlanTier`
@@ -308,7 +312,7 @@ shipped default tier is **`basic` ("Basic"), 1,000 credits/MONTHLY**, seeded in 
 A one-row update + four inserts + a nullable column — NOT a user-data migration.
 The pool stays the shipped **flat per-org `monthlyCreditAllotment`** (not × seats).
 
-**AI pool sizing** (off the shipped credit math — `credit-model.md`; one onboarding
+**AI pool sizing** (off the shipped credit math — `motir-ai/docs/credit-model.md`; one onboarding
 planning pass ≈ 150–250 credits):
 
 - **Free = 300, ONE-TIME** — try planning once.
@@ -345,7 +349,7 @@ curve stays monotonic top-to-bottom.
 Linear (the verified mirror above) bound the **PM** product; **Cursor** is the
 reference for the **AI-coding** use-case Pro / Max sell into, and its shape is
 near-identical to ours — a **dollar-denominated usage credit metered by model ×
-context × output**, the same per-credit mechanic as `credit-model.md` §2:
+context × output**, the same per-credit mechanic as `motir-ai/docs/credit-model.md` §2:
 
 - **Hobby $0** (limited) · **Pro $20** (~$20 of model usage included, ≈ 500
   premium requests) · **Pro+ $60** (~$70 usage, ~3×) · **Ultra $200** (~$400
