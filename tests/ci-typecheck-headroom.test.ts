@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import ts from 'typescript';
 // A plain-node CI script with JSDoc types, imported here so its parser is
 // exercised by the suite rather than only by CI. `allowJs` + `checkJs` off means
 // TypeScript reads its JSDoc and types these four — which is why every reading
@@ -234,6 +235,81 @@ describe('the typecheck lane reads its own heap number (MOTIR-4294)', () => {
       rmSync(out, { recursive: true, force: true });
     }
   }, 120_000);
+
+  // ── The BASELINE PROBE (MOTIR-4422) ──────────────────────────────────────
+  //
+  // MOTIR-4294 derived the 90% from a "run-to-run spread ~1.5 points", and
+  // MOTIR-4422 measured 2.9 on the tests project and 11.7 on the app project over
+  // seven builds of an unchanged tree. It also found that the "2.58 GB baseline
+  // every project pays" three documents taught is not a floor at all — it is the
+  // declaration closure a project's own bodies import, and `tsconfig.e2e.json`
+  // references the same app project with MORE bodies than `tsconfig.scripts.json`
+  // for less than half the memory.
+  //
+  // The probe is what makes that number READABLE rather than inferred: the tests
+  // project's own options and references with ONE body instead of 1682, so the gap
+  // between the two readings is the bodies and the probe's own reading is
+  // everything else. It measured 0.14 GB / 3.4%, against 2.58 GB / 64% inferred.
+  //
+  // ⚠️ THE INSTRUMENT IS ONLY VALID WHILE THE TWO PROJECTS AGREE ON EVERYTHING
+  // BUT THE INCLUDE SET, which is what these assertions hold. A probe that
+  // quietly stopped referencing the scripts project, or stopped emitting
+  // declarations, would still produce a number — a smaller one — and the
+  // subtraction built on it would be wrong with no symptom.
+
+  const BASELINE_DIR = 'scripts/ci/typecheck-baseline';
+
+  const readJsonc = (rel: string): Record<string, unknown> => {
+    const parsed = ts.parseConfigFileTextToJson(rel, readFileSync(join(ROOT, rel), 'utf8'));
+    expect(parsed.error, `${rel}: does not parse as JSONC`).toBeUndefined();
+    return parsed.config as Record<string, unknown>;
+  };
+
+  it('is `tsconfig.tests.json` with the bodies removed — same options, same references', () => {
+    const tests = readJsonc('tsconfig.tests.json');
+    const probe = readJsonc(`${BASELINE_DIR}/tsconfig.json`);
+    const testOptions = tests.compilerOptions as Record<string, unknown>;
+    const probeOptions = probe.compilerOptions as Record<string, unknown>;
+
+    for (const key of ['composite', 'noEmit', 'emitDeclarationOnly', 'declaration'] as const) {
+      expect(probeOptions[key], `the probe's ${key} must match the tests project`).toBe(
+        testOptions[key],
+      );
+    }
+    // The same base options, and the same two referenced projects — expressed
+    // from the probe's own directory, three levels down.
+    expect(probe.extends).toBe('../../../tsconfig.base.json');
+    expect(tests.extends).toBe('./tsconfig.base.json');
+    expect(projectsOf(JSON.stringify(probe))).toEqual(
+      projectsOf(JSON.stringify(tests)).map((p) => `../../../${p}`),
+    );
+    // ONE body. If this ever globs, the probe has stopped measuring the floor.
+    expect(probe.include).toEqual(['probe.ts']);
+  });
+
+  it('owns its body — the scripts project excludes it, so no file is in two projects', () => {
+    const scripts = readJsonc('tsconfig.scripts.json');
+    expect(scripts.exclude, 'scripts/**/*.ts would otherwise also claim probe.ts').toContain(
+      `${BASELINE_DIR}/**`,
+    );
+  });
+
+  it('stays OFF the solution, and the typecheck lane never pays for it', () => {
+    const solution = projectsOf(readFileSync(join(ROOT, 'tsconfig.solution.json'), 'utf8'));
+    expect(solution, 'the probe is an instrument, not a lane').not.toContain(BASELINE_DIR);
+    // The behavioural half: `pnpm typecheck` builds the solution, and the CI step
+    // runs the script WITHOUT `--baseline`. So adding the probe cost CI nothing,
+    // and a later edit that quietly opts the lane in shows up here.
+    expect(typecheckJob()).not.toContain('--baseline');
+  });
+
+  it('is reachable — the script names it, behind the flag', () => {
+    const src = readFileSync(join(ROOT, SCRIPT), 'utf8');
+    expect(src).toContain(`const BASELINE_PROJECT = '${BASELINE_DIR}'`);
+    expect(src, 'the probe must be measured only under --baseline').toMatch(
+      /if \(process\.argv\.includes\('--baseline'\)\) projects\.push\(BASELINE_PROJECT\);/,
+    );
+  });
 
   it('parses a tsconfig whose include glob contains `/**/`', () => {
     // The regression this file's own parser hit: a comment-stripping regex turns

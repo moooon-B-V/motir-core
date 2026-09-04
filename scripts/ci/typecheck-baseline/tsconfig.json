@@ -1,0 +1,35 @@
+{
+  // ── THE BASELINE-PROBE PROJECT (MOTIR-4422) ─────────────────────────────────
+  //
+  // NOT part of `tsconfig.solution.json`, and that is deliberate: nothing here
+  // ships, `pnpm typecheck` does not build it, and the `typecheck` lane does not
+  // pay for it. It is an INSTRUMENT, reached only by
+  // `node scripts/ci/assert-typecheck-headroom.mjs --baseline`.
+  //
+  // ⚠️ IT IS `tsconfig.tests.json` WITH THE BODIES REMOVED, and every option
+  // below is copied from it for that reason. Same `extends`, same references
+  // (the app project AND the scripts project), same emit shape — only the
+  // `include` differs. That is what makes the subtraction meaningful: the gap
+  // between this project's `Memory used` and the tests project's is the cost of
+  // the test bodies, and this project's own reading is the cost everything else.
+  //
+  // `probe.ts` is excluded from `tsconfig.scripts.json` (one line there, with a
+  // pointer back here) because a file belongs to exactly one composite project.
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": "../../../.tsout/baseline",
+    "tsBuildInfoFile": "../../../.tsout/baseline/tsconfig.tsbuildinfo"
+  },
+  "include": ["probe.ts"],
+  "exclude": ["node_modules", "packages", ".tsout"],
+  "references": [
+    { "path": "../../../tsconfig.app.json" },
+    { "path": "../../../tsconfig.scripts.json" }
+  ]
+}
