@@ -76,6 +76,63 @@ on:
 # (MOTIR-3902 / 3912 / 3913 / 3928 / 3950, all merged in the preceding 24 hours)
 # are what moved it.
 #
+# ── ⚠️ AND WHAT A MERGE-QUEUE ENTRY COSTS — MEASURED 2026-09-04 (MOTIR-4448) ───
+#
+# The table above is the PUSH lane. This is the queue lane, which is where a
+# merge is actually gated now, and it has its own critical path. MOTIR-4424
+# established that a build SLOT is held until the group's whole workflow RUN
+# finishes, so the run's critical path IS the slot cycle — every number below is
+# `created_at` → the last job's `completed_at`, over clean merge-group runs.
+#
+#   BEFORE MOTIR-4449   6 runs, 09:42–11:19   23.4 · 23.6 · 34.1 · 36.8 · 38.1 · 38.8   median 36.8
+#   AFTER  MOTIR-4449   7 runs, 14:52–18:05   17.8 · 19.0 · 20.0 · 20.9 · 24.2 · 24.8 · 31.1   median 20.9
+#
+# −15.9 min at the median (−43%), all of it from taking npm off every job's
+# critical path (`b51ca941`). Nothing about the PARTITION changed.
+#
+# ⚠️ THE RUN HAS TWO TAILS OF COMPARABLE LENGTH, AND IT STILL DOES. Over the
+# seven runs above, `Vitest coverage` was the last job to complete in FIVE and
+# an `e2e-at-scale` leg in TWO — but the margin between the two chains is now
+# 31 s to 11 m 07 s (coverage leading) and 59 s / 1 m 36 s (at-scale leading).
+# The chains, with the envelopes measured over those runs:
+#
+#   coverage chain   build → 12 `Vitest` legs (7.3 min · med 8.9 · p95 17.1 · max 22.2)
+#                          → `Vitest coverage`, `needs: test` (1.3–1.5 min)
+#   at-scale chain   build → 4 legs, worst is billing-cloud (8.6 · med 9.9 · p95 12.3)
+#
+# ⚠️ SO NEITHER CHAIN IS WORTH PARTITIONING, and the arithmetic is here rather
+# than in a card so the next reader does not re-derive it:
+#
+#   • SHARDING `billing-cloud` — measured on run 33902232078, that leg is 4.0 min
+#     FIXED (checkout 15 s + Postgres 13 s + `e2e-setup` 87 s + this lane's own
+#     cloud-on `next build` + `build:worker` + `next start`, ~124 s) and 7.9 min
+#     VARIABLE (72 tests, `workers: 1`). A 2-way split therefore yields
+#     4.0 + 4.0 = 8.0 min, not 5.0 — it buys 1.9 min off the LEG. But at-scale
+#     leads the other chain by only 59 s and 1 m 36 s in the two runs where it
+#     leads at all, and by nothing in the other five, so the expected saving on
+#     the RUN is ~22 s for one extra runner on every merge. Declined.
+#   • BREAKING THE `test → coverage` SERIALISATION — `coverage` is 1.3–1.5 min
+#     end to end and its `--mergeReports` step is 43 s, so the ceiling on any
+#     de-serialisation is 1.5 min. The real ceiling is ZERO: MOTIR-4424's
+#     finding is that the slot is held by the whole RUN, so a job moved off that
+#     edge still runs inside the run and still holds the slot. Recovering the
+#     1.5 min would mean removing the job from the run, which `ci-complete`'s
+#     needs-totality (`tests/ci-complete-gate.test.ts`) forbids. Declined.
+#
+# The same six-run BEFORE sample, per job, so the deltas are readable: `Vitest
+# coverage` 1.2–8.2 (median 5.0) → 1.3–1.5; `billing-cloud` 12.0–16.1 (median
+# 15.1) → 8.6–12.3; a `Vitest` leg 8.1–26.5 (median 12.4) → 7.3–22.2.
+#
+# ⚠️ WHAT THE TAIL ACTUALLY IS NOW: the slowest `Vitest` leg, at a p95 of
+# 17.1 min against a median of 8.9 over 84 legs — 1.9x at the p95 and 2.5x at
+# the max, on a partition that is cost-balanced by construction
+# (`tests/helpers/vitestShardPlan.ts`). It is NOT the split. Shard 3/12 ran
+# `tests 4340 s` on run 33886279785 and `tests 956 s` on run 33902232078 over
+# the SAME 124 files, and MOTIR-3963 settled that class at n=15: the outlier is
+# a DEGRADED RUNNER, identified by the fixed-workload control it names —
+# `migrate deploy` at 17 s on that 22.2-min leg against 3 s on its 8.1-min
+# sibling. Read that control before treating a slow leg as a partition problem.
+#
 # ── ⛔ THE TWO REASONS THE PUSH LANE KEPT THE FULL MATRIX ARE BOTH SPENT NOW ───
 #                                                              (MOTIR-4050)
 #
@@ -891,6 +948,13 @@ jobs:
     runs-on: ubuntu-latest
     # Observed 20.1–24.9 min per leg across three shards and four green runs
     # AT THE OLD 3-SHARD MEMBERSHIP; at 8 the same work per leg is ~10 min.
+    # ⚠️ RE-MEASURED AT TWELVE BY MOTIR-4448: 7.3 min / median 8.9 / p95 17.1 /
+    # max 22.2, over 84 legs in 7 clean merge-group runs on 2026-09-04. That
+    # p95 is what makes this lane the run's tail in 5 of those 7 — and the
+    # spread is the DEGRADED-RUNNER effect below, not the packer: MOTIR-3963
+    # settled it at n=15, and its fixed-workload control reads it here too
+    # (`migrate deploy` at 17 s on the 22.2-min leg against 3 s on its 8.1-min
+    # sibling in the same run).
     # The ceiling STAYS AT 75 anyway, and deliberately, because the number was
     # never derived from the membership. ⚠️ THE MULTIPLE IS NOT THE BINDING
     # CONSTRAINT HERE — the outlier is. `Vitest (2/3)` ran 47.5 minutes on run
@@ -1077,8 +1141,27 @@ jobs:
   coverage:
     name: Vitest coverage
     runs-on: ubuntu-latest
-    # Observed 1.1–1.3 min → 10 (~8x, the short-job floor). It only merges the
-    # shards' reports; the measuring is done by `test`.
+    # Observed 1.3–1.5 min (n=7 clean merge-group runs, 2026-09-04; median 1.4,
+    # p95 1.5) → 10 (~6.7x, the short-job floor). It only merges the shards'
+    # reports; the measuring is done by `test`.
+    #
+    # ⚠️ RE-MEASURED BY MOTIR-4448, AND THE OLD NUMBER CAME BACK. Between
+    # 09:42 and 11:19 on 2026-09-04 this job was observed at 1.2–8.2 min, and
+    # 8.2 against a 10-minute ceiling is 82% of the budget on a job that runs
+    # no tests and touches no Postgres — which is what MOTIR-4448 was filed to
+    # raise or re-justify before it fired and ejected a queue entry. It was
+    # NOT this job growing. On run 33864238803 — the MEDIAN of that six-run
+    # sample at 5.0 min — the step breakdown is `pnpm/action-setup@v6` **225 s**
+    # against a `--mergeReports` step of 42 s: four fifths of the job was an
+    # npm self-installer, which MOTIR-4449 took off every job's critical path
+    # in `b51ca941`. Post-fix the whole envelope is 1.3–1.5 min and the
+    # `--mergeReports` step is 43 s — i.e. the measuring never moved.
+    #
+    # So the ceiling STAYS AT 10, deliberately: it was measured correctly, it
+    # was then read against a number a DIFFERENT defect had inflated, and
+    # padding it would have absorbed that defect instead of surfacing it. If
+    # this job is ever observed near 10 again, the first question is which
+    # step grew — not what the ceiling should be.
     timeout-minutes: 10
     if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
     needs: [test, changes]
@@ -1419,9 +1502,26 @@ jobs:
   e2e-at-scale:
     name: Playwright E2E at-scale (${{ matrix.id }})
     runs-on: ubuntu-latest
-    # Observed 5.2–9.9 min across the four at-scale legs → 45 (~4.5x), the same
+    # Observed 2.9–12.3 min across the four at-scale legs (n=28 legs over 7 clean
+    # merge-group runs, 2026-09-04 — collab 2.9–3.6, board 3.8–4.9, reporting
+    # 5.2–7.2, billing-cloud 8.6–12.3) → 45 (~3.7x on the worst leg), the same
     # number `e2e` carries and for the same reason: these legs share that job's
     # setup, so they share its wedge.
+    #
+    # ⚠️ RE-MEASURED BY MOTIR-4448, AND NEITHER PRIOR READING WAS THIS LANE
+    # GROWING. The number this line used to carry — 5.2–9.9 min — predates
+    # MOTIR-4449; a reading taken between the two (2026-09-04 09:42–11:19) put
+    # `billing-cloud` at 12.0–16.1 min. Both are the ~7-minute npm self-installer
+    # moving through the numbers, and `b51ca941` removed it. The ceiling STAYS
+    # AT 45: it clears the worst leg by 3.7x AND clears the 23-minute excursion
+    # of run 33856167486 by 2.0x — one hung `waitForURL` burning a 900 s test
+    # budget, now bounded by `navigationTimeout: 30_000` in
+    # playwright.cloud.config.ts (see the note there).
+    #
+    # ⚠️ AND `billing-cloud` IS NOT WORTH SHARDING at this envelope — 4.0 min of
+    # it is FIXED per leg. The arithmetic, with the run it was measured on, is
+    # in the merge-queue block at the head of this file; read it before
+    # splitting this matrix to chase the tail.
     timeout-minutes: 45
     permissions:
       contents: read
