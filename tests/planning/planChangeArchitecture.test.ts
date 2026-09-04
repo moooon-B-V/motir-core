@@ -363,7 +363,18 @@ describe('the /planning shell is not hostage to the roadmap read', () => {
     // would put a second query back on the path MOTIR-2069 cleared.
     expect(beforeGate.match(/await projectAccessService\./g) ?? []).toHaveLength(1);
     // …and the redirect for a never-onboarded project is still on this path.
-    expect(page).toMatch(/redirect\('\/onboarding'\)/);
+    //
+    // ⚠️ MATCHED ON THE CONSTANT, NOT ON THE LITERAL (MOTIR-4403). This read
+    // `/redirect\('\/onboarding'\)/` until the onboarding entrance got one
+    // owner: the entrance is now `ONBOARDING_ENTRY_PATH`, imported from
+    // `lib/navigation/landing.ts`, and `tests/navigation/landing-owner-guard.
+    // test.ts` FAILS on a re-typed `'/onboarding'` anywhere under `app/`. So the
+    // old pattern asserted the presence of the exact string a sibling guard now
+    // forbids — two guards that cannot both be satisfied. The invariant this one
+    // is about is unchanged and is what it still checks: the never-onboarded
+    // redirect is on this path, above the render.
+    expect(page).toMatch(/redirect\(ONBOARDING_ENTRY_PATH\)/);
+    expect(page).toMatch(/import \{ ONBOARDING_ENTRY_PATH \} from '@\/lib\/navigation\/landing'/);
   });
 
   it('the host takes no roadmap data at all', () => {

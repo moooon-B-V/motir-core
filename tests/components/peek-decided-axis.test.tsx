@@ -47,6 +47,15 @@ import { PlanReviewCanvas } from '@/components/planning/PlanReviewCanvas';
 
 const t = en.planReview;
 
+/**
+ * The LITERAL PREFIX of an ICU template — everything before its first `{`.
+ *
+ * `String.split()[0]` is `string | undefined` under `noUncheckedIndexedAccess`,
+ * and six sites asserting on one is six casts; one helper is the honest shape.
+ * A template with no placeholder is its own prefix.
+ */
+const prefixOf = (template: string): string => (template.split('{')[0] ?? template).trim();
+
 const MODIFY: PlanReviewItemDto = planReviewItem({
   planItemId: 'pi_modify',
   op: 'modify',
@@ -264,10 +273,10 @@ describe('a DECIDED modify states nothing in the future tense (AC 2, AC 6)', () 
       // §16.4 — approved LIFTS the override, declined KEEPS it.
       expect(html).toContain(linkLabel);
       // §16.5 — the pinned line, in the decided arm's tense…
-      expect(html).toContain(footTemplate.split('{')[0].trim());
+      expect(html).toContain(prefixOf(footTemplate));
       // …and NOT in the present one. This is the sentence the card is named
       // after: `This plan changes 1 of the 6 fields it can set.`
-      expect(html).not.toContain(t.railChangeCount.split('{')[0].trim() + ' 1 of');
+      expect(html).not.toContain(`${prefixOf(t.railChangeCount)} 1 of`);
     },
   );
 
@@ -286,7 +295,7 @@ describe('a DECIDED modify states nothing in the future tense (AC 2, AC 6)', () 
     await waitFor(() => expect(screen.getByTestId('proposal-peek')).toBeTruthy());
     expect(screen.getByTestId('proposal-peek').outerHTML).toBe(withNull);
     expect(withNull).toContain(t.openTargetAsItStands);
-    expect(withNull).toContain(t.railChangeCount.split('{')[0].trim());
+    expect(withNull).toContain(prefixOf(t.railChangeCount));
     expect(withNull).not.toContain(t.outcomeAccepted);
     expect(withNull).not.toContain(t.outcomeDeclined);
   });
@@ -297,12 +306,12 @@ describe('a DECIDED remove (AC 5)', () => {
     const approved = await throughTheList(REMOVE, 'accepted');
     // `This plan archived {key}.` — not `{key} is archived`, which the shipped
     // `Archived` pill and banner already say. Only this line can say who did it.
-    expect(approved).toContain(t.railRemoveArchived.split('{')[0].trim());
-    expect(approved).not.toContain(t.railRemoveArchives.split('{')[0].trim());
+    expect(approved).toContain(prefixOf(t.railRemoveArchived));
+    expect(approved).not.toContain(prefixOf(t.railRemoveArchives));
     expect(approved).toContain(t.outcomeAccepted);
 
     const declined = await throughTheList(REMOVE, 'declined');
-    expect(declined).toContain(t.railRemoveDeclined.split('{')[0].trim());
+    expect(declined).toContain(prefixOf(t.railRemoveDeclined));
     expect(declined).toContain(t.outcomeDeclined);
   });
 
