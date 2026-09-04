@@ -1,8 +1,14 @@
 import {
+  isIndexFleetConfigured,
+  selectedOrchestratorProvider,
   verifyFleetBootable,
   verifyIndexFleetBootable,
   type FleetBootableVerdict,
 } from '@/lib/orchestrator';
+import {
+  verifyIndexContainerAiAddress,
+  type ContainerAiAddressVerdict,
+} from '@/lib/ai/containerAiAddress';
 
 // THE FLEET BOOT PREFLIGHT (Story MOTIR-1916 · MOTIR-2006) — §6.1 of
 // `docs/decisions/fleet-image-pull.md`, given a service seam so a background job
@@ -51,5 +57,45 @@ export const fleetPreflightService = {
    */
   async checkIndexFleet(): Promise<FleetBootableVerdict> {
     return verifyIndexFleetBootable();
+  },
+
+  /**
+   * Can the address this deployment would HAND an index container actually work
+   * for it? (MOTIR-4518)
+   *
+   * ⚠️ A THIRD METHOD, AND IT IS A DIFFERENT QUESTION FROM THE OTHER TWO rather
+   * than a third image. Both siblings ask whether a container can BOOT; neither
+   * has ever asked whether the booted container can REACH anything, and that gap
+   * is not academic — it is where the fleet spent two weeks. Every index run
+   * since 2026-08-21 booted from a perfectly pullable image, downloaded the repo,
+   * built the graph, and then failed to resolve the motir-ai address it had been
+   * given, because that address was motir-core's own private one and the
+   * container is in another organization. Both preflights were green throughout,
+   * correctly: they were answering the question they were asked.
+   *
+   * The verdict is deliberately NOT a {@link FleetBootableVerdict} — that type is
+   * about an image reference and its registry, and widening it to mean "or an
+   * address, or a name resolution" is how a verdict stops being a message an
+   * operator can act on. Same reasoning that gave the indexer image its own
+   * function rather than a second `reference` field.
+   *
+   * Never throws, for the reason neither sibling does.
+   */
+  async checkIndexContainerAiAddress(): Promise<ContainerAiAddressVerdict> {
+    // ⚠️ THE FAKE ADAPTER IS `not_applicable`, and it is EXCLUDED HERE rather
+    // than inside `isIndexFleetConfigured()`, which answers `true` for it. That
+    // predicate is asking "may this deployment enter the index path?", and the
+    // fake must, because it is what every suite selects. THIS probe is asking
+    // whether a real machine in another organization could reach an address, and
+    // the fake boots no machine — so the honest answer is that there is nothing
+    // to check. It is the same carve-out both image preflights make, for the
+    // reason `isIndexFleetConfigured()` states in its own comment: requiring a
+    // production-only variable here would put it in front of every test that
+    // drives this job, and the usual answer to that is a placeholder in the test
+    // environment — which is the same placeholder that would then work in
+    // production.
+    const bootsRealContainers =
+      isIndexFleetConfigured() && selectedOrchestratorProvider() !== 'fake';
+    return verifyIndexContainerAiAddress({ isConfigured: bootsRealContainers });
   },
 };

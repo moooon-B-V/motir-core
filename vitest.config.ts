@@ -1871,6 +1871,24 @@ export default defineConfig({
         // sub-route (`SidebarNav-settings-door.test.tsx`). `branches` is pinned
         // at the 90 floor in `thresholds` below, beside its three siblings.
         'app/**/_components/SidebarNav.tsx',
+        // MOTIR-4518 — the preflight that asks whether the address an index
+        // container is GIVEN can work where the container runs. It is gated on
+        // its own rather than blended into a service's number because it is a
+        // GUARD: the fault it exists to catch produced no failing signal
+        // anywhere for two weeks, so a regression in it would restore exactly
+        // that silence. MEASURED FIRST, over the one spec that reaches it — a
+        // LOWER BOUND on the full-suite number, since coverage over more specs
+        // can only rise:
+        //
+        //   vitest run --coverage \
+        //     --coverage.include='lib/ai/containerAiAddress.ts' \
+        //     tests/ciFleet/containerAiAddress.test.ts
+        //   Statements 100% (34/34) · Branches 100% (24/24)
+        //   Functions  100% (5/5)   · Lines    100% (31/31)
+        //
+        // GATED at the 90 floor rather than at the measured 100, so a later
+        // refactor has room without anyone loosening a gate to make a build pass.
+        'lib/ai/containerAiAddress.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -3568,6 +3586,17 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/_components/CommandPaletteProvider.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-4518 — the index container's motir-ai address preflight, on all
+        // four axes, MEASURED at 100 on each before being pinned (the numbers
+        // and the command are in its `include` entry above). Pinned at the 90
+        // floor rather than at the measured 100, so a later refactor has room
+        // without anyone loosening a gate to make a build pass.
+        'lib/ai/containerAiAddress.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -1,6 +1,7 @@
 import { defineJob } from '../defineJob';
 import type { ScheduleHealthReportDTO } from '@/lib/dto/jobSchedules';
 import type { FleetBootableVerdict } from '@/lib/orchestrator';
+import type { ContainerAiAddressVerdict } from '@/lib/ai/containerAiAddress';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
@@ -55,6 +56,18 @@ import type { FleetBootableVerdict } from '@/lib/orchestrator';
 // garbage-collects unreferenced images, and a fleet whose machines are ephemeral
 // by design references nothing between jobs.
 //
+// As of MOTIR-4518 it carries a FOURTH probe, and it is the first one that is
+// not about an image. Both boot preflights ask whether a container can BOOT;
+// neither ever asked whether the booted container can REACH anything. For two
+// weeks every index container booted from a perfectly pullable image, built a
+// 45 MB graph over nineteen minutes, and then died on
+// `getaddrinfo ENOTFOUND motir-ai.internal` one call before it could upload it —
+// because motir-core handed it motir-core's OWN private motir-ai address, and
+// the container runs in a different organization. Both preflights were green the
+// whole time, correctly: they were answering the question they were asked. This
+// probe asks the other one. It is here for the reason every probe in this job is
+// here — the fault's entire history is having had no loud surface.
+//
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
 // tick dead-letters immediately rather than retrying. That is also what makes
@@ -85,6 +98,13 @@ export interface DailyHealthCheckResult {
    *  deployment that runs CI but does not index reports `not_applicable` here
    *  while `fleet` says `bootable`, and the ledger can tell those apart. */
   indexFleet: FleetBootableVerdict;
+  /** Whether the address an index container would be GIVEN for motir-ai can work
+   *  for it (MOTIR-4518) — recorded on the healthy tick too, so the ledger can
+   *  answer "was the container's motir-ai address sane yesterday?". A deployment
+   *  that indexes reports `reachable`, `private_address` or `indeterminate`; one
+   *  that does not reports `not_applicable` beside a `not_applicable`
+   *  `indexFleet`. */
+  indexContainerAi: ContainerAiAddressVerdict;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -161,6 +181,45 @@ export class IndexFleetImageUnpullableError extends Error {
   }
 }
 
+/**
+ * Thrown when the address this deployment would hand an index container cannot
+ * work for it (MOTIR-4518) — either unset, or PRIVATE and therefore unresolvable
+ * from the fleet's organization.
+ *
+ * A SEPARATE error from the two image ones, and the message is the reason. Those
+ * two send an operator to a REGISTRY; this one sends them to a Fly secret on
+ * `motir-core`, and the fix is a different command in a different place. Telling
+ * someone to re-run the image mirror for a name-resolution fault would send them
+ * to the wrong system entirely — which is precisely what happened for two weeks
+ * while both image probes reported green.
+ *
+ * It is loud on the two DEFINITE arms only. `indeterminate` means this process
+ * could not reach the address, which is a statement about motir-core's network
+ * rather than about the address, and failing on it would teach an operator that
+ * this row is noise — the failure mode every probe in this job is written to
+ * avoid.
+ */
+export class IndexContainerAiAddressError extends Error {
+  constructor(
+    readonly verdict: Extract<
+      ContainerAiAddressVerdict,
+      { verdict: 'unconfigured' | 'private_address' }
+    >,
+  ) {
+    super(
+      `An index container cannot reach motir-ai: ${verdict.detail} ` +
+        `No code-graph index can be published until this is fixed — the container will still ` +
+        `boot, download the repository and build the whole graph, and then throw it away at the ` +
+        `upload grant. Set MOTIR_AI_CONTAINER_URL on motir-core to an address that resolves from ` +
+        `OUTSIDE motir-core's own organization (motir-ai's public ingress; its container-facing ` +
+        `routes are gated on the run-scoped credential either way). It is deliberately not ` +
+        `MOTIR_AI_URL, which is motir-core's own private seam and must stay that way ` +
+        `(MOTIR-3277 · MOTIR-4518).`,
+    );
+    this.name = 'IndexContainerAiAddressError';
+  }
+}
+
 export const dailyHealthCheck = defineJob(
   {
     id: 'system.daily-health-check',
@@ -185,6 +244,9 @@ export const dailyHealthCheck = defineJob(
     const fleet = await ctx.step.run('fleet-boot-preflight', () => services.fleetPreflight.check());
     const indexFleet = await ctx.step.run('index-fleet-boot-preflight', () =>
       services.fleetPreflight.checkIndexFleet(),
+    );
+    const indexContainerAi = await ctx.step.run('index-container-ai-address', () =>
+      services.fleetPreflight.checkIndexContainerAiAddress(),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
@@ -213,6 +275,17 @@ export const dailyHealthCheck = defineJob(
     // the larger outage; both verdicts are on the row either way.
     if (indexFleet.verdict === 'unpullable') throw new IndexFleetImageUnpullableError(indexFleet);
 
-    return { ...DAILY_HEALTH_CHECK_PAYLOAD, schedules, fleet, indexFleet };
+    // The REACHABILITY probe, reported last and on the same terms: only the two
+    // DEFINITE arms are loud. `indeterminate` is this process failing to reach an
+    // address, not the address failing; `not_applicable` is a deployment that
+    // does not index. Both are recorded on the row either way.
+    if (
+      indexContainerAi.verdict === 'unconfigured' ||
+      indexContainerAi.verdict === 'private_address'
+    ) {
+      throw new IndexContainerAiAddressError(indexContainerAi);
+    }
+
+    return { ...DAILY_HEALTH_CHECK_PAYLOAD, schedules, fleet, indexFleet, indexContainerAi };
   },
 );

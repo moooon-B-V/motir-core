@@ -1,4 +1,4 @@
-import { mintCodeGraphRunCredential, motirAiBaseUrl } from '@/lib/ai/motirAiClient';
+import { mintCodeGraphRunCredential, motirAiContainerBaseUrl } from '@/lib/ai/motirAiClient';
 import {
   codeGraphIndexAdmissionService,
   type IndexAdmission,
@@ -858,6 +858,15 @@ export const codeGraphIndexDispatchService = {
    *     the job record a `succeeded` `job_run` carrying an `output.repoRef` for a
    *     repo nothing ever indexed, which is indistinguishable from success
    *     everywhere downstream, forever (§5's ledger constraint).
+   *
+   *     ⚠️ `MOTIR_AI_CONTAINER_URL` JOINS IT (MOTIR-4518), through
+   *     {@link motirAiContainerBaseUrl}, and joins it HERE rather than as a
+   *     default. It is the address the container reaches motir-ai at, and it is
+   *     NOT motir-core's own — the two callers are in different organizations.
+   *     Unset it throws, which costs one dead-lettered run and no machine;
+   *     defaulted to motir-core's private address it costs nineteen minutes of
+   *     billed container per run, for ever, under a green ledger. That is not a
+   *     hypothetical: it is what happened, twice a refresh, for two weeks.
    *   • THE CREDENTIAL COULD NOT BE MINTED — there is NO fallback. Not
    *     `MOTIR_AI_SERVICE_TOKEN`, not any broader token: motir-ai's
    *     container-facing routes refuse the service token by design
@@ -911,7 +920,19 @@ export const codeGraphIndexDispatchService = {
     try {
       // ── 0 · The deployment gate, BEFORE anything is spent ──────────────────
       fleet = indexFleetConfig();
-      aiBaseUrl = motirAiBaseUrl();
+      // ⚠️ THE *CONTAINER'S* ACCESSOR, NOT motir-core's OWN (MOTIR-4518). These
+      // are two different addresses for one service because the two callers sit
+      // in two different organizations: motir-core reaches motir-ai over the
+      // PRIVATE seam (`MOTIR_AI_URL`, `http://motir-ai.internal:8080` in
+      // production — 6PN, and resolvable only inside `moooon`), while the machine
+      // booted below runs in the FLEET's organization, where that name is
+      // NXDOMAIN. This line read `motirAiBaseUrl()` until 2026-09-04 and handed
+      // the container motir-core's own private address; every run since
+      // 2026-08-21 built its graph and then died at
+      // `getaddrinfo ENOTFOUND motir-ai.internal`, one call before the upload
+      // grant, while the ledger recorded success. There is NO fallback between
+      // the two: unset is a throw, here, before a machine is billed.
+      aiBaseUrl = motirAiContainerBaseUrl();
       orchestrator = getOrchestrator();
 
       // ── 1 · Mint THIS run's motir-ai credential ────────────────────────────
@@ -1306,7 +1327,11 @@ export const codeGraphIndexDispatchService = {
   buildIndexSpec(args: {
     target: IndexDispatchInput;
     fleet: IndexFleetConfig;
-    /** motir-ai's base URL, WITHOUT the service token. */
+    /**
+     * motir-ai's base URL AS THE CONTAINER MUST REACH IT — without the service
+     * token, and NOT the address motir-core itself uses (MOTIR-4518). It comes
+     * from `motirAiContainerBaseUrl()`; see that accessor for why the two differ.
+     */
     aiBaseUrl: string;
     /** The resolved pre-signed, single-repo, short-lived archive URL. */
     tarballUrl: string;
