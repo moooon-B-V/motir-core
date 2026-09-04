@@ -642,7 +642,26 @@ jobs:
   design-guards:
     name: Design asset guards
     runs-on: ubuntu-latest
-    # Observed 1.1–1.4 min → 10 (~7x, the short-job floor).
+    # Observed 2.6 min → 10 (~3.8x, still above the short-job floor). NOT
+    # RAISED — re-derived, which is a different act (MOTIR-4449, criterion 9).
+    #
+    # MOTIR-3569 sized this at "1.1–1.4 min → 10 (~7x)" and that reading was
+    # right when it was taken. Two things moved underneath it since, in opposite
+    # directions, and only one of them was a defect:
+    #
+    #   - The SETUP grew from seconds to as much as 437 s, because
+    #     `pnpm/action-setup` bootstraps itself with `npm ci`. That is what
+    #     cancelled this job at 10m00s twice, and it is REMOVED rather than
+    #     accommodated — the step is now 6 s (run 33881990263).
+    #   - The lane's own WORK grew honestly: the design guards have multiplied
+    #     since MOTIR-3569, and `vitest --config vitest.design.config.ts` alone
+    #     is 118 s of the 157 s total on that run.
+    #
+    # So the ceiling is unchanged and the OBSERVATION is restated, because the
+    # old range no longer describes the job and a stale range is what let a
+    # 437-second regression hide inside a budget expressed as a multiple of it.
+    # ⚠️ One post-change sample. MOTIR-3569's bar asks for four before this is
+    # treated as the lane's settled range — re-derive it once there are.
     timeout-minutes: 10
     permissions:
       # `contents: read` and nothing else. This job used to also request
