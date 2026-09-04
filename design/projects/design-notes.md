@@ -2900,7 +2900,9 @@ gates MOTIR-4221 (pane part 1) and MOTIR-4229 (pane part 2).
 | -------------------------- | -------------------- |
 | `public-address.mock.html` | `public-address.png` |
 
-A ten-panel board (review EACH — mistake #31), 1200 px viewport, 2× export, 2400 × 13026.
+A **fourteen**-panel board (review EACH — mistake #31), 1200 px viewport, 2× export, 2400 × 19574.
+Panels 0–9 are MOTIR-4211's; panels 10–13 are MOTIR-4453's RELEASE revision, appended rather than
+interleaved (see § _REVISION 2_ at the end of this section for why).
 
 ## The surface table
 
@@ -3081,3 +3083,191 @@ is a `[data-theme]` block re-declaring the Tier-3 tokens, placed BEFORE the `[da
 block (equal specificity, later wins — MOTIR-3712).
 
 `vitest --config vitest.design.config.ts`: **7 files, 90 tests, green.**
+
+## ⚠️ REVISION 2 (2026-09-04, Story MOTIR-4451 · Subtask MOTIR-4453) — RELEASE: the Remove control, its confirm, and the state it returns to
+
+The room above was drawn for a workspace that CLAIMS and RENAMES. ADR §8
+**Amendment 2** (MOTIR-4452) adds the third act: a workspace may **release** its
+own subdomain. Never-released is a rule about who may take a name NEXT, not about
+who must keep serving it, so the addresses go and the NAMES stay held for ever.
+Panels **10–13** are that act; nothing above is redrawn.
+
+**Panels 10–13 are APPENDED, not inserted.** They belong beside panel 2 by
+subject and sit at the end by NUMBER, because the numbers are cited from outside
+this file — `PublicSubdomainCard`'s own header names _"design panels 1, 2 and
+8"_ — so renumbering to group them would silently re-point every one of those
+citations at a different picture.
+
+| panel  | what it draws                                                                                |
+| ------ | -------------------------------------------------------------------------------------------- |
+| **10** | The Remove control in the claimed state, and the confirm with THREE hostnames                |
+| **11** | The singular case (one hostname), and the unclaimed state it returns to                      |
+| **12** | The confirm in `zh`, and the claimed card's footer row in `zh`                               |
+| **13** | Narrow (390 × 844) with three hostnames, one of them a 56-character label carrying no hyphen |
+
+### Drawn against a RENDER of the shipped card, not against panel 2
+
+`PublicSubdomainCard` has been live since MOTIR-4221, so the control was placed
+against a **headless render of the real component at `origin/main`** (its own
+source + the real `theme.css` + `messages/en.json`), not against this board's
+picture of it. Two things the render settled that reading panel 2 would not have:
+
+- **The footer is ONE `justify-between` row** — `renamesLeft` on the left, a
+  `secondary` / `sm` Rename on the right. Panel 2 draws it the same way, and the
+  render is what makes that a fact rather than an assumption.
+- **The shipped card renders EVERY alias as its own row**, so a workspace that
+  renamed twice already shows three rows before the confirm opens. Panel 2 drew
+  one alias; panel 10 draws two, because the confirm's whole argument is about a
+  set and the card behind it has to show the same set.
+
+### The Remove control
+
+| element                        | primitive                                  | why this weight                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Remove** (card)              | `Button` `variant="ghost"` `size="sm"`     | Exactly what the shipped custom-domain row gives its own Remove (`CustomDomainsSection`: `action === 'remove' ? 'ghost' : 'secondary'`). One product, one weight for one act. |
+| **Rename** (card)              | `Button` `variant="secondary"` `size="sm"` | Unchanged.                                                                                                                                                                    |
+| **Remove subdomain** (confirm) | `Button` `variant="danger"` `size="md"`    | The ONE element on this board that may carry `--el-danger-text`, because it also carries `bg-(--el-danger)`.                                                                  |
+
+**Placement: inside the footer row's RIGHT-hand group, to Rename's left.** Not a
+third `space-between` column — that pushes the count, the quiet action and the
+ordinary action to three edges and makes them read as three peers. Remove sits
+LEFT of Rename so the pointer travelling to the ordinary action never passes over
+the destructive one.
+
+**No danger ink on the trigger.** `Button` ships four variants and none is a
+danger ghost; the confirm is where the colour belongs. A danger-tinted trigger
+would also be the loudest thing on a pane whose other controls are all neutral,
+which inverts the emphasis the card asks for.
+
+### The confirm — panel 7's grammar, three additions
+
+It is a **sibling of the shipped remove-domain confirm**, not a new dialect:
+`Modal` → a plain first line → the consequence in a `callout danger` on
+`--el-tint-rose` with `--el-danger-on-surface` ink → the reversibility last →
+`[ghost Cancel] [danger Confirm]`. That is `archive-confirm.png`'s grammar, which
+panel 7 already follows. Three things are added, and each is required:
+
+1. **THE HOSTNAMES ARE LISTED, NEVER SUMMARISED.** A workspace that renamed twice
+   gives up three names in one click, and somebody who forgot a rename from months
+   ago will not think of the old name as theirs to lose until it is gone. The rows
+   are the card's own address rows, with the same pills — never the words _"and
+   any previous addresses"_. The lead line is an ICU plural over the count.
+2. **THE PERMANENCE SENTENCE IS NOT BOILERPLATE AND IS NOT DRAWN AS ONE.** _"This
+   cannot be undone"_ would be true and would say nothing. What is unusual here is
+   that the name stays held **against everyone, for ever, by design** — including
+   the workspace releasing it. That is the sentence, and it is the callout's title.
+3. **THE UPSIDE IS STATED, LAST.** Release is almost always performed BY somebody
+   who wants their projects back on `motir.co`, and a confirm describing only
+   destruction makes the correct action feel like a mistake. The last line names
+   `motir.co/p/<identifier>` and says the projects appear on `motir.co` again.
+
+**And the renames sentence, which is Amendment 2 in the customer's words.**
+Releasing does **not** reset the rename cap — the cap counts names BURNT out of a
+shared namespace, so releasing three spends three. Without that sentence the
+confirm promises permanence and quietly omits the half a customer meets later as
+a refusal. It rides in the callout body rather than as a fourth block, because it
+is part of the permanence consequence rather than a separate one.
+
+### The unclaimed state it returns to — DECIDED: identical, with no trace
+
+**Byte-for-byte panel 1. There is no "you released `acme`" line, and that is a
+decision rather than a rendering accident** (panel 11's right stage).
+
+The reason is the reservation's own shape. `PublicHostnameReservation` stores a
+one-way **digest** and deliberately does not retain the hostname — ADR §8
+Amendment 1 reconciles _"held for ever"_ with Article 17 precisely by never
+keeping the string. A trace would mean keeping the very value that table was
+designed to discard, on the surface where a person can read it.
+
+And the consequence a person actually needs is delivered where it is
+**actionable**: at the moment they re-type the label, by panel 1's _already taken_
+refusal. **CHECKED, and nothing is owed to that copy** — the shipped string
+already reads _"A subdomain that has been renamed away from also keeps its name,
+so this one may belong to a workspace that no longer answers on it"_, which
+covers a released name unchanged.
+
+### The confirm's rows WRAP where the card's rows TRUNCATE — a decision
+
+The shipped `AddressRow` truncates (`min-w-0 flex-1 truncate`) and is right to: on
+the card the hostname is a LABEL for a row a reader can copy, open or scroll to.
+**In the confirm the hostname IS the message** — it is the thing being given up
+for ever, and a name a person cannot finish reading is a name they cannot decide
+about. So the modal's rows carry `overflow-wrap: anywhere` instead. This board's
+own `.addr .host` has carried that rule since MOTIR-4211, so the departure is
+consistent with every confirm already on it.
+
+**Measured at 390 px** (panel 13) with a 56-character label carrying **no hyphen
+to break at** — the case a hyphenated example silently passes. The label runs onto
+three lines inside its own row, its pill stays on the first, and the page does not
+scroll sideways. Two other things change at that width and are drawn rather than
+described: the alias pill drops its verb (_Redirects here_ → _Redirects_), and the
+renames sentence drops its second clause.
+
+### The ACCESS PATH is UNCHANGED — confirmed, not redrawn
+
+Panel 0 draws both entrances (① the rail row `/settings/project/public-address`,
+② the make-public flow's _Set up your own address →_). **Release adds no third
+door.** It is a control INSIDE the subdomain card on a pane a person is already
+standing in — there is no route, no menu item and no notification that reaches it,
+so there is nothing new to draw. Confirmed here rather than re-drawn, per the
+never-redraw rule this section's _Composition_ list applies to the rail.
+
+### Copy — `en` + `zh`, drawn on the board (panels 10–13)
+
+New keys under `settings.publicAddress.release`, beside the existing `rename` and
+`domains.removeModal` blocks:
+
+| key            | `en`                                                                                                                                                                                | `zh`                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `remove`       | `Remove`                                                                                                                                                                            | `移除`                                                                                   |
+| `title`        | `Remove {hostname}?`                                                                                                                                                                | `要移除 {hostname} 吗？`                                                                 |
+| `lead`         | `{count, plural, one {This address will stop answering:} other {These # addresses will stop answering:}}`                                                                           | `{count, plural, other {以下 # 个地址将停止提供访问：}}`                                 |
+| `warningTitle` | `{count, plural, one {This name is held for ever. Nobody can claim it again — including you.} other {These names are held for ever. Nobody can claim them again — including you.}}` | `{count, plural, other {这些名称将被永久保留，任何人都无法再认领它们——包括你自己。}}`    |
+| `warningBody`  | `Motir keeps every released name out of its namespace permanently, so no other workspace can inherit links that pointed at yours.`                                                  | `Motir 会把每个已释放的名称永久排除在命名空间之外，因此其他工作区无法继承指向你的链接。` |
+| `renamesAfter` | `You will have {count, plural, =0 {no renames} one {# rename} other {# renames}} left if you claim a subdomain again — releasing does not give them back.`                          | `若你再次认领子域名，将只剩 {count} 次重命名机会——释放不会把它们还给你。`                |
+| `fallback`     | `Your public projects go back to {url}, and appear on {site} again.`                                                                                                                | `你的公开项目将回到 {url}，并重新出现在 {site} 上。`                                     |
+| `cancel`       | `Cancel`                                                                                                                                                                            | `取消`                                                                                   |
+| `confirm`      | `Remove subdomain`                                                                                                                                                                  | `移除子域名`                                                                             |
+
+**Three things about the `zh`, each a decision:**
+
+- **`永不释放` / `永久保留` is inherited, not invented.** `rename.warningTitle`
+  already ships `旧地址将继续有效，并且永不释放。` for the same promise one control
+  over, so the release confirm reuses that register rather than adding a second way
+  to say _held for ever_.
+- **`移除` / `移除子域名` reuse the verb the pane already has** —
+  `domains.action.remove` ships `移除` and `domains.removeModal.confirm` ships
+  `移除域名`. One word for one act, across both address kinds.
+- **`zh` has one plural arm.** Every plural above renders the COUNT (`以下 3 个地址`),
+  never a bare _"these addresses"_, because zh carries no plural morphology and the
+  number is the message.
+
+### The allocation sweep — GIVES / TAKES, revision 2
+
+| card                                | GIVES                                                                                                                                                                                        | TAKES                                                                                                                                                                                                                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4455** (the Remove control) | Panels 10–13 in full: the control's variant, size and PLACEMENT; the confirm's four blocks and their order; every `en` + `zh` string above; the unclaimed-state decision; the 390 px reshape | **The wrapping row is NOT `AddressRow` unchanged** — reuse it with `truncate` replaced by `break-words`, per the decision above. And the renames sentence's number comes off the DTO's `renamesLeft`, which MOTIR-4454 has already redefined; do not re-derive it in the browser. |
+| **MOTIR-4454** (the release path)   | Nothing structural — the service was specified by the ADR, not by this asset                                                                                                                 | Nothing                                                                                                                                                                                                                                                                           |
+| **MOTIR-4452** (the ADR amendment)  | Nothing — it is this asset's INPUT                                                                                                                                                           | Nothing                                                                                                                                                                                                                                                                           |
+
+**The re-estimate this sweep implies — MOTIR-4455 is sized 3 points / 50 minutes,
+and this asset does not grow it.** Counted against what is drawn: one ghost button
+in an existing row, one `Modal` composed from primitives the file already imports,
+nine string pairs, one `fetch` + `router.refresh()`, three error branches, and the
+component tests the card already names. There is no new route, no background job,
+no migration and no new i18n SURFACE — the catalogue block is a sibling of two that
+already exist. **Run because the sweep asks for it, and it came back negative.**
+
+**One thing it TAKES that is worth its own line, because it looks like polish and
+is not:** the wrapping row. Reusing `AddressRow` verbatim inside the modal is the
+path of least resistance, it compiles, it renders, and it silently truncates the
+one string the confirm exists to show. That is why it is a TAKES rather than a
+note.
+
+### The guard lane, on this revision
+
+`vitest --config vitest.design.config.ts`: **9 files, 141 tests, green** — run in
+the design worktree before the pull request, which is the only lane whose specs
+read `design/**` and therefore the one an asset-only diff would otherwise never
+trigger. The temp render harness used for the shipped-card screenshot was deleted
+before it ran: an asset citing its own generator fails the address guard.
