@@ -28,10 +28,15 @@
   (`PlanWithAILauncher` + `PlanWithAIFab` render only when
    `isMotirAiConfigured() && activeProject` — layout.tsx:153.)
 
-  Colours are the real Motir light palette (globals.css / @motir/design-system
-  `--el-*` values, inlined, as the sibling `design/ai-chat/` mocks do). No
-  invented hue: every fill is a token value or a color-mix of two of them; text
-  on a tint is always --el-text-strong (#37352f).
+  Colours are the real Motir light palette, declared under the design system's
+  OWN `--el-*` names (`packages/design-system/theme.css`, light / motir) and
+  painted through them at every site — which is what makes this asset legible to
+  the ink guards (`tests/theme/inkContrastMockScan.ts`,
+  `tests/theme/mockStateInkScan.ts`), both of which read the token name off the
+  declaration AT the paint site. No invented hue: every fill is a token or a
+  `color-mix()` of two tokens; text on a tint is --el-text-strong (#37352f) or
+  --el-text-secondary. Box shadows stay raw alpha-black — a shadow is not a hue,
+  and mixing one from an ink token would invert it under a dark palette.
 -->
 <html lang="en">
   <head>
@@ -40,39 +45,46 @@
     <title>Plan change is a conversation — the re-plan mode of the universal workspace</title>
     <style>
       :root {
-        /* ── inlined --el-* (light) ── */
-        --text: #1a1a1a; /* --el-text */
-        --strong: #37352f; /* --el-text-strong (AA text on every tint) */
-        --secondary: #5d5b54; /* --el-text-secondary */
-        --muted: #787671; /* --el-text-muted */
-        --faint: #a4a097; /* --el-text-faint */
-        --surface: #ffffff; /* --el-page-bg / card */
-        --soft: #fafaf9; /* --el-surface-soft */
-        --hub: #f6f5f4; /* --el-surface */
-        --board: #ecebe7; /* --el-canvas (recessed planning board) */
-        --mutedfill: #f3f4f6; /* --el-muted */
-        --border: #e5e3df; /* --el-border */
-        --hair: #ede9e4; /* --el-border-soft */
-        --edge: color-mix(in srgb, #e5e3df 40%, #787671); /* canvas edge stroke (border↔muted) */
-        --accent: #5645d4; /* --el-accent */
-        --accent-soft: color-mix(in srgb, #5645d4 11%, #ffffff); /* accent tint */
-        --accent-text: #ffffff; /* --el-accent-text */
-        --pink: #ff64c8; /* --el-highlight (brand pink — glow only) */
-        --success: #1aae39; /* --el-success */
-        --warning: #dd5b00; /* --el-warning */
-        --info: #0075de; /* --el-info */
-        --danger: #e03131; /* --el-danger */
-        --peach: #ffe8d4; /* --el-tint-peach */
-        --rose: #fde0ec; /* --el-tint-rose */
-        --mint: #d9f3e1; /* --el-tint-mint */
-        --lavender: #e6e0f5; /* --el-tint-lavender */
-        --sky: #dcecfa; /* --el-tint-sky */
-        --yellow: #fef7d6; /* --el-tint-yellow */
-        --type-epic: #ff64c8;
-        --type-story: #1aae39;
-        --type-task: #0075de;
-        --type-bug: #e03131;
-        --type-subtask: #2a9d99;
+        /* ── the element-token layer, resolved to the LIGHT / motir values the
+           running app computes (`packages/design-system/theme.css`), so a plain
+           browser paints the real palette without the Tailwind build. Declared
+           under the tokens' OWN names, which is what makes every paint site
+           below measurable by the ink guards. ── */
+        --el-text: #1a1a1a;
+        --el-text-strong: #37352f; /* AA text on every tint */
+        --el-text-secondary: #5d5b54;
+        --el-text-muted: #787671;
+        --el-text-faint: #a4a097;
+
+        --el-page-bg: #ffffff;
+        --el-surface-soft: #fafaf9;
+        --el-surface: #f6f5f4;
+        --el-canvas: #ecebe7; /* recessed planning board */
+        --el-muted: #f3f4f6;
+
+        --el-border: #e5e3df;
+        --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        --el-accent: #5645d4;
+        --el-accent-text: #ffffff;
+        --el-highlight: #ff64c8; /* brand pink — glow only */
+
+        --el-warning: #dd5b00;
+        --el-info: #0075de;
+        --el-danger: #e03131;
+
+        --el-tint-peach: #ffe8d4;
+        --el-tint-rose: #fde0ec;
+        --el-tint-mint: #d9f3e1;
+        --el-tint-lavender: #e6e0f5;
+        --el-tint-sky: #dcecfa;
+        --el-tint-yellow: #fef7d6;
+
+        --el-type-epic: #ff64c8;
+        --el-type-story: #1aae39;
+        --el-type-task: #0075de;
+        --el-type-subtask: #2a9d99;
         font-family:
           ui-sans-serif,
           system-ui,
@@ -86,8 +98,8 @@
       }
       body {
         margin: 0;
-        background: #f1efec;
-        color: var(--text);
+        background: color-mix(in srgb, var(--el-surface) 50%, var(--el-canvas));
+        color: var(--el-text);
         padding: 30px 22px 60px;
       }
 
@@ -99,18 +111,18 @@
       .page-head h1 {
         font-size: 21px;
         margin: 0 0 7px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         letter-spacing: -0.01em;
       }
       .page-head p {
         font-size: 13.5px;
         line-height: 1.55;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         max-width: 940px;
         margin: 0 0 8px;
       }
       .page-head .ref {
-        color: var(--accent);
+        color: var(--el-accent);
         font:
           600 12px ui-monospace,
           monospace;
@@ -120,8 +132,8 @@
       .sheet {
         max-width: 1150px;
         margin: 0 auto 26px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 14px;
         box-shadow: 0 1px 3px #0000000d;
         overflow: hidden;
@@ -131,26 +143,26 @@
         align-items: baseline;
         gap: 10px;
         padding: 13px 18px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
       }
       .sheethead .n {
         font:
           700 11px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
         padding: 2px 7px;
         border-radius: 6px;
       }
       .sheethead h2 {
         font-size: 14.5px;
         margin: 0;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .sheethead .cap {
         font-size: 12px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-left: auto;
       }
       .sheetbody {
@@ -159,15 +171,15 @@
       .note {
         font-size: 12px;
         line-height: 1.55;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         margin: 14px 18px 0;
         padding: 10px 12px;
-        background: var(--soft);
-        border: 1px solid var(--hair);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
         border-radius: 10px;
       }
       .note b {
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .note + .note {
         margin-top: 8px;
@@ -178,8 +190,8 @@
         font:
           600 11.5px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
         padding: 1px 5px;
         border-radius: 5px;
       }
@@ -197,37 +209,37 @@
         letter-spacing: 0.05em;
         padding: 3px 8px;
         border-radius: 5px;
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .lbl-row .tag.today {
-        background: var(--peach);
-        color: var(--strong);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
       }
       .lbl-row .tag.after {
-        background: var(--mint);
-        color: var(--strong);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
       }
       .lbl-row .cap2 {
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
 
       /* ── a framed "screen" ── */
       .screen {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 2px 10px #0000000f;
-        background: var(--surface);
+        background: var(--el-page-bg);
       }
 
       /* ════════ shipped app chrome strips (rendered-from-reality) ════════ */
       .appstrip {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 11px;
         overflow: hidden;
-        background: var(--surface);
+        background: var(--el-page-bg);
         box-shadow: 0 1px 3px #0000000d;
       }
       .topnav {
@@ -236,8 +248,8 @@
         gap: 8px;
         height: 46px;
         padding: 0 14px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--surface);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-page-bg);
       }
       .topnav .ws {
         display: inline-flex;
@@ -245,14 +257,14 @@
         gap: 7px;
         font-size: 12px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .topnav .ws .sq {
         width: 20px;
         height: 20px;
         border-radius: 6px;
-        background: var(--accent);
-        color: var(--accent-text);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         display: grid;
         place-items: center;
         font-size: 10px;
@@ -273,16 +285,16 @@
         border-radius: 999px;
         font-size: 12px;
         font-weight: 700;
-        color: var(--accent-text);
+        color: var(--el-accent-text);
         background: linear-gradient(
           135deg,
-          var(--accent),
-          color-mix(in srgb, var(--accent) 55%, var(--pink))
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
         );
         box-shadow:
-          inset 0 1px 0 color-mix(in srgb, var(--accent-text) 38%, transparent),
-          0 6px 18px -5px color-mix(in srgb, var(--accent) 75%, transparent),
-          0 0 22px -3px color-mix(in srgb, var(--pink) 50%, transparent);
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+          0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
         white-space: nowrap;
       }
       .heropill.lg {
@@ -295,31 +307,31 @@
         gap: 6px;
         padding: 5px 10px;
         border-radius: 8px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         font-size: 11.5px;
         font-weight: 500;
-        color: var(--secondary);
-        background: var(--surface);
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
         white-space: nowrap;
       }
       .chip.bip {
-        background: var(--lavender);
+        background: var(--el-tint-lavender);
         border-color: transparent;
-        color: var(--strong);
+        color: var(--el-text-strong);
         font-weight: 600;
       }
       .chip.ico {
         padding: 5px 7px;
         border-color: transparent;
-        color: var(--faint);
+        color: var(--el-text-muted);
       }
       .chip.avatar {
         width: 24px;
         height: 24px;
         padding: 0;
         border-radius: 999px;
-        background: var(--strong);
-        color: var(--accent-text);
+        background: var(--el-text-strong);
+        color: var(--el-accent-text);
         justify-content: center;
         font-weight: 700;
         border-color: transparent;
@@ -331,18 +343,18 @@
         align-items: flex-end;
         gap: 14px;
         padding: 14px 14px 15px;
-        background: var(--surface);
+        background: var(--el-page-bg);
       }
       .pagehead .h {
         font-family: ui-serif, Georgia, serif;
         font-size: 17px;
         font-weight: 700;
-        color: var(--text);
+        color: var(--el-text);
         line-height: 1.1;
       }
       .pagehead .sub {
         font-size: 11px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         margin-top: 3px;
       }
       .toolbar {
@@ -360,38 +372,38 @@
         height: 30px;
         padding: 0 11px;
         border-radius: 8px;
-        border: 1px solid var(--border);
-        background: var(--surface);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
         font-size: 11.5px;
         font-weight: 500;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         white-space: nowrap;
       }
       .tbtn.ghost {
         border-color: transparent;
       }
       .tbtn.primary {
-        background: var(--accent);
+        background: var(--el-accent);
         border-color: transparent;
-        color: var(--accent-text);
+        color: var(--el-accent-text);
         font-weight: 600;
       }
       .tbtn .g {
-        color: var(--faint);
+        color: var(--el-text-muted);
         font-size: 12px;
       }
       /* the control being RETIRED — marked, never restyled */
       .tbtn.retire {
         position: relative;
-        border-color: var(--danger);
-        background: color-mix(in srgb, var(--rose) 60%, var(--surface));
-        color: var(--strong);
+        border-color: var(--el-danger);
+        background: color-mix(in srgb, var(--el-tint-rose) 60%, var(--el-page-bg));
+        color: var(--el-text-strong);
       }
       .tbtn.retire::after {
         content: '';
         position: absolute;
         inset: auto 8px 13px 8px;
-        border-top: 1.5px solid var(--danger);
+        border-top: 1.5px solid var(--el-danger);
       }
       /* the gap the removed control leaves — nothing else moves */
       .gapslot {
@@ -401,16 +413,16 @@
         height: 30px;
         padding: 0 11px;
         border-radius: 8px;
-        border: 1px dashed var(--border);
+        border: 1px dashed var(--el-border);
         background: repeating-linear-gradient(
           -45deg,
-          var(--surface),
-          var(--surface) 5px,
-          var(--soft) 5px,
-          var(--soft) 10px
+          var(--el-page-bg),
+          var(--el-page-bg) 5px,
+          var(--el-surface-soft) 5px,
+          var(--el-surface-soft) 10px
         );
         font-size: 10.5px;
-        color: var(--faint);
+        color: var(--el-text-faint);
         white-space: nowrap;
       }
       .fab {
@@ -419,23 +431,23 @@
         border-radius: 999px;
         display: grid;
         place-items: center;
-        color: var(--accent-text);
+        color: var(--el-accent-text);
         font-weight: 700;
         font-size: 15px;
         background: linear-gradient(
           135deg,
-          var(--accent),
-          color-mix(in srgb, var(--accent) 55%, var(--pink))
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
         );
         box-shadow:
-          0 6px 18px -5px color-mix(in srgb, var(--accent) 75%, transparent),
-          0 0 22px -3px color-mix(in srgb, var(--pink) 55%, transparent);
+          0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--el-highlight) 55%, transparent);
       }
       .fabrow {
         display: flex;
         justify-content: flex-end;
         padding: 6px 14px 12px;
-        background: var(--surface);
+        background: var(--el-page-bg);
       }
       .doorline {
         display: flex;
@@ -443,14 +455,14 @@
         gap: 7px;
         margin: 9px 0 0;
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .doorline .num {
         width: 17px;
         height: 17px;
         border-radius: 999px;
-        background: var(--accent-soft);
-        color: var(--accent);
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
+        color: var(--el-accent);
         display: grid;
         place-items: center;
         font:
@@ -464,8 +476,8 @@
         position: relative;
         border-radius: 12px;
         overflow: hidden;
-        border: 1px solid var(--border);
-        background: var(--hub);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
       }
       /* the dimmed, inert app behind the overlay (sheet 6 of MOTIR-1193) */
       .behind {
@@ -478,9 +490,9 @@
         z-index: 3;
         border-radius: 12px;
         overflow: hidden;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         box-shadow: 0 12px 34px #00000026;
-        background: var(--surface);
+        background: var(--el-page-bg);
       }
       .frame {
         display: grid;
@@ -499,8 +511,13 @@
         position: relative;
         overflow: hidden;
         background:
-          radial-gradient(circle at 1px 1px, #e0ded8 1px, transparent 0) 0 0 / 24px 24px,
-          var(--board);
+          radial-gradient(
+              circle at 1px 1px,
+              color-mix(in srgb, var(--el-border) 83%, var(--el-border-strong)) 1px,
+              transparent 0
+            )
+            0 0 / 24px 24px,
+          var(--el-canvas);
       }
       svg.edge {
         position: absolute;
@@ -527,13 +544,13 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 5px 9px;
         font-size: 11.5px;
         font-weight: 600;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         box-shadow: 0 1px 2px #0000000d;
       }
       .wclose kbd,
@@ -541,26 +558,26 @@
         font:
           600 9.5px ui-monospace,
           monospace;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 4px;
         padding: 0 4px;
-        color: var(--faint);
+        color: var(--el-text-muted);
       }
       .crumb {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 5px 10px;
         font-size: 11.5px;
         font-weight: 600;
-        color: var(--strong);
+        color: var(--el-text-strong);
         box-shadow: 0 1px 2px #0000000d;
       }
       .crumb .muted {
-        color: var(--faint);
+        color: var(--el-text-muted);
         font-weight: 500;
       }
       .searchbox {
@@ -568,12 +585,12 @@
         align-items: center;
         gap: 6px;
         margin-left: auto;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 5px 9px;
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         box-shadow: 0 1px 2px #0000000d;
       }
       .zoomctl {
@@ -582,8 +599,8 @@
         display: inline-flex;
         align-items: center;
         gap: 2px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         padding: 3px;
         box-shadow: 0 1px 3px #0000000f;
@@ -594,7 +611,7 @@
         border: 0;
         background: transparent;
         border-radius: 6px;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
         font-size: 13px;
         cursor: default;
         display: grid;
@@ -602,7 +619,7 @@
       }
       .zoomctl .pct {
         font-size: 10.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         padding: 0 5px;
         min-width: 36px;
         text-align: center;
@@ -613,12 +630,12 @@
         align-items: center;
         gap: 15px;
         margin-top: 11px;
-        background: var(--soft);
-        border: 1px solid var(--border);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
         border-radius: 10px;
         padding: 9px 13px;
         font-size: 10.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .legend span {
         display: inline-flex;
@@ -628,15 +645,15 @@
       .legend i {
         width: 15px;
         height: 0;
-        border-top: 2px solid var(--edge);
+        border-top: 2px solid color-mix(in srgb, var(--el-border) 40%, var(--el-text-muted));
         display: inline-block;
         flex: none;
       }
       .legend i.pending {
-        border-top: 2px dashed var(--accent);
+        border-top: 2px dashed var(--el-accent);
       }
       .legend i.cross {
-        border-top: 2px solid var(--warning);
+        border-top: 2px solid var(--el-warning);
       }
       .legend b.sw {
         width: 11px;
@@ -650,8 +667,8 @@
       .node {
         position: absolute;
         width: 176px;
-        background: var(--surface);
-        border: 1px solid var(--border);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
         border-radius: 13px;
         padding: 9px 10px;
         box-shadow: 0 2px 6px #0000000f;
@@ -675,12 +692,12 @@
       .ntitle {
         font-size: 11.5px;
         font-weight: 700;
-        color: var(--text);
+        color: var(--el-text);
         line-height: 1.2;
       }
       .nsub {
         font-size: 10px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         margin-top: 1px;
       }
       .pill {
@@ -692,34 +709,34 @@
         font-size: 9.5px;
         font-weight: 700;
         white-space: nowrap;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .pill.done {
-        background: var(--mint);
+        background: var(--el-tint-mint);
       }
       .pill.wip {
-        background: var(--lavender);
+        background: var(--el-tint-lavender);
       }
       .pill.locked {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .pill.added {
-        background: var(--accent-soft);
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
       }
       .pill.changed {
-        background: var(--sky);
+        background: var(--el-tint-sky);
       }
       .pill.removed {
-        background: var(--rose);
+        background: var(--el-tint-rose);
       }
       .pill.target {
-        background: var(--yellow);
+        background: var(--el-tint-yellow);
       }
       .nfoot {
         margin-top: 7px;
         padding-top: 6px;
-        border-top: 1px solid var(--hair);
+        border-top: 1px solid var(--el-border-soft);
         display: flex;
         align-items: center;
         gap: 5px;
@@ -728,46 +745,46 @@
 
       /* the four DIFF states — each pairs a border treatment + a pill + a glyph */
       .node.added {
-        border: 1.5px dashed var(--accent);
+        border: 1.5px dashed var(--el-accent);
         background: linear-gradient(
           180deg,
-          color-mix(in srgb, var(--accent) 3%, var(--surface)),
-          color-mix(in srgb, var(--accent) 7%, var(--surface))
+          color-mix(in srgb, var(--el-accent) 3%, var(--el-page-bg)),
+          color-mix(in srgb, var(--el-accent) 7%, var(--el-page-bg))
         );
         box-shadow:
-          0 2px 10px color-mix(in srgb, var(--accent) 14%, transparent),
-          0 0 16px -2px color-mix(in srgb, var(--pink) 30%, transparent);
+          0 2px 10px color-mix(in srgb, var(--el-accent) 14%, transparent),
+          0 0 16px -2px color-mix(in srgb, var(--el-highlight) 30%, transparent);
       }
       .node.changed {
-        border: 1.5px solid var(--info);
+        border: 1.5px solid var(--el-info);
         background: linear-gradient(
           180deg,
-          var(--surface),
-          color-mix(in srgb, var(--sky) 45%, var(--surface))
+          var(--el-page-bg),
+          color-mix(in srgb, var(--el-tint-sky) 45%, var(--el-page-bg))
         );
       }
       .node.removed {
-        border: 1.5px dashed var(--danger);
-        background: color-mix(in srgb, var(--rose) 40%, var(--surface));
+        border: 1.5px dashed var(--el-danger);
+        background: color-mix(in srgb, var(--el-tint-rose) 40%, var(--el-page-bg));
       }
       .node.removed .ntitle {
         text-decoration: line-through;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       /* LOCKED = done work. Not colour-alone: hatch + lock glyph + "locked" pill */
       .node.locked {
-        border-color: var(--border);
+        border-color: var(--el-border);
         background: repeating-linear-gradient(
           -45deg,
-          var(--soft),
-          var(--soft) 6px,
-          var(--hub) 6px,
-          var(--hub) 12px
+          var(--el-surface-soft),
+          var(--el-surface-soft) 6px,
+          var(--el-surface) 6px,
+          var(--el-surface) 12px
         );
         box-shadow: none;
       }
       .node.locked .ntitle {
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .difftag {
         position: absolute;
@@ -781,21 +798,21 @@
           monospace;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        color: var(--strong);
-        border: 1px solid var(--surface);
+        color: var(--el-text-strong);
+        border: 1px solid var(--el-page-bg);
       }
       .difftag.a {
-        background: var(--accent-soft);
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
       }
       .difftag.c {
-        background: var(--sky);
+        background: var(--el-tint-sky);
       }
       .difftag.r {
-        background: var(--rose);
+        background: var(--el-tint-rose);
       }
       .difftag.l {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
 
       /* chat rail — mirrors the shipped DiscoveryChatRail */
@@ -803,22 +820,22 @@
         display: flex;
         flex-direction: column;
         min-height: 0;
-        border-left: 1px solid var(--border);
-        background: var(--surface);
+        border-left: 1px solid var(--el-border);
+        background: var(--el-page-bg);
       }
       .railhead {
         display: flex;
         align-items: center;
         gap: 8px;
         padding: 10px 14px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
       }
       .railhead .dot {
         width: 9px;
         height: 9px;
         border-radius: 50%;
-        background: linear-gradient(135deg, var(--accent), var(--pink));
-        box-shadow: 0 0 7px color-mix(in srgb, var(--pink) 52%, transparent);
+        background: linear-gradient(135deg, var(--el-accent), var(--el-highlight));
+        box-shadow: 0 0 7px color-mix(in srgb, var(--el-highlight) 52%, transparent);
         flex: none;
       }
       .railhead .lbl {
@@ -827,19 +844,19 @@
           monospace;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: var(--secondary);
+        color: var(--el-text-secondary);
       }
       .railhead .lbl::before {
         content: '✦ ';
-        color: var(--accent);
+        color: var(--el-accent);
       }
       .railhead .mode {
         margin-left: auto;
         font:
           600 9.5px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
         padding: 2px 7px;
         border-radius: 5px;
         white-space: nowrap;
@@ -872,12 +889,12 @@
         flex: none;
       }
       .avatar.ai {
-        background: var(--accent);
-        color: var(--accent-text);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .avatar.user {
-        background: var(--mutedfill);
-        color: var(--secondary);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
       }
       .bubble {
         border-radius: 12px;
@@ -887,13 +904,13 @@
         max-width: 236px;
       }
       .bubble.ai {
-        background: var(--soft);
-        color: var(--text);
-        border: 1px solid var(--hair);
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+        border: 1px solid var(--el-border-soft);
       }
       .bubble.user {
-        background: var(--accent);
-        color: var(--accent-text);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
       }
       .bubble .tn {
         display: block;
@@ -909,28 +926,28 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        background: var(--soft);
-        border: 1px solid var(--hair);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
         border-radius: 12px;
         padding: 8px 10px;
         font-size: 11.5px;
-        color: var(--muted);
+        color: var(--el-text-secondary);
         align-self: flex-start;
       }
       .spin {
         width: 12px;
         height: 12px;
         border-radius: 50%;
-        border: 2px solid var(--border);
-        border-top-color: var(--accent);
+        border: 2px solid var(--el-border);
+        border-top-color: var(--el-accent);
         flex: none;
       }
       .streamtxt {
         font-size: 11.5px;
         line-height: 1.45;
-        color: var(--text);
-        background: var(--soft);
-        border: 1px solid var(--hair);
+        color: var(--el-text);
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border-soft);
         border-radius: 12px;
         padding: 8px 10px;
         max-width: 236px;
@@ -939,7 +956,7 @@
         display: inline-block;
         width: 2px;
         height: 12px;
-        background: var(--accent);
+        background: var(--el-accent);
         vertical-align: -2px;
         margin-left: 1px;
       }
@@ -947,18 +964,18 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
         padding: 10px 11px;
       }
       .composer .inp {
         flex: 1;
         min-width: 0;
         height: 32px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 9px;
         padding: 0 10px;
         font-size: 11.5px;
-        color: var(--faint);
+        color: var(--el-text-muted);
         display: flex;
         align-items: center;
       }
@@ -966,8 +983,8 @@
         width: 32px;
         height: 32px;
         border-radius: 9px;
-        background: var(--accent);
-        color: var(--accent-text);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
         display: grid;
         place-items: center;
         flex: none;
@@ -984,32 +1001,32 @@
         display: flex;
         align-items: center;
         gap: 11px;
-        background: var(--surface);
-        border: 1px solid var(--accent);
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-accent);
         border-radius: 12px;
         padding: 8px 10px 8px 13px;
-        box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 16%, transparent);
+        box-shadow: 0 6px 22px color-mix(in srgb, var(--el-accent) 16%, transparent);
         white-space: nowrap;
       }
       .persistbar .txt {
         font-size: 11.5px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         font-weight: 700;
       }
       .persistbar .txt small {
         display: block;
         font-weight: 500;
-        color: var(--muted);
+        color: var(--el-text-muted);
         font-size: 10px;
       }
       .btn {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 8px;
         padding: 6px 11px;
         font-size: 11.5px;
         font-weight: 600;
-        background: var(--surface);
-        color: var(--secondary);
+        background: var(--el-page-bg);
+        color: var(--el-text-secondary);
         cursor: default;
         white-space: nowrap;
         display: inline-flex;
@@ -1019,19 +1036,19 @@
       .btn.primary {
         background: linear-gradient(
           135deg,
-          var(--accent),
-          color-mix(in srgb, var(--accent) 55%, var(--pink))
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
         );
         border-color: transparent;
-        color: var(--accent-text);
+        color: var(--el-accent-text);
         box-shadow:
-          inset 0 1px 0 color-mix(in srgb, var(--accent-text) 30%, transparent),
-          0 4px 12px -4px color-mix(in srgb, var(--accent) 80%, transparent);
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 30%, transparent),
+          0 4px 12px -4px color-mix(in srgb, var(--el-accent) 80%, transparent);
       }
       .btn.ghost {
         background: transparent;
         border-color: transparent;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .btn.sm {
         padding: 4px 9px;
@@ -1047,9 +1064,9 @@
       }
       .dockmini {
         position: relative;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
-        background: var(--surface);
+        background: var(--el-page-bg);
         box-shadow: 0 3px 14px #00000014;
         overflow: hidden;
         opacity: 0.85;
@@ -1059,11 +1076,11 @@
         align-items: center;
         justify-content: space-between;
         padding: 9px 12px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--el-border);
         font-family: ui-serif, Georgia, serif;
         font-size: 12.5px;
         font-weight: 700;
-        color: var(--text);
+        color: var(--el-text);
       }
       .dockmini .drow {
         display: flex;
@@ -1071,14 +1088,14 @@
         gap: 9px;
         padding: 6px 12px;
         font-size: 11px;
-        color: var(--text);
+        color: var(--el-text);
       }
       .dockmini .op {
         font-size: 9.5px;
         font-weight: 700;
         padding: 1px 6px;
         border-radius: 999px;
-        color: var(--strong);
+        color: var(--el-text-strong);
         flex: none;
       }
       .dockmini .df {
@@ -1086,16 +1103,16 @@
         align-items: center;
         justify-content: space-between;
         padding: 9px 12px;
-        border-top: 1px solid var(--border);
+        border-top: 1px solid var(--el-border);
         font-size: 10.5px;
-        color: var(--muted);
+        color: var(--el-text-muted);
         gap: 8px;
       }
       .strike {
         position: absolute;
         inset: 0;
         z-index: 4;
-        background: color-mix(in srgb, var(--rose) 30%, transparent);
+        background: color-mix(in srgb, var(--el-tint-rose) 30%, transparent);
       }
       .strike::before,
       .strike::after {
@@ -1104,7 +1121,7 @@
         left: -6%;
         right: -6%;
         top: 50%;
-        border-top: 2px solid var(--danger);
+        border-top: 2px solid var(--el-danger);
         opacity: 0.85;
       }
       .strike::before {
@@ -1122,14 +1139,14 @@
           monospace;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--strong);
-        background: var(--rose);
+        color: var(--el-text-strong);
+        background: var(--el-tint-rose);
         border-radius: 5px;
         padding: 3px 8px;
         margin-bottom: 8px;
       }
       .wasflag.now {
-        background: var(--mint);
+        background: var(--el-tint-mint);
       }
 
       /* ════════ the state grid (panel 6) ════════ */
@@ -1139,28 +1156,28 @@
         gap: 14px;
       }
       .statecard {
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
-        background: var(--surface);
+        background: var(--el-page-bg);
       }
       .statecard .sh {
         display: flex;
         align-items: center;
         gap: 7px;
         padding: 9px 11px;
-        border-bottom: 1px solid var(--hair);
-        background: var(--soft);
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
         font-size: 11.5px;
         font-weight: 700;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .statecard .sh .k {
         margin-left: auto;
         font:
           600 9px ui-monospace,
           monospace;
-        color: var(--muted);
+        color: var(--el-text-secondary);
       }
       .statecard .sb {
         padding: 11px;
@@ -1173,30 +1190,30 @@
         padding: 0 11px 11px;
         font-size: 10.5px;
         line-height: 1.45;
-        color: var(--muted);
+        color: var(--el-text-muted);
       }
       .emptyhint {
         display: flex;
         flex-direction: column;
         gap: 6px;
         align-items: flex-start;
-        border: 1px dashed var(--border);
+        border: 1px dashed var(--el-border);
         border-radius: 10px;
         padding: 10px;
         font-size: 11px;
-        color: var(--muted);
-        background: var(--soft);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft);
       }
       .sugg {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        border: 1px solid var(--border);
+        border: 1px solid var(--el-border);
         border-radius: 999px;
         padding: 3px 9px;
         font-size: 10.5px;
-        color: var(--secondary);
-        background: var(--surface);
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
       }
       .alert {
         display: flex;
@@ -1206,15 +1223,15 @@
         padding: 9px 10px;
         font-size: 11px;
         line-height: 1.45;
-        color: var(--strong);
+        color: var(--el-text-strong);
       }
       .alert.err {
-        background: color-mix(in srgb, var(--rose) 55%, var(--surface));
-        border: 1px solid var(--danger);
+        background: color-mix(in srgb, var(--el-tint-rose) 55%, var(--el-page-bg));
+        border: 1px solid var(--el-danger);
       }
       .alert.credit {
-        background: var(--peach);
-        border: 1px solid var(--warning);
+        background: var(--el-tint-peach);
+        border: 1px solid var(--el-warning);
       }
       .alert .gl {
         flex: none;
@@ -1230,11 +1247,11 @@
       table.tok td {
         text-align: left;
         padding: 7px 10px;
-        border-bottom: 1px solid var(--hair);
+        border-bottom: 1px solid var(--el-border-soft);
         vertical-align: top;
       }
       table.tok th {
-        color: var(--muted);
+        color: var(--el-text-muted);
         font-weight: 600;
         font-size: 10.5px;
         text-transform: uppercase;
@@ -1247,8 +1264,8 @@
         font:
           600 11px ui-monospace,
           monospace;
-        color: var(--accent);
-        background: var(--accent-soft);
+        color: var(--el-accent);
+        background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
         padding: 1px 5px;
         border-radius: 5px;
       }
@@ -1300,8 +1317,8 @@
             <span class="right">
               <span class="heropill">✦ Plan with AI</span>
               <span class="chip bip">📣 Build in public</span>
-              <span class="chip">+ Create <kbd style="color: var(--faint)">C</kbd></span>
-              <span class="chip">⌕ Search <kbd style="color: var(--faint)">⌘K</kbd></span>
+              <span class="chip">+ Create <kbd style="color: var(--el-text-muted)">C</kbd></span>
+              <span class="chip">⌕ Search <kbd style="color: var(--el-text-muted)">⌘K</kbd></span>
               <span class="chip ico">◍</span>
               <span class="chip ico">▭</span>
               <span class="chip ico">◔</span>
@@ -1399,7 +1416,11 @@
             <div class="frame">
               <div class="canvas">
                 <svg class="edge">
-                  <g fill="none" stroke="var(--edge)" stroke-width="2">
+                  <g
+                    fill="none"
+                    stroke="color-mix(in srgb, var(--el-border) 40%, var(--el-text-muted))"
+                    stroke-width="2"
+                  >
                     <path d="M190 126 C 210 126, 206 107, 226 107" />
                     <path d="M190 126 C 210 126, 206 187, 226 187" />
                     <path d="M190 126 C 212 126, 206 273, 226 273" />
@@ -1415,7 +1436,9 @@
 
                 <div class="node" style="left: 14px; top: 100px">
                   <div class="nhead">
-                    <span class="tile" style="background: var(--lavender); color: var(--type-epic)"
+                    <span
+                      class="tile"
+                      style="background: var(--el-tint-lavender); color: var(--el-type-epic)"
                       >◈</span
                     >
                     <div>
@@ -1427,7 +1450,9 @@
 
                 <div class="node" style="left: 226px; top: 68px">
                   <div class="nhead">
-                    <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                    <span
+                      class="tile"
+                      style="background: var(--el-tint-mint); color: var(--el-type-story)"
                       >▤</span
                     >
                     <div>
@@ -1440,7 +1465,9 @@
 
                 <div class="node" style="left: 226px; top: 148px">
                   <div class="nhead">
-                    <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                    <span
+                      class="tile"
+                      style="background: var(--el-tint-mint); color: var(--el-type-story)"
                       >▤</span
                     >
                     <div>
@@ -1453,7 +1480,9 @@
 
                 <div class="node" style="left: 226px; top: 234px">
                   <div class="nhead">
-                    <span class="tile" style="background: var(--sky); color: var(--type-task)"
+                    <span
+                      class="tile"
+                      style="background: var(--el-tint-sky); color: var(--el-type-task)"
                       >☑</span
                     >
                     <div>
@@ -1466,7 +1495,9 @@
 
                 <div class="node" style="left: 502px; top: 68px">
                   <div class="nhead">
-                    <span class="tile" style="background: var(--sky); color: var(--type-task)"
+                    <span
+                      class="tile"
+                      style="background: var(--el-tint-sky); color: var(--el-type-task)"
                       >☑</span
                     >
                     <div>
@@ -1479,7 +1510,9 @@
 
                 <div class="node" style="left: 502px; top: 148px">
                   <div class="nhead">
-                    <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                    <span
+                      class="tile"
+                      style="background: var(--el-tint-mint); color: var(--el-type-story)"
                       >▤</span
                     >
                     <div>
@@ -1557,11 +1590,15 @@
           <div class="frame tall">
             <div class="canvas">
               <svg class="edge">
-                <g fill="none" stroke="var(--edge)" stroke-width="2">
+                <g
+                  fill="none"
+                  stroke="color-mix(in srgb, var(--el-border) 40%, var(--el-text-muted))"
+                  stroke-width="2"
+                >
                   <path d="M190 176 C 208 176, 208 106, 226 106" />
                   <path d="M190 176 C 208 176, 208 215, 226 215" />
                 </g>
-                <g fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4">
+                <g fill="none" stroke="var(--el-accent)" stroke-width="2" stroke-dasharray="5 4">
                   <path d="M190 176 C 208 176, 208 313, 226 313" />
                   <path d="M402 313 L 502 313" />
                 </g>
@@ -1573,7 +1610,9 @@
 
               <div class="node" style="left: 14px; top: 150px">
                 <div class="nhead">
-                  <span class="tile" style="background: var(--lavender); color: var(--type-epic)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-tint-lavender); color: var(--el-type-epic)"
                     >◈</span
                   >
                   <div>
@@ -1585,7 +1624,9 @@
               <div class="node locked" style="left: 226px; top: 56px">
                 <span class="difftag l">🔒 locked</span>
                 <div class="nhead">
-                  <span class="tile" style="background: var(--mutedfill); color: var(--muted)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-muted); color: var(--el-text-secondary)"
                     >▤</span
                   >
                   <div>
@@ -1599,7 +1640,9 @@
               </div>
               <div class="node" style="left: 226px; top: 176px">
                 <div class="nhead">
-                  <span class="tile" style="background: var(--sky); color: var(--type-task)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-tint-sky); color: var(--el-type-task)"
                     >☑</span
                   >
                   <div>
@@ -1612,7 +1655,9 @@
               <div class="node added" style="left: 226px; top: 274px">
                 <span class="difftag a">＋ proposed</span>
                 <div class="nhead">
-                  <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-tint-mint); color: var(--el-type-story)"
                     >▤</span
                   >
                   <div>
@@ -1628,8 +1673,8 @@
                   <span
                     class="tile"
                     style="
-                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
-                      color: var(--type-subtask);
+                      background: color-mix(in srgb, var(--el-type-subtask) 16%, var(--el-page-bg));
+                      color: var(--el-type-subtask);
                     "
                     >◇</span
                   >
@@ -1717,19 +1762,23 @@
             <div class="canvas">
               <svg class="edge">
                 <!-- parent → child, the canvas's firm neutral edge -->
-                <g fill="none" stroke="var(--edge)" stroke-width="2">
+                <g
+                  fill="none"
+                  stroke="color-mix(in srgb, var(--el-border) 40%, var(--el-text-muted))"
+                  stroke-width="2"
+                >
                   <path d="M190 256 C 210 256, 206 106, 226 106" />
                   <path d="M190 256 C 210 256, 206 226, 226 226" />
                   <path d="M190 256 C 210 256, 206 445, 226 445" />
                 </g>
                 <!-- proposed (pending) edges — dashed accent, as in MOTIR-1193 sheet 2 -->
-                <g fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4">
+                <g fill="none" stroke="var(--el-accent)" stroke-width="2" stroke-dasharray="5 4">
                   <path d="M190 256 C 212 256, 206 335, 226 335" />
                   <path d="M402 335 C 442 335, 442 289, 480 289" />
                   <path d="M402 335 C 442 335, 442 383, 480 383" />
                 </g>
                 <!-- the edge to a REMOVED child — dashed danger -->
-                <g fill="none" stroke="var(--danger)" stroke-width="2" stroke-dasharray="4 4">
+                <g fill="none" stroke="var(--el-danger)" stroke-width="2" stroke-dasharray="4 4">
                   <path d="M402 445 C 442 445, 442 477, 480 477" />
                 </g>
               </svg>
@@ -1743,7 +1792,9 @@
 
               <div class="node" style="left: 14px; top: 230px">
                 <div class="nhead">
-                  <span class="tile" style="background: var(--lavender); color: var(--type-epic)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-tint-lavender); color: var(--el-type-epic)"
                     >◈</span
                   >
                   <div>
@@ -1757,7 +1808,9 @@
               <div class="node locked" style="left: 226px; top: 56px">
                 <span class="difftag l">🔒 locked</span>
                 <div class="nhead">
-                  <span class="tile" style="background: var(--mutedfill); color: var(--muted)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-muted); color: var(--el-text-secondary)"
                     >▤</span
                   >
                   <div>
@@ -1773,7 +1826,9 @@
               <div class="node locked" style="left: 226px; top: 176px">
                 <span class="difftag l">🔒 locked</span>
                 <div class="nhead">
-                  <span class="tile" style="background: var(--mutedfill); color: var(--muted)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-muted); color: var(--el-text-secondary)"
                     >▤</span
                   >
                   <div>
@@ -1791,7 +1846,9 @@
               <div class="node added" style="left: 226px; top: 296px">
                 <span class="difftag a">＋ add</span>
                 <div class="nhead">
-                  <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-tint-mint); color: var(--el-type-story)"
                     >▤</span
                   >
                   <div>
@@ -1807,8 +1864,8 @@
                   <span
                     class="tile"
                     style="
-                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
-                      color: var(--type-subtask);
+                      background: color-mix(in srgb, var(--el-type-subtask) 16%, var(--el-page-bg));
+                      color: var(--el-type-subtask);
                     "
                     >◇</span
                   >
@@ -1825,8 +1882,8 @@
                   <span
                     class="tile"
                     style="
-                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
-                      color: var(--type-subtask);
+                      background: color-mix(in srgb, var(--el-type-subtask) 16%, var(--el-page-bg));
+                      color: var(--el-type-subtask);
                     "
                     >◇</span
                   >
@@ -1842,7 +1899,9 @@
               <div class="node changed" style="left: 226px; top: 400px">
                 <span class="difftag c">✎ change</span>
                 <div class="nhead">
-                  <span class="tile" style="background: var(--mint); color: var(--type-story)"
+                  <span
+                    class="tile"
+                    style="background: var(--el-tint-mint); color: var(--el-type-story)"
                     >▤</span
                   >
                   <div>
@@ -1863,8 +1922,8 @@
                   <span
                     class="tile"
                     style="
-                      background: color-mix(in srgb, var(--type-subtask) 16%, var(--surface));
-                      color: var(--type-subtask);
+                      background: color-mix(in srgb, var(--el-type-subtask) 16%, var(--el-page-bg));
+                      color: var(--el-type-subtask);
                     "
                     >◇</span
                   >
@@ -1928,10 +1987,16 @@
           </div>
         </div>
         <div class="legend">
-          <span><b class="sw" style="background: var(--accent-soft)"></b> ＋ add</span>
-          <span><b class="sw" style="background: var(--sky)"></b> ✎ change</span>
-          <span><b class="sw" style="background: var(--rose)"></b> − remove</span>
-          <span><b class="sw" style="background: var(--mutedfill)"></b> 🔒 done · locked</span>
+          <span
+            ><b
+              class="sw"
+              style="background: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg))"
+            ></b>
+            ＋ add</span
+          >
+          <span><b class="sw" style="background: var(--el-tint-sky)"></b> ✎ change</span>
+          <span><b class="sw" style="background: var(--el-tint-rose)"></b> − remove</span>
+          <span><b class="sw" style="background: var(--el-muted)"></b> 🔒 done · locked</span>
           <span><i></i> parent → child</span>
           <span><i class="pending"></i> proposed edge</span>
         </div>
@@ -1943,15 +2008,18 @@
             <div class="wasflag">was · retired</div>
             <div class="dockmini">
               <div class="strike"></div>
-              <div class="dh">Proposed changes <span style="color: var(--faint)">✕</span></div>
-              <div class="drow">
-                <span class="op" style="background: var(--mint)">Add</span> Recurring invoices
+              <div class="dh">
+                Proposed changes <span style="color: var(--el-text-muted)">✕</span>
               </div>
               <div class="drow">
-                <span class="op" style="background: var(--sky)">Change</span> PAY-21
+                <span class="op" style="background: var(--el-tint-mint)">Add</span> Recurring
+                invoices
               </div>
               <div class="drow">
-                <span class="op" style="background: var(--mint)">Add</span> Monthly schedule
+                <span class="op" style="background: var(--el-tint-sky)">Change</span> PAY-21
+              </div>
+              <div class="drow">
+                <span class="op" style="background: var(--el-tint-mint)">Add</span> Monthly schedule
               </div>
               <div class="df">
                 <span>3 items</span>
@@ -2186,12 +2254,12 @@
                   display: flex;
                   gap: 7px;
                   align-items: center;
-                  border: 1px solid var(--accent);
+                  border: 1px solid var(--el-accent);
                   border-radius: 10px;
                   padding: 8px 9px;
                 "
               >
-                <span style="font-size: 10.5px; color: var(--strong); font-weight: 700"
+                <span style="font-size: 10.5px; color: var(--el-text-strong); font-weight: 700"
                   >Nothing saved yet</span
                 >
                 <span class="btn ghost sm" style="margin-left: auto">Discard</span>
