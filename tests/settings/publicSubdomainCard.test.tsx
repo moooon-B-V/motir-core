@@ -418,6 +418,37 @@ describe('panel 11 — confirming, cancelling, and the three refusals', () => {
     expect(refreshMock).not.toHaveBeenCalled();
   });
 
+  it('CLEARS the claim field, which the refresh alone cannot reach', async () => {
+    // The page-state contract's case 3. `label` is client-island state seeded
+    // once at mount, so `router.refresh()` hands down `subdomain: null` while the
+    // field keeps the released label — an unclaimed pane offering to claim the
+    // one name that can never be claimed again. The E2E walk is what found it
+    // (MOTIR-4457); this is the cheap guard that keeps it fixed, and it needs the
+    // RERENDER because a mount would hide the bug.
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const view = render({ subdomain: claimedWithTwoAliases });
+    openRelease();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove subdomain' }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <PublicSubdomainCard
+        workspaceId="ws_1"
+        baseDomain="motir.site"
+        projectIdentifier="ROADMAP"
+        publicSiteHost="motir.co"
+        fallbackAddress="motir.co/p/ROADMAP"
+        subdomain={null}
+        canManage
+      />,
+    );
+    expect(screen.getByRole('textbox', { name: 'Subdomain' })).toHaveProperty('value', '');
+    expect(
+      screen.queryByText(/acme-inc\.motir\.site/),
+      'the live preview must not promise an address the next click refuses as taken',
+    ).toBeNull();
+  });
+
   it('clears a refusal when the confirm closes, so re-opening starts clean', async () => {
     fetchMock.mockResolvedValue({ ok: false, json: async () => ({ code: 'SUBDOMAIN_FORBIDDEN' }) });
     render({ subdomain: claimedWithTwoAliases });

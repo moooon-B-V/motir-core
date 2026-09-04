@@ -188,6 +188,17 @@ export function PublicSubdomainCard({
         }
       }
       setReleasing(false);
+      // ⚠️ AND CLEAR THE FIELD, WHICH `router.refresh()` CANNOT DO — the
+      // page-state contract's case 3, met exactly. `label` is a CLIENT island's
+      // state seeded by `useState(subdomain?.label ?? '')`, and that initializer
+      // runs ONCE at mount: the refresh below re-runs the server read and hands
+      // down `subdomain: null`, but the local `label` keeps the released value.
+      // The unclaimed pane then renders its claim field PRE-FILLED with the one
+      // label that can never be claimed again, and its live preview promising an
+      // address the next click refuses as taken. Found by the E2E walk
+      // (MOTIR-4457); no component test sees it, because none of them remounts.
+      setLabel('');
+      setError(null);
       // ⚠️ REFRESH, NEVER PATCH — the same rule the claim path's comment states,
       // and release is the case it bites hardest on: it empties BOTH
       // server-derived fields at once (`aliases` and `renamesLeft`), and
