@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { SidebarSection } from '@/components/ui/Sidebar';
 
@@ -122,15 +123,112 @@ describe('SidebarDrawer', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('closes on Escape', async () => {
+  // ⚠️ THIS ASSERTION'S *MEANING* CHANGED WITH MOTIR-4326, and the change is the
+  // point rather than a fixture repair. It used to press the key by calling
+  // `window.dispatchEvent`, which reaches `window` listeners and NOTHING else —
+  // an event dispatched on `window` never propagates down through `document`. So
+  // the only handler it could ever have exercised was the drawer's own
+  // `useShortcut('esc', …)` window listener, i.e. exactly the listener that was
+  // the defect. Radix's handler is a `document` CAPTURE listener and was
+  // invisible to it, which is why a test named "closes on Escape" stayed green
+  // while `Escape` was closing two surfaces at once in the browser.
+  //
+  // A real key press targets the focused element and passes through `document`
+  // in both phases, so that is what these dispatch now: from inside the panel.
+  it('closes on Escape (dispatched the way a real key press arrives)', async () => {
     const { Harness } = await loadDrawer();
     render(<Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
-    expect(screen.getByRole('dialog')).toBeTruthy();
+    const drawer = screen.getByRole('dialog', { name: 'Navigation' });
 
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+  });
+
+  // The `whenInputFocused: true` the removed shortcut carried, held as a
+  // behaviour rather than as an option: `Escape` must still close the drawer
+  // while a field INSIDE it has focus. Radix covers it for a reason that is
+  // structural rather than incidental — its listener is on `document` in the
+  // CAPTURE phase, so it runs before the focused field is reached at all.
+  it('closes on Escape while a field inside it is focused', async () => {
+    const { SidebarDrawer } = await import('@/components/ui/SidebarDrawer');
+    const { SidebarToggle } = await import('@/components/ui/SidebarToggle');
+    function Harness() {
+      return (
+        <>
+          <SidebarToggle variant="hamburger" />
+          <SidebarDrawer header={<input aria-label="Search" />}>
+            <span>body</span>
+          </SidebarDrawer>
+        </>
+      );
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+    expect(screen.getByRole('dialog', { name: 'Navigation' })).toBeTruthy();
+
+    const field = screen.getByRole('textbox', { name: 'Search' }) as HTMLInputElement;
+    field.focus();
+    expect(document.activeElement).toBe(field);
+
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+  });
+
+  // MOTIR-4326 — the LAYERING, at the tier that can afford to run on every PR.
+  //
+  // The card's own acceptance criterion asks for a browser-level reproduction
+  // (`tests/e2e/shell-keyboard.spec.ts`), because a component test of EITHER
+  // surface alone cannot see this. This one mounts BOTH, which is the composition
+  // the defect lives in: a dismissable layer opened from the drawer's utility
+  // strip, with the drawer under it. Before the fix the first `Escape` took both.
+  it('peels one surface at a time — a layer opened inside it takes the first Escape', async () => {
+    const { SidebarDrawer } = await import('@/components/ui/SidebarDrawer');
+    const { SidebarToggle } = await import('@/components/ui/SidebarToggle');
+    const { Popover } = await import('@/components/ui/Popover');
+
+    function Harness() {
+      const [menuOpen, setMenuOpen] = useState(false);
+      return (
+        <>
+          <SidebarToggle variant="hamburger" />
+          <SidebarDrawer
+            footer={
+              <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+                <Popover.Trigger asChild>
+                  <button type="button" aria-label="Help" />
+                </Popover.Trigger>
+                <Popover.Content aria-label="Help">
+                  <span>rows</span>
+                </Popover.Content>
+              </Popover>
+            }
+          >
+            <span>body</span>
+          </SidebarDrawer>
+        </>
+      );
+    }
+    render(<Harness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+    const drawer = screen.getByRole('dialog', { name: 'Navigation' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }));
+    const menu = screen.getByRole('dialog', { name: 'Help' });
+
+    // ONE Escape peels the MENU only. The drawer is still standing, and the
+    // strip that opened the menu is still reachable — asserted through the
+    // trigger rather than through the panel, because "the drawer is gone" and
+    // "the menu closed" are otherwise the same missing element.
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Help' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBe(drawer);
+    expect(screen.getByRole('button', { name: 'Help' })).toBeTruthy();
+
+    // The SECOND Escape closes the drawer — the behaviour that was traded away
+    // if the fix had simply stopped the drawer listening.
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
   });
 });

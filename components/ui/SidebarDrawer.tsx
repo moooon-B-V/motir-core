@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { useSidebarDrawer } from '@/lib/hooks/useSidebarDrawer';
-import { useShortcut } from '@/lib/hooks/useShortcut';
 
 /**
  * SidebarDrawer — the `<md` off-canvas navigation drawer.
@@ -23,9 +22,34 @@ import { useShortcut } from '@/lib/hooks/useShortcut';
  * in sync without a provider. The drawer also:
  *   - **auto-closes on route change** — a navigation means the user picked a
  *     destination, so the drawer shouldn't linger over the new page;
- *   - registers `esc` through the shared `useShortcut` hook as a belt-and-
- *     suspenders close (Radix already handles ESC; this keeps the shell's
- *     shortcut registry the single source of truth).
+ *   - **leaves `Escape` entirely to Radix** — see the block below.
+ *
+ * ## ⚠️ `Escape` IS RADIX'S, AND NOTHING ELSE HERE MAY LISTEN FOR IT (MOTIR-4326)
+ *
+ * Until this bug the drawer ALSO registered
+ * `useShortcut('esc', () => setOpen(false), { whenInputFocused: true, enabled: open })`
+ * beside the `Dialog.Root`, described as a belt-and-suspenders close. It was not
+ * a second belt; it was a hole in the first one. `useShortcut` adds a plain
+ * `window` keydown listener, which is **outside Radix's dismissable-layer
+ * stack** — so it fired for every `Escape` while the drawer was open, no matter
+ * what was open ON TOP of it. Radix's own handler, by contrast, is a `document`
+ * CAPTURE listener that dismisses only the layer that is currently HIGHEST
+ * (`@radix-ui/react-dismissable-layer`: `isHighestLayer`, then
+ * `event.preventDefault()`), which is exactly the peel-one-surface-at-a-time
+ * behaviour a layered UI owes its keyboard user. With both registered, one key
+ * took both surfaces: the popover peeled correctly and the drawer closed anyway,
+ * a keystroke later and a phase later, because the `window` listener neither
+ * consults the layer stack nor checks `defaultPrevented`.
+ *
+ * The Help menu in the utility strip is simply the first thing that has ever
+ * been opened inside the drawer; the defect belonged to every future one. So
+ * **do not re-add a `window` / `document` `Escape` listener here.** Radix
+ * covers everything the shortcut did, including the `whenInputFocused: true`
+ * it carried: a capture listener on `document` runs before any field inside the
+ * drawer can see the key, so `Escape` still closes the drawer while an input in
+ * it is focused. `SHORTCUTS.closeOverlay` in `lib/shortcuts.ts` stays a
+ * cheatsheet ENTRY with no handler of its own, which is what it already was —
+ * this drawer never bound it (it bound the bare string `'esc'`).
  *
  * `header` is the drawer's top bar (the workspace switcher in the mockup),
  * shown beside the close button. `children` is the drawer body — pass a
@@ -93,10 +117,6 @@ export function SidebarDrawer({
       if (open) setOpen(false);
     }
   }, [pathname, open, setOpen]);
-
-  // Shared-registry ESC close (fires even while a field inside the drawer is
-  // focused). Radix also closes on ESC; this keeps the shortcut centralized.
-  useShortcut('esc', () => setOpen(false), { whenInputFocused: true, enabled: open });
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
