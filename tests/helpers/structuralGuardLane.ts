@@ -270,6 +270,27 @@ export const STRUCTURAL_GUARD_SPECS = [
   // which a whole-tree read in a 15 s budget stops finishing. A guard that goes
   // red for the reason it was written to report is not a guard.
   'tests/timeout-budget-lane.test.ts',
+  // ── tests/ — the DOCS-guard lane's own membership guard (MOTIR-4408) ──────
+  // Named by THIS FILE'S derivation on the pull request that added it, which is
+  // the mechanism working: it imports this module, whose text carries the
+  // filesystem entry points, so it is a candidate by construction — and it is
+  // one on the merits too, walking all of `tests/` and comment-stripping every
+  // file to derive which specs read a `docs/**` document. Exactly the shape of
+  // `ci-structural-guards-lane.test.ts` two entries up, and the fourth guard in
+  // the tree that adjudicates a lane while being a member of the class it
+  // adjudicates.
+  //
+  // ⚠️ Its own lane (`vitest.docs.config.ts`) is NOT where it goes, and that is
+  // not an oversight: a `docs/**` diff cannot change its verdict, because every
+  // file it opens is under `tests/`, `.github/` or the repository root. What it
+  // needs is an UNCONDITIONAL lane, and this one is that — which is why
+  // `docsGuardLane.ts` records it under CARRIED_BY_ANOTHER_LANE and the docs
+  // guard checks that claim against this list rather than taking it on trust.
+  //
+  // It opens no database, renders nothing, and imports only `node:fs` /
+  // `node:path` and two dependency-free helpers under `tests/`, so it carries
+  // no coverage into the merged report.
+  'tests/ci-docs-guards-lane.test.ts',
 ] as const;
 
 /**
