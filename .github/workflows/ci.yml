@@ -786,7 +786,32 @@ jobs:
     # skip this suite entirely. Every non-pull_request event runs it.
     if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
     strategy:
-      fail-fast: false
+      # ── FAIL-FAST IS A PROPERTY OF THE LANE, NOT OF THE SUITE (MOTIR-4407) ──
+      #
+      # On a PULL REQUEST a red shard must NOT cancel its eleven siblings. The
+      # full fan-out is what makes a failure diagnosable, and this repository's
+      # flake triage depends on it specifically: the discriminator between a
+      # flake and a regression is ROTATION — a different test failing each run,
+      # the other shards behaving differently — and cancelling them deletes the
+      # evidence that tells the two apart. A cancelled shard also reports
+      # `cancelled`, which reads as neither pass nor fail.
+      #
+      # In the MERGE QUEUE the trade inverts. Nothing is diagnosed there: the
+      # entry is ejected, the batches behind it are invalidated and re-formed,
+      # and every minute the remaining shards keep running is a minute the queue
+      # is held by an entry already known to be leaving. The diagnosis happens
+      # on the pull request afterwards, on a branch that still exists — the
+      # queue's `gh-readonly-queue/main/pr-<n>-<sha>` ref does not survive the
+      # ejection, so its full fan-out could not be read even if it finished.
+      #
+      # ⚠️ THE TWO HALVES ARE ONE CHANGE. Fail-fast here is only affordable
+      # because the pull-request lane still runs this whole suite. Measured over
+      # 2026-08-27 → 09-04, 81 failing PR CI runs: 77 involved a heavy job
+      # (Vitest 93 · Playwright 33 · coverage 9) and 4 were fast-job-only. Slim
+      # the PR lane to lint/typecheck and 95% of real failures arrive in the
+      # queue instead — at which point cancelling the fan-out leaves nowhere to
+      # read them. Do not do one without re-deciding the other.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         leg: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
     # Postgres is started by ./.github/actions/postgres (first step below), NOT
@@ -1060,10 +1085,16 @@ jobs:
     # build` is red.
     needs: [build, changes]
     strategy:
-      # One leg failing must NOT cancel the others — we want the full E2E
-      # picture (and all Playwright reports) from a single run, not a race to
-      # the first red shard.
-      fail-fast: false
+      # One leg failing must NOT cancel the others ON A PULL REQUEST — we want
+      # the full E2E picture (and all Playwright reports) from a single run,
+      # not a race to the first red shard. That is the lane where an E2E red is
+      # READ, and the lane where this repository's flakiest suite most needs the
+      # sibling shards' behaviour to tell a flake from a regression.
+      #
+      # In the merge queue it is the opposite trade — the entry is leaving
+      # either way, so the remaining shards only hold the queue. The reasoning
+      # is written out once, on the `test` job's matrix above (MOTIR-4407).
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         include:
           # The non-at-scale, non-a11y suite, split five ways. `--grep-invert`
@@ -1268,7 +1299,12 @@ jobs:
     needs: [build, changes]
     if: ${{ needs.changes.outputs.app == 'true' && (github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, 'e2e-at-scale')) }}
     strategy:
-      fail-fast: false
+      # Same rule as the two matrices above (MOTIR-4407). This lane's `if:` is
+      # already merge-queue-first, so the expression resolves TRUE on almost
+      # every run of it — the `e2e-at-scale` label path is the exception, and it
+      # is exactly the case that wants the full fan-out, since someone applied
+      # that label in order to READ these legs.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         include:
           # Stories 3.5 + 4.7 — board journeys AT SCALE (Kanban + Scrum). The
