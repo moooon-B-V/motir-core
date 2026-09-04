@@ -3,18 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 
-// AddLinkControl (Subtask 2.4.9) drives the detail-page Server Actions — stub
-// them + next/navigation so the client logic is testable under happy-dom.
-const createLinkAction = vi.fn();
+// AddLinkControl (Subtask 2.4.9) drives the detail-page candidate READ — stub
+// that Server Action so the client logic is testable under happy-dom.
+//
+// MOTIR-4496: the control no longer performs the WRITE. It hands the picked
+// candidate to the panel's `onAdd`, which owns the optimistic insert, the
+// action and the refresh — so the write is stubbed here as that prop, and the
+// optimism itself is asserted where it lives, in
+// relationships-panel-optimistic.test.tsx.
+const onAdd = vi.fn();
 const listLinkCandidatesAction = vi.fn();
-const refresh = vi.fn();
 
 vi.mock('@/app/(authed)/items/[key]/actions', () => ({
-  createLinkAction: (...args: unknown[]) => createLinkAction(...args),
+  createLinkAction: vi.fn(),
   removeLinkAction: vi.fn(),
   listLinkCandidatesAction: (...args: unknown[]) => listLinkCandidatesAction(...args),
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 import { AddLinkControl } from '@/app/(authed)/items/[key]/_components/AddLinkControl';
 
@@ -33,15 +37,14 @@ const candidate = {
 };
 
 beforeEach(() => {
-  createLinkAction.mockReset();
+  onAdd.mockReset();
   listLinkCandidatesAction.mockReset();
-  refresh.mockReset();
   listLinkCandidatesAction.mockResolvedValue({ ok: true, candidates: [candidate] });
 });
 afterEach(cleanup);
 
 function open() {
-  render(<AddLinkControl currentItemId="wi-1" identifier="PROD-1" />);
+  render(<AddLinkControl currentItemId="wi-1" onAdd={onAdd} />);
   fireEvent.click(screen.getByRole('button', { name: /Link work item/ }));
 }
 
@@ -79,8 +82,8 @@ describe('AddLinkControl (2.4.9; server-search since 6.9.2)', () => {
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
   });
 
-  it('selecting a searched target enables Add; a rejected create surfaces the inline error (no refresh)', async () => {
-    createLinkAction.mockResolvedValue({ ok: false, error: 'That link already exists.' });
+  it('selecting a searched target enables Add; a rejected create surfaces the inline error', async () => {
+    onAdd.mockResolvedValue({ ok: false, error: 'That link already exists.' });
     open();
 
     // Type to search, then pick the fetched candidate.
@@ -92,12 +95,8 @@ describe('AddLinkControl (2.4.9; server-search since 6.9.2)', () => {
     fireEvent.click(add);
 
     await screen.findByText('That link already exists.');
-    expect(createLinkAction).toHaveBeenCalledWith({
-      currentItemId: 'wi-1',
-      identifier: 'PROD-1',
-      targetId: 'cand-1',
-      relationship: 'blocked_by',
-    });
-    expect(refresh).not.toHaveBeenCalled();
+    // The WHOLE candidate is handed up, not just its id — that summary is what
+    // the panel draws the optimistic row from (MOTIR-4496).
+    expect(onAdd).toHaveBeenCalledWith('blocked_by', candidate);
   });
 });

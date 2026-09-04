@@ -466,3 +466,104 @@ describe('an ARCHIVED blocker no longer gates its dependents (MOTIR-1328)', () =
     expect(next?.id).toBe(a.id);
   });
 });
+
+describe('getReadinessVerdict — the banner verdict, RESOLVED (MOTIR-4496)', () => {
+  // The link Server Actions return this so the relationships panel's readiness
+  // banner reconciles off the ACTION rather than off a whole-page
+  // `router.refresh()`. It must agree with `getIssueDetail`'s inline assembly
+  // exactly — a second door onto one verdict is only safe while the two answer
+  // the same thing, so every case here asserts BOTH.
+  async function tree() {
+    const fx = await makeWorkItemFixture();
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'S' },
+      fx.ctx,
+    );
+    const subtask = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'T', parentId: story.id },
+      fx.ctx,
+    );
+    return { fx, story, subtask };
+  }
+  async function blockWith(
+    fromId: string,
+    fx: { projectId: string; ctx: Parameters<typeof workItemsService.isReady>[1] },
+    title: string,
+  ) {
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    return blocker;
+  }
+
+  it('an item with no blockers is ready, with both collections empty', async () => {
+    const { fx, subtask } = await tree();
+    const verdict = await workItemsService.getReadinessVerdict(subtask.id, fx.ctx);
+    expect(verdict).toEqual({ ready: true, openBlockers: [], blockedByAncestor: null });
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness).toEqual(verdict);
+  });
+
+  it('RESOLVES the open blockers into summaries, `key ASC` — the order the panel renders', async () => {
+    const { fx, subtask } = await tree();
+    // Created in DESCENDING title order so a pass-through of insertion order
+    // would be visible; the projection is `key ASC` like every other one.
+    const first = await blockWith(subtask.id, fx, 'Z blocker');
+    const second = await blockWith(subtask.id, fx, 'A blocker');
+
+    const verdict = await workItemsService.getReadinessVerdict(subtask.id, fx.ctx);
+    expect(verdict.ready).toBe(false);
+    expect(verdict.openBlockers.map((b) => b.id)).toEqual([first.id, second.id]);
+    expect(verdict.openBlockers.map((b) => b.key)).toEqual([first.key, second.key]);
+    expect(verdict.openBlockers[0]!.key).toBeLessThan(verdict.openBlockers[1]!.key);
+    // The title rides the summary, so the banner needs no second read.
+    expect(verdict.openBlockers.map((b) => b.title)).toEqual(['Z blocker', 'A blocker']);
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness).toEqual(verdict);
+  });
+
+  it('a TERMINAL blocker drops out and the verdict flips ready — the remove path the panel shows', async () => {
+    const { fx, subtask } = await tree();
+    const blocker = await blockWith(subtask.id, fx, 'B');
+    expect((await workItemsService.getReadinessVerdict(subtask.id, fx.ctx)).ready).toBe(false);
+
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    const verdict = await workItemsService.getReadinessVerdict(subtask.id, fx.ctx);
+    expect(verdict).toEqual({ ready: true, openBlockers: [], blockedByAncestor: null });
+  });
+
+  it('RESOLVES the cascade cause — a blocked ancestor, with empty own blockers', async () => {
+    const { fx, story, subtask } = await tree();
+    await blockWith(story.id, fx, 'BLK');
+
+    const verdict = await workItemsService.getReadinessVerdict(subtask.id, fx.ctx);
+    expect(verdict.ready).toBe(false);
+    expect(verdict.openBlockers).toEqual([]);
+    expect(verdict.blockedByAncestor?.id).toBe(story.id);
+    expect(verdict.blockedByAncestor?.identifier).toBe(story.identifier);
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness).toEqual(verdict);
+  });
+
+  it('carries BOTH when an item has its own blocker AND a blocked ancestor', async () => {
+    const { fx, story, subtask } = await tree();
+    const own = await blockWith(subtask.id, fx, 'OWN');
+    await blockWith(story.id, fx, 'ANC');
+
+    const verdict = await workItemsService.getReadinessVerdict(subtask.id, fx.ctx);
+    expect(verdict.ready).toBe(false);
+    expect(verdict.openBlockers.map((b) => b.id)).toEqual([own.id]);
+    expect(verdict.blockedByAncestor?.id).toBe(story.id);
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
+    expect(detail.readiness).toEqual(verdict);
+  });
+});
