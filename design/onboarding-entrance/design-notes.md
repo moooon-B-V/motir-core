@@ -16,6 +16,35 @@ comparable products onboard (below) showed that split is off-pattern for an **id
 the entrance now leads with one full-width idea box and demotes import to a secondary row. This also
 fixes the practical problem that a half-width column can't hold a long first idea.
 
+**⚠️ AMENDED 2026-09-04 (MOTIR-4370) — the asymmetry with motir.co is DELIBERATE, and this is the
+record of it.** `motir-marketing/design/marketing/design-notes.md` draws the public landing as a
+**symmetric fork**: "Start something new" and "I have an existing project" as co-equal doors, with the
+`OR` divider deliberately removed. That asset flagged the seam it opened and said plainly that it could
+not decide another surface's design. MOTIR-4370 carried the question, and the ruling is: **this entrance
+keeps the idea-first shape described above. Neither surface is changed to match the other.**
+
+**Why they differ — the two are met in different moments, by readers who have chosen different amounts.**
+The landing meets a visitor who has committed to nothing, and a symmetric fork is the honest thing to show
+someone still deciding; that page is also answering _what Motir is_, and the co-equal import door is the
+point of the answer. **This entrance is reached by a reader who has already chosen the idea path, by name,
+at the door** — the in-app door is a button reading "Plan a new project with AI" (`ProjectSwitcher` and
+`ProjectsEmptyState`, via `startNewAiProjectAction`), and the cross-origin door carries an idea in the
+`motir_pending_idea` cookie and renders **Panel 2, which drops the import row entirely.** Re-offering a
+symmetric fork here re-asks a question the reader answered with the click.
+
+**The 2026-07-01 width constraint still holds, and only this surface has it.** This entrance's centred
+column is ~660px (~310px a side) — too narrow for a long first idea. The landing's fork sits in a 1080px
+container (~510px a side), wider than this entrance's own full-width box. The constraint was about width.
+
+**Import is not demoted out of reach.** It is a first-class secondary row, and a project that already
+holds work items never meets this entrance at all — MOTIR-1259 routes it to the migrate wizard.
+
+**What this ruling does NOT settle.** The `intent=import` parameter the landing's import door emits has
+no reader on this side, so a visitor who picks that door currently lands on Panel 1 rather than the
+import branch. **That is a routing gap, not a design asymmetry**, and MOTIR-3846 owns it. This ruling
+assumes it lands; if it is ever abandoned, the asymmetry is worth revisiting, because the import door
+would then contradict itself one screen later.
+
 **Scope (deliberately SLIMMED, per the card):** the ENTRANCE ONLY. It draws the idea box, the carried-over
 idea state, and names each destination (with a "How Motir works" link for the full lifecycle) — then hands
 off. **It draws NO repo-connect,
