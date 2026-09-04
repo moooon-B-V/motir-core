@@ -993,3 +993,140 @@ describe('a truncated level says so (MOTIR-3490 · AC 3)', () => {
     expect(onSelect).not.toHaveBeenCalledWith('__level_more__');
   });
 });
+
+// ── MOTIR-4501 · the tile is drawn at EVERY level, so it must uncap EVERY level ──
+// The block above pins the ROOT level, which is the only place the affordance was
+// ever exercised — and the only place it worked, because there the level's own
+// cache key and `rootCacheKey()` are the same string. A DRILLED level's key is a
+// different string, so marking the root's key left the drilled level capped, its
+// cached copy intact, and the reload that followed served from that cache: no
+// request was issued at all. `design/roadmap/design-notes.md` DECISION 7 asks for
+// the tile "at every level, not only the root"; this is the activation half of it.
+describe('a truncated DRILLED level uncaps ITSELF, not the root (MOTIR-4501)', () => {
+  // TWO drillable roots, so AUTO-DRILL (MOTIR-1807) leaves the root level alone and
+  // there is a real drill to perform. The ROOT is WHOLE (`levelTotal` equals its row
+  // count) — only the DRILLED level overflows, which is the shape the cap actually
+  // bites in: an epic accumulates children far faster than a project accumulates
+  // epics.
+  const twoRoots = {
+    nodes: [
+      {
+        id: 'E1',
+        parentId: null,
+        kind: 'epic',
+        identifier: 'MOTIR-1',
+        title: 'Epic one',
+        status: 'in_progress',
+        isDone: false,
+        hasChildren: true,
+      },
+      {
+        id: 'E2',
+        parentId: null,
+        kind: 'epic',
+        identifier: 'MOTIR-3',
+        title: 'Epic two',
+        status: 'todo',
+        isDone: false,
+        hasChildren: true,
+      },
+    ],
+    edges: [],
+    offLevelBlockers: [],
+    levelTotal: 2,
+  };
+  // E1's children as the CAPPED read returns them: 3 rows of a level of 205.
+  const cappedChildren = {
+    nodes: Array.from({ length: 3 }, (_, i) => ({
+      id: `S${i}`,
+      parentId: 'E1',
+      kind: 'story',
+      identifier: `MOTIR-1${i}`,
+      title: `Story ${i}`,
+      status: 'todo',
+      isDone: false,
+      hasChildren: false,
+    })),
+    edges: [],
+    offLevelBlockers: [],
+    levelTotal: 205,
+  };
+  // The same level read whole: the row the cap had been dropping is on it, and
+  // `levelTotal` now equals the row count, so no tile is emitted for it.
+  const wholeChildren = {
+    ...cappedChildren,
+    nodes: [
+      ...cappedChildren.nodes,
+      {
+        id: 'S205',
+        parentId: 'E1',
+        kind: 'story',
+        identifier: 'MOTIR-205',
+        title: 'The newest story',
+        status: 'todo',
+        isDone: false,
+        hasChildren: false,
+      },
+    ],
+    levelTotal: 4,
+  };
+
+  function stubLevels(seen: string[]) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+        seen.push(u);
+        if (u.includes('parentId=E1')) {
+          return {
+            ok: true,
+            json: async () => (u.includes('all=1') ? wholeChildren : cappedChildren),
+          };
+        }
+        return { ok: true, json: async () => twoRoots };
+      }),
+    );
+  }
+
+  it('activating the tile on a DRILLED level re-reads THAT level with all=1, drops the tile, and leaves the root alone', async () => {
+    const seen: string[] = [];
+    stubLevels(seen);
+    render(<WorkItemRoadmap projectKey="MOTIR" />);
+
+    // Drill into E1 — the level whose 205 children the cap truncates to 3.
+    expect(await screen.findByText('Epic one')).toBeTruthy();
+    expect(screen.queryByTestId('level-truncation-tile')).toBeNull(); // the root is whole
+    fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('drill-button'));
+
+    // EMISSION is per-level and always was — the tile draws on the drilled level.
+    const tile = await screen.findByTestId('level-truncation-tile');
+    expect(within(tile).getByText('+ 202 more')).toBeTruthy();
+    expect(within(tile).getByText('Showing 3 of 205')).toBeTruthy();
+    expect(seen.some((u) => u.includes('all=1'))).toBe(false); // not before it is asked for
+
+    fireEvent.keyDown(tile.closest('[data-node-id]')!, { key: 'Enter' });
+
+    // AC 1 — the re-read is ISSUED, and it names the DRILLED level, not the root.
+    expect(await screen.findByText('The newest story')).toBeTruthy();
+    await waitFor(() =>
+      expect(seen.some((u) => u.includes('parentId=E1') && u.includes('all=1'))).toBe(true),
+    );
+    // AC 2 — the reader's escape is complete: the level came back whole, so the
+    // tile is gone rather than still sitting there promising a way out.
+    await waitFor(() => expect(screen.queryByTestId('level-truncation-tile')).toBeNull());
+
+    // AC 3 — the ROOT was never marked `all` and never evicted. Going Back issues
+    // no `all=1` read of a level nobody complained about, and the root still
+    // renders its own rows.
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByText('Epic one')).toBeTruthy();
+    expect(screen.getByText('Epic two')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Story 0')).toBeNull());
+    // A ROOT read carries no `parentId`; none of them may carry `all=1`.
+    expect(seen.filter((u) => !u.includes('parentId=')).some((u) => u.includes('all=1'))).toBe(
+      false,
+    );
+  });
+});
