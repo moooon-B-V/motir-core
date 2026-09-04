@@ -1,14 +1,25 @@
 {
-  // ── The TESTS project (MOTIR-4293) ──────────────────────────────────────────
+  // ── The TESTS project (MOTIR-4293, narrowed by MOTIR-4363) ──────────────────
   //
-  // 1814 files that import almost all of `lib/`. Checked on its own it would be
+  // Files that import almost all of `lib/`. Checked on its own it would be
   // nearly the whole tree again — which is why it REFERENCES the app project
   // instead of including it: `@/lib/x` redirects to `.tsout/app/lib/x.d.ts`, so
   // this program pays for its own bodies plus the app's declarations.
   //
-  // The four vitest configs and the three Playwright configs live here because
-  // they are the tests' own entry points, and each file belongs to EXACTLY ONE
-  // project — a file in two composite projects is emitted twice and checked twice.
+  // The four VITEST configs live here because they are that runner's own entry
+  // points, and each file belongs to EXACTLY ONE project — a file in two
+  // composite projects is emitted twice and checked twice.
+  //
+  // ⚠️ THE PLAYWRIGHT HALF LEFT (MOTIR-4363), AND THE LINE IS THE RUNNER: the
+  // 182 `tests/e2e/**/*.spec.ts` and the three `playwright.*.config.ts` are
+  // `tsconfig.e2e.json` now, which REFERENCES this project. Everything a spec
+  // imports stayed HERE — `tests/e2e/_helpers/`, `_reporters/`,
+  // `global-setup.ts`, `global-teardown.ts`, `shard-plan.ts` — because nine
+  // vitest suites import those same modules, and a module both runners load has
+  // to sit in the project the other one references or the graph is a cycle.
+  // `tsconfig.e2e.json`'s header carries the rule in full; the short form is
+  // *Playwright ENTERS THROUGH it ⇒ e2e project; something Playwright runs
+  // IMPORTS it ⇒ here*.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
@@ -27,12 +38,12 @@
     "vitest.config.ts",
     "vitest.collect.config.ts",
     "vitest.design.config.ts",
-    "vitest.guards.config.ts",
-    "playwright.config.ts",
-    "playwright.acceptance.config.ts",
-    "playwright.cloud.config.ts"
+    "vitest.guards.config.ts"
   ],
-  "exclude": ["node_modules", "packages", ".tsout"],
+  // The e2e project owns the Playwright specs (above). Excluded rather than
+  // narrowed out of the glob so `tests/**` keeps meaning "every test source",
+  // and so the one line that moves the boundary is legible in a diff.
+  "exclude": ["node_modules", "packages", ".tsout", "tests/e2e/**/*.spec.ts"],
   // BOTH, because a test importing `@/scripts/plan-seed/…` (the seed fixtures) or
   // `../../scripts/deployFreshness.mjs` must redirect into the scripts project
   // rather than pull those files into this program as sources of its own — a file

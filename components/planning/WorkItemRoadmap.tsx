@@ -271,6 +271,42 @@ export function WorkItemRoadmap({
     [projectKey, scope, subtreeRootId],
   );
 
+  // THE ROOT LEVEL, READ RATHER THAN REMEMBERED (bug MOTIR-4426). The grouped
+  // node's level is SERVED FROM the root read, and a cached value is not a source.
+  // The manual refresh (MOTIR-1542) clears every cached level at the top of
+  // `loadLevel`, three statements before the grouped branch reads one back — so a
+  // reader standing INSIDE the group got `undefined`, and every `?? []` below it
+  // turned that miss into a well-formed EMPTY level: `emptyDrilled` ("This node
+  // has no children to show") over rows that exist, on the level they were
+  // standing on, until they pressed Back.
+  //
+  // A MISS therefore RE-READS — which is exactly what the sibling synthetic door
+  // three lines below already does: `ORIGIN_ID` serves `readPreplan()`, whose
+  // promise is keyed on the refresh generation, so a refresh makes it re-read
+  // instead of come back empty. The grouped door had copied that door's SHAPE
+  // (intercept the id, serve it locally) without the half that survives a cache
+  // generation change.
+  //
+  // A HIT is untouched, and that is what keeps MOTIR-3490's own guarantee true:
+  // an ordinary drill inside one refresh generation still issues no request.
+  const readRootLevel = useCallback(async (): Promise<RoadmapLevelData> => {
+    const key = rootCacheKey();
+    const cached = cacheRef.current.get(key);
+    if (cached) return cached;
+    // The same read the ROOT level's own load makes, `all` included — the key is
+    // `rootCacheKey()` in both places, so the two can never disagree about which
+    // level this is.
+    const wi = await fetchRoadmapLevel(
+      projectKey,
+      subtreeRootId,
+      scope,
+      undefined,
+      showAllRef.current.has(key),
+    );
+    cacheRef.current.set(key, wi);
+    return wi;
+  }, [projectKey, scope, subtreeRootId, rootCacheKey]);
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
       // A new refresh generation invalidates every cached level so this load hits the
@@ -296,8 +332,15 @@ export function WorkItemRoadmap({
         // node, so asking the API for its children asks for the children of an id
         // it has never heard of).
         if (parentId === NOT_IN_EPIC_ID) {
-          const root = cacheRef.current.get(rootCacheKey());
-          const rows = (root?.items ?? []).filter(isNotInEpicRow);
+          // `readRootLevel` (above) serves the cached root read, and RE-READS it
+          // when there is none — the refresh case (bug MOTIR-4426). Registering
+          // the rows is owed here for the same reason: the peek's id → identifier
+          // map was filled by the root load, and the clear that lost the level
+          // did not lose the map, but a re-read level whose rows were never
+          // registered would leave View inert on this level alone.
+          const root = await readRootLevel();
+          registerItems(root);
+          const rows = root.items.filter(isNotInEpicRow);
           // ⚠️ THE EDGES ARE SCOPED TO THE ROWS (bug MOTIR-3557). The root's
           // edge list is the edges of the WHOLE root level — the 18 root epics
           // included, wired to each other by the epic roadmap's own dependency
@@ -314,8 +357,8 @@ export function WorkItemRoadmap({
           return buildWorkItemLevel(
             {
               items: rows,
-              edges: (root?.edges ?? []).filter((e) => rowIds.has(e.blockedId)),
-              offLevelBlockers: root?.offLevelBlockers ?? [],
+              edges: root.edges.filter((e) => rowIds.has(e.blockedId)),
+              offLevelBlockers: root.offLevelBlockers,
             },
             { markActive: true, scope },
           );
@@ -395,7 +438,7 @@ export function WorkItemRoadmap({
       produced,
       rooted,
       subtreeRootId,
-      rootCacheKey,
+      readRootLevel,
       t,
     ],
   );

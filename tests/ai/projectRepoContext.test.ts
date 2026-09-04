@@ -269,6 +269,9 @@ describe('the planning-job ENVELOPE', () => {
     expect(context).toEqual({
       prompt: 'extend the tracker',
       generateExplanations: false,
+      // The consent flag rides every planning submit (MOTIR-4343), generation
+      // included — ON here because this fixture never touches the setting.
+      recordPlanningMistakes: true,
       code: {
         repos: [{ provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' }],
       },
@@ -285,7 +288,13 @@ describe('the planning-job ENVELOPE', () => {
     await aiGenerationService.startGeneration(ctx, { prompt: 'start fresh' });
 
     const [, , context] = vi.mocked(submitJob).mock.calls[0]!;
-    expect(context).toEqual({ prompt: 'start fresh', generateExplanations: false });
+    // `repositories` is absent (this project has no set); the consent flag is
+    // PRESENT, because absence there means ON rather than none (MOTIR-4343).
+    expect(context).toEqual({
+      prompt: 'start fresh',
+      generateExplanations: false,
+      recordPlanningMistakes: true,
+    });
     expect(Object.keys(context as object)).not.toContain('repositories');
   });
 

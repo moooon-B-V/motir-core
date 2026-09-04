@@ -53,9 +53,12 @@ import type { CommandGroup } from '@/components/ui/CommandPalette';
 // ── What the guard found on its first run: MOTIR-4260 ──────────────────────
 // Pointing it at the plan canvas node in its `remove` state returned a SIXTH
 // site of this class — the node's title in `--el-text-muted` on its own
-// `--el-muted` frame, 4.12:1. That state is deliberately NOT mounted below: the
-// defect is open, so the case would ship red. MOTIR-4260 carries both the fix and
-// the mount, and its acceptance criterion 2 adds the `it` to this file.
+// `--el-muted` frame, 4.12:1. MOTIR-4251 could not mount that state, because the
+// defect was open and the case would have shipped red. MOTIR-4260 closes it: the
+// title takes `--el-text-secondary` (6.18:1, and what `design/ai-planning`'s
+// `.node.remove .ttl` specified all along), and the `remove` state is mounted
+// below beside the `modify` one. The two are different STATES of one module,
+// which is exactly why MOTIR-4030's fix to this very file did not reach it.
 //
 // ── One reading decision, stated because it differs from the static walk ────
 // The worst background an ancestor can paint decides, so `hover:bg-(--el-surface)`
@@ -166,6 +169,41 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
     expect(screen.getByTestId('diff-line')).toBeTruthy();
     expect(screen.getByText('PROD-14')).toBeTruthy();
     expectNoFailingInk(container, 'PlanItemNode (modify, with a diff overlay)');
+  });
+
+  it('the plan canvas node in its REMOVE state — the same module, MOTIR-4030 did not reach it (MOTIR-4260)', async () => {
+    const { PlanItemNode } = await import('@/components/planning/PlanItemNode');
+    // The `remove` node is the one op that paints its OWN fill: the frame is
+    // computed into a `frame` variable and interpolated onto the root `div`,
+    // while the title's ink is a ternary six elements down. The static walk
+    // resolves nothing across that gap and ABSTAINS, so the pairing was green in
+    // `tests/theme/inkContrastLint.test.ts` and always would have been.
+    const { container } = renderWithIntl(
+      <PlanItemNode
+        item={planReviewItem({
+          op: 'remove',
+          nodeId: 'wi_2',
+          identifier: 'PROD-21',
+          title: 'Superseded subtask',
+          status: 'todo',
+          // The peek envelope (MOTIR-4183) restates the op; the builder's
+          // default describes an `add`, which this case is not.
+          proposal: {
+            op: 'remove',
+            identifier: 'PROD-21',
+            changedFields: [],
+            settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+          },
+        })}
+      />,
+    );
+    // The struck title is on screen AND the node paints its own `--el-muted`
+    // frame under it. Both are asserted because either one absent turns the
+    // sweep below into a tautology — the muted ink fails on `--el-muted` at
+    // 4.12:1, so this is the state in which a re-inking would be caught.
+    expect(screen.getByText('Superseded subtask')).toBeTruthy();
+    expect(paintedSurfaces(container)).toContain('--el-muted');
+    expectNoFailingInk(container, 'PlanItemNode (remove)');
   });
 
   it('the command palette — components/ui/CommandPalette.tsx', async () => {

@@ -301,6 +301,13 @@ const PUSH_LANE = [
  */
 const TRIPWIRE = ['lint', 'typecheck', 'build'];
 
+/** A matrix job's `fail-fast:`, from its `strategy:` block — six spaces exactly
+ *  (`jobs:` → id → `strategy:` → the key). */
+function failFast(id: string): string | null {
+  const m = /^ {6}fail-fast:(.*)$/m.exec(jobCode(id));
+  return m ? m[1]!.trim() : null;
+}
+
 describe('the merge queue reports the required check (MOTIR-4050)', () => {
   it('finds the workflow it is meant to guard', () => {
     // A parser regression would otherwise make every assertion below vacuous.
@@ -361,6 +368,45 @@ describe('the queue runs the whole gate, and the push lane no longer does', () =
         `${id} runs on some event`,
       ).toBe(true);
     }
+  });
+});
+
+describe('a shard matrix fails fast in the QUEUE and fans out on a PR (MOTIR-4407)', () => {
+  // The three matrices are ONE decision and they must not drift apart: whichever
+  // lane a red shard lands in decides whether the other shards are evidence or
+  // overhead, and that is a property of the lane, not of the suite.
+  //
+  //   • PULL REQUEST — the full fan-out. It is where an E2E or Vitest red is
+  //     actually READ, and this repository's flake triage turns on ROTATION (a
+  //     different test failing each run, the siblings behaving differently),
+  //     which cancelling them deletes.
+  //   • MERGE QUEUE — cancel. The entry is ejected either way; the remaining
+  //     shards only hold the queue, and the `gh-readonly-queue/…` ref they would
+  //     report against does not survive the ejection.
+  //
+  // ⚠️ The two halves are one change. Fail-fast in the queue is affordable ONLY
+  // while the pull-request lane still runs these suites — 77 of 81 failing PR CI
+  // runs over 2026-08-27 → 09-04 involved one of them, so a PR lane slimmed to
+  // lint/typecheck would send 95% of real failures to a lane that now cancels
+  // its own evidence. Asserted here so neither half can move alone.
+  const SHARDED = ['test', 'e2e', 'e2e-at-scale'];
+
+  it.each(SHARDED)('%s declares a fail-fast this evaluator can read', (job) => {
+    // Without this the two assertions below would pass on a `null` they never
+    // evaluated — the vacuity every guard in this file is written against.
+    expect(ciJobs.has(job), `${job} exists`).toBe(true);
+    expect(failFast(job), `${job} declares fail-fast`).not.toBeNull();
+  });
+
+  it.each(SHARDED)('%s cancels its siblings on a queue entry', (job) => {
+    expect(evaluate(failFast(job)!, contextFor('merge_group'))).toBe(true);
+  });
+
+  it.each(SHARDED)('%s keeps the whole fan-out on a pull request', (job) => {
+    // `e2e-at-scale` reaches a pull request only under its own label, and that
+    // is exactly the case that wants every leg: somebody applied the label in
+    // order to read them.
+    expect(evaluate(failFast(job)!, contextFor('pull_request'))).toBe(false);
   });
 });
 
