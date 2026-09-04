@@ -1514,3 +1514,334 @@ show it as context, as it stands after MOTIR-4254), the **drawer** itself (`top-
 **top bar** and its control budget, the **rail head** (`context-row.mock.html`), the **account menu**
 (`account-menu.mock.html`), and the `ShortcutsCheatsheet` dialog that row 2 opens — which ships today and
 is unchanged by this story.
+
+---
+
+## 3D / Immersive takes the shell chrome — the rail floats, the bar is the lid (MOTIR-4252)
+
+`3d-immersive-shell.mock.html` / `.png` is **the design of record for the app shell under
+`data-style="3d-immersive"`**, and the drawing behind
+[`docs/styles/3d-immersive.md`](../../docs/styles/3d-immersive.md) §4's new **shell chrome** row and
+its **§4b closure rule**. It draws the whole shell — top bar, expanded rail, collapsed rail, main
+region — in light and dark, and it draws the **target**: there is no before-frame.
+
+**It is a chrome asset, not a shell-composition asset.** The bar's control budget stays
+`top-bar.mock.html`'s, the rail's bottom section stays `rail-bottom-section.mock.html`'s, the rail
+head stays `context-row.mock.html`'s and the Help menu stays `help-menu.mock.html`'s. What this
+asset owns is the **plane each chrome host sits on**, and nothing else about them.
+
+### Why the area owed this
+
+**§4's plane ladder named ten surfaces and stopped before the frame.** It has rows for modal,
+popover, card, board card, page panel, board column, button, quiet control/row, text field and
+status pill — and none for the top bar or the rail. The stylesheet matched the spec exactly: the
+`[data-style='3d-immersive']` block in
+[`packages/design-system/theme.css`](../../packages/design-system/theme.css) carried **no
+`[data-surface='header']` rule and no `[data-surface='sidebar']` rule**, while both hooks are emitted
+([`app/(authed)/_components/TopNav.tsx`](<../../app/(authed)/_components/TopNav.tsx>),
+[`components/ui/Sidebar.tsx`](../../components/ui/Sidebar.tsx)) and **five of the eleven styles
+already use them**:
+
+| Style            | `[data-surface='sidebar']`                | `[data-surface='header']` |
+| ---------------- | ----------------------------------------- | ------------------------- |
+| glassmorphism    | ✅ frosted chrome over the canvas         | —                         |
+| aurora           | ✅ the aurora sheen                       | —                         |
+| hand-drawn-indie | ✅ a wavy right edge                      | ✅ a wavy bottom edge     |
+| neumorphism      | ✅ moulded, raised, + both a11y fallbacks | —                         |
+| retrofuturism    | ✅ chrome bevel + specular                | —                         |
+| **3d-immersive** | **none**                                  | **none**                  |
+
+**So the frame rendered byte-identically to the default style's**, and §4 contradicted itself as a
+result: its _Quiet control / row_ row says a sidebar nav link is _"flat at rest… **the surface they
+sit in is what floats**"_. The surface it sits in did not float, was not specified to float, and had
+nowhere on the ladder to be told to.
+
+**And this is the reason the card was a re-shape rather than a third patch.** Three defects have now
+been filed against this one style and all three are one shape — _a promise bound to an enumeration,
+with silence where the enumeration ends_: MOTIR-3522 (199 of 280 controls flat, the physical-key rule
+enumerating two radius utilities), MOTIR-4230 (the atmosphere painted on `body` alone, so the shell
+root covered it), MOTIR-4253 (the chrome never enumerated at all). 3522 fixed the mechanism **for
+controls** — that fix is §4a and `tests/theme/immersive-control-depth.test.ts` — and left it standing
+one level up, over SURFACES. §4b is that fix for surfaces, and it is the part of this work that
+outlives the drawing.
+
+### The decision — four dispositions ship in real design systems and they conflict
+
+The verdict is that **the two chrome hosts take DIFFERENT planes**, and the ladder gains one row that
+says which. They are two objects: the rail is a panel with an edge, the bar is a lid content stops
+beneath.
+
+| Disposition                                                                                                                                      | Verdict                                                             | The argument                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Chrome as GROUND** — Fluent 2 / Windows 11 (Mica, Acrylic are _"base layers beneath interactive UI"_); M3's top app bar at rest at elevation 0 | **REJECTED**                                                        | It contradicts §4's own _Quiet control / row_. Adopting recede means amending that row to say the rail is flat — and its rows are already flat by the ladder, so the frame becomes the one region of the app with no depth anywhere, which is §8's half-3D failure at the largest scale on the screen. Fluent's recede is coherent because its depth is a **material that occludes**; this style's depth is **geometry**, and geometry can only say _beneath_ by not floating, which here reads as _unstyled_.                         |
+| **Chrome as REACTIVE ground** — M3's actual mechanic: level 0 → level 2 only when content scrolls beneath                                        | **REJECTED — and this is the card's own recommendation, falsified** | Measured, not assumed. [`components/ui/AppLayout.tsx`](../../components/ui/AppLayout.tsx) is `h-dvh overflow-hidden` and `<main>` is the shell's ONLY scroller (MOTIR-3208); the bar sits in a `shrink-0` row **above** that grid, outside the scroller. **Nothing passes under this bar.** Its `sticky top-0` earns its keep on the public and auth surfaces, where the document scrolls — in the signed-in shell it is inert. The event M3 keys on never occurs beneath this bar, so the lift would be depth with nothing behind it. |
+| **Chrome as ORNAMENT** — visionOS toolbars and tab bars, floating in front on the z-axis on a glass capsule, overlapping the window edge         | **REJECTED**                                                        | An ornament overlaps its window, and `AppLayout` composes the rail as a **grid column**. So this is not a treatment, it is a layout change from grid to overlay with the main region reserving a footprint — and [`docs/DESIGN.md`](../../docs/DESIGN.md)'s two-axis contract says a style sets shape and feel, not the shell's architecture. Its glass capsule is also Glassmorphism's material, and `theme.css`'s own header states the differentiator: _glass is a translucent MATERIAL over a gradient; 3D is OPAQUE depth_.       |
+| **The floating / inset panel** — the web shorthand: shadcn's `floating` and `inset` sidebar variants, Slack, Linear                              | **ADOPTED, for the RAIL only**                                      | It is the one disposition that makes §4's existing promise **true** instead of amending it away, and it composes with what MOTIR-4230 shipped: an inset rail only reads as inset because there is an atmosphere behind it, and that card is what put the atmosphere on the shell root.                                                                                                                                                                                                                                                 |
+
+**What ADOPTED means for the BAR, said plainly: it takes none of the four.** It is not ground (it
+lifts), not reactive (there is no scroll beneath it), not an ornament (it does not overlap), and not
+a panel (it keeps full-bleed edges and square corners). **The lid is the fifth answer, and it is the
+one the shipped shell makes available.**
+
+**Why the bar takes the ladder's LOWEST rung and the rail the card rung** — the distinction that
+keeps the two-plane story honest rather than arbitrary. **How far a surface floats is how far you can
+see under its edges.** The rail has four edges in the scene, so it can be an object at a distance:
+`--shadow-card`. The bar has exactly one — its bottom — so the only thing it can express is a
+CONTACT: _this edge is where the region below begins_. That is `--shadow-subtle`, the ladder's
+tightest rung. A bar wearing `--shadow-card` would out-float the panel it frames, on the strength of
+one visible edge.
+
+**The card's own recommendation was half right and is amended on the record.** It named _"rail →
+floating/inset panel, header → the on-scroll lift"_. The rail half is adopted verbatim. The header
+half is rejected on a measurement the card did not have, and the amendment is recorded here and on
+the card rather than dropped silently.
+
+### The rules — what MOTIR-4253 ships
+
+These are the rules the frames in the asset are **drawn by**, injected verbatim into the mock's own
+`<style>` so a frame cannot flatter a rule the implementation could not write. They go in the
+`[data-style='3d-immersive']` block of `packages/design-system/theme.css`.
+
+```css
+:root {
+  --spacing-rail-inset: 0px;
+}
+
+[data-style='3d-immersive'] {
+  --spacing-rail-inset: 10px;
+}
+
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  /* The RAIL — a floating panel. */
+  [data-surface='sidebar'] {
+    margin: var(--spacing-rail-inset);
+    height: calc(100% - 2 * var(--spacing-rail-inset));
+    border-radius: var(--radius-card);
+    border-right-color: transparent;
+    box-shadow: var(--shadow-card);
+  }
+}
+
+@scope ([data-style='3d-immersive']) to ([data-style]) {
+  /* The TOP BAR — the LID. */
+  [data-surface='header'] {
+    background-color: transparent;
+    border-bottom-color: transparent;
+    box-shadow: var(--shadow-subtle);
+  }
+}
+
+@media (prefers-contrast: more) {
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-surface='sidebar'] {
+      outline: 1px solid var(--el-border-strong);
+      outline-offset: -1px;
+    }
+    [data-surface='header'] {
+      border-bottom-color: var(--el-border-strong);
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  @scope ([data-style='3d-immersive']) to ([data-style]) {
+    [data-surface='sidebar'] {
+      outline: 1px solid var(--el-border-strong);
+      outline-offset: -1px;
+      box-shadow: none;
+    }
+    [data-surface='header'] {
+      border-bottom-color: var(--el-border-strong);
+      box-shadow: none;
+    }
+  }
+}
+```
+
+**Four things in that block are decisions rather than syntax:**
+
+1. **`box-shadow` ONLY on the bar, never `position`.** `hand-drawn-indie` carries the guard
+   explicitly — the sticky header is already a containing block and overriding it breaks the sticky —
+   and the pleasing part is that the same property is what makes the lid work: `sticky … z-30`
+   creates the **stacking context** that lets the shadow paint over the region beneath it. A static
+   header's downward shadow is painted behind the next sibling's background and is invisible. **The
+   constraint and the mechanism are the same line of the component.**
+2. **The rail's shared edge goes `border-right-color: transparent`, not `border: none`.** The 1px
+   stays in the box, so `--width-rail-chrome` — the rail's `px-2` gutters plus that border — is
+   unchanged. A floating panel has a shadow instead of a shared edge; it does not have a different
+   width.
+3. **Both fallbacks restore a LINE the treatment made transparent, and neither moves a pixel.** The
+   rail's hairline comes back as an `outline` with `outline-offset: -1px` — drawn outside the box,
+   follows the radius, costs no layout — and the bar's `border-bottom` already has its width; only
+   its colour was taken away. This is `neumorphism`'s pattern (its own `prefers-contrast: more` /
+   `forced-colors: active` blocks) applied to a treatment whose structure rests on a shadow.
+4. **`--spacing-rail-inset` is `0px` in the base layer.** Every other style is untouched and the
+   `AppLayout` sums below compile to today's numbers everywhere else, which is what makes this a
+   style-axis change rather than a shell change.
+
+### The geometry the implementation inherits — an inset rail moves a column
+
+**The rail fills its grid cell, so a margin shrinks the RAIL, not the cell — and the collapsed rail
+cannot shrink.** Its content box is exactly one `--height-control` square, which is why MOTIR-4232
+made that column a SUM rather than a constant. So the **column** grows by twice the inset, in both
+states, and the main region gives up that width.
+
+| Column                | Today                                                    | With the inset                                                                           | At this style's tokens                      |
+| --------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------- |
+| **Collapsed rail**    | `calc(var(--height-control) + var(--width-rail-chrome))` | `calc(var(--height-control) + var(--width-rail-chrome) + 2 * var(--spacing-rail-inset))` | 40 + 20 + 20 = **80px** (60px today)        |
+| **Expanded rail**     | `240px`                                                  | `calc(240px + 2 * var(--spacing-rail-inset))`                                            | 240 + 20 = **260px**                        |
+| **Every other style** | unchanged                                                | the same expression                                                                      | `--spacing-rail-inset: 0px` → **unchanged** |
+
+The two class strings [`components/ui/AppLayout.tsx`](../../components/ui/AppLayout.tsx) carries
+become:
+
+```
+md:grid-cols-[calc(var(--height-control)_+_var(--width-rail-chrome)_+_2_*_var(--spacing-rail-inset))_1fr]
+md:grid-cols-[calc(240px_+_2_*_var(--spacing-rail-inset))_1fr]
+```
+
+**This is stated here because a card that only reads the CSS block would not find it.** Insetting is
+a stylesheet change everywhere except the one place it is a component change, and the component is in
+a different repository area from the token block.
+
+### The CLOSURE RULE — the part that outlives this asset
+
+The rule lives in [`docs/styles/3d-immersive.md`](../../docs/styles/3d-immersive.md) §4b, not here,
+because it governs the SPEC. Its short form: **every surface class the app renders is either assigned
+a plane or listed as deliberately flat with a named reason; a surface class absent from the ladder is
+a spec defect, not a default.**
+
+Two rows in that table carry a reason rather than a plane, and they are the proof the rule is not
+just a longer list — a closure rule with no flat rows is only a demand that everything float:
+
+- **The modal scrim** (`[data-surface='overlay']`) — a scrim is the absence of a surface, not one.
+  Its job is to remove the plane behind the modal; a plane of its own puts a floating sheet between
+  the modal and the page it is dimming.
+- **The specimen page** (`[data-surface='page']`,
+  [`packages/design-system/src/specimen/TokensSpecimen.tsx`](../../packages/design-system/src/specimen/TokensSpecimen.tsx))
+  — a page ABOUT surfaces rather than one of them. Floating the host would put a plane between the
+  reader and what they are reading.
+
+### Primitives and tokens
+
+**No new primitive, no new colour token, and one new SHAPE token.** Every colour in the rules is an
+existing `--el-*` (`--el-border-strong`) or an existing style-axis shadow token
+(`--shadow-card`, `--shadow-subtle`); every shape is an existing element-semantic token
+(`--radius-card`) except `--spacing-rail-inset`, which is added to the base layer at `0px` and moved
+only by this style — the per-component growth pattern the shape rule prescribes. **The chrome hosts
+are unchanged components**: `Sidebar` and `TopNav` keep their class strings exactly as they ship, and
+the treatment reaches them entirely through the two `data-surface` hooks they already emit.
+
+Board chrome routes every colour through `--el-*` and takes `--el-text-secondary` for body ink rather
+than `--el-text-muted`, which fails AA on three of the four surfaces it could land on
+([`docs/decisions/design-board-chrome-aa.md`](../../docs/decisions/design-board-chrome-aa.md)).
+
+### The access path
+
+**None, deliberately — and that is a finding rather than an omission.** This asset adds no
+affordance, no destination and no new surface: it changes the plane two existing hosts sit on. There
+is no door to draw, and drawing one would mean inventing a control the shell does not need. The
+surfaces it depicts are reached exactly as they are today — the shell is what you are already
+looking at on every signed-in route.
+
+### The divergence ledger — which source wins for this element
+
+| #   | The other assets say                                                                                                                                                                                      | This asset says                                                                                                                                                                                                                                                                                                                | Since      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| 1   | Every other shell asset draws the rail with a **shared right border**, flush to the viewport edge, and the bar with an opaque fill and a hairline                                                         | **Under `data-style="3d-immersive"` only**: the rail is inset and floating, the bar has no fill and no hairline. Those assets draw the DEFAULT style and remain correct for it — **this asset wins for one style axis value and claims nothing about the other ten.** A style-scoped asset does not supersede an unscoped one. | MOTIR-4252 |
+| 2   | `top-bar.mock.html` owns the bar's control budget; `rail-bottom-section.mock.html` owns the rail's rows; `context-row.mock.html` owns the rail head; `help-menu.mock.html` owns the footer's two controls | **All four still win for their own element.** This asset LIFTS their output as context and re-specifies none of it. Its subject is the plane, and only the plane.                                                                                                                                                              | MOTIR-4252 |
+| 3   | `docs/styles/3d-immersive.md` §4's _Quiet control / row_ said the surface a sidebar nav link sits in is what floats — of a surface no rule made float                                                     | **The premise is now TRUE**, and that row is unchanged because it never needed changing: what was missing was the rule underneath it.                                                                                                                                                                                          | MOTIR-4252 |
+
+### How the render was produced
+
+Generated, not hand-drawn, so it cannot drift from the app. Reproduced inline rather than cited,
+because the harness is deleted with this card's run:
+
+1. **The RAILS are lifted from `help-menu.mock.html`**, whose two rails are the real
+   `components/ui/Sidebar.tsx` rendered through the repo's own vitest setup, drawn after MOTIR-4254
+   cut `Docs` and `Legal`: **four bottom rows** — Settings · Security · Job runs · Git — and the
+   **two-control footer** MOTIR-4238 added. Lifted with a real HTML parser (`happy-dom`) via
+   `[data-vw="240"] nav[data-surface="sidebar"]` and `[data-vw="56"] …`, never string surgery.
+2. **The TOP BAR is lifted from `account-menu.mock.html`'s `[data-vw="1024"]` frame**, which is
+   `top-bar.mock.html`'s bar with MOTIR-4248's corrected `--height-control`-square avatar already
+   substituted. **Its class string is restored to `TopNav.tsx`'s shipped one** — that asset drew bars
+   alone and dropped `sticky top-0 z-30`; this one draws the SHELL, where the stacking context those
+   classes create is exactly what makes the lid's shadow paint.
+3. **The MAIN region's panels are the real primitives** — `Card`, `Button`, `Pill`, `SectionLabel` —
+   rendered through [`tests/helpers/renderWithIntl.tsx`](../../tests/helpers/renderWithIntl.tsx) in a
+   throwaway spec under a throwaway config (`environment: 'happy-dom'`, no `globalSetup`, the `@` and
+   `server-only` aliases), dumped as `container.innerHTML`.
+4. **The frames are `AppLayout`'s own structure and class strings**, with `h-dvh` overridden by an
+   inline height (a frame is a picture of a viewport) and `id="main"` dropped (the board holds six
+   shells and an id is unique per document).
+5. **`tailwindcss`'s own `compile()` runs `app/globals.css`** — with its package imports resolved
+   through node's resolver — over the assembled markup, so the stylesheet is the build's output
+   rather than a retyped token block.
+6. **The axis attributes go on a WRAPPER around the shell root, because `<html>` carries them in the
+   app — and that is load-bearing rather than tidy.** `theme.css`'s atmosphere rule is
+   `@scope ([data-style='3d-immersive']) { body, [data-app-shell] { … } }`, and inside an `@scope` a
+   bare selector matches a DESCENDANT of the scope root. Put `data-style` on the shell root itself and
+   `[data-app-shell]` **is** the root, matches nothing, and the frame renders with **no atmosphere at
+   all** — while every other rule still fires, which is what makes the omission invisible. The first
+   render of this asset had exactly that bug; `getComputedStyle(shell).backgroundImage` returning zero
+   `radial-gradient` layers is what found it, not looking at the picture.
+7. **Two blocks are re-emitted UNLAYERED, and the reason is a CSS-engine fact worth
+   carrying.** Tailwind v4 puts the Tier-0 palette inside `@layer theme`, and `theme.css`
+   declares the Tier-3 `--el-*` layer BELOW its first `@scope` at-rule. A cascade-layer-blind
+   engine drops the first, and a parser that stops at `@scope` drops the second — so under the
+   design lane's happy-dom guards **every tailwind-compiled asset in this tree reads
+   `--el-page-bg` as unset**, while being perfectly live in a browser. (The tell is exact:
+   `--color-background` resolves, because the dark Tier-0 flip sits ABOVE the first `@scope`;
+   `--el-page-bg` does not.) Both blocks are therefore lifted — the compiler's own declarations and
+   the file's own declarations, never retyped — into a leading `<style>`, with `[data-theme]`
+   added to the Tier-3 selector list so a NESTED dark scope recomputes the layer against its own
+   Tier-0. **The lift strips the source's prose comments**, which document `theme.css` rather than
+   this asset — and one of them names a `lib/projects/` module that no longer exists, which
+   the design lane's address guard correctly failed the moment it was carried into `design/**`. That
+   the guard cannot see the comment in its own home is a separate finding, filed rather than fixed
+   here. It is inert in a browser: the values are identical and every unlayered
+   override in `theme.css` still comes later and still wins. **This asset is the first
+   tailwind-compiled mock in the tree with a nested dark scope, which is why the gap surfaced
+   here** — `design/settings/two-factor.mock.html` hit the second half of it and wrote its Tier-3
+   copy by hand (MOTIR-3712). What the lift buys beyond a green lane is that the ink-contrast
+   guards, which also render in happy-dom, can now RULE on this asset instead of abstaining on
+   tokens they cannot resolve.
+8. **One value is restored rather than compiled: `--width-rail-chrome`.** It is an `@theme` variable
+   consumed only by a `calc()` inside `AppLayout`'s grid utility, which no utility in this board's
+   markup emits — so Tailwind tree-shakes it, the collapsed column's sum becomes invalid, and the grid
+   silently falls back to one column. The generator READS the declaration out of `theme.css` rather
+   than retyping it, so it cannot drift.
+9. **The proposed rules are injected verbatim**, so the frames are drawn BY them.
+10. **The frames are measured in a browser**, which is what makes the panels' claims checkable rather
+    than captioned. All six frames: the atmosphere resolves to **3 radial-gradient layers**; the rail's
+    inset is **10px on all four sides**; the rail's radius is **20px** (`--radius-card` at this style);
+    the expanded rail is **240px** in a **260px** column and the collapsed rail **60px** in an **80px**
+    column, so `mainColStart` is 260 and 80; the bar's computed `background-color` is
+    `rgba(0, 0, 0, 0)` and its `border-bottom-color` transparent, with `position: sticky` and
+    `z-index: 30`; **zero** drawn rail elements lie outside their frame; the expanded rail's bottom
+    section holds **four** rows and its footer **two** controls. The two fallback frames measure
+    `outline: solid rgb(200, 196, 190)` (`--el-border-strong`) with the bar's border restored, and the
+    `forced-colors` frame measures `box-shadow: none` on both hosts.
+11. **A board property, stated so it is not read as an app one**: the immersive background is
+    `background-attachment: fixed`, which resolves against the real viewport — correct in the app,
+    where the shell IS the viewport, and wrong on a board holding six shells, where every frame would
+    show a slice of one giant gradient. The board resolves it against each frame's own box instead.
+
+### The design-allocation sweep — what this asset GIVES and TAKES
+
+| Card                                                                                                    | GIVES / TAKES | What                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4253** (the implementation, `blocked_by` this card)                                             | **GIVES**     | The two `data-surface` rules verbatim, both a11y fallback blocks, the `--spacing-rail-inset` token and its `0px` base, and the two `AppLayout` class strings. It also gives it the §4b closure rule to satisfy, which is scope its estimate did not carry. |
+| `rail-bottom-section.mock.html` · `top-bar.mock.html` · `context-row.mock.html` · `help-menu.mock.html` | **NEITHER**   | Their elements are lifted as context and re-specified nowhere. Nothing is taken away from them and nothing added.                                                                                                                                          |
+
+### What this asset does NOT draw
+
+The **bar's composition** or its control budget (`top-bar.mock.html`), the **rail's rows**
+(`rail-bottom-section.mock.html`), the **rail head** (`context-row.mock.html`), the **Help menu** and
+the **account menu** (their own assets), the **mobile drawer** below `md` — the rail is
+`hidden md:block` and the drawer takes over, and a drawer is an overlay rather than a chrome host, so
+it is out of the ladder's shell-chrome row — the **platform-admin shell**
+([`app/(admin)/_components/AdminShell.tsx`](<../../app/(admin)/_components/AdminShell.tsx>)), which
+carries the same `data-app-shell` hook and therefore inherits the atmosphere but has no
+`data-surface` chrome of its own, and the **other ten `[data-style]` values**, whose chrome this
+asset makes no claim about.
