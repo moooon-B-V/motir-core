@@ -12,9 +12,9 @@ any workspace of the org, and doing so **rebuilds nothing**.
 
 **The reasoning, and it is the reasoning rather than the conclusion that matters here:**
 
-> _The repository belongs to the whole org, and the org is the billing unit, so there is no privacy
-> issue. If a repo doesn't belong to the org, we need to maintain the index per project, which will
-> be a total wrong design._
+> _The repository belongs to the whole org, and the org is the accounting unit, so there is no
+> privacy issue. If a repo doesn't belong to the org, we need to maintain the index per project,
+> which will be a total wrong design._
 
 That is the argument in full. Ownership settles it: the org owns the repository and pays for the
 indexing, so there is no boundary between two of its projects that a second copy of the same graph
@@ -69,9 +69,9 @@ re-fetch **survives** the move — it only leaves Vercel.
 
 What changed is the price:
 
-|                  | serverless                                                   | containers                                                                    |
-| ---------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| N projects costs | N function invocations, absorbed by an included-minutes pool | **N machines × ~924 MB × minutes of billed compute, for byte-identical work** |
+|                  | serverless                                                   | containers                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| N projects costs | N function invocations, absorbed by an included-minutes pool | **N machines × ~924 MB × minutes of metered compute, for byte-identical work — drawn from the org's index allowance AND from Motir's own margin** |
 
 §6's argument — _one container per REPO_, forced by the ledger contract — is **untouched** by this
 document. That argument is about not batching many REPOSITORIES into one container, and it survives
@@ -79,7 +79,7 @@ intact. What was never sized is the orthogonal ×N over PROJECTS.
 
 **The multiplier is live, not hypothetical.** The `moooon` workspace holds two projects, `MOTIR` and
 `TEST`, so indexing `motir-core` boots two containers and builds the same graph twice — half of it
-into a throwaway test project. Every workspace pays its own project count.
+into a throwaway test project. Every workspace's project count multiplies its own index cost.
 
 **The number is measurable, and it should be measured before the choice is made rather than
 estimated.** `ciFleetCostMeterService` stamps per-container seconds and cost with a `workload`
@@ -112,7 +112,7 @@ The repository is the org's. The graph is built once and read by every project t
 into. **The multiplier does not shrink; it stops existing.**
 
 Its cost is honest and is a tenancy change rather than a policy tweak — §_The audit_ below is the
-whole of it. The first revision priced that cost and stopped there; what it did not price was the
+whole of it. The first revision costed that change and stopped there; what it did not cost was the
 alternative, which is maintaining N identical graphs for ever.
 
 ## The audit — a tenancy change is a schema audit, not a policy change
@@ -155,9 +155,10 @@ caller's identity rather than from anything a caller sends.
   newest `indexedAt` is the obvious answer and it is not obviously right — a project pinned to an
   older commit would silently move. That belongs to the implementation story with a real reading of
   how many such pairs exist in production.
-- **The cost stops being a multiplier.** Indexing `motir-core` for an org with two projects boots one
-  container, not two. `ciFleetCostMeterService`'s per-workload rollup is where the before/after
-  reading comes from — quote the meter, do not assert the saving.
+- **The cost stops being a multiplier, on both sides.** Indexing `motir-core` for an org with two
+  projects boots one container, not two — so the org's index allowance is drawn once and Motir's
+  container time is spent once. `ciFleetCostMeterService`'s per-workload rollup is where the
+  before/after reading comes from; quote the meter, do not assert the saving.
 - **MOTIR-1765's isolation test is amended, not deleted.** It moves from project-level to org-level
   and stays exactly as load-bearing.
 
