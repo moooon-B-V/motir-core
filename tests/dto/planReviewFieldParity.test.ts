@@ -242,6 +242,16 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
         'MOTIR-4143 — and it has NO patch key, so a modify has no proposed side at all: the ' +
         "target's live value IS the value the card will have, which is what the rail asks.",
     },
+    todos: {
+      addOnly:
+        'AMENDMENT 13 D2 — a `modify` patch carries NO `todos` (`patchSchema` declares none and ' +
+        '`applyModify` writes only PLAN_ITEM_PATCH_KEYS), so on any op but `add` there is no ' +
+        'proposed side at all. And the target side must NOT be substituted for it the way the ' +
+        "MOTIR-4143 rail fields substitute theirs: a committed card's list is a person's " +
+        'PROGRESS — ticked rows — so reporting it here would show work somebody already did on ' +
+        'the surface that says what approve will WRITE, which is the one confusion this whole ' +
+        'story exists to remove.',
+    },
     planningProvenance: {
       addOnly:
         'WHO WROTE THE PROPOSAL, not a field of the card — a modify proposes no provenance ' +
@@ -283,13 +293,17 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // for the wrong reason, and if it matched everything the add-only ones would.
     const addOnly = Object.keys(OP_AXIS).filter((k) => addOnlyElseNull(k).test(service));
     const everyOp = Object.keys(OP_AXIS).filter((k) => !addOnlyElseNull(k).test(service));
-    // ⚠️ THE ADD-ONLY ARM IS DOWN TO TWO (MOTIR-4143 moved the six rail fields
+    // ⚠️ THE ADD-ONLY ARM WAS DOWN TO TWO (MOTIR-4143 moved the six rail fields
     // across), and a COUNT would now be a threshold nobody could defend. So it
-    // is asserted by NAME: these two are add-only for reasons about provenance
-    // rather than about the rail, they are stated at their own fields, and if a
-    // later change empties this arm the vacuity guard above it stops being real
-    // — which is the thing this case exists to notice.
-    expect(addOnly.sort()).toEqual(['explanationSource', 'planningProvenance']);
+    // is asserted by NAME: each is add-only for a reason stated at its own
+    // field, and if a later change empties this arm the vacuity guard above it
+    // stops being real — which is the thing this case exists to notice.
+    //
+    // `todos` is the THIRD (MOTIR-4622), and it joins for a reason unlike the
+    // other two: not provenance, but that a `modify` has no proposed side AND
+    // its target's side is a person's PROGRESS, which must not be drawn on the
+    // surface that says what approve will write.
+    expect(addOnly.sort()).toEqual(['explanationSource', 'planningProvenance', 'todos']);
     expect(everyOp.length).toBeGreaterThan(2);
     // And it reads the file it thinks it does.
     expect(service).toContain('function proposedBody(');

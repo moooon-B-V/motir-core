@@ -430,12 +430,20 @@ interface MaterializedTodo {
   text: string;
 }
 
-/** A created-row revision diff ({ field: { from: null, to } }) for a materialized add. */
+/**
+ * One cell of a created-row revision diff. Every SCALAR key is a `{ from: null,
+ * to }` pair; `todos` is a COLLECTION key carrying `{ added }` directly, for the
+ * reason stated where it is written below — `lib/activity/renderers.ts` is keyed
+ * by field NAME, so the shape is the field's, not this function's.
+ */
+type AddDiffCell = { from: null; to: unknown } | { added: readonly MaterializedTodo[] };
+
+/** A created-row revision diff for a materialized add. */
 function buildAddDiff(
   row: WorkItem,
   todos: readonly MaterializedTodo[] = [],
-): Record<string, { from: null; to: unknown }> {
-  const diff: Record<string, { from: null; to: unknown }> = {
+): Record<string, AddDiffCell> {
+  const diff: Record<string, AddDiffCell> = {
     title: { from: null, to: row.title },
     kind: { from: null, to: row.kind },
     status: { from: null, to: row.status },
@@ -459,14 +467,21 @@ function buildAddDiff(
   // `textField()` disposition in lib/activity/renderers.ts, so the created-revision
   // feed renders it.
   if (row.targetRepo != null) diff.targetRepo = { from: null, to: row.targetRepo };
-  // The card's STEPS (MOTIR-4618 · AMENDMENT 13 D5) — the same `todos.added`
-  // shape `workItemTodosService.recordTodoRevision` writes for a hand-added row,
-  // so the item's history reads identically whichever door the rows came
-  // through. Omitted entirely when the `add` carried none, like every other
-  // optional field here: an empty key would render as "a list was created" for a
-  // card that has no list.
+  // The card's STEPS (MOTIR-4618 · AMENDMENT 13 D5) — BYTE-IDENTICAL to what
+  // `workItemTodosService.recordTodoRevision` writes for a hand-added row, so the
+  // item's history reads the same whichever door the rows came through.
+  //
+  // ⚠️ AND THAT IS WHY IT IS NOT A `{ from, to }` CELL like its neighbours here.
+  // `lib/activity/renderers.ts` is keyed by FIELD NAME, not by revision kind, so
+  // `todos` has exactly one shape across every writer, and the shipped hand-add
+  // fixed it first: `collectionField()` reads `added` / `removed` off the value
+  // itself. Wrapping it would not render as a different collection — it would
+  // miss the collection renderer entirely and fall through to the generic part.
+  //
+  // Omitted when the `add` carried none, like every other optional field here:
+  // an empty key would render as "a list was created" for a card with no list.
   if (todos.length > 0) {
-    diff.todos = { from: null, to: { added: todos.map((t) => ({ id: t.id, text: t.text })) } };
+    diff.todos = { added: todos.map((t) => ({ id: t.id, text: t.text })) };
   }
   return diff;
 }

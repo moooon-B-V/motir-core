@@ -694,10 +694,15 @@ export const planReviewService = {
       // renders no section at all — a row's absence is a statement about the
       // SUBJECT (Part XIV §1), and an empty `0 of 0` would assert that a planner
       // considered the steps and proposed none.
-      const proposedTodos = item.op === 'add' ? (proposed?.todos ?? null) : null;
-      const todos: PlanReviewTodoDto[] | null =
-        proposedTodos && proposedTodos.length > 0
-          ? proposedTodos.map((row) => ({
+      //
+      // The op gate is written AT THE TWO CARRIERS below rather than here, in the
+      // literal `field: item.op === 'add' ? … : null` shape every other add-only
+      // field on this DTO uses — `tests/dto/planReviewFieldParity.test.ts` reads
+      // the service SOURCE for that shape, so a disposition declared there and a
+      // gate hidden behind a local would be a claim the guard cannot check.
+      const resolvedTodos: PlanReviewTodoDto[] | null =
+        proposed?.todos && proposed.todos.length > 0
+          ? proposed.todos.map((row) => ({
               text: row.text,
               notesMd: row.notesMd ?? null,
               commandText: row.commandText ?? null,
@@ -856,8 +861,8 @@ export const planReviewService = {
         // `changedFields` states four lines down. It rides the ITEM because the
         // review model is what a projection test reads, and the ENVELOPE because
         // the envelope is what reaches the peek; the envelope's copy below is
-        // this same `todos`, never a re-read of `proposed`.
-        todos,
+        // this same resolved list, never a re-read of `proposed`.
+        todos: item.op === 'add' ? resolvedTodos : null,
         // A RECENCY fact, not a second reading of `op` (Part XII §E).
         revised: revisedItemIds.has(item.id),
         stale: reasons.length > 0,
@@ -882,7 +887,7 @@ export const planReviewService = {
           identifier: target?.identifier ?? null,
           changedFields: changes.map((c) => c.field as PlanItemChangeField),
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
-          todos,
+          todos: item.op === 'add' ? resolvedTodos : null,
         },
       };
     });

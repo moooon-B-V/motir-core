@@ -212,6 +212,7 @@ function planScript(overrides: V1Script = {}): V1Script {
               estimateMinutes: null,
               descriptionMd: null,
               targetRepo: null,
+              todos: null,
             },
           }),
           v1Proposal('b', {
@@ -225,6 +226,7 @@ function planScript(overrides: V1Script = {}): V1Script {
               estimateMinutes: null,
               descriptionMd: null,
               targetRepo: null,
+              todos: null,
             },
             parentRef: 'planItem:a',
           }),

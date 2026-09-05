@@ -144,10 +144,10 @@ describe('materialize — a proposal’s todos become the card’s to-do rows (M
       where: { workItemId: created.id, changeKind: 'created' },
     });
     const diff = rev.diff as {
-      todos?: { from: null; to: { added: Array<{ id: string; text: string }> } };
+      todos?: { added: Array<{ id: string; text: string }> };
     };
-    expect(diff.todos?.to.added).toHaveLength(4);
-    expect(diff.todos?.to.added.map((t) => t.text)).toEqual([
+    expect(diff.todos?.added).toHaveLength(4);
+    expect(diff.todos?.added.map((t) => t.text)).toEqual([
       'Create a restricted API key',
       'Scope it to charges:write',
       'Set it as the deployment secret',
@@ -156,7 +156,7 @@ describe('materialize — a proposal’s todos become the card’s to-do rows (M
     // The ids are the REAL rows', not a re-derivation — the same shape
     // `recordTodoRevision` writes for a hand-added row.
     const rows = await workItemTodosService.listTodos(created.id, fx.ctx);
-    expect(diff.todos!.to.added.map((t) => t.id)).toEqual(rows.items.map((t) => t.id));
+    expect(diff.todos!.added.map((t) => t.id)).toEqual(rows.items.map((t) => t.id));
   });
 
   it('writes NO rows and NO `todos` key for an empty list or an absent one', async () => {
