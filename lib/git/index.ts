@@ -17,10 +17,14 @@ export {
 export {
   requireRepoTarballUrlResolver,
   providerSupportsRepoTarballUrl,
+  REPO_FILE_MAX_BYTES,
+  REPO_FILE_READ_TIMEOUT_MS,
   REPO_TARBALL_TIMEOUT_MS,
 } from './provider';
+export { MAX_REPO_PATH_LENGTH, normalizeRepoFilePath } from './fileRead';
 export type { GitProvider, RepoTarballUrlResolver } from './provider';
 export {
+  RepoFileReadError,
   RepoTarballUrlError,
   RepoTarballUrlMissingLocationError,
   RepoTarballUrlNotRedirectedError,
@@ -39,4 +43,7 @@ export type {
   NormalizedChangeRequest,
   NormalizedRepo,
   NormalizedStatusEvent,
+  RepoFileReadOutcome,
+  RepoFileReadResult,
+  RepoFileReadTransportFailure,
 } from './types';

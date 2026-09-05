@@ -1,7 +1,9 @@
 import { registerGitProvider } from '../registry';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
-import { type GitProvider } from '../provider';
+import { REPO_FILE_MAX_BYTES, REPO_FILE_READ_TIMEOUT_MS, type GitProvider } from '../provider';
+import { byteLength, describeBody, normalizeRepoFilePath } from '../fileRead';
+import { RepoFileReadError } from '../errors';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -11,6 +13,7 @@ import type {
   NormalizedPushEvent,
   NormalizedRepo,
   NormalizedStatusEvent,
+  RepoFileReadResult,
 } from '../types';
 
 // The GitLab implementation of the GitProvider seam (Story 7.23 · MOTIR-1474) —
@@ -127,6 +130,100 @@ export const gitlabProvider: GitProvider = {
   // ENFORCED (`codeGraphIndexService.resolveIndexTarget` refuses before dispatch,
   // and the connect surface tells the user). Do not "fix" it by adding bytes back:
   // that is the 180 s-bounded in-process shape MOTIR-2057 deleted.
+
+  // ⚠️ AND YET IT DOES IMPLEMENT `readFileAtRef` — the two are not in tension,
+  // and the difference is the whole reason one is optional and the other is
+  // required. The block above refuses to build a URL-shaped credential to hand
+  // a container. This method hands nobody anything: the request is made HERE,
+  // with the connection's token, in the process that already holds it, and what
+  // comes back is text. Nothing credential-shaped crosses a boundary, so the
+  // §4/§10 objection has nothing to bite on.
+  async readFileAtRef(
+    installationId: string,
+    owner: string,
+    name: string,
+    path: string,
+    ref: string,
+  ): Promise<RepoFileReadResult> {
+    // The guard runs BEFORE the token is fetched and before a URL exists — the
+    // same ordering the GitHub implementation uses, and for the same reason.
+    const guarded = normalizeRepoFilePath(path);
+    if (!guarded.ok) return { outcome: 'invalid_path', path, reason: guarded.reason };
+
+    const { token } = await gitlabConnectionService.getAccessToken(installationId);
+    // GitLab addresses a project by numeric id OR by URL-encoded
+    // `path_with_namespace`, and the second is what we have: `owner` is the
+    // whole namespace (a group can be nested, which `normalizeProject` above
+    // already preserves), so `owner/name` is that path. Both slashes must be
+    // encoded — the one inside the project path AND every one inside the FILE
+    // path, which is why `encodeURIComponent` is applied to the joined string
+    // rather than per segment.
+    const project = encodeURIComponent(`${owner}/${name}`);
+    const filePath = encodeURIComponent(guarded.path);
+    const url =
+      `${gitlabBaseUrl()}/api/v4/projects/${project}/repository/files/${filePath}/raw` +
+      `?ref=${encodeURIComponent(ref)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      return {
+        outcome: 'unreachable',
+        path: guarded.path,
+        ref,
+        failure: controller.signal.aborted ? 'timeout' : 'unreachable',
+        detail: controller.signal.aborted
+          ? `no response within ${REPO_FILE_READ_TIMEOUT_MS}ms`
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    // GitLab, like GitHub, answers 404 for both a missing path and a missing
+    // ref — and, like GitHub, it says which in its `message`. The two hosts
+    // therefore differ in their wording and NOT in what a session learns, which
+    // is the property this whole capability is for: a planner must not conclude
+    // a different fact about the same repository because of where it is hosted.
+    if (res.status === 404) {
+      const body = await res.text().catch(() => '');
+      return /reference|revision|branch|commit/i.test(body) && !/file/i.test(body)
+        ? { outcome: 'ref_not_found', path: guarded.path, ref }
+        : { outcome: 'not_found', path: guarded.path, ref };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return { outcome: 'unauthorized', path: guarded.path, ref };
+    }
+    if (!res.ok) {
+      throw new RepoFileReadError('gitlab', res.status, await describeBody(res));
+    }
+
+    // ⚠️ GITLAB HAS NO INLINE SIZE REFUSAL, SO THE CAP HAS TO BE OURS. GitHub
+    // answers 403 above 1 MB; GitLab streams whatever is there. Without this
+    // arm the SAME file would be a named `too_large` on one host and a
+    // multi-megabyte string on the other — the exact per-host divergence the
+    // shared limit in `provider.ts` exists to prevent. Checking
+    // `content-length` first is what keeps a large body from being buffered at
+    // all; the post-decode check catches a chunked response that declared none.
+    const declared = Number(res.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > REPO_FILE_MAX_BYTES) {
+      return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
+    }
+    const text = await res.text();
+    if (byteLength(text) > REPO_FILE_MAX_BYTES) {
+      return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
+    }
+    return { outcome: 'found', path: guarded.path, ref, text, bytes: byteLength(text) };
+  },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {
     // GitLab has no App-installation read; the connection's account is the
