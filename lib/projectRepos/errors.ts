@@ -35,15 +35,27 @@ export class ProjectRepoNameTakenError extends Error {
 }
 
 /**
- * The realized `GithubRepo` is already claimed by ANOTHER project's set row. This
- * is the corruption the `github_repo_id` unique index exists to prevent — a repo
- * created for project A being recorded as project B's — surfaced as a typed error
- * rather than a raw P2002. → 409
+ * The realized `GithubRepo` is already in THIS PROJECT's set — a second row in
+ * one project claiming one repository. Surfaced as a typed error rather than a
+ * raw P2002. → 409
+ *
+ * ⚠️ RE-AIMED, NOT RETIRED (Story MOTIR-4669 · MOTIR-4648). It used to read: *"the
+ * realized `GithubRepo` is already claimed by ANOTHER project's set row … the
+ * corruption the `github_repo_id` unique index exists to prevent — a repo created
+ * for project A being recorded as project B's."* A repository belongs to the
+ * ORGANISATION and a repository in two projects is the ordinary case, so that is
+ * no longer corruption and no longer refused.
+ *
+ * What IS refused is a repository appearing twice in one project's set, which is
+ * always a mistake — and it is still enforced in the database, by
+ * `@@unique([projectId, githubRepoId])`. The error KEEPS its `code` and its
+ * status: the same 409 the product already returned, asked at the grain the
+ * product now has.
  */
 export class RealizedRepoAlreadyClaimedError extends Error {
   readonly code = 'REALIZED_REPO_ALREADY_CLAIMED' as const;
   constructor(githubRepoId: string) {
-    super(`Connected repository ${githubRepoId} is already claimed by another project's set.`);
+    super(`Connected repository ${githubRepoId} is already in this project's repository set.`);
     this.name = 'RealizedRepoAlreadyClaimedError';
   }
 }

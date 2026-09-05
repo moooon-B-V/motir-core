@@ -314,9 +314,16 @@ async function establishRow(
     });
 
     // SETTLE the row: `creating → created`, with the mirror row attached. The
-    // unique index on `github_repo_id` is the tenant-blind backstop for the
-    // adoption check above — a repo already claimed by another project's row
-    // fails here as a typed error, which `failRow` turns into a `failed` row.
+    // unique index is the tenant-blind backstop for the adoption check above — a
+    // repository already in THIS PROJECT's set fails here as a typed error, which
+    // `failRow` turns into a `failed` row.
+    //
+    // ⚠️ The index it names changed with the model (MOTIR-4648). It used to be
+    // `github_repo_id` alone, and the sentence here read *"a repo already claimed
+    // by ANOTHER project's row"* — which is no longer a failure at all: a
+    // repository belongs to the ORGANISATION, so two projects using one is the
+    // ordinary case. The backstop is now `(project_id, github_repo_id)`, and it
+    // catches the mistake that is still a mistake.
     const settled = await projectRepoSetService.attachRealizedRepo(row.id, mirrored.id, ctx);
 
     // POST-COMMIT, BEST-EFFORT — the existing chokepoint, per repo (MOTIR-1500).

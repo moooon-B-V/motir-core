@@ -312,22 +312,58 @@ export const projectRepoRepository = {
   },
 
   /**
-   * The set row that already claims a realized `GithubRepo`, if any — the
-   * pre-check behind the "a repo created for project A is never project B's"
-   * guarantee.
+   * ⚠️ `findByGithubRepoId` IS GONE, AND ITS ABSENCE IS THE POINT (MOTIR-4648).
    *
-   * NOT workspace-filtered in its WHERE, on purpose: the corruption to prevent is
-   * cross-PROJECT, and a project in another WORKSPACE is invisible to this read
-   * anyway (RLS hides it under the app role). So the DB's `github_repo_id` unique
-   * index is the real, tenant-blind guard and its P2002 is translated to a typed
-   * error; this read is what turns the common, same-tenant case into a clean 409
-   * instead of a raced insert.
+   * It was `findFirst({ where: { githubRepoId } })`, and its own comment said why
+   * that was sound: *"the DB's `github_repo_id` unique index is the real,
+   * tenant-blind guard."* The index is dropped — a repository belongs to the
+   * ORGANISATION and a repository in two projects is the ordinary case — so the
+   * same call would return AN answer rather than THE answer, silently, and
+   * whichever row the planner happened to hand back first.
+   *
+   * A method that quietly changes from total to arbitrary is worse than one that
+   * disappears, so it disappeared. Its four callers each took one of the two
+   * reads below, with a stated disposition at the call site.
    */
-  async findByGithubRepoId(
+
+  /**
+   * The row in THIS PROJECT that already claims a realized `GithubRepo`, if any —
+   * the pre-check behind the surviving guarantee: one repository appears at most
+   * once in one project's set.
+   *
+   * NOT workspace-filtered in its WHERE, exactly as its predecessor was not: the
+   * corruption to prevent is within a project, and another workspace's rows are
+   * invisible to this read anyway (RLS hides them under the app role). The DB's
+   * `@@unique([projectId, githubRepoId])` is the real, tenant-blind guard and its
+   * P2002 is translated to a typed error; this read is what turns the common,
+   * same-tenant case into a clean 409 instead of a raced insert.
+   */
+  async findByProjectAndGithubRepoId(
+    projectId: string,
     githubRepoId: string,
     tx: Prisma.TransactionClient,
   ): Promise<ProjectRepo | null> {
-    return tx.projectRepo.findFirst({ where: { githubRepoId } });
+    return tx.projectRepo.findFirst({ where: { projectId, githubRepoId } });
+  },
+
+  /**
+   * EVERY set row realizing one `GithubRepo` — the read for a caller that
+   * genuinely wants the SET rather than a single owner.
+   *
+   * Deliberately plural in its NAME as well as its type, so a caller has to
+   * decide what a length of two means for it. That decision is the whole of what
+   * MOTIR-4648 asked for at the four call sites: two of them are ATTRIBUTION and
+   * must not start guessing, and one is EXISTENTIAL and never needed a single row
+   * at all.
+   *
+   * Ordered by `position` so a caller that does want a deterministic first row
+   * gets the project set's own primary ordering rather than the planner's.
+   */
+  async listByGithubRepoId(
+    githubRepoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo[]> {
+    return tx.projectRepo.findMany({ where: { githubRepoId }, orderBy: { position: 'asc' } });
   },
 
   /** The set's LAST position key (the append anchor), or null on an empty set. */

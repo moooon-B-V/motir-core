@@ -179,8 +179,19 @@ export async function evaluateLinkCheck(subject: LinkCheckSubject): Promise<Link
     //    read is not one whose pull requests owe a card. `ProjectRepo` is the
     //    existing expression of "this repository holds planned work", so no new
     //    concept is introduced by the rule.
-    const planned = await projectRepoRepository.findByGithubRepoId(subject.repoRow.id, tx);
-    if (!planned) return { planned: false as const };
+    //    ⚠️ EXISTENTIAL, not a lookup (MOTIR-4648). This check has never wanted a
+    //    particular project — it asks whether ANY project plans work in this
+    //    repository, and returns a boolean. `findByGithubRepoId` happened to
+    //    answer that while `github_repo_id` was unique; with the index dropped the
+    //    honest read is the SET, and "is it non-empty?".
+    //
+    //    (The card described this site as "scoped by the project the card belongs
+    //    to". That does not fit the call: the check runs on a pull request, BEFORE
+    //    any card is known — deciding whether one is owed at all — so there is no
+    //    project to scope by. Amended on the record rather than followed into a
+    //    scope this function cannot obtain.)
+    const plannedIn = await projectRepoRepository.listByGithubRepoId(subject.repoRow.id, tx);
+    if (plannedIn.length === 0) return { planned: false as const };
 
     // 5. UNLINKED means: no `work_item_delivery` row names this pull request. The
     //    same question the completion gate asks, asked of the same table.

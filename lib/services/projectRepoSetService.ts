@@ -958,10 +958,21 @@ export const projectRepoSetService = {
           allowedTransitions(row.state),
         );
       }
-      // The pre-check turns the common same-tenant case into a clean 409; the
-      // `github_repo_id` unique index is the real, tenant-blind guarantee and its
-      // P2002 is translated below.
-      const claimant = await projectRepoRepository.findByGithubRepoId(githubRepoId, tx);
+      // ⚠️ THE CLAIM GUARD, RE-ASKED AT THE GRAIN THE PRODUCT NOW HAS
+      // (MOTIR-4648). It used to ask "is this repository claimed ANYWHERE?",
+      // because `github_repo_id` was globally unique. It now asks "is it already
+      // in THIS project's set?" — which is the guarantee that survived, and the
+      // one the 409 was always really about: connecting the same repository into
+      // one project twice is a mistake; two projects sharing one is the model.
+      //
+      // The pre-check still only turns the common same-tenant case into a clean
+      // 409; `@@unique([projectId, githubRepoId])` is the real, tenant-blind
+      // guarantee and its P2002 is translated below, unchanged.
+      const claimant = await projectRepoRepository.findByProjectAndGithubRepoId(
+        row.projectId,
+        githubRepoId,
+        tx,
+      );
       if (claimant && claimant.id !== rowId) {
         throw new RealizedRepoAlreadyClaimedError(githubRepoId);
       }

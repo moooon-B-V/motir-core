@@ -5739,12 +5739,21 @@ model GithubRepo {
   /// the same reason the metered rows are: the intent keeps `repoOwner`/`repoName`
   /// so it survives the mirror row entirely.
   ciRunnerProvisioningIntents CiRunnerProvisioningIntent[]
-  /// The project-repo-set row this connected repo REALIZES, if any (MOTIR-1780).
-  /// At most one — a repo created for project A can never be recorded as project
-  /// B's (`ProjectRepo.githubRepoId` is `@unique`). Back-relation of a SetNull FK:
-  /// disconnecting this repo leaves the set row with a null realized repo, not a
-  /// deleted plan.
-  projectRepo                 ProjectRepo?
+  /// The project-repo-set rows this connected repo REALIZES — a LIST, and the
+  /// plural is the model this story reverses into (MOTIR-4669 · MOTIR-4648).
+  ///
+  /// ⚠️ It was `ProjectRepo?`, singular, and the reason it could be was
+  /// `ProjectRepo.githubRepoId @unique`: a repo created for project A could never
+  /// be recorded as project B's (MOTIR-1780). That constraint is DROPPED. A
+  /// repository belongs to the ORGANISATION and which projects use it is
+  /// visibility configuration (MOTIR-2029), so **a repository in two projects is
+  /// the ordinary case**, and what survives is the narrower guarantee: at most one
+  /// row per `(project, repository)` — `ProjectRepo`'s
+  /// `@@unique([projectId, githubRepoId])`.
+  ///
+  /// Back-relation of a SetNull FK, unchanged: disconnecting this repo leaves each
+  /// set row with a null realized repo, not a deleted plan.
+  projectRepos                ProjectRepo[]
   workItemDeliveries          WorkItemDelivery[]
 
   @@unique([installationId, repoId])
@@ -6775,16 +6784,27 @@ model ProjectRepo {
   /// creation or connect-existing completes (`attachRealizedRepo`). This is the
   /// seam that makes one table serve as both plan and record.
   ///
-  /// `@unique` is the second uniqueness guarantee the ADR requires: a realized repo
+  /// ⚠️ THIS COLUMN WAS `@unique`, AND THE MODEL THAT MADE IT SO IS REVERSED
+  /// (MOTIR-4669 · MOTIR-4648). The comment here used to read: *"a realized repo
   /// is claimed by AT MOST ONE project row, so a repo created for project A can
-  /// never be recorded as project B's. Postgres allows many NULLs in a unique
-  /// index, which is exactly right — every `proposed` row is unrealized.
+  /// never be recorded as project B's."* A repository belongs to the
+  /// ORGANISATION, and which projects use it is visibility configuration
+  /// (MOTIR-2029, applied to the thing the code graph is built FROM) — so **a
+  /// repository in two projects is the ordinary case**, and the old sentence is
+  /// not merely relaxed, it is false.
+  ///
+  /// What SURVIVES is the narrower guarantee, and it is still enforced in the
+  /// DATABASE rather than in application code: `@@unique([projectId,
+  /// githubRepoId])` below — one repository appears at most once in ONE project's
+  /// set. That is what the 409 on a double-connect now means, and Postgres still
+  /// allows many NULLs in it, which is exactly right: every `proposed` row is
+  /// unrealized.
   ///
   /// SetNull (not Cascade): disconnecting a repo must leave the row with a null
   /// realized repo and its state still reading honestly. A disconnected repo is
   /// not a lost plan — the role + name + seed source survive so the row can be
   /// re-established.
-  githubRepoId          String?                   @unique @map("github_repo_id")
+  githubRepoId          String?                   @map("github_repo_id")
   /// ORDER within the set, and it is MEANINGFUL: the first row is the project's
   /// PRIMARY repo (ADR §1.3) — what a single-repo project's one row is, and the
   /// deterministic tie-break anywhere the set needs one. Order carries NO dispatch
@@ -6812,6 +6832,12 @@ model ProjectRepo {
   /// additionally rejects a CASE-VARIANT collision (git-host names are
   /// case-insensitive), for which this exact-match index is the backstop.
   @@unique([projectId, name])
+  /// The uniqueness that REPLACES `githubRepoId @unique` (MOTIR-4648): one
+  /// repository appears at most once in ONE project's set. It keeps a real
+  /// database-level guard rather than moving the check into application code — the
+  /// same 409 the product already returns, asked at the grain the product now has.
+  /// Many NULLs are allowed, as before: an unrealized row claims nothing.
+  @@unique([projectId, githubRepoId])
   /// Serves every read of this table, not just an explicit `where workspaceId`:
   /// RLS policy `project_repository_active_workspace` predicates all of them on
   /// `workspace_id = current_setting('app.workspace_id')`.

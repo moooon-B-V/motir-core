@@ -173,21 +173,46 @@ export const ciMinutesMeterService = {
     if (connection.kind === 'unknown_repo') return { outcome: 'unknown_repo' };
 
     const tenant = await withWorkspaceServiceContext(connection.workspaceId, async (tx) => {
-      // `ProjectRepo.githubRepoId` is @unique, so a realized repo belongs to AT
-      // MOST one project row — the join can never be ambiguous. Its absence is
-      // §5.4's deleted-project / no-project case: the repo-set row cascades away
-      // with its project, so "no row" covers both.
-      const projectRepo = await projectRepoRepository.findByGithubRepoId(
+      // ⚠️ ATTRIBUTION, AND IT IS NO LONGER A LOOKUP (MOTIR-4648). This read used
+      // to be `findByGithubRepoId`, justified by: *"`ProjectRepo.githubRepoId` is
+      // @unique, so a realized repo belongs to AT MOST one project row — the join
+      // can never be ambiguous."* The index is dropped and a repository in two
+      // projects is the ordinary case, so the join CAN be ambiguous now.
+      //
+      // The disposition, and it refuses to guess:
+      //   0 rows  → unattributed, exactly as before (§5.4's deleted-project /
+      //             no-project case — the set row cascades away with its project).
+      //   1 row   → that project. Unchanged, and still the overwhelmingly common
+      //             shape.
+      //   N rows  → the ORGANISATION still owns the spend and is still charged;
+      //             the PROJECT is genuinely unknown, so it is recorded as null
+      //             rather than as whichever row came back first. `projectId` is
+      //             nullable on `ci_workflow_run_usage` precisely because "we
+      //             know who pays but not which project" is a real state.
+      //
+      // Picking `rows[0]` would have been a one-word change and a plausible row
+      // in the meter attributed to a project that may not have run anything.
+      const projectRepos = await projectRepoRepository.listByGithubRepoId(
         connection.githubRepoId,
         tx,
       );
-      if (!projectRepo) return null;
-      const workspace = await workspaceRepository.findByIdInTx(projectRepo.workspaceId, tx);
+      if (projectRepos.length === 0) return null;
+      // Every row realizing one repository is reachable from the same
+      // installation, so the workspace is read off the first — what is ambiguous
+      // is the PROJECT, not the tenant.
+      const anchor = projectRepos[0]!;
+      const workspace = await workspaceRepository.findByIdInTx(anchor.workspaceId, tx);
       if (!workspace) return null;
+      if (projectRepos.length > 1) {
+        console.warn(
+          '[ciMinutesMeterService] repository is used by several projects — metering the org, project left null',
+          { githubRepoId: connection.githubRepoId, projectCount: projectRepos.length },
+        );
+      }
       return {
-        workspaceId: projectRepo.workspaceId,
+        workspaceId: anchor.workspaceId,
         organizationId: workspace.organizationId,
-        projectId: projectRepo.projectId,
+        projectId: projectRepos.length === 1 ? anchor.projectId : null,
       };
     });
 

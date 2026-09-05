@@ -154,21 +154,36 @@ export const ciRunnerProvisioningService = {
     }
 
     const tenant = await withWorkspaceServiceContext(connection.workspaceId, async (tx) => {
-      // `ProjectRepo.githubRepoId` is @unique, so a realized repo belongs to AT
-      // MOST one project row — the join can never be ambiguous. Its absence
-      // covers both the deleted-project and the no-project case (the set row
-      // cascades away with its project).
-      const projectRepo = await projectRepoRepository.findByGithubRepoId(
+      // ⚠️ ATTRIBUTION, and the SAME disposition as the meter's (MOTIR-4648) —
+      // the two sites ask one question and must not answer it differently.
+      // `ProjectRepo.githubRepoId` is no longer `@unique`, so:
+      //   0 rows → unattributed (the job is REFUSED below, which is this path's
+      //            own posture — the money has not been spent yet).
+      //   1 row  → that project. Unchanged.
+      //   N rows → the organisation owns the fleet cost and is charged; the
+      //            project is unknown and recorded as null. `project_id` is
+      //            nullable on `ci_runner_provisioning_intent` for this.
+      // Provisioning is NOT refused on ambiguity: an org-owned repository shared
+      // by two projects is a legitimate shape, and refusing its jobs would turn a
+      // supported model into an outage.
+      const projectRepos = await projectRepoRepository.listByGithubRepoId(
         connection.githubRepoId,
         tx,
       );
-      if (!projectRepo) return null;
-      const workspace = await workspaceRepository.findByIdInTx(projectRepo.workspaceId, tx);
+      if (projectRepos.length === 0) return null;
+      const anchor = projectRepos[0]!;
+      const workspace = await workspaceRepository.findByIdInTx(anchor.workspaceId, tx);
       if (!workspace) return null;
+      if (projectRepos.length > 1) {
+        console.warn(
+          '[ciRunnerProvisioningService] repository is used by several projects — provisioning for the org, project left null',
+          { githubRepoId: connection.githubRepoId, projectCount: projectRepos.length },
+        );
+      }
       return {
-        workspaceId: projectRepo.workspaceId,
+        workspaceId: anchor.workspaceId,
         organizationId: workspace.organizationId,
-        projectId: projectRepo.projectId,
+        projectId: projectRepos.length === 1 ? anchor.projectId : null,
       };
     });
 

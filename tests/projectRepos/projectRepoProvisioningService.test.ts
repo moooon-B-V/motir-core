@@ -752,10 +752,20 @@ describe('the establish run is honest about what it did NOT do', () => {
     expect(existingRepos.has('acme-api')).toBe(false);
   });
 
-  it('refuses to hand one repository to a SECOND project of the same workspace', async () => {
+  // ⚠️ INVERTED, NOT DELETED (Story MOTIR-4669 · MOTIR-4648). This case was
+  // titled *"refuses to hand one repository to a SECOND project of the same
+  // workspace"* and asserted `outcome: 'failed'` with
+  // `failureCode: 'REALIZED_REPO_ALREADY_CLAIMED'`, on the reasoning: *"two
+  // projects in ONE workspace, so the cross-tenant guard cannot fire and the
+  // `github_repo_id` unique index is what has to hold the line."*
+  //
+  // There is no line to hold any more. A repository belongs to the ORGANISATION
+  // and which projects use it is visibility configuration, so a second project
+  // taking up an existing repository is THE FEATURE — and the old assertion, left
+  // standing, would pin the product to refusing it. The previous contract is kept
+  // above so a reader meeting the inversion can see what it replaced.
+  it('lets a SECOND project of the same workspace take up the same repository, with no second repo', async () => {
     const fx = await makeWorkItemFixture();
-    // Two projects in ONE workspace, so the cross-tenant guard cannot fire and the
-    // `github_repo_id` unique index is what has to hold the line.
     const first = await projectRepoSetService.addRow(
       fx.projectId,
       { role: 'api', name: 'shared-api' },
@@ -771,16 +781,19 @@ describe('the establish run is honest about what it did NOT do', () => {
 
     const result = await projectRepoProvisioningService.establishSet(second, fx.ctx);
 
-    expect(result.rows[0]).toMatchObject({
-      outcome: 'failed',
-      failureCode: 'REALIZED_REPO_ALREADY_CLAIMED',
-    });
+    // It ADOPTS the repository that already exists rather than failing on it.
+    expect(result.rows[0]).toMatchObject({ rowId, outcome: 'adopted' });
     const rows = await projectRepoSetService.listByProject(second, fx.ctx);
-    expect(rows.find((r) => r.id === rowId)).toMatchObject({ state: 'failed', established: false });
-    // The first project keeps its repository, and there is still exactly one.
+    expect(rows.find((r) => r.id === rowId)).toMatchObject({ state: 'created', established: true });
+
+    // The first project keeps it — neither takes it from the other.
     expect(await readState(first.id, fx)).toMatchObject({ state: 'created', established: true });
-    const githubRepoCount = await adminDb.githubRepo.count();
-    expect(githubRepoCount).toBe(1);
+
+    // ⚠️ AND THERE IS STILL EXACTLY ONE `GithubRepo`. This assertion is the one
+    // that survived the inversion unchanged, and it is the story's whole promise:
+    // a second project picking up a repository costs nothing, because there is no
+    // second repository and therefore no second index.
+    expect(await adminDb.githubRepo.count()).toBe(1);
   });
 
   it('reports honestly when the actor loses ACCESS mid-run — the repository still exists', async () => {
