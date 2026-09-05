@@ -736,6 +736,49 @@ export async function getConvention(query: ConventionQuery): Promise<RawConventi
   return (await res.json()) as RawConventionSurface;
 }
 
+export interface CodeGraphStatusQuery {
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  /** The whole connected set — ONE call covers it, not one call per repo. */
+  repoRefs: readonly string[];
+}
+
+/** The raw boundary shape of `GET /v1/code-graph/status` (MOTIR-1765). */
+export interface RawCodeGraphRepoStatus {
+  repoRef: string;
+  indexed: boolean;
+  commitSha: string | null;
+  indexedAt: string | null;
+  codegraphVersion: string | null;
+}
+
+export interface RawCodeGraphStatus {
+  repos: RawCodeGraphRepoStatus[];
+}
+
+// GET /v1/code-graph/status — per-repo index freshness (MOTIR-1765). motir-ai
+// holds the only authoritative answer to "what is in the code graph, and how
+// current is it"; motir-core's own `job_run` ledger proves a job succeeded and
+// says nothing about WHICH COMMIT landed.
+//
+// `repoRef` is REPEATABLE, so the whole connected set costs one round-trip. The
+// answer is TOTAL over the request: a repo with no coordination row comes back
+// `indexed: false` with null freshness rather than being omitted, which is what
+// lets the consumer render "never indexed" for a CONNECTED repo.
+export async function getCodeGraphStatus(query: CodeGraphStatusQuery): Promise<RawCodeGraphStatus> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({
+    coreWorkspaceId: query.coreWorkspaceId,
+    coreProjectId: query.coreProjectId,
+  });
+  for (const ref of query.repoRefs) params.append('repoRef', ref);
+  const res = await aiFetch(`${url}/v1/code-graph/status?${params.toString()}`, {
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  return (await res.json()) as RawCodeGraphStatus;
+}
+
 // The RUN-SCOPED CREDENTIAL a fleet index container presents to motir-ai
 // (MOTIR-1989 / MOTIR-1986). `credential` is OPAQUE to motir-core: motir-ai signs
 // it and motir-ai verifies it, and nothing here parses, inspects or re-signs it.

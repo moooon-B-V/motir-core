@@ -46,3 +46,38 @@ This repo is the side that **enforces** invariants 1, 2, and 4; #3 is the closed
 The server-to-server surfaces this repo owns for the boundary are the internal read-back routes
 (`app/api/internal/ai/*`) — reachable only with the service credential **and** the job-scoped
 token, never from a browser session. Their shapes are specified in `motir-ai/docs/contract.md` §6.
+
+## The core → ai READS this repo makes
+
+The routes above are `ai → core`. In the other direction `motir-core` reaches the closed side
+through **one leaf**, `lib/ai/motirAiClient.ts`, and nothing else in this repo issues a request to
+`motir-ai`. Each read is `serviceAuth`-gated and keyed by the CORE identity — a workspace id and a
+project id — so this repo never learns, holds, or sends motir-ai's internal `aiProjectId`.
+
+| Read                                                   | Leaf                                   | Consumer                                 |
+| ------------------------------------------------------ | -------------------------------------- | ---------------------------------------- |
+| `GET /v1/preplan` · `PATCH /v1/preplan`                | `getPreplanState` / `saveDesignChoice` | the onboarding pre-plan surface          |
+| `GET /v1/code-audit` · `POST /v1/code-context/refresh` | `getCodeAudit` / `refreshCodeAudit`    | `lib/services/aiConventionService.ts`    |
+| `GET /v1/convention`                                   | `getConvention`                        | `lib/services/aiConventionService.ts`    |
+| `GET /v1/lessons` · `GET /v1/lessons/:id`              | `getLessons` / `getLesson`             | Settings → Project → AI planning         |
+| **`GET /v1/code-graph/status`**                        | **`getCodeGraphStatus`**               | **`lib/services/codeContextService.ts`** |
+
+### `GET /v1/code-graph/status` — per-repo index freshness (MOTIR-1765 → MOTIR-1767)
+
+Added by Story MOTIR-1754. Query: `coreWorkspaceId`, `coreProjectId`, and a **repeatable**
+`repoRef`, so one round-trip covers a whole connected repository set. Answers, per requested ref:
+`{ repoRef, indexed, commitSha, indexedAt, codegraphVersion }`.
+
+**Why it had to exist.** motir-ai holds the only authoritative record of what is in the code graph —
+its `CodeRepo` coordination rows — and it was not exposed. This repo could therefore infer
+_"indexed"_ only from its OWN `job_run` ledger, which proves a job succeeded and says nothing about
+WHICH COMMIT landed. _"Is Motir planning against my latest code?"_ was unanswerable end to end.
+
+**What stays on THIS side.** motir-ai does not know a repository's default-branch head, so it cannot
+say whether the graph is behind. The staleness **verdict** is computed here, in
+`lib/services/codeContextService.ts`, by comparing the indexed commit against
+`GithubRepo.lastPushSha` — the head this repo records from its own push webhook (MOTIR-1766). The
+boundary carries facts; the judgement is local.
+
+**Failure posture.** A boundary failure on this read degrades to an explicit _unknown_ and the
+surface still renders. An AI-side outage must never 500 the planning workspace.
