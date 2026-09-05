@@ -451,6 +451,52 @@ describe('describeProposal', () => {
     ).toBe('~ modify PROD-7 — title, storyPoints');
   });
 
+  // MOTIR-4620 — a `manual` card's proposed STEPS, as a COUNT. The rows are read
+  // in Motir; what the terminal owes is enough to notice a card that has none.
+  it('appends `· N steps` after the sizing, and pluralises on the count', () => {
+    expect(
+      describeProposal(
+        add('a', {
+          proposedFields: {
+            title: 'Provision the account',
+            kind: 'task',
+            type: 'manual',
+            storyPoints: 2,
+            todos: [
+              { text: 'Create the key', notesMd: null, commandText: null, executor: 'human' },
+              { text: 'Scope it', notesMd: null, commandText: null, executor: null },
+              { text: 'Set the secret', notesMd: null, commandText: null, executor: null },
+            ],
+          },
+        }),
+      ),
+    ).toBe('+ [task/manual] Provision the account (2 pts) · 3 steps');
+
+    expect(
+      describeProposal(
+        add('a', {
+          proposedFields: {
+            title: 'One thing',
+            kind: 'task',
+            todos: [{ text: 'The one thing', notesMd: null, commandText: null, executor: null }],
+          },
+        }),
+      ),
+    ).toBe('+ [task] One thing · 1 step');
+  });
+
+  it('renders NOTHING extra for a proposal with no steps, an empty list, or a null', () => {
+    expect(describeProposal(add('a', { proposedFields: { title: 'T', kind: 'task' } }))).toBe(
+      '+ [task] T',
+    );
+    expect(
+      describeProposal(add('a', { proposedFields: { title: 'T', kind: 'task', todos: [] } })),
+    ).toBe('+ [task] T');
+    expect(
+      describeProposal(add('a', { proposedFields: { title: 'T', kind: 'task', todos: null } })),
+    ).toBe('+ [task] T');
+  });
+
   it('renders a modify with an empty patch and a remove', () => {
     expect(describeProposal(add('m', { op: 'modify', workItemKey: 'PROD-7', patch: {} }))).toBe(
       '~ modify PROD-7',

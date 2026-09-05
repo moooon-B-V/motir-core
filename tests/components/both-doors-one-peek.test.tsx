@@ -47,6 +47,7 @@ const MODIFY: PlanReviewItemDto = planReviewItem({
     identifier: 'MOTIR-7',
     changedFields: ['priority'],
     settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+    todos: null,
   },
 });
 
@@ -199,6 +200,7 @@ describe('both plan-review doors open ONE peek (MOTIR-4185)', () => {
           identifier,
           changedFields: [],
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+          todos: null,
         },
       });
       render(<PlanProposalList items={[item]} outcome={null} />);
@@ -281,7 +283,13 @@ describe('the target fetch has a TERMINAL state in every direction (MOTIR-4185)'
       op: 'add',
       identifier: null,
       title: 'A proposed work item',
-      proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
+      proposal: {
+        op: 'add',
+        identifier: null,
+        changedFields: [],
+        settableRailFields: [],
+        todos: null,
+      },
     });
     render(<PlanProposalList items={[add]} outcome={null} />);
     fireEvent.click(screen.getByRole('button', { name: /Open / }));
@@ -320,6 +328,7 @@ const MATERIALIZED_ADD: PlanReviewItemDto = planReviewItem({
     identifier: 'MOTIR-7',
     changedFields: [],
     settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+    todos: null,
   },
 });
 
@@ -352,7 +361,13 @@ describe('a DECIDED plan’s list row opens the card that EXISTS (bug MOTIR-4471
       op: 'add',
       identifier: null,
       title: 'A proposed work item',
-      proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
+      proposal: {
+        op: 'add',
+        identifier: null,
+        changedFields: [],
+        settableRailFields: [],
+        todos: null,
+      },
     });
     render(<PlanProposalList items={[pending]} outcome={null} />);
     fireEvent.click(screen.getByRole('button', { name: /Open / }));
@@ -383,6 +398,7 @@ describe('a DECIDED plan’s list row opens the card that EXISTS (bug MOTIR-4471
           identifier: 'MOTIR-7',
           changedFields: [],
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+          todos: null,
         },
       });
       render(<PlanProposalList items={[item]} outcome="accepted" />);

@@ -53,7 +53,14 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     staleReasons: [],
     revised: false,
     targetMissing: false,
-    proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
+    todos: null,
+    proposal: {
+      op: 'add',
+      identifier: null,
+      changedFields: [],
+      settableRailFields: [],
+      todos: null,
+    },
     ...over,
   };
 }

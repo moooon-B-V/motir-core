@@ -607,9 +607,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'ab983b5ea9ac',
   },
   get_plan: {
+    // Re-pinned for MOTIR-4619, summary UNCHANGED and deliberately so — the
+    // `get_plan_status` reasoning above, applied here. The description's edit
+    // added ONE marker to the one-line render (`· N steps`, the count of a
+    // `manual` proposal's proposed to-do rows) and said that the rows themselves
+    // ride `structuredContent`. That is a new thing the tool REPORTS, not a
+    // different question it answers: this line already says the tool returns what
+    // the planner actually proposed rather than how much, and the steps are part
+    // of what was proposed.
     summary:
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much.',
-    descriptionFingerprint: 'c23f12cfee90',
+    descriptionFingerprint: '95d3e64618dd',
   },
   create_plan: {
     summary:

@@ -14,8 +14,14 @@ import type {
   CorrectPlanBriefInput,
   UpdateProposalKey,
   CorrectProposalKey,
+  ProposedTodoInput,
   CorrectPlanBriefKey,
 } from '@/lib/dto/plans';
+import {
+  TODO_COMMAND_MAX_LENGTH,
+  TODO_NOTES_MAX_LENGTH,
+  TODO_TEXT_MAX_LENGTH,
+} from '@/lib/workItemTodos/limits';
 import { InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
@@ -203,6 +209,58 @@ const createPlanInputSchema = {
 };
 
 /**
+ * A proposed TO-DO row — the element of `todos` (Story MOTIR-3810 · MOTIR-4619).
+ *
+ * The shape is `ProposedTodoInput` (`lib/dto/plans.ts`) and the bar is the
+ * STORE's, imported from `lib/workItemTodos/limits.ts` and never re-typed here:
+ * the schema states the cap so an agent is told the number, and the service
+ * enforces it so the two can never disagree about it.
+ */
+const proposedTodoSchema = z.object({
+  text: z
+    .string()
+    .describe(
+      `WHAT to do — ONE operation, at most ${TODO_TEXT_MAX_LENGTH} characters. ` +
+        '"Change this one setting", "run this one command". Navigation is NOT an operation: ' +
+        '"go to the dashboard and find the panel" belongs in `notesMd` of the row that then ' +
+        'changes something.',
+    ),
+  notesMd: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      `The INSTRUCTIONS for this one operation — Markdown, at most ${TODO_NOTES_MAX_LENGTH} ` +
+        'characters. The HOW, where `text` is the WHAT.',
+    ),
+  commandText: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      `The command this step runs, if it runs one — at most ${TODO_COMMAND_MAX_LENGTH} ` +
+        'characters, and in this field rather than inside `text`, because this is what the ' +
+        'reader copies.',
+    ),
+  executor: z
+    .enum(['coding_agent', 'human'])
+    .nullable()
+    .optional()
+    .describe(
+      'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the ' +
+        'proposal’s own `executor` at approve, falling back to `human`.',
+    ),
+});
+
+/** The `todos` array, described once for the three doors that carry it. */
+const TODOS_DESCRIPTION =
+  'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the ' +
+  'sequence they are performed in — and approving the plan writes one real to-do row per ' +
+  'element, none ticked. A `manual` card’s steps belong HERE, not only in the description: ' +
+  'the reviewer reads the list they will tick before they approve it, and the created card ' +
+  'carries it from birth. Leaf kinds only — a container’s steps are its children.';
+
+/**
  * One proposed operation.
  *
  * A deliberate NARROWING of `ProposalInput`: `planningProvenance` is absent from
@@ -241,6 +299,7 @@ const proposedFieldsSchema = z
       .string()
       .optional()
       .describe('The PORTABLE repo pin — a role of the project’s repository set.'),
+    todos: z.array(proposedTodoSchema).optional().describe(TODOS_DESCRIPTION),
   })
   .describe('The proposed item’s fields. Required on an `add`, ignored otherwise.');
 
@@ -535,6 +594,15 @@ const updatePlanItemInputSchema = {
     .nullable()
     .optional()
     .describe('Estimated minutes of work; `null` clears it.'),
+  todos: z
+    .array(proposedTodoSchema)
+    .nullable()
+    .optional()
+    .describe(
+      TODOS_DESCRIPTION +
+        ' REPLACES the list whole — a list has no sparse edit — so send the set you want; ' +
+        '`[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
+    ),
 };
 
 // ── The CORRECTION door (Story MOTIR-3533 · Subtask MOTIR-3541) ────────────
@@ -717,6 +785,7 @@ interface UpdatePlanItemArgs {
   executor?: string | null;
   storyPoints?: number | null;
   estimateMinutes?: number | null;
+  todos?: ProposedTodoInput[] | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1295,6 +1364,7 @@ export async function runUpdatePlanItem(
     'executor',
     'storyPoints',
     'estimateMinutes',
+    'todos',
   ] as const satisfies readonly UpdateProposalKey[];
 
   const input: UpdateProposalInput = {};
@@ -1344,6 +1414,7 @@ export async function runUpdatePlanProposal(
     'executor',
     'storyPoints',
     'estimateMinutes',
+    'todos',
     'parentRef',
     'blockedByRefs',
     'targetRepo',

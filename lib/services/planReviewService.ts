@@ -32,6 +32,7 @@ import type {
   PlanParentCrumbDto,
   PlanReviewDto,
   PlanReviewItemDto,
+  PlanReviewTodoDto,
 } from '@/lib/dto/planReview';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
@@ -677,6 +678,40 @@ export const planReviewService = {
       // them separately is the drift this card exists to make impossible.
       const changes = item.op === 'modify' ? buildChanges(item.patch, target, nameParent) : [];
 
+      // THE PROPOSED STEPS, resolved for READING (MOTIR-4622 · AMENDMENT 14 D5,
+      // D6; `design/ai-planning/design-notes.md` Part XV).
+      //
+      // ⚠️ `executor` IS RESOLVED HERE — `row.executor ?? proposal.executor ??
+      // 'human'` is exactly what `plansService.materialize` writes, so the peek
+      // shows WHAT APPROVE WILL WRITE rather than the raw field. Sending the
+      // null and resolving on the client would put one seed rule in two places,
+      // and the client's copy is the one nothing tests against materialize.
+      //
+      // ⚠️ `add` ONLY. A `modify`'s target is a committed card whose list is a
+      // person's PROGRESS: `QuickViewData` carries no to-do field and a `modify`
+      // patch carries no `todos`, so there is nothing to show and nothing this
+      // plan could change (D2). An `add` with no rows is `null` too, so the peek
+      // renders no section at all — a row's absence is a statement about the
+      // SUBJECT (Part XIV §1), and an empty `0 of 0` would assert that a planner
+      // considered the steps and proposed none.
+      //
+      // The op gate is written AT THE TWO CARRIERS below rather than here, in the
+      // literal `field: item.op === 'add' ? … : null` shape every other add-only
+      // field on this DTO uses — `tests/dto/planReviewFieldParity.test.ts` reads
+      // the service SOURCE for that shape, so a disposition declared there and a
+      // gate hidden behind a local would be a claim the guard cannot check.
+      const resolvedTodos: PlanReviewTodoDto[] | null =
+        proposed?.todos && proposed.todos.length > 0
+          ? proposed.todos.map((row) => ({
+              text: row.text,
+              notesMd: row.notesMd ?? null,
+              commandText: row.commandText ?? null,
+              executor: (row.executor ??
+                proposed?.executor ??
+                'human') as PlanReviewTodoDto['executor'],
+            }))
+          : null;
+
       // The COMMITTED parent, when there is one. Two sources now (MOTIR-3191):
       // a `parentRef` naming a real work item — an `add`, saying where it wants
       // to land — and the parent a `modify` / `remove` INHERITS from its target,
@@ -820,6 +855,14 @@ export const planReviewService = {
         statusCategory: statusByKey.get(target?.status ?? '')?.category ?? null,
         hasChildren: childParentIds.has(nodeId),
         changes,
+        // THE PROPOSED STEPS (Story MOTIR-3810 · MOTIR-4622 · Part XV).
+        //
+        // ⚠️ ONE LOCAL, TWO CARRIERS, NO SECOND DERIVATION — the discipline
+        // `changedFields` states four lines down. It rides the ITEM because the
+        // review model is what a projection test reads, and the ENVELOPE because
+        // the envelope is what reaches the peek; the envelope's copy below is
+        // this same resolved list, never a re-read of `proposed`.
+        todos: item.op === 'add' ? resolvedTodos : null,
         // A RECENCY fact, not a second reading of `op` (Part XII §E).
         revised: revisedItemIds.has(item.id),
         stale: reasons.length > 0,
@@ -844,6 +887,7 @@ export const planReviewService = {
           identifier: target?.identifier ?? null,
           changedFields: changes.map((c) => c.field as PlanItemChangeField),
           settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+          todos: item.op === 'add' ? resolvedTodos : null,
         },
       };
     });

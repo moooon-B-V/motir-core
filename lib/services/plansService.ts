@@ -60,10 +60,14 @@ import {
   assertProposalSetSelfConsistent,
   assertReparentLegal,
   collectReferencedWorkItemIds,
+  DEFAULT_PROPOSED_KIND,
   validatePlanProposals,
   type LiveWorkItemState,
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
+import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
+import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
+import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import {
@@ -240,6 +244,16 @@ function validateProposal(p: ProposalInput): void {
       throw new InvalidProposalError('An `add` proposal requires proposedFields.title.');
     }
     validateProposedSizing(p.proposedFields);
+    // The card's proposed STEPS (MOTIR-4616 · AMENDMENT 14 D4) — the store's own
+    // caps, imported never re-declared, plus the container gate. Read the kind
+    // the way `materialize` reads it (`DEFAULT_PROPOSED_KIND` when the `add`
+    // proposes none), so the gate here and the insert there agree about what
+    // this proposal IS.
+    validateProposedTodos(
+      p.proposedFields.todos,
+      p.proposedFields.kind ?? DEFAULT_PROPOSED_KIND,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
     assertKnownPlanningSource(
       p.proposedFields,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
@@ -403,12 +417,35 @@ function mergeProposedFields(
   // every key above it: absent leaves the proposal's executor alone, an explicit
   // `null` clears it back to unassigned.
   if (input.executor !== undefined) next.executor = input.executor;
+  // The card's proposed STEPS (MOTIR-4616 · AMENDMENT 14 D3). Sparse at the KEY
+  // like every line above it — absent leaves the list alone, an explicit `[]` or
+  // `null` clears it — but the VALUE replaces the set whole rather than merging
+  // per row: a list has no meaningful partial edit, the same reason a
+  // correction's `blockedByRefs` replaces rather than merges.
+  if (input.todos !== undefined) next.todos = input.todos;
   return next;
 }
 
-/** A created-row revision diff ({ field: { from: null, to } }) for a materialized add. */
-function buildAddDiff(row: WorkItem): Record<string, { from: null; to: unknown }> {
-  const diff: Record<string, { from: null; to: unknown }> = {
+/** One to-do row a materialized `add` wrote, as the revision diff names it. */
+interface MaterializedTodo {
+  id: string;
+  text: string;
+}
+
+/**
+ * One cell of a created-row revision diff. Every SCALAR key is a `{ from: null,
+ * to }` pair; `todos` is a COLLECTION key carrying `{ added }` directly, for the
+ * reason stated where it is written below — `lib/activity/renderers.ts` is keyed
+ * by field NAME, so the shape is the field's, not this function's.
+ */
+type AddDiffCell = { from: null; to: unknown } | { added: readonly MaterializedTodo[] };
+
+/** A created-row revision diff for a materialized add. */
+function buildAddDiff(
+  row: WorkItem,
+  todos: readonly MaterializedTodo[] = [],
+): Record<string, AddDiffCell> {
+  const diff: Record<string, AddDiffCell> = {
     title: { from: null, to: row.title },
     kind: { from: null, to: row.kind },
     status: { from: null, to: row.status },
@@ -432,6 +469,22 @@ function buildAddDiff(row: WorkItem): Record<string, { from: null; to: unknown }
   // `textField()` disposition in lib/activity/renderers.ts, so the created-revision
   // feed renders it.
   if (row.targetRepo != null) diff.targetRepo = { from: null, to: row.targetRepo };
+  // The card's STEPS (MOTIR-4618 · AMENDMENT 14 D5) — BYTE-IDENTICAL to what
+  // `workItemTodosService.recordTodoRevision` writes for a hand-added row, so the
+  // item's history reads the same whichever door the rows came through.
+  //
+  // ⚠️ AND THAT IS WHY IT IS NOT A `{ from, to }` CELL like its neighbours here.
+  // `lib/activity/renderers.ts` is keyed by FIELD NAME, not by revision kind, so
+  // `todos` has exactly one shape across every writer, and the shipped hand-add
+  // fixed it first: `collectionField()` reads `added` / `removed` off the value
+  // itself. Wrapping it would not render as a different collection — it would
+  // miss the collection renderer entirely and fall through to the generic part.
+  //
+  // Omitted when the `add` carried none, like every other optional field here:
+  // an empty key would render as "a list was created" for a card with no list.
+  if (todos.length > 0) {
+    diff.todos = { added: todos.map((t) => ({ id: t.id, text: t.text })) };
+  }
   return diff;
 }
 
@@ -1269,7 +1322,7 @@ async function materialize(
   // The created adds, collected for the post-creation body pass (Pass 3) — the
   // intra-plan item-link tokens in a body can reference a sibling created LATER
   // (a forward ref), so resolving them must wait until every add's id exists.
-  const createdAdds: Array<{ created: WorkItem; prefix: string }> = [];
+  const createdAdds: Array<{ created: WorkItem; prefix: string; todos: MaterializedTodo[] }> = [];
 
   const resolveRef = (ref: string): string => {
     if (ref.startsWith(TEMP_REF_PREFIX)) {
@@ -1440,12 +1493,57 @@ async function materialize(
         tx,
       );
     }
+    // THE CARD'S STEPS (Story MOTIR-3810 · MOTIR-4618, `agent-authored-plans.md`
+    // AMENDMENT 14 D5). A `manual` card's operations were proposed WITH it, the
+    // reviewer read them in the peek, and approve is where they become rows a
+    // person can tick.
+    //
+    // ⚠️ THROUGH THE REPOSITORY, NOT `workItemTodosService.addTodo`, and for the
+    // reason this file's own header gives for bypassing
+    // `workItemsService.createWorkItem` (`:137-149`): `addTodo` owns its own
+    // `withWorkspaceContext` and Prisma cannot nest interactive transactions, so
+    // calling it here would break the "approve applies in ONE transaction"
+    // guarantee. Its `lockTodoList` buys nothing either — it serialises two
+    // people appending to one card's list, and this list belongs to a card that
+    // did not exist two statements ago and that nobody else can reach until this
+    // transaction commits.
+    //
+    // What the service DOES own and is therefore reached for rather than
+    // re-implemented: the three normalizers (`lib/workItemTodos/normalize.ts`,
+    // lifted out for exactly this second writer) and the executor SEED rule,
+    // `todo.executor ?? pf.executor ?? 'human'` — the store's §2 rule, with the
+    // PROPOSAL's executor standing in for the card's, because at this point the
+    // card's own column was written from that same value one statement ago.
+    //
+    // ORDER is the array's (D1) — there is no `position` on a proposed row, so
+    // each key is minted from the row before it with `keyForAppend`, `null` for
+    // the first. A throw on any row rolls the whole approve back: a card with
+    // half its steps is worse than no card, because nothing on it says which half.
+    const createdTodos: MaterializedTodo[] = [];
+    let lastTodoPosition: string | null = null;
+    for (const todo of pf.todos ?? []) {
+      const row = await workItemTodoRepository.create(
+        {
+          workspaceId: ctx.workspaceId,
+          workItemId: created.id,
+          text: requireText(todo.text),
+          notesMd: normalizeNotes(todo.notesMd),
+          commandText: normalizeCommand(todo.commandText),
+          executor: (todo.executor ?? pf.executor ?? 'human') as WorkItemCreateInput['executor'],
+          position: keyForAppend(lastTodoPosition),
+        },
+        tx,
+      );
+      lastTodoPosition = row.position;
+      createdTodos.push({ id: row.id, text: row.text });
+    }
+
     planItemToWorkItem.set(item.id, created.id);
     await planItemRepository.setWorkItemId(item.id, created.id, tx);
     // The `created` revision is recorded in Pass 3, after the body's intra-plan
     // item-link tokens are resolved — so the revision (and the live row) carry the
     // FINAL chip body, never the temp-ref form.
-    createdAdds.push({ created, prefix });
+    createdAdds.push({ created, prefix, todos: createdTodos });
   }
 
   // Pass 2 — blocked-by edges for the adds (all add targets now exist).
@@ -1580,7 +1678,7 @@ async function materialize(
   // (it cannot nest `workItemsService.createWorkItem`'s own transaction), so this
   // is where that hook belongs. ADD-only + idempotent, so it never duplicates or
   // downgrades the structural `is_blocked_by` edges from Pass 2.
-  for (const { created, prefix } of createdAdds) {
+  for (const { created, prefix, todos } of createdAdds) {
     let finalRow = created;
     const { body: rewrittenDescription, unresolved } = rewriteIntraPlanRefs(
       created.descriptionMd ?? '',
@@ -1632,7 +1730,7 @@ async function materialize(
         workItemId: finalRow.id,
         changedById: ctx.userId,
         changeKind: 'created',
-        diff: buildAddDiff(finalRow),
+        diff: buildAddDiff(finalRow, todos),
       },
       tx,
     );
@@ -2235,6 +2333,17 @@ async function editAddProposal(
       // Re-validate sizing on the MERGED result (MOTIR-1433) so a patched-in bad
       // point/minute value is rejected here, the same as at create.
       validateProposedSizing(next);
+      // And the STEPS on the MERGED result (MOTIR-4616 · AMENDMENT 14 D3-D4).
+      // MERGED is load-bearing on both axes: a deepen that patches only `kind`
+      // must still be judged against the list the proposal already carries, and
+      // a deepen that patches only `todos` must still be judged against the kind
+      // it already has. Validating the PATCH alone would let a proposal become a
+      // `story` with a checklist in two calls that are each individually legal.
+      validateProposedTodos(
+        next.todos,
+        next.kind ?? DEFAULT_PROPOSED_KIND,
+        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      );
       await planItemRepository.update(
         planItemId,
         { proposedFields: next as unknown as Prisma.InputJsonValue },
@@ -3546,6 +3655,13 @@ export const plansService = {
             throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
           }
           validateProposedSizing(next);
+          // The STEPS, on the MERGED result — the same rule the deepen turn
+          // applies, on the same basis (MOTIR-4616 · AMENDMENT 14 D3-D4).
+          validateProposedTodos(
+            next.todos,
+            next.kind ?? DEFAULT_PROPOSED_KIND,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+          );
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),

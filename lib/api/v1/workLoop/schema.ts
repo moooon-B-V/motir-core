@@ -818,6 +818,21 @@ export const planOutcomeSchema = z.object({
 
 /** What an `add` proposal would create. Every field but the title is optional —
  *  a proposal is a draft, not a validated work item. */
+/**
+ * ONE proposed STEP of a `manual` card's to-do list (Story MOTIR-3810 ·
+ * MOTIR-4620) — the element of {@link planProposalFieldsSchema}'s `todos`.
+ *
+ * Declared here rather than inferred, because a versioned contract STRIPS what
+ * it does not name: without this a plan carrying steps and a plan carrying none
+ * are byte-identical to a client, with nothing on the wire to say which.
+ */
+export const planProposalTodoSchema = z.object({
+  text: z.string(),
+  notesMd: z.string().nullable(),
+  commandText: z.string().nullable(),
+  executor: z.enum(['coding_agent', 'human']).nullable(),
+});
+
 export const planProposalFieldsSchema = z.object({
   title: z.string(),
   kind: z.string().nullable(),
@@ -828,6 +843,16 @@ export const planProposalFieldsSchema = z.object({
   estimateMinutes: z.number().int().nullable(),
   descriptionMd: z.string().nullable(),
   targetRepo: z.string().nullable(),
+  /**
+   * The card's ORDERED STEPS, in the order they are performed — `null` on a
+   * proposal that carries none, which is most of them.
+   *
+   * READ-ONLY on this surface, and that is a boundary rather than an omission:
+   * `/api/v1` has no plan-AUTHORING operation at all (the author doors are the
+   * MCP's and the internal seam's), so there is nothing here for a `todos` to be
+   * written through.
+   */
+  todos: z.array(planProposalTodoSchema).nullable(),
 });
 
 /**
@@ -1333,6 +1358,17 @@ function presentProposedFields(
     estimateMinutes: fields.estimateMinutes ?? null,
     descriptionMd: fields.descriptionMd ?? null,
     targetRepo: fields.targetRepo ?? null,
+    // The steps, normalized row by row so the wire shape is TOTAL: every optional
+    // member of a stored row becomes an explicit `null` rather than an absent
+    // key, which is what lets a generated client type them as nullable rather
+    // than optional (the same discipline every field above it follows).
+    todos:
+      fields.todos?.map((todo) => ({
+        text: todo.text,
+        notesMd: todo.notesMd ?? null,
+        commandText: todo.commandText ?? null,
+        executor: (todo.executor ?? null) as 'coding_agent' | 'human' | null,
+      })) ?? null,
   };
 }
 

@@ -1593,6 +1593,12 @@ export interface components {
                     estimateMinutes: number | null;
                     descriptionMd: string | null;
                     targetRepo: string | null;
+                    todos: {
+                        text: string;
+                        notesMd: string | null;
+                        commandText: string | null;
+                        executor: ("coding_agent" | "human") | null;
+                    }[] | null;
                 } | null;
                 patch: {
                     [key: string]: unknown;
@@ -8119,6 +8125,12 @@ export interface operations {
                                     estimateMinutes: number | null;
                                     descriptionMd: string | null;
                                     targetRepo: string | null;
+                                    todos: {
+                                        text: string;
+                                        notesMd: string | null;
+                                        commandText: string | null;
+                                        executor: ("coding_agent" | "human") | null;
+                                    }[] | null;
                                 } | null;
                                 patch: {
                                     [key: string]: unknown;

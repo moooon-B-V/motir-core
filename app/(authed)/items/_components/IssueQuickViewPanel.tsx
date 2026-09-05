@@ -21,6 +21,7 @@ import { ArchivedNotice } from '@/components/issues/ArchivedNotice';
 import { DevelopmentSection } from '@/components/github/DevelopmentSection';
 import { RepositorySetField } from '@/components/workItems/RepositorySetField';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import { TodoRowReadOnly } from '@/app/(authed)/items/[key]/_components/TodoListSection';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
@@ -324,6 +325,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // PROPOSAL MODE — resolved before the early returns so the hook order is
   // stable across states (the loading / notfound arms carry no proposal).
   const tPlan = useTranslations('planReview');
+  // The shipped to-do section's own copy — the title and the count are the SAME
+  // strings the created card will show, which is the point of composing that
+  // section rather than writing a preview of it (MOTIR-4622).
+  const tTodos = useTranslations('workItemTodos');
   const proposal = props.state === 'ready' ? (props.proposal ?? null) : null;
   // The PLAN's decision — resolved beside the proposal for the same reason (hook
   // order), and `null` on every committed host (Part XIV §16.1, MOTIR-4472).
@@ -781,6 +786,53 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 </p>
               )}
             </>
+          ) : null}
+          {/* THE PROPOSED STEPS (Story MOTIR-3810 · MOTIR-4622) — the read-only
+              To-do list, built to `design/ai-planning/design-notes.md` Part XV.
+              LAST in the main column, after the explanation, because the peek
+              defers children and comments to a page a proposal does not have
+              (Part XIV §2): there is nothing below it, and the reader reaches it
+              by scrolling the body they were already reading.
+
+              ⚠️ `null` / `[]` RENDERS NOTHING, and that is the decision rather
+              than a fallback (Part XV §15.3). An empty `To-do list · 0 of 0`
+              would assert that a planner considered this card's steps and
+              proposed none — a claim the data cannot support, since the same
+              proposal is produced by a planner that never reached the question.
+              A row's absence is a statement about the SUBJECT (Part XIV §1).
+
+              The section does NOT get its own scroller at any length: it grows,
+              and `QuickViewMain`'s existing `overflow-y-auto` is the one scroll
+              surface (Part XV §15.2). A second scroller inside the first gives
+              the reader two things to move and no way to tell which one they
+              are in. */}
+          {proposal?.todos && proposal.todos.length > 0 ? (
+            <section className="mt-6" data-testid="proposal-todos">
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h3 className="text-[13px] font-semibold text-(--el-text)">
+                    {tTodos('sectionTitle')}
+                  </h3>
+                  <span className="text-[11.5px] text-(--el-text-secondary)">
+                    {tPlan('proposedTodosSubtitle')}
+                  </span>
+                </div>
+                <span
+                  data-testid="proposal-todos-progress"
+                  className="font-mono text-[11px] text-(--el-text-secondary)"
+                >
+                  {tTodos('progress', { done: 0, total: proposal.todos.length })}
+                </span>
+              </div>
+              <ul data-testid="proposal-todos-list" className="list-none">
+                {proposal.todos.map((row, index) => (
+                  // No id on a proposed row — it has none until approve mints
+                  // one — so the index IS the identity here, and it is a stable
+                  // one: this list is read-only and never reorders.
+                  <TodoRowReadOnly key={index} row={row} />
+                ))}
+              </ul>
+            </section>
           ) : null}
           {/* Development — linked PRs + PR/CI state (Story 7.10 · MOTIR-1579,
               design/github Panels 3 + 4a). Display-only here (the peek's one

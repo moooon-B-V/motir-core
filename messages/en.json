@@ -292,6 +292,7 @@
     "rowOpenAria": "Open {name}",
     "openTargetAsItStands": "Open the work item as it stands",
     "railChangedMark": "changed",
+    "proposedTodosSubtitle": "the steps this work item proposes",
     "railChangeCount": "This plan changes {n} of the {m} fields it can set.",
     "railChangeNone": "This plan changes none of these fields — only the description and the explanation.",
     "railAddAll": "Every value here is what approval will create.",

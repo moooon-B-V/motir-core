@@ -4508,7 +4508,7 @@ render it needed was of the MARKUP, not of the pixels.
 `deviceScaleFactor: 2` (export 2400×11500).
 
 When a plan proposes a `manual` work item, the proposal already carries that card's ORDERED STEPS
-(`docs/decisions/agent-authored-plans.md` AMENDMENT 13, MOTIR-4614). Until now the reviewer read
+(`docs/decisions/agent-authored-plans.md` AMENDMENT 14, MOTIR-4614). Until now the reviewer read
 those operations as a paragraph — the one thing they are actually approving on a `manual` card was
 the one thing the surface could not show. This Part draws where they read them instead: a
 **read-only To-do list** in the peek's main column, one click before Approve.
@@ -4585,7 +4585,7 @@ decision rather than as an omission. Three facts, none of them about this design
    with `doneAt` and `doneById`;
 2. `QuickViewData` carries **no to-do field** (`lib/dto/quickView.ts`, checked at `d2a0c964b`), so
    the peek has nothing to render even if it wanted to;
-3. AMENDMENT 13 **D2** refuses a `todos` on a `modify` patch, so a plan could not change one either.
+3. AMENDMENT 14 **D2** refuses a `todos` on a `modify` patch, so a plan could not change one either.
 
 The steps are shown on an `add` — which has no live card to fetch them from, and whose steps
 therefore exist nowhere else — and on nothing else.

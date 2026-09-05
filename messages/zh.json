@@ -292,6 +292,7 @@
     "rowOpenAria": "打开 {name}",
     "openTargetAsItStands": "查看工作项的当前状态",
     "railChangedMark": "将变更",
+    "proposedTodosSubtitle": "这个工作项提议的步骤",
     "railChangeCount": "此计划将变更它可设置的 {m} 个字段中的 {n} 个。",
     "railChangeNone": "此计划不变更这些字段，只变更描述与说明。",
     "railAddAll": "此处的每个值都是批准后将创建的内容。",

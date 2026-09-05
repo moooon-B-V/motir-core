@@ -87,6 +87,7 @@ const MODIFY: PlanProposalPeekDto = {
   identifier: 'PROD-7',
   changedFields: ['priority', 'storyPoints', 'description'],
   settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+  todos: null,
 };
 
 const ADD: PlanProposalPeekDto = {
@@ -94,6 +95,7 @@ const ADD: PlanProposalPeekDto = {
   identifier: null,
   changedFields: [],
   settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+  todos: null,
 };
 
 const REMOVE: PlanProposalPeekDto = {
@@ -101,6 +103,7 @@ const REMOVE: PlanProposalPeekDto = {
   identifier: 'PROD-7',
   changedFields: [],
   settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+  todos: null,
 };
 
 const DATA_WITH_WHY: QuickViewData = {
@@ -257,5 +260,117 @@ describe('the shipped peek in PROPOSAL MODE (MOTIR-4184)', () => {
     expect(screen.queryByTestId('quick-view-op')).toBeNull();
     expect(screen.getByText(/live on the/)).toBeTruthy();
     expect(screen.getAllByText(/^Created/).length).toBeGreaterThan(0);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE PROPOSED TO-DO LIST (Story MOTIR-3810 · MOTIR-4622) —
+// `design/ai-planning/design-notes.md` Part XV.
+//
+// The reviewer reads the steps one click before Approve, in the READ face of
+// the SAME row the created card will carry. So the assertions below are about
+// what is DROPPED as much as what is shown: a preview that grew its own row
+// markup would drift from the card's, which is the defect class MOTIR-4181 just
+// spent a story removing.
+// ════════════════════════════════════════════════════════════════════════════
+const FOUR_STEPS: PlanProposalPeekDto = {
+  op: 'add',
+  identifier: null,
+  changedFields: [],
+  settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+  todos: [
+    { text: 'Create a restricted API key', notesMd: null, commandText: null, executor: 'human' },
+    {
+      text: 'Scope it to charges:write',
+      notesMd: 'Dashboard → Developers → API keys.',
+      commandText: null,
+      executor: 'human',
+    },
+    {
+      text: 'Set the deployment secret',
+      notesMd: null,
+      commandText: 'fly secrets set STRIPE_KEY=… -a motir',
+      executor: 'coding_agent',
+    },
+    { text: 'Confirm a test charge succeeds', notesMd: null, commandText: null, executor: 'human' },
+  ],
+};
+
+describe('the PROPOSED to-do list in proposal mode (MOTIR-4622)', () => {
+  it('renders every step in ARRAY ORDER, with the count and the per-row executor mark (AC 2)', () => {
+    renderProposal(FOUR_STEPS);
+
+    const list = screen.getByTestId('proposal-todos-list');
+    const rows = within(list).getAllByTestId('todo-row-readonly');
+    expect(rows).toHaveLength(4);
+    expect(rows.map((r) => within(r).getByTestId('todo-text').textContent)).toEqual([
+      'Create a restricted API key',
+      'Scope it to charges:write',
+      'Set the deployment secret',
+      'Confirm a test charge succeeds',
+    ]);
+
+    // `0 of 4` — a proposal has no ticked row, and the header is the SAME
+    // string the created card shows.
+    expect(screen.getByTestId('proposal-todos-progress').textContent).toBe('0 of 4 done');
+
+    // The executor mark per row, and the ONE agent row marked as the agent's —
+    // asserted positionally, because "an agent pill is present" passes with it
+    // on the wrong step.
+    expect(within(rows[2]!).getByTestId('todo-executor-agent')).toBeTruthy();
+    for (const i of [0, 1, 3]) {
+      expect(within(rows[i]!).queryByTestId('todo-executor-agent')).toBeNull();
+    }
+  });
+
+  it('shows the command on its own row with a copy control, and collapses instructions (AC 2)', () => {
+    renderProposal(FOUR_STEPS);
+    const rows = within(screen.getByTestId('proposal-todos-list')).getAllByTestId(
+      'todo-row-readonly',
+    );
+
+    // The command is on the row that HAS one, and nowhere else.
+    expect(within(rows[2]!).getByTestId('todo-command').textContent).toContain('fly secrets set');
+    expect(within(rows[0]!).queryByTestId('todo-command')).toBeNull();
+    // Copying a command is a READ, so the control survives into the read face.
+    expect(within(rows[2]!).getByRole('button', { name: /copy command/i })).toBeTruthy();
+
+    // The disclosure exists on the row with notes, COLLAPSED, and the notes are
+    // not in the document until it is opened.
+    const toggle = within(rows[1]!).getByRole('button', { name: /instructions/i });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText(/Developers → API keys/)).toBeNull();
+  });
+
+  it('renders NO write affordance — no tickable checkbox, no add / edit / delete / reorder (AC 3)', () => {
+    renderProposal(FOUR_STEPS);
+    const list = screen.getByTestId('proposal-todos-list');
+
+    // The checkbox is DRAWN and is not a control: no role, no tab stop. A
+    // `disabled` checkbox would announce itself as a control that is
+    // unavailable, and this is not a control at all.
+    const rows = within(list).getAllByTestId('todo-row-readonly');
+    expect(within(rows[0]!).getByTestId('todo-checkbox-inert')).toBeTruthy();
+    expect(within(list).queryAllByRole('checkbox')).toHaveLength(0);
+
+    // And none of the four write affordances the shipped row carries.
+    for (const name of [/add step/i, /edit step/i, /delete step/i, /reorder step/i]) {
+      expect(within(list).queryByRole('button', { name })).toBeNull();
+    }
+  });
+
+  it('renders NO section for an add with an empty list, a null, or a modify (AC 4)', () => {
+    renderProposal({ ...FOUR_STEPS, todos: [] });
+    expect(screen.queryByTestId('proposal-todos')).toBeNull();
+    cleanup();
+
+    renderProposal({ ...FOUR_STEPS, todos: null });
+    expect(screen.queryByTestId('proposal-todos')).toBeNull();
+    cleanup();
+
+    // A `modify` shows none BY DECISION (AMENDMENT 14 D2, Part XV §15.4): its
+    // target is a committed card whose list is a person's PROGRESS.
+    renderProposal(MODIFY);
+    expect(screen.queryByTestId('proposal-todos')).toBeNull();
   });
 });

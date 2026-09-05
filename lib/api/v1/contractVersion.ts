@@ -314,5 +314,23 @@
  *   states: `V1_CONTRACT_VERSION` was `1.23.0` at `e055b6b23`, so this claims
  *   `1.24.0`. If a sibling has taken it since, RENUMBER this entry — it names the
  *   OPERATION rather than a position, precisely so that stays one line.
+ *
+ * - `1.25.0` — MOTIR-3810 / MOTIR-4620 adds `todos` to a plan PROPOSAL's
+ *   `proposedFields`: the card's ORDERED STEPS, proposed with the card so a
+ *   reviewer reads the list they will tick before approving it
+ *   (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D6). Each row is
+ *   `{ text, notesMd, commandText, executor }`, array order is list order, and
+ *   approve writes one real to-do row per element.
+ *
+ *   Additive: ONE new nullable field on an existing resource, `null` on every
+ *   proposal that carries no steps — which is every proposal that exists today,
+ *   so no response a client has already seen changes shape. It is READ-ONLY here
+ *   and stays so: `/api/v1` has no plan-authoring operation, so there is no write
+ *   door for this field to appear on, and adding one is a different decision.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.24.0` at `4dc08ff39`, so this claims `1.25.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the FIELD rather than a position.
+ *   MOTIR-3157 is the bug filed the last time a shape moved without the number.
  */
-export const V1_CONTRACT_VERSION = '1.24.0';
+export const V1_CONTRACT_VERSION = '1.25.0';
