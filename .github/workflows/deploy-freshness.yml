@@ -28,6 +28,17 @@
 # else's unrelated change is how a check gets muted, and a muted check is
 # indistinguishable from a passing one.
 #
+# ⚠️ WHAT IT COMPARES AGAINST — AND WHEN THAT STOPS BEING RIGHT (MOTIR-4605,
+# 2026-09-05). This lane compares production against the HEAD OF `main`, which
+# is correct only while every merge to `main` deploys. That is true today. When
+# `main` starts going to STAGING first, and a launch train carries production,
+# production is DELIBERATELY behind `main` and this lane goes PERMANENTLY RED —
+# which is the muted-check failure named in the paragraph directly above, and a
+# muted check is indistinguishable from a passing one. So the reference point
+# has to move in the SAME change that introduces staging, not after it, and the
+# question splits in two: is STAGING at the head of `main`, and is PRODUCTION at
+# the release ref? Whoever builds that pipeline is the reader this note is for.
+#
 # The logic lives in `scripts/deployFreshness.mjs` (unit-tested in
 # `tests/scripts/assert-deploy-freshness.test.ts`, which also asserts this file's
 # wiring) — same arrangement as `scripts/machinePool.mjs` and the deploy job's
@@ -42,11 +53,30 @@ name: Deploy freshness
 
 on:
   schedule:
-    # Every 30 minutes. The unit the check reports in is MINUTES and its ceiling
-    # is 90, so a coarser cadence would round the verdict past the thing it
-    # measures; a finer one would spend runs to sharpen a number whose ceiling is
-    # ninety minutes wide. GitHub runs a schedule late under load, which this
-    # tolerates: the age is measured from the COMMIT, not from the last run.
+    # Every 30 minutes — DECLARED. What GitHub actually delivers on this lane
+    # is about ONE RUN EVERY 3 h 36 m, and that is ACCEPTED as this lane's
+    # operating interval rather than treated as a defect (MOTIR-4599 measured
+    # it, MOTIR-4605 decided it, 2026-09-05).
+    #
+    # The numbers, so nobody re-opens a settled question: over this lane's whole
+    # life, 38 runs against 281 declared ticks — 13.5 % — with the gap between
+    # consecutive runs min 1 h 36 m, MEDIAN 3 h 36 m, max 7 h 50 m. Daily and
+    # weekly crons in this org deliver 100 %; only sub-hourly ones lose ticks.
+    # Dropping to a daily cron was the alternative and was REJECTED: it would
+    # have traded a 3 h 36 m detection latency for roughly 30 h.
+    #
+    # ⚠️ `max_age_minutes: 90` IS NOW A MEASURED NUMBER RATHER THAN A GUESS.
+    # Merge → `Deploy to Fly` complete, 268 commits over 8.2 days, excluding the
+    # 2026-08-28 incident day: median 23 min, p90 47 min, P95 79 min, with 3.3 %
+    # of merges over ninety minutes. The threshold sits just above the
+    # pipeline's real 95th percentile, which is what a chosen threshold should.
+    #
+    # ⚠️ AND THE COMMIT-AGE TOLERANCE BOUNDS THE VERDICT, NOT THE DETECTION
+    # LATENCY — the two were conflated in this block until 2026-09-05. Measuring
+    # age from the COMMIT rather than from the last run makes each run's VERDICT
+    # correct however late that run is; it says nothing about how long a stale
+    # deploy goes unnoticed, which is the GAP BETWEEN RUNS. That gap is the
+    # number above, and it is the one to re-measure if this lane is re-timed.
     - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
