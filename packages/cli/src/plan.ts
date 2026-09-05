@@ -365,6 +365,19 @@ function blockers(refs: string[] | undefined): string {
 }
 
 /** One proposal as a single line: the op, what it targets, and its sizing. */
+/**
+ * ` · N steps` — how many to-do rows this `add` proposes (MOTIR-4620).
+ *
+ * A COUNT, not the rows. The terminal is where a person or an agent confirms
+ * that a plan has the SHAPE it should; the steps themselves are read in Motir,
+ * where they can be reviewed properly. A count is enough to notice a `manual`
+ * card that has none.
+ */
+function steps(todos: readonly unknown[] | null | undefined): string {
+  const n = todos?.length ?? 0;
+  return n > 0 ? ` · ${n} step${n === 1 ? '' : 's'}` : '';
+}
+
 export function describeProposal(item: PlanProposal): string {
   const marker = OP_MARKER[item.op] ?? '?';
   if (item.op === 'add') {
@@ -374,6 +387,7 @@ export function describeProposal(item: PlanProposal): string {
     return (
       `${marker} [${kind}${type}] ${fields?.title ?? '(untitled)'}` +
       sizing(fields?.storyPoints, fields?.estimateMinutes) +
+      steps(fields?.todos) +
       blockers(item.blockedByRefs)
     );
   }
