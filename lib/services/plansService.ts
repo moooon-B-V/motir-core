@@ -22,7 +22,7 @@ import {
   type PlanRevisionAgentActor,
 } from '@/lib/services/planRevisionsService';
 
-import { planRepository } from '@/lib/repositories/planRepository';
+import { planRepository, type PlanUpdateInput } from '@/lib/repositories/planRepository';
 import {
   planItemRepository,
   type PlanItemCreateInput,
@@ -3376,7 +3376,7 @@ export const plansService = {
 
     // Built BEFORE the transaction — it reads nothing and can refuse an empty
     // call without taking the plan's row lock.
-    const data: Prisma.PlanUncheckedUpdateInput = {};
+    const data: PlanUpdateInput = {};
     const touched: CorrectPlanBriefKey[] = [];
     if (input.title !== undefined) {
       data.title = normalizeSelfReported(input.title);
