@@ -1386,11 +1386,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'design/brand/brand-mark.design-notes.md',
     why: "The asset's own File-name note, recording the filename the card asked for and why it ships as `design/brand/design-notes.md` instead. It has to name the path it did not use.",
   },
-  {
-    file: 'design/audit-coverage/design-notes.md',
-    path: 'design/code-context',
-    why: 'A verified-absent claim the asset makes inline — "its asset is not drawn yet — verified: there is no `design/code-context/` on `origin/main`".',
-  },
   // ── Forward-looking: the asset proposes the file ──────────────────────────
   {
     file: 'design/shell/design-notes.md',
