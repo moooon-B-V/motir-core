@@ -318,6 +318,7 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
         title={t('jobs.runDetailTitle')}
         size="lg"
       >
+        {/* modal-scroll-container: measured 1280x700, tallest = a failed run with a stack; the JsonBlock caps at 40vh and scrolls, panel 410px */}
         {detail ? (
           <div className="flex flex-col gap-4">
             <DeliveryDetail delivery={detail.delivery} />
@@ -481,6 +482,7 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
         description={t('jobs.dlqDetailDesc')}
         size="lg"
       >
+        {/* modal-scroll-container: measured 1280x700, tallest = a dead-letter row: failure JSON + event payload JSON, each JsonBlock capped at 40vh and scrolling, panel 550px */}
         {detail ? (
           <div className="flex flex-col gap-4">
             <div>

@@ -94,41 +94,47 @@ export function SaveFilterDialog({
       size="md"
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex min-h-0 flex-1 flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           if (!saving && name.trim()) void save();
         }}
       >
-        <Input
-          id={nameId}
-          label={t('save.nameLabel')}
-          placeholder={t('save.namePlaceholder')}
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            if (nameError) setNameError(null);
-          }}
-          error={nameError ?? undefined}
-          errorVariant="box"
-          autoFocus
-          required
-        />
-        <Textarea
-          id={descId}
-          label={t('save.descriptionLabel')}
-          placeholder={t('save.descriptionPlaceholder')}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-        />
-        <VisibilityRadioCards
-          value={visibility}
-          onChange={setVisibility}
-          canShare={viewer.canShare}
-          legend={t('save.visibilityLegend')}
-        />
-
+        {/* Same shape as EditFilterDialog, which clips at a 700px-tall
+            viewport once its go-private note shows; this one measured 623px
+            against the panel's 630px cap (MOTIR-2491), one copy change from
+            the same clip. `Modal.Body` owns the scroll recipe; the footer stays
+            pinned and inside the form. */}
+        <Modal.Body className="gap-4">
+          <Input
+            id={nameId}
+            label={t('save.nameLabel')}
+            placeholder={t('save.namePlaceholder')}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (nameError) setNameError(null);
+            }}
+            error={nameError ?? undefined}
+            errorVariant="box"
+            autoFocus
+            required
+          />
+          <Textarea
+            id={descId}
+            label={t('save.descriptionLabel')}
+            placeholder={t('save.descriptionPlaceholder')}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+          />
+          <VisibilityRadioCards
+            value={visibility}
+            onChange={setVisibility}
+            canShare={viewer.canShare}
+            legend={t('save.visibilityLegend')}
+          />
+        </Modal.Body>
         <Modal.Footer>
           <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
             {t('save.cancel')}

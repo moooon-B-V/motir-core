@@ -519,6 +519,7 @@ function ReassignModal({
   const [targetId, setTargetId] = useState('');
   return (
     <Modal open onOpenChange={(o) => !o && onCancel()} size="md">
+      {/* modal-scroll-container: measured 1280x700, tallest = an in-use status: the count + the destination select, panel 276px */}
       <h2 className="font-serif text-xl font-semibold text-(--el-text)">
         {t('workflow.reassignTitle', { label: status.label })}
       </h2>
@@ -607,6 +608,7 @@ function StatusFormModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} size="md">
+      {/* modal-scroll-container: measured 1280x700, tallest = add status (key, label, category, the swatch picker, make-initial), panel 468px */}
       <h2 className="font-serif text-xl font-semibold text-(--el-text)">{title}</h2>
       <form
         className="mt-4 flex flex-col gap-3"

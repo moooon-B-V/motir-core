@@ -104,6 +104,7 @@ export function IssueQuickView({ peekKey, children }: { peekKey: string; childre
       srTitle={t('quickViewDialogLabel', { key: peekKey })}
       className="h-[680px] max-h-[82vh] w-[90vw] p-0"
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = the ready peek; the panel pins its own height and IssueQuickViewPanel's two columns scroll, panel 574px */}
       {children}
     </Modal>
   );

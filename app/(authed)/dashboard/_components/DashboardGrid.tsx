@@ -859,6 +859,7 @@ function AccessModal({
   const [value, setValue] = useState<DashboardAccess>(initial);
   return (
     <Modal open onOpenChange={(o) => !o && onCancel()} size="sm" title={t('accessModal.title')}>
+      {/* modal-scroll-container: measured 1280x700, tallest = both access cards, panel 272px */}
       <AccessCards value={value} onChange={setValue} />
       <Modal.Footer>
         <Button variant="ghost" onClick={onCancel}>

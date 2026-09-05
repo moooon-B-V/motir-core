@@ -30,6 +30,7 @@ export function ShortcutsCheatsheet({
       description={t('shortcuts.description')}
       size="md"
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = all six SHELL_SHORTCUTS rows (a fixed list), panel 304px */}
       <ul className="flex flex-col gap-1">
         {SHELL_SHORTCUTS.map((shortcut) => (
           <li

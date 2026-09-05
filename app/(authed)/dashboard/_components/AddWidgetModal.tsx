@@ -124,30 +124,39 @@ export function AddWidgetModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={t('add.title')} size="md">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {WIDGET_TYPES.map((type) => {
-          const def = WIDGET_REGISTRY[type];
-          return (
-            <button
-              key={type}
-              type="button"
-              data-testid={`add-widget-${type}`}
-              onClick={() => onPick(type, def.editorKind)}
-              className="flex flex-col items-start gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) text-left hover:border-(--el-accent) hover:shadow-(--shadow-card) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-            >
-              <span className="flex h-[58px] w-full items-center justify-center rounded-(--radius-control) bg-(--el-surface-soft)">
-                <Thumbnail rendererKind={def.rendererKind} />
-              </span>
-              <span className="font-serif text-sm font-semibold text-(--el-text-strong)">
-                {t(`add.${type}_name`)}
-              </span>
-              <span className="text-xs leading-relaxed text-(--el-text-muted)">
-                {t(`add.${type}_desc`)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* The picker is a 3-column grid of one card per registered widget type,
+          so it grows a row every third type — seven types is three rows, and
+          at a 700px-tall viewport that is ~780px of content in a panel capped
+          at 90vh. Without a scroll container the last row and the Cancel
+          button were clipped OUTSIDE the panel with no scrollbar (MOTIR-2491,
+          the third instance of the `Modal.Body`-bypass class). `Modal.Body`
+          owns the scroll recipe; the footer below stays pinned. */}
+      <Modal.Body>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {WIDGET_TYPES.map((type) => {
+            const def = WIDGET_REGISTRY[type];
+            return (
+              <button
+                key={type}
+                type="button"
+                data-testid={`add-widget-${type}`}
+                onClick={() => onPick(type, def.editorKind)}
+                className="flex flex-col items-start gap-2 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-(--spacing-card-padding) text-left hover:border-(--el-accent) hover:shadow-(--shadow-card) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+              >
+                <span className="flex h-[58px] w-full items-center justify-center rounded-(--radius-control) bg-(--el-surface-soft)">
+                  <Thumbnail rendererKind={def.rendererKind} />
+                </span>
+                <span className="font-serif text-sm font-semibold text-(--el-text-strong)">
+                  {t(`add.${type}_name`)}
+                </span>
+                <span className="text-xs leading-relaxed text-(--el-text-muted)">
+                  {t(`add.${type}_desc`)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Modal.Body>
       <Modal.Footer>
         <button
           type="button"
