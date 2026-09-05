@@ -1477,6 +1477,52 @@
             d="m23.955 13.587-1.342-4.135-2.664-8.189a.455.455 0 0 0-.867 0L16.418 9.45H7.582L4.919 1.263a.455.455 0 0 0-.867 0L1.386 9.452.044 13.587a.924.924 0 0 0 .331 1.023L12 23.054l11.625-8.443a.92.92 0 0 0 .33-1.024"
           />
         </symbol>
+        <!-- ══ ADDED by MOTIR-4673's follow-up — the area rail's own glyphs ══ -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-building"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+          <path d="M10 6h4" />
+          <path d="M10 10h4" />
+          <path d="M10 14h4" />
+          <path d="M10 18h4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </symbol>
         <symbol
           viewBox="0 0 24 24"
           id="i-git-branch"
@@ -1633,7 +1679,46 @@
           reason the project is — it is not where the repository lives
         </div>
         <div class="panel">
-          <div class="settings-shell">
+          <!-- The AREA rail, `Git` active — MOTIR-4673 panel 7's nav. These two
+               panels drew no rail after the re-tier, on the reading that
+               `/settings/organization/*` has none; panel 6's ⚠️ comment records why
+               that reading is reversed. Drawn on all three so the page does not
+               change chrome between its own states. Shell is 952px: the 232px rail
+               plus the 720px content column these panels already used. -->
+          <div class="settings-shell" style="width: 952px">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="breadcrumb">moooon · Organisation settings</div>
+              <div class="nav-grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <svg><use href="#i-building" /></svg>Organisation
+                </div>
+                <div class="nav-row active">
+                  <svg><use href="#i-git-branch" /></svg>Git
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>Members
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-shield-check" /></svg>Security
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Billing</div>
+                <div class="nav-row">
+                  <svg><use href="#i-coins" /></svg>Usage &amp; cost
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-card" /></svg>Billing &amp; plans
+                </div>
+              </div>
+            </aside>
             <div class="content">
               <div class="page-head">
                 <h2>Git</h2>
@@ -1721,7 +1806,46 @@
           Panel 6&rsquo;s
         </div>
         <div class="panel">
-          <div class="settings-shell">
+          <!-- The AREA rail, `Git` active — MOTIR-4673 panel 7's nav. These two
+               panels drew no rail after the re-tier, on the reading that
+               `/settings/organization/*` has none; panel 6's ⚠️ comment records why
+               that reading is reversed. Drawn on all three so the page does not
+               change chrome between its own states. Shell is 952px: the 232px rail
+               plus the 720px content column these panels already used. -->
+          <div class="settings-shell" style="width: 952px">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>Back to Motir
+              </div>
+              <div class="breadcrumb">moooon · Organisation settings</div>
+              <div class="nav-grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <svg><use href="#i-building" /></svg>Organisation
+                </div>
+                <div class="nav-row active">
+                  <svg><use href="#i-git-branch" /></svg>Git
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>Members
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-shield-check" /></svg>Security
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Billing</div>
+                <div class="nav-row">
+                  <svg><use href="#i-coins" /></svg>Usage &amp; cost
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-card" /></svg>Billing &amp; plans
+                </div>
+              </div>
+            </aside>
             <div class="content">
               <div class="page-head">
                 <h2>Git</h2>
@@ -2196,21 +2320,53 @@
           index state, and <b>Used by N projects</b> drawn at rest (row 2 expanded)
         </div>
         <div class="panel">
-          <!-- ⚠️ NO RAIL, and that is a reading of SHIPPED reality rather than a
-               simplification. `/settings/organization/*` has NO area layout and no
-               settings rail — unlike `settings/project/` and `settings/account/`,
-               each of which has one. Its ONLY navigation is the ORG MENU behind the
-               organisation name (`OrgControl`), plus the command palette. Drawing an
-               "Organisation" rail group here would invent a navigation the app does
-               not have, so this panel draws the CONTENT COLUMN and names its door
-               instead. The DOOR is MOTIR-4673's, in design/org-admin/.
-               Wider than Panels 1–2's 720px shell because the inventory is a
-               five-column table. -->
-          <div class="settings-shell" style="width: 880px">
-            <div class="content">
-              <div class="breadcrumb" style="margin-bottom: 14px">
-                Settings › Organisation › Git
+          <!-- ⚠️ THE RAIL IS BACK, AND THAT IS A REVERSAL — recorded, not hidden.
+               An earlier revision of this panel drew NO rail, reasoning that
+               `/settings/organization/*` has no area layout and no settings nav
+               (true of the shipped tree) and that inventing one here would invent a
+               navigation the app does not have. The reasoning was sound and the
+               conclusion was wrong: a tier that is the only one of three without a
+               settings nav is a GAP, and drawing the page without one made the door
+               invisible from the page it opens — which is exactly what Yue read off
+               the asset. MOTIR-4673 panel 7 now SPECIFIES the nav; this panel draws
+               it with `Git` active, so the two halves agree about where you are.
+               The rail is 232px and the content column is unchanged at 880px — the
+               inventory is a five-column table and does not shrink to make room. -->
+          <div class="settings-shell" style="width: 1112px">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>Back to Motir
               </div>
+              <div class="breadcrumb">moooon · Organisation settings</div>
+              <div class="nav-grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <svg><use href="#i-building" /></svg>Organisation
+                </div>
+                <div class="nav-row active">
+                  <svg><use href="#i-git-branch" /></svg>Git
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>Members
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-shield-check" /></svg>Security
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Billing</div>
+                <div class="nav-row">
+                  <svg><use href="#i-coins" /></svg>Usage &amp; cost
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-card" /></svg>Billing &amp; plans
+                </div>
+              </div>
+            </aside>
+            <div class="content">
               <div class="page-head">
                 <h2>Git</h2>
                 <p class="sub">
@@ -2414,17 +2570,37 @@
           </div>
         </div>
         <p class="panel-note">
-          <b
-            >The DOOR is the ORG MENU, not a settings rail — and that is shipped reality, not a
-            simplification.</b
+          <b>⚠️ REVERSED — this note said the opposite, and it is kept as the reading it was.</b>
+          It read:
+          <i
+            >“The DOOR is the ORG MENU, not a settings rail — and that is shipped reality, not a
+            simplification. <code>/settings/organization/*</code> has no area layout and no rail of
+            its own; the only navigation to it is the menu behind the organisation name
+            (<code>OrgControl</code>) … a rail row drawn here would contradict the departure half of
+            the same move.”</i
           >
-          <code>/settings/organization/*</code> has no area layout and no rail of its own; the only
-          navigation to it is the menu behind the organisation name (<code>OrgControl</code>), whose
-          rows are Settings · Security · Members · Usage · Billing. The <code>Git</code> row that
-          joins them is <b>MOTIR-4673</b>'s, in <code>design/org-admin/</code> — a navigation is
-          amended in the area that owns it. And it is not a rail row anywhere:
-          <b>MOTIR-4640</b> takes <code>Git</code> OUT of the shell rail's bottom section, so a rail
-          row drawn here would contradict the departure half of the same move.
+        </p>
+        <p class="panel-note">
+          Every fact in it is still true of the shipped tree; the inference was not. Drawn without a
+          rail, this page shows a person no way to have arrived and no way onward — the org menu is
+          a pop-over you must already know to open, it closes behind you, and it highlights nothing.
+          <b>MOTIR-4673 panel 7 specifies the organisation settings NAV</b> (groups General · Access
+          · Billing; <code>Git</code> in General), and this panel now draws it with
+          <code>Git</code> active. <b>MOTIR-4640 is untouched by that</b>: it removes
+          <code>Git</code> from the SHELL rail's bottom section, and this is the settings AREA rail
+          — a different rail, which the project and account areas each already have. The org menu
+          keeps its row as the fast door.
+        </p>
+        <p class="panel-note">
+          <b>⚠️ A consequence of the row's gate, for whoever builds this table.</b> MOTIR-4673 gates
+          the <code>Git</code> ROW on org membership, not on org admin — <code>§6</code> of
+          <code>docs/decisions/organization-tier.md</code> forbids a relocation that narrows an
+          audience, and <code>/settings/workspace/github</code> checks no role at all today. So a
+          plain member reads this inventory, and
+          <b><code>Used by N projects</code> must read the access-filtered project set</b> — the
+          count and the expansion agreeing, never a count that reveals a project the viewer may not
+          name. The page's WRITE controls (Connect · Disconnect · Remove) carry the owner/admin
+          gate.
         </p>
         <p class="panel-note">
           <b>Used by N projects is a COLUMN, at rest.</b> It is the disclosure mechanism for the

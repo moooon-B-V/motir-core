@@ -54,8 +54,10 @@ improvisation at build time.
 > because the DERIVATION is still the right method while its ANSWER is now false.
 > The connection is ORGANISATION-scoped (MOTIR-4649), so the surface is **Settings
 > → Organisation → Git** — _"the workspace is the wrong tenant for the same reason
-> the project is: it is not where the repository lives."_ The rail row described
-> below is gone with it; the door is the org menu (MOTIR-4673). Verbatim:
+> the project is: it is not where the repository lives."_ The **Workspace**-group
+> rail row described below is gone with it; the door is the `Git` row in the
+> organisation settings nav (MOTIR-4673 panel 7), with the org menu's row (panel 6)
+> beside it. Verbatim:
 
 Same as GitHub: the integration is **workspace-scoped** (the connection binds to
 the workspace; the token store is workspace-keyed via the seam's
@@ -83,8 +85,12 @@ row. Instead:
 ### Access path (the door — drawn, not just named)
 
 - **Settings surfaces (Panels 1–2):** ⚠️ **re-tiered by MOTIR-4672.** The door is
-  the **org menu** (`OrgControl`), specified by MOTIR-4673 in `design/org-admin/`;
-  the breadcrumb is `Settings › Organisation › Git`, and the provider `Segmented`
+  the **organisation settings nav** (`Git`, in the `general` group), specified by
+  MOTIR-4673 panel 7 in `design/org-admin/`, with the **org menu**'s `Git` row
+  (panel 6 there) as the fast door beside it. The panels draw that rail with `Git`
+  active — the GitLab arm wears the SAME chrome as the GitHub arm, because it is
+  one page with a provider Segmented and a rail on one but not the other would make
+  it two. Its head reads `moooon · Organisation settings`, and the provider `Segmented`
   [GitHub | GitLab] is still the in-page door to the GitLab variant. It read: _"the
   settings rail shows the **Git** row (git-branch icon) active under the
   **Workspace** group, breadcrumb `Settings › Workspace › Git`"_ — a rail that never
@@ -395,11 +401,13 @@ that sent a reader to `Settings → Workspace → GitHub` — the Panel-5c no-ma
 hint and its disconnected-error banner — now name the organisation, because the
 destination they pointed at is deleted by this very story.
 
-**And the RAIL is gone rather than corrected.** An intermediate pass replaced the
-fictional _Account / Workspace / Project_ grouping with a faithful drawing of what
-`/settings/workspace/github` renders today — which was true and still wrong, because
-it drew the surface this story removes. There is no rail in these panels now; the
-DOOR is the **org menu**, and it is **MOTIR-4673**'s, in `design/org-admin/`.
+**And the RAIL went through three states, which is worth recording as three.** (1) A fictional
+_Account / Workspace / Project_ grouping — invented, and caught by Yue. (2) A faithful drawing of
+what `/settings/workspace/github` renders today — true, and still wrong, because it drew the surface
+this story removes. (3) **No rail at all** — also wrong, in the third direction: it left the page
+with no visible door. The rail these panels carry NOW is the organisation settings nav
+**MOTIR-4673 panel 7 specifies**, `Git` active. It is not a drawing of something shipped; it is a
+drawing of something designed, in the asset that designs it, cited here.
 
 For the record, since two passes got this wrong in opposite directions — the
 grouping never existed either: only `settings/project/` and `settings/account/`

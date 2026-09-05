@@ -25,8 +25,10 @@ on top of the Development display surface **MOTIR-1579** ships.
 > tier should be able to see what it replaced. Its ANSWER is now false: the
 > installation and the repository are ORGANISATION-scoped, so the surface is
 > **Settings → Organisation → Git**, and _"the workspace is the wrong tenant for
-> the same reason the project is: it is not where the repository lives."_ The rail
-> row it describes is gone too — the door is the org menu (MOTIR-4673).
+> the same reason the project is: it is not where the repository lives."_ The
+> **Workspace**-group rail row it describes is gone too — the door is the `Git` row
+> in the organisation settings nav (MOTIR-4673 panel 7), with the org menu's row
+> (panel 6) beside it.
 
 The GitHub integration lives under **Settings → Workspace → GitHub**
 (`app/(authed)/settings/workspace/github`, the shipped settings-area shell that
@@ -50,8 +52,10 @@ settings page).
 ### Access path (the door — drawn, not just named)
 
 - **Settings surfaces (Panels 1–2):** ⚠️ **re-tiered by MOTIR-4672.** The door is
-  the **org menu** (`OrgControl`), specified by MOTIR-4673 in `design/org-admin/`,
-  and the breadcrumb is `Settings › Organisation › Git`. It read: _"the settings
+  the **organisation settings nav** (`Git`, in the `general` group), specified by
+  MOTIR-4673 panel 7 in `design/org-admin/`, with the **org menu**'s `Git` row
+  (panel 6 there) as the fast door beside it. The panels draw that rail with `Git`
+  active; its head reads `moooon · Organisation settings`. It read: _"the settings
   rail shows a **GitHub** row (github mark icon) active under the **Workspace**
   group, with the breadcrumb `Settings › Workspace › GitHub`"_ — a rail that never
   existed, at a tier that no longer does. The rule it states is still right and is
@@ -402,19 +406,40 @@ organisation-scoped. So the route is **Settings → Organisation → Git**, the 
 never _workspace_. The _two grants_ model, the identity binding, the PR/CI surfaces and the Panel-5
 link affordance are untouched.
 
-**⚠️ The DOOR is the ORG MENU, and Panel 6 draws NO RAIL — that is a reading of shipped reality,
-not a simplification.** `/settings/organization/*` has **no area layout and no settings rail** —
-unlike `settings/project/` and `settings/account/`, each of which has one. Its only navigation is
-the **org menu** behind the organisation name (`app/(authed)/_components/OrgControl.tsx`), whose
-rows are Settings · Security · Members · Usage · Billing, plus the command palette. So Panel 6
-draws the **content column** with its breadcrumb and names its door rather than inventing an
-"Organisation" rail group the app does not render.
+**⚠️ REVERSED — the panels DO draw a rail, and it is `Git` active in the organisation settings
+nav.** This section read:
 
-**The `Git` row that joins that menu is NOT specified here.** A navigation is amended in the area
-that owns it, so the row is **MOTIR-4673**, in `design/org-admin/` — which is where the org menu is
-already drawn (Panel 1, arm C). **And it is not a rail row anywhere:** **MOTIR-4640** takes `Git`
-OUT of the shell rail's bottom section, so a rail row drawn here would contradict the departure half
-of the same move.
+> The DOOR is the ORG MENU, and Panel 6 draws NO RAIL — that is a reading of shipped reality, not a
+> simplification. `/settings/organization/*` has **no area layout and no settings rail** — unlike
+> `settings/project/` and `settings/account/`, each of which has one. Its only navigation is the
+> **org menu** behind the organisation name (`app/(authed)/_components/OrgControl.tsx`), whose rows
+> are Settings · Security · Members · Usage · Billing, plus the command palette. So Panel 6 draws
+> the **content column** with its breadcrumb and names its door rather than inventing an
+> "Organisation" rail group the app does not render.
+
+Every fact in it is still true of the shipped tree; the inference was not, and Yue read the
+consequence straight off the asset: drawn without a rail, this page shows a person no way to have
+arrived and no way onward. The org menu is a pop-over you must already know to open, it closes
+behind you, and it highlights nothing. A tier that is the only one of three without a settings nav
+is a **gap**, and drawing the page as if the gap were the convention designs it in permanently.
+
+**MOTIR-4673 panel 7 now specifies the organisation settings NAV** — a registry sibling of
+`projectSettingsNav.ts` / `accountSettingsNav.ts`, groups `general / access / billing`, with `Git`
+in `general`. **Panels 1, 2 and 6 all draw it with `Git` active**, on all three so the page does not
+change chrome between its own states. The rail's breadcrumb (`moooon · Organisation settings`)
+replaces the content-column one.
+
+**MOTIR-4640 is untouched by that.** It removes `Git` from the SHELL rail's bottom section; this is
+the settings AREA rail, which the project and account areas each already have. Two different rails,
+and the move is unaffected. The **org menu keeps its `Git` row** (MOTIR-4673 panel 6) as the fast
+door beside the durable one.
+
+**⚠️ The row's gate has a consequence for the `Used by N projects` column.** MOTIR-4673 gates the
+`Git` ROW on org membership, not org admin — §6 of `docs/decisions/organization-tier.md` forbids a
+relocation that narrows an audience, and `/settings/workspace/github` checks no role at all today.
+So a plain member reads this inventory, and **the count and the expansion must read the same
+access-filtered project set** — never a count that reveals a project the viewer may not name. The
+page's WRITE controls (Connect · Disconnect · Remove) carry the owner/admin gate.
 
 ### ⚠️ CORRECTED ON REVIEW — there is no WORKSPACE tier for git, and these panels drew one
 
@@ -438,11 +463,13 @@ that sent a reader to `Settings → Workspace → GitHub` — the Panel-5c no-ma
 hint and its disconnected-error banner — now name the organisation, because the
 destination they pointed at is deleted by this very story.
 
-**And the RAIL is gone rather than corrected.** An intermediate pass replaced the
-fictional _Account / Workspace / Project_ grouping with a faithful drawing of what
-`/settings/workspace/github` renders today — which was true and still wrong, because
-it drew the surface this story removes. There is no rail in these panels now; the
-DOOR is the **org menu**, and it is **MOTIR-4673**'s, in `design/org-admin/`.
+**And the RAIL went through three states, which is worth recording as three.** (1) A fictional
+_Account / Workspace / Project_ grouping — invented, and caught by Yue. (2) A faithful drawing of
+what `/settings/workspace/github` renders today — true, and still wrong, because it drew the surface
+this story removes. (3) **No rail at all** — also wrong, in the third direction: it left the page
+with no visible door, which is what Yue read off it. The rail these panels carry NOW is the
+organisation settings nav **MOTIR-4673 panel 7 specifies**, `Git` active. It is not a drawing of
+something shipped; it is a drawing of something designed, in the asset that designs it, cited here.
 
 For the record, since two passes got this wrong in opposite directions — the
 grouping never existed either: only `settings/project/` and `settings/account/`
