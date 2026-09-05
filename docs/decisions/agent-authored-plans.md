@@ -2423,3 +2423,260 @@ second plan they must decline by hand, which is two surfaces to read instead of 
 is refused."_ Under this amendment that is false for a declared revision. **Nothing in `motir-meta`
 changes in this card's pull request** — one subtask is one repo — and the sweep is filed as its own
 sibling, MOTIR-4154, `blocked_by` this card.
+
+---
+
+## AMENDMENT 13 — an `add` proposal CARRIES the card's to-do list (MOTIR-3810 · MOTIR-4614, 2026-09-05)
+
+MOTIR-3808 gave a `manual` card's operations somewhere to live: an ordered list of `work_item_todo`
+rows, each ONE operation, each carrying its own executor and an optional command you copy, ticked off
+by the person doing them. It is a surface you edit while you are WORKING.
+
+**Planning never reaches it.** A plan proposes a `manual` card whose `descriptionMd` says _"provision
+the DNS records"_, a reviewer approves that sentence, and the twelve operations inside it are written
+— if they are written at all — by whoever opens the card afterwards. So the one thing the reviewer is
+actually approving on a `manual` card, the work a person will do, is the one thing the review surface
+cannot show them.
+
+This amendment settles the shape that closes that gap: **an `add` proposal carries the card's steps,
+the reviewer reads them before approving, and approve writes them as the card's real to-do rows.**
+
+> Every reading below was taken off `origin/main` at `4dc08ff39` on 2026-09-05.
+
+### The context, and why it is an amendment rather than a decision
+
+Nothing here is a product choice. Yue settled the WHAT on 2026-08-28 — _"when plan a manual subtask,
+it should be planned like a to-do list, each to-do can be manual or agent"_ — and every question below
+is a HOW that the shipped code already answers, if it is asked. What makes them worth writing down is
+that each would otherwise be answered **implicitly, by whichever card reached it first**:
+
+- whether a `modify` may rewrite a committed card's list — decided by a schema key nobody argues about;
+- whether the caps are re-declared or imported — decided by a validator;
+- whether materialize writes through the service or the repository — decided by an import;
+- whether an agent's `manual` card with no steps is finished — decided by a completeness predicate.
+
+Four files, four authors, four defensible answers, no reader. The cost of the alternative is not a
+wrong feature; it is a feature whose reasons live nowhere, and a `modify` delta added six months from
+now by someone who could not find the sentence saying why it was left out.
+
+### D1 — the carrier is a field on `proposedFields`, and array order IS list order
+
+`PlanItemProposedFields` (`lib/dto/plans.ts:106`) gains:
+
+```ts
+todos?: ProposedTodo[] | null;
+
+interface ProposedTodo {
+  text: string;
+  notesMd?: string | null;
+  commandText?: string | null;
+  executor?: 'coding_agent' | 'human' | null;
+}
+```
+
+**Array order is list order.** There is no `position` on a proposed row and there must not be: a
+fractional index is minted from its NEIGHBOURS at write time (`keyForAppend`,
+`lib/workItems/positioning.ts`), so a key minted at append would be a key computed against a list that
+does not exist yet. The array is the order; materialize mints the keys (D5).
+
+It is one of the `add`'s own values, exactly like `descriptionMd` — persisted in the `proposedFields`
+JSON, no new table, no new column, no migration. `PlanItem.proposedFields`'s doc comment in
+`prisma/schema.prisma:5404` enumerates the fields it holds and says _"`PlanItemProposedFields` in
+`lib/dto/plans.ts` is the authoritative shape — this list is a reader's summary of it, so keep the two
+in step when the shape grows."_ The shape grows here, so that comment is a **deliverable of the carrier
+card**, not a nicety.
+
+### D2 — `add` ONLY. A `modify` may not rewrite a committed card's list
+
+`PlanItemPatch` (`lib/dto/plans.ts:220`) gains NO `todos` key, and `PLAN_ITEM_PATCH_KEYS` with its
+compile-time exhaustiveness guard (`lib/dto/plans.ts:350-380`) is untouched.
+
+**The symmetric feature was considered and is REJECTED.** The obvious shape — a `todosAdd` /
+`todosRemove` delta on the patch, mirroring `blockedByAdd` / `blockedByRemove` — is the one a reader
+expects to find, so the rejection is recorded rather than left as an omission.
+
+**The reason is that a committed card's list is not content the planner owns.** Every row carries
+`doneAt` and `doneById`: the list on a live card is the record of **how far a person has got**. A
+re-plan that overwrote four ticked rows with four fresh ones would not be an edit to a description
+that happens to be a list — it would be the day the checkbox stopped meaning anything, and the loss
+would be silent, because a re-plan is approved as one act by someone reading titles.
+
+The two doors that DO edit a live card's list are unchanged and are the right ones: the shipped
+section on the item page (a person editing their own progress) and the item-scoped assistant,
+MOTIR-1344. `blockedByAdd` is not a precedent against this — an edge has no `doneAt`.
+
+An omission invites the next reader to add the missing half. A recorded rejection does not, which is
+the whole reason this D exists in a document about a field that is not being added.
+
+### D3 — DEEPENABLE, because a step list is what a card SAYS
+
+AMENDMENT 3 D3 fixed the deepen turn's editable set with a rule: **a deepen may change what a card
+SAYS and who ACTS on it, never where it SITS or SHIPS.** AMENDMENT 4 D3a is the one widening that rule
+has taken, adding `executor` on exactly that reasoning.
+
+A to-do list is CONTENT — it is the card's own words about the work, at a finer grain than
+`descriptionMd` — so it falls on the SAYS side and joins the deepen's editable set. It is not
+placement: it says nothing about where the card sits or which repository it ships in, so D3's excluded
+columns (`parentRef`, `blockedByRefs`, `targetRepo` / `targetRepoRole`) are untouched by this
+amendment.
+
+**Three doors carry it on the deepen side**, and they are the ones that already carry
+`explanationMd`:
+
+1. **`update_plan_item`** — the MCP deepen turn (`lib/mcp/tools/`), onto `plansService.updateProposal`;
+2. **`update_plan_proposal`** — the AMENDMENT 8 correction door, onto `plansService.correctProposal`;
+3. **the internal AI deepen + correct routes** — the `/api/internal/ai/plan-proposals` §4 job-token
+   seam Motir's own planner writes through.
+
+Mechanically, `todos` joins `UpdateProposalInput` (`lib/dto/plans.ts:533`), and therefore
+`CorrectProposalInput` (`:593`), which extends it. **That is the one place this amendment cannot be
+implemented incompletely**, and it is deliberate: `UPDATE_PROPOSAL_KEYS` (`:643`) is the declared
+source every transport derives from, held to the interface by a compile-time assertion (`:684`) and to
+the internal route's parser by `tests/integration/ai/planRevisionRoutes.test.ts`. Its own comment says
+why it exists — a key declared on an input and read by no transport is _"invisible from both ends: the
+request succeeds, the response is a `200`, and the proposal simply keeps the value it had"_, which
+happened three times to this contract. Adding `todos` to `UpdateProposalInput` without carrying it
+through every transport **fails `tsc` in the pull request that adds it.**
+
+**Sparse like every key in that set:** absent leaves the proposal's list alone; an explicit `[]` or
+`null` CLEARS it. `mergeProposedFields` (`lib/services/plansService.ts:387`) is an explicit key-by-key
+merge, so it gains one line and no behaviour anywhere else changes.
+
+### D4 — the bar is the STORE's bar, imported and never re-declared
+
+Validated at BOTH write boundaries — the append (`plansService.addProposals`, `lib/services/plansService.ts:2635`)
+and the deepen / correction (`updateProposal` `:3284`, `correctProposal`):
+
+| field         | rule                                                         | constant                   |
+| ------------- | ------------------------------------------------------------ | -------------------------- |
+| `text`        | non-empty after trim, ≤ 200 characters                       | `TODO_TEXT_MAX_LENGTH`     |
+| `notesMd`     | ≤ 2000 characters                                            | `TODO_NOTES_MAX_LENGTH`    |
+| `commandText` | ≤ 500 characters                                             | `TODO_COMMAND_MAX_LENGTH`  |
+| `executor`    | `coding_agent` \| `human` \| null, at the TRANSPORT's schema | — (AMENDMENT 4 D3a's rule) |
+
+All three are imported from **`lib/workItemTodos/limits.ts`**, whose header is explicit that this is
+the point of the file: _"⚠️ THE POINT OF THIS FILE IS THAT THE NUMBER HAS ONE HOME … a bar enforced in
+two places is a bar that drifts — so the service, the DTO's documented contract, the error message a
+user reads and every test assert against THESE constants, never against a literal."_ A proposal path
+that re-declared `200` would be the second home that file exists to prevent, and the drift would be
+invisible: a step accepted at plan time and rejected on the card it materializes into.
+
+**A `todos` on a CONTAINER kind is refused** — `InvalidProposalError`, at the same boundary as every
+other proposal-shape refusal. A container's steps are its children; a story with a checklist is a
+story whose children were never planned, and the refusal is what says so at the moment somebody writes
+it rather than at the moment somebody reads it.
+
+**It is ALLOWED on every leaf kind** — `task`, `bug`, `subtask` — because the STORE allows a to-do on
+any card and the carrier's job is to reach the store, not to re-decide its scope. **Nothing here makes
+a list mandatory on anything.** The expectation that a `manual` card HAS one is a planning RULE, and it
+lives in the two rule homes (D7 and the Consequences below), not in this field's validator.
+
+### D5 — what MATERIALIZE writes
+
+In `plansService.materialize` **Pass 1** (`lib/services/plansService.ts:1281`), immediately after the
+`workItemRepository.create` for that `add` (`:1411`) and inside the SAME transaction:
+
+- **one `workItemTodoRepository.create` per row** (`lib/repositories/workItemTodoRepository.ts:71`), in
+  array order;
+- **`position` minted with `keyForAppend`** from the PREVIOUS row's key (`null` for the first) — the
+  same fractional-index arithmetic `addTodo` uses, and the same helper Pass 1 already calls twice for
+  the created item's own `position` and `backlogRank` (`:1312`, `:1320`). No lock is taken: the rows
+  are minted in one loop inside one transaction against a list nobody else can see, which is the one
+  case `addTodo`'s `FOR UPDATE` re-read is not protecting against;
+- **`executor` per row = `todo.executor ?? pf.executor ?? 'human'`** — the store's own seed rule
+  (`work-item-todo-list.md` §2), restated for the proposal path. `workItemTodosService.addTodo`
+  (`lib/services/workItemTodosService.ts:309`) writes
+  `input.executor !== undefined ? input.executor : (item.executor ?? 'human')`, reading the CARD's
+  executor as the fallback; on the proposal path the card does not exist yet, so `pf.executor` is that
+  same fact one step earlier;
+- **`doneAt` / `doneById` null.** A proposal never ticks. There is no field for it and there will not
+  be: an approved plan that arrived with rows already checked would be a plan asserting that work was
+  done, which is the one thing a proposal cannot know.
+
+**The created-row revision records them.** `buildAddDiff` (`lib/services/plansService.ts:407`) gains
+`todos: { added: [{ id, text }] }` — byte-identical to the shape `recordTodoRevision`
+(`lib/services/workItemTodosService.ts:227`) writes for a hand-added row, so the activity feed renders
+a materialized list through the disposition it already has rather than through a second one.
+
+**It goes through the REPOSITORY, not `workItemTodosService.addTodo`.** This is not a layering
+shortcut and the reason is already written down, one layer up: the `plansService` header
+(`:137-149`) explains that materialize composes the tx-aware LEAF repositories directly rather than
+calling `workItemsService.createWorkItem`, because _"those service methods own their OWN
+`db.$transaction` and Prisma cannot nest interactive transactions — calling them here would break the
+'approve applies in ONE transaction' guarantee."_ `addTodo` has exactly that shape — its own
+`withWorkspaceContext`, its own `resolveEditableWorkItem`, its own `lockTodoList` — so it is bypassed
+for the identical reason, and the executor seed and the revision diff are what have to be restated
+here as a consequence.
+
+### D6 — who READS it
+
+| reader                                                                | file                                                     |
+| --------------------------------------------------------------------- | -------------------------------------------------------- |
+| the review surface's item DTO — `PlanReviewItemDto.todos` on an `add` | `lib/dto/planReview.ts`                                  |
+| the peek's PROPOSAL MODE, read-only, composed from the shipped row    | `app/(authed)/items/_components/IssueQuickViewPanel.tsx` |
+| the public v1 proposal schema + presenter                             | `app/api/v1/**` (`planProposalFieldsSchema`)             |
+| the CLI's one-line render — `· N steps`                               | `packages/cli/src/**` (`describeProposal`)               |
+| `get_plan`'s per-proposal line — a step COUNT                         | `lib/mcp/tools/`                                         |
+
+`/api/v1` carries it **additively**, with a `V1_CONTRACT_VERSION` **MINOR** bump and the regenerated
+client types. MOTIR-3157 is the precedent for forgetting exactly that, and is `relates_to` this story
+for that reason.
+
+**A `modify` and a `remove` render NO list, and this amendment does not add one.** The reason is a
+decision already taken next door: `PlanProposalPeekDto` (`lib/dto/planReview.ts:131`) deliberately
+carries the ENVELOPE and not the payload, because a `modify` names a real work item and the shipped
+peek is already client-fetched by key from both hosts — merging the target's `QuickViewData` into the
+plan read would mean _"~14 reads … once per proposal … ~280 reads for a plan with twenty `modify`s, to
+serve a peek the reviewer opens at most one of."_ And `QuickViewData` (`lib/dto/quickView.ts`) carries
+no to-do field at `d2a0c964b` in any case. So the rule is exact: **the peek shows steps on an `add`,
+which has no live card to fetch them from, and on nothing else.** Widening it is MOTIR-3808's surface
+plus MOTIR-4181's, not this story's.
+
+### D7 — the PRODUCER on the closed side
+
+`motir-ai` mirrors the field on its own `ProposedFields` and `ProposalPatch`; the `author` tool takes
+`todos` on a leaf; the writer carries it to core's append and deepen seams.
+
+**And `walkCompleteness` treats a `type: manual` leaf with an empty `todos` as INCOMPLETE**
+(`AUTHOR_REQUIRED_ON_MANUAL`). That is the load-bearing half of D7 and the reason it is a `D` rather
+than a note: it turns the rule from advice into a **field the walk reads**, which is this document's
+own standard — a bar stated in prose is a bar the first tired author walks past; _"a bar enforced as a
+value the service rejects past"_ is a bar the product holds (`lib/workItemTodos/limits.ts`, quoted in
+D4). D4 makes a list optional at the CARRIER precisely so that the RULE can be the thing that requires
+it, in the one place a `manual` card is authored.
+
+### What this does NOT change
+
+- **Nothing about the STORE.** `work_item_todo`, its columns, its policy, the section on the item page
+  and hand-editing are MOTIR-3808's and are untouched. This amendment adds a second WRITER of those
+  rows and no new way for them to be shaped.
+- **`work-item-todo-list.md` is not amended.** That record stands; this one cites it and composes with
+  it. The caps, the executor seed rule and _"a to-do is one operation"_ are quoted here, never
+  re-decided.
+- **No migration, no new table, no new column.** D1 is a JSON field on a row that already exists.
+- **Nothing about DISPATCHING a step.** Handing one row to a hosted agent is MOTIR-3809 (Epic 9), and
+  the `executor` a proposed row carries is the same declarative promise §2 of the store's ADR already
+  defines — it says who the step is FOR, and nothing schedules it.
+- **Nothing about the assistant that rewrites a list.** MOTIR-1344, `blocked_by` this story.
+- **No committed-card list in the quick view.** D6.
+- **`CLI_TOKEN_GRANT` is NOT widened.** `add_plan_items` and `update_plan_item` assert `ai:view_plan`
+  and the grant does not carry it, so a sandboxed run can no more propose a step list than it can
+  propose a card. AMENDMENT 12's own bullet, unchanged.
+- **Nothing about approve's other passes.** The birth-status derivation (Pass 2b), the ref resolver,
+  the repo-pin checks and `PlanItem`'s shape are all as they were.
+
+### Consequences — what each sibling of MOTIR-3810 inherits
+
+| card                                                          | inherits                                                                                                                                                                           |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The CARRIER — `PlanItemProposedFields.todos`** (MOTIR-4616) | D1's field and element type verbatim; D3's sparse merge; D4's imported caps, the container refusal and the leaf allowance                                                          |
+| **MATERIALIZE writes the rows** (MOTIR-4618)                  | D5 entire — the repository call, the `keyForAppend` minting, the executor seed expression, the untouched `doneAt`, and `buildAddDiff`'s new key                                    |
+| **Every DOOR carries `todos`** (MOTIR-4619)                   | D3's three deepen doors plus the append; `UPDATE_PROPOSAL_KEYS` as the guard that makes an incomplete pass fail to compile; `get_plan`'s step count and the MCP tool-doc catalogue |
+| **`/api/v1` and the CLI read the steps** (MOTIR-4620)         | D6's public rows — the schema, the presenter, the MINOR `V1_CONTRACT_VERSION` bump with regenerated client types, and `· N steps`                                                  |
+| **The DESIGN of the proposed list in the peek** (MOTIR-4615)  | D6's read-only rule and D2's _why a `modify` shows none_, which the asset has to draw as an ANSWER rather than leave as an empty state                                             |
+| **The REVIEW SURFACE shows the steps** (MOTIR-4622)           | D6's `PlanReviewItemDto.todos` and the peek's PROPOSAL MODE, built to MOTIR-4615's asset                                                                                           |
+| **The SHIPPED planner PROPOSES the steps** (MOTIR-4623)       | D7 entire — the mirrored fields, `author`'s parameter, the caps re-validated on the closed side, and `AUTHOR_REQUIRED_ON_MANUAL`                                                   |
+| **`SHARED_PLANNING_RULES` teaches the bar** (MOTIR-4621)      | D7's rule half, as sentences in `A_MANUAL_CARD_BAR`                                                                                                                                |
+| **`type-manual.md` teaches the runbook planner** (MOTIR-4617) | the same sentences in `motir-meta`'s pack — the other of the two rule homes                                                                                                        |
+| **The two test gates** (MOTIR-4624 · MOTIR-4626)              | every refusal D4 names, the round trip D5 describes, and the `modify`-carries-no-steps rule D2 decides                                                                             |
+| **The Playwright acceptance E2E** (MOTIR-4625)                | the story's own verification recipe, which is D6 and D5 read end to end by a person                                                                                                |
