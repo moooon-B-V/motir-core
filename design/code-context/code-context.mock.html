@@ -3,14 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Design mock &middot; The code-context surface (MOTIR-1754 &middot; MOTIR-1764)</title>
+    <title>Design mock &middot; The Code surface (MOTIR-1754 &middot; MOTIR-1764)</title>
     <!--
-      DESIGN ASSET (HTML mockup) — THE CODE-CONTEXT SURFACE.
+      DESIGN ASSET (HTML mockup) — THE CODE SURFACE.
       Story MOTIR-1754, subtask MOTIR-1764 (design). Gates MOTIR-1768 (the renderer).
 
-      WHAT IT ANSWERS: does Motir know your code, and how current is what it knows?
-      Drawn on the two surfaces an established project actually reaches — /code-health
-      (the durable connect affordance) and /planning (where the consequence is felt).
+      ⚠️ REWORKED 2026-09-05 on Yue's direction: code health, the code index and git
+      COLLAPSE into ONE left-nav row — `Code` — and repository visibility is PER
+      PROJECT while the code graph is SHARED PER ORGANISATION. The earlier revision
+      drew the freshness signal across /planning and /code-health with git left in
+      the rail's bottom section; that split is superseded, not merely restyled.
+
+      WHAT IT ANSWERS: which repositories can THIS project see, how current is what
+      Motir knows about them, and what is the audit saying — in one room.
 
       COMPOSES, DOES NOT REDRAW. The connect aside inherits the §10.3 "Deepen this
       audit" anatomy verbatim (design/coding-convention/design-notes.md §10.3 +
@@ -24,10 +29,13 @@
       icon node is extracted from the installed lucide-react. No hex and no path is
       hand-typed, so this asset cannot drift from the shipped layer.
 
-      PANELS: 0 the two DOORS · A no-repo-with-implemented-work (+ dismissed) ·
+      PANELS: 0 the DOOR (one Code row; Git leaves the bottom section) · S the
+      visibility rule (per-project sees, per-org indexes) · R Repositories (the
+      Add-or-remove button) · A no-repo-with-implemented-work (+ dismissed) ·
       B no-repo-nothing-implemented · C current · D stale-and-not-moving (1, 312,
       and the no-action variant) · E planning without code context · F current
-      again · G indexing · H never indexed · V the four verdicts side by side.
+      again · G indexing · H never indexed · H2 Health (the gate kept INSIDE the
+      section, not on the row) · V the four verdicts side by side.
     -->
     <style>
       :root {
@@ -992,6 +1000,136 @@
         color: var(--el-warning-text);
       }
 
+      /* ── The RAIL, composed from design/shell/ — NOT redrawn ─────────── */
+      .rail {
+        width: 240px;
+        flex: none;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 10px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        border-radius: var(--radius-card) 0 0 var(--radius-card);
+      }
+      .railRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .railRow svg {
+        font-size: 16px;
+        color: var(--el-icon-muted);
+      }
+      .railRow.current {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
+      .railRow.current svg {
+        color: var(--el-accent-on-surface);
+      }
+      .railRow.dim {
+        opacity: 0.45;
+      }
+      .railSpacer {
+        flex: 1;
+        min-height: 14px;
+      }
+      .railRule {
+        height: 1px;
+        background: var(--el-sidebar-border);
+        margin: 8px 4px;
+      }
+      .railGone {
+        /* `--el-text-secondary`, not `--el-text-muted`: this row carries real
+           text on `--el-sidebar-bg`, where muted is 4.12–4.34:1 and clears AA on
+           the white page/card only. The strikethrough is what says "leaving";
+           the ink does not have to be faint to say it. */
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        border: 1px dashed var(--el-border);
+        text-decoration: line-through;
+      }
+      .shellRow {
+        display: flex;
+        align-items: stretch;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .shellMain {
+        flex: 1;
+        padding: 18px;
+        min-width: 0;
+      }
+
+      /* ── The Code page: section tabs + panes ─────────────────────────── */
+      .pageHead {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .pageTitle {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        margin: 0;
+      }
+      .tabs {
+        display: flex;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        margin-bottom: 16px;
+      }
+      .tab {
+        padding: 7px 12px;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+      }
+      .tab.on {
+        color: var(--el-text-strong);
+        font-weight: 500;
+        border-bottom-color: var(--el-tabnav-active);
+      }
+      .tab .cnt {
+        margin-left: 6px;
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .scopeNote {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border-radius: var(--radius-card);
+        background: var(--el-notice-info-bg);
+        padding: 10px 13px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-strong);
+      }
+      .scopeNote svg {
+        font-size: 15px;
+        color: var(--el-info);
+        margin-top: 1px;
+        flex: none;
+      }
+
       /* ── Host frames (the DOORS) ──────────────────────────────────── */
       .frame {
         border: 1px solid var(--el-border);
@@ -1345,6 +1483,270 @@
         <circle cx="18" cy="6" r="3" />
         <circle cx="6" cy="18" r="3" />
       </symbol>
+      <symbol
+        id="i-activity"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+        />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-settings"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+        />
+        <circle cx="12" cy="12" r="3" />
+      </symbol>
+      <symbol
+        id="i-shield-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+        />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol
+        id="i-list-checks"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M13 5h8" />
+        <path d="M13 12h8" />
+        <path d="M13 19h8" />
+        <path d="m3 17 2 2 4-4" />
+        <path d="m3 7 2 2 4-4" />
+      </symbol>
+      <symbol
+        id="i-house"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+        <path
+          d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+        />
+      </symbol>
+      <symbol
+        id="i-layout-dashboard"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="7" height="9" x="3" y="3" rx="1" />
+        <rect width="7" height="5" x="14" y="3" rx="1" />
+        <rect width="7" height="9" x="14" y="12" rx="1" />
+        <rect width="7" height="5" x="3" y="16" rx="1" />
+      </symbol>
+      <symbol
+        id="i-circle-dot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="1" />
+      </symbol>
+      <symbol
+        id="i-circle-play"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"
+        />
+        <circle cx="12" cy="12" r="10" />
+      </symbol>
+      <symbol
+        id="i-waypoints"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m10.586 5.414-5.172 5.172" />
+        <path d="m18.586 13.414-5.172 5.172" />
+        <path d="M6 12h12" />
+        <circle cx="12" cy="20" r="2" />
+        <circle cx="12" cy="4" r="2" />
+        <circle cx="20" cy="12" r="2" />
+        <circle cx="4" cy="12" r="2" />
+      </symbol>
+      <symbol
+        id="i-columns-3"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M9 3v18" />
+        <path d="M15 3v18" />
+      </symbol>
+      <symbol
+        id="i-map"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"
+        />
+        <path d="M15 5.764v15" />
+        <path d="M9 3.236v15" />
+      </symbol>
+      <symbol
+        id="i-layout-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="7" height="7" x="3" y="3" rx="1" />
+        <rect width="7" height="7" x="3" y="14" rx="1" />
+        <path d="M14 4h7" />
+        <path d="M14 9h7" />
+        <path d="M14 15h7" />
+        <path d="M14 20h7" />
+      </symbol>
+      <symbol
+        id="i-inbox"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+        <path
+          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+        />
+      </symbol>
+      <symbol
+        id="i-chart-column"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+        <path d="M18 17V9" />
+        <path d="M13 17V5" />
+        <path d="M8 17v-3" />
+      </symbol>
+      <symbol
+        id="i-lock"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+      <symbol
+        id="i-users"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <circle cx="9" cy="7" r="4" />
+      </symbol>
+      <symbol
+        id="i-share-2"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
+        <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
+      </symbol>
+      <symbol
+        id="i-code"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m16 18 6-6-6-6" />
+        <path d="m8 6-6 6 6 6" />
+      </symbol>
       <symbol id="i-github" viewBox="0 0 24 24">
         <path
           fill="currentColor"
@@ -1356,17 +1758,22 @@
     </svg>
     <div class="sheet">
       <div class="sheetHead">
-        <h1>The code-context surface</h1>
+        <h1>The Code surface</h1>
         <p>
-          MOTIR-1754 &middot; MOTIR-1764. Motir&rsquo;s loop is
-          <em
-            >plan here &rarr; your agent builds &rarr; plan the next phase against what was
-            built</em
-          >. The last hop only holds if the code the agent wrote is in the graph &mdash; and on the
-          start-fresh journey it never is, silently. This asset draws the two surfaces that make
-          that visible: a durable <strong>connect</strong> affordance on <code>/code-health</code>,
-          and a per-repository <strong>freshness</strong> reading on <code>/planning</code>, with an
-          explicit state for planning that happens without code at all.
+          MOTIR-1754 &middot; MOTIR-1764.
+          <strong>One room for the three things that were in two places.</strong> Code health was a
+          primary project row gated on <code>ai:configure</code>; git was an ungated row in the
+          rail&rsquo;s bottom section; the code index had no surface at all. They collapse into a
+          single primary <strong>Code</strong> row with three sections &mdash;
+          <em>Repositories</em>, <em>Index</em>, <em>Health</em> &mdash; in the order the user meets
+          them: you connect, it indexes, it is audited.
+        </p>
+        <p>
+          <strong>⚠️ Visibility is per PROJECT; the graph is shared per ORGANISATION.</strong> A
+          repository connected to one project is not visible in another, and connecting one that
+          another project in the same organisation already uses does <strong>not</strong> index it
+          again. The separation is about who can SEE a repository, never about building the same
+          graph twice &mdash; panel&nbsp;S draws both halves.
         </p>
         <p>
           <strong>Drift is stated in COMMITS, never as an age.</strong> An old graph on an unchanged
@@ -1379,134 +1786,400 @@
 
       <section class="panel">
         <h2 class="panelTitle">
-          <span class="panelNum">0</span>THE DOORS — where each surface is reached, drawn in situ.
+          <span class="panelNum">0</span>THE DOOR — one <em>Code</em> row, and the <em>Git</em> row
+          is gone.
         </h2>
         <p class="panelNote">
-          Neither surface is a new page and neither has a menu item: the access path IS the
-          position. The connect aside sits inside the <code>/code-health</code> report the user is
-          already reading — between the health-summary card and the findings card, exactly where
-          <code>design/coding-convention/design-notes.md</code> Panel&nbsp;1 places the §10.3 aside.
-          The code-context strip sits in the <code>/planning</code> workspace’s right rail, above
-          the composer, so the answer to <em>&ldquo;what can the planner see?&rdquo;</em> is beside
-          the thing that is about to use it. Neighbours are dimmed; this asset does
-          <strong>not</strong> redraw the canvas, the rail’s other panes or the composer &mdash; see
-          <code>design/ai-chat/planning-workspace.mock.html</code>.
+          Three things were in two places with opposite gating: <strong>Code health</strong> was a
+          primary project row gated on <code>ai:configure</code>, <strong>Git</strong> was a
+          bottom-section row that is deliberately UNGATED, and the <strong>code index</strong> had
+          no surface at all. They collapse into ONE primary row — <strong>Code</strong> — and the
+          bottom section loses <em>Git</em>. ⚠️
+          <strong>THE RAIL IS COMPOSED, NOT REDRAWN.</strong> Its design of record is
+          <code>design/shell/rail-bottom-section.mock.html</code> (the four bottom rows) and
+          <code>design/shell/design-notes.md</code>; the row order and glyphs here are
+          <code>SidebarNav.tsx</code>'s own.
+          <strong
+            >Removing the <em>Git</em> row is an amendment to THAT asset, in another area</strong
+          >
+          — it is drawn here so the door is visible, and it is owned by a shell design-amendment
+          card, not by this one.
+        </p>
+        <div class="panelBody">
+          <div class="shellRow">
+            <div class="rail">
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-house" /></svg>Home
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-layout-dashboard" /></svg>Dashboard
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-circle-dot" /></svg>Issues
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-circle-play" /></svg>Ready
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-waypoints" /></svg>Runs
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-columns-3" /></svg>Boards
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-map" /></svg>Roadmap
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-sparkles" /></svg>Plans
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-layout-list" /></svg>Backlog
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-inbox" /></svg>Triage
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-chart-column" /></svg>Reports
+              </div>
+              <div class="railRow current">
+                <svg aria-hidden="true"><use href="#i-code" /></svg>Code
+              </div>
+              <div class="railSpacer"></div>
+              <div class="railRule"></div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-settings" /></svg>Settings
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-shield-check" /></svg>Security
+              </div>
+              <div class="railRow dim">
+                <svg aria-hidden="true"><use href="#i-list-checks" /></svg>Job runs
+              </div>
+              <div class="railGone">
+                <svg aria-hidden="true"><use href="#i-git-branch" /></svg>Git
+              </div>
+            </div>
+            <div class="shellMain">
+              <div class="pageHead">
+                <h3 class="pageTitle">Code</h3>
+                <span class="btn primary"
+                  ><svg aria-hidden="true"><use href="#i-plus" /></svg>Add or remove
+                  repositories</span
+                >
+              </div>
+              <div class="tabs">
+                <div class="tab on">Repositories<span class="cnt">2</span></div>
+                <div class="tab">Index</div>
+                <div class="tab">Health</div>
+              </div>
+              <div class="repoList">
+                <div class="repoRow">
+                  <span style="color: var(--el-text-secondary)"
+                    ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                  ></span>
+                  <span class="repoName">acme/web</span>
+                  <span class="repoMeta">
+                    <span class="sha">3f8a21c</span>
+                    <span class="verdict v-current"
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                    >
+                  </span>
+                </div>
+
+                <div class="repoRow">
+                  <span style="color: var(--el-text-secondary)"
+                    ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                  ></span>
+                  <span class="repoName">acme/worker</span>
+                  <span class="repoMeta">
+                    <span class="sha">b09d4e1</span>
+                    <span class="verdict v-stale"
+                      ><svg aria-hidden="true"><use href="#i-triangle-alert" /></svg>312
+                      behind</span
+                    >
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="outNote">
+            The bottom section's FLOOR was <em>Job runs · Git</em>; after this it is
+            <em>Job runs</em> alone. That is a real narrowing of a section the shell asset measured
+            deliberately, which is why the amendment belongs to the shell area and is named rather
+            than absorbed here.
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">S</span>THE REPOSITORY BELONGS TO THE ORG — the project list is
+          VISIBILITY CONFIGURATION.
+        </h2>
+        <p class="panelNote">
+          The rule this whole surface is built on, and the one a reader must not have to infer.
+          <strong
+            >A repository belongs to the ORGANISATION, and the organisation is the billing
+            unit</strong
+          >
+          &mdash; so one repository has <strong>one</strong> code graph, built once, shared across
+          the org. ⚠️
+          <strong
+            >THERE IS NO PRIVACY BOUNDARY BETWEEN PROJECTS OF ONE ORG, and this panel does not draw
+            one.</strong
+          >
+          An
+          <strong
+            >org admin can pull any of the org&rsquo;s repositories into any project, in the same
+            workspace or a different one</strong
+          >
+          &mdash; so the per-project list is <strong>VISIBILITY CONFIGURATION</strong>: which
+          repositories THIS project works on, so its planner reads the right code and its surfaces
+          are not a directory of everything the org owns.
+          <strong>The counterfactual settles it:</strong> if a repository did NOT belong to the org,
+          the index would have to be maintained per project &mdash; the same graph rebuilt N times
+          and billed N times to answer a question nobody asked. That is the wrong design, and not
+          needing it is why the graph is org-keyed. ⚠️
+          <strong>WORKSPACE DOES NOT CONSTRAIN IT EITHER</strong>, which is why this list can never
+          be the workspace installation's repo list &mdash; the read that leaks today.
+        </p>
+        <div class="panelBody">
+          <div class="cols2">
+            <div>
+              <div class="cap">Project ACME-WEB &middot; two repositories</div>
+              <div class="repoList">
+                <div class="repoRow">
+                  <span style="color: var(--el-text-secondary)"
+                    ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                  ></span>
+                  <span class="repoName">acme/web</span>
+                  <span class="repoMeta">
+                    <span class="sha">3f8a21c</span>
+                    <span class="verdict v-current"
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                    >
+                  </span>
+                </div>
+
+                <div class="repoRow">
+                  <span style="color: var(--el-text-secondary)"
+                    ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                  ></span>
+                  <span class="repoName">acme/worker</span>
+                  <span class="repoMeta">
+                    <span class="sha">b09d4e1</span>
+                    <span class="verdict v-current"
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                    >
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="cap">Project ACME-BILLING &middot; a DIFFERENT workspace, same org</div>
+              <div class="repoList">
+                <div class="repoRow">
+                  <span style="color: var(--el-text-secondary)"
+                    ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                  ></span>
+                  <span class="repoName">acme/billing</span>
+                  <span class="repoMeta">
+                    <span class="sha">7c31de0</span>
+                    <span class="verdict v-current"
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                    >
+                  </span>
+                </div>
+              </div>
+              <p class="outNote" style="margin-top: 10px">
+                <code>acme/web</code> is absent because nobody configured it here &mdash;
+                <strong>not</strong>
+                because it is hidden. An org admin can add it from either workspace, and the graph
+                it would use already exists.
+              </p>
+            </div>
+          </div>
+          <div class="scopeNote">
+            <svg aria-hidden="true"><use href="#i-share-2" /></svg>
+            <span
+              >Adding <code class="m">acme/web</code> here is <strong>configuration</strong>, not a
+              grant: it puts the repository in this project&rsquo;s working set and rebuilds
+              <strong>nothing</strong>, because the org already has its graph. It reads
+              <em>&ldquo;current&rdquo;</em> the moment it is added &mdash; never
+              <em>&ldquo;indexing&hellip;&rdquo;</em>, which would be a wait for an event that will
+              not happen.</span
+            >
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">R</span>REPOSITORIES &mdash; the section that replaces the git
+          settings page.
+        </h2>
+        <p class="panelNote">
+          <strong>The button says what the user wants to do, not where it goes.</strong>
+          &ldquo;Manage on GitHub&rdquo; named a destination and left the intent to be inferred;
+          <strong>Add or remove repositories</strong> names the intent. The picker it opens offers
+          <strong>every repository the ORG has</strong> &mdash; not the workspace&rsquo;s &mdash;
+          because that is the set an org admin may configure into any project (panel&nbsp;S). ⚠️
+          <strong
+            >TWO DIFFERENT ACTIONS LIVED BEHIND THE OLD <em>Git</em> ROW, AND ONLY ONE OF THEM IS
+            THIS BUTTON.</strong
+          >
+          Configuring which repositories a project works on is an <strong>org-admin</strong> act.
+          Connecting <strong>your own</strong> account is not: <code>GithubIdentity</code> is
+          <code>userId @unique</code>, and <code>projectSettingsNav.ts</code> calls it &ldquo;the
+          one action nobody can take on [a member&rsquo;s] behalf&rdquo;. Both reached the same
+          page, so collapsing the row without carrying BOTH forward removes a capability. This
+          section draws both: the admin action as the header button, the personal one as its own row
+          that every member sees.
         </p>
         <div class="panelBody">
           <div>
-            <div class="cap">Door 1 &middot; /code-health &mdash; the connect aside, in situ</div>
+            <div class="cap">Org admin &mdash; the configuration action</div>
             <div class="frame">
-              <div class="frameBar">
-                <svg aria-hidden="true"><use href="#i-folder-git-2" /></svg>app.motir.co/code-health
-              </div>
               <div class="frameBody">
-                <div class="ghostCard">
-                  <div class="ghostTitle">Code health &middot; acme/web</div>
-                  <div class="ghostLine" style="width: 62%"></div>
-                  <div class="ghostLine" style="width: 41%"></div>
+                <div class="pageHead">
+                  <h3 class="pageTitle">Code</h3>
+                  <span class="btn primary"
+                    ><svg aria-hidden="true"><use href="#i-plus" /></svg>Add or remove
+                    repositories</span
+                  >
                 </div>
-                <div class="halo">
-                  <div class="aside">
-                    <div class="asideTop">
-                      <span class="eyebrow">Optional · non-blocking</span>
-                      <button type="button" class="dismiss" aria-label="Dismiss">
-                        <svg aria-hidden="true"><use href="#i-x" /></svg>
-                      </button>
-                    </div>
-                    <div class="asideLead">
-                      <span class="asideGlyph"
-                        ><svg aria-hidden="true"><use href="#i-scan-search" /></svg
-                      ></span>
-                      <div>
-                        <h3 class="asideTitle">Motir has not seen your code</h3>
-                        <p class="asideSub">
-                          Plans for this project are generated
-                          <strong>without reading the codebase</strong>, and
-                          <strong>work items will not move themselves</strong> —
-                          pull-request&nbsp;&rarr;&nbsp;status sync rides the same connection.
-                        </p>
-                      </div>
-                    </div>
-                    <p class="bestfit">
-                      14 work items in this project have been reported implemented.
-                    </p>
-                    <div class="warnFoot">
-                      <span class="btn primary"
-                        ><svg aria-hidden="true"><use href="#i-link" /></svg>Connect a
-                        repository</span
+                <div class="tabs">
+                  <div class="tab on">Repositories<span class="cnt">3</span></div>
+                  <div class="tab">Index</div>
+                  <div class="tab">Health</div>
+                </div>
+                <div class="repoList">
+                  <div class="repoRow">
+                    <span style="color: var(--el-text-secondary)"
+                      ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                    ></span>
+                    <span class="repoName">acme/web</span>
+                    <span class="repoMeta">
+                      <span class="sha">3f8a21c</span><span>github</span>
+                      <span class="verdict v-current"
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
                       >
-                      <span class="linkq">Settings &rarr; Workspace &rarr; GitHub / GitLab</span>
-                    </div>
-                    <p class="asideFoot">
-                      Connecting indexes the default branch and turns on
-                      pull-request&nbsp;&rarr;&nbsp;status sync. Nothing here blocks planning.
-                    </p>
+                    </span>
+                  </div>
+
+                  <div class="repoRow">
+                    <span style="color: var(--el-text-secondary)"
+                      ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                    ></span>
+                    <span class="repoName">acme/worker</span>
+                    <span class="repoMeta">
+                      <span class="sha">b09d4e1</span><span>github</span>
+                      <span class="verdict v-current"
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                      >
+                    </span>
+                  </div>
+
+                  <div class="repoRow">
+                    <span style="color: var(--el-text-secondary)"
+                      ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                    ></span>
+                    <span class="repoName">acme/legacy</span>
+                    <span class="repoMeta">
+                      <span>gitlab</span>
+                      <span class="verdict v-never"
+                        ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>Never
+                        indexed</span
+                      >
+                    </span>
                   </div>
                 </div>
-                <span class="doorTag"
-                  ><svg aria-hidden="true"><use href="#i-arrow-right" /></svg>the aside lands here
-                  &mdash; after the summary, before the findings</span
-                >
-                <div class="ghostCard">
-                  <div class="ghostTitle">143 findings</div>
-                  <div class="ghostLine" style="width: 78%"></div>
-                  <div class="ghostLine" style="width: 55%"></div>
-                </div>
+                <p class="outNote" style="margin-top: 12px">
+                  Removing one here removes it from <strong>this project</strong>. It does not
+                  delete the org&rsquo;s graph, which another project may still be using.
+                </p>
               </div>
             </div>
           </div>
           <div>
             <div class="cap">
-              Door 2 &middot; /planning &mdash; the code-context strip, in the shipped rail
+              Member &mdash; no configuration action, and the one action that IS theirs
             </div>
             <div class="frame">
-              <div class="frameBar">
-                <svg aria-hidden="true"><use href="#i-sparkles" /></svg>app.motir.co/planning
-              </div>
               <div class="frameBody">
-                <div class="wsCols">
-                  <div style="display: flex; flex-direction: column; gap: 12px">
-                    <div class="ghostCard">
-                      <div class="ghostTitle">Plan canvas</div>
-                      <div class="ghostLine" style="width: 70%"></div>
-                      <div class="ghostLine" style="width: 84%"></div>
-                      <div class="ghostLine" style="width: 48%"></div>
-                    </div>
-                    <div class="composer">Describe what you want to build&hellip;</div>
+                <div class="pageHead">
+                  <h3 class="pageTitle">Code</h3>
+                </div>
+                <div class="tabs">
+                  <div class="tab on">Repositories<span class="cnt">3</span></div>
+                  <div class="tab">Index</div>
+                  <div class="tab">Health</div>
+                </div>
+                <div class="repoList">
+                  <div class="repoRow">
+                    <span style="color: var(--el-text-secondary)"
+                      ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                    ></span>
+                    <span class="repoName">acme/web</span>
+                    <span class="repoMeta">
+                      <span class="sha">3f8a21c</span><span>github</span>
+                      <span class="verdict v-current"
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                      >
+                    </span>
                   </div>
-                  <div style="display: flex; flex-direction: column; gap: 12px">
-                    <div class="halo">
-                      <div class="strip">
-                        <div class="stripHead">
-                          <svg aria-hidden="true"><use href="#i-scan-search" /></svg>Code context
-                        </div>
-                        <div class="repoList">
-                          <div class="repoRow">
-                            <span style="color: var(--el-text-secondary)"
-                              ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
-                            ></span>
-                            <span class="repoName">acme/web</span>
-                            <span class="repoMeta">
-                              <span class="sha">3f8a21c</span>
-                              <span class="verdict v-current"
-                                ><svg aria-hidden="true"><use href="#i-circle-check" /></svg
-                                >Current</span
-                              >
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <span class="doorTag"
-                      ><svg aria-hidden="true"><use href="#i-arrow-right" /></svg>top of the rail,
-                      above the composer</span
-                    >
-                    <div class="ghostCard">
-                      <div class="ghostTitle">Lessons</div>
-                      <div class="ghostLine" style="width: 66%"></div>
-                    </div>
+
+                  <div class="repoRow">
+                    <span style="color: var(--el-text-secondary)"
+                      ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                    ></span>
+                    <span class="repoName">acme/worker</span>
+                    <span class="repoMeta">
+                      <span class="sha">b09d4e1</span><span>github</span>
+                      <span class="verdict v-current"
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                      >
+                    </span>
+                  </div>
+
+                  <div class="repoRow">
+                    <span style="color: var(--el-text-secondary)"
+                      ><svg aria-hidden="true"><use href="#i-folder-git-2" /></svg
+                    ></span>
+                    <span class="repoName">acme/legacy</span>
+                    <span class="repoMeta">
+                      <span>gitlab</span>
+                      <span class="verdict v-never"
+                        ><svg aria-hidden="true"><use href="#i-circle-dashed" /></svg>Never
+                        indexed</span
+                      >
+                    </span>
                   </div>
                 </div>
+                <div class="aside" style="margin-top: 12px">
+                  <div class="asideLead">
+                    <span class="asideGlyph"
+                      ><svg aria-hidden="true"><use href="#i-users" /></svg
+                    ></span>
+                    <div>
+                      <h3 class="asideTitle">Connect your GitHub account</h3>
+                      <p class="asideSub">
+                        So Motir can act as you when it opens pull requests, and so you can clone
+                        this project&rsquo;s code.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="warnFoot">
+                    <span class="btn secondary"
+                      ><svg aria-hidden="true"><use href="#i-link" /></svg>Connect your
+                      account</span
+                    >
+                  </div>
+                </div>
+                <p class="outNote" style="margin-top: 12px">
+                  ⚠️ This row is <strong>per user</strong> (<code class="m"
+                    >GithubIdentity.userId @unique</code
+                  >) and is the reason the old <em>Git</em> row was ungated. It must survive the
+                  collapse, or the move removes a capability rather than a concept.
+                </p>
               </div>
             </div>
           </div>
@@ -1909,6 +2582,95 @@
               <span class="btn secondary"
                 ><svg aria-hidden="true"><use href="#i-refresh-cw" /></svg>Build the index</span
               >
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2 class="panelTitle">
+          <span class="panelNum">H2</span>HEALTH &mdash; the shipped audit, composed, with its gate
+          kept INSIDE.
+        </h2>
+        <p class="panelNote">
+          ⚠️ <strong>The gating clash, and how it is resolved.</strong> <code>/code-health</code> is
+          gated on <code>ai:configure</code> today, while the <em>Git</em> row is deliberately
+          ungated &mdash; <code>SidebarNav.tsx</code> says it
+          <em>&ldquo;must not be&rdquo;</em> gated, because connecting your own account is the one
+          action nobody can take on a member's behalf. Collapsing them under one gated row would
+          <strong>take that action away from every member</strong>; collapsing them under one
+          ungated row would <strong>widen an admin-only audit to everyone</strong>. Neither is
+          acceptable, and neither is necessary:
+          <strong>the ROW is browse-reachable and each SECTION keeps its own gate.</strong> The page
+          already renders an admin-only empty state rather than refusing &mdash; this composes it.
+          The report itself is <code>design/coding-convention/design-notes.md</code>'s and is NOT
+          redrawn here.
+        </p>
+        <div class="panelBody">
+          <div class="cols2">
+            <div>
+              <div class="cap">Admin &mdash; the shipped report, composed</div>
+              <div class="frame">
+                <div class="frameBody">
+                  <div class="tabs">
+                    <div class="tab">Repositories</div>
+                    <div class="tab">Index</div>
+                    <div class="tab on">Health</div>
+                  </div>
+                  <div class="ghostCard">
+                    <div class="ghostTitle">Code health &middot; acme/web &middot; grade B</div>
+                    <div class="ghostLine" style="width: 72%"></div>
+                    <div class="ghostLine" style="width: 48%"></div>
+                  </div>
+                  <p class="outNote">
+                    Drawn dimmed because it is <code>design/coding-convention/</code>'s surface,
+                    embedded unchanged. This asset composes it; it does not restate it.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="cap">Member &mdash; the section's own gate, not the row's</div>
+              <div class="frame">
+                <div class="frameBody">
+                  <div class="tabs">
+                    <div class="tab">Repositories</div>
+                    <div class="tab">Index</div>
+                    <div class="tab on">Health</div>
+                  </div>
+                  <div
+                    style="
+                      border: 1px solid var(--el-border);
+                      border-radius: var(--radius-card);
+                      background: var(--el-surface-soft);
+                      padding: 22px;
+                      text-align: center;
+                    "
+                  >
+                    <div style="color: var(--el-icon-muted); font-size: 20px">
+                      <svg aria-hidden="true"><use href="#i-lock" /></svg>
+                    </div>
+                    <div
+                      style="
+                        font-family: var(--font-serif);
+                        font-size: 15px;
+                        font-weight: 600;
+                        color: var(--el-text-strong);
+                        margin: 8px 0 4px;
+                      "
+                    >
+                      Only project admins can see the code audit
+                    </div>
+                    <div style="font-size: 13px; color: var(--el-text-secondary)">
+                      Repositories and Index are here for everyone.
+                    </div>
+                  </div>
+                  <p class="outNote">
+                    The two tabs beside it still work.
+                    <strong>Nothing a member could do before is gone</strong>
+                    &mdash; that is the whole test this panel exists to pass.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
