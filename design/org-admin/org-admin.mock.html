@@ -1758,9 +1758,190 @@
       </div>
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 6 — THE ORG MENU GAINS A `Git` ROW (MOTIR-4673 · Story MOTIR-4669)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      6 · <b>The org menu gains a <code>Git</code> row</b> — the ACCESS PATH to a surface that has
+      moved tier. Drawn as the menu SHIPS today, both gate arms. The page behind it is
+      <b>MOTIR-4672</b>&rsquo;s (design/github Panel 6); this panel does not describe it.
+    </div>
+    <p class="panel-note">
+      <b>⚠️ This menu is NOT panel 1&rsquo;s.</b> Panel 1 arm C draws the org menu as it stood when
+      this asset was written —
+      <span class="mono"
+        >Settings · Members · Billing &amp; usage (Coming soon) · New workspace</span
+      >
+      — and it is kept as the point-in-time record it is.
+      <b>The convention this row is placed by was read from the SHIPPED menu</b>
+      (<span class="mono">app/(authed)/_components/OrgControl.tsx</span>), which has since grown
+      <span class="mono">Security</span> and <span class="mono">Usage</span> and made
+      <span class="mono">Billing</span> active and cloud-conditional. Amending panel 1 to match is
+      not this card&rsquo;s work; drawing this row into a stale menu would have been worse than
+      either.
+    </p>
+    <div class="panel">
+      <div class="stage">
+        <div class="grid-2" style="align-items: start">
+          <div>
+            <p class="panel-note" style="margin-top: 0">
+              <b>A · an ORG ADMIN.</b> The row sits third, after
+              <span class="mono">Security</span> and above <span class="mono">Members</span>.
+            </p>
+            <div class="menu" style="width: 300px; margin: 0">
+              <div class="menu-head">moooon</div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+                <span class="ot"><span class="nm">Settings</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-shield-check" /></svg>
+                <span class="ot"><span class="nm">Security</span></span>
+              </div>
+              <!-- ⚠️ THE NEW ROW. Same glyph and same word it carried in the shell
+                   rail, because it is the SAME row arriving: MOTIR-4640 is the
+                   departure half, in design/shell/.
+                   Drawn AT REST like every sibling — no `.active`. That class
+                   paints --el-surface, on which the row glyph's --el-text-muted is
+                   4.17:1 and fails AA (tests/design-ink-contrast.test.ts), and a
+                   menu row is only active while the pointer is on it, which is not
+                   what this panel is about. -->
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-git-branch" /></svg>
+                <span class="ot"><span class="nm">Git</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+                <span class="ot"><span class="nm">Members</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-coins" /></svg>
+                <span class="ot"><span class="nm">Usage &amp; cost</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-card" /></svg>
+                <span class="ot"><span class="nm">Billing &amp; plans</span></span>
+              </div>
+              <div class="menu-sep"></div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+                <span class="ot"><span class="nm">New workspace</span></span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p class="panel-note" style="margin-top: 0">
+              <b>B · a member who is NOT an org admin.</b> The row is <b>ABSENT</b>, and the rows
+              below close up. Nothing marks the gap.
+            </p>
+            <div class="menu" style="width: 300px; margin: 0">
+              <div class="menu-head">moooon</div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+                <span class="ot"><span class="nm">Settings</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+                <span class="ot"><span class="nm">Members</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-coins" /></svg>
+                <span class="ot"><span class="nm">Usage &amp; cost</span></span>
+              </div>
+              <div class="menu-sep"></div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+                <span class="ot"><span class="nm">New workspace</span></span>
+              </div>
+            </div>
+            <p class="panel-note">
+              Absent, not disabled — <b>an entry point is a promise about a room</b>, and the rail
+              already makes that call for a whole area. It is the same disposition
+              <span class="mono">Billing</span> takes off cloud and
+              <span class="mono">Security</span>
+              takes below the workspace-tier reveal: the row is not rendered and the rows below
+              close up, with no disabled row and no tooltip.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>Where it goes, and why there.</b> The shipped menu&rsquo;s own reasoning for
+      <span class="mono">Security</span> is that it sits directly under
+      <span class="mono">Settings</span> because it is <i>a settings-shaped destination</i> and
+      keeping it above <span class="mono">Members</span>
+      <i>holds the two account-level concerns together</i>. <span class="mono">Git</span> is the
+      third such concern — the organisation&rsquo;s own resources — so it joins that block rather
+      than landing among the people and money rows. The menu then reads
+      <b>configuration → people → money</b>, which is the order it already had.
+    </p>
+    <p class="panel-note">
+      <b>⚠️ There is no org settings RAIL to put a row in.</b>
+      <span class="mono">/settings/organization/*</span> has no area layout and no rail — unlike
+      <span class="mono">settings/project/</span> and <span class="mono">settings/account/</span>,
+      each of which has one. This menu, plus the command palette, IS the organisation&rsquo;s
+      settings navigation, which is why the row lands here and why <b>MOTIR-4672</b>&rsquo;s Panel 6
+      draws its page with no rail beside it.
+    </p>
+
     <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
+        <!-- ══ ADDED by MOTIR-4673 — the glyphs the shipped org menu uses ══
+             git-branch is the SAME glyph the row carried in the shell rail, so
+             the departure (MOTIR-4640) and the arrival read as one move. -->
+        <g
+          id="i-git-branch"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="6" x2="6" y1="3" y2="15" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M18 9a9 9 0 0 1-9 9" />
+        </g>
+        <g
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </g>
+        <g
+          id="i-card"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="5" rx="2" />
+          <line x1="2" x2="22" y1="10" y2="10" />
+        </g>
         <g
           id="i-lock"
           fill="none"
