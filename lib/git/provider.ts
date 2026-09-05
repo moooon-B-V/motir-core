@@ -12,6 +12,7 @@ import type {
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
   NormalizedWorkflowRunEvent,
+  RepoFileReadResult,
 } from './types';
 
 // The GitProvider seam (Story 7.10 · MOTIR-891). ONE interface every Git host
@@ -36,6 +37,35 @@ import type {
  * output. Bounds time-to-response-headers, which is where a dead host hangs.
  */
 export const REPO_TARBALL_TIMEOUT_MS = 60_000;
+
+/**
+ * Deadline for a single FILE read, in ms (MOTIR-4586). Same job as
+ * {@link REPO_TARBALL_TIMEOUT_MS} and deliberately a twelfth of it: that one
+ * bounds a resolve on the index path, where a slow answer still beats a failed
+ * dispatch; this one bounds a lookup a PLANNING SESSION is waiting on inside a
+ * turn, where a minute of silence is worse than a named refusal.
+ *
+ * It must stay under the reading route's `maxDuration`
+ * (`app/api/internal/ai/repo-file/route.ts`), so a dead host surfaces as the
+ * `unreachable` result inside the invocation budget rather than as a
+ * `FUNCTION_INVOCATION_TIMEOUT` with no body at all — and
+ * `tests/git/repoFileRead.test.ts` asserts that ordering rather than leaving it
+ * to a comment.
+ */
+export const REPO_FILE_READ_TIMEOUT_MS = 5_000;
+
+/**
+ * The largest file this capability will hand back, in bytes.
+ *
+ * ⚠️ IT IS THE HOST'S LIMIT, NOT OURS, AND THAT IS WHY IT IS 1 MiB. GitHub's
+ * contents endpoint refuses a blob over 1 MB outright, so anything larger is
+ * not a policy we could relax by editing this line — it is a fact about the
+ * upstream. Naming it here (rather than only catching GitHub's 403) lets GitLab,
+ * which has no such refusal, answer the SAME way for the same file, so a session
+ * does not learn a different truth about a repository depending on where it is
+ * hosted.
+ */
+export const REPO_FILE_MAX_BYTES = 1024 * 1024;
 
 export interface GitProvider {
   /** The provider discriminator — matches the stored rows' `provider` column. */
@@ -122,6 +152,47 @@ export interface GitProvider {
     name: string,
     ref: string,
   ): Promise<string>;
+
+  /**
+   * Read ONE file's TEXT at a ref (MOTIR-4586) — the capability a planning
+   * session's `read_file` tool is built on.
+   *
+   * ⚠️ REQUIRED, AND THAT IS THE OPPOSITE OF {@link resolveRepoTarballUrl} ON
+   * PURPOSE. That one is optional because GitLab genuinely CANNOT back it: the
+   * fleet container holds no credential, so it needs a SELF-AUTHORIZING URL,
+   * and GitLab's only URL-shaped credential is the connection's full-`api`
+   * OAuth token — strictly more privilege than §10 permits a container to hold.
+   * Reading a file has no such constraint, because nothing credential-shaped
+   * crosses a boundary at all: the call happens HERE, in the process that
+   * already holds the token, and what leaves is text. Both hosts can back it,
+   * so both must — declaring it optional would re-create exactly the disguise
+   * MOTIR-2124 removed, where a provider looks complete while the capability a
+   * consumer requires is missing, and every attempt dead-letters saying nothing.
+   *
+   * ⚠️ IT RETURNS ITS FAILURES. Every ordinary answer — no such path, no such
+   * ref, a file over {@link REPO_FILE_MAX_BYTES}, a credential the host
+   * refused, a path the guard rejected, a host that did not answer — is a
+   * NAMED member of {@link RepoFileReadResult}, because the consumer is a model
+   * deciding what it now knows and "this project has no code" must never be
+   * concluded from "that file is not at that path". A `RepoFileReadError`
+   * (`lib/git/errors.ts`) is thrown ONLY for a status no arm names.
+   *
+   * Implementations MUST call `normalizeRepoFilePath` (`lib/git/repoPath.ts`)
+   * BEFORE issuing any request, MUST bound the request with
+   * {@link REPO_FILE_READ_TIMEOUT_MS}, and MUST NOT put the token — or any URL
+   * carrying one — into the result they return.
+   *
+   * `ref` is required: the caller knows the repository's default branch (it is
+   * a stored column) and the provider does not, so defaulting here would mean a
+   * second host round-trip to learn something the caller already had.
+   */
+  readFileAtRef(
+    installationId: string,
+    owner: string,
+    name: string,
+    path: string,
+    ref: string,
+  ): Promise<RepoFileReadResult>;
 
   /**
    * Fetch an installation's account (login + type) from the host, given only the

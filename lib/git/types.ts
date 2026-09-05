@@ -233,3 +233,53 @@ export interface InstallationToken {
   token: string;
   expiresAt: Date;
 }
+
+// ─── File READ at a ref (Story MOTIR-4585 · MOTIR-4586) ──────────────────────
+//
+// ⚠️ WHY THIS IS A RESULT UNION AND NOT A `string | null`. The consumer is a
+// PLANNING SESSION: a model that has to decide what it now knows. "This project
+// has no repository connected", "that path is not in this repo", "that ref does
+// not exist" and "we could not reach the host" are four different facts, and a
+// reader handed one polite failure string for all of them will conclude the
+// first from the last — the collapse `describeProjectRepositories` and
+// `describePendingPlans` already keep three states apart to avoid. A nullable
+// return is exactly that collapse with the words removed.
+
+/** The named answers a file read can produce. `found` is the only one carrying
+ *  text; every other member is a FACT about why there is none. */
+export type RepoFileReadOutcome =
+  | 'found'
+  | 'not_found'
+  | 'ref_not_found'
+  | 'too_large'
+  | 'unauthorized'
+  | 'invalid_path'
+  | 'unreachable';
+
+/** Why a read could not reach the host at all. Carried on the `unreachable`
+ *  result rather than thrown, so a caller switching on `outcome` stays total —
+ *  the class that carries the same discriminator is `RepoFileReadError`
+ *  (`lib/git/errors.ts`), thrown only for a status no arm below names. */
+export type RepoFileReadTransportFailure = 'timeout' | 'unreachable';
+
+/**
+ * The result of {@link GitProvider.readFileAtRef}.
+ *
+ * ⚠️ `bytes` is the length of the TEXT AS DECODED, not the blob's size on the
+ * host. It is here so a caller that caps output can say by how much it cut, and
+ * it must never be read as the file's on-disk size.
+ */
+export type RepoFileReadResult =
+  | { outcome: 'found'; path: string; ref: string; text: string; bytes: number }
+  | { outcome: 'not_found'; path: string; ref: string }
+  | { outcome: 'ref_not_found'; path: string; ref: string }
+  | { outcome: 'too_large'; path: string; ref: string; limitBytes: number }
+  | { outcome: 'unauthorized'; path: string; ref: string }
+  | { outcome: 'invalid_path'; path: string; reason: string }
+  | {
+      outcome: 'unreachable';
+      path: string;
+      ref: string;
+      failure: RepoFileReadTransportFailure;
+      detail: string;
+    };

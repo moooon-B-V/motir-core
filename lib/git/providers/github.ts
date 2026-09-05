@@ -1,7 +1,14 @@
 import { registerGitProvider } from '../registry';
 import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
-import { REPO_TARBALL_TIMEOUT_MS, type GitProvider } from '../provider';
 import {
+  REPO_FILE_MAX_BYTES,
+  REPO_FILE_READ_TIMEOUT_MS,
+  REPO_TARBALL_TIMEOUT_MS,
+  type GitProvider,
+} from '../provider';
+import { byteLength, describeBody, normalizeRepoFilePath } from '../fileRead';
+import {
+  RepoFileReadError,
   RepoTarballUrlMissingLocationError,
   RepoTarballUrlNotRedirectedError,
   RepoTarballUrlTimeoutError,
@@ -20,6 +27,7 @@ import type {
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
   NormalizedWorkflowRunEvent,
+  RepoFileReadResult,
 } from '../types';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
@@ -178,6 +186,97 @@ export const githubProvider: GitProvider = {
     const location = res.headers.get('location');
     if (!location) throw new RepoTarballUrlMissingLocationError(res.status);
     return location;
+  },
+
+  async readFileAtRef(
+    installationId: string,
+    owner: string,
+    name: string,
+    path: string,
+    ref: string,
+  ): Promise<RepoFileReadResult> {
+    // THE PATH GUARD RUNS FIRST — before the token is minted, before a URL is
+    // built, before anything is sent. A traversal that reaches GitHub gets a
+    // 404 and looks exactly like an honest miss in every log we keep, so
+    // "a path outside the repository cannot be reached" has to be a fact about
+    // this function rather than an inference from GitHub's behaviour.
+    const guarded = normalizeRepoFilePath(path);
+    if (!guarded.ok) return { outcome: 'invalid_path', path, reason: guarded.reason };
+
+    const { token } = await mintInstallationToken(installationId);
+    const url =
+      `${GITHUB_API}/repos/${owner}/${name}/contents/` +
+      `${guarded.path.split('/').map(encodeURIComponent).join('/')}` +
+      `?ref=${encodeURIComponent(ref)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+          // The RAW media type: the endpoint answers with the file's bytes
+          // rather than a JSON envelope carrying a base64 `content` field. One
+          // decode fewer, and no chance of returning the envelope's
+          // `download_url` — which is a token-bearing URL on a private repo.
+          accept: 'application/vnd.github.raw',
+          'user-agent': 'motir',
+        },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      return {
+        outcome: 'unreachable',
+        path: guarded.path,
+        ref,
+        failure: controller.signal.aborted ? 'timeout' : 'unreachable',
+        detail: controller.signal.aborted
+          ? `no response within ${REPO_FILE_READ_TIMEOUT_MS}ms`
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    // ⚠️ 404 IS THE ONE ANSWER GITHUB GIVES FOR TWO DIFFERENT QUESTIONS, and
+    // both of them are ordinary. A missing PATH and a missing REF are the same
+    // status, and the endpoint's own message is what separates them ("No commit
+    // found for the ref …"). Reading it is not string-sniffing for a happy path
+    // — it is refusing to tell a planning session that a file is absent when
+    // what is actually absent is the branch it asked about.
+    if (res.status === 404) {
+      const body = await res.text().catch(() => '');
+      return /No commit found for the ref/i.test(body)
+        ? { outcome: 'ref_not_found', path: guarded.path, ref }
+        : { outcome: 'not_found', path: guarded.path, ref };
+    }
+    // 403 covers BOTH a refused credential and a blob over the inline limit;
+    // 401 is only the credential. GitHub says which in the body, and the two
+    // have opposite meanings for a caller: one is "ask a smaller question",
+    // the other is "this connection is broken".
+    if (res.status === 403 || res.status === 401) {
+      const body = await res.text().catch(() => '');
+      return /too_large|larger than 1 ?MB|over the (file )?size limit/i.test(body)
+        ? { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES }
+        : { outcome: 'unauthorized', path: guarded.path, ref };
+    }
+    if (!res.ok) {
+      throw new RepoFileReadError('github', res.status, await describeBody(res));
+    }
+
+    const text = await res.text();
+    // The size arm the host did not take. A directory read, a repo whose blob
+    // limit differs, a future endpoint change: whatever the reason, a caller
+    // must never receive more than the named bound WITHOUT being told, so the
+    // check is ours as well as GitHub's.
+    if (byteLength(text) > REPO_FILE_MAX_BYTES) {
+      return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
+    }
+    return { outcome: 'found', path: guarded.path, ref, text, bytes: byteLength(text) };
   },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {

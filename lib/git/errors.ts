@@ -113,3 +113,36 @@ export class RepoTarballUrlUnsupportedError extends Error {
     this.providerId = providerId;
   }
 }
+
+// ─── File READ at a ref (Story MOTIR-4585 · MOTIR-4586) ──────────────────────
+//
+// ⚠️ ONE class, not four, and it is thrown in ONE case — deliberately the
+// inverse of the tarball errors above. There the CALLER is a dispatcher that
+// must fail loudly; here the caller is a planning session, and every ordinary
+// answer (no such path, no such ref, too large, credential refused, host
+// unreachable) is a NAMED RESULT it can reason about (`RepoFileReadResult`).
+// What is left over is a host status no arm names — a 500, a 502, a body that
+// is not what the endpoint documents — and that is the one thing a model cannot
+// do anything sensible with. It gets a typed error so the stack says what
+// happened and a retry is the operator's obvious next move.
+//
+// So: a transport failure is a typed error HERE, and a named result at the
+// boundary the model reads. The two are not in tension — they are the same fact
+// stated to two different readers.
+
+/** The host answered with a status this capability does not name. RETRYABLE. */
+export class RepoFileReadError extends Error {
+  readonly code = 'REPO_FILE_READ_FAILED' as const;
+  readonly status: number;
+  readonly providerId: string;
+
+  constructor(providerId: string, status: number, detail?: string) {
+    super(
+      `the ${providerId} file-contents endpoint answered ${status}` +
+        (detail ? ` (${detail})` : ''),
+    );
+    this.name = 'RepoFileReadError';
+    this.providerId = providerId;
+    this.status = status;
+  }
+}
