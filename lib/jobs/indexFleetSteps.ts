@@ -9,6 +9,7 @@ import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepos
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
 import type {
+  IndexCoreTimings,
   IndexRepoInput,
   IndexRepoResult,
   IndexTarget,
@@ -218,9 +219,9 @@ export async function runIndexFleetSteps(
   // on every pass, which is exactly what a deployment fault should do.
   indexFleetConfig();
 
-  await indexEveryProject(ctx, services, input, target, dispatchId);
+  const coreTimings = await indexEveryProject(ctx, services, input, target, dispatchId);
 
-  return await finishIndexRun(ctx, services, input, target);
+  return await finishIndexRun(ctx, services, input, target, coreTimings);
 }
 
 /**
@@ -257,8 +258,22 @@ async function indexEveryProject(
   target: Extract<IndexTarget, { indexed: true }>,
   /** See its definition in {@link runIndexFleetSteps} — the cross-pass identity. */
   dispatchId: string,
-): Promise<void> {
+): Promise<IndexCoreTimings[]> {
   const steps = stepSeam(ctx);
+
+  // ⚠️ RE-DERIVED PER PASS, NEVER ACCUMULATED ACROSS THEM (MOTIR-4413). This
+  // array is local, and being local is exactly why it is safe: the loop above
+  // throws `JobRunDefer` out of this function until the LAST project has
+  // settled, so the only pass that ever reaches the `return` is one on which
+  // every `advanceIndexContainer` call replays its memos and hands back the
+  // spans the working pass measured. The array is rebuilt from durable sources
+  // on every pass and discarded on all but one; nothing is being carried.
+  //
+  // The distinction matters because the wrong version of this looks identical:
+  // a `totalMs += …` in this scope would compile, pass a single-pass test, and
+  // silently report the last pass's fragment in production, where a supervision
+  // spans dozens of runs.
+  const coreTimings: IndexCoreTimings[] = [];
 
   for (const projectId of target.projectIds) {
     const dispatchInput = {
@@ -305,7 +320,23 @@ async function indexEveryProject(
     if (outcome.outcome !== 'settled' || !outcome.verdict.indexed) {
       throw dispatchFailure(target.repoRef, projectId, outcome);
     }
+
+    // ⚠️ AFTER the throw, deliberately: a project that did not index contributes
+    // no row. The run is about to fail anyway, and a `phasesMs` map for a
+    // container that never indexed would sit in the ledger looking like the
+    // measurement of a refresh that happened.
+    //
+    // ⚠️ AND AN EMPTY MAP CONTRIBUTES NOTHING EITHER. `coreSpansOf` returns
+    // `{ phasesMs: {} }` when every source was missing — the in-flight-memo case
+    // — and a row saying only "this project's spans are unknown" is noise on a
+    // ledger row that many readers parse. Omit the project rather than record its
+    // absence.
+    if (outcome.coreTimings && Object.keys(outcome.coreTimings.phasesMs).length > 0) {
+      coreTimings.push({ projectId, ...outcome.coreTimings });
+    }
   }
+
+  return coreTimings;
 }
 
 /**
@@ -317,6 +348,8 @@ async function finishIndexRun(
   services: JobServices,
   input: IndexRepoInput,
   target: Extract<IndexTarget, { indexed: true }>,
+  /** The per-container core-side spans this run re-derived (MOTIR-4413). */
+  coreTimings: IndexCoreTimings[],
 ): Promise<IndexRepoResult> {
   void services;
   // CANCEL any pending code-graph offboarding for this repo (MOTIR-2166 ·
@@ -358,10 +391,19 @@ async function finishIndexRun(
 
   // The ledger's row: ONE per repo, with ONE `output.repoRef`, reached only when
   // EVERY project's container exited 0.
+  //
+  // ⚠️ THE THREE FIELDS ARE UNCHANGED, AND `coreTimings` IS SPREAD IN ONLY WHEN
+  // THERE IS SOMETHING TO SAY (MOTIR-4413). §6's contract is what
+  // `listSucceededCodeGraphIndexRepoRefs` and the onboarding wizard read, and it
+  // is not being widened — a fourth key rides ALONGSIDE it, optional, and absent
+  // entirely on a run that could measure nothing. That absence is what keeps a
+  // deployment mid-rollout honest: runs whose `index-admit` memo predates this
+  // card produce exactly the row they produced before.
   return {
     indexed: true,
     repoRef: target.repoRef,
     projectsIndexed: target.projectIds.length,
+    ...(coreTimings.length > 0 ? { coreTimings } : {}),
   };
 }
 

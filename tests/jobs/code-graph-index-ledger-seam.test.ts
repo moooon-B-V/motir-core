@@ -182,6 +182,7 @@ describe('four repos produce four runs with four DISTINCT repoRefs', () => {
         indexed: true,
         repoRef: `${repo.owner}/${repo.name}`,
         projectsIndexed: 1,
+        coreTimings: expect.any(Array),
       });
     }
 

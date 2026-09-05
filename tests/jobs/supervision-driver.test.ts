@@ -240,6 +240,11 @@ describe('the terminal transitions', () => {
       reason: 'completed',
       outcome: 'torn-down:completed',
       raced: false,
+      // The poll this supervision ENDED on (MOTIR-4413) — the one that observed
+      // the container done. Returned so a caller can turn it into a duration
+      // with its own pure `waitMs`, and named here rather than allowed for,
+      // because the shape of what a settled pass reports is the contract.
+      pollNumber: 1,
     });
     expect(r.settles).toHaveLength(1);
     expect(r.settles[0]!.verdict).toBe('exit-0');

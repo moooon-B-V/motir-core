@@ -159,7 +159,12 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
 
     const { result, ctx } = await runIndex({ installationId, workspaceId, projectIds });
 
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 1,
+      coreTimings: expect.any(Array),
+    });
     // ONE pair. `refreshCodeAudit` is the call that submits BOTH jobs — motir-ai
     // returns an `auditJobId` and a `conventionJobId` from the one request — so
     // "exactly one pair" is exactly one call.
@@ -266,7 +271,12 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
     const { result, error } = await runIndex({ installationId, workspaceId, projectIds });
 
     expect(error).toBeUndefined();
-    expect(result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 1 });
+    expect(result).toEqual({
+      indexed: true,
+      repoRef: REPO_REF,
+      projectsIndexed: 1,
+      coreTimings: expect.any(Array),
+    });
     const runs = await indexJobRuns();
     expect(runs).toHaveLength(1);
     expect(runs[0]!.status).toBe('succeeded');

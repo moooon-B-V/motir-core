@@ -7,6 +7,11 @@ import {
 } from '@/lib/services/codeGraphIndexAdmissionService';
 import { getGitProvider, requireRepoTarballUrlResolver } from '@/lib/git';
 import type { GitProviderId } from '@/lib/git/types';
+// TYPE-ONLY, and it has to stay that way: `codeGraphIndexService` is the READ
+// half this service is dispatched BY, so a value import would close a cycle. The
+// phase vocabulary lives there because that is where the ledger's result type
+// lives, and both halves must name the same three spans (MOTIR-4413).
+import type { IndexCorePhase } from '@/lib/services/codeGraphIndexService';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   OrchestratorImageUnpullableError,
@@ -627,6 +632,21 @@ export type IndexDispatchOutcome =
        *  aggregated tenant-attributed cost. */
       usage: ContainerUsage;
       failureDetail: string | null;
+      /**
+       * THE CORE-SIDE SPANS FOR THIS CONTAINER (MOTIR-4413), in milliseconds.
+       *
+       * ⚠️ ATTACHED BY {@link codeGraphIndexDispatchService.advanceIndexContainer}
+       * AFTER the settle step returns — deliberately NOT part of what
+       * `index-settle:<pid>` memoizes. A span belongs to the DISPATCH, not to the
+       * teardown, and widening the settle memo would freeze these numbers into a
+       * `job_step` row whose shape a hundred in-flight runs already hold.
+       * Re-deriving them on every pass from the memoized admit result, the
+       * memoized session and the `job_supervision` row costs nothing and cannot
+       * disagree with itself.
+       *
+       * Absent when nothing could be computed — telemetry never fails a run.
+       */
+      coreTimings?: IndexCoreSpans;
     }
   /**
    * Teardown itself failed, so the container may still be running. Reported
@@ -634,6 +654,66 @@ export type IndexDispatchOutcome =
    * backstop that still destroys it.
    */
   | { outcome: 'teardown_failed'; detail: string };
+
+/** One container's core-side spans: the `phasesMs` map, plus the sum of what is in it. */
+export interface IndexCoreSpans {
+  phasesMs: Partial<Record<IndexCorePhase, number>>;
+  totalMs?: number;
+}
+
+/**
+ * A span between two ISO instants, or `undefined` when it cannot be computed.
+ *
+ * ⚠️ IT NEVER THROWS AND NEVER GUESSES, which is the whole contract
+ * (MOTIR-4413). `logPhaseTimings`'s header states the same rule for the motir-ai
+ * half — *"a run must not fail on its own telemetry"* — and here the stakes are
+ * higher: the ledger row this ends up on is a permanent claim that the repo is
+ * indexed (`docs/decisions/code-graph-index-fleet.md` §6), so a malformed
+ * instant must cost a missing FIELD, never a failed run.
+ *
+ * Four ways a span is refused, and each of them is a real state rather than a
+ * defensive flourish:
+ *
+ *   • an instant is ABSENT — an in-flight run whose `index-admit` memo was
+ *     written before this card shipped replays the OLD shape, so `from` arrives
+ *     `undefined` for as long as those runs live;
+ *   • an instant is UNPARSEABLE — `new Date(x).getTime()` is `NaN`, which
+ *     compares false against everything and would otherwise flow into the total;
+ *   • the span is NEGATIVE — the container clock and this process's clock are
+ *     not the same clock, and a negative duration is a fact about that, not
+ *     about the fleet;
+ *   • the span is not FINITE.
+ */
+function spanMs(from: string | undefined, to: string | undefined): number | undefined {
+  if (!from || !to) return undefined;
+  const start = new Date(from).getTime();
+  const end = new Date(to).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return undefined;
+  const ms = end - start;
+  return Number.isFinite(ms) && ms >= 0 ? Math.round(ms) : undefined;
+}
+
+/**
+ * Assemble the `phasesMs` map from spans that may each be absent, and total ONLY
+ * what is present.
+ *
+ * ⚠️ AN ABSENT PHASE IS OMITTED FROM THE MAP, NOT WRITTEN AS ZERO. The two are
+ * opposite claims — "this took no time" versus "this could not be measured" —
+ * and a reader diagnosing a slow refresh has to be able to tell them apart. For
+ * the same reason `totalMs` is the sum of the spans PRESENT and is itself absent
+ * when the map is empty: a total over an incomplete map is a number that invites
+ * exactly the subtraction it cannot support.
+ */
+function coreSpansOf(spans: Partial<Record<IndexCorePhase, number | undefined>>): IndexCoreSpans {
+  const phasesMs: Partial<Record<IndexCorePhase, number>> = {};
+  for (const [phase, ms] of Object.entries(spans) as [IndexCorePhase, number | undefined][]) {
+    if (typeof ms === 'number') phasesMs[phase] = ms;
+  }
+  const present = Object.values(phasesMs);
+  return present.length === 0
+    ? { phasesMs }
+    : { phasesMs, totalMs: present.reduce((sum, ms) => sum + ms, 0) };
+}
 
 function sleepFor(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms));
@@ -1432,13 +1512,32 @@ export const codeGraphIndexDispatchService = {
   ): Promise<IndexDispatchOutcome> {
     const sleep = options.sleep ?? sleepFor;
     const steps = options.steps ?? INLINE_STEPS;
+    const now = options.now ?? ((): Date => new Date());
     const { projectId } = input;
 
     // ── 0 · QUEUE FOR ADMISSION — over the cap means WAIT, never drop ─────────
     // ONE memoized step containing the whole backoff, unchanged (§13.3(c)).
-    const admitted = await steps.run(`index-admit:${projectId}`, () =>
-      this.waitForAdmission(input, sleep, options),
-    );
+    //
+    // ⚠️ THE TWO INSTANTS RIDE THE MEMO, AND THAT IS THE ONLY REASON THE SPAN
+    // EXISTS (MOTIR-4413). `advanceIndexContainer` is re-entered from the top on
+    // every pass and usually leaves by throwing `JobRunDefer`, so a duration
+    // accumulated in a local here would be discarded on the very first
+    // suspension and read as zero for ever after. Written INSIDE the step, the
+    // pair is captured once — on the pass that actually queued — and every later
+    // pass replays the same two strings out of `job_step` and derives the same
+    // number. `session.bootedAt` is the shipped precedent for exactly this, and
+    // this is the second instance of it rather than a new idea.
+    //
+    // ⚠️ `waitForAdmission` ITSELF IS UNTOUCHED. The instants are taken around
+    // the call rather than inside it, because `IndexAdmissionVerdict` is the
+    // admission service's vocabulary and is asserted on by suites that have
+    // nothing to do with timing. The spread preserves `outcome`, `reason` and
+    // `admission`, so both branches below read exactly as they did.
+    const admitted = await steps.run(`index-admit:${projectId}`, async () => {
+      const requestedAt = now().toISOString();
+      const verdict = await this.waitForAdmission(input, sleep, options);
+      return { ...verdict, requestedAt, admittedAt: now().toISOString() };
+    });
     if (admitted.outcome === 'deferred') {
       return {
         outcome: 'admission_deferred',
@@ -1520,7 +1619,41 @@ export const codeGraphIndexDispatchService = {
           ),
       },
     );
-    return result.outcome;
+
+    // ── 8 · THE CORE-SIDE SPANS (MOTIR-4413) ──────────────────────────────────
+    // Derived HERE, after the supervision has settled, from three sources that
+    // every one of them survives a `JobRunDefer`:
+    //
+    //   • `admitted.requestedAt` / `admitted.admittedAt` — the `index-admit:<pid>`
+    //     MEMO, replayed identically on every pass;
+    //   • `session.bootedAt` — the `index-boot:<pid>` MEMO, which is also what
+    //     anchors the supervision's wall clock (§13.2), so the two agree by
+    //     construction;
+    //   • `result.pollNumber` — the `job_supervision` row, keyed `(runId,
+    //     subject)`, which a terminal transition advances not at all, so the
+    //     completing pass and every replay read the same number.
+    //
+    // Nothing is counted in this function's own scope, which is the point: a
+    // pass typically enters here, replays three memos and returns, and the
+    // numbers it reports are the same numbers the pass that did the work would
+    // have reported.
+    //
+    // ⚠️ `indexPollWaitMs` IS READ, NEVER EDITED. It is pure and a function of
+    // the ITERATION, so calling it here re-derives the interval that preceded
+    // the detecting poll without moving a single cadence constant — §16.6 forbids
+    // moving them and this card does not.
+    const coreTimings = coreSpansOf({
+      admissionWait: spanMs(admitted.requestedAt, admitted.admittedAt),
+      boot: spanMs(admitted.admittedAt, session.bootedAt),
+      pollToDetect: indexPollWaitMs(result.pollNumber, options),
+    });
+
+    // ⚠️ ONLY THE `settled` ARM CARRIES THEM, and the guard is a type narrowing
+    // rather than a check: the other outcomes are dispatches that never ran a
+    // container, so spans over them would describe a boot that did not happen.
+    return result.outcome.outcome === 'settled'
+      ? { ...result.outcome, coreTimings }
+      : result.outcome;
   },
 
   /**

@@ -92,10 +92,79 @@ export type IndexSkipReason =
   | 'no_projects'
   | 'provider_cannot_index';
 
-/** A small JSON-serializable summary persisted on the job_run ledger row. */
+/**
+ * THE CORE-SIDE PHASES OF ONE CONTAINER'S DISPATCH (MOTIR-4413) — the part of a
+ * refresh's wall clock that happens OUTSIDE the container, and which nothing has
+ * ever recorded.
+ *
+ * `motir-ai` has instrumented the container's own eight phases since MOTIR-3250
+ * (`src/indexer/runIndex.ts`'s `PhaseTimer` over `INDEX_RUN_PHASES`, reported by
+ * `logPhaseTimings` as one `[index-timings]` line). Everything before that timer
+ * starts, and everything between containers, was invisible: the ledger's output
+ * was three fields and none of them was a duration, so "why did this refresh take
+ * thirty-five minutes" could only be answered by reading a machine's logs by hand.
+ *
+ * Three spans are knowable HERE and nowhere else — one per `(repo × project)`,
+ * never one aggregate, because a long admission queue and a slow boot and a
+ * lagging poll are three different faults with three different remedies and they
+ * produce the same single number when summed.
+ */
+export type IndexCorePhase =
+  /** Queued for an admission slot: the request → the grant (MOTIR-1990's cap). */
+  | 'admissionWait'
+  /** Mint + tarball-URL resolve + provision: the grant → the container booted. */
+  | 'boot'
+  /**
+   * The width of the FINAL poll window — the longest a finished container could
+   * have gone unobserved before this run noticed.
+   *
+   * ⚠️ A BOUND, AND DELIBERATELY NAMED AS ONE. The provider does not tell us when
+   * the container stopped, only that it has; what is derivable is the interval
+   * that preceded the poll which saw it. Reporting it as an exact lag would be a
+   * measurement we cannot take, and a plausible number is worse than an honest
+   * bound (`lib/jobs/supervision/driver.ts` owns the cadence this reads).
+   */
+  | 'pollToDetect';
+
+/**
+ * One container's core-side spans, in milliseconds.
+ *
+ * ⚠️ THE SHAPE MIRRORS `motir-ai`'s ON PURPOSE — a `phasesMs` map plus a total,
+ * exactly what `logPhaseTimings` emits — so the two halves of one refresh read the
+ * same way rather than in two invented vocabularies.
+ *
+ * ⚠️ EVERY MEMBER IS OPTIONAL, AND AN ABSENT ONE MEANS "COULD NOT BE COMPUTED",
+ * never "zero". Telemetry may not fail a run: the ledger row is a permanent claim
+ * that the repo is indexed (`docs/decisions/code-graph-index-fleet.md` §6), so a
+ * span whose source is missing — an in-flight run whose memo predates this card,
+ * a clock that went backwards — is OMITTED rather than guessed or thrown on.
+ */
+export interface IndexCoreTimings {
+  /** WHICH container's spans these are — the second half of `(repo × project)`. */
+  readonly projectId: string;
+  readonly phasesMs: Partial<Record<IndexCorePhase, number>>;
+  /** The sum of the spans PRESENT. Absent when none could be computed. */
+  readonly totalMs?: number;
+}
+
+/**
+ * A small JSON-serializable summary persisted on the job_run ledger row.
+ *
+ * ⚠️ `indexed` / `repoRef` / `projectsIndexed` ARE UNCHANGED AND MUST STAY SO
+ * (§6). `jobRunRepository.listSucceededCodeGraphIndexRepoRefs` builds the indexed
+ * set from them, and `MigrateIndexRepoDto` / `MigrateIndexStatusDto.allIndexed`
+ * gate the onboarding wizard on that set. {@link IndexCoreTimings} rides ALONGSIDE
+ * them, optional, and no reader of the three is asked to learn about it.
+ */
 export type IndexRepoResult =
   | { indexed: false; reason: IndexSkipReason }
-  | { indexed: true; repoRef: string; projectsIndexed: number };
+  | {
+      indexed: true;
+      repoRef: string;
+      projectsIndexed: number;
+      /** MOTIR-4413. Absent when no container produced a computable span. */
+      coreTimings?: IndexCoreTimings[];
+    };
 
 /**
  * What the job needs to know before it can index anything: the skip reason, or
