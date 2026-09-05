@@ -4,12 +4,12 @@
 where it comes to live, who on the team can get into it, and what the standing _"it's yours — move
 it whenever you want"_ actually opens onto.
 
-| Surface                                                          | Asset                                                                                                               | Card                                                         | Sections |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------- |
-| **The establish step** at plan approval                          | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png)             | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code)         | §0–§13   |
-| **The take-it-over flow** — move a repository to your own GitHub | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                                     | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga) | §14      |
-| **Team code access** — who else on the team can clone it         | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)                         | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API) | **§15**  |
-| **The room's two registries** — hosted set + workspace-connected | [`repositories-room.mock.html`](./repositories-room.mock.html) + [`repositories-room.png`](./repositories-room.png) | MOTIR-3126 (bug: design + surface), MOTIR-3086 (the ladder)  | **§16**  |
+| Surface                                                                                                    | Asset                                                                                                               | Card                                                                                                      | Sections    |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------- |
+| **The establish step** at plan approval                                                                    | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png)             | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code)                                                      | §0–§13      |
+| **The take-it-over flow** — move a repository to your own GitHub                                           | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                                     | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga)                                              | §14         |
+| **Team code access** — who else on the team can clone it                                                   | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)                         | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API)                                              | **§15**     |
+| **The room's two registries** — hosted set + workspace-connected, and the room's own `Add repository` door | [`repositories-room.mock.html`](./repositories-room.mock.html) + [`repositories-room.png`](./repositories-room.png) | MOTIR-3126 (bug: design + surface), MOTIR-3086 (the ladder), **MOTIR-4674** (the door + the two removals) | **§16–§17** |
 
 **Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13).** §0–§13 are the design
 reference for the step at plan approval that gives an approved plan somewhere for its code to live —
@@ -1697,3 +1697,180 @@ this project — that is the one definition this whole card exists to stop dupli
 - **Promoting a connected repository into `project_repository`** — the ADR amendment's own "what this
   does NOT fix". Until something does, a connected repository has no row, so it has no takeover, no
   role chip and no position; that absence is drawn rather than papered over.
+
+---
+
+# 17. `repositories-room.mock.html` §5–§9 — THE ROOM GAINS ITS DOOR
+
+**Story MOTIR-4669 · subtask MOTIR-4674 (design amendment), 2026-09-05.** §16 drew the room
+_rendering_ two registries. It could not _change_ either: connecting was a workspace-level act
+somewhere else, and §16.11 says so in as many words — _"the room links there and grows no connect
+flow of its own."_
+
+**That is what this amendment inverts, and it is not a change of mind about §16 — it is a change in
+what the model underneath it allows.** A repository is now connected **ONCE, to the ORGANISATION**,
+and which projects use it is visibility configuration (MOTIR-2029's rule for the code graph, applied
+to the thing the graph is built FROM). So the act a project performs is **ADD**, it happens **here**,
+and it is **one action with two segments**.
+
+- **Panels added:** 5 (the room with its door), 6 (the picker), 7 (a first-time organisation),
+  8 (the non-org-admin arm), 9 (the project-side removal).
+- **Nothing in Panels 1–4 is redrawn.** The ladder they render is unchanged; what changes is that
+  the room can now act on it.
+- **⚠️ NOT drawn here, and cited rather than redrawn:** the ORGANISATION's repository inventory,
+  its index-state column, its `Used by N projects` column and its `Disconnect from organisation`
+  dialog — `design/github/` and `design/gitlab/` Panels 6–7 (**MOTIR-4672**). This asset owns the
+  PROJECT's side of the same model, and only that.
+
+## 17.1 · The answer in one line
+
+**The picker belongs to the room that already exists**, and it offers one list with two segments:
+what the organisation already has, and connecting something new. **Three revisions of a sibling
+design drew it somewhere else and each was rejected; the defect record is MOTIR-4668.** The room has
+four assets and a header that says it renders the project's whole repository domain — a feature
+drawing its own version of that room produces two designs of one surface that drift.
+
+## 17.2 · Panel 5 — the door
+
+- **`Add repository`, a `Button variant="primary"`, in the pane head beside the title.** It is the
+  room's only add path, and it opens the same picker the organisation's Git settings opens — same
+  flow, same picker, two doors.
+- **The section heading changes from `Your own repositories` to `From your organisation`**, and its
+  hint with it. The old copy was true of a workspace-connected repository and is false of an
+  org-owned one: the repositories in this section are not the reader's personally, they are the
+  organisation's, and the project has them because somebody added them.
+- **The footer's link stops being a hand-off and becomes a view.** It read
+  _"Choose which repositories Motir can see"_ — the way to perform an act this room could not. The
+  room performs it now, so the link reads **"See every repository in moooon"** and points at the
+  organisation's inventory (`design/github/` Panel 6). **That single change is the tier move in one
+  line.**
+- **The connected row gains ONE action** — `Remove from this project` — which is the first
+  affordance a row in this section has ever carried. §16.6 said _"No action of any kind on a row"_
+  and gave the reason: the user already owns these, so there was nothing to do. There is now: a
+  project's link to an org repository is exactly the thing a project may change.
+
+## 17.3 · Panel 6 — the picker: ONE list, TWO segments
+
+| segment                           | what it offers                                                       | what it costs                                                                |
+| --------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **In moooon · already connected** | the organisation's repositories, pick → linked immediately           | **nothing.** The row reads **`already indexed · shared`**, and no index runs |
+| **Connect a new one**             | performs the organisation connection AND the project link in one act | the only path that costs an index                                            |
+
+- **⚠️ `already indexed · shared` is a STATE, and it carries the whole promise of the tier move.**
+  It says the code graph for this repository exists, belongs to the organisation, and is not rebuilt
+  because a second project picked it up. Without it the row is indistinguishable from the segment
+  below — which is exactly the pair the reader is being asked to tell apart. It is a **neutral
+  chip**, not a tint: a fact about the repository, not a step in a flow.
+- **A repository this project already has is LISTED and unpickable** (`already in this project`, at
+  the shipped disabled opacity), rather than filtered out. A reader who came looking for it should
+  find it and see why it is not offered.
+- **⚠️ The provider asymmetry is drawn, not smoothed.** _Connect a new one_ is a **link-out** to the
+  App's install screen for GitHub and an **in-app browse** for GitLab — the same honest inverse
+  `design/gitlab/` §2b already draws. A picker that drew only the in-app arm would leave the
+  commoner path improvised at build time.
+
+## 17.4 · Panel 7 — a first-time organisation is a PICKER, not a signpost
+
+**An empty-state panel with a link out is the exact shape this amendment exists to forbid.**
+_"Nothing to pick"_ must never render as a message whose job is to send somebody to another page:
+that turns one intent into two errands, which is the same defect at the project tier that the whole
+story removes at the organisation tier.
+
+So the zero case is the same picker with **one segment**. The search field is gone, because there is
+nothing to search; the lead sentence says what will happen (_"connect the first one and it lands in
+Acme booking at the same time"_); everything else is where it was. **The organisation connection
+happens BECAUSE you added a repository — never as an errand you run first.**
+
+## 17.5 · Panel 8 — the org-admin gate, drawn in both arms
+
+**The room stays visible on `repository:manage`. Every ADD path inside it asserts ORG ADMIN.** That
+is the story's own rule and it is what stops a project admin connecting a repository to the
+organisation through a project-scoped permission.
+
+**What a project admin who is not an org admin sees: the set, and no add affordance — plus one
+sentence.** Not a disabled button, and not a silent absence either:
+
+- **Not disabled.** A disabled control is a promise the product then refuses; the rail already makes
+  that call for a whole area (MOTIR-2468 — _an entry point is a promise about a room_).
+- **Not silent.** A room whose one action simply vanishes leaves a reader wondering whether they are
+  looking at a bug. The section's footer says **who** can do it and **where**, which is what turns an
+  absence into an answer.
+
+**The project-side REMOVE is NOT gated on org admin**, and the discriminator is what the act
+changes: removing a repository from this project deletes one `ProjectRepo` row and touches neither
+the organisation's connection nor the code graph. It is the room's own scope, so it takes the room's
+own permission, `repository:manage`.
+
+## 17.6 · Panel 9 — the project-side removal REASSURES
+
+**The two removals share a word and not a blast radius, so they must not share a weight.**
+
+|                                    | **Remove from this project** (here) | **Disconnect from organisation** (`design/github/` + `design/gitlab/` Panel 7) |
+| ---------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------ |
+| what it changes                    | one `ProjectRepo` row               | every project's link in the organisation                                       |
+| the code graph                     | **nothing**                         | offboarded — `repo_disconnected`, windowed 30 days                             |
+| the affordance                     | a quiet row action                  | a destructive confirm (GitLab) / a pre-link-out disclosure (GitHub)            |
+| the confirm's primary              | `Remove`, a **secondary** button    | `Disconnect`, a **danger fill** / `Continue on GitHub ↗`                       |
+| what the copy spends its length on | what does **not** happen            | what **does**                                                                  |
+| who may do it                      | `repository:manage`                 | org admin                                                                      |
+
+**⚠️ A project-level remove enqueues NO offboarding.** It deletes one row and nothing else — no new
+member on `CodeGraphOffboardReason`. Saying so explicitly, on the surface and in these notes, is what
+stops somebody adding one.
+
+**Each LABEL names its own tier** (`Remove from this project` · `Disconnect from organisation`), so
+neither depends on the reader knowing which page they are standing on.
+
+## 17.7 · Primitives — every element, and what it is
+
+| Element                    | Primitive                                 | Notes                                                                                                                                                                       |
+| -------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Add repository`           | `Button variant="primary"` + `Plus` glyph | In the pane head's right slot. No new affordance type.                                                                                                                      |
+| The picker                 | `Modal` + the shipped `Combobox` grammar  | Search input, grouped listbox, option rows — the same pattern `design/repository-set/` already composes for the takeover picker and `design/github/` §5b for pull requests. |
+| Segment headings           | the listbox's own `grp` caption           | Two, and only two.                                                                                                                                                          |
+| `already indexed · shared` | a neutral chip                            | `Pill` tone=neutral's treatment; no new tone, no new token.                                                                                                                 |
+| `Remove from this project` | a quiet text button                       | The `QuietAction` treatment `RepositoryRow` already ships, in danger ink.                                                                                                   |
+| The remove confirm         | `Modal` + `Button variant="secondary"`    | **Secondary, deliberately** — a danger fill would claim a blast radius this act does not have.                                                                              |
+| Everything in Panels 1–4   | unchanged                                 | Not one of their panels, rows or strings moves.                                                                                                                             |
+
+## 17.8 · Token roles added by this amendment
+
+| Element                                       | Colour role                                                                          | Shape role                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `Add repository`                              | fill `--el-accent` · ink `--el-accent-text`                                          | `--radius-btn` · `--height-btn-md` · `--spacing-btn-x/y`       |
+| Picker modal                                  | `--el-card` / `--el-border` / `--shadow-modal`                                       | `--radius-modal` · `--spacing-card-padding`                    |
+| Search field                                  | `--el-page-bg` / `--el-input-border`                                                 | `--radius-input` · `--height-input` · `--spacing-input-x`      |
+| Listbox / option / active option              | `--el-card` + `--shadow-elevated`; active `--el-option-active-bg`                    | `--radius-card` / `--radius-control` · `--spacing-control-x/y` |
+| Segment heading                               | **`--el-text-eyebrow`** — ⚠️ see below                                               | —                                                              |
+| Option repo name · owner prefix               | `--el-text` · `--el-text-secondary`                                                  | —                                                              |
+| `already indexed · shared` chip               | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, glyph `--el-icon-muted` | `--radius-badge` · `--spacing-chip-x/y`                        |
+| Option sub-label (`opens GitHub`, `in Motir`) | **`--el-text-secondary`** — ⚠️ see below                                             | —                                                              |
+| Already-in-this-project row                   | the shipped disabled treatment (`opacity`)                                           | —                                                              |
+| `Remove from this project`                    | **`--el-danger-on-surface`**                                                         | —                                                              |
+| Remove confirm's primary                      | the secondary button: text `--el-text` · border `--el-button-border`                 | `--radius-btn` · `--height-btn-sm`                             |
+
+**⚠️ Two carried-over rules were corrected rather than used as they stood.** `.listbox .grp` was
+`--el-text-faint` and `.listbox .opt .sub` was `--el-text-muted`, both inherited from
+`takeover.mock.html` and **never exercised in this asset** — the picker is their first use. Faint
+clears AA on **no** surface at all, and muted is 4.12:1 on `--el-option-active-bg`, which is what an
+ACTIVE option paints. The segment headings are the information the whole panel turns on, so they are
+not decoration; they take `--el-text-eyebrow`, and the sub-labels take `--el-text-secondary`.
+
+**⚠️ And the removal's ink is `--el-danger-on-surface`, never `--el-danger-text`.** That token is the
+ink FOR a danger FILL and is legal only on an element carrying `bg-(--el-danger)`; painted on a page
+it measures 1.00–1.04:1 in every light palette. Raw `--el-danger` is not the answer either — it is
+4.11–4.25:1 on the dark page in three palettes. This mock's own token block did not declare
+`--el-danger-on-surface`, so this amendment adds it, verbatim from
+`packages/design-system/theme.css`.
+
+## 17.9 · Explicitly OUT of scope here
+
+- **The organisation's inventory, its index column, `Used by N projects` and its disconnect
+  dialog** — `design/github/` + `design/gitlab/` Panels 6–7 (**MOTIR-4672**). Cited, never redrawn.
+- **The org settings rail row** that reaches that page — **MOTIR-4673**, `design/org-admin/`.
+- **The member's own git credential** — **MOTIR-4675**, `design/settings/`.
+- **The takeover flow and the establish step** — §0–§14, unchanged: not one of their panels, states
+  or strings moves.
+- **What happens to a `project_repository` row when a repository is added this way.** A picked
+  repository is a link, not a hosted row; §16.11's _"promoting a connected repository into
+  `project_repository`"_ remains unfixed and unfixed by this too.
