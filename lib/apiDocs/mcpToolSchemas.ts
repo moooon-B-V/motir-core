@@ -517,7 +517,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'Optional longer summary (Markdown) of what this plan proposes and why, shown to the reviewer above the tree.',
+          'Optional longer summary (Markdown) of what this plan proposes and why, shown to the reviewer above the tree. Not write-once: `update_plan` corrects it — and the title — after the fact, on a `generating` or `planned` plan, without touching a proposal.',
       },
       plannedWithHarness: {
         type: 'string',
@@ -1565,6 +1565,25 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  update_plan: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', minLength: 1, description: 'The plan id `create_plan` returned.' },
+      title: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          "The plan's own short label — what it is proposing, in a line. `null` clears it. Omit it to leave it exactly as it is.",
+      },
+      summary: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          'The longer summary (Markdown) shown to the reviewer above the tree — the sentence they read before any card. `null` clears it. Omit it to leave it exactly as it is.',
+      },
+    },
+    required: ['planId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },

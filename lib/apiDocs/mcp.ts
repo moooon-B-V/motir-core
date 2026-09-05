@@ -659,6 +659,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
     descriptionFingerprint: 'dc5421fc3039',
   },
+  update_plan: {
+    // The line has to say WHAT this one is about, because its three neighbours
+    // are all about a PROPOSAL and this one is not — that is the whole reason a
+    // reader picks between them.
+    summary:
+      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal.",
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '3c8e94ce5a31',
+  },
   open_plan_session: {
     summary: "Open — or resume — a project's planning conversation, and read its thread.",
     descriptionFingerprint: 'aa4e7ce9b277',

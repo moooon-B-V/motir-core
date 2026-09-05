@@ -671,6 +671,35 @@ export const CORRECT_PROPOSAL_KEYS = [
 export type CorrectProposalKey = (typeof CORRECT_PROPOSAL_KEYS)[number];
 
 /**
+ * The PLAN'S OWN heading — its `title` and `summary` (MOTIR-4637).
+ *
+ * ⚠️ NOT a proposal's fields. {@link CorrectProposalInput} above corrects one
+ * card ON a plan; this corrects the two lines a reviewer reads ABOVE the tree,
+ * before any card. They were write-once from `create_plan` until this input
+ * existed, so a single wrong sentence — one the product itself tells an agent to
+ * write dispositions into — could only be repaired by withdrawing every proposal
+ * (which ENDS a `planned` plan, `declined` / `discarded`) and re-authoring the
+ * whole thing under a new id.
+ *
+ * SPARSE, exactly like its siblings: a key you omit is left alone and an explicit
+ * `null` clears it. Both fields are nullable on the row and both are nullable
+ * here, so a summary written by mistake can be removed rather than only replaced.
+ */
+export interface CorrectPlanBriefInput {
+  title?: string | null;
+  summary?: string | null;
+}
+
+/**
+ * The keys {@link CorrectPlanBriefInput} declares — the same DECLARED-SOURCE
+ * discipline the two constants above are held to, and for the same reason: a key
+ * on the input that no transport reads is invisible from both ends.
+ */
+export const CORRECT_PLAN_BRIEF_KEYS = ['title', 'summary'] as const;
+
+export type CorrectPlanBriefKey = (typeof CORRECT_PLAN_BRIEF_KEYS)[number];
+
+/**
  * The COMPILE-TIME half of the drift guard: each input's keys and its constant
  * are the same set, in BOTH directions.
  *
@@ -685,12 +714,16 @@ type UpdateKeyMissingFromConstant = Exclude<keyof UpdateProposalInput, UpdatePro
 type UpdateKeyMissingFromInterface = Exclude<UpdateProposalKey, keyof UpdateProposalInput>;
 type CorrectKeyMissingFromConstant = Exclude<keyof CorrectProposalInput, CorrectProposalKey>;
 type CorrectKeyMissingFromInterface = Exclude<CorrectProposalKey, keyof CorrectProposalInput>;
+type BriefKeyMissingFromConstant = Exclude<keyof CorrectPlanBriefInput, CorrectPlanBriefKey>;
+type BriefKeyMissingFromInterface = Exclude<CorrectPlanBriefKey, keyof CorrectPlanBriefInput>;
 const _proposalInputKeysAreExhaustive: [
   UpdateKeyMissingFromConstant,
   UpdateKeyMissingFromInterface,
   CorrectKeyMissingFromConstant,
   CorrectKeyMissingFromInterface,
-] extends [never, never, never, never]
+  BriefKeyMissingFromConstant,
+  BriefKeyMissingFromInterface,
+] extends [never, never, never, never, never, never]
   ? true
   : never = true;
 void _proposalInputKeysAreExhaustive;
