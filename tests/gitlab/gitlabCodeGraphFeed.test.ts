@@ -173,6 +173,59 @@ describe('gitlabWebhookService — push → code-graph refresh enqueue (MOTIR-14
     expect(callsFor(sendSpy, 'system.code-graph-refresh')).toHaveLength(0);
   });
 
+  // ── MOTIR-1766 — the STALENESS INPUT, at PARITY with GitHub ───────────────
+  //
+  // A connected GitLab project is a row in the SAME `github_repo` table, its
+  // `parsePushEvent` normalizes `after` into the same `headSha`, and this handler
+  // has already established the same fact GitHub's has by this point — that the
+  // delivery is a default-branch push. So the head is recorded here too, rather
+  // than left NULL with a documented deferral.
+
+  async function storedRepo() {
+    return adminDb.githubRepo.findFirstOrThrow({ where: { repoId: PROJECT_ID } });
+  }
+
+  it('a default-branch push RECORDS the head — GitLab has PARITY, not a NULL deferral', async () => {
+    await makeScenario('gl-push-head@example.com', { withRepo: true });
+    spySend();
+
+    expect((await storedRepo()).lastPushSha).toBeNull();
+
+    await gitlabWebhookService.handleEvent('Push Hook', pushPayload());
+
+    const row = await storedRepo();
+    expect(row.lastPushSha).toBe('a'.repeat(40));
+    expect(row.lastPushedAt).toBeInstanceOf(Date);
+  });
+
+  it('a redelivered GitLab push is a no-op on the stored head', async () => {
+    await makeScenario('gl-push-head-redeliver@example.com', { withRepo: true });
+    spySend();
+
+    await gitlabWebhookService.handleEvent('Push Hook', pushPayload());
+    const first = await storedRepo();
+    await gitlabWebhookService.handleEvent('Push Hook', pushPayload());
+    const second = await storedRepo();
+
+    expect(second.lastPushedAt?.getTime()).toBe(first.lastPushedAt?.getTime());
+  });
+
+  it('a non-default branch and a branch deletion record NOTHING', async () => {
+    await makeScenario('gl-push-head-nothing@example.com', { withRepo: true });
+    spySend();
+
+    await gitlabWebhookService.handleEvent(
+      'Push Hook',
+      pushPayload({ ref: 'refs/heads/feature', after: 'b'.repeat(40) }),
+    );
+    await gitlabWebhookService.handleEvent(
+      'Push Hook',
+      pushPayload({ after: '0'.repeat(40) }), // GitLab signals a deletion with an all-zero sha
+    );
+
+    expect((await storedRepo()).lastPushSha).toBeNull();
+  });
+
   it('an enqueue transport failure never fails the ack (best-effort, fast 2xx)', async () => {
     await makeScenario('gl-push-enqueue-down@example.com', { withRepo: true });
     spyOnJobDispatch().mockRejectedValue(new Error('queue down'));

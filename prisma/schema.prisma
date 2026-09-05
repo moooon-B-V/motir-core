@@ -5683,12 +5683,12 @@ model GithubInstallation {
 /// internal installation modelled on BOTH sides (the FK-`@relation` rule). Read
 /// through the GitProvider seam as a NormalizedRepo (owner/name/defaultBranch).
 model GithubRepo {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   /// Provider discriminator — always "github" for these rows.
-  provider       String   @default("github")
+  provider       String    @default("github")
   /// FK → GithubInstallation.id (the internal cuid, NOT GitHub's numeric
   /// installation id). The parent installation this repo was selected on.
-  installationId String   @map("installation_id")
+  installationId String    @map("installation_id")
   /// WHOSE this repo is (MOTIR-1931). Tenancy is a property of the REPOSITORY,
   /// not of the installation: Motir's provisioning org holds every tenant's
   /// created repos behind ONE installation, so workspace A's repo and workspace
@@ -5696,12 +5696,12 @@ model GithubRepo {
   /// ONLY tenancy read — the installation still SELECTS which mirror rows a
   /// delivery may touch, the repo row ATTRIBUTES them. Mirrors `ProjectRepo`,
   /// which already gates on its own `workspace_id` rather than a join through.
-  workspaceId    String   @map("workspace_id")
+  workspaceId    String    @map("workspace_id")
   /// GitHub's numeric repository id (as a string) — stable across renames.
-  repoId         String   @map("repo_id")
+  repoId         String    @map("repo_id")
   owner          String
   name           String
-  defaultBranch  String   @map("default_branch")
+  defaultBranch  String    @map("default_branch")
   /// Whether the repository is ARCHIVED on the host (MOTIR-1959). An archived
   /// repo is READ-ONLY: it rejects a push and a pull request from an admin, so a
   /// card resolving to one dispatches an agent that cannot open a PR at all.
@@ -5718,9 +5718,27 @@ model GithubRepo {
   /// `@default(false)` rather than nullable: every pre-existing row was accepted
   /// as live, and `false` says exactly that — "not known to be archived" — with no
   /// backfill pass and no third state for consumers to interpret.
-  archived       Boolean  @default(false)
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  archived       Boolean   @default(false)
+  /// The default branch's HEAD sha, as of the last push delivery Motir saw
+  /// (MOTIR-1766). This is the STALENESS INPUT: "stale" means the commit in the
+  /// code graph is behind the repo's default-branch head, and motir-ai supplies
+  /// only the former. Recorded from the push webhook's own payload — which
+  /// already carries it and already discarded it — so staleness is a comparison
+  /// of two columns with ZERO network calls, rather than a provider HEAD fetch
+  /// on every page render.
+  ///
+  /// NULLABLE, and null means UNKNOWN — never "current" and never "stale". Every
+  /// pre-existing row backfills to null with no data step, and a repo that has
+  /// not pushed since this shipped simply has no head recorded yet. A consumer
+  /// that reads null as stale would put a false warning in front of every
+  /// existing user, which is why the column is nullable rather than guessed.
+  /// Self-healing: the next default-branch push records it.
+  lastPushSha    String?   @map("last_push_sha")
+  /// When `lastPushSha` was recorded. Moves only when the sha CHANGES, so a
+  /// GitHub redelivery of the same push is a true no-op on both columns.
+  lastPushedAt   DateTime? @map("last_pushed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   installation                GithubInstallation           @relation(fields: [installationId], references: [id], onDelete: Cascade)
   /// The owning tenant (MOTIR-1931) — modelled on BOTH sides, like every other FK

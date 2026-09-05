@@ -158,6 +158,35 @@ export const githubRepoRepository = {
    * no-op (count 0), never a `P2025` throw that makes GitHub retry a delivery no
    * retry can fix. Returns the count.
    */
+  /**
+   * Record the default branch's HEAD sha for one repo row — the STALENESS INPUT
+   * the code graph is compared against (MOTIR-1766).
+   *
+   * ⚠️ CONDITIONAL, and that is what makes a redelivery a true no-op. GitHub
+   * retries a delivery, so the same push arrives more than once; writing
+   * unconditionally would leave the sha correct and drag `lastPushedAt` forward
+   * on every retry, which is a timestamp that means "when we last heard about
+   * this push" rather than "when this head arrived". The `OR` is not decoration:
+   * `{ not: sha }` alone excludes a NULL row in SQL, which is exactly the row
+   * that has never had a head recorded — the one case this most needs to write.
+   *
+   * Returns whether a row was actually updated, so a caller can tell a first
+   * record from a redelivery without a second read.
+   */
+  async recordDefaultBranchHead(
+    input: { id: string; headSha: string; pushedAt?: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.githubRepo.updateMany({
+      where: {
+        id: input.id,
+        OR: [{ lastPushSha: null }, { lastPushSha: { not: input.headSha } }],
+      },
+      data: { lastPushSha: input.headSha, lastPushedAt: input.pushedAt ?? new Date() },
+    });
+    return count > 0;
+  },
+
   async setArchivedByRepoId(
     repoId: string,
     archived: boolean,

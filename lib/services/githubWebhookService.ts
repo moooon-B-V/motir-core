@@ -14,6 +14,7 @@ import { githubPullRequestRepository } from '@/lib/repositories/githubPullReques
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { recordDefaultBranchHead } from '@/lib/github/pushHead';
 import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
@@ -304,6 +305,9 @@ export const githubWebhookService = {
       if (!repo) return { kind: 'unknown_repo' as const };
       return {
         kind: 'resolved' as const,
+        // Carried so the head write (MOTIR-1766) addresses the row by its own id
+        // rather than re-resolving it on the write path.
+        repoRowId: repo.id,
         // The REPO says whose this is (MOTIR-1931). The installation only
         // selected which mirror rows this delivery may touch — under Motir's
         // shared provisioning installation it names no workspace at all.
@@ -321,6 +325,18 @@ export const githubWebhookService = {
     // Only the STORED default branch feeds the graph — the graph mirrors the
     // repo's shipped mainline, per tenant, per repo (the N-repo cardinality).
     if (push.branch !== resolved.defaultBranch) return { event: 'push', outcome: 'ignored_ref' };
+
+    // Record the default branch's head — the STALENESS INPUT the code graph is
+    // compared against (MOTIR-1766). It sits HERE, past the guard, because the
+    // question it answers is "what is on the mainline?" and only a default-branch
+    // push moves that.
+    //
+    // ⚠️ BEST-EFFORT AND SWALLOWED, exactly like the enqueue beside it. The
+    // webhook's contract is a fast 2xx: a failed head write must never turn a
+    // delivery into a 500 that GitHub then retries. The cost of losing one is
+    // bounded and self-healing — the next push records it, and a consumer reads a
+    // missing head as UNKNOWN rather than as stale.
+    await recordDefaultBranchHead(resolved.repoRowId, push.headSha);
 
     // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
     // the default branch's CURRENT head at run time, so debounced/coalesced

@@ -98,6 +98,12 @@ interface JoinedRow {
    *  column itself is nullable. Reassembled below with the same `?? false` an
    *  absent value reads as everywhere else. */
   repoArchived: boolean | null;
+  // MOTIR-1766 — the staleness input. Selected here because this raw read builds
+  // a `GithubRepo` shape BY HAND: a column added to the model and not to this
+  // list is a compile error, not a silently missing field, which is what the
+  // caller-set sweep exists to catch.
+  repoLastPushSha: string | null;
+  repoLastPushedAt: Date | null;
   repoCreatedAt: Date | null;
   repoUpdatedAt: Date | null;
 }
@@ -157,6 +163,8 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             name: r.repoName!,
             defaultBranch: r.repoDefaultBranch!,
             archived: r.repoArchived ?? false,
+            lastPushSha: r.repoLastPushSha,
+            lastPushedAt: r.repoLastPushedAt,
             createdAt: r.repoCreatedAt!,
             updatedAt: r.repoUpdatedAt!,
           },
@@ -236,6 +244,8 @@ export const projectRepoRepository = {
         gr."name"              AS "repoName",
         gr."default_branch"    AS "repoDefaultBranch",
         gr."archived"          AS "repoArchived",
+        gr."last_push_sha"     AS "repoLastPushSha",
+        gr."last_pushed_at"    AS "repoLastPushedAt",
         gr."created_at"        AS "repoCreatedAt",
         gr."updated_at"        AS "repoUpdatedAt"
       FROM "project_repository" pr

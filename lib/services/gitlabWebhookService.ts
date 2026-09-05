@@ -9,6 +9,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { recordDefaultBranchHead } from '@/lib/github/pushHead';
 import {
   syncChangeRequestStatus,
   type ChangeRequestContextResolution,
@@ -148,6 +149,14 @@ export const gitlabWebhookService = {
     // shipped mainline, per tenant, per repo (the N-repo cardinality). A push to any
     // other branch is a clean no-op.
     if (push.branch !== repo.defaultBranch) return { event: 'push', outcome: 'ignored_ref' };
+
+    // Record the default branch's head — the STALENESS INPUT (MOTIR-1766), and
+    // GitLab has PARITY with GitHub here rather than an explicit deferral: a
+    // connected GitLab project is a row in the SAME `github_repo` table, its
+    // `parsePushEvent` normalizes `after` into the same `headSha`, and this
+    // handler has already established the same fact GitHub's has — that this is a
+    // default-branch push. Best-effort and swallowed, like the enqueue below.
+    await recordDefaultBranchHead(repo.id, push.headSha);
 
     // POST-tx, best-effort: the ack never hinges on the queue (the enqueue swallows
     // + logs a transport failure). The job re-fetches the default branch's CURRENT

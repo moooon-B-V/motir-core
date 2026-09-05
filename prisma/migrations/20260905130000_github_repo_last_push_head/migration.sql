@@ -1,0 +1,33 @@
+-- MOTIR-1766 — THE STALENESS INPUT: the default branch's head, recorded on push.
+--
+-- "Stale" means the commit in the code graph is BEHIND the repository's
+-- default-branch head. motir-ai supplies the indexed commit (`CodeRepo.commitSha`);
+-- nothing supplied the head. Without it the only way to answer "are we behind?"
+-- is a provider API call per repository on every page render — the fetch-on-render
+-- shape two user-facing surfaces must not have, with its latency and its
+-- rate-limit exposure, failing closed whenever the token is unavailable.
+--
+-- The answer was already flowing through the system and being discarded:
+-- `parsePushEvent` normalizes `after` into `headSha` on BOTH providers, and both
+-- `handlePush` implementations already decide that a delivery is a default-branch
+-- push before enqueuing the refresh. Persisting it there makes staleness a
+-- comparison of two columns with ZERO network calls, and the push is precisely
+-- the event that makes the graph stale in the first place.
+--
+-- ⚠️ NULLABLE, AND NULL MEANS *UNKNOWN* — never "current" and never "stale".
+-- Every existing row backfills to NULL with no data step, so this migration
+-- touches no data. A repository that has not pushed since this shipped simply has
+-- no head recorded yet, and a consumer that read NULL as stale would put a false
+-- warning in front of every existing user. That is why the column is nullable
+-- rather than backfilled with a guessed value, and the limitation is
+-- self-correcting: the next default-branch push records it.
+--
+-- `last_pushed_at` moves only when the sha CHANGES, so a GitHub redelivery of the
+-- same push is a true no-op on both columns rather than a timestamp that drifts
+-- under retries.
+--
+-- Purely additive: two nullable columns, no constraint, no index, no data change.
+
+-- AlterTable
+ALTER TABLE "github_repo" ADD COLUMN     "last_push_sha" TEXT,
+ADD COLUMN     "last_pushed_at" TIMESTAMP(3);

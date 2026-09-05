@@ -8,6 +8,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -948,11 +949,12 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
       repoId?: number;
       installationId?: string;
       deleted?: boolean;
+      after?: string | null;
     } = {},
   ) {
     return {
       ref: opts.ref ?? 'refs/heads/main',
-      after: 'a'.repeat(40),
+      ...(opts.after === null ? {} : { after: opts.after ?? 'a'.repeat(40) }),
       ...(opts.deleted !== undefined ? { deleted: opts.deleted } : {}),
       repository: { id: opts.repoId ?? Number(REPO_PROVIDER_ID) },
       installation: { id: opts.installationId ?? INSTALLATION_ID },
@@ -1038,6 +1040,113 @@ describe('githubWebhookService — push → code-graph refresh enqueue (MOTIR-89
     expect(inst).toEqual({ event: 'push', outcome: 'unknown_installation' });
 
     expect(refreshCalls(sendSpy)).toHaveLength(0);
+  });
+
+  // ── MOTIR-1766 — the STALENESS INPUT ──────────────────────────────────────
+  //
+  // "Stale" means the indexed commit is BEHIND the default-branch head. motir-ai
+  // supplies the indexed commit; nothing supplied the head, so the only way to
+  // answer "are we behind?" was a provider call per repo on every page render.
+  // The head is already in this payload and was already being discarded.
+
+  /** The stored repo row, read through the OWNER client (a direct-DB assertion). */
+  async function storedRepo() {
+    return adminDb.githubRepo.findFirstOrThrow({ where: { repoId: REPO_PROVIDER_ID } });
+  }
+
+  it('a default-branch push RECORDS the head sha + timestamp, and still enqueues', async () => {
+    await makeScenario('push-head@example.com');
+    const sendSpy = spySend();
+
+    const before = await storedRepo();
+    expect(before.lastPushSha).toBeNull();
+    expect(before.lastPushedAt).toBeNull();
+
+    const res = await githubWebhookService.handleEvent('push', pushPayload());
+    expect(res).toEqual({ event: 'push', outcome: 'refresh_enqueued' });
+    expect(refreshCalls(sendSpy)).toHaveLength(1);
+
+    const after = await storedRepo();
+    expect(after.lastPushSha).toBe('a'.repeat(40));
+    expect(after.lastPushedAt).toBeInstanceOf(Date);
+  });
+
+  it('a REDELIVERED push is a no-op on the stored head — the timestamp does not drift', async () => {
+    await makeScenario('push-head-redeliver@example.com');
+    spySend();
+
+    await githubWebhookService.handleEvent('push', pushPayload());
+    const first = await storedRepo();
+
+    // GitHub retries. The same push must not drag the timestamp forward, or it
+    // stops meaning "when this head arrived".
+    await githubWebhookService.handleEvent('push', pushPayload());
+    const second = await storedRepo();
+
+    expect(second.lastPushSha).toBe(first.lastPushSha);
+    expect(second.lastPushedAt?.getTime()).toBe(first.lastPushedAt?.getTime());
+  });
+
+  it('a LATER push advances the head', async () => {
+    await makeScenario('push-head-advance@example.com');
+    spySend();
+
+    await githubWebhookService.handleEvent('push', pushPayload());
+    await githubWebhookService.handleEvent('push', pushPayload({ after: 'b'.repeat(40) }));
+
+    expect((await storedRepo()).lastPushSha).toBe('b'.repeat(40));
+  });
+
+  it('a non-default branch, a tag, a deletion, an unknown repo and an unknown installation record NOTHING', async () => {
+    await makeScenario('push-head-nothing@example.com');
+    spySend();
+
+    await githubWebhookService.handleEvent(
+      'push',
+      pushPayload({ ref: 'refs/heads/subtask/MOTIR-1766-feature', after: 'b'.repeat(40) }),
+    );
+    await githubWebhookService.handleEvent(
+      'push',
+      pushPayload({ ref: 'refs/tags/v1.0.0', after: 'c'.repeat(40) }),
+    );
+    await githubWebhookService.handleEvent(
+      'push',
+      pushPayload({ deleted: true, after: 'd'.repeat(40) }),
+    );
+    await githubWebhookService.handleEvent('push', pushPayload({ repoId: 999 }));
+    await githubWebhookService.handleEvent('push', pushPayload({ installationId: 'inst-nope' }));
+
+    const row = await storedRepo();
+    expect(row.lastPushSha).toBeNull();
+    expect(row.lastPushedAt).toBeNull();
+  });
+
+  it('a payload with no `after` records nothing — NULL means UNKNOWN, not a head', async () => {
+    await makeScenario('push-head-no-after@example.com');
+    spySend();
+
+    // `parsePushEvent` normalizes a missing `after` to `headSha: null`. Writing it
+    // would overwrite a known head with an unknown one.
+    await githubWebhookService.handleEvent('push', pushPayload({ after: null }));
+
+    expect((await storedRepo()).lastPushSha).toBeNull();
+  });
+
+  it('a head-write FAILURE is logged and never fails the delivery', async () => {
+    await makeScenario('push-head-throws@example.com');
+    spySend();
+    vi.spyOn(githubRepoRepository, 'recordDefaultBranchHead').mockRejectedValue(
+      new Error('db down'),
+    );
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // The webhook's contract is a fast 2xx: a 500 here makes GitHub retry a
+    // delivery no retry can fix, and a missed head is self-healing anyway.
+    const res = await githubWebhookService.handleEvent('push', pushPayload());
+    expect(res).toEqual({ event: 'push', outcome: 'refresh_enqueued' });
+    expect(errorSpy).toHaveBeenCalled();
+
+    errorSpy.mockRestore();
   });
 
   it('an enqueue transport failure never fails the ack (best-effort, fast 2xx)', async () => {
