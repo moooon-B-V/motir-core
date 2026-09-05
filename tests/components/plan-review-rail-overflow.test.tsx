@@ -51,7 +51,7 @@ function renderRail() {
             planItemId: 'pi_stale',
             title: STALE_ITEM_TITLE,
             stale: true,
-            staleReasons: [{ code: 'parent_removed' }],
+            staleReasons: [{ code: 'parent_removed', parentId: 'wi_archived_parent' }],
           }),
         ],
         {
