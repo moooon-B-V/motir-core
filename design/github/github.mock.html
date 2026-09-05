@@ -2277,58 +2277,21 @@
           index state, and <b>Used by N projects</b> drawn at rest (row 2 expanded)
         </div>
         <div class="panel">
-          <!-- WIDER than Panels 1–2's 720px shell: the inventory is a five-column
-               table and the settings column at 720 clips it. The app's own settings
-               content column is fluid, so this is the same shell measured at a
-               desktop width, not a different one. -->
-          <div class="settings-shell" style="width: 1100px">
-            <aside class="sidebar">
-              <div class="side-back">
-                <svg><use href="#i-arrow-left" /></svg>Back to Motir
-              </div>
-              <div class="breadcrumb">Settings › Organisation › Git</div>
-              <div class="nav-grp">
-                <div class="grp-label">Account</div>
-                <div class="nav-row">
-                  <svg><use href="#i-user" /></svg>Profile
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-github" /></svg>Git accounts
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Organisation</div>
-                <div class="nav-row">
-                  <svg><use href="#i-users" /></svg>Members
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-card" /></svg>Billing
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-shield" /></svg>Security
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-activity" /></svg>Usage
-                </div>
-                <!-- The ROW is MOTIR-4673's, in design/org-admin/. It is drawn
-                     here only so this page is not floating; its placement,
-                     label and gate are specified there, not here. -->
-                <div class="nav-row active" aria-current="page">
-                  <svg><use href="#i-git-branch" /></svg>Git
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Project</div>
-                <div class="nav-row">
-                  <svg><use href="#i-repo" /></svg>Repositories
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-cog" /></svg>Details
-                </div>
-              </div>
-            </aside>
-
+          <!-- ⚠️ NO RAIL, and that is a reading of SHIPPED reality rather than a
+               simplification. `/settings/organization/*` has NO area layout and no
+               settings rail — unlike `settings/project/` and `settings/account/`,
+               each of which has one. Its ONLY navigation is the ORG MENU behind the
+               organisation name (`OrgControl`), plus the command palette. Drawing an
+               "Organisation" rail group here would invent a navigation the app does
+               not have, so this panel draws the CONTENT COLUMN and names its door
+               instead. The DOOR is MOTIR-4673's, in design/org-admin/.
+               Wider than Panels 1–2's 720px shell because the inventory is a
+               five-column table. -->
+          <div class="settings-shell" style="width: 880px">
             <div class="content">
+              <div class="breadcrumb" style="margin-bottom: 14px">
+                Settings › Organisation › Git
+              </div>
               <div class="page-head">
                 <h2>Git</h2>
                 <p class="sub">
@@ -2531,6 +2494,19 @@
             </div>
           </div>
         </div>
+        <p class="panel-note">
+          <b
+            >The DOOR is the ORG MENU, not a settings rail — and that is shipped reality, not a
+            simplification.</b
+          >
+          <code>/settings/organization/*</code> has no area layout and no rail of its own; the only
+          navigation to it is the menu behind the organisation name (<code>OrgControl</code>), whose
+          rows are Settings · Security · Members · Usage · Billing. The <code>Git</code> row that
+          joins them is <b>MOTIR-4673</b>'s, in <code>design/org-admin/</code> — a navigation is
+          amended in the area that owns it. And it is not a rail row anywhere:
+          <b>MOTIR-4640</b> takes <code>Git</code> OUT of the shell rail's bottom section, so a rail
+          row drawn here would contradict the departure half of the same move.
+        </p>
         <p class="panel-note">
           <b>Used by N projects is a COLUMN, at rest.</b> It is the disclosure mechanism for the
           org-level removal below: a warning inside a dialog is read past, a count that was on

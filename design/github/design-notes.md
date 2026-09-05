@@ -383,9 +383,19 @@ organisation-scoped. So the route is **Settings → Organisation → Git**, the 
 never _workspace_. The _two grants_ model, the identity binding, the PR/CI surfaces and the Panel-5
 link affordance are untouched.
 
-**The `Git` row is NOT re-specified here.** A rail is amended in the area that owns it, so the org
-settings navigation row that reaches Panel 6 is **MOTIR-4673**, in `design/org-admin/`. Panel 6
-draws the rail only so the page is not floating; its placement, label and gate are settled there.
+**⚠️ The DOOR is the ORG MENU, and Panel 6 draws NO RAIL — that is a reading of shipped reality,
+not a simplification.** `/settings/organization/*` has **no area layout and no settings rail** —
+unlike `settings/project/` and `settings/account/`, each of which has one. Its only navigation is
+the **org menu** behind the organisation name (`app/(authed)/_components/OrgControl.tsx`), whose
+rows are Settings · Security · Members · Usage · Billing, plus the command palette. So Panel 6
+draws the **content column** with its breadcrumb and names its door rather than inventing an
+"Organisation" rail group the app does not render.
+
+**The `Git` row that joins that menu is NOT specified here.** A navigation is amended in the area
+that owns it, so the row is **MOTIR-4673**, in `design/org-admin/` — which is where the org menu is
+already drawn (Panel 1, arm C). **And it is not a rail row anywhere:** **MOTIR-4640** takes `Git`
+OUT of the shell rail's bottom section, so a rail row drawn here would contradict the departure half
+of the same move.
 
 ### Panel 6 — Settings → Organisation → Git: the INVENTORY
 
