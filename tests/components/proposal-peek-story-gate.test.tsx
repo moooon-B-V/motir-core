@@ -125,6 +125,7 @@ function itemFor(op: PlanItemOpDto) {
       identifier,
       changedFields: op === 'modify' ? ['priority'] : [],
       settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+      todos: null,
     },
   });
 }
@@ -215,6 +216,7 @@ describe('the story gate for MOTIR-4181 — the seams, not a fourth pass', () =>
         identifier: 'MOTIR-7',
         changedFields: ['title'],
         settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+        todos: null,
       },
     });
     render(<PlanProposalList items={[item]} outcome={null} />);

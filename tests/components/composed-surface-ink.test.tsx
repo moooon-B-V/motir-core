@@ -160,6 +160,7 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
             identifier: 'PROD-14',
             changedFields: ['priority', 'title'],
             settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+            todos: null,
           },
         })}
       />,
@@ -198,6 +199,7 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
               identifier: 'PROD-21',
               changedFields: [],
               settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+              todos: null,
             },
           })}
         />
@@ -240,6 +242,7 @@ describe('MOTIR-4251 · composed surfaces resolve their own ink', () => {
               identifier: 'PROD-22',
               changedFields: [],
               settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+              todos: null,
             },
           })}
           // PENDING: no outcome. This is the whole time a plan sits `planned`

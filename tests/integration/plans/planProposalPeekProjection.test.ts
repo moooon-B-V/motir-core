@@ -220,6 +220,93 @@ describe('the proposal envelope the peek reads (MOTIR-4183)', () => {
     expect(item.storyPoints).toBe(5);
   });
 
+  // ── MOTIR-4622 — the PROPOSED STEPS reach the peek ────────────────────────
+  // `agent-authored-plans.md` AMENDMENT 13 D5 / D6. The assertions are about
+  // the RESOLVED executor and the `null` on the other ops, because both are
+  // decisions rather than plumbing: the peek must show what approve will WRITE,
+  // and a `modify` must show no list at all.
+  it('an `add` carries its `todos`, with the executor RESOLVED per D5 (MOTIR-4622)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Steps' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Provision the account',
+            kind: 'task',
+            type: 'manual',
+            // The CARD's executor — the seed a row that names none inherits.
+            executor: 'human',
+            todos: [
+              { text: 'Create the account' },
+              { text: 'Wire the secret', executor: 'coding_agent' },
+              {
+                text: 'Read it back',
+                notesMd: 'Settings → Secrets.',
+                commandText: 'fly secrets list',
+              },
+            ],
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const item = byTitle(
+      (await planReviewService.getPlanReview(plan.id, fx.ctx)).items,
+      'Provision the account',
+    );
+
+    // ONE array, TWO carriers, no second derivation — the item and its envelope.
+    expect(item.todos).toEqual(item.proposal.todos);
+
+    expect(item.todos).toEqual([
+      { text: 'Create the account', notesMd: null, commandText: null, executor: 'human' },
+      { text: 'Wire the secret', notesMd: null, commandText: null, executor: 'coding_agent' },
+      {
+        text: 'Read it back',
+        notesMd: 'Settings → Secrets.',
+        commandText: 'fly secrets list',
+        // NO row executor and NO card fallback needed here — the card is
+        // `human`, so the seed resolves to it. This is the row that proves the
+        // resolution happens on the SERVER rather than being left as `null`
+        // for a client to guess at.
+        executor: 'human',
+      },
+    ]);
+  });
+
+  it('an `add` with NO steps, and a `modify`, both carry `null` (MOTIR-4622)', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await seedTarget(fx, 'A committed card');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'No steps' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'add', proposedFields: { title: 'A stepless add', kind: 'task' } },
+        { op: 'modify', workItemId: target.id, patch: { priority: 'high' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const items = (await planReviewService.getPlanReview(plan.id, fx.ctx)).items;
+
+    // `null`, not `[]`: the peek renders no section at all, because an empty
+    // `To-do list · 0 of 0` would assert that a planner considered the steps
+    // and proposed none (design Part XV §15.3).
+    expect(byTitle(items, 'A stepless add').todos).toBeNull();
+
+    // A `modify` shows none BY DECISION (D2): its target's list is a person's
+    // PROGRESS, and a plan is not the editor of somebody's progress.
+    const modify = items.find((i) => i.op === 'modify')!;
+    expect(modify.todos).toBeNull();
+    expect(modify.proposal.todos).toBeNull();
+  });
+
   it('every op carries the SETTABLE set, so the count line has its denominator (AC 9)', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedTarget(fx, 'Tax rates');

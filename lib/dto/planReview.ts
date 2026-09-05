@@ -21,6 +21,7 @@
 // stays as-is.
 
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
+import type { ExecutorDto } from '@/lib/dto/workItems';
 import type {
   PlanItemOpDto,
   PlanItemPatch,
@@ -129,6 +130,26 @@ export const PLAN_ITEM_SETTABLE_RAIL_FIELDS: readonly PlanItemChangeField[] = Ar
 );
 
 /**
+ * ONE proposed STEP, as the REVIEW surface shows it (Story MOTIR-3810 ·
+ * MOTIR-4622) — `design/ai-planning/design-notes.md` Part XV.
+ *
+ * ⚠️ `executor` IS RESOLVED HERE, not carried raw. `agent-authored-plans.md`
+ * AMENDMENT 13 D5 seeds a materialized row's executor as
+ * `row.executor ?? proposal.executor ?? 'human'`, and the whole point of this
+ * surface is that **the reviewer reads what approve will WRITE**. Sending the
+ * raw `null` and letting the client decide would put the seed rule in two
+ * places, and the client's copy would be the one nobody tests against
+ * materialize.
+ */
+export interface PlanReviewTodoDto {
+  text: string;
+  notesMd: string | null;
+  commandText: string | null;
+  /** RESOLVED — never null on the wire. */
+  executor: ExecutorDto;
+}
+
+/**
  * What only a PROPOSAL has, carried BESIDE the payload the shipped quick view
  * reads (MOTIR-4183, story MOTIR-4181).
  *
@@ -169,6 +190,21 @@ export interface PlanProposalPeekDto {
    *  carried so an older client renders the denominator the SERVER's patch type
    *  supports rather than the one its own bundle was built against. */
   settableRailFields: readonly PlanItemChangeField[];
+  /**
+   * The card's proposed STEPS, read-only (MOTIR-4622 · Part XV).
+   *
+   * On an `add` that carries them; **`null` on a `modify` and a `remove`, and
+   * that is a decision rather than a gap** (AMENDMENT 13 D2 / D6). A `modify`'s
+   * target is a COMMITTED card whose list is a person's PROGRESS: `QuickViewData`
+   * carries no to-do field, and a `modify` patch carries no `todos`, so there is
+   * nothing to show and nothing this plan could change. Part XV panel 6 draws
+   * that absence deliberately, so nobody fills it in later by accident.
+   *
+   * It rides the ENVELOPE and not the payload for the reason the header above
+   * gives: the payload of a `modify` is the target's, fetched on open, and an
+   * `add` has no target at all — its steps exist nowhere else.
+   */
+  todos: PlanReviewTodoDto[] | null;
 }
 
 /** One field's OLD → NEW change in a `modify` proposal (the diff overlay). */
@@ -439,6 +475,19 @@ export interface PlanReviewItemDto {
    * a new READING of the same model, which is the whole shape of this story.
    */
   proposal: PlanProposalPeekDto;
+  /**
+   * The card's proposed STEPS (MOTIR-4622 · Part XV) — on an `add` that carries
+   * them, `null` on a `modify` / `remove` and on an `add` with none.
+   *
+   * ⚠️ THE SAME ARRAY AS {@link PlanProposalPeekDto.todos}, ASSIGNED FROM ONE
+   * LOCAL IN ONE RETURN — not a second computation. `changedFields` three fields
+   * up carries the identical warning for the identical reason: two derivations
+   * of one fact stay self-consistent on both surfaces while drifting from each
+   * other, invisibly. This one is on the ITEM because the review MODEL is what a
+   * projection test reads, and on the ENVELOPE because the envelope is what
+   * reaches the peek; neither is derived from the other.
+   */
+  todos: PlanReviewTodoDto[] | null;
 }
 
 /**

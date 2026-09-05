@@ -195,7 +195,14 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     staleReasons: [],
     revised: false,
     targetMissing: false,
-    proposal: { op: 'add', identifier: null, changedFields: [], settableRailFields: [] },
+    todos: null,
+    proposal: {
+      op: 'add',
+      identifier: null,
+      changedFields: [],
+      settableRailFields: [],
+      todos: null,
+    },
     ...over,
   };
 }
@@ -405,11 +412,13 @@ describe('PlanReviewCanvas — the committed level it draws', () => {
         identifier: 'MOTIR-3083',
         title: 'A drifted modify',
         changes: [],
+        todos: null,
         proposal: {
           op: 'modify',
           identifier: 'MOTIR-3083',
           changedFields: [],
           settableRailFields: [],
+          todos: null,
         },
       }),
     ]);
