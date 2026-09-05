@@ -868,6 +868,20 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/p',
     why: 'Historical: the app-hosted /p/<key> path MOTIR-3951 deleted, quoted as the address the retargets replace. Permanent.',
   },
+
+  // ── Forward-looking: the ORGANISATION's Git page (Story MOTIR-4669) ───────
+  //    `design/org-admin/design-notes.md`'s Panel-7 amendment specifies the
+  //    organisation settings NAV, whose `git` row points at a route nothing
+  //    has built: `app/(authed)/settings/organization/` holds `billing`,
+  //    `members`, `security` and `usage`, and no `git`. MOTIR-4680 builds the
+  //    page; this row DELETES ITSELF in that commit, and the `carries no KNOWN
+  //    entry that has stopped applying` check above is what turns a forgotten
+  //    deletion into a red build rather than a quiet one.
+  {
+    file: 'design/org-admin/design-notes.md',
+    address: '/settings/organization/git',
+    why: 'Forward-looking: the org Git page MOTIR-4680 builds. Named in the Panel-7 nav registry as the one NEW row. Delete this entry in the commit that adds the route.',
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };

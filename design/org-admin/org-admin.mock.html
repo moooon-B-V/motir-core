@@ -115,6 +115,7 @@
         --color-muted: #f3f4f6;
         --color-muted-foreground: #787671;
         --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
         --color-hairline-soft: #ede9e4;
         --color-hairline-strong: #c8c4be;
         --color-accent: #ff64c8;
@@ -187,6 +188,9 @@
         --el-accent: var(--color-primary);
         --el-accent-pressed: var(--color-primary-pressed);
         --el-accent-text: var(--color-primary-foreground);
+        /* ADDED by MOTIR-4673 — accent AS INK (the active rail row's glyph).
+           theme.css: a plain --color-primary alias in light, lifted in dark. */
+        --el-accent-on-surface: var(--color-primary);
         --el-highlight: var(--color-accent);
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
@@ -204,6 +208,14 @@
         --el-type-task: var(--color-info);
         --el-type-bug: var(--color-destructive);
         --el-type-subtask: var(--color-accent-teal);
+        /* ══ ADDED by MOTIR-4673 — the app-shell RAIL, which this asset had no
+           reason to paint until organisation settings became an AREA. Values
+           are packages/design-system/theme.css's, verbatim; the hover shade is
+           a concrete hex there too and so carries its own dark value below. ══ */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
         --focus-ring-color: var(--color-primary);
       }
       [data-theme='dark'] {
@@ -218,8 +230,11 @@
         --color-muted: #1a1a1a;
         --color-muted-foreground: #a4a097;
         --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
         --color-hairline-soft: #1f1f1f;
         --color-hairline-strong: #3a3a3a;
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
         --color-primary: #7b6ce5;
         --color-primary-pressed: #5645d4;
         --color-tint-peach: #3a2a1a;
@@ -311,6 +326,274 @@
         .grid-2 {
           grid-template-columns: 1fr;
         }
+      }
+
+      /* ══ ADDED by MOTIR-4673 — board chrome the panel-6 commit USED but never
+         DEFINED (`.panel-note`, `.mono`), so those notes rendered as bare
+         paragraphs. Ink is --el-text-secondary, not --el-text-muted: the body
+         of this board is --el-surface, where muted is 4.17:1 and fails AA
+         (CLAUDE.md's contrast table · design-board-chrome-aa). ═══════════ */
+      .panel-note {
+        max-width: 1100px;
+        margin: 14px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      /* the registry table */
+      .reg {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .reg th {
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 12px 8px 0;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .reg td {
+        padding: 9px 12px 9px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      .reg td:nth-child(2) {
+        color: var(--el-text);
+        font-family: var(--font-mono);
+      }
+      .reg td[rowspan] {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .reg .ex {
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-mint);
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        margin-left: 6px;
+      }
+      .reg-note {
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        margin: 14px 0 0;
+      }
+      .reg-note b {
+        color: var(--el-text);
+      }
+
+      /* ══ ADDED by MOTIR-4673 — THE AREA SHELL (rail + content) ═══════════
+         Organisation settings becomes an AREA, so this asset now has to paint
+         the one thing it never did: the app rail, swapped to a settings nav.
+         Every rule below is design/settings/account-settings.mock.html's,
+         verbatim, and that asset is itself the drawing of the SHIPPED rail
+         (Sidebar + SidebarSection + SidebarNavItem). Copied rather than
+         re-derived on purpose — two assets drawing one rail differently is how
+         MOTIR-4672 came to carry a rail nobody had built. ─────────────────── */
+      .shell {
+        display: flex;
+        min-height: 560px;
+        background: var(--el-page-bg);
+      }
+      .shell .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .shell .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .shell .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .shell .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .shell .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      /* the ORGANISATION identity — this rail's head. The account area shows the
+         user here and the project area the ProjectSwitcher; the constant is that
+         the head names the tenant the area configures. */
+      .shell .who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .shell .who .org-ava {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .shell .who .meta {
+        min-width: 0;
+      }
+      .shell .who .nm {
+        font-family: var(--font-serif);
+        font-size: 14.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .shell .who .sub {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .shell .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .shell .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .shell .grp + .grp {
+        margin-top: 12px;
+      }
+      .shell .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .shell .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .shell .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .shell .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .shell .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .shell .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .shell .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .shell .nav-row.active .ni {
+        color: var(--el-accent-on-surface);
+      }
+      .shell .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 26px 28px 32px;
+        overflow: hidden;
+      }
+      .shell .page-head {
+        margin-bottom: 20px;
+      }
+      .shell .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .shell .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 5px;
+        max-width: 64ch;
+        line-height: 1.5;
+      }
+      /* the CONTENT STUB — a pane this card deliberately does not redraw, named
+         with the asset that owns it. Not a design element; a pointer. */
+      .stub {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 20px 22px;
+        background: var(--el-surface-soft);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+      }
+      .stub b {
+        color: var(--el-text);
       }
 
       /* ── Page shell — mirrors app/(authed)/settings/* ────────────────────── */
@@ -1832,14 +2115,20 @@
 
           <div>
             <p class="panel-note" style="margin-top: 0">
-              <b>B · a member who is NOT an org admin.</b> The row is <b>ABSENT</b>, and the rows
-              below close up. Nothing marks the gap.
+              <b>B · a member who is NOT an org admin.</b> <span class="mono">Git</span> is
+              <b>PRESENT</b> — see the correction below. <span class="mono">Security</span> and
+              <span class="mono">Billing &amp; plans</span> are absent and the rows close up;
+              nothing marks the gap.
             </p>
             <div class="menu" style="width: 300px; margin: 0">
               <div class="menu-head">moooon</div>
               <div class="opt">
                 <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
                 <span class="ot"><span class="nm">Settings</span></span>
+              </div>
+              <div class="opt">
+                <svg viewBox="0 0 24 24" class="li"><use href="#i-git-branch" /></svg>
+                <span class="ot"><span class="nm">Git</span></span>
               </div>
               <div class="opt">
                 <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
@@ -1856,12 +2145,27 @@
               </div>
             </div>
             <p class="panel-note">
-              Absent, not disabled — <b>an entry point is a promise about a room</b>, and the rail
-              already makes that call for a whole area. It is the same disposition
-              <span class="mono">Billing</span> takes off cloud and
-              <span class="mono">Security</span>
-              takes below the workspace-tier reveal: the row is not rendered and the rows below
-              close up, with no disabled row and no tooltip.
+              <b>⚠️ CORRECTED.</b> This arm first drew <span class="mono">Git</span> as
+              <b>absent</b> for a plain member. That was wrong, and wrong in a way §6 of
+              <span class="mono">docs/decisions/organization-tier.md</span> names outright:
+              <i
+                >“a hidden tier may not remove a capability … relocating a surface preserves its
+                gate.”</i
+              >
+              The surface this row relocates FROM,
+              <span class="mono">/settings/workspace/github</span>, checks a session and a workspace
+              context and <b>no role at all</b> — every workspace member reads it today, and every
+              workspace member is an org member by §5’s upward invariant. Admin-gating the row would
+              have taken that away silently. The owner/admin gate belongs on the page’s WRITE
+              controls (Connect · Disconnect · Remove), which is where panel 7c puts it.
+            </p>
+            <p class="panel-note">
+              What survives from the first drawing is the <b>disposition</b>, unchanged and still
+              right for the rows it applies to: absent, not disabled —
+              <b>an entry point is a promise about a room</b>. It is what
+              <span class="mono">Billing</span> does off cloud and
+              <span class="mono">Security</span> does below the workspace-tier reveal: the row is
+              not rendered and the rows below close up, with no disabled row and no tooltip.
             </p>
           </div>
         </div>
@@ -1878,13 +2182,490 @@
       <b>configuration → people → money</b>, which is the order it already had.
     </p>
     <p class="panel-note">
-      <b>⚠️ There is no org settings RAIL to put a row in.</b>
-      <span class="mono">/settings/organization/*</span> has no area layout and no rail — unlike
-      <span class="mono">settings/project/</span> and <span class="mono">settings/account/</span>,
-      each of which has one. This menu, plus the command palette, IS the organisation&rsquo;s
-      settings navigation, which is why the row lands here and why <b>MOTIR-4672</b>&rsquo;s Panel 6
-      draws its page with no rail beside it.
+      <b>⚠️ SUPERSEDED BY PANEL 7 — kept verbatim as the reading that produced it.</b> This note
+      read:
+      <i
+        >“There is no org settings RAIL to put a row in.
+        <span class="mono">/settings/organization/*</span> has no area layout and no rail — unlike
+        <span class="mono">settings/project/</span> and <span class="mono">settings/account/</span>,
+        each of which has one. This menu, plus the command palette, IS the organisation&rsquo;s
+        settings navigation, which is why the row lands here and why MOTIR-4672&rsquo;s Panel 6
+        draws its page with no rail beside it.”</i
+      >
     </p>
+    <p class="panel-note">
+      Every FACT in it is still true of the shipped tree; the inference was not. A tier that is the
+      only one of three without a settings nav is a <b>gap</b>, and answering “where does the Git
+      row go” with “the pop-over, because that is all there is” designs the gap in permanently — a
+      pop-over you must already know to open, that closes behind you and highlights nothing.
+      <b>Panel 7 builds the rail.</b> This menu keeps its row as the fast door beside it, and
+      MOTIR-4672&rsquo;s panel 6 gains the rail its page was drawn without.
+    </p>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         PANEL 7 — ORGANISATION SETTINGS BECOMES AN AREA, WITH A RAIL
+         (MOTIR-4673 · Story MOTIR-4669)
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      7 · <b>Organisation settings gains a settings NAV</b> — the registry-driven rail that
+      <code>settings/project/</code> and <code>settings/account/</code> each already have, and that
+      <code>settings/organization/</code> is the only settings tier without. This is
+      <b>the door</b> panel 6&rsquo;s menu row opens onto; without it you land on a page with no
+      visible way to reach <span class="mono">Git</span>, or anything else.
+    </div>
+    <p class="panel-note">
+      <b
+        >⚠️ THIS PANEL REPLACES THE ANSWER PANEL 6 GAVE ON ITS OWN, AND SUPERSEDES ITS CLOSING
+        NOTE.</b
+      >
+      That note read
+      <i
+        >&ldquo;there is no org settings RAIL to put a row in &hellip; this menu, plus the command
+        palette, IS the organisation&rsquo;s settings navigation.&rdquo;</i
+      >
+      It was an accurate reading of the tree and the wrong thing to design against: it took a GAP
+      for a convention. The org menu is a pop-over you must already know to open, it closes behind
+      you, and it highlights nothing — so a person who arrives at
+      <span class="mono">/settings/organization</span> from the rail&rsquo;s bottom
+      <span class="mono">Settings</span> row (which is where that row points with no active project)
+      sees one page of cards and no way onward. Panel 6&rsquo;s row is kept: it is the FAST door,
+      and it is how the two other sub-pages have always been reached. This panel adds the DURABLE
+      one.
+    </p>
+    <p class="panel-note">
+      <b>Nothing moves.</b> Every existing page keeps its route and its content — the four
+      sub-routes (<span class="mono">members</span> &middot;
+      <span class="mono">security</span> &middot; <span class="mono">usage</span> &middot;
+      <span class="mono">billing</span>) become rows, the index becomes the
+      <span class="mono">Organisation</span> row, and <span class="mono">Git</span> is the one NEW
+      row. In particular
+      <b><span class="mono">WorkspaceFoldInSection</span> stays exactly where it is</b>, on the
+      index page: below the workspace-tier reveal that page hosts two tiers&rsquo; sections, and
+      relocating them is a §6 decision this card has no business re-taking.
+    </p>
+
+    <div class="panel-label">
+      7a &middot; <b><span class="mono">Git</span> active</b> — an org owner/admin, cloud. The pane
+      itself is <b>MOTIR-4672</b>&rsquo;s (design/github panel 6); this panel draws the CHROME
+      around it, which is the part that was missing.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="who">
+                <span class="org-ava">M</span>
+                <span class="meta">
+                  <span class="nm">moooon</span>
+                  <span class="sub">3 workspaces &middot; 11 members</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Organisation settings</span>
+            </div>
+            <nav aria-label="Organisation settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                  ></span>
+                  <span class="nl">Organisation</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg
+                  ></span>
+                  <span class="nl">Git</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                  ></span>
+                  <span class="nl">Security</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Billing</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                  ></span>
+                  <span class="nl">Usage &amp; cost</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                  ></span>
+                  <span class="nl">Billing &amp; plans</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Git</h2>
+              <p class="sub">
+                Repositories connected to <strong>moooon</strong>. Connect once here; any project in
+                the organisation can then use them.
+              </p>
+            </div>
+            <div class="stub">
+              <b
+                >The pane is drawn in <span class="mono">design/github/github.mock.html</span>,
+                panel 6</b
+              >
+              — the provider Segmented, the repository inventory with its four index states, and the
+              <span class="mono">Used by N projects</span> expansion. It is not redrawn here: one
+              surface, one asset. What THIS panel fixes is that the pane had no reachable door and
+              no rail beside it.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      7b &middot; <b><span class="mono">Organisation</span> active</b> — the index page, unchanged,
+      now inside the area chrome. Drawn to make the &ldquo;nothing moves&rdquo; claim above
+      checkable rather than asserted.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="who">
+                <span class="org-ava">M</span>
+                <span class="meta">
+                  <span class="nm">moooon</span>
+                  <span class="sub">3 workspaces &middot; 11 members</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Organisation settings</span>
+            </div>
+            <nav aria-label="Organisation settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                  ></span>
+                  <span class="nl">Organisation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg
+                  ></span>
+                  <span class="nl">Git</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                  ></span>
+                  <span class="nl">Security</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Billing</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                  ></span>
+                  <span class="nl">Usage &amp; cost</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-card" /></svg
+                  ></span>
+                  <span class="nl">Billing &amp; plans</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Organisation</h2>
+              <p class="sub">
+                Your organisation&rsquo;s name, its plan, and the sections that belong to it.
+              </p>
+            </div>
+            <div class="stub">
+              <b
+                >Today&rsquo;s <span class="mono">/settings/organization</span> page, card for
+                card</b
+              >
+              — <span class="mono">OrgGeneralCard</span> &middot;
+              <span class="mono">AcceptanceVideoCard</span> &middot;
+              <span class="mono">BillingCard</span> &middot;
+              <span class="mono">WorkspaceFoldInSection</span> &middot;
+              <span class="mono">DangerZoneCard</span>, in that order, each keeping its own §6d
+              per-SECTION gate. The row filter below decides which ROWS exist; it does not touch
+              what is inside one.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      7c &middot; <b>The two filtered arms</b> — the rail is a REGISTRY, filtered on the same two
+      axes <span class="mono">visibleSettingsNav</span> already filters the project rail on: what
+      the actor HOLDS, and what this BUILD has.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="grid-2" style="align-items: start; padding: 20px">
+          <div>
+            <p class="panel-note" style="margin-top: 0">
+              <b>A &middot; a plain org member</b> (not owner/admin) who is a member of a workspace.
+              Four rows are gone and the groups they emptied are gone with them. Nothing marks the
+              gap.
+            </p>
+            <div class="stage">
+              <div class="shell" style="min-height: 300px">
+                <aside class="rail">
+                  <div class="rail-head">
+                    <span class="back"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to
+                      Motir</span
+                    >
+                    <div class="who">
+                      <span class="org-ava">M</span>
+                      <span class="meta">
+                        <span class="nm">moooon</span>
+                        <span class="sub">3 workspaces &middot; 11 members</span>
+                      </span>
+                    </div>
+                    <span class="settings-eyebrow">Organisation settings</span>
+                  </div>
+                  <nav aria-label="Organisation settings">
+                    <div class="grp">
+                      <div class="grp-label">General</div>
+                      <div class="nav-row">
+                        <span class="ni" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                        ></span>
+                        <span class="nl">Organisation</span>
+                      </div>
+                      <div class="nav-row">
+                        <span class="ni" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg
+                        ></span>
+                        <span class="nl">Git</span>
+                      </div>
+                    </div>
+                  </nav>
+                </aside>
+                <div class="content" style="padding: 20px 22px">
+                  <div class="stub">
+                    <b>Why <span class="mono">Git</span> SURVIVES here</b>, when
+                    <span class="mono">Members</span>, <span class="mono">Security</span>,
+                    <span class="mono">Usage</span> and <span class="mono">Billing</span> do not: §6
+                    of <span class="mono">docs/decisions/organization-tier.md</span> —
+                    <i
+                      >&ldquo;a hidden tier may not remove a capability &hellip; relocating a
+                      surface preserves its gate.&rdquo;</i
+                    >
+                    The surface it is relocating FROM,
+                    <span class="mono">/settings/workspace/github</span>, gates on a session and a
+                    workspace context and <b>no role at all</b> — every workspace member can read it
+                    today. So the ROW is org-membership-gated, and it is the page&rsquo;s WRITE
+                    controls (Connect &middot; Disconnect &middot; Remove) that carry the
+                    owner/admin gate. The other four rows are org-scoped in §6d&rsquo;s own table
+                    and were never a workspace member&rsquo;s to begin with.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p class="panel-note" style="margin-top: 0">
+              <b>B &middot; an org owner/admin on a self-host build.</b>
+              <span class="mono">Billing &amp; plans</span> is absent — the same disposition the org
+              menu already takes off cloud, and the same one the route takes (it
+              <span class="mono">notFound()</span>s).
+              <span class="mono">Usage &amp; cost</span> stays, so the group keeps one row.
+            </p>
+            <div class="stage">
+              <div class="shell" style="min-height: 300px">
+                <aside class="rail">
+                  <div class="rail-head">
+                    <span class="back"
+                      ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to
+                      Motir</span
+                    >
+                    <div class="who">
+                      <span class="org-ava">M</span>
+                      <span class="meta">
+                        <span class="nm">moooon</span>
+                        <span class="sub">3 workspaces &middot; 11 members</span>
+                      </span>
+                    </div>
+                    <span class="settings-eyebrow">Organisation settings</span>
+                  </div>
+                  <nav aria-label="Organisation settings">
+                    <div class="grp">
+                      <div class="grp-label">General</div>
+                      <div class="nav-row">
+                        <span class="ni" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                        ></span>
+                        <span class="nl">Organisation</span>
+                      </div>
+                      <div class="nav-row">
+                        <span class="ni" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg
+                        ></span>
+                        <span class="nl">Git</span>
+                      </div>
+                    </div>
+                    <div class="grp">
+                      <div class="grp-label">Access</div>
+                      <div class="nav-row">
+                        <span class="ni" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                        ></span>
+                        <span class="nl">Members</span>
+                      </div>
+                      <div class="nav-row">
+                        <span class="ni" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                        ></span>
+                        <span class="nl">Security</span>
+                      </div>
+                    </div>
+                    <div class="grp">
+                      <div class="grp-label">Billing</div>
+                      <div class="nav-row">
+                        <span class="ni" aria-hidden="true"
+                          ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                        ></span>
+                        <span class="nl">Usage &amp; cost</span>
+                      </div>
+                    </div>
+                  </nav>
+                </aside>
+                <div class="content" style="padding: 20px 22px">
+                  <div class="stub">
+                    <b>A group with no surviving rows is not rendered</b> — no empty heading, no
+                    disabled row. A group with SOME survivors keeps its heading and closes up, which
+                    is this arm. Both are <span class="mono">groupSettingsNav</span>&rsquo;s
+                    existing behaviour; neither is new here.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="panel-note">
+      <b>The registry, row by row.</b> A sibling of
+      <span class="mono">lib/settings/projectSettingsNav.ts</span> and
+      <span class="mono">lib/settings/accountSettingsNav.ts</span>, with the same
+      <span class="mono">{ id, group, href, icon, labelKey, exact? }</span> entry shape, the same
+      <span class="mono">SETTINGS_NAV_GROUP_ORDER</span> discipline, and the same two filter axes.
+    </p>
+    <div class="panel">
+      <div class="page" style="padding: 20px 24px 24px">
+        <table class="reg">
+          <thead>
+            <tr>
+              <th>group</th>
+              <th>id</th>
+              <th>route</th>
+              <th>glyph</th>
+              <th>who sees the row</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td rowspan="2">general</td>
+              <td>organization</td>
+              <td class="mono">/settings/organization <span class="ex">exact</span></td>
+              <td class="mono">Building2</td>
+              <td>any org member &mdash; §6d gates it per SECTION, inside</td>
+            </tr>
+            <tr>
+              <td>git</td>
+              <td class="mono">/settings/organization/git</td>
+              <td class="mono">GitBranch</td>
+              <td>any org member; WRITE controls are owner/admin</td>
+            </tr>
+            <tr>
+              <td rowspan="2">access</td>
+              <td>members</td>
+              <td class="mono">/settings/organization/members</td>
+              <td class="mono">Users</td>
+              <td>org owner/admin</td>
+            </tr>
+            <tr>
+              <td>security</td>
+              <td class="mono">/settings/organization/security</td>
+              <td class="mono">ShieldCheck</td>
+              <td>org owner/admin</td>
+            </tr>
+            <tr>
+              <td rowspan="2">billing</td>
+              <td>usage</td>
+              <td class="mono">/settings/organization/usage</td>
+              <td class="mono">Coins</td>
+              <td>org owner/admin</td>
+            </tr>
+            <tr>
+              <td>billing</td>
+              <td class="mono">/settings/organization/billing</td>
+              <td class="mono">CreditCard</td>
+              <td>org owner/admin, cloud builds only</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="reg-note">
+          <b
+            >The index row is called <span class="mono">Organisation</span>, not
+            <span class="mono">Settings</span></b
+          >
+          — the word the org menu uses for the same route. Inside a settings area a row named
+          &ldquo;Settings&rdquo; names its own container; the project rail has the same row and
+          calls it <span class="mono">Details</span>. The MENU keeps its word: it is outside the
+          area, where &ldquo;Settings&rdquo; is what the destination is.
+        </p>
+        <p class="reg-note">
+          <b>Labels are the menu&rsquo;s, everywhere else</b> —
+          <span class="mono">Usage &amp; cost</span> and
+          <span class="mono">Billing &amp; plans</span> in full, not truncated to fit a rail. Two
+          doors onto one room that disagree about its name are two rooms as far as the person using
+          them is concerned.
+        </p>
+      </div>
+    </div>
 
     <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
@@ -1892,6 +2673,34 @@
         <!-- ══ ADDED by MOTIR-4673 — the glyphs the shipped org menu uses ══
              git-branch is the SAME glyph the row carried in the shell rail, so
              the departure (MOTIR-4640) and the arrival read as one move. -->
+        <!-- ══ ADDED by MOTIR-4673 (panel 7) — the area rail's own glyphs ══ -->
+        <g
+          id="i-building"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+          <path d="M10 6h4" />
+          <path d="M10 10h4" />
+          <path d="M10 14h4" />
+          <path d="M10 18h4" />
+        </g>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
         <g
           id="i-git-branch"
           fill="none"
