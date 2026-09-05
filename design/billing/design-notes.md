@@ -41,10 +41,11 @@ the same primitives — no design→code gap.
 > Code follow-ups blocked on this asset: **8.1.16 / MOTIR-1303** (seat toggle +
 > drop the note) and **8.1.17 / MOTIR-1304** (pricing blocks).
 
-| Surface                                                | Asset                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup) | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                        |
-| **Motir CI — the third billed line** (AMENDMENT)       | **`ci-line.mock.html`** (HTML mockup) | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file. |
+| Surface                                                | Asset                                     | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing settings · pricing storefront · AI paywall** | **`billing.mock.html`** (HTML mockup)     | The whole commercial surface, 8 panels: access path · billing settings panel (2 billed lines) · panel states (past_due / trialing / canceled) · role gating · Motir AI plans & subscription (AI-only screen, Monthly/Annual toggle) · Motir seats plan & upgrade screen · AI paywall (402 + tier-gate) · empty/loading/error. A `billing.png` full-page export sits beside it (the board-visible face).                                                                                                                                                        |
+| **Motir CI — the third billed line** (AMENDMENT)       | **`ci-line.mock.html`** (HTML mockup)     | The CI-minutes line the allowance adds to the settings panel, 8 panels: the line in place at real width · its three non-paused states · `ci_credits_exhausted` for an admin (the two-option decision, measured in a 1280×800 viewport) and for a member (the routing alert) · what renders nothing · loading / balance-unreachable / error · the pointer form on other surfaces · the paused-state card ordering. Amends the row above; redraws none of it. `ci-line.png` beside it. See § "Amendment 2026-07-30 — the Motir CI line" at the end of this file. |
+| **Motir Search — the FOURTH billed line** (AMENDMENT)  | **`search-line.mock.html`** (HTML mockup) | The web-search line the grounding channel adds to the settings panel, 6 panels: the line in place at real width beside ①②③ · its states (spend · nothing billed · the ABSENCE of a paused state, drawn) · the META org, which renders no line · loading / figures-UNAVAILABLE / page error · role gating · the access path, reproduced. Amends the two rows above; redraws neither. `search-line.png` beside it. See § "Amendment 2026-09-05 — the Motir Search line" at the end of this file.                                                                 |
 
 ## What this area is
 
@@ -871,3 +872,207 @@ fails the PR (amendment §D).
 - Pointers: **"Can't start this work — CI is paused"** / **"Manage CI minutes"** /
   **"CI is paused on the repositories Motir hosts — your own repositories are
   untouched, because GitHub bills those to you."**
+
+---
+
+# Amendment 2026-09-05 — the Motir Search line (MOTIR-4551)
+
+The asset is **`search-line.mock.html`** + **`search-line.png`**, a NEW three-file
+member of this area, under story **MOTIR-4334**. Its consuming code card is
+**MOTIR-4557**, `blocked_by` this design gate; the read that feeds it is
+**MOTIR-4555**.
+
+It follows the structural precedent the CI line set one amendment up: **a billed
+line that arrives after the panel shipped gets its OWN asset**, never an
+amendment that re-exports `billing.mock.html` or `ci-line.mock.html`. Both of
+those are byte-unchanged by this card. An asset records what was decided on the
+day it was decided; re-exporting a frozen mock buries a new surface inside an old
+one and makes the diff unreadable.
+
+## THE SURFACE DECISION — recorded on motir-core's own side
+
+**Search spend is its OWN billed line. It is not folded into the Motir AI figure,
+and it is not a second usage kind on that line.**
+
+This is **not re-taken here** — it is TRANSCRIBED, because until now it existed
+only in two other repositories and a motir-core reader had nowhere to find it:
+
+- **`motir-gateway/docs/decisions/motir-search-channel.md` §4.4** — _"The customer
+  sees a search charge on their credit ledger as its own `kind`, alongside AI turns
+  and Motir CI. It is not merged into the AI line."_
+- **`motir-ai/docs/credit-model.md` §4b** — the same sentence, followed by that
+  record's own standing warning that motir-core does not yet RENDER the line.
+
+**Why it is worth writing down HERE.** The decision binds a motir-core surface and
+is stated in two repositories a motir-core reader has no reason to open. That is
+exactly how the gap this story exists to close was created: the mechanism shipped
+with its decision recorded beside the mechanism, and the surface shipped nothing
+because the decision was not recorded beside the surface.
+
+**What this decision does NOT settle**, stated so a later card does not read it as
+covering more than it does:
+
+- **It does not decide the run-level drill-down.** _Which run spent it_ is the
+  **usage dashboard's** question and has its own asset (MOTIR-4554) and its own
+  code card (MOTIR-4558). This line answers _what am I charged for_ and links
+  across, exactly as ② and ③ do. The two surfaces must not duplicate — the
+  standing `ai-usage` ⟷ `billing` split at the top of this file governs here
+  unchanged.
+- **It does not decide pricing.** The rate, the margin and the env fail-safe are
+  the gateway's (`motir-search-channel.md` §4.2) and this asset moves none of them.
+
+## Where each behaviour came from (nothing here is invented)
+
+| Drawn                                 | Comes from                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| A fourth billed line at all           | `motir-gateway/docs/decisions/motir-search-channel.md` §4.4 · `motir-ai/docs/credit-model.md` §4b            |
+| Credits as the only unit              | §4.2 — the gateway prices a search and hands over whole credits; motir-core never learns what one costs      |
+| **NO meter**                          | §4.2 again, read for what it does NOT give: no pool, no allowance, no included quantity ⇒ **no denominator** |
+| **NO paused / refused state**         | §5 — an out-of-credit org goes into overdraft and search refuses nothing                                     |
+| `Spent this month` / `Spent all time` | `BillingStatusDTO.search` = `{ totalSpend, monthSpend }` (MOTIR-4555)                                        |
+| The UNAVAILABLE dash                  | `BillingStatusDTO.search` is `SearchSpendDTO \| null`; `null` = the boundary did not report the block        |
+| The META org rendering no line        | the shipped `InternalPlanCard` branch, unchanged                                                             |
+| The access path                       | `billing.mock.html` panel 1, reproduced verbatim — no new door                                               |
+
+## ⚠️ The two things this line does NOT have, and why each is a DECISION
+
+**These are the parts a code card is most likely to add by analogy with ③ Motir
+CI, so they are recorded as absences rather than left out.**
+
+### 1. There is NO METER, because there is no denominator
+
+② Motir AI meters its monthly allotment; ③ Motir CI meters its included pool. A
+meter needs a number to divide by. Search has **no pool, no allowance and no
+included quantity** — every search is charged, from the first one. A meter here
+would have to invent the figure it fills against.
+
+What replaces it is the **figure band** (`.figs` / `.fig`): two plain numbers,
+_Spent this month_ and _Spent all time_, with the unit spelled `credits` and never
+a currency (the area's standing rule).
+
+### 2. There is NO PAUSED STATE, and it is a decision — `motir-search-channel.md` §5
+
+**Every other billed line on this panel has an exhaustion story and this one does
+not.** `motir-search-channel.md` §5 decides that an out-of-credit org is allowed
+into **overdraft** and that **search refuses nothing**: a second refusal valve on
+grounding would mean a balance state silently turns the planner code-blind at rung
+1, and rung 1's failure is invisible by construction — the planner would not error,
+it would go back to asserting from memory. Refusal stays at the planning-turn gate,
+where it already is.
+
+So panel 2c draws a balance at zero with **spend still accruing** and an
+INFO banner saying so in words. It is `--el-tint-sky` / `--el-info`, deliberately
+not the warning family: nothing is wrong and nothing is paused.
+
+**For MOTIR-4557:** do not build a fourth pill tone, a pause banner, a hoisting
+rule or a decision surface for search. ③ Motir CI's card-hoisting rule (this
+file's earlier amendment, panel 8) is CI's alone and search does not join it —
+there is no urgency for it to order by.
+
+## ⚠️ UNAVAILABLE IS NOT ZERO — the one thing the code card must get exactly right
+
+`BillingStatusDTO.search` is `SearchSpendDTO | null`, and `null` means **the
+boundary did not report the block** — a rolling deploy where the motir-ai half has
+not landed, not a customer who spent nothing.
+
+**Drawn as an EM-DASH, never a `0`,** plus the dashed note _"Search figures aren't
+available right now. Your searches are still being charged — this is the display,
+not the billing."_
+
+This is the same rule `ciFigures.ts` already ships as `balanceUnavailable` —
+_"a real value, never exhaustion and never rendered as a misleading zero"_ — and
+it matters more here, because search's honest zero is COMMON (an org whose runs
+never search) while CI's is rare. A customer told they spent nothing on search
+concludes they were not charged; there is no second surface that corrects them.
+
+**And it is a PER-LINE treatment, never a page error.** Only this line's figures
+are missing — ①②③ and the payment card are fed by other reads and are unaffected.
+Panel 4c shows the page-level error state for contrast: that one is the SHIPPED
+`ErrorState`, unchanged, and it takes all four lines with it.
+
+## Primitives composed (no new primitive is introduced)
+
+| Element                        | Primitive / shipped source                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| The line's container           | `Card` with a `header` — identical to `MotirCiLine`                                         |
+| Product glyph badge            | the `.gico` badge `MotirCiLine` uses, `--radius-control`, `18px` lucide `search`            |
+| `Per use` chip                 | `Pill` tone `neutral`                                                                       |
+| The figure band                | NEW composition of plain elements — no primitive owns a two-figure band                     |
+| `No searches billed` note      | the dashed `note` family (`EmptyState`'s inline sibling), as `MotirCiLine` uses             |
+| The overdraft banner           | the `banner` family, INFO variant (`--el-tint-sky` / `--el-info`)                           |
+| Unavailable note               | the same dashed `note`, with the `alert` glyph                                              |
+| Loading                        | the panel's own `BillingSkeleton` (`components/ui` has `PageSkeleton` and nothing narrower) |
+| Page error                     | the shipped `ErrorState` — unchanged                                                        |
+| `See which runs spent it` link | the `.xlink` cross-link ② and ③ already use to reach Usage & cost                           |
+
+## Colour + shape roles (additions only — the base table above still governs)
+
+| Element                        | Token                                      | Why                                                                                                                                                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Product glyph background**   | **`--el-tint-sky`**                        | mint = Motir, lavender = Motir AI, peach = Motir CI. A fourth line takes the next SHIPPED tint slot, never a new hue. Sky is also the only remaining slot not already spent on a STATE — rose is danger and yellow is warning, and either would read as an alarm on a line that never alarms. |
+| Product glyph ink              | `--el-text-strong`                         | hue in the tint background, AA ink on top — the area's standing chip rule                                                                                                                                                                                                                     |
+| Figure VALUE                   | `--el-text`                                | the primary number                                                                                                                                                                                                                                                                            |
+| Figure LABEL / secondary value | `--el-text-secondary`                      | 6.18–6.80:1 on every surface this band lands on, including the view-only note's                                                                                                                                                                                                               |
+| The unavailable dash           | `--el-text-secondary`                      | quieter than a real figure, still AA — it is information, not a disabled control                                                                                                                                                                                                              |
+| Overdraft banner               | `--el-tint-sky` + `--el-info`              | INFO, never warning: nothing is wrong                                                                                                                                                                                                                                                         |
+| Card radius / padding          | `--radius-card` / `--spacing-card-padding` | unchanged from the base                                                                                                                                                                                                                                                                       |
+| Glyph badge radius             | `--radius-control`                         | matches ①②③                                                                                                                                                                                                                                                                                   |
+
+## ⚠️ TWO STALE RULES INHERITED FROM `ci-line.mock.html`, corrected here — and filed
+
+This asset splices `ci-line.mock.html`'s token block verbatim, as that asset
+splices `billing.mock.html`'s. **Two rules in that chain are STALE**: they were
+copied before `billing.mock.html` corrected them, and they never fire in
+`ci-line.mock.html` because it draws neither element.
+
+| Rule            | `ci-line.mock.html` | `billing.mock.html` (corrected) | Measured                            |
+| --------------- | ------------------- | ------------------------------- | ----------------------------------- |
+| `.state .ico`   | `--el-text-muted`   | `--el-text-secondary`           | 4.17:1 on `--el-surface` — fails AA |
+| `.menu .mlabel` | `--el-text-faint`   | `--el-text-secondary`           | 2.39:1 — clears AA on NO surface    |
+
+This asset follows the CORRECTED base and says so at each rule. The guard lane
+(`tests/design-ink-contrast.test.ts`) is what found them — it fired the moment
+this asset drew a `.state` block and an org menu, which is the first time either
+rule had a user.
+
+**Filed as a bug** against `ci-line.mock.html`, because the latent copy is a trap
+for the NEXT asset that splices from it — which is exactly how it reached this one.
+
+## Copy strings (en — the `billing` namespace; MOTIR-4557 adds each with a `zh` twin)
+
+- Name: **"Motir Search"**
+- Tagline: **"The web searches your planning runs make to ground themselves in
+  current sources."**
+- Chip: **"Per use"**
+- Figures: **"Spent this month"** / **"Spent all time"** / **"{credits} credits"**
+- Rate line: **"Each web search draws 1 credit from your Motir AI balance. There
+  is no included allowance and nothing to run out of — search is charged only when
+  a run uses it."**
+- Nothing billed: **"No searches billed this month."** / **"Search is charged only
+  when a planning run uses it, so nothing here means nothing was used — not that
+  anything is unavailable."**
+- Overdraft: **"Search keeps working when your balance runs out."** / **"An
+  out-of-credit org goes into overdraft and search refuses nothing. Refusal stays
+  at the planning-turn gate, where it already is."**
+- Unavailable: **"Search figures aren't available right now. Your searches are
+  still being charged — this is the display, not the billing."**
+- Cross-link: **"See which runs spent it"**
+
+## GIVES / TAKES
+
+**GIVES — MOTIR-4557** the whole element set: the card and its header, the glyph
+and its tint, the `Per use` chip, the figure band and its two labels, the
+nothing-billed note, the overdraft banner, the unavailable dash and its note, the
+loading shape, the cross-link, and the two ABSENCES above (no meter, no paused
+state) as build instructions rather than omissions.
+
+**TAKES — nothing from any other card.** No sibling's scope is narrowed and no
+card is amended by this one. The access path is REPRODUCED from
+`billing.mock.html` panel 1 rather than taken from it: the door already exists and
+this line joins a panel that already has one, which is precisely what drawing it
+here proves.
+
+Its neighbours for the record, neither of them amended: **MOTIR-4554** draws the
+same spend on the usage dashboard (the run-level drill-down this line links to and
+does not own), and **MOTIR-4555** carries the figures across the boundary that
+feed both.
