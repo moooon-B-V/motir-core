@@ -5305,7 +5305,15 @@
       "creditsChip": "Credits",
       "creditsUnit": "credits",
       "unlimited": "Unlimited",
-      "internal": "Internal"
+      "internal": "Internal",
+      "searchThisMonth": "Search spend, this month",
+      "searchAllTime": "{n} credits all time",
+      "searchAttributed": "…of which attributed",
+      "searchUnattributed": "{n} credits not attributed to a run",
+      "searchUnavailable": "Search figures aren’t available right now. Your searches are still being charged — this is the display, not the billing.",
+      "searchUnavailableValue": "Unavailable",
+      "scopeFollows": "Follows this scope",
+      "scopeOrg": "Whole organization"
     },
     "affordance": "Credits are an internal usage allotment — not a currency, and this is not a bill. One planning run debits credits by the tokens it consumed. Buying more credits and plan changes arrive with billing in a later release.",
     "drill": {
@@ -5352,7 +5360,10 @@
       "pagerPage": "Page {n} of {m}",
       "prev": "Prev",
       "next": "Next",
-      "unknownProject": "Unknown project"
+      "unknownProject": "Unknown project",
+      "webSearch": "Web search",
+      "noModel": "No model",
+      "noTokens": "No tokens"
     },
     "member": {
       "readOnly": "Read-only",
