@@ -15,7 +15,13 @@
       which is forbidden (notes.html #31). GitLab's sibling (MOTIR-1472) mirrors
       this layout against the GitProvider seam.
 
-      PLACEMENT (resolved from shipped reality, not assumed): the GitHub
+      PLACEMENT — ⚠️ SUPERSEDED by the MOTIR-4672 amendment below, and kept
+      because the DERIVATION is still the right method (read off the schema, not
+      chosen) while its ANSWER is now false. The connection is ORGANISATION-scoped
+      (MOTIR-4649), so the surface is Settings → Organisation → Git; the workspace
+      is the wrong tenant for the same reason the project is — it is not where the
+      repository lives. What it said, verbatim:
+      (resolved from shipped reality, not assumed): the GitHub
       integration is WORKSPACE-scoped — the installation entity is
       GithubInstallation { workspaceId } (MOTIR-891) and repo selection is
       workspace-wide — so it lives under Settings → Workspace → GitHub, the
@@ -50,7 +56,7 @@
       onto the shipped semantic axes (see design-notes.md § Pill mapping).
 
       PANELS (multi-panel board — review EACH, mistake #31):
-        (1) Settings → Workspace → GitHub, NOT connected — the two-grants
+        (1) Settings → Organisation → Git, NOT connected — the two-grants
             explainer + primary "Connect GitHub" CTA (the access path: the
             settings rail shows the GitHub row active — the door is drawn).
         (2) Connected — the repo-selection list: bound identity (avatar+login),
@@ -1597,13 +1603,13 @@
         a workspace connects to GitHub through the
         <b>verified GitHub-App model</b> — two independent grants (know my identity · pick my repos)
         — after which linked pull requests surface their PR state and CI result directly on the work
-        item. Placement is <b>Settings → Workspace → GitHub</b> (the installation is
-        workspace-scoped). Composed only from shipped primitives — Card, Pill, Button, EmptyState,
-        Switch, the settings-area shell — with colour via <span class="mono">--el-*</span> tokens
-        and shape via element-semantic tokens. Five panels: (1) not connected · (2) connected +
-        repos · (3) PR/CI on the issue · (4) empty + revoked-error states · (5) the explicit item→PR
-        link (MOTIR-1595) — the manual override of the auto-resolver, on the detail page's
-        Development card.
+        item. Placement is <b>Settings → Organisation → Git</b> (the connection is
+        ORGANISATION-scoped — see the amendment below; it was workspace-scoped when this asset was
+        drawn). Composed only from shipped primitives — Card, Pill, Button, EmptyState, Switch, the
+        settings-area shell — with colour via <span class="mono">--el-*</span> tokens and shape via
+        element-semantic tokens. Five panels: (1) not connected · (2) connected + repos · (3) PR/CI
+        on the issue · (4) empty + revoked-error states · (5) the explicit item→PR link (MOTIR-1595)
+        — the manual override of the auto-resolver, on the detail page's Development card.
       </p>
       <p>
         <b>AMENDED — MOTIR-4672 (Story MOTIR-4669), 2026-09-05: the tier moves.</b> A repository is
@@ -1622,55 +1628,39 @@
       <!-- ══════════════════════ PANEL 1 — NOT CONNECTED ══════════════════════ -->
       <div>
         <div class="panel-label">
-          Panel 1 · <b>Settings → Workspace → GitHub</b> — not connected (the two grants + CTA; rail
-          shows the door)
+          Panel 1 · <b>Settings → Organisation → Git</b>, GitHub tab — not connected (the two grants
+          + CTA). <b>NOT Settings → Workspace:</b> the workspace is the wrong tenant for the same
+          reason the project is — it is not where the repository lives
         </div>
         <div class="panel">
           <div class="settings-shell">
-            <aside class="sidebar">
-              <div class="side-back">
-                <svg><use href="#i-arrow-left" /></svg>Back to Motir
-              </div>
-              <div class="breadcrumb">Settings › Workspace › GitHub</div>
-              <div class="nav-grp">
-                <div class="grp-label">Account</div>
-                <div class="nav-row">
-                  <svg><use href="#i-user" /></svg>Profile
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Appearance
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Workspace</div>
-                <div class="nav-row">
-                  <svg><use href="#i-users" /></svg>Members
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-briefcase" /></svg>Jobs
-                </div>
-                <div class="nav-row active" aria-current="page">
-                  <svg><use href="#i-github" /></svg>GitHub
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Project</div>
-                <div class="nav-row">
-                  <svg><use href="#i-cog" /></svg>Details
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Workflow
-                </div>
-              </div>
-            </aside>
-
             <div class="content">
               <div class="page-head">
-                <h2>GitHub</h2>
+                <h2>Git</h2>
                 <p class="sub">
-                  Connect this workspace to GitHub to sync pull-request and CI status onto your work
-                  items, feed the code graph, and drive the review loop.
+                  Connect <b>moooon</b> to GitHub to sync pull-request and CI status onto your work
+                  items, feed the code graph, and drive the review loop. Connected once, to the
+                  organisation — every project can then work on a repository without re-connecting
+                  it.
                 </p>
+              </div>
+
+              <!-- SHARED CHROME — `GitSettingsShell` + `ProviderSwitch`. Composed,
+                   never re-specified (MOTIR-4672): the `Git` title and the provider
+                   Segmented are the shell's, and both provider variants render
+                   through them. These panels predate that shell (MOTIR-1478) and
+                   drew a bare "GitHub" heading; matching it here is what makes the
+                   panel a drawing of the surface rather than of half of it. -->
+              <div class="provider-bar">
+                <div class="seg" role="group" aria-label="Git provider">
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg><use href="#i-github" /></svg>GitHub
+                  </button>
+                  <button class="seg-opt">
+                    <svg><use href="#i-gitlab" /></svg>GitLab
+                  </button>
+                </div>
+                <span class="provider-hint">Same surface — pick a provider.</span>
               </div>
 
               <div class="card">
@@ -1725,169 +1715,93 @@
       <!-- ══════════════════════ PANEL 2 — CONNECTED + REPOS ══════════════════════ -->
       <div>
         <div class="panel-label">
-          Panel 2 · connected — bound identity, installation & the selected-repo list
+          Panel 2 · <b>Settings → Organisation → Git</b>, connected — the ORGANISATION&rsquo;s
+          connection. <b>The member&rsquo;s own identity is NOT here</b> (it is the USER tenant —
+          MOTIR-4675, <span class="mono">design/settings/</span>), and the repository INVENTORY is
+          Panel 6&rsquo;s
         </div>
         <div class="panel">
           <div class="settings-shell">
-            <aside class="sidebar">
-              <div class="side-back">
-                <svg><use href="#i-arrow-left" /></svg>Back to Motir
-              </div>
-              <div class="breadcrumb">Settings › Workspace › GitHub</div>
-              <div class="nav-grp">
-                <div class="grp-label">Account</div>
-                <div class="nav-row">
-                  <svg><use href="#i-user" /></svg>Profile
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Appearance
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Workspace</div>
-                <div class="nav-row">
-                  <svg><use href="#i-users" /></svg>Members
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-briefcase" /></svg>Jobs
-                </div>
-                <div class="nav-row active" aria-current="page">
-                  <svg><use href="#i-github" /></svg>GitHub
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Project</div>
-                <div class="nav-row">
-                  <svg><use href="#i-cog" /></svg>Details
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Workflow
-                </div>
-              </div>
-            </aside>
-
             <div class="content">
               <div class="page-head">
-                <h2>GitHub</h2>
+                <h2>Git</h2>
                 <p class="sub">
-                  Connected. Motir reads the repositories you selected and syncs their PR &amp; CI
-                  status.
+                  Connected to <b>moooon</b>. Motir reads the repositories you selected and syncs
+                  their PR &amp; CI status onto every project that uses them.
                 </p>
               </div>
 
+              <!-- SHARED CHROME — `GitSettingsShell` + `ProviderSwitch`. Composed,
+                   never re-specified (MOTIR-4672): the `Git` title and the provider
+                   Segmented are the shell's, and both provider variants render
+                   through them. These panels predate that shell (MOTIR-1478) and
+                   drew a bare "GitHub" heading; matching it here is what makes the
+                   panel a drawing of the surface rather than of half of it. -->
+              <div class="provider-bar">
+                <div class="seg" role="group" aria-label="Git provider">
+                  <button class="seg-opt active" aria-pressed="true">
+                    <svg><use href="#i-github" /></svg>GitHub
+                  </button>
+                  <button class="seg-opt">
+                    <svg><use href="#i-gitlab" /></svg>GitLab
+                  </button>
+                </div>
+                <span class="provider-hint">Same surface — pick a provider.</span>
+              </div>
+
               <div class="stack">
-                <!-- identity + installation card -->
+                <!-- THE ORGANISATION'S CONNECTION.
+                     ⚠️ RE-TIERED (MOTIR-4672). This card used to lead with the
+                     member's bound `GithubIdentity` — avatar, @login, "Verified",
+                     Disconnect. That is the USER's tenant: `GithubIdentity` is
+                     `userId @unique`, it has never belonged to a workspace, and
+                     `projectSettingsNav.ts` calls connecting it "the one action
+                     nobody can take on [a member's] behalf". It lives at
+                     Settings → Account → Git accounts now — MOTIR-4675,
+                     design/settings/ — and drawing it on the ORGANISATION's page
+                     is the same tier confusion this story removes, pointed the
+                     other way.
+                     What stays is the connection itself, which IS the org's. -->
                 <div class="card">
                   <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                    <span class="grant-ic"
+                      ><svg><use href="#i-github" /></svg
+                    ></span>
                     <div class="identity-row" style="flex: 1">
-                      <!-- GitHub identity avatar: real avatar_url image (GithubIdentity.avatarUrl) -->
-                      <img
-                        class="gh-avatar"
-                        alt="zhuyue on GitHub"
-                        src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
-                      />
                       <div class="who">
                         <span class="login"
-                          >@zhuyue
+                          >Motir GitHub App on <b>moooon</b>
                           <span class="pill pill-mint" style="margin-left: 4px"
-                            ><svg><use href="#i-badge-check" /></svg>Verified</span
+                            ><svg><use href="#i-badge-check" /></svg>Connected</span
                           ></span
                         >
-                        <span class="cap">GitHub identity · connected as Zhu Yue</span>
+                        <span class="cap"
+                          >Organisation connection · installed by @zhuyue on 12 August 2026</span
+                        >
                       </div>
                     </div>
-                    <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
-                  </div>
-                  <div class="card-foot">
-                    <span>Motir App installed on <b>moooon</b> · organization</span>
                     <button class="btn btn-sm btn-secondary">
                       <svg><use href="#i-external" /></svg>Manage on GitHub
                     </button>
                   </div>
                 </div>
 
-                <!-- repository list -->
+                <!-- ⚠️ THE REPOSITORY LIST IS NOT REPEATED HERE. This panel used to
+                     draw a "Repositories" card of its own — a per-repo sync Switch
+                     and a sync-state Pill per row. Panel 6 is the organisation's
+                     repository INVENTORY, with each row's index state and
+                     `Used by N projects`, and two drawings of one list on one board
+                     is exactly the drift these assets exist to prevent. The
+                     inventory is Panel 6's; this panel is the connection's. -->
                 <div class="card">
-                  <div class="card-head">
-                    <div>
-                      <h3>Repositories</h3>
-                      <p class="hsub">
-                        Only the repositories you selected on GitHub. Motir reads these — it can’t
-                        see any others.
-                      </p>
-                    </div>
-                  </div>
-                  <div class="repo-list">
-                    <div class="repo-row">
-                      <svg class="r-ic"><use href="#i-repo" /></svg>
-                      <span class="r-name"><span class="r-owner">moooon/</span>motir-core</span>
-                      <span class="branch-chip">main</span>
-                      <span class="spacer"></span>
-                      <span class="pill pill-mint"
-                        ><svg><use href="#i-check" /></svg>Synced</span
-                      >
-                      <span
-                        class="sw on"
-                        role="switch"
-                        aria-checked="true"
-                        aria-label="Sync motir-core"
-                        ><span class="kn"></span
-                      ></span>
-                    </div>
-                    <div class="repo-row">
-                      <svg class="r-ic"><use href="#i-repo" /></svg>
-                      <span class="r-name"><span class="r-owner">moooon/</span>motir-ai</span>
-                      <span class="branch-chip">main</span>
-                      <span class="spacer"></span>
-                      <span class="pill pill-mint"
-                        ><svg><use href="#i-check" /></svg>Synced</span
-                      >
-                      <span
-                        class="sw on"
-                        role="switch"
-                        aria-checked="true"
-                        aria-label="Sync motir-ai"
-                        ><span class="kn"></span
-                      ></span>
-                    </div>
-                    <div class="repo-row">
-                      <svg class="r-ic"><use href="#i-repo" /></svg>
-                      <span class="r-name"><span class="r-owner">moooon/</span>motir-gateway</span>
-                      <span class="branch-chip">main</span>
-                      <span class="spacer"></span>
-                      <span class="pill pill-peach"
-                        ><svg><use href="#i-dots" /></svg>Syncing…</span
-                      >
-                      <span
-                        class="sw on"
-                        role="switch"
-                        aria-checked="true"
-                        aria-label="Sync motir-gateway"
-                        ><span class="kn"></span
-                      ></span>
-                    </div>
-                    <div class="repo-row">
-                      <svg class="r-ic"><use href="#i-repo" /></svg>
-                      <span class="r-name"><span class="r-owner">moooon/</span>design-system</span>
-                      <span class="branch-chip">main</span>
-                      <span class="spacer"></span>
-                      <span class="pill pill-neutral">Not synced</span>
-                      <span
-                        class="sw"
-                        role="switch"
-                        aria-checked="false"
-                        aria-label="Sync design-system"
-                        ><span class="kn"></span
-                      ></span>
-                    </div>
-                  </div>
-                  <div class="card-foot">
-                    <span
-                      >To add or remove repositories, update the Motir App’s access on GitHub.</span
+                  <div class="card-body">
+                    <p
+                      class="helper"
+                      style="margin: 0; font-size: 12.5px; color: var(--el-text-secondary)"
                     >
-                    <button class="btn btn-sm btn-secondary">
-                      <svg><use href="#i-external" /></svg>Manage on GitHub
-                    </button>
+                      The organisation&rsquo;s repositories, their index state and
+                      <b>Used by N projects</b> are drawn in <b>Panel 6</b>.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -2020,7 +1934,7 @@
             <div class="card-head">
               <div>
                 <h3>GitHub</h3>
-                <p class="hsub">Settings → Workspace → GitHub · connection needs attention</p>
+                <p class="hsub">Settings → Organisation → Git · connection needs attention</p>
               </div>
               <span class="pill pill-rose"
                 ><svg><use href="#i-alert" /></svg>Disconnected</span
@@ -2035,23 +1949,26 @@
                   synced work items keep their last-known status. Reconnect to restore sync.
                 </div>
               </div>
-              <!-- identity may still be bound even though the installation is gone (grants are independent) -->
-              <div class="identity-row" style="margin-bottom: 16px">
-                <img
-                  class="gh-avatar sm"
-                  alt="zhuyue on GitHub"
-                  src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26'%3E%3Crect width='26' height='26' fill='%235645d4'/%3E%3Ctext x='13' y='18' font-family='sans-serif' font-size='12' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
-                />
-                <div class="who">
-                  <span class="login" style="font-size: 13px"
-                    >@zhuyue
-                    <span class="pill pill-mint" style="margin-left: 2px"
-                      ><svg><use href="#i-badge-check" /></svg>Verified</span
-                    ></span
-                  >
-                  <span class="cap">Identity still connected · repository access revoked</span>
-                </div>
-              </div>
+              <!-- ⚠️ RE-TIERED (MOTIR-4672). This panel used to render the member's
+                   own bound identity here — avatar, @login, "Verified", and the
+                   caption "Identity still connected · repository access revoked" —
+                   to make the two-grants independence legible. The FACT is
+                   unchanged and still matters; the PLACE is wrong. A personal
+                   credential is the USER's tenant (`GithubIdentity` is
+                   `userId @unique`), so it is drawn on Settings → Account → Git
+                   accounts — MOTIR-4675, design/settings/, which draws exactly this
+                   state as its "connected, organisation has no installation" arm.
+                   What the ORGANISATION's page owes is the sentence, not the row:
+                   the grants are independent, so this is a broken INSTALLATION and
+                   not a broken account. -->
+              <p
+                class="helper"
+                style="margin: 0 0 16px; font-size: 12.5px; color: var(--el-text-secondary)"
+              >
+                Members&rsquo; own git accounts are unaffected — the two grants are independent, and
+                a member&rsquo;s account is theirs at
+                <b>Settings → Account → Git accounts</b>.
+              </p>
               <button class="btn btn-primary">
                 <svg><use href="#i-github" /></svg>Reconnect GitHub
               </button>
@@ -2236,14 +2153,16 @@
                 <div class="combo-pop">
                   <div class="combo-empty">
                     No matching pull requests
-                    <div class="hint">Repositories sync in Settings → Workspace → GitHub.</div>
+                    <div class="hint">
+                      Repositories are connected in Settings → Organisation → Git.
+                    </div>
                   </div>
                 </div>
                 <div class="form-error">
                   <svg><use href="#i-alert" /></svg>
                   <span
-                    >GitHub isn&rsquo;t connected for this workspace. Connect it in Settings →
-                    Workspace → GitHub.</span
+                    >GitHub isn&rsquo;t connected for this organisation. Connect it in Settings →
+                    Organisation → Git.</span
                   >
                 </div>
                 <div class="form-actions">

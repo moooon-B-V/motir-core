@@ -19,6 +19,15 @@ on top of the Development display surface **MOTIR-1579** ships.
 
 ## Placement — resolved from shipped reality, not assumed
 
+> ⚠️ **SUPERSEDED by the MOTIR-4672 amendment below (Story MOTIR-4669).** This
+> section is kept because its DERIVATION is still the right method — the placement
+> was read off the schema rather than chosen — and because a reader meeting the new
+> tier should be able to see what it replaced. Its ANSWER is now false: the
+> installation and the repository are ORGANISATION-scoped, so the surface is
+> **Settings → Organisation → Git**, and _"the workspace is the wrong tenant for
+> the same reason the project is: it is not where the repository lives."_ The rail
+> row it describes is gone too — the door is the org menu (MOTIR-4673).
+
 The GitHub integration lives under **Settings → Workspace → GitHub**
 (`app/(authed)/settings/workspace/github`, the shipped settings-area shell that
 already hosts **Jobs**). This is **derived, not a free choice** — so guard #4 of
@@ -40,10 +49,14 @@ settings page).
 
 ### Access path (the door — drawn, not just named)
 
-- **Settings surfaces (Panels 1–2):** the settings rail shows a **GitHub** row
-  (github mark icon) **active** under the **Workspace** group, with the
-  breadcrumb `Settings › Workspace › GitHub`. The reader SEES the entry
-  affordance, not just a route named in prose.
+- **Settings surfaces (Panels 1–2):** ⚠️ **re-tiered by MOTIR-4672.** The door is
+  the **org menu** (`OrgControl`), specified by MOTIR-4673 in `design/org-admin/`,
+  and the breadcrumb is `Settings › Organisation › Git`. It read: _"the settings
+  rail shows a **GitHub** row (github mark icon) active under the **Workspace**
+  group, with the breadcrumb `Settings › Workspace › GitHub`"_ — a rail that never
+  existed, at a tier that no longer does. The rule it states is still right and is
+  why the door has a card of its own: the reader must SEE the entry affordance,
+  not just a route named in prose.
 - **PR/CI surface (Panels 3–4a):** the **Development** section appears on the
   work-item detail (peek) automatically once a branch/PR references the item's
   `MOTIR-<n>` id — the door is the section itself materialising on the issue.
@@ -81,7 +94,10 @@ icon) rather than faking in-app repo granting.
 
 ## Panels & primitives (every panel — the multi-panel rule, mistake #31)
 
-### Panel 1 — Settings → Workspace → GitHub, NOT connected
+### Panel 1 — Settings → Organisation → Git, NOT connected
+
+> ⚠️ Re-tiered by MOTIR-4672. It read _"Settings → Workspace → GitHub"_; the
+> panel's layout is unchanged, its TIER is not.
 
 - **Settings-area shell** (sidebar rail + content) — the shipped area layout.
   Rail groups Account / Workspace / **GitHub (active)** / Project.
@@ -234,13 +250,16 @@ this also avoids the combobox-in-dialog clipping class entirely):
 
 - **Type-to-search** — listbox shows the centered prompt "Type to search pull
   requests" (`--el-text-secondary`).
-- **No matches** — "No matching pull requests" + the hint line "Repositories
-  sync in Settings → Workspace → GitHub." (`--el-text-identifier`) — the road
-  to the fix when the repo was never selected on GitHub.
+- **No matches** — "No matching pull requests" + the hint line "Repositories are
+  connected in Settings → Organisation → Git." (`--el-text-identifier`) — the road
+  to the fix when the repo was never connected. **⚠️ Re-pointed by MOTIR-4672:** it
+  read _"Repositories sync in Settings → Workspace → GitHub"_, and that
+  destination is deleted by this story.
 - **Typed error** — `LinkAddForm`'s rose banner (strong text on
   `--el-tint-rose`, alert glyph `--el-danger` — finding #35): e.g. the
-  disconnected workspace ("GitHub isn't connected for this workspace. Connect
-  it in Settings → Workspace → GitHub."). Loading reuses the Combobox spinner.
+  disconnected organisation ("GitHub isn't connected for this organisation.
+  Connect it in Settings → Organisation → Git."). **⚠️ Re-pointed by MOTIR-4672**,
+  same reason. Loading reuses the Combobox spinner.
 
 **Copy — the `github` i18n namespace (all locales, en+zh parity):**
 `development.title` "Development" · `development.gloss` "Linked pull requests ·
@@ -248,11 +267,11 @@ live PR and CI status" · `development.linkPr` "Link pull request" ·
 `development.linkPrField` "Pull request to link" · `development.searchPlaceholder`
 "Search pull requests…" · `development.typeToSearch` "Type to search pull
 requests" · `development.noMatches` "No matching pull requests" ·
-`development.noMatchesHint` "Repositories sync in Settings → Workspace →
-GitHub." · `development.linkedTo` "Linked to {key}" · `development.linkedManually`
+`development.noMatchesHint` "Repositories are connected in Settings →
+Organisation → Git." · `development.linkedTo` "Linked to {key}" · `development.linkedManually`
 "linked manually" · `development.linkAction` "Link" · `development.notConnected`
-"GitHub isn't connected for this workspace. Connect it in Settings → Workspace →
-GitHub." · `development.autoLinkCaption` "Link with + Link pull request here, or
+"GitHub isn't connected for this organisation. Connect it in Settings →
+Organisation → Git." · `development.autoLinkCaption` "Link with + Link pull request here, or
 with `link_pull_request` over the MCP." (cancel = the shared
 `common.cancel`).
 
@@ -396,6 +415,98 @@ that owns it, so the row is **MOTIR-4673**, in `design/org-admin/` — which is 
 already drawn (Panel 1, arm C). **And it is not a rail row anywhere:** **MOTIR-4640** takes `Git`
 OUT of the shell rail's bottom section, so a rail row drawn here would contradict the departure half
 of the same move.
+
+### ⚠️ CORRECTED ON REVIEW — there is no WORKSPACE tier for git, and these panels drew one
+
+**Caught by Yue, and it is this amendment's own subject rather than a detail.** The
+first pass added Panels 6–7 at the organisation tier and left the surviving panels
+saying **Settings → Workspace**, reading the card's _"does not redraw the panels
+that survive"_ as _"do not touch them"_. That is the wrong reading: the card's
+FIRST item is _"the page is the ORGANISATION's — its heading, its empty state and
+its copy say organisation, not workspace"_. A panel's tier is not its layout.
+
+**The story settles it in one line:** _"The `Git` row leaves the project rail, and
+it does NOT go to Settings → Workspace. The workspace is the wrong tenant for the
+same reason the project is: it is not where the repository lives."_ Three tenants,
+and workspace is not one of them — **ORG** (the connection and the inventory),
+**PROJECT** (which of the org's repositories this project works on), **USER** (your
+own git account).
+
+So every surviving panel is re-tiered: the heading is the shared shell's `Git`, the
+copy is the organisation's, and the revoked panel's caption follows. Two pointers
+that sent a reader to `Settings → Workspace → GitHub` — the Panel-5c no-matches
+hint and its disconnected-error banner — now name the organisation, because the
+destination they pointed at is deleted by this very story.
+
+**And the RAIL is gone rather than corrected.** An intermediate pass replaced the
+fictional _Account / Workspace / Project_ grouping with a faithful drawing of what
+`/settings/workspace/github` renders today — which was true and still wrong, because
+it drew the surface this story removes. There is no rail in these panels now; the
+DOOR is the **org menu**, and it is **MOTIR-4673**'s, in `design/org-admin/`.
+
+For the record, since two passes got this wrong in opposite directions — the
+grouping never existed either: only `settings/project/` and `settings/account/`
+have an area `layout.tsx`, only `projectSettingsNav.ts` and `accountSettingsNav.ts`
+exist, and `SidebarNav` swaps to an area rail on exactly two predicates
+(`isAccountSettingsPath`, `isProjectSettingsPath`), neither of which
+`/settings/workspace/github` matches.
+
+**The tell was in this run's own output.** The sibling amendment (MOTIR-4675) drew
+the ACCOUNT settings rail straight from `accountSettingsNav.ts`, which has no
+_Workspace_ group — so two assets touched in one pass disagreed about whether the
+grouping existed, and nothing looked at them together.
+
+**Three surviving panels were re-tiered, not merely re-labelled**, because the
+four-tenants table sorts every surface and two of them were sorted wrong:
+
+| what it drew                                                                           | why it moved                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel 2's **bound identity card** — avatar, `@login`, _Verified_, Disconnect           | `GithubIdentity` is `userId @unique`; it is the **USER** tenant. Drawing a personal credential on the ORGANISATION's page is this story's own tier confusion, pointed the other way. It is MOTIR-4675's, in `design/settings/`               |
+| Panel 2's **Repositories card** (per-repo sync `Switch` + sync `Pill`)                 | Panel 6 IS the organisation's repository inventory, with each row's index state and `Used by N projects`. Two drawings of one list on one board is exactly the drift these assets exist to prevent — so this panel points at Panel 6 instead |
+| Panel 4b's **identity row** (_"Identity still connected · repository access revoked"_) | Same tenant error. The FACT it existed to make legible — the grants are independent — is kept as a sentence, which is what the organisation's page owes; the ROW belongs to the account surface, where MOTIR-4675 draws exactly that state   |
+
+**GitLab took the same treatment, and it is the harder half.** GitLab authorises
+through ONE OAuth grant whose token is stored on the connection row itself
+(`accessTokenEncrypted`), so the person who connected and the connection are more
+entangled than GitHub's two independent grants. That makes _who authorised it_
+part of the connection's own record — kept as a caption — and it does not make the
+member's ACCOUNT the organisation's to manage.
+
+### ⚠️ CORRECTED — the settings RAIL these panels drew does not exist
+
+**Caught by Yue on review of this amendment, and it is the amendment's own subject.**
+The surviving panels drew a settings sidebar grouped **Account / Workspace /
+Project**, with the git surface active under _Workspace_. **There is no such
+rail**, and the grouping asserted a TIER STRUCTURE the app does not have — which
+matters here more than anywhere, because the tier is exactly what this amendment
+moves.
+
+Read off shipped reality rather than inherited:
+
+| claim                                         | reality                                                                                                                                                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a _Workspace_ settings area with its own rail | only `settings/project/` and `settings/account/` have an area `layout.tsx`; `settings/workspace/` has none                                                                                         |
+| a workspace settings nav                      | only `projectSettingsNav.ts` and `accountSettingsNav.ts` exist; there is no workspace registry                                                                                                     |
+| the rail swaps for this route                 | `SidebarNav` swaps on exactly two predicates — `isAccountSettingsPath` (`/settings/account*`) and `isProjectSettingsPath` (`/settings/project*`). **`/settings/workspace/github` matches neither** |
+
+**The ROUTE is real; the RAIL was not.** `/settings/workspace/github` genuinely
+exists, and it is under `workspace/` because `GithubInstallation { workspaceId }`
+was workspace-scoped (MOTIR-891 · MOTIR-1931) — the very tier this amendment
+moves. What renders there is the ORDINARY rail: the shell's primary rows, then
+its **bottom section**, where the `Git` row is the door.
+
+So the panels now draw that, and the bottom section is **cited, not
+re-specified** — its design of record is
+`design/shell/rail-bottom-section.mock.html`, and **MOTIR-4640** is the card that
+removes the `Git` row from it once this story completes the tier move.
+
+**How it got through, recorded because the reason is reusable.** The card says
+this amendment _"does not redraw the panels that survive"_, and that was read as
+covering the rail. It should not have: a panel's rail is a claim about the TIER,
+and the tier is this card's subject. The tell was available in this run's own
+output — the sibling amendment (MOTIR-4675) drew the ACCOUNT settings rail
+straight from `accountSettingsNav.ts`, which has no _Workspace_ group, so two
+assets touched in one pass disagreed about whether the grouping existed.
 
 ### Panel 6 — Settings → Organisation → Git: the INVENTORY
 

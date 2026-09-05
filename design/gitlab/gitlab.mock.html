@@ -73,7 +73,7 @@
       invented brand hex enters the mock.
 
       PANELS (multi-panel board — review EACH, mistake #31):
-        (1) Settings → Workspace → Git, GitLab tab, NOT connected — the provider
+        (1) Settings → Organisation → Git, GitLab tab, NOT connected — the provider
             Segmented picker [GitHub | GitLab] + the single-OAuth explainer +
             primary "Connect GitLab" CTA (access path: the rail shows the "Git"
             row active — the door is drawn).
@@ -844,6 +844,20 @@
       <defs>
         <symbol
           viewBox="0 0 24 24"
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
           id="i-arrow-left"
           fill="none"
           stroke="currentColor"
@@ -1166,10 +1180,11 @@
         grants); <b>project selection is in-app</b> (the OAuth token can enumerate + webhook your
         projects — the honest inverse of GitHub's external install screen); terminology is
         <b>Merge Request (<span class="mono">!123</span>)</b> and <b>Pipeline</b>. Placement is the
-        same <b>Settings → Workspace → Git</b> shell. Composed only from shipped primitives — Card,
-        Pill, Button, EmptyState, Switch, Segmented, the settings-area shell — colour via
-        <span class="mono">--el-*</span>, shape via element-semantic tokens; the GitLab mark is
-        monochrome <span class="mono">currentColor</span> (no invented brand hex).
+        same shared <b>Git</b> shell, now at <b>Settings → Organisation</b> (see the amendment
+        below). Composed only from shipped primitives — Card, Pill, Button, EmptyState, Switch,
+        Segmented, the settings-area shell — colour via <span class="mono">--el-*</span>, shape via
+        element-semantic tokens; the GitLab mark is monochrome
+        <span class="mono">currentColor</span> (no invented brand hex).
       </p>
       <p>
         <b>AMENDED — MOTIR-4672 (Story MOTIR-4669), 2026-09-05: the tier moves.</b> A repository is
@@ -1192,48 +1207,11 @@
       <!-- ══════════════════════ PANEL 1 — NOT CONNECTED (GitLab tab) ══════════════════════ -->
       <div>
         <div class="panel-label">
-          Panel 1 · <b>Settings → Workspace → Git</b> — GitLab tab, NOT connected (the provider
+          Panel 1 · <b>Settings → Organisation → Git</b> — GitLab tab, NOT connected (the provider
           Segmented picker + the single-OAuth explainer + CTA; the rail shows the door)
         </div>
         <div class="panel">
           <div class="settings-shell">
-            <aside class="sidebar">
-              <div class="side-back">
-                <svg><use href="#i-arrow-left" /></svg>Back to Motir
-              </div>
-              <div class="breadcrumb">Settings › Workspace › Git</div>
-              <div class="nav-grp">
-                <div class="grp-label">Account</div>
-                <div class="nav-row">
-                  <svg><use href="#i-user" /></svg>Profile
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Appearance
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Workspace</div>
-                <div class="nav-row">
-                  <svg><use href="#i-users" /></svg>Members
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-briefcase" /></svg>Jobs
-                </div>
-                <div class="nav-row active" aria-current="page">
-                  <svg><use href="#i-git-branch" /></svg>Git
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Project</div>
-                <div class="nav-row">
-                  <svg><use href="#i-cog" /></svg>Details
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Workflow
-                </div>
-              </div>
-            </aside>
-
             <div class="content">
               <div class="page-head">
                 <h2>Git</h2>
@@ -1314,48 +1292,13 @@
       <!-- ══════════════════════ PANEL 2 — CONNECTED + PROJECTS ══════════════════════ -->
       <div>
         <div class="panel-label">
-          Panel 2 · connected — the bound GitLab identity + the connected-projects list (per-project
-          sync Switch), with the in-app “+ Connect a project” affordance
+          Panel 2 · <b>Settings → Organisation → Git</b>, connected — the ORGANISATION&rsquo;s
+          connection + the connected-projects list.
+          <b>The member&rsquo;s own identity is NOT here</b>
+          (MOTIR-4675). (per-project sync Switch), with the in-app “+ Connect a project” affordance
         </div>
         <div class="panel">
           <div class="settings-shell">
-            <aside class="sidebar">
-              <div class="side-back">
-                <svg><use href="#i-arrow-left" /></svg>Back to Motir
-              </div>
-              <div class="breadcrumb">Settings › Workspace › Git</div>
-              <div class="nav-grp">
-                <div class="grp-label">Account</div>
-                <div class="nav-row">
-                  <svg><use href="#i-user" /></svg>Profile
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Appearance
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Workspace</div>
-                <div class="nav-row">
-                  <svg><use href="#i-users" /></svg>Members
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-briefcase" /></svg>Jobs
-                </div>
-                <div class="nav-row active" aria-current="page">
-                  <svg><use href="#i-git-branch" /></svg>Git
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Project</div>
-                <div class="nav-row">
-                  <svg><use href="#i-cog" /></svg>Details
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Workflow
-                </div>
-              </div>
-            </aside>
-
             <div class="content">
               <div class="page-head">
                 <h2>Git</h2>
@@ -1377,24 +1320,38 @@
               </div>
 
               <div class="stack">
-                <!-- identity card -->
+                <!-- THE ORGANISATION'S CONNECTION.
+                     ⚠️ RE-TIERED (MOTIR-4672). This card led with the member's own
+                     bound GitLab identity — avatar, @login, "Verified", Disconnect.
+                     A personal credential is the USER's tenant and lives at
+                     Settings → Account → Git accounts (MOTIR-4675,
+                     design/settings/); drawing it on the ORGANISATION's page is the
+                     tier confusion this story removes, pointed the other way.
+
+                     ⚠️ GitLab is the harder half and it is worth saying why the
+                     answer is the same. GitLab authorises through ONE OAuth grant
+                     whose token is stored on the connection row itself
+                     (`accessTokenEncrypted`), so the person who connected and the
+                     connection are more entangled than GitHub's two independent
+                     grants. That makes WHO CONNECTED IT part of the connection's
+                     own record — kept below as a caption — and it does not make the
+                     member's ACCOUNT the organisation's to manage. -->
                 <div class="card">
                   <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                    <span class="grant-ic"
+                      ><svg><use href="#i-gitlab" /></svg
+                    ></span>
                     <div class="identity-row" style="flex: 1">
-                      <!-- GitLab identity avatar: real avatar_url image (GitlabIdentity.avatarUrl) -->
-                      <img
-                        class="gl-avatar"
-                        alt="zhuyue on GitLab"
-                        src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
-                      />
                       <div class="who">
                         <span class="login"
-                          >@zhuyue
+                          >GitLab connected to <b>moooon</b>
                           <span class="pill pill-mint" style="margin-left: 4px"
-                            ><svg><use href="#i-badge-check" /></svg>Verified</span
+                            ><svg><use href="#i-badge-check" /></svg>Connected</span
                           ></span
                         >
-                        <span class="cap">GitLab identity · connected as Zhu Yue</span>
+                        <span class="cap"
+                          >Organisation connection · authorised by @zhuyue on 12 August 2026</span
+                        >
                       </div>
                     </div>
                     <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
@@ -1746,7 +1703,7 @@
             <div class="card-head">
               <div>
                 <h3>GitLab</h3>
-                <p class="hsub">Settings → Workspace → Git · connection needs attention</p>
+                <p class="hsub">Settings → Organisation → Git · connection needs attention</p>
               </div>
               <span class="pill pill-rose"
                 ><svg><use href="#i-alert" /></svg>Disconnected</span
@@ -1796,25 +1753,29 @@
                 </button>
               </div>
             </div>
+            <!-- ⚠️ RE-TIERED (MOTIR-4672), like every other identity card in these
+                 two assets: the member's own account is the USER tenant and is
+                 drawn at Settings → Account → Git accounts (MOTIR-4675). What the
+                 shared shell shows under the GitHub tab is the ORGANISATION's
+                 connection. -->
             <div class="card">
               <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                <span class="grant-ic"
+                  ><svg><use href="#i-github" /></svg
+                ></span>
                 <div class="identity-row" style="flex: 1">
-                  <img
-                    class="gl-avatar"
-                    alt="zhuyue on GitHub"
-                    src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
-                  />
                   <div class="who">
                     <span class="login"
-                      >@zhuyue
+                      >Motir GitHub App on <b>moooon</b>
                       <span class="pill pill-mint" style="margin-left: 4px"
-                        ><svg><use href="#i-badge-check" /></svg>Verified</span
+                        ><svg><use href="#i-badge-check" /></svg>Connected</span
                       ></span
                     >
-                    <span class="cap">GitHub identity · connected as Zhu Yue</span>
+                    <span class="cap"
+                      >Organisation connection · installed by @zhuyue on 12 August 2026</span
+                    >
                   </div>
                 </div>
-                <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
               </div>
               <div class="card-foot">
                 <span>Motir App installed on <b>moooon</b> · organization</span>
