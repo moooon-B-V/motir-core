@@ -143,6 +143,17 @@
         --el-info: var(--color-info);
         --el-danger: var(--color-destructive);
         --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4675, verbatim from packages/design-system/theme.css.
+           --el-danger-on-surface is the ink for danger text ON a page surface;
+           --el-danger-text above is legal ONLY on an element carrying a danger
+           FILL, and --el-danger-surface is the tint the shipped DisconnectButton
+           hovers to. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-danger-surface: var(--color-tint-rose);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
         --el-tint-mint: var(--color-tint-mint);
@@ -1071,6 +1082,169 @@
         width: 14px;
         height: 14px;
       }
+      /* ══ AMENDMENT MOTIR-4675 — the `Git accounts` pane (Panels 9–10) ══ */
+      .gitrow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: var(--spacing-control-y) 0;
+      }
+      .gitrow + .gitrow {
+        border-top: 1px solid var(--el-border-soft);
+      }
+      .gitrow .gav {
+        width: 34px;
+        height: 34px;
+        flex: none;
+        border-radius: 9999px;
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .gitrow .gav svg {
+        width: 18px;
+        height: 18px;
+      }
+      .gitrow .gwho {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .gitrow .glogin {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--el-text);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .gitrow .gcap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pill--success {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      /* the shipped DisconnectButton: the `ghost` Button variant with danger ink
+         and a border — the Button primitive has no danger-ghost variant, so it is
+         COMPOSED, and this mock composes the same three declarations rather than
+         specifying a fourth treatment. */
+      .btn-danger-ghost {
+        background: transparent;
+        color: var(--el-danger);
+        border: 1px solid var(--el-border);
+      }
+      .btn-danger-ghost:hover {
+        background: var(--el-danger-surface);
+      }
+      /* the connect affordance when nothing is connected */
+      .connect-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .connect-empty p {
+        max-width: 56ch;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      /* the needs-re-auth notice — danger ink on a page surface, so
+         --el-danger-on-surface and never --el-danger-text (which is the ink FOR a
+         danger FILL and measures 1.00:1 on a light page). */
+      .reauth {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border-left: 2px solid var(--el-danger);
+        background: var(--el-danger-surface);
+        padding: 12px 14px;
+      }
+      .reauth svg {
+        width: 17px;
+        height: 17px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger-on-surface);
+      }
+      .reauth .rbody {
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-strong);
+      }
+      .reauth .rbody b {
+        font-weight: 600;
+      }
+      /* the two-independent-grants note: a FACT, not a failure */
+      .grantnote {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px 14px;
+      }
+      .grantnote svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        color: var(--el-icon-muted);
+      }
+      .grantnote .gbody {
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .grantnote .gbody b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .state-label {
+        margin: 0 0 8px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
+      }
+      .state-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .state-col {
+        width: 400px;
+      }
+      .panel-note {
+        max-width: 760px;
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
     </style>
   </head>
   <body>
@@ -1147,6 +1321,50 @@
           <path
             d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
           />
+        </g>
+        <!-- ══ ADDED by MOTIR-4675 — the glyphs the Git accounts pane needs ══ -->
+        <g id="i-github" fill="currentColor" stroke="none">
+          <path
+            d="M12 1.5A10.5 10.5 0 0 0 8.68 22c.53.1.72-.23.72-.5v-1.9c-2.92.64-3.54-1.25-3.54-1.25-.48-1.22-1.17-1.54-1.17-1.54-.95-.65.07-.64.07-.64 1.06.07 1.61 1.09 1.61 1.09.94 1.6 2.46 1.14 3.06.87.1-.68.37-1.14.67-1.4-2.33-.27-4.78-1.16-4.78-5.18 0-1.15.41-2.08 1.08-2.82-.11-.27-.47-1.34.1-2.79 0 0 .88-.28 2.88 1.07a10 10 0 0 1 5.24 0c2-1.35 2.88-1.07 2.88-1.07.57 1.45.21 2.52.1 2.79.68.74 1.08 1.67 1.08 2.82 0 4.03-2.45 4.91-4.79 5.17.38.33.71.97.71 1.96v2.9c0 .28.19.61.72.5A10.5 10.5 0 0 0 12 1.5Z"
+          />
+        </g>
+        <g
+          id="i-git-branch"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="6" x2="6" y1="3" y2="15" />
+          <circle cx="18" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M18 9a9 9 0 0 1-9 9" />
+        </g>
+        <g
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-database"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+          <path d="M3 12A9 3 0 0 0 21 12" />
         </g>
         <g
           id="i-key"
@@ -1879,5 +2097,324 @@
         </div>
       </div>
     </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         AMENDMENT — MOTIR-4675 (Story MOTIR-4669). `Git accounts` ARRIVES.
+         Every other card in that story moves something UP a tier — the
+         repository and its connection go from the workspace to the
+         ORGANISATION. This one moves something DOWN. `GithubIdentity` is
+         `userId @unique`: it is a PERSONAL CREDENTIAL, it has never belonged to
+         a workspace, and it belongs beside tokens and passkeys.
+         ⚠️ The pane carries NO repository list and NO installation lifecycle.
+         Those are the organisation's — design/github Panel 6 (MOTIR-4672).
+         ══════════════════════════════════════════════════════════════════ -->
+
+    <!-- ════════════ PANEL 9 — Git accounts pane, CONNECTED (the area shell) ════════════ -->
+    <div class="panel-label">
+      9 · <b>Git accounts pane — connected</b>, in the area shell. Rail drawn as it SHIPS today
+      (<span class="mono">ACCOUNT_SETTINGS_NAV</span>), with the new row third in <b>Security</b>.
+      Panels 1–3&rsquo;s rail is a point-in-time record and is not amended.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="me">
+                <span class="av">Z</span>
+                <span class="meta">
+                  <span class="nm">Zhu Yue</span>
+                  <span class="em">zhuyue@motir.co</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Account settings</span>
+            </div>
+            <nav aria-label="Account settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                  ></span>
+                  <span class="nl">Profile</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Preferences</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
+                  ></span>
+                  <span class="nl">Language</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
+                  ></span>
+                  <span class="nl">Notifications</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                  ></span>
+                  <span class="nl">Appearance</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Security</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                  ></span>
+                  <span class="nl">Two-factor</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
+                  ></span>
+                  <span class="nl">API tokens</span>
+                </div>
+                <!-- ⚠️ THE NEW ROW — THIRD in Security, by the group's own
+                     declaration convention: the more consequential thing first.
+                     A second factor protects the account; an API token acts AS
+                     you inside Motir; a git identity grants Motir nothing about
+                     your account and is the least consequential of the three. -->
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg
+                  ></span>
+                  <span class="nl">Git accounts</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Data</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-database" /></svg
+                  ></span>
+                  <span class="nl">Data &amp; privacy</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+
+          <div class="content">
+            <div class="page-head">
+              <h2>Git accounts</h2>
+              <p class="sub">
+                The git accounts you have connected to Motir. They are yours — nobody else can
+                connect one on your behalf, and disconnecting one affects only you.
+              </p>
+            </div>
+            <div class="stack">
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Connected</h3>
+                    <p class="hsub">Motir uses these to know who you are on the host.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="gitrow">
+                    <span class="gav"
+                      ><svg viewBox="0 0 24 24"><use href="#i-github" /></svg
+                    ></span>
+                    <span class="gwho">
+                      <span class="glogin"
+                        >@zhuyue
+                        <span class="pill pill--success"
+                          ><svg
+                            viewBox="0 0 24 24"
+                            style="width: 12px; height: 12px"
+                            aria-hidden="true"
+                          >
+                            <use href="#i-check-circle" /></svg
+                          >Connected</span
+                        ></span
+                      >
+                      <span class="gcap">GitHub · connected 12 August 2026</span>
+                    </span>
+                    <button class="btn btn-sm btn-danger-ghost" type="button">Disconnect</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <div>
+                    <h3>Add an account</h3>
+                    <p class="hsub">One per host. Connecting replaces nothing else you have.</p>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="connect-empty">
+                    <button class="btn btn-secondary btn-sm" type="button">
+                      <svg class="ic" viewBox="0 0 24 24"><use href="#i-git-branch" /></svg>Connect
+                      GitLab
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>⚠️ No repository list, and no installation action.</b> Those are the organisation&rsquo;s —
+      <code>Settings → Organisation → Git</code>, drawn by <b>MOTIR-4672</b>. A pane here showing
+      <i>&ldquo;repositories you can see&rdquo;</i> would re-introduce the tier confusion this story
+      removes: the member&rsquo;s credential and the organisation&rsquo;s grant are two independent
+      things, and the shipped page already says so.
+    </p>
+    <p class="panel-note">
+      <b>The rail is drawn as it SHIPS.</b> Panels 1–3 above draw it as it stood when this asset was
+      written —
+      <span class="mono"
+        >Profile (Soon) · Language · Notifications · Appearance (Soon) · API tokens</span
+      >. The product has since lit every reserved slot and added
+      <span class="mono">Two-factor</span> and a fourth <span class="mono">Data</span> group. Those
+      panels are kept as the point-in-time record they are; the row&rsquo;s position was read from
+      <code>lib/settings/accountSettingsNav.ts</code>, because a row placed by a convention read off
+      a stale rail is placed by nothing.
+    </p>
+
+    <!-- ════════════ PANEL 10 — the other three states ════════════ -->
+    <div class="panel-label">
+      10 · <b>The other three states</b> — none connected · revoked / needs re-auth ·
+      connected-with-no-organisation-installation. Three of the four are failure or partial states
+      the product already produces and no asset has ever drawn.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="state-grid">
+          <div class="state-col">
+            <p class="state-label">A · none connected</p>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Git accounts</h3>
+                  <p class="hsub">Nothing connected yet.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="connect-empty">
+                  <p>
+                    Connect a git account so Motir knows who you are on the host — and so it can
+                    invite you to the repositories your projects work on. It reads your public
+                    profile only, and grants no access to any code.
+                  </p>
+                  <button class="btn btn-primary btn-sm" type="button">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-github" /></svg>Connect GitHub
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="state-col">
+            <p class="state-label">B · revoked / needs re-auth</p>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Connected</h3>
+                  <p class="hsub">Motir uses these to know who you are on the host.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="reauth">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                  <span class="rbody"
+                    ><b>Reconnect your GitHub account.</b> The authorization was withdrawn on
+                    GitHub, so Motir can no longer confirm who you are there. Nothing else about
+                    your account changed.</span
+                  >
+                </div>
+                <div class="gitrow">
+                  <span class="gav"
+                    ><svg viewBox="0 0 24 24"><use href="#i-github" /></svg
+                  ></span>
+                  <span class="gwho">
+                    <span class="glogin"
+                      >@zhuyue <span class="pill pill--warning">Needs re-auth</span></span
+                    >
+                    <span class="gcap">GitHub · connected 12 August 2026</span>
+                  </span>
+                  <button class="btn btn-sm btn-primary" type="button">Reconnect</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="state-col">
+            <p class="state-label">C · connected, organisation has no installation</p>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Connected</h3>
+                  <p class="hsub">Motir uses these to know who you are on the host.</p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="gitrow">
+                  <span class="gav"
+                    ><svg viewBox="0 0 24 24"><use href="#i-github" /></svg
+                  ></span>
+                  <span class="gwho">
+                    <span class="glogin"
+                      >@zhuyue
+                      <span class="pill pill--success"
+                        ><svg
+                          viewBox="0 0 24 24"
+                          style="width: 12px; height: 12px"
+                          aria-hidden="true"
+                        >
+                          <use href="#i-check-circle" /></svg
+                        >Connected</span
+                      ></span
+                    >
+                    <span class="gcap">GitHub · connected 12 August 2026</span>
+                  </span>
+                  <button class="btn btn-sm btn-danger-ghost" type="button">Disconnect</button>
+                </div>
+                <div class="grantnote">
+                  <svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg>
+                  <span class="gbody"
+                    ><b>This is a complete, working state.</b> Your account is connected. Whether
+                    <b>moooon</b> has connected any repositories is a separate, organisation-level
+                    grant — an org admin manages it, and nothing here is waiting on it.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b
+        >State C is the one an implementer would otherwise improvise as an error, and it is not
+        one.</b
+      >
+      The two grants are INDEPENDENT — the shipped connect page says so in as many words — so an
+      identity with no installation is <i>valid</i>. Drawn as a quiet fact on a neutral surface,
+      deliberately NOT as a warning and NOT as a call to action the reader may not be able to
+      perform: connecting the organisation is an <b>org-admin</b> act, and a member sent to do it is
+      sent to a door that will not open for them.
+    </p>
+    <p class="panel-note">
+      <b>The disconnect affordance is COMPOSED, not specified.</b> It is the shipped
+      <code>DisconnectButton</code> treatment verbatim — the <code>ghost</code> Button variant with
+      <code>--el-danger</code> ink on an <code>--el-border</code> border, hovering to
+      <code>--el-danger-surface</code>. The Button primitive has no danger-ghost variant, which is
+      why that composition exists; drawing a fourth version of it here would be a new treatment
+      nobody asked for. <b>And its ink is never <code>--el-danger-text</code></b> — that token is
+      the ink FOR a danger fill and measures 1.00–1.04:1 painted on a light page. Where danger ink
+      sits on a page surface in this amendment (the re-auth glyph) it is
+      <code>--el-danger-on-surface</code>.
+    </p>
   </body>
 </html>

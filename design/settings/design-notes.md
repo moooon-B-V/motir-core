@@ -2455,3 +2455,122 @@ makes).
 
 **TAKES NOTHING FROM, AND GIVES NOTHING TO, `design/epic-privacy/`** — that area
 is Story 6.14's public-project privacy filter and is unrelated despite the name.
+
+---
+
+# `Git accounts` — a personal credential, on the ACCOUNT surface (Story MOTIR-4669 · subtask MOTIR-4675)
+
+**2026-09-05.** `account-settings.mock.html` **Panels 9–10.** Every other card in MOTIR-4669 moves
+something UP a tier — the repository and its connection go from the workspace to the ORGANISATION.
+**This one moves something DOWN**, and it is the piece most likely to be lost in the shuffle,
+because it is small and because it currently lives on the same page as the thing being moved up.
+
+`GithubIdentity` is `userId @unique`. It is a **personal credential** — it has never belonged to a
+workspace, and `projectSettingsNav.ts` already calls connecting it _"the one action nobody can take
+on [a member's] behalf."_ It belongs beside tokens and passkeys, and it is the only part of the git
+surface that is not an organisation's.
+
+## ⚠️ What this pane is NOT
+
+**No repository list. No installation lifecycle.** Those are the organisation's —
+`Settings → Organisation → Git`, drawn by **MOTIR-4672** (`design/github/` Panel 6). A pane here
+showing _"repositories you can see"_ would re-introduce the tier confusion this story removes: the
+member's credential and the organisation's grant are two independent things, and the shipped connect
+page already says so.
+
+## The nav row — where it goes, and by which convention
+
+**Security group, THIRD — after `Two-factor` and `API tokens`.**
+
+The convention was read from **`lib/settings/accountSettingsNav.ts`**, the registry that drives the
+rail, the command palette and the route-totality test. Two things in it decide the placement:
+
+1. **The group.** `Git accounts` is a credential, and the registry's `security` group is where
+   credentials live (`twoFactor`, `apiTokens`). It is not a preference and it is not data.
+2. **The order within the group**, which the registry states as its own rule: entries render in
+   declaration order, and `twoFactor` is first _"above API tokens: … a second factor is the more
+   consequential of the two things this group holds."_ Extending that ordering: a second factor
+   **protects the account**; an API token **acts as you inside Motir**; a git identity grants Motir
+   nothing about your account at all. Third.
+
+**Glyph:** `GitBranch` — the same glyph the org's `Git` row carries (MOTIR-4673). Two rows in two
+different navigations, deliberately of one family: a reader who has seen one recognises the other as
+_the git surface_, at the tier they are standing on. **Label:** `Git accounts`, plural and
+account-scoped, so it cannot be misread as the organisation's `Git`.
+
+**⚠️ Panels 1–3's rail is a POINT-IN-TIME RECORD and is not amended.** It draws
+`Profile (Soon) · Language · Notifications · Appearance (Soon) · API tokens`. The product has since
+lit every reserved slot (the reservation mechanism is itself retired) and added `Two-factor` and a
+fourth `Data` group. Bringing those panels up to date is a change to what they record and is not
+this card's work — **but the new row is not drawn into them either**, because a row placed by a
+convention read off a stale rail is placed by nothing. Hence Panel 9, drawn from the registry.
+
+## The four states (Panel 9 · Panel 10)
+
+| state                                  | drawn                      | what it says                                                                                                                     |
+| -------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **connected**                          | Panel 9, in the area shell | the login, the host, the date, a mint `Connected` pill, and `Disconnect`                                                         |
+| **none connected**                     | Panel 10 · A               | one sentence of what connecting is for and what it grants (_public profile only, no access to any code_), and one primary action |
+| **revoked / needs re-auth**            | Panel 10 · B               | a danger notice + the row kept, with a peach `Needs re-auth` pill and `Reconnect`                                                |
+| **connected, org has no installation** | Panel 10 · C               | **a complete, working state** — see below                                                                                        |
+
+**Three of the four are failure or partial states the product already produces and no asset has ever
+drawn**, so today they are rendered by whoever gets there first. That is the reason this card is
+worth its points: the pane is small, and the states are the work.
+
+### ⚠️ State C is the one an implementer would otherwise improvise as an error
+
+**The two grants are INDEPENDENT** — the shipped connect page says so in as many words — so an
+identity with no installation is **valid**. It is drawn as a quiet fact on a neutral surface:
+
+- **NOT as a warning.** Nothing is wrong, and nothing is pending.
+- **NOT as a call to action.** Connecting the organisation is an **org-admin** act. A member sent to
+  do it is sent to a door that will not open for them, which is worse than saying nothing.
+
+**The revoked state (B) is the opposite**, and the two are drawn differently on purpose: something
+_is_ wrong, the member _can_ fix it, so it takes a danger notice and a primary `Reconnect`.
+
+## Primitives — composed, not specified
+
+| Element            | Primitive                                                             | Notes                                                                                                                                                                                                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The pane           | the shipped account-settings area shell                               | rail + content, unchanged                                                                                                                                                                                                                                                                             |
+| The account row    | `Card` + a flex row                                                   | login, caption, state pill, action                                                                                                                                                                                                                                                                    |
+| State pills        | `Pill` on existing axes                                               | `Connected` = success/mint · `Needs re-auth` = warning/peach. No new tone                                                                                                                                                                                                                             |
+| **`Disconnect`**   | **the shipped `DisconnectButton` treatment, verbatim**                | the `ghost` Button variant with `--el-danger` ink on an `--el-border` border, hovering to `--el-danger-surface`. The Button primitive has **no** danger-ghost variant, which is why that composition exists in the app; drawing a fourth version of it here would be a new treatment nobody asked for |
+| `Connect …`        | `Button` `primary` (empty state) / `secondary` (adding a second host) |                                                                                                                                                                                                                                                                                                       |
+| The re-auth notice | the shipped danger-callout shape                                      | left rule + tinted surface, as `NeedsAccessPanel` already renders                                                                                                                                                                                                                                     |
+
+**No new design-system entry.**
+
+## Token roles
+
+| Element                     | Colour role                                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Row login · caption         | `--el-text` · `--el-text-secondary`                                                                          |
+| Host avatar disc            | `--el-muted` fill, glyph `--el-text-secondary`                                                               |
+| `Connected` pill            | `--el-tint-mint` + `--el-text-strong`                                                                        |
+| `Needs re-auth` pill        | `--el-tint-peach` + `--el-text-strong`                                                                       |
+| `Disconnect`                | text `--el-danger` · border `--el-border` · hover `--el-danger-surface`                                      |
+| Re-auth notice              | `--el-danger-surface` + left rule `--el-danger`, body `--el-text-strong`, **glyph `--el-danger-on-surface`** |
+| The two-grants note (C)     | `--el-surface-soft` + `--el-border`, body `--el-text-secondary`, glyph `--el-icon-muted`                     |
+| State labels (board chrome) | `--el-text-eyebrow`                                                                                          |
+
+**⚠️ Danger ink on a page surface is `--el-danger-on-surface`, never `--el-danger-text`.** That
+token is the ink FOR a danger FILL and measures 1.00–1.04:1 painted on a light page in all ten
+palettes; its one correct use in the tree is `Button`'s danger variant. **Five tokens this asset did
+not declare were added to its own token block**, verbatim from
+`packages/design-system/theme.css`: `--el-danger-on-surface`, `--el-danger-surface`,
+`--el-text-eyebrow`, `--el-icon-muted`, `--el-chip-bg` / `--el-chip-border`. An `--el-*` name a mock
+does not declare resolves to nothing, which is the failure `tests/design-token-layer.test.ts` exists
+to catch.
+
+## Explicitly OUT of scope here
+
+- **The organisation's repository inventory, its index states and its disconnect dialog** —
+  **MOTIR-4672**, `design/github/` + `design/gitlab/`. Cited, described nowhere.
+- **The org menu's own `Git` row** — **MOTIR-4673**, `design/org-admin/`.
+- **The project's `Add repository` picker** — **MOTIR-4674**, `design/repository-set/`.
+- **The OAuth round trip itself**, and where the callback returns to — a code card
+  (`the callback returns to the surface that STARTED the flow`), not a drawing.
+- **Bringing Panels 1–3's rail up to date** — a change to what those panels record.
