@@ -1918,7 +1918,7 @@
         <p class="panelNote">
           The rule this whole surface is built on, and the one a reader must not have to infer.
           <strong
-            >A repository belongs to the ORGANISATION, and the organisation is the billing
+            >A repository belongs to the ORGANISATION, and the organisation is the accounting
             unit</strong
           >
           &mdash; so one repository has <strong>one</strong> code graph, built once, shared across
@@ -1936,11 +1936,15 @@
           repositories THIS project works on, so its planner reads the right code and its surfaces
           are not a directory of everything the org owns.
           <strong>The counterfactual settles it:</strong> if a repository did NOT belong to the org,
-          the index would have to be maintained per project &mdash; the same graph rebuilt N times
-          and billed N times to answer a question nobody asked. That is the wrong design, and not
-          needing it is why the graph is org-keyed. ⚠️
-          <strong>WORKSPACE DOES NOT CONSTRAIN IT EITHER</strong>, which is why this list can never
-          be the workspace installation's repo list &mdash; the read that leaks today.
+          the index would have to be maintained per project &mdash; the same graph rebuilt N times,
+          drawing the org's index allowance N times and Motir's own container time N times, for
+          byte-identical output. That is the wrong design, and not needing it is why the graph is
+          org-keyed. ⚠️ <strong>THE DEDUP BOUNDARY IS THE ORG, NOT THE REPOSITORY:</strong> two
+          different orgs that each connect the same repository are indexed <strong>twice</strong>,
+          once per org, and that is correct &mdash; the org is the isolation boundary and a global
+          graph would cross it. ⚠️ <strong>WORKSPACE DOES NOT CONSTRAIN IT EITHER</strong>, which is
+          why this list can never be the workspace installation's repo list &mdash; the read that
+          leaks today.
         </p>
         <div class="panelBody">
           <div class="cols2">
@@ -1992,9 +1996,10 @@
               </div>
               <p class="outNote" style="margin-top: 10px">
                 <code>acme/web</code> is absent because nobody configured it here &mdash;
-                <strong>not</strong>
-                because it is hidden. An org admin can add it from either workspace, and the graph
-                it would use already exists.
+                <strong>not</strong> because it is hidden. An org admin can add it from either
+                workspace, and the graph it would use already exists. A
+                <em>different org</em> connecting <code>acme/web</code> would get its own graph
+                &mdash; the org is the boundary.
               </p>
             </div>
           </div>

@@ -44,7 +44,11 @@ They collapse into a single primary **Code** row with three sections, in the ord
 
 Everything below is a consequence of this, so it is stated first, in Yue's own framing.
 
-- **A repository belongs to the ORGANISATION, and the organisation is the billing unit.**
+- **A repository belongs to the ORGANISATION, and the organisation is the accounting unit.**
+  ⚠️ _Accounting_, not _billing_: Motir does **not charge** for code indexing. It draws on a separate
+  **index allowance** included in the org's tier, which the customer never sees — so the cost is real
+  and the org bears it inside the tier price, a hidden cost rather than a hidden charge. Use
+  _attributed · accounted · internal COGS · index allowance_ (MOTIR-4541).
 - **So there is no privacy question between projects of one org**, and this design does not draw an
   isolation boundary. An **org admin can pull any of the org's repositories into any project — in the
   same workspace or a different one.**
@@ -56,8 +60,14 @@ Everything below is a consequence of this, so it is stated first, in Yue's own f
 
 **The counterfactual is what settles it, and it is worth writing down because it is the argument
 rather than the conclusion:** _if a repository did not belong to the org, the index would have to be
-maintained per project_ — the same graph rebuilt N times and billed N times to answer a question
-nobody asked. **That is the wrong design.** Not needing it is why the graph is org-keyed.
+maintained per project_ — the same graph rebuilt N times, drawing the org's index allowance N times
+**and** Motir's own container time N times, for byte-identical output. **That is the wrong design**,
+and it costs both sides. Not needing it is why the graph is org-keyed.
+
+**⚠️ The dedup boundary is the ORG, not the repository.** Two DIFFERENT orgs that each connect the
+same repository — a shared dependency, a public repo — are indexed **twice**, once per org, and that
+is correct rather than wasteful. The org is the isolation boundary and a global `repoRef`-keyed graph
+would cross it. Nobody may "optimise" this into a single global index.
 
 **Two readings that follow, and both are copy rules:**
 
