@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import robots from '../../app/robots';
+import robots, { dynamic } from '../../app/robots';
 import {
   AUTH_SEGMENTS,
   SIGNED_IN_SEGMENTS,
@@ -36,6 +36,28 @@ describe('robots policy', () => {
     expect(result.sitemap).toBeUndefined();
     expect(result.host).toMatch(/^https?:\/\//);
     expect(Array.isArray(result.rules) ? result.rules : [result.rules]).toHaveLength(1);
+  });
+
+  // ── the RENDERING MODE ───────────────────────────────────────────────────
+  //
+  // ⚠️ MOTIR-4580 — THE ONE FACT ABOUT THIS ROUTE THAT NO ASSERTION ABOUT ITS
+  // BODY CAN REACH, which is why every test above was green while production
+  // served `Host: http://localhost:3000` for the life of the image.
+  //
+  // Without `force-dynamic` Next prerenders this route during `next build`, and
+  // the `builder` stage has no `MOTIR_BASE_URL` (the Dockerfile declares no
+  // `ARG` for it, on purpose). `resolveBaseUrlTrimmed()` therefore took
+  // `lib/baseUrl.ts`'s rung 2 and the loopback origin was BAKED into the served
+  // body. Fly secrets are runtime-only; nothing re-evaluated it afterwards.
+  //
+  // The tests above cannot see any of that, and not through any fault of
+  // theirs: they inject the origin (`buildRobots('https://example.test')`),
+  // which is the correct shape for a POLICY test and leaves the RESOLUTION path
+  // unexercised. Static-vs-dynamic is a rendering-mode fact rather than a policy
+  // fact, so the guard has to assert the rendering mode itself. This assertion
+  // fails on the commit before the fix and passes after it.
+  it('declares force-dynamic — the origin is resolved at REQUEST time, never baked at build', () => {
+    expect(dynamic).toBe('force-dynamic');
   });
 
   // ── the ALLOW half ───────────────────────────────────────────────────────
