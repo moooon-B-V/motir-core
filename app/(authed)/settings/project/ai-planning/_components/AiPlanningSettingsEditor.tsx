@@ -353,6 +353,21 @@ export function AiPlanningSettingsEditor({
                   })}
                 </Callout>
               ) : null}
+              {/* MOTIR-4603 — WHEN the cadence holds off, in the user's words.
+                  ⚠️ THE CHECKBOX ABOVE IS NEVER MUTATED BY A PAUSE. It records
+                  what the user WANTS; silently unchecking it to reflect a system
+                  state would be Motir editing their intent, and they would later
+                  find a setting they never changed. So the condition is EXPLAINED
+                  here and the switch stays exactly where they left it.
+                  ⚠️ AND IT NAMES NO COMMERCIAL CAUSE. If indexing is paused
+                  because an allowance is spent, this says the index is out of
+                  date and what to do about it — never why in cost terms
+                  (MOTIR-4541). The real reason lives in the admin panel. */}
+              {working.autoPlanEnabled ? (
+                <Callout tint="peach" icon={<Info className="size-[15px]" aria-hidden />}>
+                  {t('aiPlanning.autoPlan.pauseConditions')}
+                </Callout>
+              ) : null}
             </>
           )}
         </DependentField>

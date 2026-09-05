@@ -37,6 +37,7 @@ import { planRepository } from '@/lib/repositories/planRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { PlanTargetImmutableError } from '@/lib/plans/errors';
 import { makeWorkItemFixture } from '../../fixtures';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemFixture } from '../../fixtures';
@@ -130,15 +131,43 @@ async function makeItem(
  * default threshold of 5, i.e. drained.
  */
 async function makeDrainedProject(
-  opts: { name?: string; identifier?: string; threshold?: number } = {},
+  opts: { name?: string; identifier?: string; threshold?: number; connectRepo?: boolean } = {},
 ): Promise<{ fx: WorkItemFixture; stubKey: string }> {
   const fx = await makeWorkItemFixture({
     name: opts.name ?? 'Acme',
     identifier: opts.identifier ?? 'PROD',
   });
   await enableAutoPlan(fx.projectId, opts.threshold ?? 5);
+  // ⚠️ MOTIR-4603 — the cadence now HOLDS OFF when Motir cannot read the code,
+  // and a workspace with no installation is the commonest such case. Every
+  // fixture below is about a DIFFERENT gate, so the canonical eligible project
+  // connects a repository: otherwise each case would be asserting the
+  // code-blindness verdict rather than the one it is named for. The cases that
+  // ARE about code blindness pass `connectRepo: false` and say so.
+  if (opts.connectRepo !== false) await connectRepo(fx.workspaceId);
   const stub = await makeItem(fx, { kind: 'epic', title: 'Unexpanded epic' });
   return { fx, stubKey: stub.identifier };
+}
+
+/** Connect ONE repository to a workspace, so the cadence is not code-blind. */
+async function connectRepo(workspaceId: string): Promise<void> {
+  await githubInstallationService.persistInstallation({
+    workspaceId,
+    installation: {
+      installationId: `inst-cadence-${workspaceId}`,
+      accountLogin: 'acme',
+      accountType: 'Organization',
+    },
+    repos: [
+      {
+        providerRepoId: `repo-${workspaceId}`,
+        owner: 'acme',
+        name: 'web',
+        defaultBranch: 'main',
+        archived: false,
+      },
+    ],
+  });
 }
 
 /**
@@ -254,6 +283,8 @@ describe('Auto-plan cadence — the opt-in and the drain threshold (MOTIR-916)',
   it('an opted-in, drained project with nothing left to expand fires nothing (no false nag)', async () => {
     const fx = await makeWorkItemFixture();
     await enableAutoPlan(fx.projectId);
+    // Connected, so the earlier code-blindness gate is not what this asserts.
+    await connectRepo(fx.workspaceId);
     // A story WITH a child is not a stub, and the child subtask is not expandable.
     const story = await makeItem(fx, { kind: 'story', title: 'Fully expanded' });
     await makeItem(fx, { kind: 'subtask', title: 'Child', parentId: story.id });

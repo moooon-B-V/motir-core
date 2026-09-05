@@ -3251,6 +3251,7 @@
         "thresholdInvalid": "Enter 1 or more ready items.",
         "decreaseAria": "Decrease threshold",
         "increaseAria": "Increase threshold",
+        "pauseConditions": "Auto-planning pauses while Motir cannot read your code — when no repository is connected, or the code index is out of date. It also waits while a proposed plan is still undecided, while ready work is above your threshold, when there is nothing left to expand, and while your plan does not include AI planning. Your setting is unchanged, and it resumes on its own once the condition clears.",
         "guardrail": "Auto-plan <strong>proposes</strong> an expansion for your approval — it never creates work without you."
       },
       "paused": {
