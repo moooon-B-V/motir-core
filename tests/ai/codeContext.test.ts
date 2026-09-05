@@ -172,12 +172,60 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
+      // ⚠️ AMENDED BY MOTIR-4604, RE-POINTED BY MOTIR-4807 — `context.code`'s repo
+      // entries carry each repo's INDEX STATE beside its coordinates, plus the
+      // reason it is behind and an explicit in-flight flag. The state comes from
+      // the ONE derivation (`lib/codeGraph/indexState.ts`) over motir-core's own
+      // columns; the `freshnessUnknown` flag this block once carried is gone with
+      // the boundary read that made it possible.
+      //
+      // The invariant this assertion was written to protect is UNCHANGED and is
+      // still asserted: `code` is the WORKSPACE grant list, `repositories` is the
+      // PROJECT set, and the two are separate fields with separate scopes. What
+      // MOTIR-3044 forbade was MERGING them; widening a repo's own entry with
+      // facts about that same repo is not that.
       code: {
         repos: [
-          { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
-          { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' },
-          { provider: 'github', repoRef: 'moooon/motir-gateway', defaultBranch: 'master' },
-          { provider: 'github', repoRef: 'moooon/motir-meta', defaultBranch: 'main' },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-ai',
+            defaultBranch: 'main',
+            indexState: 'never',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedAt: null,
+            commitsBehind: null,
+          },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-core',
+            defaultBranch: 'main',
+            indexState: 'never',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedAt: null,
+            commitsBehind: null,
+          },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-gateway',
+            defaultBranch: 'master',
+            indexState: 'never',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedAt: null,
+            commitsBehind: null,
+          },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-meta',
+            defaultBranch: 'main',
+            indexState: 'never',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedAt: null,
+            commitsBehind: null,
+          },
         ],
       },
     });

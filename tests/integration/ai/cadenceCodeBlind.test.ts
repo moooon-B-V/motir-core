@@ -1,15 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/ai/motirAiClient', () => ({
-  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
-    repos: (q.repoRefs ?? []).map((repoRef) => ({
-      repoRef,
-      indexed: true,
-      commitSha: 'a'.repeat(40),
-      indexedAt: '2026-09-01T10:00:00.000Z',
-      codegraphVersion: '1.0.0',
-    })),
-  })),
   submitJob: vi.fn(),
   streamJob: vi.fn(),
   getJob: vi.fn(),

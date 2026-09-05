@@ -9,17 +9,6 @@ import { JobTestEngine } from '../../helpers/jobs';
 // these assert about the Plan rows and about whether cadence fires is what
 // production does.
 vi.mock('@/lib/ai/motirAiClient', () => ({
-  // MOTIR-4604: the planning submit now reads per-repo index freshness over the
-  // 7.1 boundary. TOTAL over the request, exactly as the real route is.
-  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
-    repos: (q.repoRefs ?? []).map((repoRef) => ({
-      repoRef,
-      indexed: false,
-      commitSha: null,
-      indexedAt: null,
-      codegraphVersion: null,
-    })),
-  })),
   submitJob: vi.fn(),
   streamJob: vi.fn(),
   getJob: vi.fn(),

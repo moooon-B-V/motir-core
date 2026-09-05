@@ -5,7 +5,14 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   streamJob: vi.fn(),
 }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
-vi.mock('@/lib/ai/codeContext', () => ({ resolveCodeContext: vi.fn() }));
+// MOTIR-4604: the plan-edit submits now resolve the PLANNING code context — the
+// grant list plus each repo's freshness verdict, reason and in-flight flag. These
+// suites are about the ENVELOPE, so `undefined` (no connected repo) keeps every
+// assertion below reading exactly as it did.
+vi.mock('@/lib/ai/codeContext', () => ({
+  resolveCodeContext: vi.fn(),
+  resolvePlanningCodeContext: vi.fn(async () => undefined),
+}));
 // The PROJECT's repository set (MOTIR-3044), mocked beside the workspace grant
 // list for the same reason: these cases drive a SYNTHETIC ProjectContext with no
 // rows behind it, so the real set read would 404 on the project id and prove
@@ -36,7 +43,7 @@ import { aiPlanEditsService, InvalidTargetError } from '@/lib/services/aiPlanEdi
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
@@ -118,7 +125,7 @@ function mockWorkItem(overrides: {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(resolveTenantOrg).mockResolvedValue(mockOrg);
-  vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
+  vi.mocked(resolvePlanningCodeContext).mockResolvedValue(undefined);
   vi.mocked(resolveProjectRepoContext).mockResolvedValue(undefined);
   // Default ON, which is what an untouched project resolves to (MOTIR-3349).
   vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(true);
@@ -131,7 +138,7 @@ function mockSubmitJob() {
 
 describe('aiPlanEditsService.submitAugment', () => {
   it('submits an augment job with the prompt + tenant + code context', async () => {
-    vi.mocked(resolveCodeContext).mockResolvedValue({
+    vi.mocked(resolvePlanningCodeContext).mockResolvedValue({
       repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main' }],
     });
     mockSubmitJob();
@@ -162,7 +169,7 @@ describe('aiPlanEditsService.submitAugment', () => {
   });
 
   it('submits without code context when none', async () => {
-    vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
+    vi.mocked(resolvePlanningCodeContext).mockResolvedValue(undefined);
     mockSubmitJob();
 
     const out = await aiPlanEditsService.submitAugment('add a login flow', ctx);
@@ -520,7 +527,7 @@ describe('aiPlanEditsService — the generateExplanations opt-in rides every pla
     // The submit's own context (`rootItemKey`) is preserved alongside the flag —
     // the field is added to the envelope, it does not replace what the caller
     // built (the `code` hole included).
-    vi.mocked(resolveCodeContext).mockResolvedValue({
+    vi.mocked(resolvePlanningCodeContext).mockResolvedValue({
       repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main' }],
     });
     await aiPlanEditsService.submitReplan('MOTIR-100', ctxWithExplanations);
@@ -785,7 +792,7 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
 
   it('an expand submit sends exactly the bag it sent before the switch', async () => {
     mockSubmitJob();
-    vi.mocked(resolveCodeContext).mockResolvedValue({ repos: ['owner/repo'] } as never);
+    vi.mocked(resolvePlanningCodeContext).mockResolvedValue({ repos: ['owner/repo'] } as never);
     vi.mocked(resolveProjectRepoContext).mockResolvedValue({ repositories: [] } as never);
     vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(false);
 
@@ -818,7 +825,7 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
 
   it('a contextual submit sends its anchor SET, and nothing else moved', async () => {
     mockSubmitJob();
-    vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
+    vi.mocked(resolvePlanningCodeContext).mockResolvedValue(undefined);
     vi.mocked(resolveProjectRepoContext).mockResolvedValue(undefined);
     vi.mocked(resolveRecordPlanningMistakesForJob).mockResolvedValue(true);
 
