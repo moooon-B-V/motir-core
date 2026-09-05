@@ -9,6 +9,17 @@ import { JobTestEngine } from '../../helpers/jobs';
 // these assert about the Plan rows and about whether cadence fires is what
 // production does.
 vi.mock('@/lib/ai/motirAiClient', () => ({
+  // MOTIR-4604: the planning submit now reads per-repo index freshness over the
+  // 7.1 boundary. TOTAL over the request, exactly as the real route is.
+  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
+    repos: (q.repoRefs ?? []).map((repoRef) => ({
+      repoRef,
+      indexed: false,
+      commitSha: null,
+      indexedAt: null,
+      codegraphVersion: null,
+    })),
+  })),
   submitJob: vi.fn(),
   streamJob: vi.fn(),
   getJob: vi.fn(),
@@ -28,6 +39,7 @@ import { jobDefinitions } from '@/lib/jobs/registry';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../../helpers/db';
 import type { JobStatus } from '@/lib/ai/types';
@@ -156,6 +168,28 @@ async function makeDrainedProject(
   await adminDb.project.update({
     where: { id: fx.projectId },
     data: { aiAutoPlanEnabled: true, aiAutoPlanThreshold: 5 },
+  });
+  // ⚠️ CONNECTED (MOTIR-4603) — the cadence now holds off when Motir cannot read
+  // the code, and a workspace with no installation is exactly that. Every case
+  // here is about the PLAN-abandonment gate, so the fixture has to clear the
+  // code-blindness one to reach it; otherwise each case would be asserting a
+  // verdict it is not named for.
+  await githubInstallationService.persistInstallation({
+    workspaceId: fx.workspaceId,
+    installation: {
+      installationId: `inst-${fx.workspaceId}`,
+      accountLogin: 'acme',
+      accountType: 'Organization',
+    },
+    repos: [
+      {
+        providerRepoId: `repo-${fx.workspaceId}`,
+        owner: 'acme',
+        name: 'web',
+        defaultBranch: 'main',
+        archived: false,
+      },
+    ],
   });
   const stub = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'epic', title: 'Unexpanded epic' },
