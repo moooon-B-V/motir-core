@@ -815,3 +815,105 @@ GitHub ships a grace period or a countdown, so nothing here says "by" or
    reasonable next question for an admin who has just switched this on, and this
    story does not answer it. Not a gap in 8.13 — a candidate for a later card,
    named so it is not smuggled into 8.13.5.
+
+---
+
+# The org menu gains a `Git` row (Story MOTIR-4669 · subtask MOTIR-4673)
+
+**2026-09-05.** The git connect surface moves to the ORGANISATION tier, and **a surface with no
+drawn entrance gets its entrance improvised at build time.** This amendment draws the entrance. It
+is `org-admin.mock.html` **Panel 6**, and it decides one thing: where the row goes and what gates it.
+
+**It does not describe the page behind it.** That is **MOTIR-4672**, `design/github/` Panel 6 —
+the organisation's repository inventory, its index states, its `Used by N projects` column and its
+disconnect disclosure. Cited here, described nowhere.
+
+## ⚠️ There is no org settings RAIL — this menu IS the navigation
+
+`/settings/organization/*` has **no area layout and no settings rail**. `settings/project/` and
+`settings/account/` each have one; the organisation does not. Its navigation is the **org menu**
+behind the organisation name (`app/(authed)/_components/OrgControl.tsx`), plus the command palette.
+
+So the row lands in the menu, and this asset already owns that menu (Panel 1, arm C). It is also why
+**MOTIR-4672's Panel 6 draws its page with no rail beside it** — the two halves agree about what the
+navigation is, which is the whole point of splitting the door from the room.
+
+## The convention that was read, and where the row goes
+
+**Read from the SHIPPED menu, not from this asset's own Panel 1.** The shipped rows are
+`Settings` · `Security` · `Members` · `Usage & cost` · `Billing & plans` (cloud-only), a separator,
+then `New workspace` / `Switch organization`. Each is a lucide glyph at `--el-icon-muted` plus a
+label.
+
+**`Git` sits third — after `Security`, above `Members`.** The shipped menu's own reasoning for
+`Security` is that it sits directly under `Settings` because it is _a settings-shaped destination_
+and keeping it above `Members` _holds the two account-level concerns together_. `Git` is the third
+such concern — the organisation's own resources — so it joins that block rather than landing among
+the people and money rows. The menu then reads **configuration → people → money**, which is the
+order it already had.
+
+**The glyph and the word are the ones the row already had.** `git-branch`, labelled `Git` — the same
+pair it carried in the shell rail's bottom section. It is the SAME row arriving, and drawing it with
+a new glyph would hide that.
+
+**One width.** The menu is a popover of a single fixed width (288px shipped, drawn at 300px as
+Panel 1 draws it), so "every width the asset draws" is one — unlike a rail, which this is not.
+
+## The gate: ORG ADMIN, and the row is ABSENT when it is not held
+
+Both arms are drawn. For a member who is not an org admin the row **is not rendered and the rows
+below close up** — no disabled row, no tooltip, nothing marking the gap.
+
+**Absent, not disabled**, because an entry point is a promise about a room and a disabled row is a
+promise the product then refuses (MOTIR-2468). It is also the disposition two siblings already take:
+`Billing & plans` is absent off cloud, and `Security` is absent below the workspace-tier reveal.
+
+## ⚠️ Panel 1's menu is a POINT-IN-TIME RECORD and stays as drawn
+
+Panel 1 arm C draws the org menu as it stood when this asset was written —
+`Settings · Members · Billing & usage (Coming soon) · New workspace`. The product has since added
+`Security` and `Usage & cost` and made `Billing` active and cloud-conditional. **Panel 1 is not
+amended**: bringing it up to date is a change to what that panel records and is not this card's
+work. **But the new row is not drawn into it either** — a row placed by a convention read from a
+stale list would be placed by nothing. Hence a second panel, drawn from the shipped menu, saying so
+in its own label.
+
+## The departure half — MOTIR-4640, and the two agree
+
+The row LEAVES the shell rail's bottom section: **MOTIR-4640**, in `design/shell/`, which removes it
+from `rail-bottom-section.mock.html` and narrows that section's floor to `Job runs` alone. **The two
+are halves of one move and they agree about the destinations**, which MOTIR-4640 states as three:
+
+| what leaves the rail row          | where it arrives                                                            |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| the host connection's lifecycle   | **Settings → Organisation → Git** — the surface this row opens (MOTIR-4672) |
+| the member's own git account      | Settings → Account → Git accounts (MOTIR-4675)                              |
+| which repositories a project uses | Settings → Project → Repositories, which already exists (MOTIR-4674)        |
+
+This asset's row is the first of those three. **Cited, not restated:** what any of those surfaces
+contains belongs to the card that draws it.
+
+## Primitives and token roles
+
+| Element          | Primitive                                | Colour role                                                                    |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
+| The menu         | the shipped `Popover` + `ul role="list"` | `--el-page-bg` / `--el-border` / `--shadow-elevated`, `--radius-card`          |
+| The row          | `MenuLink`                               | `--el-text`, `--radius-control`, `--spacing-control-x/y`                       |
+| The row's glyph  | lucide `GitBranch`                       | `--el-icon-muted`                                                              |
+| The menu heading | the existing `menu-head`                 | `--el-text-muted` on the white popover (4.54:1 — AA-safe there and only there) |
+
+**Nothing new is introduced.** No new primitive, no new token, no new affordance — one row, in a
+menu that already renders five.
+
+**⚠️ The row is drawn AT REST, with no `.active`.** That class paints `--el-surface`, on which the
+row glyph's `--el-text-muted` measures 4.17:1 and fails AA (`tests/design-ink-contrast.test.ts`
+rules on it) — and a menu row is only active while the pointer is on it, which is not what this
+panel is about.
+
+## Explicitly OUT of scope here
+
+- **What the org Git page contains** — MOTIR-4672, `design/github/` + `design/gitlab/` Panels 6–7.
+- **The rail row's removal** — MOTIR-4640, `design/shell/`. Cited as the departure; not performed here.
+- **The project's `Add repository` picker** — MOTIR-4674, `design/repository-set/`.
+- **The member's own git credential and its account-nav row** — MOTIR-4675, `design/settings/`.
+- **Bringing Panel 1's menu up to date** — a change to what that panel records, and not this card's.
