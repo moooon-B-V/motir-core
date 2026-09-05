@@ -2181,7 +2181,33 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
 - **`op`** — `add` · `modify` · `remove`.
 - **`proposedFields`** (`add`, required) — `title` (required), `kind`,
   `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`,
-  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepoRole`.
+  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepoRole`, `todos`.
+- **`proposedFields.todos`** (`add` only, leaf kinds only) — the card's **ORDERED
+  STEPS**, written as its to-do list. **Array order is list order**, and
+  approving the plan writes one real to-do row per element, none ticked. A
+  `manual` card's steps belong here rather than only in the description: the
+  reviewer reads the list they will tick before approving it, and the created
+  card carries it from birth. Each row is
+  `{ text, notesMd?, commandText?, executor? }` — one OPERATION per `text`
+  (≤ 200 chars), the how in `notesMd` (≤ 2000), the command to copy in its own
+  `commandText` (≤ 500) rather than inside the text, and `executor` only where
+  the step differs from the card's (it inherits the proposal's, then `human`).
+  A non-empty `todos` on a container kind is refused.
+
+  ```jsonc
+  proposedFields: {
+    title: 'Provision the Stripe restricted key',
+    kind: 'task', type: 'manual', executor: 'human',
+    todos: [
+      { text: 'Create a restricted API key' },
+      { text: 'Scope it to charges:write', notesMd: 'Dashboard → Developers → API keys.' },
+      { text: 'Set the deployment secret', commandText: 'fly secrets set STRIPE_KEY=… -a motir',
+        executor: 'coding_agent' },
+      { text: 'Confirm a test charge succeeds' },
+    ],
+  }
+  ```
+
 - **`workItemId`** / **`patch`** / **`baseRevision`** — for a `modify` / `remove`.
 - **`parentRef`** / **`blockedByRefs`** — a real `work_item.id`, **or** an
   intra-plan temp-ref `planItem:<id>`.
@@ -2292,15 +2318,24 @@ applies each `modify` in sequence. Three things upstream do:
 forbids the strategy Motir's own generator uses, so this tool is the other half —
 **write the tree's SHAPE first, then fill each card in.**
 
-| Input                                                                                                               | Type   | Required | Notes                                                       |
-| ------------------------------------------------------------------------------------------------------------------- | ------ | -------- | ----------------------------------------------------------- |
-| `planId`                                                                                                            | string | yes      | The id `create_plan` returned.                              |
-| `planItemId`                                                                                                        | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
-| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
+| Input                                                                                                                        | Type   | Required | Notes                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------ | -------- | ----------------------------------------------------------- |
+| `planId`                                                                                                                     | string | yes      | The id `create_plan` returned.                              |
+| `planItemId`                                                                                                                 | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
+| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes`, `todos` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
 
 **The patch is SPARSE, and absent is not the same as `null`.** A field you omit is
 left exactly as it was; an explicit `null` clears it. So a deepen turn sends only
 what it is deciding, and nothing it has not thought about yet is destroyed.
+
+**`todos` is the one member that is sparse at the KEY and whole at the VALUE.**
+It is the card's ordered steps (the shape and the caps are under
+`add_plan_items` above), and a list has no meaningful partial edit — so omitting
+it leaves the proposal's list alone, sending an array REPLACES the set, and `[]`
+or `null` clears it. It is deepenable because a step list is what a card SAYS;
+it is refused on a container kind here exactly as at the append, and the check
+runs on the MERGED result, so a deepen that turns a leaf carrying steps into a
+`story` is refused even though the patch names only `kind`.
 
 ```jsonc
 // 1 — the SKELETON: titles, kinds and the edge graph. No `final`.

@@ -76,6 +76,15 @@ export async function PATCH(
     ...('estimateMinutes' in b
       ? { estimateMinutes: typeof b.estimateMinutes === 'number' ? b.estimateMinutes : null }
       : {}),
+    // The card's ORDERED STEPS (MOTIR-4619 · AMENDMENT 13 D3), parsed exactly as
+    // the internal deepen route parses it — the two edit paths accept the same
+    // shape, which is what this route's shipped comment asks of them. Present
+    // but not an array becomes `null` (this parser's convention for every
+    // wrong-typed value above); the ROW shape is judged by the service, whose
+    // typed `InvalidProposalError` the catch below already answers as a 422.
+    ...('todos' in b
+      ? { todos: Array.isArray(b.todos) ? (b.todos as UpdateProposalInput['todos']) : null }
+      : {}),
   };
 
   try {

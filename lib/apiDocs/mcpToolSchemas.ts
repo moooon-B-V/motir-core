@@ -201,6 +201,41 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   type: 'string',
                   description: 'The PORTABLE repo pin — a role of the project’s repository set.',
                 },
+                todos: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      text: {
+                        type: 'string',
+                        description:
+                          'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                      },
+                      notesMd: {
+                        type: ['string', 'null'],
+                        description:
+                          'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                      },
+                      commandText: {
+                        type: ['string', 'null'],
+                        description:
+                          'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                      },
+                      executor: {
+                        anyOf: [
+                          { type: 'string', enum: ['coding_agent', 'human'] },
+                          { type: 'null' },
+                        ],
+                        description:
+                          'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                      },
+                    },
+                    required: ['text'],
+                    additionalProperties: false,
+                  },
+                  description:
+                    'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children.',
+                },
               },
               required: ['title'],
               additionalProperties: false,
@@ -1645,6 +1680,43 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'integer' }, { type: 'null' }],
         description: 'Estimated minutes of work; `null` clears it.',
       },
+      todos: {
+        anyOf: [
+          {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                text: {
+                  type: 'string',
+                  description:
+                    'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                },
+                notesMd: {
+                  type: ['string', 'null'],
+                  description:
+                    'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                },
+                commandText: {
+                  type: ['string', 'null'],
+                  description:
+                    'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                },
+                executor: {
+                  anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
+                  description:
+                    'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                },
+              },
+              required: ['text'],
+              additionalProperties: false,
+            },
+          },
+          { type: 'null' },
+        ],
+        description:
+          'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children. REPLACES the list whole — a list has no sparse edit — so send the set you want; `[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
+      },
     },
     required: ['planId', 'planItemId'],
     additionalProperties: false,
@@ -1726,6 +1798,43 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       estimateMinutes: {
         anyOf: [{ type: 'integer' }, { type: 'null' }],
         description: 'Estimated minutes of work; `null` clears it.',
+      },
+      todos: {
+        anyOf: [
+          {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                text: {
+                  type: 'string',
+                  description:
+                    'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                },
+                notesMd: {
+                  type: ['string', 'null'],
+                  description:
+                    'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                },
+                commandText: {
+                  type: ['string', 'null'],
+                  description:
+                    'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                },
+                executor: {
+                  anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
+                  description:
+                    'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                },
+              },
+              required: ['text'],
+              additionalProperties: false,
+            },
+          },
+          { type: 'null' },
+        ],
+        description:
+          'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children. REPLACES the list whole — a list has no sparse edit — so send the set you want; `[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
       },
       parentRef: {
         type: ['string', 'null'],

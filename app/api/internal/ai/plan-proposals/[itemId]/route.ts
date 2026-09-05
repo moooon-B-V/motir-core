@@ -164,6 +164,23 @@ export async function PATCH(
     ...('executor' in patch
       ? { executor: typeof patch.executor === 'string' ? patch.executor : null }
       : {}),
+    // The card's ORDERED STEPS (MOTIR-4619 · AMENDMENT 13 D3). Read by PRESENCE
+    // like the keys above it — absent leaves the proposal's list alone, an
+    // explicit `null` clears it — with ONE difference that is a property of the
+    // value rather than of this route: a list has no sparse edit, so a supplied
+    // array REPLACES the set.
+    //
+    // A non-array becomes `null` rather than being forwarded, which is the
+    // parser's shipped convention for every wrong-typed value here (`type`,
+    // `priority`, the two sizes). The SHAPE of each row is not judged at this
+    // layer at all: `validateProposedTodos` runs on the merged result inside the
+    // service and answers a typed `InvalidProposalError`, which the catch below
+    // already maps to 422 `PROPOSALS_INVALID` — so a malformed row is refused
+    // with a message naming the row and the bar, rather than silently dropped by
+    // a transport that knows less about the rules than the service does.
+    ...('todos' in patch
+      ? { todos: Array.isArray(patch.todos) ? (patch.todos as UpdateProposalInput['todos']) : null }
+      : {}),
   };
 
   try {
