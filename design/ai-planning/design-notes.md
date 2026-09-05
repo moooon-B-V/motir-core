@@ -22,6 +22,7 @@ This area holds the surfaces where a person reviews what Motir's planner PROPOSE
 | **Revising a plan under review**             | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
 | **The plan detail, refined**                 | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
 | **The shipped peek in PROPOSAL mode**        | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
+| **The PROPOSED to-do list in the peek**      | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV   |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -4498,3 +4499,156 @@ peek looks the same"_ into the 11,676-byte identity in §16.0. §15's Playwright
 harness would have measured the same thing more expensively: this section decides no geometry — every
 panel below is a string and a chip inside a layout §3 and §4 already measured at 1440×900 — so the
 render it needed was of the MARKUP, not of the pixels.
+
+---
+
+# Part XV — The PROPOSED to-do list in the peek's PROPOSAL MODE: the read-only steps on an un-materialized `add`, their executor marks and commands, the empty / at-scale / long-command states, and why a `modify` shows none (MOTIR-4615 / Story MOTIR-3810)
+
+**Asset:** `peek-proposed-todos.mock.html` + `peek-proposed-todos.png`, rendered at viewport 1200,
+`deviceScaleFactor: 2` (export 2400×11500).
+
+When a plan proposes a `manual` work item, the proposal already carries that card's ORDERED STEPS
+(`docs/decisions/agent-authored-plans.md` AMENDMENT 13, MOTIR-4614). Until now the reviewer read
+those operations as a paragraph — the one thing they are actually approving on a `manual` card was
+the one thing the surface could not show. This Part draws where they read them instead: a
+**read-only To-do list** in the peek's main column, one click before Approve.
+
+**A NEW asset, not an edit of Part XIV's.** § _A design result is a MOMENT_ (Yue, 2026-08-20):
+a new element on an existing surface gets its own file. `peek-proposal-mode.mock.html` stays frozen
+at what MOTIR-4182 decided.
+
+## 15.1 Composition — what comes from where, and what is DROPPED
+
+Nothing here is drawn twice. Both halves are shipped assets and this Part cites rather than redraws
+them.
+
+| element                            | comes from                                                 | kept / dropped                                                                 |
+| ---------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| the section shell + header grammar | `ContentSectionCard`, as `todo-list.mock.html` composes it | KEPT whole — the created card shows the same section, so it must look the same |
+| `To-do list` + the muted gloss     | `todo-list.mock.html` § the section header                 | KEPT; the gloss reads _"the steps this card proposes"_ rather than the card's  |
+| the `0 of N` count, mono           | same                                                       | KEPT — `0 of 5`, because a proposal has no ticked row                          |
+| the three-track row grid           | `todo-list.mock.html` `.todoRow`                           | **DROPPED to two.** The actions track has nothing to hold                      |
+| the checkbox                       | same, `.cbox`                                              | KEPT, **inert**: unchecked, `aria-disabled`, `--el-input-readonly-bg`          |
+| the 13.5px plain-text step         | same                                                       | KEPT verbatim                                                                  |
+| the executor pill `You` / `Agent`  | same, `.execMark`                                          | KEPT verbatim                                                                  |
+| the mono command box + copy button | same, `.cmdBox` / `.cmdVal`                                | **KEPT, including copy** — copying a command is a READ                         |
+| the `Instructions` disclosure      | same, `.notesToggle` / `.notesBody`                        | KEPT and still interactive — expanding notes is a read                         |
+| the reorder grip / edit / delete   | same, `.rowActions`                                        | **DROPPED**                                                                    |
+| the `Add a step` row               | same, `.addRow`                                            | **DROPPED**                                                                    |
+| the peek chrome                    | `components/workItems/QuickViewSurface.tsx` (Part XIV)     | KEPT; re-declared as `.peek*` shims against the same tokens                    |
+
+**Why the checkbox stays and is not simply removed.** It is what makes the section recognisable as
+_the list you will tick_. Removing it would leave a bulleted paragraph that happens to sit in a card,
+which is what this whole story exists to stop being the answer. It is dimmed rather than left at full
+contrast because a control that looks tickable and is not is worse than no control at all.
+
+## 15.2 Placement, measured
+
+- **Viewport 1440×900**, peek **980×680** (Part XIV's `h-[680px]`), main column **626×613**, rail
+  **300px** — Part XIV's own numbers, inherited rather than re-measured.
+- The section is **the last thing in the main column**, after the explanation. The peek defers
+  children and comments to a page a proposal does not have (Part XIV §2), so there is nothing below
+  it, and the reader reaches it by scrolling the body they were already reading.
+- **At 5 rows the column does not scroll.** At **12 rows it does** — and that is the answer to _does
+  the section get its own scroller?_ **No.** It grows, and `QuickViewMain`'s existing
+  `overflow-y-auto` is the one scroll surface. A second scroller inside the first gives the reader
+  two things to move and no way to tell which one they are in. The 300px rail is a sibling grid cell
+  and does not move.
+
+## 15.3 The states, panel by panel
+
+| panel | state                  | what the reader sees                                                                  |
+| ----- | ---------------------- | ------------------------------------------------------------------------------------- |
+| 1     | 5 steps, 1440×900      | the section at the foot of the main column, no scroll                                 |
+| 2     | the row's read face    | the shipped write face beside it, so what is dropped is visible rather than described |
+| 3a    | **absent**             | **no section at all** — see below                                                     |
+| 3b    | 1 step                 | the header still carries `0 of 1`                                                     |
+| 3c    | instructions expanded  | the disclosure opens in place; the section grows and the column scrolls               |
+| 4     | 12 steps               | the column scrolls, the rail stays put                                                |
+| 5     | the long command, 1440 | only the inside of the mono box moves                                                 |
+| 5     | the long command, 390  | the body is one column; same containment, more of the command visible per line        |
+| 6     | `modify` / `remove`    | **no list**, drawn deliberately                                                       |
+| 7     | dark                   | the same markup under `data-theme="dark"`                                             |
+
+**The ABSENT state is the one with an argument behind it.** An `add` with no `todos`, or with `[]`,
+renders **nothing** — not an empty section reading `To-do list · 0 of 0`. That is Part XIV §1's rule
+applied to a new row: _a row's absence is a statement about the SUBJECT_. An empty section asserts
+that a planner considered this card's steps and proposed none, which is a claim the data cannot
+support — the same proposal is produced by a planner that never reached the question.
+
+## 15.4 `modify` and `remove` — drawn as NOT drawn
+
+Panel 6 exists so that nobody adds a list there later by accident, and so the absence reads as a
+decision rather than as an omission. Three facts, none of them about this design:
+
+1. a `modify`'s target is a **committed** card, whose list is a **person's progress** — ticked rows,
+   with `doneAt` and `doneById`;
+2. `QuickViewData` carries **no to-do field** (`lib/dto/quickView.ts`, checked at `d2a0c964b`), so
+   the peek has nothing to render even if it wanted to;
+3. AMENDMENT 13 **D2** refuses a `todos` on a `modify` patch, so a plan could not change one either.
+
+The steps are shown on an `add` — which has no live card to fetch them from, and whose steps
+therefore exist nowhere else — and on nothing else.
+
+## 15.5 ⚠️ Two things this asset had to fix in the technique, and one of them is a filed defect
+
+Both were found by rendering the dark panel and reading it, which is the only way either surfaces.
+
+**(a) A Tier-3 token does not re-derive in a NESTED dark scope.** A custom property's `var()` is
+substituted at computed-value time on the element that DECLARES it, so `--el-text:
+var(--color-foreground)` declared on `:root` computes to the LIGHT foreground and it is that value
+which inherits. A descendant carrying `data-theme="dark"` flips Tier 0 for its subtree and cannot
+retroactively re-substitute Tier 3. **In the real app this never arises** — `data-theme` sits on
+`<html>`, the same element `:root` matches — and it arises only in a MOCK drawing a dark panel beside
+a light one. This asset therefore repeats the identical `--el-*: var(--color-*)` declarations inside
+`[data-theme='dark']`. **It declares no new token and no new value.**
+
+**(b) A CSS ESCAPE BELONGS IN THE SELECTOR AND NEVER IN THE `class` ATTRIBUTE.** `todo-list.mock.html`
+writes its Tailwind arbitrary-value utilities as `class="text-\[13.5px\] text-\(--el-text\)"` — with
+literal backslashes in the HTML. The selector `.text-\(--el-text\)` matches the class
+`text-(--el-text)`; the attribute above declares the class `text-\(--el-text\)`. **They never meet**,
+so every one of those utilities is inert, and the element falls back to whatever it inherits.
+
+In LIGHT that is `body { color: var(--el-text) }` — the right colour by accident. In a scoped dark
+panel the inherited value is still the light one, so **the steps render near-black on near-black**.
+It is visible in that asset's own committed PNG.
+
+**138 such class attributes, in exactly one file, tree-wide** (`git ls-tree origin/main -- design`,
+every `*.mock.html`). **Filed as a bug on story MOTIR-3810, `relates_to` MOTIR-4615.** This asset
+does not inherit it: its class attributes carry no escapes, which is also what the shipped app emits
+and what `peek-proposal-mode.mock.html`'s real Tailwind output already looks like.
+
+## 15.6 Access path
+
+**No new door.** The peek is opened from the **plan list row** (its title button, Part XIII §7) and
+from the **canvas node's `View` pill** (Part V §3) — both shipped by MOTIR-4185, both drawn in Part
+XIV panel 0. This Part draws neither and adds none: the steps are inside a surface the reader has
+already opened.
+
+## 15.7 GIVES / TAKES
+
+Every `MOTIR-<n>` in the asset and in this Part, dispositioned.
+
+| key            | GIVES / TAKES                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-4622** | **GIVES** — the review surface builds this. It owns `PlanReviewItemDto.todos` and the peek's read-only section, to this asset. |
+| **MOTIR-4625** | **GIVES** — the acceptance E2E films this surface; the panels are what it should show.                                         |
+| MOTIR-3810     | the story. GIVES its verification recipe the surface it names.                                                                 |
+| MOTIR-4614     | the ADR amendment. **TAKES** — D1, D2 and D5 are what this asset draws; it decides none of them.                               |
+| MOTIR-4182     | Part XIV. **TAKES** the peek chrome, the per-op header and §1's absence rule.                                                  |
+| MOTIR-4185     | **TAKES** the two doors, unchanged.                                                                                            |
+| MOTIR-3812     | the to-do design. **TAKES** the row grammar, the executor pills and the overflow rule.                                         |
+| MOTIR-4181     | the peek story. **TAKES** the surface.                                                                                         |
+
+**Nothing is TAKEN from MOTIR-4622.** This asset removes no element it was going to build and moves
+no boundary: it is strictly the surface that card was already `blocked_by` this one for.
+
+## 15.8 ⚠️ Planning flags
+
+- **`design/work-items/todo-list.mock.html`'s class escapes (15.5b) are a DEFECT with a card**, not a
+  note here. It is filed on story MOTIR-3810 and `relates_to` MOTIR-4615. It blocks nothing in this
+  story: this asset is already free of it, and MOTIR-4622 builds from THIS asset. The 138 attributes
+  in that one file are what the fix has to sweep.
+- **No other flag.** The states this Part draws are all reachable from the shipped surface, and the
+  one number it does not own — the peek's own geometry — is Part XIV's and is cited rather than
+  re-measured.
