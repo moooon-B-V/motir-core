@@ -64,6 +64,10 @@ function activeStandard(): BillingStatusDTO {
     organizationId: 'org1',
     access: { role: 'owner', canManageBilling: true },
     isMeta: false,
+    // The FOURTH billed line's figures (MOTIR-4555). Present here so this
+    // fixture is a whole `BillingStatusDTO`; the LINE that renders them is
+    // MOTIR-4557's card and this suite asserts nothing about it yet.
+    search: { totalSpend: 0, monthSpend: 0 },
     motir: { scaledTrackerSubscription: null, aiIncludedSeat: false },
     motirAi: {
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },

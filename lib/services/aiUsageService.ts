@@ -84,6 +84,20 @@ function emptyDto(args: {
     monthlyHistory: [],
     perModel: [],
     recentRuns: { runs: [], page: args.page, pageSize: args.pageSize, total: 0 },
+    // NOT `null` here, and the difference from the mapping below is the point.
+    // `null` means the BOUNDARY did not report the block; this branch never calls
+    // the boundary at all, because there is provably nothing to fetch (a member
+    // with no accessible project). Zero is the true answer, so say zero — a
+    // spurious "unavailable" would send the reader looking for an outage.
+    search: { totalSpend: 0, monthSpend: 0 },
+    searchRuns: {
+      runs: [],
+      page: args.page,
+      pageSize: args.pageSize,
+      total: 0,
+      attributedSpend: 0,
+      unattributedSpend: 0,
+    },
     hasUsage: false,
   };
 }
@@ -257,6 +271,12 @@ export const aiUsageService = {
         pageSize: raw.recentRuns.pageSize,
         total: raw.recentRuns.total,
       },
+      // ⚠️ `?? null`, never `?? { totalSpend: 0, … }`. An absent block means the
+      // boundary did not report it — a rolling deploy where the motir-ai half has
+      // not landed — and defaulting it to zeroes here is precisely how a
+      // fetch failure becomes an authoritative-looking "you spent nothing".
+      search: raw.search ?? null,
+      searchRuns: raw.searchRuns ?? null,
       hasUsage: raw.totalSpend > 0 || raw.recentRuns.total > 0,
     };
   },
