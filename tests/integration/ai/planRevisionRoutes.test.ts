@@ -261,6 +261,13 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     estimateMinutes: 45,
     explanationMd: 'The corrected WHY — the key this route never read.',
     executor: 'human',
+    // The card's proposed STEPS (MOTIR-4616). Present here because the
+    // compile-time half of the guard REQUIRES it — `UPDATE_PROPOSAL_KEYS` gained
+    // `todos` with the interface, and this object `satisfies` that key set — and
+    // because the runtime half is exactly the assertion this story owes: the
+    // internal correction route's parser has to carry the key through into
+    // `proposedFields`, which is the door MOTIR-4619 opens.
+    todos: [{ text: 'Create the restricted API key', executor: 'human' }],
   } satisfies Record<UpdateProposalKey, unknown>;
 
   /** Each STRUCTURAL key → where the correction lands it, or `null` for a key

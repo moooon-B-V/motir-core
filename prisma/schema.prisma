@@ -5403,10 +5403,14 @@ model PlanItem {
   workItemId     String?    @map("work_item_id")
   /// `add` ONLY — the new node's proposed fields (title, kind, descriptionMd,
   /// type, priority, executor, storyPoints, estimateMinutes, explanationMd,
-  /// explanationSource, planningProvenance, targetRepo). The add's values live
-  /// HERE (no WorkItem exists yet). `PlanItemProposedFields` in `lib/dto/plans.ts`
-  /// is the authoritative shape — this list is a reader's summary of it, so keep
-  /// the two in step when the shape grows.
+  /// explanationSource, planningProvenance, targetRepo, targetRepoRole, todos).
+  /// The add's values live HERE (no WorkItem exists yet). `PlanItemProposedFields`
+  /// in `lib/dto/plans.ts` is the authoritative shape — this list is a reader's
+  /// summary of it, so keep the two in step when the shape grows.
+  /// `todos` is the card's ORDERED STEPS (MOTIR-3810 · `agent-authored-plans.md`
+  /// AMENDMENT 13): `add` only, array order is list order, and approve writes one
+  /// `work_item_todo` row per element. No column and no table — a proposal's steps
+  /// live in this JSON exactly as its description does.
   proposedFields Json?      @map("proposed_fields")
   /// `modify` ONLY — the sparse changed fields ({ title?, descriptionMd?,
   /// priority?, type?, storyPoints?, estimateMinutes?, targetRepo?,

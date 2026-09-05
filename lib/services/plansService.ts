@@ -60,10 +60,12 @@ import {
   assertProposalSetSelfConsistent,
   assertReparentLegal,
   collectReferencedWorkItemIds,
+  DEFAULT_PROPOSED_KIND,
   validatePlanProposals,
   type LiveWorkItemState,
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
+import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import {
@@ -238,6 +240,16 @@ function validateProposal(p: ProposalInput): void {
       throw new InvalidProposalError('An `add` proposal requires proposedFields.title.');
     }
     validateProposedSizing(p.proposedFields);
+    // The card's proposed STEPS (MOTIR-4616 · AMENDMENT 13 D4) — the store's own
+    // caps, imported never re-declared, plus the container gate. Read the kind
+    // the way `materialize` reads it (`DEFAULT_PROPOSED_KIND` when the `add`
+    // proposes none), so the gate here and the insert there agree about what
+    // this proposal IS.
+    validateProposedTodos(
+      p.proposedFields.todos,
+      p.proposedFields.kind ?? DEFAULT_PROPOSED_KIND,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
     assertKnownPlanningSource(
       p.proposedFields,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
@@ -401,6 +413,12 @@ function mergeProposedFields(
   // every key above it: absent leaves the proposal's executor alone, an explicit
   // `null` clears it back to unassigned.
   if (input.executor !== undefined) next.executor = input.executor;
+  // The card's proposed STEPS (MOTIR-4616 · AMENDMENT 13 D3). Sparse at the KEY
+  // like every line above it — absent leaves the list alone, an explicit `[]` or
+  // `null` clears it — but the VALUE replaces the set whole rather than merging
+  // per row: a list has no meaningful partial edit, the same reason a
+  // correction's `blockedByRefs` replaces rather than merges.
+  if (input.todos !== undefined) next.todos = input.todos;
   return next;
 }
 
@@ -2233,6 +2251,17 @@ async function editAddProposal(
       // Re-validate sizing on the MERGED result (MOTIR-1433) so a patched-in bad
       // point/minute value is rejected here, the same as at create.
       validateProposedSizing(next);
+      // And the STEPS on the MERGED result (MOTIR-4616 · AMENDMENT 13 D3-D4).
+      // MERGED is load-bearing on both axes: a deepen that patches only `kind`
+      // must still be judged against the list the proposal already carries, and
+      // a deepen that patches only `todos` must still be judged against the kind
+      // it already has. Validating the PATCH alone would let a proposal become a
+      // `story` with a checklist in two calls that are each individually legal.
+      validateProposedTodos(
+        next.todos,
+        next.kind ?? DEFAULT_PROPOSED_KIND,
+        proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+      );
       await planItemRepository.update(
         planItemId,
         { proposedFields: next as unknown as Prisma.InputJsonValue },
@@ -3439,6 +3468,13 @@ export const plansService = {
             throw new InvalidProposalError('An `add` proposal requires a non-empty title.');
           }
           validateProposedSizing(next);
+          // The STEPS, on the MERGED result — the same rule the deepen turn
+          // applies, on the same basis (MOTIR-4616 · AMENDMENT 13 D3-D4).
+          validateProposedTodos(
+            next.todos,
+            next.kind ?? DEFAULT_PROPOSED_KIND,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+          );
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter((k) => k !== 'parentRef' && k !== 'blockedByRefs'),

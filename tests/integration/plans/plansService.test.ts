@@ -14,6 +14,12 @@ import {
 } from '@/lib/plans/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
+import type { ProposedTodoInput } from '@/lib/dto/plans';
+import {
+  TODO_COMMAND_MAX_LENGTH,
+  TODO_NOTES_MAX_LENGTH,
+  TODO_TEXT_MAX_LENGTH,
+} from '@/lib/workItemTodos/limits';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -1785,6 +1791,237 @@ describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
     await expect(
       plansService.updateProposal(plan.id, itemId, { estimateMinutes: -5 }, fx.ctx),
     ).rejects.toBeInstanceOf(InvalidEstimateError);
+  });
+});
+
+// ── MOTIR-4616 ─────────────────────────────────────────────────────────────────
+// The CARRIER — a proposal can hold the card's ordered STEPS
+// (`docs/decisions/agent-authored-plans.md` AMENDMENT 13 D1-D4). These prove the
+// two WRITE boundaries over real Postgres: the append and the deepen. What
+// approve does with the rows is MOTIR-4618's, and every DOOR onto the field is
+// MOTIR-4619's — this block stops at `proposedFields`.
+describe('plansService — proposed to-do list on an add (MOTIR-4616)', () => {
+  /** A 201-character step: one past `TODO_TEXT_MAX_LENGTH`, built from the constant. */
+  const OVER_TEXT = 'x'.repeat(TODO_TEXT_MAX_LENGTH + 1);
+
+  it('round-trips `todos` through proposedFields VERBATIM, in array order', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Steps' }, fx.ctx);
+    const todos = [
+      { text: 'Create a Stripe restricted key', executor: 'human' as const },
+      {
+        text: 'Scope it to charges:write',
+        notesMd: 'Dashboard → Developers → API keys.',
+        executor: 'human' as const,
+      },
+      {
+        text: 'Set it as the deployment secret',
+        commandText: 'fly secrets set STRIPE_KEY=… -a motir',
+        executor: 'coding_agent' as const,
+      },
+    ];
+    const after = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Provision Stripe', kind: 'task', todos } }],
+      fx.ctx,
+    );
+    expect(after.items[0]!.proposedFields!.todos).toEqual(todos);
+
+    // Read back through getPlan — the JSON column is the persistence, and ORDER
+    // is the whole contract (there is no `position` on a proposed row).
+    const reread = await plansService.getPlan(plan.id, fx.ctx);
+    expect(reread.items[0]!.proposedFields!.todos!.map((t) => t.text)).toEqual([
+      'Create a Stripe restricted key',
+      'Scope it to charges:write',
+      'Set it as the deployment secret',
+    ]);
+  });
+
+  it('an add with NO todos round-trips unchanged — the field is optional', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const after = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'No steps', kind: 'task' } }],
+      fx.ctx,
+    );
+    expect(after.items[0]!.proposedFields!.todos).toBeUndefined();
+  });
+
+  it('accepts the boundary values and an empty list, and refuses every bar past it', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+
+    // The boundary values are ACCEPTED — the cap is inclusive.
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [
+          {
+            op: 'add',
+            proposedFields: {
+              title: 'At the bar',
+              kind: 'task',
+              todos: [
+                {
+                  text: 'x'.repeat(TODO_TEXT_MAX_LENGTH),
+                  notesMd: 'y'.repeat(TODO_NOTES_MAX_LENGTH),
+                  commandText: 'z'.repeat(TODO_COMMAND_MAX_LENGTH),
+                },
+              ],
+            },
+          },
+          { op: 'add', proposedFields: { title: 'Empty list', kind: 'task', todos: [] } },
+        ],
+        fx.ctx,
+      ),
+    ).resolves.toBeDefined();
+
+    // The last row casts past its own type on purpose: `executor: 'robot'` is a
+    // value the DTO forbids and an agent over the MCP is not type-checked by our
+    // compiler, so the case that matters is the SERVICE refusing it.
+    const refusals: ProposedTodoInput[] = [
+      { text: '' },
+      { text: OVER_TEXT },
+      { text: 'ok', notesMd: 'y'.repeat(TODO_NOTES_MAX_LENGTH + 1) },
+      { text: 'ok', commandText: 'z'.repeat(TODO_COMMAND_MAX_LENGTH + 1) },
+      { text: 'ok', executor: 'robot' as unknown as 'human' },
+    ];
+    for (const row of refusals) {
+      await expect(
+        plansService.addProposals(
+          plan.id,
+          [{ op: 'add', proposedFields: { title: 'Bad step', kind: 'task', todos: [row] } }],
+          fx.ctx,
+        ),
+      ).rejects.toBeInstanceOf(InvalidProposalError);
+    }
+  });
+
+  it('refuses a non-empty list on a CONTAINER kind — a story’s steps are its children', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    await expect(
+      plansService.addProposals(
+        plan.id,
+        [
+          {
+            op: 'add',
+            proposedFields: { title: 'A story', kind: 'story', todos: [{ text: 'Step one' }] },
+          },
+        ],
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+  });
+
+  it('updateProposal merges `todos` sparsely: omitted leaves, a new array REPLACES, `[]` empties, `null` clears', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Deepen my steps',
+            kind: 'task',
+            todos: [{ text: 'First' }, { text: 'Second' }],
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    // OMITTED — the list is left exactly as it was.
+    const untouched = await plansService.updateProposal(
+      plan.id,
+      itemId,
+      { descriptionMd: 'The body arrives on the deepen turn.' },
+      fx.ctx,
+    );
+    expect(untouched.items.find((i) => i.id === itemId)!.proposedFields!.todos).toHaveLength(2);
+
+    // A NEW ARRAY replaces the set whole — no per-row merge.
+    const replaced = await plansService.updateProposal(
+      plan.id,
+      itemId,
+      { todos: [{ text: 'Only step', executor: 'human' }] },
+      fx.ctx,
+    );
+    expect(replaced.items.find((i) => i.id === itemId)!.proposedFields!.todos).toEqual([
+      { text: 'Only step', executor: 'human' },
+    ]);
+
+    // `[]` EMPTIES it.
+    const emptied = await plansService.updateProposal(plan.id, itemId, { todos: [] }, fx.ctx);
+    expect(emptied.items.find((i) => i.id === itemId)!.proposedFields!.todos).toEqual([]);
+
+    // `null` CLEARS it.
+    const cleared = await plansService.updateProposal(plan.id, itemId, { todos: null }, fx.ctx);
+    expect(cleared.items.find((i) => i.id === itemId)!.proposedFields!.todos).toBeNull();
+  });
+
+  it('re-validates on the MERGED result: a deepen that flips `kind` to a container is refused', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: { title: 'Leaf with steps', kind: 'task', todos: [{ text: 'Step' }] },
+        },
+      ],
+      fx.ctx,
+    );
+    const itemId = withItems.items[0]!.id;
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    // The patch alone is innocent — it names only `kind`. It is the MERGE that
+    // is illegal, which is exactly why the gate reads the merge.
+    await expect(
+      plansService.updateProposal(plan.id, itemId, { kind: 'story' }, fx.ctx),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+
+    // And the mirror: patching only `todos` onto a proposal that is ALREADY a
+    // container is refused on the same read.
+    const containerPlan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const container = await plansService.addProposals(
+      containerPlan.id,
+      [{ op: 'add', proposedFields: { title: 'A story', kind: 'story' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(containerPlan.id, fx.ctx);
+    await expect(
+      plansService.updateProposal(
+        containerPlan.id,
+        container.items[0]!.id,
+        { todos: [{ text: 'Step' }] },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
+  });
+
+  it('refuses a patched-in step past the bar on the deepen turn', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+    const withItems = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'OK', kind: 'task' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await expect(
+      plansService.updateProposal(
+        plan.id,
+        withItems.items[0]!.id,
+        { todos: [{ text: OVER_TEXT }] },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(InvalidProposalError);
   });
 });
 
