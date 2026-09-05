@@ -19,6 +19,18 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 //   3. The WORKSPACE grant list (`context.code`) is untouched beside it.
 //   4. EVERY planning operation carries it, not the one a test drove.
 vi.mock('@/lib/ai/motirAiClient', () => ({
+  // MOTIR-4604: the planning submit now reads per-repo index freshness over the
+  // 7.1 boundary. TOTAL over the request, exactly as the real route is — one
+  // entry per requested ref — with no graph, which is true of these fixtures.
+  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
+    repos: (q.repoRefs ?? []).map((repoRef) => ({
+      repoRef,
+      indexed: false,
+      commitSha: null,
+      indexedAt: null,
+      codegraphVersion: null,
+    })),
+  })),
   submitJob: vi.fn(),
   streamJob: vi.fn(),
 }));
@@ -272,8 +284,35 @@ describe('the planning-job ENVELOPE', () => {
       // The consent flag rides every planning submit (MOTIR-4343), generation
       // included — ON here because this fixture never touches the setting.
       recordPlanningMistakes: true,
+      // ⚠️ AMENDED BY MOTIR-4604 — `context.code`'s repo entries now carry each
+      // repo's FRESHNESS beside its coordinates: the verdict, the reason it is
+      // behind, and an explicit in-flight flag. The freshness is joined from
+      // motir-ai's `GET /v1/code-graph/status` (MOTIR-1765) and the head this
+      // repo records on push (MOTIR-1766). With no freshness answer for these
+      // fixtures the read is unavailable, so `freshnessUnknown` is true, NO repo
+      // carries a verdict and nothing is enqueued — a motir-ai outage must not
+      // make every repo announce something false.
+      //
+      // The invariant this assertion was written to protect is UNCHANGED and is
+      // still asserted: `code` is the WORKSPACE grant list, `repositories` is the
+      // PROJECT set, and the two are separate fields with separate scopes. What
+      // MOTIR-3044 forbade was MERGING them; widening a repo's own entry with
+      // facts about that same repo is not that.
       code: {
-        repos: [{ provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' }],
+        freshnessUnknown: false,
+        repos: [
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-core',
+            defaultBranch: 'main',
+            verdict: 'never_indexed',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedCommitSha: null,
+            headSha: null,
+            commitsBehind: null,
+          },
+        ],
       },
       repositories: {
         repos: [{ ref: web, name: 'motir-core', role: 'web', label: null, state: 'proposed' }],
@@ -344,8 +383,10 @@ describe('the planning-job ENVELOPE', () => {
   });
 
   it('leaves the WORKSPACE grant list byte-identical for a job that carried one before', async () => {
-    // The boundary this card must not cross: `context.code` is MOTIR-1598's and
-    // is not re-scoped here, however tempting the adjacency.
+    // The boundary MOTIR-3044 must not cross: `context.code` is MOTIR-1598's and
+    // is not RE-SCOPED here, however tempting the adjacency. (MOTIR-4604 later
+    // widened each entry with that repo's freshness — a different act, and the
+    // set itself is still the workspace's grant list. See the assertion below.)
     const seed = await seedWorkspace();
     const ctx = await seedProject(seed, 'THETA');
     await githubInstallationService.persistInstallation({
@@ -371,8 +412,27 @@ describe('the planning-job ENVELOPE', () => {
 
     await aiGenerationService.startGeneration(ctx, { prompt: 'go' });
     const [, , context] = vi.mocked(submitJob).mock.calls[0]!;
+    // ⚠️ AMENDED BY MOTIR-4604. The guard's subject is unchanged and is what is
+    // still asserted: the grant list is the WORKSPACE's, it names `motir-ai`, and
+    // the project's own unrelated row (`unrelated-service`) is nowhere in it — the
+    // two sets are not merged. What is no longer true is byte-identity, because
+    // each entry now carries that repo's own freshness. `code` was not RE-SCOPED,
+    // which is the boundary this test's original comment drew.
     expect((context as { code: unknown }).code).toEqual({
-      repos: [{ provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'trunk' }],
+      freshnessUnknown: false,
+      repos: [
+        {
+          provider: 'github',
+          repoRef: 'moooon/motir-ai',
+          defaultBranch: 'trunk',
+          verdict: 'never_indexed',
+          reason: 'never_indexed',
+          refreshInFlight: false,
+          indexedCommitSha: null,
+          headSha: null,
+          commitsBehind: null,
+        },
+      ],
     });
   });
 });

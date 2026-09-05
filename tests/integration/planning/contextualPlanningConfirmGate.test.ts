@@ -61,6 +61,18 @@ vi.mock('@/lib/workspaces', async (importOriginal) => ({
 // absent from CI; everything on THIS side of the boundary runs for real.
 const submitJobMock = vi.fn(async (..._args: unknown[]) => ({ jobId: 'job-contextual-1' }));
 vi.mock('@/lib/ai/motirAiClient', () => ({
+  // MOTIR-4604: the planning submit now reads per-repo index freshness over the
+  // 7.1 boundary. TOTAL over the request, exactly as the real route is — one
+  // entry per requested ref — with no graph, which is true of these fixtures.
+  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
+    repos: (q.repoRefs ?? []).map((repoRef) => ({
+      repoRef,
+      indexed: false,
+      commitSha: null,
+      indexedAt: null,
+      codegraphVersion: null,
+    })),
+  })),
   submitJob: (...args: unknown[]) => submitJobMock(...(args as [])),
   streamJob: vi.fn(),
   getJob: vi.fn(),

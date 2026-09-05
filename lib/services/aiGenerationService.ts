@@ -1,6 +1,6 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
@@ -83,9 +83,15 @@ export const aiGenerationService = {
     // read; no GitHub round-trip on the submit path). `undefined` (no
     // installation / no grants) OMITS `context.code` entirely, so a start-fresh
     // project's envelope is byte-identical to a code-less one.
-    const code = await resolveCodeContext({
+    // ⚠️ THE PLANNING PRODUCER, not the bare grant list (MOTIR-4604). It carries
+    // each repo's freshness VERDICT, the REASON it is behind and an explicit
+    // IN-FLIGHT flag, and it ENQUEUES a refresh where one can actually run —
+    // through the shipped debounced path, never awaited. `undefined` still means
+    // "no connected repo", so `context.code` is omitted exactly as before.
+    const code = await resolvePlanningCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
     });
     // The PROJECT's repository SET (MOTIR-3044) — beside the workspace grant list
     // above, never merged into it. Resolved on the same pre-submit slot and for

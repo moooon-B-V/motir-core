@@ -1,6 +1,6 @@
 import { submitJob, streamJob, getJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
 import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
@@ -148,9 +148,15 @@ async function submitPlanEditJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  const code = await resolveCodeContext({
+  // ⚠️ THE PLANNING PRODUCER, not the bare grant list (MOTIR-4604). It carries
+  // each repo's freshness VERDICT, the REASON it is behind and an explicit
+  // IN-FLIGHT flag, and it ENQUEUES a refresh where one can actually run —
+  // through the shipped debounced path, never awaited. `undefined` still means
+  // "no connected repo", so `context.code` is omitted exactly as before.
+  const code = await resolvePlanningCodeContext({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
+    projectId: ctx.projectId,
   });
   // The PROJECT's repository SET (MOTIR-3044), on THIS shared submit rather than
   // per operation — for the same reason `generateExplanations` is set here: the
@@ -508,9 +514,11 @@ export const aiPlanEditsService = {
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
-      const code = await resolveCodeContext({
+      // The planning producer (MOTIR-4604), as on the shared submit above.
+      const code = await resolvePlanningCodeContext({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
+        projectId: ctx.projectId,
       });
       const repositories = await resolveProjectRepoContext(ctx.projectId, {
         userId: ctx.userId,

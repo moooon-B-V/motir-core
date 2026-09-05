@@ -7,6 +7,18 @@ import { resolve } from 'node:path';
 // suites). Everything below it is real: a real Postgres, the real settings
 // write path, the real cross-workspace cadence scan.
 vi.mock('@/lib/ai/motirAiClient', () => ({
+  // MOTIR-4604: the planning submit now reads per-repo index freshness over the
+  // 7.1 boundary. TOTAL over the request, exactly as the real route is — one
+  // entry per requested ref — with no graph, which is true of these fixtures.
+  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
+    repos: (q.repoRefs ?? []).map((repoRef) => ({
+      repoRef,
+      indexed: false,
+      commitSha: null,
+      indexedAt: null,
+      codegraphVersion: null,
+    })),
+  })),
   submitJob: vi.fn(),
   streamJob: vi.fn(),
   getJob: vi.fn(),

@@ -10,6 +10,18 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 // seam-test convention — the ABSENT case must leave the envelope byte-identical
 // to today's (no `code` key, not an empty one).
 vi.mock('@/lib/ai/motirAiClient', () => ({
+  // MOTIR-4604: the planning submit now reads per-repo index freshness over the
+  // 7.1 boundary. TOTAL over the request, exactly as the real route is — one
+  // entry per requested ref — with no graph, which is true of these fixtures.
+  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
+    repos: (q.repoRefs ?? []).map((repoRef) => ({
+      repoRef,
+      indexed: false,
+      commitSha: null,
+      indexedAt: null,
+      codegraphVersion: null,
+    })),
+  })),
   submitJob: vi.fn(),
   streamJob: vi.fn(),
 }));
@@ -169,12 +181,67 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       // The consent flag rides every planning submit (MOTIR-4343), generation
       // included — ON here because this fixture never touches the setting.
       recordPlanningMistakes: true,
+      // ⚠️ AMENDED BY MOTIR-4604 — `context.code`'s repo entries now carry each
+      // repo's FRESHNESS beside its coordinates: the verdict, the reason it is
+      // behind, and an explicit in-flight flag. The freshness is joined from
+      // motir-ai's `GET /v1/code-graph/status` (MOTIR-1765) and the head this
+      // repo records on push (MOTIR-1766). With no freshness answer for these
+      // fixtures the read is unavailable, so `freshnessUnknown` is true, NO repo
+      // carries a verdict and nothing is enqueued — a motir-ai outage must not
+      // make every repo announce something false.
+      //
+      // The invariant this assertion was written to protect is UNCHANGED and is
+      // still asserted: `code` is the WORKSPACE grant list, `repositories` is the
+      // PROJECT set, and the two are separate fields with separate scopes. What
+      // MOTIR-3044 forbade was MERGING them; widening a repo's own entry with
+      // facts about that same repo is not that.
       code: {
+        freshnessUnknown: false,
         repos: [
-          { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
-          { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' },
-          { provider: 'github', repoRef: 'moooon/motir-gateway', defaultBranch: 'master' },
-          { provider: 'github', repoRef: 'moooon/motir-meta', defaultBranch: 'main' },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-ai',
+            defaultBranch: 'main',
+            verdict: 'never_indexed',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedCommitSha: null,
+            headSha: null,
+            commitsBehind: null,
+          },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-core',
+            defaultBranch: 'main',
+            verdict: 'never_indexed',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedCommitSha: null,
+            headSha: null,
+            commitsBehind: null,
+          },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-gateway',
+            defaultBranch: 'master',
+            verdict: 'never_indexed',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedCommitSha: null,
+            headSha: null,
+            commitsBehind: null,
+          },
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-meta',
+            defaultBranch: 'main',
+            verdict: 'never_indexed',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedCommitSha: null,
+            headSha: null,
+            commitsBehind: null,
+          },
         ],
       },
     });

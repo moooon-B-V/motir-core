@@ -32,6 +32,18 @@ import { truncateAuthTables } from '../helpers/db';
 // `aiPlanEditsService`).
 
 vi.mock('@/lib/ai/motirAiClient', () => ({
+  // MOTIR-4604: the planning submit now reads per-repo index freshness over the
+  // 7.1 boundary. TOTAL over the request, exactly as the real route is — one
+  // entry per requested ref — with no graph, which is true of these fixtures.
+  getCodeGraphStatus: vi.fn(async (q: { repoRefs?: string[] }) => ({
+    repos: (q.repoRefs ?? []).map((repoRef) => ({
+      repoRef,
+      indexed: false,
+      commitSha: null,
+      indexedAt: null,
+      codegraphVersion: null,
+    })),
+  })),
   submitJob: vi.fn(async () => ({ jobId: 'job-augment-1' })),
   streamJob: vi.fn(),
   getJob: vi.fn(),

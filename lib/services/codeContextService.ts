@@ -54,9 +54,130 @@ function noCodeContext(hasImplementedWork: boolean): CodeContextDTO {
   return { hasCodeContext: false, repos: [], hasImplementedWork, freshnessUnavailable: false };
 }
 
+/**
+ * The JOIN, WITHOUT the access gate — the honest state of the planner's inputs.
+ *
+ * ⚠️ UNGATED ON PURPOSE, and it is exported for exactly one kind of caller: a
+ * PLANNING-JOB SUBMIT (MOTIR-4604), which has already authorized the actor before
+ * it assembles an envelope and must not re-run a browse check it would pass by
+ * construction. Every BROWSER-facing read goes through
+ * `codeContextService.getCodeContext`, which gates first. Keeping one join with
+ * two doors is what stops the UI and the planner disagreeing about the same repo.
+ */
+export async function resolveCodeContextState(
+  projectId: string,
+  ctx: AccessActorContext,
+): Promise<CodeContextDTO> {
+  const { hasImplementedWork, repos, indexingInFlight } = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    async (
+      tx,
+    ): Promise<{
+      hasImplementedWork: boolean;
+      repos: GithubRepo[];
+      indexingInFlight: boolean;
+    }> => {
+      // "Has anybody reported implementing work here?" — EXISTS-shaped, not a
+      // row scan. Deliberately NOT "any done item" (a project migrated from
+      // another tracker is full of those, implemented by nobody through Motir)
+      // and NOT "any pull-request link" (that presumes the very connection the
+      // affordance is asking for).
+      const implemented = await tx.workItem.findFirst({
+        where: { projectId, implementationSource: { not: null } },
+        select: { id: true },
+      });
+
+      const installation = await githubInstallationRepository.findByWorkspaceId(
+        ctx.workspaceId,
+        tx,
+      );
+      const rows = installation
+        ? await githubRepoRepository.listByInstallation(installation.id, tx)
+        : [];
+
+      // The ledger cannot say WHICH repo a running index belongs to — an
+      // in-flight `system.code-graph-index` row writes `output.repoRef` only on
+      // SUCCESS — so this signal is workspace-AGGREGATE, exactly as the migrate
+      // wizard's own index step reads it. It therefore only ever promotes a
+      // never-indexed repo to `indexing`; it never claims a stale repo is
+      // moving, which is the claim `design/code-context/design-notes.md` §6.1
+      // forbids without proof.
+      const running = rows.length
+        ? await jobRunRepository.findRunningCodeGraphIndexForWorkspace(ctx.workspaceId, tx)
+        : null;
+
+      return {
+        hasImplementedWork: implemented !== null,
+        repos: rows,
+        indexingInFlight: running !== null,
+      };
+    },
+  );
+
+  // ⚠️ A workspace with no installation SHORT-CIRCUITS — no boundary round-trip
+  // at all. `resolveCodeContext` is the same predicate the job envelope is built
+  // from, so "the planner would get no code context" and "there is nothing to
+  // ask motir-ai about" are one fact, not two.
+  const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+  if (!code) return noCodeContext(hasImplementedWork);
+
+  const repoRefs = repos.map((repo) => `${repo.owner}/${repo.name}`);
+
+  // ONE boundary call for the WHOLE set, never one per repo.
+  let freshness: Map<string, RawCodeGraphRepoStatus> | null = null;
+  try {
+    const raw = await getCodeGraphStatus({
+      coreWorkspaceId: ctx.workspaceId,
+      coreProjectId: projectId,
+      repoRefs,
+    });
+    freshness = new Map(raw.repos.map((r) => [r.repoRef, r]));
+  } catch (err) {
+    // ⚠️ AN AI-SIDE FAILURE MUST NEVER 500 THE PLANNING WORKSPACE. The surface
+    // still renders: the connection facts are motir-core's own and are still
+    // true, and freshness degrades to an explicit unknown rather than to a
+    // guess. Anything that is NOT a boundary failure still throws.
+    if (!(err instanceof MotirAiError)) throw err;
+    freshness = null;
+  }
+
+  const dtos: CodeContextRepoDTO[] = repos.map((repo) => {
+    const repoRef = `${repo.owner}/${repo.name}`;
+    const status = freshness?.get(repoRef) ?? null;
+    const indexed = status?.indexed ?? false;
+    const indexedCommitSha = status?.commitSha ?? null;
+    return {
+      repoRef,
+      provider: repo.provider,
+      verdict: resolveVerdict({
+        indexed,
+        indexedCommitSha,
+        headSha: repo.lastPushSha,
+        // With no freshness answer we know nothing about what is in flight
+        // either, so the honest verdict is `never_indexed`, not `indexing`.
+        indexingInFlight: freshness === null ? false : indexingInFlight,
+      }),
+      indexedCommitSha,
+      indexedAt: status?.indexedAt ?? null,
+      codegraphVersion: status?.codegraphVersion ?? null,
+      headSha: repo.lastPushSha,
+      // ALWAYS NULL until its producer ships — a first-class, drawn answer, not
+      // a gap. See the DTO's own note.
+      commitsBehind: null,
+    };
+  });
+
+  return {
+    hasCodeContext: true,
+    repos: dtos,
+    hasImplementedWork,
+    freshnessUnavailable: freshness === null,
+  };
+}
+
 export const codeContextService = {
   /**
-   * The active project's code context.
+   * The active project's code context, for a BROWSER.
    *
    * ⚠️ Gated on BROWSE, not on `ai:configure`. `aiConventionService` gates its
    * reads on `ai:configure` because a convention is AI CONFIGURATION; this is not
@@ -66,111 +187,6 @@ export const codeContextService = {
    */
   async getCodeContext(projectId: string, ctx: AccessActorContext): Promise<CodeContextDTO> {
     await projectAccessService.assertCanBrowse(projectId, ctx);
-
-    const { hasImplementedWork, repos, indexingInFlight } = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (
-        tx,
-      ): Promise<{
-        hasImplementedWork: boolean;
-        repos: GithubRepo[];
-        indexingInFlight: boolean;
-      }> => {
-        // "Has anybody reported implementing work here?" — EXISTS-shaped, not a
-        // row scan. Deliberately NOT "any done item" (a project migrated from
-        // another tracker is full of those, implemented by nobody through Motir)
-        // and NOT "any pull-request link" (that presumes the very connection the
-        // affordance is asking for).
-        const implemented = await tx.workItem.findFirst({
-          where: { projectId, implementationSource: { not: null } },
-          select: { id: true },
-        });
-
-        const installation = await githubInstallationRepository.findByWorkspaceId(
-          ctx.workspaceId,
-          tx,
-        );
-        const rows = installation
-          ? await githubRepoRepository.listByInstallation(installation.id, tx)
-          : [];
-
-        // The ledger cannot say WHICH repo a running index belongs to — an
-        // in-flight `system.code-graph-index` row writes `output.repoRef` only on
-        // SUCCESS — so this signal is workspace-AGGREGATE, exactly as the migrate
-        // wizard's own index step reads it. It therefore only ever promotes a
-        // never-indexed repo to `indexing`; it never claims a stale repo is
-        // moving, which is the claim `design/code-context/design-notes.md` §6.1
-        // forbids without proof.
-        const running = rows.length
-          ? await jobRunRepository.findRunningCodeGraphIndexForWorkspace(ctx.workspaceId, tx)
-          : null;
-
-        return {
-          hasImplementedWork: implemented !== null,
-          repos: rows,
-          indexingInFlight: running !== null,
-        };
-      },
-    );
-
-    // ⚠️ A workspace with no installation SHORT-CIRCUITS — no boundary round-trip
-    // at all. `resolveCodeContext` is the same predicate the job envelope is built
-    // from, so "the planner would get no code context" and "there is nothing to
-    // ask motir-ai about" are one fact, not two.
-    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
-    if (!code) return noCodeContext(hasImplementedWork);
-
-    const repoRefs = repos.map((repo) => `${repo.owner}/${repo.name}`);
-
-    // ONE boundary call for the WHOLE set, never one per repo.
-    let freshness: Map<string, RawCodeGraphRepoStatus> | null = null;
-    try {
-      const raw = await getCodeGraphStatus({
-        coreWorkspaceId: ctx.workspaceId,
-        coreProjectId: projectId,
-        repoRefs,
-      });
-      freshness = new Map(raw.repos.map((r) => [r.repoRef, r]));
-    } catch (err) {
-      // ⚠️ AN AI-SIDE FAILURE MUST NEVER 500 THE PLANNING WORKSPACE. The surface
-      // still renders: the connection facts are motir-core's own and are still
-      // true, and freshness degrades to an explicit unknown rather than to a
-      // guess. Anything that is NOT a boundary failure still throws.
-      if (!(err instanceof MotirAiError)) throw err;
-      freshness = null;
-    }
-
-    const dtos: CodeContextRepoDTO[] = repos.map((repo) => {
-      const repoRef = `${repo.owner}/${repo.name}`;
-      const status = freshness?.get(repoRef) ?? null;
-      const indexed = status?.indexed ?? false;
-      const indexedCommitSha = status?.commitSha ?? null;
-      return {
-        repoRef,
-        provider: repo.provider,
-        verdict: resolveVerdict({
-          indexed,
-          indexedCommitSha,
-          headSha: repo.lastPushSha,
-          // With no freshness answer we know nothing about what is in flight
-          // either, so the honest verdict is `never_indexed`, not `indexing`.
-          indexingInFlight: freshness === null ? false : indexingInFlight,
-        }),
-        indexedCommitSha,
-        indexedAt: status?.indexedAt ?? null,
-        codegraphVersion: status?.codegraphVersion ?? null,
-        headSha: repo.lastPushSha,
-        // ALWAYS NULL until its producer ships — a first-class, drawn answer, not
-        // a gap. See the DTO's own note.
-        commitsBehind: null,
-      };
-    });
-
-    return {
-      hasCodeContext: true,
-      repos: dtos,
-      hasImplementedWork,
-      freshnessUnavailable: freshness === null,
-    };
+    return resolveCodeContextState(projectId, ctx);
   },
 };
