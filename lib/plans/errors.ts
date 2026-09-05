@@ -674,9 +674,15 @@ export class PlanItemFieldRejectedError extends Error {
 }
 
 /**
- * A CORRECTION, a WITHDRAW or a REVISION APPEND was attempted on a plan whose
- * proposals are FROZEN (Story MOTIR-3533 · Subtask MOTIR-3540; the third verb
- * MOTIR-4153).
+ * A CORRECTION, a WITHDRAW, a REVISION APPEND or a BRIEF EDIT was attempted on a
+ * plan that is FROZEN (Story MOTIR-3533 · Subtask MOTIR-3540; the third verb
+ * MOTIR-4153; the fourth MOTIR-4637).
+ *
+ * ⚠️ THE FOURTH VERB IS ABOUT THE PLAN, NOT ITS PROPOSALS — `correctPlanBrief`
+ * edits the plan's own `title` / `summary`. It shares this refusal because it
+ * shares the boundary exactly: `generating` and `planned` are editable and a
+ * DECIDED plan is a record. The message says both halves rather than only the
+ * one it was first written for.
  *
  * `generating` and `planned` are editable; `approved` and `declined` are not,
  * for two different reasons the message states rather than implies:
@@ -698,10 +704,10 @@ export class PlanNotEditableError extends Error {
     readonly status: string,
   ) {
     super(
-      `Plan ${planId} is \`${status}\` — its proposals can no longer be corrected, withdrawn ` +
-        'or appended to. ' +
+      `Plan ${planId} is \`${status}\` — its own title and summary can no longer be edited, ` +
+        'and its proposals can no longer be corrected, withdrawn or appended to. ' +
         (status === 'approved'
-          ? 'Its proposals have materialized into work items, which are now the source of truth: edit the work item with `update_work_item` instead.'
+          ? 'Its proposals have materialized into work items, which are now the source of truth: edit the work item with `update_work_item` instead, and read the plan as the record of what was approved.'
           : 'A declined plan is a closed decision; author a new plan instead.') +
         ' Only a `generating` or `planned` plan is editable.',
     );

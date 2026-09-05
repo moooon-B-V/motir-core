@@ -10,9 +10,10 @@ colour tokens + `[data-display-style]` shape tokens + the shipped
 `components/ui/*` primitives), so the code subtask composes the same primitives
 — no Pencil→code gap.
 
-| Surface                                                          | Asset                               | Notes                                                                                                                                                                                                                                                                                                                                                             |
-| ---------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Org cost dashboard (balance · drill · model · runs · states)** | **`usage.mock.html`** (HTML mockup) | The whole org-level token-cost surface. Multi-panel: **access path (org-menu entry)** · cost summary · org→workspace→project drill-down · per-model breakdown · paginated run log · limited member view · low-balance/out-of-credits · empty/loading/error. **Gates 7.2.11 (MOTIR-824).** A `usage.png` full-page export sits beside it (the board-visible face). |
+| Surface                                                                      | Asset                                      | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Org cost dashboard (balance · drill · model · runs · states)**             | **`usage.mock.html`** (HTML mockup)        | The whole org-level token-cost surface. Multi-panel: **access path (org-menu entry)** · cost summary · org→workspace→project drill-down · per-model breakdown · paginated run log · limited member view · low-balance/out-of-credits · empty/loading/error. **Gates 7.2.11 (MOTIR-824).** A `usage.png` full-page export sits beside it (the board-visible face).                                                                                                                                                                                                                                                     |
+| **Search spend (the FIFTH figure · the mixed activity log · the remainder)** | **`search-spend.mock.html`** (HTML mockup) | The web-search spend the grounding channel adds to this dashboard, 6 panels: the summary figure IN PLACE beside the shipped stat row · the same row UNDER THE DRILL, where the org-level and attributed figures come apart · the activity log holding a MIX of search and token rows · the un-attributed REMAINDER and its zero case · states (no spend for the scope · figures unavailable · plain member · META) · the access path, reproduced. Amends the row above; redraws none of it. `search-spend.png` beside it. See § "Amendment 2026-09-05 — search spend on the usage dashboard" at the end of this file. |
 
 ## What this area is
 
@@ -207,7 +208,11 @@ this amendment every planning run would fall to the shipped renderer's generic
   **That is NOT this card's to fix and is deliberately not drawn here** — it
   predates the wire change, it reaches Panel 2 (out of scope), and where a
   non-AI charge belongs is a real design question rather than something to
-  improvise. It is filed as MOTIR-4325, and it is named here so the next reader
+  improvise. **⚠️ AMENDED 2026-09-05 (MOTIR-4554): it was filed as MOTIR-4325,
+  which is now ARCHIVED and superseded by the story MOTIR-4334 — and the half of
+  it this asset owed is DRAWN, in `search-spend.mock.html`. A deferral pointing
+  at a dead card is a deferral nobody can follow, which is why the pointer is
+  corrected here rather than left to read as still-open.** It is named here so the next reader
   of this asset — including the code card MOTIR-4305 — does not re-derive it or
   read the run log as a complete account of what burns credits. It will widen:
   hosted-agent runtime and code-graph indexing are the same shape, arriving.
@@ -389,3 +394,187 @@ confirm token parity (every colour flips through Tier-0 under `--el-*`).
 
 The full string set is added to the app's locale files (en + zh, the shipped
 locale set) by the 7.2.11 code subtask under the new `usage` namespace.
+
+---
+
+# Amendment 2026-09-05 — search spend on the usage dashboard (MOTIR-4554)
+
+The asset is **`search-spend.mock.html`** + **`search-spend.png`**, a NEW
+three-file member of this area, under story **MOTIR-4334**. Its consuming code
+card is **MOTIR-4558**, `blocked_by` this design gate; the read that feeds it is
+**MOTIR-4555**, and the per-run attribution it renders is produced by
+**MOTIR-4552**.
+
+**This is the answer to the note Panel 5's own amendment left.** That section
+records, in its own words, that the run log is planning runs ONLY while the
+balance above it is the WHOLE ledger — that _"search is rendered nowhere at
+all"_, with _"nothing on the surface saying so"_ — and deliberately did not draw
+it. Its pointer (MOTIR-4325) is corrected in the same pass: that card is archived
+and superseded by MOTIR-4334, and a deferral pointing at a dead card is a
+deferral nobody can follow.
+
+## Why the shipped asset cannot absorb this
+
+`usage.mock.html` draws eight panels and **every quantity on them is
+token-denominated** — the cost summary, the drill, the per-MODEL breakdown, the
+paginated run log. **A search has no model and no tokens.** It cannot be a row in
+the per-model breakdown and it cannot be a token count anywhere. So it needs its
+own figure and its own row treatment, and per the standing convention it gets a
+NEW file rather than an amendment that re-exports eight panels nobody changed.
+`usage.mock.html` and `usage.png` are byte-unchanged.
+
+## THE THREE DECISIONS (the card's own three questions)
+
+### 1. Under the DRILL, two figures come apart — so EVERY figure states its scope
+
+`OrgUsageDTO.search` is **org-level and scope-independent**: a search made
+outside any run has no project to attribute to, so the organization total is the
+only honest place to count them all. `searchRuns.attributedSpend` **does** narrow,
+because an attributed search has a run and a run has a project.
+
+So at project scope the two search figures disagree, correctly. **A number that
+silently ignored the scope selector above it would be the surface lying
+quietly** — and the fix is not to hide one of them, because both are useful. Each
+figure carries a **`.scopetag`**, in the same place, in the same two possible
+words:
+
+| Label                  | Meaning                | Figures                           |
+| ---------------------- | ---------------------- | --------------------------------- |
+| **Follows this scope** | narrows with the drill | token spend · search _attributed_ |
+| **Whole organization** | does NOT narrow        | search _total_                    |
+
+The second is drawn at `--el-text-strong` rather than `--el-text-secondary`: a
+figure that ignores the selector above it has to say so **louder** than one that
+obeys it. Panel 2 adds a note in prose saying WHY, because a reader who notices
+the middle figure did not change deserves the reason on the same screen.
+
+### 2. In the ACTIVITY LOG, a search row is NOT a job kind
+
+**One list, not two.** The page answers _where did my credits go_, and splitting
+search into its own table puts the reconciliation back on the reader.
+
+- **Chip:** the base asset's `pill-neutral` treatment plus the `i-search` glyph
+  (`.pill-search`). **Deliberately NOT a `--el-tint-*`** — see the tint decision
+  below.
+- **Model column:** an **em-dash**, not blank. A search has no model.
+- **Token column:** an **em-dash**, not a `0`. A search does not use zero tokens;
+  it uses none, and a `0` claims the first.
+- **Credits column:** the real figure, in the same column every other row sums
+  into.
+- **Secondary text:** the project and the search COUNT (`Mobile App · 4
+searches`), because a run's row is one entry covering several searches.
+
+### 3. The UN-ATTRIBUTED REMAINDER is a residual ROW — and it is ABSENT at zero
+
+Attributed rows will not sum to the org total, because searches made outside a
+run still debit (`MOTIR-2778` §4 makes two such arrivals legitimate, and a third
+is a `runRef` naming a run motir-ai never opened). **That difference is a real,
+explainable quantity, not a reconciliation failure** — and an unexplained gap
+between a total and its rows is exactly the complaint this story exists to end.
+
+- **Labelled** _"Not attributed to a run"_, as the LAST row of the by-run table,
+  in the same credits column the rows above sum into. **Never a footnote** — a
+  number the reader can add up by eye is a number they can trust. The card foot
+  states the arithmetic in words: _"246 attributed + 66 not attributed = 312."_
+- **At ZERO the row is not drawn at all.** A residual line reading _"Not
+  attributed — 0"_ invites the reader to look for a problem that does not exist.
+  Panel 4 draws both cases side by side for exactly this reason.
+- The `Searches` cell on that row is an em-dash: the count is per-run and there
+  is no run.
+
+## ⚠️ THE TINT DECISION — where this asset differs from its billing sibling
+
+On the **billing panel** the search glyph takes `--el-tint-sky` (that asset's own
+amendment). **Here it takes no tint at all**, and the difference is a decision
+rather than an inconsistency:
+
+**All six `--el-tint-*` slots on this surface are already spent, five of them on
+JOB KINDS** — lavender = generate + the tier chip, sky = expand, mint = augment,
+peach = plan (MOTIR-4303), yellow = low balance, rose = the error icon.
+
+A search row is **not a job kind** — it is a different KIND OF CHARGE. Giving it
+a tint would put two meanings on one colour inside one table, and reusing `sky`
+would make a search row and an `expand` run read alike at a glance. **Two
+identical signals are less legible than one.** The neutral chip plus the search
+glyph is what _"not one of the job kinds"_ looks like in this asset's own
+vocabulary — and the billing panel, which has no job-kind pills at all, has no
+such collision and is free to use the tint.
+
+## Primitives composed (no new primitive is introduced)
+
+| Element                | Primitive / shipped source                               |
+| ---------------------- | -------------------------------------------------------- |
+| The search figure card | the shipped `.card.stat` — same as the three beside it   |
+| The scope label        | NEW inline element (`.scopetag`); no primitive owns one  |
+| The search chip        | the base `Pill` at `pill-neutral` + the `i-search` glyph |
+| The em-dash cells      | plain table cells (`.nodata`)                            |
+| The residual row       | a `.tbl` row (`tr.residual`) on `--el-surface-soft`      |
+| The by-run table       | the shipped `.tbl` at-scale list pattern                 |
+| Pager                  | the shipped `.pager` — unchanged, one list               |
+| Notes / banners        | the shipped dashed `note` family                         |
+| Loading                | the dashboard's own inline skeleton (`.sk` / `.sk-stat`) |
+
+## Colour + shape roles (additions only — the base table above still governs)
+
+| Element                 | Token                                                                        | Why                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Search figure glyph     | `--el-text-muted` on the card                                                | the `.stat .lbl` treatment every stat card already uses                            |
+| Scope label (follows)   | `--el-text-secondary`                                                        | 6.18–6.80:1 on the card AND on `--el-surface-soft`, which is where panel 5 puts it |
+| Scope label (org-level) | `--el-text-strong`                                                           | it has to out-state the one beside it                                              |
+| Search chip             | `--el-surface` bg + `--el-text-secondary`                                    | the base `pill-neutral` triple. NOT a tint — see the tint decision                 |
+| Em-dash cells           | `--el-text-secondary`                                                        | information, not a disabled control                                                |
+| Residual row            | `--el-surface-soft` bg, `--el-text-secondary` ink, `--el-text-strong` figure | quieter than a run row, still AA, with the number readable                         |
+| Card radius / padding   | `--radius-card` / `--spacing-card-padding`                                   | unchanged from the base                                                            |
+
+Credits are labelled **"credits"** and never a currency, per this area's standing
+rule.
+
+## Copy strings (en — the `orgUsage` namespace; MOTIR-4558 adds each with a `zh` twin)
+
+- Figure labels: **"Search spend, this month"** / **"…of which attributed"** /
+  **"{credits} credits all time"** / **"{credits} credits not attributed to a run"**
+- Scope labels: **"Follows this scope"** / **"Whole organization"** /
+  **"Whole organization · unchanged by this drill"**
+- The what-is-a-search note: **"A web search is charged per search, at 1 credit
+  each, and has no model and no tokens — so it never appears in the per-model
+  breakdown above. It is shown as its own figure for the same reason."**
+- The drill note: **"Why the middle figure did not change."** / **"Search is
+  charged to the organization. A search made inside a planning run can be
+  attributed to that run's project — that is the third figure — but a search made
+  outside any run has no project, so the organization total is the only honest
+  place to count them all."**
+- Activity row: **"Web search"** / **"{project} · {n} searches"**
+- One-list note: **"One list, not two."** / **"Splitting search into its own
+  table would put the reconciliation back on the reader — the question this page
+  answers is 'where did my credits go', and the answer has to be readable in one
+  column."**
+- Residual: **"Not attributed to a run"** / **"{attributed} attributed +
+  {remainder} not attributed = {total}. A search made outside a planning run still
+  costs credits and still appears in the total; it just has no run to name."**
+- Zero: **"No searches this month."**
+- Unavailable: **"Search figures aren't available right now. Your searches are
+  still being charged — this is the display, not the billing."**
+- Member lock: **"A member sees their own project's slice. The organization-wide
+  search total and the un-attributed remainder are owner/admin only."**
+
+## GIVES / TAKES
+
+**GIVES — MOTIR-4558** the whole element set: the fourth and fifth stat cards and
+their scope labels, the search row's chip / em-dash / secondary text, the
+residual row and its absence at zero, the four states, and the two decisions
+above as build instructions rather than as taste.
+
+**TAKES — one thing, and it is AMENDED IN THIS PASS.** Panel 5's MOTIR-4303
+amendment carried a deferral naming **MOTIR-4325** as the open card for the
+missing search surface. That card is archived and superseded by **MOTIR-4334**,
+and the dashboard half of what it described is now drawn here — so the pointer is
+corrected in place rather than left to read as still-open. No sibling card's
+scope is narrowed.
+
+The access path is **REPRODUCED** from `usage.mock.html` panel 1, not taken from
+it: the door already exists and this figure joins a page that already has one.
+
+Its neighbours for the record, neither amended: **MOTIR-4551** draws the same
+spend as a billed line on the billing panel (what am I charged for — this asset
+answers where did it go), and **MOTIR-4555** carries the figures across the
+boundary that feed both.

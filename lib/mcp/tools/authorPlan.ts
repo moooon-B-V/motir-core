@@ -11,8 +11,10 @@ import type {
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
+  CorrectPlanBriefInput,
   UpdateProposalKey,
   CorrectProposalKey,
+  CorrectPlanBriefKey,
 } from '@/lib/dto/plans';
 import { InvalidProposalError, PlanRefGraphError } from '@/lib/plans/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -143,6 +145,7 @@ export const ADD_PLAN_ITEMS_TOOL_NAME = 'add_plan_items';
 export const UPDATE_PLAN_ITEM_TOOL_NAME = 'update_plan_item';
 export const UPDATE_PLAN_PROPOSAL_TOOL_NAME = 'update_plan_proposal';
 export const WITHDRAW_PLAN_PROPOSAL_TOOL_NAME = 'withdraw_plan_proposal';
+export const UPDATE_PLAN_TOOL_NAME = 'update_plan';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arguments
@@ -192,7 +195,8 @@ const createPlanInputSchema = {
     .optional()
     .describe(
       'Optional longer summary (Markdown) of what this plan proposes and why, shown to the ' +
-        'reviewer above the tree.',
+        'reviewer above the tree. Not write-once: `update_plan` corrects it — and the title — ' +
+        'after the fact, on a `generating` or `planned` plan, without touching a proposal.',
     ),
   plannedWithHarness: plannedWithHarnessField,
   plannedWithModel: plannedWithModelField,
@@ -621,6 +625,57 @@ const withdrawPlanProposalInputSchema = {
     .min(1)
     .describe('The proposal to take off the plan — one of the ids `add_plan_items` returned.'),
 };
+
+// ── AND `update_plan` (MOTIR-4637) ─────────────────────────────────────────
+// The SIXTH tool, and the one that is not about a proposal at all. The five
+// above reach every part of a plan under review except the two lines a reviewer
+// reads FIRST: the plan's own `title` and `summary`, written once by
+// `create_plan` and unreachable afterwards. So the cheapest possible mistake —
+// one wrong sentence, in the field `create_plan` itself describes as "shown to
+// the reviewer above the tree" — had the most expensive remedy in the surface:
+// withdraw every proposal (which ENDS a `planned` plan as `declined` /
+// `discarded`), re-create the plan, re-append every proposal with every
+// `planItem:` ref rebuilt, re-close it.
+//
+// ⚠️ WHY A SIXTH TOOL AND NOT AN ARGUMENT ON `update_plan_proposal`. That tool's
+// contract is addressed to ONE proposal — it takes a `planItemId` and every
+// field on it patches that proposal's own body or structure. Growing it a pair
+// of plan-level fields would make its `planItemId` conditionally meaningless and
+// its one-line contract unsayable. The same argument AMENDMENT 8 made for not
+// widening the deepen turn.
+//
+// THIN, like its siblings: the lock, the frozen-status gate and the trail write
+// are all `plansService.correctPlanBrief`.
+
+const updatePlanInputSchema = {
+  planId: z.string().trim().min(1).describe('The plan id `create_plan` returned.'),
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .nullable()
+    .optional()
+    .describe(
+      "The plan's own short label — what it is proposing, in a line. `null` clears it. Omit " +
+        'it to leave it exactly as it is.',
+    ),
+  summary: z
+    .string()
+    .trim()
+    .min(1)
+    .nullable()
+    .optional()
+    .describe(
+      'The longer summary (Markdown) shown to the reviewer above the tree — the sentence they ' +
+        'read before any card. `null` clears it. Omit it to leave it exactly as it is.',
+    ),
+};
+
+interface UpdatePlanArgs {
+  planId: string;
+  title?: string | null;
+  summary?: string | null;
+}
 
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
   parentRef?: string | null;
@@ -1345,6 +1400,58 @@ export async function runWithdrawPlanProposal(
   );
 }
 
+/**
+ * The BRIEF-correction summary (MOTIR-4637). Its own function for the same
+ * reason `summarizeCorrection` is not `summarizeDeepen`: what a caller should do
+ * next differs, and on a `planned` plan the thing that changed is the sentence a
+ * reviewer is reading right now.
+ */
+function summarizeBriefCorrection(plan: PlanWithItemsDto, changed: readonly string[]): string {
+  return [
+    `Corrected plan ${plan.id}'s own ${changed.join(' and ')} — ${plan.status}, ` +
+      `${plan.itemCount} proposal(s), every one of them untouched.`,
+    plan.status === 'planned'
+      ? 'This plan is `planned` — it is in front of a reviewer, and this edit is on its ' +
+        'timeline with the harness and model that made it, so they can see the heading changed ' +
+        'after they started reading.'
+      : `Still \`generating\` — send \`final: true\` on a last \`${ADD_PLAN_ITEMS_TOOL_NAME}\` ` +
+        'batch to put the plan in front of a reviewer.',
+    '',
+    PROPOSAL_GATE,
+  ].join('\n');
+}
+
+/**
+ * CORRECT the plan's own `title` / `summary` on a `generating` or `planned` plan
+ * (MOTIR-4637) — a transport over `plansService.correctPlanBrief`, adding no
+ * logic of its own.
+ *
+ * The presence-then-`undefined` discipline is its siblings': the summary may not
+ * claim a field this call did not send, and `null` is a VALUE here (it clears)
+ * rather than an absence.
+ */
+export async function runUpdatePlan(
+  args: UpdatePlanArgs,
+  ctx: ServiceContext,
+): Promise<CallToolResult> {
+  const patchable = ['title', 'summary'] as const satisfies readonly CorrectPlanBriefKey[];
+
+  const input: CorrectPlanBriefInput = {};
+  const changed: string[] = [];
+  for (const key of patchable) {
+    if (!(key in args) || args[key] === undefined) continue;
+    (input as Record<string, unknown>)[key] = args[key];
+    changed.push(key);
+  }
+
+  const plan = await plansService.correctPlanBrief(args.planId, input, ctx);
+
+  return toolOk(
+    summarizeBriefCorrection(plan, changed),
+    derived(planPayload, presentMcpPlan(plan)),
+  );
+}
+
 export function registerAuthorPlan(server: McpServer, resolveContext: McpContextResolver): void {
   server.registerTool(
     CREATE_PLAN_TOOL_NAME,
@@ -1513,6 +1620,41 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
     async (args, extra) => {
       try {
         return await runWithdrawPlanProposal(args, resolveContext(extra));
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    UPDATE_PLAN_TOOL_NAME,
+    {
+      title: "Correct a plan's own title and summary",
+      description:
+        'Correct the PLAN’S OWN title and summary — the heading a reviewer reads ABOVE the ' +
+        'tree, before any card. This touches NO proposal: ' +
+        `\`${UPDATE_PLAN_PROPOSAL_TOOL_NAME}\` is the door onto one of those, and this is the ` +
+        'door onto the two fields `create_plan` writes once and nothing could reach afterwards. ' +
+        'Reach for it when the summary says something that turned out to be wrong — a premise ' +
+        'that was falsified, a decision that moved, a disposition you now have to restate — ' +
+        'instead of withdrawing every proposal to rebuild the plan under a new id. The patch is ' +
+        'SPARSE: a field you omit is left exactly as it was and an explicit `null` clears it, ' +
+        'so send only what you are changing; a call sending neither is refused. Legal while the ' +
+        'plan is `generating` AND after you have closed it with `final: true`, while it is ' +
+        '`planned` and waiting for a reviewer. It is REFUSED once the plan is `approved` (its ' +
+        'proposals have become work items and the plan is the record of what was approved) or ' +
+        '`declined` (a closed decision), and the refusal names the status. It changes NOTHING ' +
+        'else: the plan keeps every proposal it had, its status, its planned-at time and its ' +
+        'staleness flags. The edit appears on the plan’s timeline with the harness and model ' +
+        'that made it, so a reviewer can see the heading changed under them. ' +
+        'IMPORTANT: this creates NO work item and changes nothing in the tree. Approving the ' +
+        'plan in Motir is the only path from a proposal to a work item, and approval does not ' +
+        'happen on this surface. Costs nothing and starts no job.',
+      inputSchema: updatePlanInputSchema,
+    },
+    async (args, extra) => {
+      try {
+        return await runUpdatePlan(args, resolveContext(extra));
       } catch (err) {
         return toToolError(err);
       }

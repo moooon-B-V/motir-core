@@ -1841,6 +1841,12 @@ one blocks implement the acquire, the refusal and the release.
   the work item is the source of truth, `declined` because it is a closed decision. D3(c)'s
   mutable-ref-graph objection is answered by MOTIR-3539's append-time check, which the correction
   re-runs. No grant change, no UI, no change to what approve materializes.
+- **And so can the PLAN'S OWN title and summary** (AMENDMENT 13, MOTIR-4637): `correctPlanBrief`
+  reaches the last write-once thing about a plan under review — the two lines a reviewer reads ABOVE
+  the tree. Same boundary (`generating` / `planned` editable, decided plans frozen), same key
+  (`ai:view_plan`), same refusal (`PLAN_NOT_EDITABLE`), and it is RECORDED on the trail under a verb
+  of its own (`brief_edited`) rather than silently. It touches no proposal, no status, and no
+  `plannedAt`. One MCP tool, `update_plan`; no UI control, deliberately.
 - **A `modify` may RE-PARENT its target** (AMENDMENT 11, MOTIR-3859): `PlanItemPatch` gains
   `parentRef`, so D3's `SITS or SHIPS` pair — widened for SHIPS by MOTIR-1884 / MOTIR-1912 and for
   SITS by nothing — is whole. A `planItem:` temp-ref is refused (every guard a re-parent owes is a
@@ -2423,3 +2429,91 @@ second plan they must decline by hand, which is two surfaces to read instead of 
 is refused."_ Under this amendment that is false for a declared revision. **Nothing in `motir-meta`
 changes in this card's pull request** — one subtask is one repo — and the sweep is filed as its own
 sibling, MOTIR-4154, `blocked_by` this card.
+
+---
+
+## AMENDMENT 13 — the plan's OWN title and summary are correctable, and the correction is on the record (MOTIR-4637, 2026-09-05)
+
+AMENDMENT 8 opened a correction door onto a plan under review and AMENDMENT 12 opened a third verb
+beside it. Between them an author can now change what a proposal SAYS, where it SITS, where it SHIPS,
+which ops the plan carries, and which cards are on it at all — **on a plan a reviewer is already
+holding**. Every one of those doors addresses a `PlanItem`.
+
+The `Plan` row itself kept a pair of fields no door reached: `title` and `summary`, written once by
+`createPlan` and never again. `summary` is the field `create_plan`'s own description calls _"shown to
+the reviewer above the tree"_ — it is read BEFORE any card is — and MOTIR-3053's standing planning
+guidance actively directs an agent to put dispositions in it. **A field the product tells you to write
+dispositions into cannot also be the one field you may never revise.**
+
+### What it cost, measured on the incident that filed the card
+
+A `planned` plan carried three proposals and a summary asserting the org was the billing unit for
+code indexing. That is false — indexing is absorbed (MOTIR-4541) — and it is the sentence the reviewer
+reads first. The proposals were correctable. The sentence was not. So all three proposals were
+withdrawn, which under MOTIR-4146 ENDED the plan (`declined` / `discarded`), and the whole plan was
+re-authored under a new id. **The cheapest possible mistake had the most expensive remedy in the
+surface**, and the record now carries an abandoned, item-less plan whose only defect was one sentence.
+
+### D1 — WHICH STATUSES. `generating` and `planned`; `approved` and `declined` are FROZEN.
+
+The same boundary AMENDMENT 8 drew, reused rather than re-derived, because it is the same question: a
+plan being written or awaiting a decision is editable, a DECIDED plan is a record. `PlanNotEditableError`
+is the refusal, and its message now names both halves — the brief and the proposals — instead of only
+the half it was first written for.
+
+`approved` is the arm worth stating: a decided plan's title and summary are part of the record of
+what was approved, and there is no `update_work_item` equivalent to redirect a caller to, because the
+brief did not materialize into anything.
+
+### D2 — IS IT AN EVENT THE REVIEWER MUST SEE? **YES.** It is recorded, under its own verb.
+
+This is the question the card refused to pre-answer, and the answer is that a silent edit would trade
+one honesty problem for another. AMENDMENT 10 already settled the general form — _the `generating`
+assertion was never about generation, it was the guarantee that a plan does not change INVISIBLY under
+its reviewer_ — and a rewritten summary is the most visible change a plan can undergo, since it is the
+first thing read.
+
+**The verb is `brief_edited`, not `edited`.** `edited` means _a proposal on this plan changed_: the
+timeline renders it as `N proposal(s) edited`, and a row saying so when no proposal moved would be a
+trail that LIES. That is the one failure `PlanRevision`'s required `tx` exists to prevent, arriving
+through the vocabulary instead of through the transaction. It is the same reasoning MOTIR-3540 used to
+make a withdraw its own verb rather than an `edited` row.
+
+The row carries no `planItemId` (there is no proposal), its `diff` names the fields the call supplied,
+and — like `correctProposal` — it records the AGENT actor, so a reviewer can see which harness and
+model rewrote the sentence they were reading.
+
+### D3 — WHICH DOORS. The MCP tool. **No UI control.**
+
+`update_plan` is the sixth tool in this family and the first that is not about a proposal. It is a
+SIXTH tool rather than two more arguments on `update_plan_proposal` for AMENDMENT 8's own reason: that
+tool's contract is addressed to ONE proposal, it takes a `planItemId`, and every field on it patches
+that proposal. Plan-level fields would make its `planItemId` conditionally meaningless and its
+one-line contract unsayable.
+
+**A reviewer-facing editor is NOT decided here and is NOT shipped.** The reviewer wanting to fix an
+agent's wording without going back to the agent is a real want and a separate question — it needs a
+surface, an actor rule (a person editing an agent-written plan is a different actor, which is exactly
+why `PlanRevision` carries its own) and a decision about whether a reviewer editing what they are
+reviewing is even the shape we want. MOTIR-3084's removal of the proposal edit modal stands, and this
+amendment does not re-open it. **What is shipped is the door the incident needed: the author that
+wrote the wrong sentence can correct it.**
+
+### D4 — DOES `title` TRAVEL WITH `summary`? **YES, in one tool.**
+
+Identical shape, identical single write site, identical remedy. Splitting them would leave half the
+defect and cost a second tool for nothing.
+
+### What this does NOT do
+
+- **It touches no proposal.** The plan keeps every proposal it had, and the tests assert the set and
+  the ids directly rather than through the returned DTO.
+- **It does not move `status`, `plannedAt` or the staleness derived from it.** A brief edit corrects
+  what the plan says about itself; it may not re-open a closed plan, re-date it, or make a reviewer's
+  read of the tree stale.
+- **`CLI_TOKEN_GRANT` is NOT widened.** `correctPlanBrief` asserts `ai:view_plan` and the grant does
+  not carry it, so a sandboxed run that may not reshape the plan it was handed may not rewrite what
+  that plan says about itself either. Asserted from the constant, so a later widening fails a test.
+- **No migration.** `changeKind` is plain text precisely so a new verb is a code change, and both
+  columns already exist and are already nullable.
+- **No lease.** One transaction, the same reasoning AMENDMENT 12 records for the revision append.

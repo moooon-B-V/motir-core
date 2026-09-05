@@ -56,6 +56,21 @@ import { planRevisionRepository } from '@/lib/repositories/planRevisionRepositor
  * delete an existing work item from the tree, so rendering a withdraw as
  * *"1 proposal removed"* would read to a reviewer as a card being deleted.
  *
+ * ⚠️ `brief_edited` is the ELEVENTH (MOTIR-4637), and it is the second verb —
+ * after `bug_filed` — that is not about a proposal at all. It records an edit to
+ * the PLAN'S OWN `title` / `summary`, the two lines a reviewer reads above the
+ * tree. It is deliberately NOT `edited`: that verb means *a proposal on this plan
+ * changed*, the timeline renders it as `N proposal(s) edited`, and a row saying
+ * so when no proposal moved would be a trail that lies — the one failure the
+ * required `tx` above exists to prevent, arriving through the vocabulary instead.
+ * It carries no `planItemId`, for the same reason the open and the close do not,
+ * and its `diff` names the fields the call supplied.
+ *
+ * AND IT IS RECORDED RATHER THAN SILENT, which is the decision MOTIR-4637 owed
+ * and states here: a `planned` plan is a thing a person is deciding about, so
+ * rewriting the sentence they are reading without a trace would trade one honesty
+ * problem for another.
+ *
  * ⚠️ `bug_filed` is the tenth (Story MOTIR-4053 · MOTIR-4076), and it is the
  * first verb that describes a WORK ITEM rather than a proposal: the planning
  * job filed a real `bug` into its own project, unreviewed, and this row is where
@@ -74,7 +89,8 @@ export type PlanRevisionChangeKind =
   | 'declined'
   | 'revision_started'
   | 'revision_ended'
-  | 'bug_filed';
+  | 'bug_filed'
+  | 'brief_edited';
 
 /**
  * WHICH AGENT performed a change, when one did — the
