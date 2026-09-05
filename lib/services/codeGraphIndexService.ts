@@ -42,10 +42,19 @@ import {
 // intended repo, each carrying the realized `GithubRepo` it maps to — read it via
 // `projectRepoSetService.getSet` / `listByProject`. This service is DELIBERATELY
 // still workspace-scoped: narrowing the fan-out is a behaviour change to shipped,
-// working code-graph plumbing, and it belongs to MOTIR-1754 (the BYOK code-index
-// loop), which owns per-repo index freshness end to end. So the association is no
-// longer missing — only unadopted here, and by whom is recorded. Do not read this
-// paragraph as an invitation to fix it in passing.
+// working code-graph plumbing, and it wants its own decision, its own tests and
+// its own review.
+//
+// ⚠️ THE OWNER IS `docs/decisions/code-graph-index-fan-out.md` (MOTIR-2029), NOT
+// MOTIR-1754. This paragraph named that story for months and that story's own
+// scope boundary handed the question straight back — a closed loop, which is
+// exactly how a deferral orphans. The decision document is what closes it: it
+// weighs the options, records that the container move made this a COST multiplier
+// rather than a tidiness question (one machine per (repo × project), byte-identical
+// work), and names what must be settled — the empty-set case and the fate of graphs
+// a narrowed rule would exclude.
+//
+// Do not read this paragraph as an invitation to fix it in passing.
 //
 // SIDE-EFFECTS-OUTSIDE-TX: the DB reads run inside one `withSystemContext`
 // transaction (RLS-safe under the trusted-writer escape, like the webhook); every
