@@ -45,6 +45,15 @@ function rawResponse(over: Partial<RawUsageResponse> = {}): RawUsageResponse {
     monthlyHistory: [{ yearMonth: '2026-06', credits: 7520 }],
     perModel: [{ model: 'claude-opus-4-8', inputTokens: 1000, outputTokens: 200, credits: 5180 }],
     recentRuns: { runs: [], page: 1, pageSize: 10, total: 0 },
+    search: { totalSpend: 40, monthSpend: 12 },
+    searchRuns: {
+      runs: [{ jobId: 'job_1', credits: 9, lastSearchAt: '2026-09-01T10:00:00.000Z' }],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+      attributedSpend: 31,
+      unattributedSpend: 9,
+    },
     ...over,
   };
 }
@@ -109,6 +118,52 @@ describe('GET /api/organizations/[orgId]/usage', () => {
     );
     // project exists so the drill/enrichment path had a row to resolve.
     expect(project.id).toBeTruthy();
+  });
+
+  it('200 — serializes the SEARCH blocks through the route (MOTIR-4555)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getOrgUsageMock.mockResolvedValue(rawResponse());
+
+    signInAs(owner);
+    const { req, ctx } = usageReq(workspace.organizationId, '?scope=org');
+    const res = await GET(req, ctx);
+    const body = (await res.json()) as {
+      search: { totalSpend: number; monthSpend: number } | null;
+      searchRuns: {
+        runs: { jobId: string; credits: number }[];
+        attributedSpend: number;
+        unattributedSpend: number;
+      } | null;
+    };
+
+    expect(body.search).toEqual({ totalSpend: 40, monthSpend: 12 });
+    expect(body.searchRuns?.runs).toEqual([
+      { jobId: 'job_1', credits: 9, lastSearchAt: '2026-09-01T10:00:00.000Z' },
+    ]);
+    // The remainder survives serialization intact — it is the figure the
+    // dashboard renders, and JSON is the last place it could be lost.
+    expect(body.searchRuns?.attributedSpend).toBe(31);
+    expect(body.searchRuns?.unattributedSpend).toBe(9);
+  });
+
+  it('200 — an ABSENT search block serializes as null, not as zero', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    getOrgUsageMock.mockResolvedValue(rawResponse({ search: undefined, searchRuns: undefined }));
+
+    signInAs(owner);
+    const { req, ctx } = usageReq(workspace.organizationId, '?scope=org');
+    const body = (await (await GET(req, ctx)).json()) as {
+      search: unknown;
+      searchRuns: unknown;
+    };
+
+    // `null` survives JSON; `undefined` would be DROPPED from the body entirely,
+    // and a missing key reads to a client exactly like a client that forgot to
+    // ask. The DTO's `null` is what makes "unavailable" legible on the wire.
+    expect(body.search).toBeNull();
+    expect(body.searchRuns).toBeNull();
   });
 
   it('404 (no-leak) for a non-member — the route MAPS OrganizationNotFoundError', async () => {

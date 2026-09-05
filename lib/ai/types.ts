@@ -486,6 +486,56 @@ export interface RawUsageRun {
   startedAt: string; // ISO
 }
 
+/**
+ * `GET /v1/usage` — the ORG-LEVEL web-search spend block (motir-ai
+ * `docs/contract.md`, `docs/credit-model.md` §4b).
+ *
+ * Scope-INDEPENDENT: it counts every search the org made, attributed or not, and
+ * does NOT narrow when the drill moves to a workspace or a project. The AI spend
+ * figures beside it all join `PlanningTurn` and therefore exclude these rows by
+ * construction, which is what lets the billing panel render Motir Search as its
+ * own line rather than folding it into the AI number.
+ */
+export interface RawUsageSearch {
+  totalSpend: number;
+  monthSpend: number;
+}
+
+/** One run's search spend. `jobId` is the SAME key `RawUsageRun` carries. */
+export interface RawUsageSearchRun {
+  jobId: string;
+  credits: number;
+  lastSearchAt: string; // ISO
+}
+
+/**
+ * `GET /v1/usage` — the PER-RUN half of search spend (motir-ai MOTIR-4552,
+ * `docs/credit-model.md` §4b.1). Reported ALONGSIDE `search`, never inside it.
+ *
+ * ⚠️ THE TWO HALVES ARE SCOPED DIFFERENTLY, and a consumer that cannot tell will
+ * render an org number under a project heading:
+ *
+ * - `runs` / `total` FOLLOW THE DRILL SCOPE. A search carries its run and a run
+ *   carries a project, so attributed spend narrows the way the AI figures do.
+ * - `attributedSpend` / `unattributedSpend` are ORG-LEVEL, all-time, measured
+ *   over the same population as `search.totalSpend` — so
+ *   `attributedSpend + unattributedSpend === search.totalSpend`, always, however
+ *   the reader has drilled.
+ *
+ * `unattributedSpend` is NOT an error figure. `MOTIR-2778` §4 makes a search
+ * outside any run, and a search from an untrusted token, both legitimate and both
+ * fully charged, so the remainder is a real quantity to render — showing it is
+ * what stops the gap between a total and its rows reading as a bug in the number.
+ */
+export interface RawUsageSearchRuns {
+  runs: RawUsageSearchRun[];
+  page: number;
+  pageSize: number;
+  total: number;
+  attributedSpend: number;
+  unattributedSpend: number;
+}
+
 export interface RawUsageResponse {
   scope: UsageScope;
   coreOrganizationId: string;
@@ -498,6 +548,21 @@ export interface RawUsageResponse {
   monthlyHistory: { yearMonth: string; credits: number }[];
   perModel: { model: string; inputTokens: number; outputTokens: number; credits: number }[];
   recentRuns: { runs: RawUsageRun[]; page: number; pageSize: number; total: number };
+  /**
+   * Web-search spend. motir-ai sends BOTH blocks on every response
+   * (`usageService.UsageResponseDto`), so the wire shape is not optional —
+   * they are OPTIONAL HERE for one reason only: a ROLLING DEPLOY, where
+   * motir-core has shipped and the motir-ai half has not (or has rolled back).
+   *
+   * ⚠️ `undefined` therefore means UNAVAILABLE, never zero, and the two must not
+   * collapse: a customer told they spent nothing on search when the figure could
+   * not be fetched is worse off than one told nothing at all. The DTO layer
+   * carries that distinction as `null` vs a populated object; see
+   * `lib/dto/aiUsage.ts`, and `ciFigures.ts`'s `balanceUnavailable` for the
+   * shipped precedent one billed line over.
+   */
+  search?: RawUsageSearch;
+  searchRuns?: RawUsageSearchRuns;
 }
 
 // POST /v1/credits/ci-overage (MOTIR-1899 · motir-ai `docs/contract.md` §2.4) —

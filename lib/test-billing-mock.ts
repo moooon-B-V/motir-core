@@ -56,11 +56,68 @@ export interface BillingFixtureSubscription {
   planTier: BillingFixtureTier | null;
 }
 
+/** Web-search spend, as `/v1/usage` reports it (mirrors `RawUsageSearch`). */
+export interface BillingFixtureSearch {
+  totalSpend: number;
+  monthSpend: number;
+}
+
+/** One run's search spend (mirrors `RawUsageSearchRun`). */
+export interface BillingFixtureSearchRun {
+  jobId: string;
+  credits: number;
+  lastSearchAt: string;
+}
+
+/**
+ * The per-RUN half of search spend (mirrors `RawUsageSearchRuns`).
+ *
+ * ⚠️ `attributedByProject` is the one field with no counterpart on the wire, and
+ * it exists to make the DRILL reachable in this lane. `attributedSpend` FOLLOWS
+ * the drill while `search.totalSpend` does not, and that asymmetry is the whole
+ * decision the search asset makes — a fixture that answered the same figure at
+ * every scope could only ever assert it vacuously. Keyed by `coreProjectId`,
+ * falling back to `attributedSpend` when the read is not project-scoped.
+ */
+export interface BillingFixtureSearchRuns {
+  runs: BillingFixtureSearchRun[];
+  attributedSpend: number;
+  unattributedSpend: number;
+  attributedByProject?: Record<string, number>;
+}
+
 /** One org's motir-ai-side billing state the boundary should report. */
 export interface BillingFixtureEntry {
   balance: number;
   tier: BillingFixtureTier | null;
   subscription: BillingFixtureSubscription;
+  /**
+   * OPTIONAL, and the omission is meaningful rather than lazy (MOTIR-4560).
+   * Absent ⇒ the boundary reports NO `search` / `searchRuns` block at all, which
+   * is exactly the rolling-deploy shape motir-core renders as UNAVAILABLE. So a
+   * fixture that says nothing about search drives the unavailable state, and one
+   * that supplies zeroes drives the genuinely-zero state — the two an entire
+   * story exists to keep apart.
+   */
+  search?: BillingFixtureSearch;
+  searchRuns?: BillingFixtureSearchRuns;
+  /** Token runs for the activity log, so a search row is judged beside real
+   *  neighbours rather than alone. */
+  recentRuns?: {
+    jobId: string;
+    jobKind: string;
+    model: string | null;
+    coreWorkspaceId: string;
+    coreProjectId: string;
+    inputTokens: number;
+    outputTokens: number;
+    credits: number;
+    startedAt: string;
+  }[];
+  /** Org-level token spend, so the dashboard's GLOBAL empty state can be kept
+   *  off while search spend is zero — the distinction AC 4 drives. */
+  totalSpend?: number;
+  monthSpend?: number;
 }
 
 /** The fixture file shape: `coreOrganizationId` → its motir-ai billing state. */
@@ -90,9 +147,12 @@ function entryFor(coreOrganizationId: string | null): BillingFixtureEntry {
   return readFixture()[coreOrganizationId] ?? FREE_DEFAULT;
 }
 
+function queryOf(reqPath: string): URLSearchParams {
+  return new URLSearchParams(reqPath.includes('?') ? reqPath.slice(reqPath.indexOf('?') + 1) : '');
+}
+
 function queryOrgId(reqPath: string): string | null {
-  const q = reqPath.includes('?') ? reqPath.slice(reqPath.indexOf('?') + 1) : '';
-  return new URLSearchParams(q).get('coreOrganizationId');
+  return queryOf(reqPath).get('coreOrganizationId');
 }
 
 const json = { headers: { 'content-type': 'application/json' } } as const;
@@ -113,20 +173,50 @@ export function installBillingBoundaryMock(agent: MockAgent): void {
     .reply((req) => {
       const orgId = queryOrgId(req.path);
       const e = entryFor(orgId);
+      const q = queryOf(req.path);
+      // ECHO the requested scope rather than hardcoding `org`. motir-core sends
+      // the scope it RESOLVED server-side (a member is narrowed to their own
+      // project before the call), so echoing it is what the real boundary does
+      // and what lets a scoped read be told from an unscoped one.
+      const scope = q.get('scope') ?? 'org';
+      const coreProjectId = q.get('coreProjectId');
+      const runs = e.recentRuns ?? [];
       return {
         statusCode: 200,
         data: {
-          scope: 'org',
+          scope,
           coreOrganizationId: orgId,
-          coreWorkspaceId: null,
-          coreProjectId: null,
+          coreWorkspaceId: q.get('coreWorkspaceId'),
+          coreProjectId,
           balance: e.balance,
           tier: e.tier,
-          totalSpend: 0,
-          monthSpend: 0,
+          totalSpend: e.totalSpend ?? 0,
+          monthSpend: e.monthSpend ?? 0,
           monthlyHistory: [],
           perModel: [],
-          recentRuns: { runs: [], page: 1, pageSize: 20, total: 0 },
+          recentRuns: { runs, page: 1, pageSize: 20, total: runs.length },
+          // ⚠️ SPREAD, not a default. An absent `search` must stay ABSENT on the
+          // wire — that is the rolling-deploy shape motir-core renders as
+          // UNAVAILABLE, and defaulting it to zeroes here would make the one
+          // state this whole story distinguishes unreachable in the lane.
+          ...(e.search ? { search: e.search } : {}),
+          ...(e.searchRuns
+            ? {
+                searchRuns: {
+                  runs: e.searchRuns.runs,
+                  page: 1,
+                  pageSize: 20,
+                  total: e.searchRuns.runs.length,
+                  // The org-level total never narrows; the attributed figure
+                  // does, which is the asymmetry the surface labels.
+                  attributedSpend:
+                    (coreProjectId
+                      ? e.searchRuns.attributedByProject?.[coreProjectId]
+                      : undefined) ?? e.searchRuns.attributedSpend,
+                  unattributedSpend: e.searchRuns.unattributedSpend,
+                },
+              }
+            : {}),
         },
         responseOptions: json,
       };

@@ -5306,7 +5306,15 @@
       "creditsChip": "Credits",
       "creditsUnit": "credits",
       "unlimited": "Unlimited",
-      "internal": "Internal"
+      "internal": "Internal",
+      "searchThisMonth": "Search spend, this month",
+      "searchAllTime": "{n} credits all time",
+      "searchAttributed": "…of which attributed",
+      "searchUnattributed": "{n} credits not attributed to a run",
+      "searchUnavailable": "Search figures aren’t available right now. Your searches are still being charged — this is the display, not the billing.",
+      "searchUnavailableValue": "Unavailable",
+      "scopeFollows": "Follows this scope",
+      "scopeOrg": "Whole organization"
     },
     "affordance": "Credits are an internal usage allotment — not a currency, and this is not a bill. One planning run debits credits by the tokens it consumed. Buying more credits and plan changes arrive with billing in a later release.",
     "drill": {
@@ -5353,7 +5361,10 @@
       "pagerPage": "Page {n} of {m}",
       "prev": "Prev",
       "next": "Next",
-      "unknownProject": "Unknown project"
+      "unknownProject": "Unknown project",
+      "webSearch": "Web search",
+      "noModel": "No model",
+      "noTokens": "No tokens"
     },
     "member": {
       "readOnly": "Read-only",
@@ -5481,6 +5492,22 @@
       "optionMoveCost": "Needs a GitHub account you own, a transfer you accept on GitHub (it isn't instant), and re-installing the Motir app so dispatch keeps working.",
       "optionMoveCta": "Move repositories",
       "viewUsage": "View Usage & cost"
+    },
+    "search": {
+      "name": "Motir Search",
+      "tagline": "The web searches your planning runs make to ground themselves in current sources.",
+      "perUse": "Per use",
+      "monthLabel": "Spent this month",
+      "totalLabel": "Spent all time",
+      "creditsUnit": "credits",
+      "rate": "Each web search draws 1 credit from your Motir AI balance. There is no included allowance and nothing to run out of — search is charged only when a run uses it.",
+      "zeroTitle": "No searches billed this month.",
+      "zeroBody": "Search is charged only when a planning run uses it, so nothing here means nothing was used — not that anything is unavailable.",
+      "overdraftTitle": "Search keeps working when your balance runs out.",
+      "overdraftBody": "An out-of-credit organization goes into overdraft and search refuses nothing. Refusal stays at the planning-turn gate, where it already is.",
+      "unavailable": "Search figures aren’t available right now. Your searches are still being charged — this is the display, not the billing.",
+      "unavailableValue": "Unavailable",
+      "viewRuns": "See which runs spent it"
     },
     "internal": {
       "badge": "Internal",

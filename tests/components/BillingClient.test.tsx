@@ -64,6 +64,10 @@ function activeStandard(): BillingStatusDTO {
     organizationId: 'org1',
     access: { role: 'owner', canManageBilling: true },
     isMeta: false,
+    // ④ The Motir Search line's figures (MOTIR-4555 carries them; MOTIR-4557
+    // renders them). The default is a zero month, so the base fixture exercises
+    // the `nothing_to_bill` shape and the spend cases opt in explicitly.
+    search: { totalSpend: 0, monthSpend: 0 },
     motir: { scaledTrackerSubscription: null, aiIncludedSeat: false },
     motirAi: {
       tier: { key: 'standard', name: 'Standard', monthlyCreditAllotment: 2000 },
@@ -558,5 +562,162 @@ describe('BillingClient — the Motir CI line', () => {
     renderWithBody({ ...withCi({}), isMeta: true });
     await waitFor(() => expect(screen.getByText('Internal organization')).toBeTruthy());
     expect(screen.queryByRole('heading', { name: 'Motir CI' })).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ④ The Motir Search line (MOTIR-4557) — the fourth billed line.
+//
+// EXTENDS this suite rather than replacing it (AC 7): every assertion above, for
+// the three shipped lines, is untouched and still runs.
+//
+// The line is figures and a cross-link — no button, no checkout, no owner-only
+// affordance — so it takes no `canManage` and has no member variant of its own.
+// The member test below asserts exactly that: the shipped permission split
+// reaches it unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function withSearch(
+  search: BillingStatusDTO['search'],
+  over: Partial<BillingStatusDTO> = {},
+): BillingStatusDTO {
+  return { ...activeStandard(), search, ...over };
+}
+
+describe('BillingClient — the Motir Search line', () => {
+  it('renders as the FOURTH billed line, beside the three shipped ones', async () => {
+    renderWithBody(withSearch({ totalSpend: 1204, monthSpend: 312 }));
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    expect(screen.getByRole('heading', { name: 'Motir Search', level: 2 })).toBeTruthy();
+    // The three shipped lines are untouched by its arrival.
+    expect(screen.getByRole('heading', { name: 'Motir', level: 2 })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Motir AI', level: 2 })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Motir CI', level: 2 })).toBeTruthy();
+  });
+
+  it('shows both figures, labelled `credits` and never a currency (AC 4)', async () => {
+    renderWithBody(withSearch({ totalSpend: 1204, monthSpend: 312 }));
+    await waitFor(() => expect(screen.getByText('Spent this month')).toBeTruthy());
+
+    expect(screen.getByText('Spent all time')).toBeTruthy();
+    expect(screen.getByText('312')).toBeTruthy();
+    expect(screen.getByText('1,204')).toBeTruthy();
+    // The unit is the word, on both figures — a `$` anywhere on this line would
+    // be the area's standing rule broken.
+    expect(screen.getAllByText('credits').length).toBeGreaterThanOrEqual(2);
+    const line = screen.getByRole('heading', { name: 'Motir Search', level: 2 }).closest('div');
+    expect(line?.textContent ?? '').not.toContain('$');
+  });
+
+  it('renders NOTHING BILLED as a sentence, not as a zero figure', async () => {
+    renderWithBody(withSearch({ totalSpend: 40, monthSpend: 0 }));
+    await waitFor(() => expect(screen.getByText('No searches billed this month.')).toBeTruthy());
+
+    // Deliberately NOT a "0 credits" figure: an org whose runs never search has
+    // nothing wrong with it, and a zero drawn as a figure reads as if it did.
+    expect(screen.queryByText('Spent this month')).toBeNull();
+  });
+
+  // ── AC 3's named assertion ─────────────────────────────────────────────────
+
+  it('⚠️ renders UNAVAILABLE visibly differently from ZERO', async () => {
+    renderWithBody(withSearch(null));
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Search figures aren’t available right now/, { exact: false }),
+      ).toBeTruthy(),
+    );
+
+    // An em-dash carrying an accessible name — never a `0`, which would tell a
+    // customer they were not charged.
+    expect(screen.getAllByLabelText('Unavailable').length).toBe(2);
+    expect(screen.getByText('Spent this month')).toBeTruthy();
+    // And it is NOT the zero-month sentence.
+    expect(screen.queryByText('No searches billed this month.')).toBeNull();
+
+    // Now the genuinely-zero month, for contrast in the same suite.
+    cleanup();
+    renderWithBody(withSearch({ totalSpend: 0, monthSpend: 0 }));
+    await waitFor(() => expect(screen.getByText('No searches billed this month.')).toBeTruthy());
+    expect(screen.queryByLabelText('Unavailable')).toBeNull();
+    expect(screen.queryByText(/aren’t available right now/, { exact: false })).toBeNull();
+  });
+
+  it('leaves the OTHER lines intact when only the search figures are missing', async () => {
+    // A per-LINE treatment, never a page error: the search block is the only
+    // thing absent, and ①②③ are fed by other reads.
+    renderWithBody(withSearch(null));
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    expect(screen.getByRole('heading', { name: 'Motir AI', level: 2 })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Motir CI', level: 2 })).toBeTruthy();
+    expect(screen.queryByText(/We couldn’t load your billing/, { exact: false })).toBeNull();
+  });
+
+  // ── §5 — the overdraft banner, and the paused state that does not exist ────
+
+  it('states that search keeps working at a zero balance — and shows no paused state', async () => {
+    renderWithBody(
+      withSearch(
+        { totalSpend: 1204, monthSpend: 86 },
+        {
+          motirAi: { ...activeStandard().motirAi, balance: 0 },
+        },
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByText('Search keeps working when your balance runs out.')).toBeTruthy(),
+    );
+
+    // The figure is still shown — spend is still accruing, nothing is blocked.
+    expect(screen.getByText('86')).toBeTruthy();
+    // ⚠️ There is no "Search paused" pill, banner or decision anywhere. §5 makes
+    // that a decision, not an omission, and building one would invent a state
+    // the product does not have.
+    expect(screen.queryByText(/Search paused/, { exact: false })).toBeNull();
+  });
+
+  it('shows no overdraft banner on a healthy balance', async () => {
+    renderWithBody(withSearch({ totalSpend: 1204, monthSpend: 312 }));
+    await waitFor(() => expect(screen.getByText('Spent this month')).toBeTruthy());
+    expect(screen.queryByText('Search keeps working when your balance runs out.')).toBeNull();
+  });
+
+  // ── AC 3 — META ────────────────────────────────────────────────────────────
+
+  it('renders NO search line for the META org', async () => {
+    renderWithBody(withSearch({ totalSpend: 1204, monthSpend: 312 }, { isMeta: true }));
+    await waitFor(() => expect(screen.getByText('Internal organization')).toBeTruthy());
+    expect(screen.queryByRole('heading', { name: 'Motir Search' })).toBeNull();
+  });
+
+  // ── AC 6 — the shipped role gating, unchanged ──────────────────────────────
+
+  it('gives a plain ADMIN the same line as an owner — it has no control to gate', async () => {
+    renderWithBody(
+      withSearch(
+        { totalSpend: 1204, monthSpend: 312 },
+        {
+          access: { role: 'admin', canManageBilling: false },
+        },
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Motir Search', level: 2 })).toBeTruthy(),
+    );
+
+    // Identical content to the owner's view: the figures, the rate line and the
+    // cross-link. The line follows the panel's existing split rather than a rule
+    // of its own, so a non-managing admin loses nothing on it.
+    expect(screen.getByText('Spent this month')).toBeTruthy();
+    expect(screen.getByText('312')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /See which runs spent it/ })).toBeTruthy();
+  });
+
+  it('links across to the usage dashboard rather than re-drawing the drill-down', async () => {
+    renderWithBody(withSearch({ totalSpend: 1204, monthSpend: 312 }));
+    const link = await screen.findByRole('link', { name: /See which runs spent it/ });
+    expect(link.getAttribute('href')).toBe('/settings/organization/usage');
   });
 });
