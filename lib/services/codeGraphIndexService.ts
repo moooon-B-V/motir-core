@@ -45,16 +45,24 @@ import {
 // working code-graph plumbing, and it wants its own decision, its own tests and
 // its own review.
 //
-// ⚠️ THE OWNER IS `docs/decisions/code-graph-index-fan-out.md` (MOTIR-2029), NOT
-// MOTIR-1754. This paragraph named that story for months and that story's own
-// scope boundary handed the question straight back — a closed loop, which is
-// exactly how a deferral orphans. The decision document is what closes it: it
-// weighs the options, records that the container move made this a COST multiplier
-// rather than a tidiness question (one machine per (repo × project), byte-identical
-// work), and names what must be settled — the empty-set case and the fate of graphs
-// a narrowed rule would exclude.
+// ⚠️ DECIDED, 2026-09-05 — `docs/decisions/code-graph-index-fan-out.md` (MOTIR-2029).
+// This paragraph named MOTIR-1754 for months and that story's own scope boundary
+// handed the question straight back, which is exactly how a deferral orphans. It
+// is answered now, and NOT by narrowing this fan-out:
 //
-// Do not read this paragraph as an invitation to fix it in passing.
+//   THE CODE GRAPH IS KEYED TO THE ORGANISATION. One repository has ONE graph,
+//   built once. Which projects work on it is VISIBILITY CONFIGURATION — an org
+//   admin adds a repository to any project, in any workspace of the org, and
+//   doing so rebuilds nothing. The repository belongs to the org, the org is the
+//   billing unit, so there is no boundary between two of its projects that a
+//   second copy of the same graph would protect.
+//
+// So this fan-out does not get a narrower project list — it stops being a fan-out.
+// The decision record carries the eleven-row tenancy audit and the migration
+// question it deliberately leaves to the implementation story.
+//
+// Do not read this paragraph as an invitation to fix it in passing: the change is
+// a schema move on both sides of the boundary, and it is that story's.
 //
 // SIDE-EFFECTS-OUTSIDE-TX: the DB reads run inside one `withSystemContext`
 // transaction (RLS-safe under the trusted-writer escape, like the webhook); every

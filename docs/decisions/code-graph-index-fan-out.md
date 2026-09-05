@@ -1,8 +1,34 @@
-# Should a repository be indexed into EVERY project of its workspace?
+# The code graph is keyed to the ORGANISATION; project membership is visibility configuration
 
-**Status: PROPOSED — the options are weighed and the recommendation is stated; the choice is the
-owner's.** Story MOTIR-1754 · Subtask MOTIR-2029. Carried out of MOTIR-2028 (the MOTIR-1989 planning
-bug), whose fourth acceptance criterion required this question be filed rather than left in a bug body.
+**Status: ACCEPTED — decided by Yue, 2026-09-05.** Story MOTIR-1754 · Subtask MOTIR-2029. Carried out
+of MOTIR-2028 (the MOTIR-1989 planning bug), whose fourth acceptance criterion required this question
+be filed rather than left in a bug body.
+
+## The decision
+
+**One repository has ONE code graph, keyed to the ORGANISATION, built once.** Which projects work on
+that repository is **visibility configuration**: an org admin adds a repository to any project, in
+any workspace of the org, and doing so **rebuilds nothing**.
+
+**The reasoning, and it is the reasoning rather than the conclusion that matters here:**
+
+> _The repository belongs to the whole org, and the org is the billing unit, so there is no privacy
+> issue. If a repo doesn't belong to the org, we need to maintain the index per project, which will
+> be a total wrong design._
+
+That is the argument in full. Ownership settles it: the org owns the repository and pays for the
+indexing, so there is no boundary between two of its projects that a second copy of the same graph
+would be protecting. The per-project list is about **relevance** — which code this project's planner
+should read — and never about secrecy.
+
+⚠️ **THIS DOCUMENT ORIGINALLY RECOMMENDED SOMETHING ELSE, AND THE RECOMMENDATION IS STRUCK RATHER
+THAN QUIETLY REPLACED.** Its first revision weighed four options and recommended **option 3**, narrow
+with a fallback — and dismissed **option 4**, the shared graph, as _"a motir-ai TENANCY change… much
+larger than this card, and named here only so the decision records why it was not taken now."_
+**Option 4 is the decision.** The first revision was reasoning about which narrowing was cheapest to
+build while treating per-project graphs as the given; the question it never asked was whether a
+per-project graph should exist at all. It should not. Recording that inversion is the point of
+keeping the struck text: the cheapest change to a wrong model is still the wrong model.
 
 ## The question
 
@@ -61,59 +87,79 @@ estimated.** `ciFleetCostMeterService` stamps per-container seconds and cost wit
 until every row carried one. So the cost of this fan-out is a query against that rollup, per
 workspace, keyed by the index workload — not a figure anyone has to assert.
 
-## The options
+## The options, as they were weighed
 
-### 1. Keep the workspace-wide fan-out
+### 1. Keep the workspace-wide fan-out — REJECTED
 
-Every project of a workspace can plan against any repository the workspace connected, with no new
-gate and no migration. Cost scales with project count; a scratch project costs a full index.
+Cost scales with project count; a scratch project costs a full index, and the graph is duplicated for
+no reason anyone can name.
 
-### 2. Narrow to the project's declared repository SET
+### 2. Narrow to the project's declared repository SET — REJECTED
 
-`project_repository` (MOTIR-1780) already exists — one row per intended repository, each carrying the
-realized `GithubRepo` it maps to, read through `projectRepoSetService.getSet` / `listByProject`.
-Index only into projects whose set claims the repository.
+Index only into projects whose `project_repository` set claims the repository. It reduces the
+multiplier and keeps per-project graphs, so it still builds the same graph more than once whenever
+two projects share a repository. Its own cost was the empty-set case: a project that never ran the
+establish step would silently go code-blind.
 
-Cheapest, and it matches what MOTIR-1767 already reads for the code-context surface. **Its cost is
-the empty-set case:** a project that never ran the establish step has no rows and would silently go
-code-blind — which is the exact failure MOTIR-1754 exists to end, re-created by its own story.
+### 3. Narrow WITH a fallback — REJECTED (and it was this document's first recommendation)
 
-### 3. Narrow WITH a fallback — the declared set when non-empty, the workspace-wide fan-out when empty
+The declared set when non-empty, the workspace-wide fan-out when empty. Same objection as 2, plus a
+fallback that re-introduces the leak precisely for the projects least able to notice.
 
-Preserves today's behaviour for legacy and unestablished projects, and charges the multiplier only
-where the plan asked for it. **Recommended.** It is the only option that reduces the cost without
-creating a new silent downgrade, and its fallback is exactly the population that cannot express an
-intent yet.
+### 4. ONE graph per repository, keyed to the ORG, shared — **ACCEPTED**
 
-### 4. Index once per REPOSITORY and share the graph across a workspace's projects
+The repository is the org's. The graph is built once and read by every project the org configures it
+into. **The multiplier does not shrink; it stops existing.**
 
-The lowest theoretical cost, and out of scope here. It is a motir-ai TENANCY change: the code-graph
-store is `aiProjectId`-keyed and `codeGraphContext` binds tenancy structurally. Recorded so the
-decision says why it was not taken now, not because it is wrong.
+Its cost is honest and is a tenancy change rather than a policy tweak — §_The audit_ below is the
+whole of it. The first revision priced that cost and stopped there; what it did not price was the
+alternative, which is maintaining N identical graphs for ever.
 
-## What the decision must settle
+## The audit — a tenancy change is a schema audit, not a policy change
 
-**⚠️ These are the three the options above do NOT answer, and they are the reason this is a decision
-rather than a preference.**
+Read on `origin/main` at `4dc08ff39`. Each row is a place the graph's tenant is currently the
+PROJECT and must become the ORG, or a place the project boundary is currently enforced and must
+become configuration:
 
-1. **The empty-set case.** Under option 2 or 3, what does a project with no `project_repository` rows
-   get? Option 3's answer is "today's behaviour". Option 2's is "nothing", and that must then be a
-   VISIBLE state rather than a silent downgrade — MOTIR-1754 owns the code-blind signal, and
-   narrowing must not manufacture more of what that signal is for.
-2. **Already-indexed graphs the narrowed rule would exclude.** Left stale where they are, or actively
-   removed? A stale graph that keeps answering is the failure MOTIR-2105 is about; leaving them is
-   cheap and dishonest, removing them is `POST /v1/code-graph/offboard`'s job (MOTIR-2165) and is a
-   second card either way.
-3. **The measured multiplier, per workspace.** Quote the meter, not a guess.
+| #   | today                                                                                                                                    | under this decision                                                                 |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1   | `CodeRepo @@unique([aiProjectId, repoRef])` — one graph per project                                                                      | `@@unique([aiOrganizationId, repoRef])`                                             |
+| 2   | `CodeRepo` cascades from `AiProject` — deleting a project DROPS a graph                                                                  | cascades from the org; a project leaving cannot drop a graph others read            |
+| 3   | `getCoordination(aiProjectId, repoRef)` — every caller in `codeGraphTools`, `codeGraphContext`, `graphIndexPublisher`, the control plane | keyed by org                                                                        |
+| 4   | the run credential is minted bound to `(aiProjectId, repoRef, runId)`                                                                    | bound to the org                                                                    |
+| 5   | the snapshot key is `codegraph/<aiProjectId>/<repoRef>/<sha>`, and retention prunes per `(aiProjectId, repoRef)`                         | org-keyed path and pruning                                                          |
+| 6   | `GET /v1/code-graph/status` is keyed by core workspace + project (MOTIR-1765)                                                            | keyed by org, filtered by the project's configured set                              |
+| 7   | MOTIR-1765's isolation test asserts _project A cannot read project B's row_                                                              | the isolation boundary is the **ORG**; that test asserts the wrong tenant           |
+| 8   | `resolveCodeContext` → `listByInstallation` — the WORKSPACE's repos                                                                      | the project's configured set                                                        |
+| 9   | `codeGraphIndexService` fans out to every project of the workspace                                                                       | one index per repository, per org                                                   |
+| 10  | **`ProjectRepo.githubRepoId` is `@unique`**                                                                                              | dropped — a repository in two projects is the ordinary case                         |
+| 11  | `GithubRepo.workspaceId` is the repo's tenancy column (MOTIR-1931)                                                                       | the org owns the repository; workspace must not constrain which projects may use it |
 
-## Consequences of the recommendation
+**Row 10 blocks the model outright** and is a one-line schema fact rather than a judgement: while
+`githubRepoId` is `@unique`, _"an org admin adds this repository to a second project"_ is
+inexpressible. **Row 7 is the one most likely to be missed**, because the test passes today and will
+keep passing — it simply asserts a boundary the product no longer has.
 
-If option 3 is chosen, the implementation is its own subtask, wired `blocked_by` this decision —
-deliberately not folded in here, because narrowing the fan-out is a behaviour change to shipped,
-working plumbing and it wants its own tests and its own review.
+**What does NOT change:** the org remains the isolation boundary, and nothing here weakens it. A
+repository of org A is never readable by org B, and every read still resolves its tenant from the
+caller's identity rather than from anything a caller sends.
 
-If option 1 is chosen, the reason is recorded here so the next planner does not re-open the question
-from the same evidence.
+## Consequences
+
+- **The implementation is its own STORY, not a subtask.** Eleven rows across two repositories,
+  including a schema change on each side and a migration that has to merge N per-project graphs into
+  one per-org graph without losing a snapshot. It is `blocked_by` nothing in MOTIR-1754 and blocks
+  none of it: the surface MOTIR-1754 draws renders the project's configured set either way.
+- **A migration question this document does not answer, and names rather than hides:** when two
+  projects hold graphs for the same repository at different commits, which survives the merge? The
+  newest `indexedAt` is the obvious answer and it is not obviously right — a project pinned to an
+  older commit would silently move. That belongs to the implementation story with a real reading of
+  how many such pairs exist in production.
+- **The cost stops being a multiplier.** Indexing `motir-core` for an org with two projects boots one
+  container, not two. `ciFleetCostMeterService`'s per-workload rollup is where the before/after
+  reading comes from — quote the meter, do not assert the saving.
+- **MOTIR-1765's isolation test is amended, not deleted.** It moves from project-level to org-level
+  and stays exactly as load-bearing.
 
 ## Corrections this document makes
 
@@ -122,6 +168,9 @@ from the same evidence.
   here.
 - **`codeGraphIndexService.ts`'s TENANCY note now names THIS decision** as the question's owner,
   rather than a story that disclaims it.
+- **This document's own first recommendation is struck** at the top rather than edited away — the
+  inversion it records (pricing the change to a wrong model instead of questioning the model) is
+  worth more to the next reader than a clean document.
 
 ## References
 
