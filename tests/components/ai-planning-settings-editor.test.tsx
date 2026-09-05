@@ -186,6 +186,39 @@ describe('AiPlanningSettingsEditor — dependent controls + callouts', () => {
     expect(screen.getByText(rationale)).toBeTruthy();
   });
 
+  // MOTIR-4603 — the cadence's PAUSE CONDITIONS, in the user's words.
+  it('names EVERY reason the cadence can pause for, and never a commercial one', () => {
+    mount();
+    fireEvent.click(autoPlanSwitch());
+
+    const text = screen.getByText(/Auto-planning pauses while Motir cannot read your code/);
+    expect(text).toBeTruthy();
+
+    // ⚠️ A condition list that omits a live case is WORSE than none, because the
+    // reader rules that case out. Every reason the cadence can actually skip for
+    // is named — the two this card adds, and the four that were already there.
+    const copy = text.textContent ?? '';
+    for (const reason of [
+      /no repository is connected/i, // code_blind — no repo
+      /code index is out of date/i, // code_blind — badly stale
+      /proposed plan is still undecided/i, // pending_proposal
+      /ready work is above your threshold/i, // ready_set_healthy
+      /nothing left to expand/i, // no_expandable_stub
+      /plan does not include AI planning/i, // the entitlement pause (MOTIR-4596)
+    ]) {
+      expect(copy).toMatch(reason);
+    }
+
+    // ⚠️ AND IT NAMES NO INTERNAL COST REASON. If indexing is paused because an
+    // allowance is spent, this says the index is out of date and what to do —
+    // never why in commercial terms (MOTIR-4541). The real reason lives in the
+    // admin panel.
+    expect(copy).not.toMatch(/credit|allowance|quota|balance|billing|cost|spend|exhaust/i);
+
+    // And it says the setting is untouched, because it is.
+    expect(copy).toMatch(/setting is unchanged/i);
+  });
+
   it('steps within the range and disables each button at its end', () => {
     mount({ aiSprintPlanningEnabled: true, aiSprintLengthDays: 1 });
     const decrease = screen.getByRole('button', { name: 'Decrease sprint length' });
