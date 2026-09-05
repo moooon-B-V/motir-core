@@ -5481,6 +5481,22 @@
       "optionMoveCta": "Move repositories",
       "viewUsage": "View Usage & cost"
     },
+    "search": {
+      "name": "Motir Search",
+      "tagline": "The web searches your planning runs make to ground themselves in current sources.",
+      "perUse": "Per use",
+      "monthLabel": "Spent this month",
+      "totalLabel": "Spent all time",
+      "creditsUnit": "credits",
+      "rate": "Each web search draws 1 credit from your Motir AI balance. There is no included allowance and nothing to run out of — search is charged only when a run uses it.",
+      "zeroTitle": "No searches billed this month.",
+      "zeroBody": "Search is charged only when a planning run uses it, so nothing here means nothing was used — not that anything is unavailable.",
+      "overdraftTitle": "Search keeps working when your balance runs out.",
+      "overdraftBody": "An out-of-credit organization goes into overdraft and search refuses nothing. Refusal stays at the planning-turn gate, where it already is.",
+      "unavailable": "Search figures aren’t available right now. Your searches are still being charged — this is the display, not the billing.",
+      "unavailableValue": "Unavailable",
+      "viewRuns": "See which runs spent it"
+    },
     "internal": {
       "badge": "Internal",
       "title": "Internal organization",

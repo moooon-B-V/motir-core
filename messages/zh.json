@@ -5481,6 +5481,22 @@
       "optionMoveCta": "迁移仓库",
       "viewUsage": "查看用量与费用"
     },
+    "search": {
+      "name": "Motir 搜索",
+      "tagline": "规划运行为获取最新资料而发起的网页搜索。",
+      "perUse": "按次计费",
+      "monthLabel": "本月已用",
+      "totalLabel": "累计已用",
+      "creditsUnit": "积分",
+      "rate": "每次网页搜索从你的 Motir AI 余额中扣除 1 积分。没有包含额度，也没有可用尽的配额——只有运行实际使用时才计费。",
+      "zeroTitle": "本月没有产生搜索费用。",
+      "zeroBody": "只有规划运行实际使用搜索时才会计费，因此这里没有数据表示没有使用过，而不是数据不可用。",
+      "overdraftTitle": "余额用尽后搜索仍可继续使用。",
+      "overdraftBody": "积分耗尽的组织将进入透支状态，搜索不会被拒绝。拒绝仍然发生在规划轮次的关卡处，与原先一致。",
+      "unavailable": "暂时无法获取搜索数据。你的搜索仍在正常计费——这是显示问题，不是计费问题。",
+      "unavailableValue": "暂无数据",
+      "viewRuns": "查看是哪些运行产生的"
+    },
     "internal": {
       "badge": "内部",
       "title": "内部组织",

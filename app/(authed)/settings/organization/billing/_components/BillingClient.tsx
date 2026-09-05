@@ -17,6 +17,7 @@ import {
   Layers,
   Lock,
   Pause,
+  Search,
   Sparkles,
   Users,
   X,
@@ -32,6 +33,7 @@ import { useToast } from '@/components/ui/Toast';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { AiPlanCatalogEntry, BillingCadence } from '@/lib/billing/catalog';
 import { ciLineFigures, type CiLineVariant } from './ciFigures';
+import { searchLineFigures } from './searchFigures';
 
 // The §4 free-tier scale caps the Motir (free) line draws — mirrors
 // `lib/billing/entitlements.ts` PM_ENTITLEMENTS.free (the locked ADR §4 numbers).
@@ -473,6 +475,7 @@ function HomeView({
         redirecting={redirecting}
       />
       {ciPaused ? null : ciLine}
+      <MotirSearchLine data={data} t={t} />
       <PaymentCard t={t} canManage={canManage} portal={portal} redirecting={redirecting} />
     </>
   );
@@ -1039,6 +1042,161 @@ function CiPausedDecision({ t, goPlans }: { t: T; goPlans: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ④ Motir Search line — the fourth billed line (MOTIR-4557; the asset is
+// `design/billing/search-line.mock.html`, `design-notes.md` "Amendment
+// 2026-09-05"). The customer sees a search charge as its own kind alongside AI
+// turns and Motir CI, and NOT merged into the AI line — decided in the same words
+// by `motir-search-channel.md` §4.4 and `credit-model.md` §4b.
+//
+// ⚠️ It looks like ③ and behaves differently, and building it as a copy of ③
+// would invent two things the product does not have: a METER (search has no pool
+// to divide by) and a PAUSED state (§5 — an out-of-credit org goes into overdraft
+// and search refuses nothing). Neither is an omission; both are in the asset as
+// drawn absences.
+//
+// It takes no `canManage`: the line is figures, not a control. There is no
+// button, no checkout and no owner-only affordance on it, so the shipped
+// permission split reaches it unchanged and it needs no member variant of its own.
+function MotirSearchLine({ data, t }: { data: BillingStatusDTO; t: T }) {
+  const search = searchLineFigures({
+    search: data.search,
+    isMeta: data.isMeta,
+    balance: data.motirAi.balance,
+  });
+  // `null` is the META org — the shipped "Internal plan" treatment renders no
+  // billed line at all, and a search figure beside three absent ones would be the
+  // only number on a page whose point is that none applies.
+  if (!search) return null;
+
+  return (
+    <Card
+      header={
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {/* The FOURTH product hue. mint = Motir, lavender = Motir AI, peach =
+                Motir CI, so search takes the unused SKY tint slot rather than
+                inventing one — and sky is the only remaining slot not already
+                spent on a STATE (rose is danger, yellow warning; either would
+                read as an alarm on a line that never alarms). */}
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-text-strong)">
+              <Search className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="font-sans text-base font-semibold text-(--el-text)">
+                {t('search.name')}
+              </h2>
+              <p className="font-sans text-xs text-(--el-text-muted)">{t('search.tagline')}</p>
+            </div>
+          </div>
+          <Pill tone="neutral">{t('search.perUse')}</Pill>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {search.variant === 'nothing_to_bill' ? (
+          // Deliberately NOT a "0 credits" figure with a zero meter beside it: an
+          // org whose runs never search has nothing wrong with it. Same shape ③
+          // uses for its own zero-consumption case.
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              <strong className="text-(--el-text-strong)">{t('search.zeroTitle')}</strong>{' '}
+              {t('search.zeroBody')}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-7">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-sans text-xs text-(--el-text-secondary)">
+                {t('search.monthLabel')}
+              </span>
+              {/* ⚠️ AN EM-DASH, NEVER A ZERO. `null` means the boundary did not
+                  report the block — a rolling deploy where the motir-ai half has
+                  not landed — and a `0` here tells a customer they were not
+                  charged. The label carries the meaning for a reader who cannot
+                  see the dash. */}
+              {search.figuresUnavailable ? (
+                <span
+                  className="font-sans text-xl font-medium tracking-wide text-(--el-text-secondary)"
+                  aria-label={t('search.unavailableValue')}
+                >
+                  &mdash;
+                </span>
+              ) : (
+                <span className="font-sans text-xl font-semibold text-(--el-text) tabular-nums">
+                  {fmt(search.monthSpend ?? 0)}
+                  <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
+                    {t('search.creditsUnit')}
+                  </span>
+                </span>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-sans text-xs text-(--el-text-secondary)">
+                {t('search.totalLabel')}
+              </span>
+              {search.figuresUnavailable ? (
+                <span
+                  className="font-sans text-xl font-medium tracking-wide text-(--el-text-secondary)"
+                  aria-label={t('search.unavailableValue')}
+                >
+                  &mdash;
+                </span>
+              ) : (
+                <span className="font-sans text-xl font-medium text-(--el-text-secondary) tabular-nums">
+                  {fmt(search.totalSpend ?? 0)}
+                  <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
+                    {t('search.creditsUnit')}
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* §5 — the one place a reader of ①②③ expects a refusal and must be told
+            there is none. INFO, never the warning family: nothing is blocked. */}
+        {search.overdraft ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding)">
+            <Coins
+              className="mt-0.5 h-4 w-4 shrink-0"
+              style={{ color: 'var(--el-info)' }}
+              aria-hidden
+            />
+            <p className="font-sans text-xs text-(--el-text-strong)">
+              <strong>{t('search.overdraftTitle')}</strong> {t('search.overdraftBody')}
+            </p>
+          </div>
+        ) : null}
+
+        {search.figuresUnavailable ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              {t('search.unavailable')}
+            </p>
+          </div>
+        ) : (
+          <p className="font-sans text-xs text-(--el-text-muted)">{t('search.rate')}</p>
+        )}
+
+        {/* "What am I charged for" is this panel; "where did it go" is the usage
+            dashboard's, and this line links across rather than re-drawing it —
+            the same cross-link ② and ③ already use. */}
+        <div>
+          <Link
+            href="/settings/organization/usage"
+            className="inline-flex items-center gap-1 font-sans text-xs font-medium text-(--el-link) hover:underline"
+          >
+            <Coins className="h-3.5 w-3.5" aria-hidden />
+            {t('search.viewRuns')}
+          </Link>
+        </div>
+      </div>
+    </Card>
   );
 }
 
