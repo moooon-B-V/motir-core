@@ -15,20 +15,9 @@ import { toWorkItemTodoDto, toWorkItemTodoListDto } from '@/lib/mappers/workItem
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
-import {
-  TODO_COMMAND_MAX_LENGTH,
-  TODO_NOTES_MAX_LENGTH,
-  TODO_TEXT_MAX_LENGTH,
-} from '@/lib/workItemTodos/limits';
-import {
-  EmptyTodoTextError,
-  TodoCommandTooLongError,
-  TodoNotesTooLongError,
-  TodoReorderConflictError,
-  TodoTextTooLongError,
-  WorkItemTodoNotFoundError,
-} from '@/lib/workItemTodos/errors';
+import { TodoReorderConflictError, WorkItemTodoNotFoundError } from '@/lib/workItemTodos/errors';
 import type { ExecutorDto } from '@/lib/dto/workItems';
+import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import type {
   TodoProgressDto,
   WorkItemTodoDto,
@@ -158,54 +147,10 @@ async function resolveEditableTodo(
   return { todo, item };
 }
 
-/**
- * Validate a to-do's text against the granularity bar and return it trimmed.
- *
- * REJECTS, never truncates — the difference matters: a truncated step is a
- * step whose second half is silently gone, and the author is the only person
- * who can decide which two steps it should have been.
- */
-function requireText(raw: string): string {
-  const text = raw.trim();
-  if (text.length === 0) throw new EmptyTodoTextError();
-  if (text.length > TODO_TEXT_MAX_LENGTH) throw new TodoTextTooLongError(text.length);
-  return text;
-}
-
-/**
- * Validate the optional INSTRUCTIONS and return them, or `null`.
- *
- * Markdown, unlike `text` — the how of a dashboard flow wants a numbered list
- * and a link, and a plain-text field would strip exactly the part that makes
- * *"go to the dashboard"* actionable. Whitespace-only normalises to `null` so a
- * row cannot render an empty disclosure.
- *
- * ⚠️ THIS CAP IS NOT A GRANULARITY BAR. `text`'s 200 asks *"is this one
- * operation?"*; this 2000 asks *"has the how become a document?"* — and the
- * remedy for hitting it is a card, not a split, which is what its typed error
- * says.
- */
-function normalizeNotes(raw: string | null | undefined): string | null {
-  if (raw === null || raw === undefined) return null;
-  const notes = raw.trim();
-  if (notes.length === 0) return null;
-  if (notes.length > TODO_NOTES_MAX_LENGTH) throw new TodoNotesTooLongError(notes.length);
-  return notes;
-}
-
-/**
- * Validate an optional command. An empty / whitespace-only string normalises to
- * `null` rather than to `''` — the DTO's contract is that `commandText === null`
- * is exactly "not a command row", and an empty string would make a row that
- * renders a copy button for nothing.
- */
-function normalizeCommand(raw: string | null | undefined): string | null {
-  if (raw === null || raw === undefined) return null;
-  const command = raw.trim();
-  if (command.length === 0) return null;
-  if (command.length > TODO_COMMAND_MAX_LENGTH) throw new TodoCommandTooLongError(command.length);
-  return command;
-}
+// ⚠️ THE THREE NORMALIZERS MOVED to `lib/workItemTodos/normalize.ts` (MOTIR-4618).
+// They are unchanged; what changed is that `plansService.materialize` is now a
+// SECOND writer of these rows (an approved proposal's `todos`), and the rules
+// about the caps belong in one home for the same reason the caps themselves do.
 
 /**
  * The card's progress, read INSIDE the caller's transaction.

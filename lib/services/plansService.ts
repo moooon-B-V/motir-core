@@ -66,6 +66,8 @@ import {
   type ProposalNode,
 } from '@/lib/plans/validateProposals';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
+import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
+import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import { validateStoryPoints, validateEstimateMinutes } from '@/lib/estimation/validate';
 import { PLANNING_SOURCES } from '@/lib/api/v1/workItems/schema';
 import {
@@ -422,8 +424,17 @@ function mergeProposedFields(
   return next;
 }
 
+/** One to-do row a materialized `add` wrote, as the revision diff names it. */
+interface MaterializedTodo {
+  id: string;
+  text: string;
+}
+
 /** A created-row revision diff ({ field: { from: null, to } }) for a materialized add. */
-function buildAddDiff(row: WorkItem): Record<string, { from: null; to: unknown }> {
+function buildAddDiff(
+  row: WorkItem,
+  todos: readonly MaterializedTodo[] = [],
+): Record<string, { from: null; to: unknown }> {
   const diff: Record<string, { from: null; to: unknown }> = {
     title: { from: null, to: row.title },
     kind: { from: null, to: row.kind },
@@ -448,6 +459,15 @@ function buildAddDiff(row: WorkItem): Record<string, { from: null; to: unknown }
   // `textField()` disposition in lib/activity/renderers.ts, so the created-revision
   // feed renders it.
   if (row.targetRepo != null) diff.targetRepo = { from: null, to: row.targetRepo };
+  // The card's STEPS (MOTIR-4618 · AMENDMENT 13 D5) — the same `todos.added`
+  // shape `workItemTodosService.recordTodoRevision` writes for a hand-added row,
+  // so the item's history reads identically whichever door the rows came
+  // through. Omitted entirely when the `add` carried none, like every other
+  // optional field here: an empty key would render as "a list was created" for a
+  // card that has no list.
+  if (todos.length > 0) {
+    diff.todos = { from: null, to: { added: todos.map((t) => ({ id: t.id, text: t.text })) } };
+  }
   return diff;
 }
 
@@ -1285,7 +1305,7 @@ async function materialize(
   // The created adds, collected for the post-creation body pass (Pass 3) — the
   // intra-plan item-link tokens in a body can reference a sibling created LATER
   // (a forward ref), so resolving them must wait until every add's id exists.
-  const createdAdds: Array<{ created: WorkItem; prefix: string }> = [];
+  const createdAdds: Array<{ created: WorkItem; prefix: string; todos: MaterializedTodo[] }> = [];
 
   const resolveRef = (ref: string): string => {
     if (ref.startsWith(TEMP_REF_PREFIX)) {
@@ -1456,12 +1476,57 @@ async function materialize(
         tx,
       );
     }
+    // THE CARD'S STEPS (Story MOTIR-3810 · MOTIR-4618, `agent-authored-plans.md`
+    // AMENDMENT 13 D5). A `manual` card's operations were proposed WITH it, the
+    // reviewer read them in the peek, and approve is where they become rows a
+    // person can tick.
+    //
+    // ⚠️ THROUGH THE REPOSITORY, NOT `workItemTodosService.addTodo`, and for the
+    // reason this file's own header gives for bypassing
+    // `workItemsService.createWorkItem` (`:137-149`): `addTodo` owns its own
+    // `withWorkspaceContext` and Prisma cannot nest interactive transactions, so
+    // calling it here would break the "approve applies in ONE transaction"
+    // guarantee. Its `lockTodoList` buys nothing either — it serialises two
+    // people appending to one card's list, and this list belongs to a card that
+    // did not exist two statements ago and that nobody else can reach until this
+    // transaction commits.
+    //
+    // What the service DOES own and is therefore reached for rather than
+    // re-implemented: the three normalizers (`lib/workItemTodos/normalize.ts`,
+    // lifted out for exactly this second writer) and the executor SEED rule,
+    // `todo.executor ?? pf.executor ?? 'human'` — the store's §2 rule, with the
+    // PROPOSAL's executor standing in for the card's, because at this point the
+    // card's own column was written from that same value one statement ago.
+    //
+    // ORDER is the array's (D1) — there is no `position` on a proposed row, so
+    // each key is minted from the row before it with `keyForAppend`, `null` for
+    // the first. A throw on any row rolls the whole approve back: a card with
+    // half its steps is worse than no card, because nothing on it says which half.
+    const createdTodos: MaterializedTodo[] = [];
+    let lastTodoPosition: string | null = null;
+    for (const todo of pf.todos ?? []) {
+      const row = await workItemTodoRepository.create(
+        {
+          workspaceId: ctx.workspaceId,
+          workItemId: created.id,
+          text: requireText(todo.text),
+          notesMd: normalizeNotes(todo.notesMd),
+          commandText: normalizeCommand(todo.commandText),
+          executor: (todo.executor ?? pf.executor ?? 'human') as WorkItemCreateInput['executor'],
+          position: keyForAppend(lastTodoPosition),
+        },
+        tx,
+      );
+      lastTodoPosition = row.position;
+      createdTodos.push({ id: row.id, text: row.text });
+    }
+
     planItemToWorkItem.set(item.id, created.id);
     await planItemRepository.setWorkItemId(item.id, created.id, tx);
     // The `created` revision is recorded in Pass 3, after the body's intra-plan
     // item-link tokens are resolved — so the revision (and the live row) carry the
     // FINAL chip body, never the temp-ref form.
-    createdAdds.push({ created, prefix });
+    createdAdds.push({ created, prefix, todos: createdTodos });
   }
 
   // Pass 2 — blocked-by edges for the adds (all add targets now exist).
@@ -1596,7 +1661,7 @@ async function materialize(
   // (it cannot nest `workItemsService.createWorkItem`'s own transaction), so this
   // is where that hook belongs. ADD-only + idempotent, so it never duplicates or
   // downgrades the structural `is_blocked_by` edges from Pass 2.
-  for (const { created, prefix } of createdAdds) {
+  for (const { created, prefix, todos } of createdAdds) {
     let finalRow = created;
     const { body: rewrittenDescription, unresolved } = rewriteIntraPlanRefs(
       created.descriptionMd ?? '',
@@ -1648,7 +1713,7 @@ async function materialize(
         workItemId: finalRow.id,
         changedById: ctx.userId,
         changeKind: 'created',
-        diff: buildAddDiff(finalRow),
+        diff: buildAddDiff(finalRow, todos),
       },
       tx,
     );
