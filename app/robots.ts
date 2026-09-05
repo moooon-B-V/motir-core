@@ -9,10 +9,21 @@ import { buildRobots } from '@/lib/robotsPolicy';
 // A framework boundary and nothing else: it resolves the origin through the one
 // module that owns that precedence and returns what `lib/robotsPolicy.ts`
 // builds. The policy — and the reasoning behind every entry in it, including
-// the two deliberate NON-entries — lives there.
+// the deliberate NON-entries and the ABSENT `Sitemap:` line (MOTIR-4583) —
+// lives there.
 //
-// Static by design, unlike `app/sitemap.ts`: this route reads no database, so
-// it has nothing to go stale and no reason to be `force-dynamic`.
+// ⚠️ This is now the ONLY metadata route this application serves.
+// `app/sitemap.ts` is deleted: an empty `<urlset>` is schema-invalid, so it
+// could not express "nothing to crawl" and produced a permanent Search Console
+// error instead (MOTIR-4583, and `lib/robotsPolicy.ts`'s note carries the full
+// reasoning). Serving no sitemap is the valid way to say it.
+//
+// ⚠️ This route reads no database, but it DOES read the origin, and it is
+// PRERENDERED at build time — which is why production serves
+// `Host: http://localhost:3000`. That defect is MOTIR-4580 and is not fixed
+// here; it is `blocked_by` MOTIR-4583 on purpose, because a corrected origin
+// would otherwise have re-advertised the invalid sitemap on every crawl instead
+// of once.
 
 export default function robots(): MetadataRoute.Robots {
   return buildRobots(resolveBaseUrlTrimmed());

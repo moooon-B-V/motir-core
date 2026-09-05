@@ -369,31 +369,47 @@ test('an absolute link the app BUILDS resolves — the app-URL contract from the
   page,
   baseURL,
 }) => {
-  // robots.txt is the cheapest surface that EMITS the app's own origin now that
-  // the sitemap lists no public pages (they moved to motir-marketing,
-  // MOTIR-3951): its `sitemap:` line comes from resolveBaseUrlTrimmed(), the
-  // single accessor MOTIR-2388 collapsed the four VERCEL_* / BETTER_AUTH_URL
-  // rungs into. It needs no seeding and no session, so it exercises the
-  // accessor and nothing else.
+  // robots.txt is the cheapest surface that EMITS the app's own origin: it
+  // needs no seeding and no session, so it exercises `resolveBaseUrlTrimmed()`
+  // — the single accessor MOTIR-2388 collapsed the four VERCEL_* /
+  // BETTER_AUTH_URL rungs into — and nothing else.
+  //
+  // ⚠️ THE CARRIER MOVED FROM `Sitemap:` TO `Host:` (MOTIR-4583), and the
+  // CONTRACT under test is unchanged. This read the `sitemap:` line until
+  // `buildRobots` stopped emitting one: MOTIR-3951 moved the crawlable pages
+  // to motir-marketing, which left `app/sitemap.ts` serving an empty
+  // `<urlset>` — schema-invalid, and a permanent Search Console error — so the
+  // route was deleted and the directive with it. `Host:` is now the only
+  // runtime consumer of the origin in this file, which is exactly what makes
+  // it the right carrier, and `lib/robotsPolicy.ts` records why it stays.
   const robots = await page.request.get('/robots.txt');
   expect(robots.status()).toBe(200);
 
-  const sitemapLine = (await robots.text()).match(/^sitemap:\s*(\S+)\s*$/im);
-  expect(sitemapLine, 'robots.txt advertises a sitemap URL').toBeTruthy();
-  const sitemapUrl = sitemapLine![1]!;
+  const body = await robots.text();
+  const hostLine = body.match(/^host:\s*(\S+)\s*$/im);
+  expect(hostLine, 'robots.txt emits a Host directive').toBeTruthy();
+  const origin = hostLine![1]!;
 
-  // ABSOLUTE, and on the origin this run is actually driving. A relative link,
+  // And the line that is GONE stays gone. Re-adding it would point a crawler
+  // at an address that 404s, and re-adding the route to satisfy the pointer
+  // puts the permanent Search Console error back.
+  expect(body.match(/^sitemap:/im), 'robots.txt advertises no sitemap').toBeNull();
+
+  // ABSOLUTE, and on the origin this run is actually driving. A relative value,
   // or one carrying some other host, is precisely what an unset or mis-set
   // MOTIR_BASE_URL produces — and it fails silently everywhere else, because a
   // wrong origin in an email is only discovered by the person who clicks it.
-  expect(sitemapUrl.startsWith(`${baseURL}`)).toBe(true);
+  expect(origin.startsWith(`${baseURL}`)).toBe(true);
 
-  // Follow it the way an outside reader would — with the absolute URL, not a
-  // path — and land on the file it claims (an empty urlset, which still
-  // resolves 200).
-  const landed = await page.goto(sitemapUrl);
+  // Follow it the way an outside reader would — building an absolute URL from
+  // the origin the app emitted, not a path — and land on a file this host
+  // certainly serves. robots.txt itself is that file, which makes the check
+  // self-referential in the load-bearing way: the origin robots.txt ADVERTISES
+  // has to be the origin robots.txt is SERVED from.
+  const absolute = `${origin}/robots.txt`;
+  const landed = await page.goto(absolute);
   expect(landed?.status()).toBe(200);
   // `startsWith`, not equality: the assertion is that the generated origin is
   // the one the browser stays on.
-  expect(page.url().startsWith(sitemapUrl)).toBe(true);
+  expect(page.url().startsWith(absolute)).toBe(true);
 });

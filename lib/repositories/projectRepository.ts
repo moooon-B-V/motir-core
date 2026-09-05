@@ -305,12 +305,18 @@ export const projectRepository = {
 
   /**
    * Every PUBLIC (accessLevel = 'public'), non-archived project across ALL
-   * workspaces — the read behind `app/sitemap.ts` (Story 6.12 · Subtask
-   * 6.12.4). This is the ONE project read that is deliberately NOT
-   * workspace-scoped: a public project is crawlable cross-org, so the sitemap
-   * lists every one regardless of tenant. Read-only path → `db` singleton.
-   * Ordered by `updatedAt` desc so the freshest public projects lead the
-   * sitemap. Returns only the columns the sitemap needs.
+   * workspaces (Story 6.12 · Subtask 6.12.4). This is the ONE project read that
+   * is deliberately NOT workspace-scoped: a public project is crawlable
+   * cross-org, so every one is listed regardless of tenant. Read-only path →
+   * `db` singleton. Ordered by `updatedAt` desc so the freshest lead.
+   *
+   * ⚠️ It was named for `app/sitemap.ts`, which no longer exists. MOTIR-3951
+   * moved the crawlable pages to `motir.co` and MOTIR-4583 deleted the route
+   * outright (an empty `<urlset>` is schema-invalid — see
+   * `lib/robotsPolicy.ts`). The read is still LIVE:
+   * `publicFollowDigestService` is its consumer, through
+   * `publicProjectsService.listPublicForSitemap`. The name is kept because
+   * `tests/rls/singleton-read-guard.test.ts` pins its verdict by it.
    */
   /**
    * Every PUBLIC, non-archived project in ONE workspace — what a workspace

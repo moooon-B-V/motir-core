@@ -304,17 +304,43 @@ says _this is the hosted service_, and nothing else is allowed to imply it.
 
 **Each host's own application writes its own, and neither describes the other.**
 
-| host           | written by        | contents                                                                   |
-| -------------- | ----------------- | -------------------------------------------------------------------------- |
-| `motir.co`     | `motir-marketing` | allow; the public surface it serves; its own sitemap                       |
-| `app.motir.co` | `motir-core`      | `app/robots.ts` (MOTIR-3726) — disallow the API and the signed-in surfaces |
+| host           | written by        | contents                                                                                       |
+| -------------- | ----------------- | ---------------------------------------------------------------------------------------------- |
+| `motir.co`     | `motir-marketing` | allow; the public surface it serves; its own sitemap                                           |
+| `app.motir.co` | `motir-core`      | `app/robots.ts` (MOTIR-3726) — disallow the API and the signed-in surfaces, and **NO sitemap** |
 
 This is the arrangement that needs no cross-repo list, which is the whole reason
 it is stated. A single sitemap describing surfaces served by two applications
 would be the route mirror B was rejected for, wearing a different name.
 
-`motir-core`'s own sitemap stops emitting entries for pages it no longer serves
-as part of MOTIR-3910's sweep, not here.
+**⚠️ AND A HOST WITH NOTHING PUBLIC WRITES A `robots.txt` AND NO SITEMAP AT ALL
+(MOTIR-4583, 2026-09-04).** This paragraph used to read _"`motir-core`'s own
+sitemap stops emitting entries for pages it no longer serves as part of
+MOTIR-3910's sweep, not here."_ MOTIR-3951 performed that emptying, and the
+result was `app/sitemap.ts` returning `[]` behind an advertised
+`Sitemap: ${origin}/sitemap.xml` — three lines of XML meaning "this host has
+nothing public to crawl".
+
+**The policy was right; the ENCODING had no receiver.** The sitemaps schema
+requires at least one `<url>`, so an empty `<urlset>` is invalid. Googlebot
+fetched it without difficulty (`HTTP/2 200`, `application/xml`) and Search
+Console reported `Missing XML tag · Parent tag: urlset · Tag: url` at line 3 —
+**permanently**, because the condition producing the error was the intended end
+state rather than a transient one. There is no representation of _deliberately
+nothing_ in that schema, so the signal could only ever arrive as an error.
+
+So the row above is the decision: `app.motir.co` serves `robots.txt` and **no
+`/sitemap.xml`** — the route is deleted, the directive is gone, and the address
+404s. Absence is the standard, receivable way to say a host has nothing to
+crawl. The ORDERING against MOTIR-4580 (the prerendered `robots.txt` advertising
+`http://localhost:3000`) is load-bearing and is why that card is `blocked_by`
+this one: repairing the origin first would have handed Google a working pointer
+to an invalid document, re-advertised on every crawl instead of submitted once.
+
+The `Host:` directive is deliberately kept. Dropping it too would leave
+`robots.txt` with no runtime dependency on the origin — genuinely simpler, and a
+cross-host product question (`motir.co` emits `Host:` as well) that a bug fix may
+not settle by side effect.
 
 ---
 

@@ -401,10 +401,15 @@ export const publicProjectsService = {
   // --- READ (6.12.4) -------------------------------------------------------
 
   /**
-   * Every public project's `{ identifier, updatedAt }` — the read behind
-   * `app/sitemap.ts` (Subtask 6.12.4). No gate: these are public by definition
-   * (the repo read constrains to `accessLevel = 'public'`). Cross-workspace
-   * (the sitemap lists every public project regardless of tenant).
+   * Every public project's `{ identifier, updatedAt }` (Subtask 6.12.4). No
+   * gate: these are public by definition (the repo read constrains to
+   * `accessLevel = 'public'`). Cross-workspace, by design.
+   *
+   * ⚠️ Named for `app/sitemap.ts`, which is DELETED — MOTIR-3951 moved the
+   * crawlable pages to `motir.co`, and MOTIR-4583 removed the route because an
+   * empty `<urlset>` is schema-invalid. Its live consumer is
+   * `publicFollowDigestService`; the name is kept because
+   * `tests/rls/singleton-read-guard.test.ts` pins the read's verdict by it.
    */
   async listPublicForSitemap(): Promise<Array<{ identifier: string; updatedAt: Date }>> {
     return projectRepository.listPublic();

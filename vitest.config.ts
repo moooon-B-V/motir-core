@@ -1314,12 +1314,15 @@ export default defineConfig({
         // floor below, per this block's own rule.
         // Story MOTIR-3876 · Subtask MOTIR-3885 — the ORIGIN SEAM this story
         // widened: `publicSiteOrigin()` and the description the public metadata
-        // and the JSON-LD are both built from, plus the sitemap re-based on the
-        // application origin. `urls.ts` shipped at 45% statements / 25% branches
-        // with `derivePublicDescription` untested at all; MEASURED at
-        // 100/100/100 after 3885's cases, then pinned at the floor below.
+        // and the JSON-LD are both built from. `urls.ts` shipped at 45%
+        // statements / 25% branches with `derivePublicDescription` untested at
+        // all; MEASURED at 100/100/100 after 3885's cases, then pinned at the
+        // floor below.
+        // (`app/sitemap.ts` was pinned here too, for the sitemap 3885 re-based
+        // on the application origin. It is DELETED — MOTIR-4583: an empty
+        // `<urlset>` is schema-invalid, so this host serves no sitemap at all.
+        // A path listed here that does not exist is a threshold nothing meets.)
         'lib/publicProjects/urls.ts',
-        'app/sitemap.ts',
         // Story MOTIR-3876 · Subtask MOTIR-3726 — `/robots.txt` and the policy
         // behind it. MEASURED at 100/100/100 on `tests/seo/robots.test.ts`;
         // the DERIVED half of that guard walks the signed-in route groups and
@@ -2519,8 +2522,8 @@ export default defineConfig({
         // contract (see the `include` note above; each measured at 100/100/100).
         // Story MOTIR-3876 · Subtask MOTIR-3885 — the origin seam (measured
         // 100/100/100 each; see the `include` note above).
+        // (`app/sitemap.ts` sat here and is DELETED — MOTIR-4583.)
         'lib/publicProjects/urls.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/sitemap.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-3876 · Subtask MOTIR-3726 — robots (measured 100/100/100).
         'lib/robotsPolicy.ts': { branches: 90, functions: 90, lines: 90 },
         'app/robots.ts': { branches: 90, functions: 90, lines: 90 },
