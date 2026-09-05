@@ -148,6 +148,20 @@ export interface ShapeFive {
   modifiedTitle: string;
 }
 
+/**
+ * SHAPE SIX — a plan whose `manual` proposal carries its STEPS (Story
+ * MOTIR-3810 · MOTIR-4625), beside a stepless `add` so the ABSENT state has a
+ * subject in the same plan.
+ */
+export interface ShapeSix {
+  planId: string;
+  epic: CommittedRef;
+  /** The `manual` add — the one that carries four steps. */
+  withStepsTitle: string;
+  /** The `add` that carries none, for the no-section negative. */
+  steplessTitle: string;
+}
+
 export interface PlansShapesSeed {
   email: string;
   password: string;
@@ -158,7 +172,28 @@ export interface PlansShapesSeed {
   three: ShapeThree;
   four: ShapeFour;
   five: ShapeFive;
+  six: ShapeSix;
 }
+
+/**
+ * SHAPE SIX's four steps, exported so the spec asserts against the SEED's own
+ * strings rather than against a second copy of them. One plain, one with
+ * instructions, one with a command, one for the agent — the four shapes a row
+ * can take (`design/ai-planning/design-notes.md` Part XV).
+ */
+export const SIX_STEPS = [
+  { text: 'Create a restricted Stripe API key' },
+  {
+    text: 'Scope it to charges:write',
+    notesMd: 'Dashboard → Developers → API keys → **Edit permissions**.',
+  },
+  {
+    text: 'Set the deployment secret',
+    commandText: 'fly secrets set STRIPE_RESTRICTED_KEY=rk_test_placeholder --app motir-core',
+    executor: 'coding_agent' as const,
+  },
+  { text: 'Confirm a test charge succeeds' },
+];
 
 async function makeTenant(email: string): Promise<{ ctx: ServiceContext; projectId: string }> {
   const owner = await createTestPerson({
@@ -392,6 +427,53 @@ export async function seedPlanShapes(email: string): Promise<PlansShapesSeed> {
   );
   await plansService.markPlanned(fivePlan.id, ctx);
 
+  // ── SHAPE SIX ─────────────────────────────────────────────────────────────
+  // A `manual` proposal that carries its STEPS, and a stepless one beside it.
+  // Both in ONE plan so the spec can show the section and its absence without
+  // navigating between plans — the contrast is the point of the negative.
+  const sixEpic = await commit('epic', 'Billing, provisioned');
+  const sixWithStepsTitle = 'Provision the Stripe restricted key';
+  const sixSteplessTitle = 'Wire the charge path';
+  const sixPlan = await plansService.createPlan(projectId, { title: 'Billing plan' }, ctx);
+  await plansService.addProposals(
+    sixPlan.id,
+    [
+      {
+        op: 'add',
+        proposedFields: {
+          title: sixWithStepsTitle,
+          kind: 'task',
+          type: 'manual',
+          // The CARD's executor — the seed every unnamed row inherits at
+          // approve, which is what makes three of the four rows read `You`.
+          executor: 'human',
+          descriptionMd:
+            'The billing epic needs a live Stripe key before the charge path can be built.',
+          explanationMd: 'An account holder does this; there is no pull request.',
+          storyPoints: 2,
+          estimateMinutes: 30,
+          todos: SIX_STEPS,
+        },
+        parentRef: sixEpic.id,
+      },
+      {
+        op: 'add',
+        proposedFields: {
+          title: sixSteplessTitle,
+          kind: 'task',
+          type: 'code',
+          executor: 'coding_agent',
+          descriptionMd: 'The code half, which has no out-of-band steps.',
+          storyPoints: 3,
+          estimateMinutes: 45,
+        },
+        parentRef: sixEpic.id,
+      },
+    ],
+    ctx,
+  );
+  await plansService.markPlanned(sixPlan.id, ctx);
+
   return {
     email,
     password: PLANS_SHAPES_PASSWORD,
@@ -441,6 +523,12 @@ export async function seedPlanShapes(email: string): Promise<PlansShapesSeed> {
       removed: fiveRemoved,
       addedTitle: fiveAddedTitle,
       modifiedTitle: fiveModifiedTitle,
+    },
+    six: {
+      planId: sixPlan.id,
+      epic: sixEpic,
+      withStepsTitle: sixWithStepsTitle,
+      steplessTitle: sixSteplessTitle,
     },
   };
 }
