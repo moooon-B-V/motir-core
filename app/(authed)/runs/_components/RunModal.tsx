@@ -145,6 +145,7 @@ export function RunModal({ runId, projectKey, onClose }: RunModalProps) {
       // the whole viewport.
       className="flex flex-col rounded-none border-0 p-0"
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = a live run with 60 streamed log lines; the full-size panel IS the viewport and the canvas and log panes scroll (min-h-0 flex-1 overflow-auto), panel 700px */}
       {load.state === 'loading' ? (
         <div
           className="flex flex-1 items-center justify-center p-(--spacing-card-padding) text-sm text-(--el-text-secondary)"

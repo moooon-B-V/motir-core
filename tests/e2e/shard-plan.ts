@@ -91,6 +91,16 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * `onboarding-migrate.spec.ts` (43.5 s) is by far the heaviest of the twelve and
  * is the one to watch when the bin-packer redistributes.
  *
+ * ⚠️ `modal-scroll-container.spec.ts` (MOTIR-2491) carries the LOCAL provenance
+ * too — a brand-new spec, three tests, each a sign-up + first project (one of
+ * them a seeded sprint tree) and one short-viewport dialog. Measured on
+ * 2026-09-05 against a production build on its own port and database, JSON
+ * reporter, per-test `durationMs` summed: **5.6 s** (2.0 + 2.0 + 1.6) on a warm
+ * server; the same three ran in 38–39 s of wall clock including harness
+ * startup. Recorded as 6.0 — rounded UP, because under-estimating is the
+ * direction that unbalances a bin-packer. Re-measure from the first green CI
+ * run that includes it.
+ *
  * ⚠️ `plan-decision-permission.spec.ts` (MOTIR-3188) carries the LOCAL provenance
  * too, for the same reason the twelve above do: it is a brand-new spec, and a
  * spec with no entry here is assigned to no leg and never runs — which is what
@@ -478,6 +488,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'link-search-flow.spec.ts': 14.6,
   'member-facing-permissions.spec.ts': 7.7,
   'migrate-index-fleet.spec.ts': 26.7,
+  'modal-scroll-container.spec.ts': 6.0,
   'multi-tenant-isolation.spec.ts': 2.5,
   'navigation-instant.spec.ts': 8.0,
   'notifications.spec.ts': 14.3,
