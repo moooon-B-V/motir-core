@@ -39,6 +39,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workIt
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
 
 // Story 7.13 · Subtask 7.13.7 (MOTIR-920) — the STORY-LEVEL gate over the merged
 // 7.13 surface. The implementation subtasks (MOTIR-915/916/918/919/1740) each
@@ -163,6 +164,28 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     await adminDb.project.update({
       where: { id: fx.projectId },
       data: { aiAutoPlanEnabled: true, aiAutoPlanThreshold: 5 },
+    });
+    // ⚠️ CONNECTED (MOTIR-4603) — the cadence now holds off when Motir cannot
+    // read the code, and a workspace with no installation is exactly that. This
+    // case is about the SUBMIT's error path, so it has to get past that gate to
+    // reach it; without the repo the sweep skips `code_blind` and the assertion
+    // below measures the wrong thing.
+    await githubInstallationService.persistInstallation({
+      workspaceId: fx.workspaceId,
+      installation: {
+        installationId: `inst-${fx.workspaceId}`,
+        accountLogin: 'acme',
+        accountType: 'Organization',
+      },
+      repos: [
+        {
+          providerRepoId: `repo-${fx.workspaceId}`,
+          owner: 'acme',
+          name: 'web',
+          defaultBranch: 'main',
+          archived: false,
+        },
+      ],
     });
     // One childless epic = the expandable stub AND the whole (drained) ready set.
     await workItemsService.createWorkItem(
