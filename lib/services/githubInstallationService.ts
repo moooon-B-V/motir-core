@@ -1,5 +1,6 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
@@ -44,10 +45,16 @@ export const githubInstallationService = {
     repos: NormalizedRepo[];
   }): Promise<GithubInstallationDTO> {
     const { dto, prunedRefs, selectedRefs } = await withSystemContext(async (tx) => {
+      // THE OWNING ORGANISATION (Story MOTIR-4669 · MOTIR-4649), resolved THROUGH
+      // the workspace. `workspace.organizationId` is NOT NULL, so this read is
+      // total for any workspace that exists — a missing workspace is a caller
+      // error and throws rather than writing a null tenancy.
+      const organizationId = await resolveOrganizationId(input.workspaceId, tx);
       const installation = await githubInstallationRepository.upsert(
         {
           installationId: input.installation.installationId,
           workspaceId: input.workspaceId,
+          organizationId,
           accountLogin: input.installation.accountLogin,
           accountType: input.installation.accountType,
         },
@@ -73,6 +80,10 @@ export const githubInstallationService = {
             // installation is bound to, since this path only ever runs for a
             // workspace's own grant.
             workspaceId: input.workspaceId,
+            // …and the tier that OWNS it (MOTIR-4649). Stamped on every write, so
+            // a row written between the migration and the backfill is not left
+            // null either — which is what makes the nullable column safe.
+            organizationId,
             repoId: repo.providerRepoId,
             owner: repo.owner,
             name: repo.name,
@@ -159,15 +170,24 @@ export const githubInstallationService = {
           // NULL, always: Motir's provisioning installation serves N workspaces
           // and is owned by none of them.
           workspaceId: null,
+          // NULL for the SAME reason, and this is the one row the column is
+          // nullable FOR (MOTIR-4649). An installation shared across tenants can
+          // name no organisation any more than it can name a workspace; the
+          // repository rows below carry the tenancy, as they already did.
+          organizationId: null,
           accountLogin: input.installation.accountLogin,
           accountType: input.installation.accountType,
         },
         tx,
       );
+      // The REPOSITORY, by contrast, always has one — resolved through the
+      // workspace it was created for.
+      const organizationId = await resolveOrganizationId(input.workspaceId, tx);
       return githubRepoRepository.upsert(
         {
           installationId: installation.id,
           workspaceId: input.workspaceId,
+          organizationId,
           repoId: input.repo.providerRepoId,
           owner: input.repo.owner,
           name: input.repo.name,

@@ -923,6 +923,14 @@ model Organization {
   /// acceptanceVideoEligibilityService alongside billingService.hasPaidAiPlan.
   acceptanceVideoEnabled Boolean @default(true) @map("acceptance_video_enabled")
 
+  /// The git CONNECTIONS this organisation holds, and the REPOSITORIES behind
+  /// them (Story MOTIR-4669 · MOTIR-4649) — a repository is connected ONCE, to
+  /// the organisation, and which projects use it is visibility configuration.
+  /// Back-relations of two Cascade FKs, modelled on both sides per the
+  /// FK-`@relation` rule.
+  githubInstallations GithubInstallation[]
+  githubRepos         GithubRepo[]
+
   /// Whether every member of this organization must hold a second factor
   /// (Story MOTIR-1215 · Subtask MOTIR-3644). The EFFECTIVE requirement on a
   /// person is the OR of the two tiers — this column, and `requiresTwoFactor`
@@ -5656,6 +5664,19 @@ model GithubInstallation {
   /// `persistInstallation` requires a `workspaceId: string`, so the reconcile
   /// cannot even be formed for a shared installation.
   workspaceId           String?   @map("workspace_id")
+  /// The ORGANISATION this connection belongs to (Story MOTIR-4669 · MOTIR-4649)
+  /// — the tier a repository is actually connected at. A repository is connected
+  /// ONCE, to the organisation, and which projects use it is visibility
+  /// configuration (MOTIR-2029's rule for the code graph, applied to the thing
+  /// the graph is built FROM); the workspace column above is the tier this
+  /// replaces as the OWNER, and it is kept because a connection is still STARTED
+  /// from somewhere.
+  ///
+  /// ⚠️ NULLABLE, and for the SAME reason `workspaceId` is: Motir's shared
+  /// provisioning installation is owned by no tenant, so it can name neither a
+  /// workspace nor an organisation. A NULL here is that row, not a backfill gap —
+  /// the backfill's own assertion is scoped to rows that HAVE a workspace.
+  organizationId        String?   @map("organization_id")
   accountLogin          String    @map("account_login")
   accountType           String    @map("account_type")
   /// The connection's access token, encrypted at rest — NULL for GitHub (minted
@@ -5671,10 +5692,15 @@ model GithubInstallation {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  workspace Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  repos     GithubRepo[]
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// Modelled on BOTH sides with the same action the SQL uses (the FK-`@relation`
+  /// rule). Cascade, exactly as the workspace relation above: a deleted
+  /// organisation takes its connections with it.
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repos        GithubRepo[]
 
   @@index([workspaceId])
+  @@index([organizationId])
   @@map("github_installation")
 }
 
@@ -5697,6 +5723,31 @@ model GithubRepo {
   /// delivery may touch, the repo row ATTRIBUTES them. Mirrors `ProjectRepo`,
   /// which already gates on its own `workspace_id` rather than a join through.
   workspaceId    String   @map("workspace_id")
+  /// WHOSE this repository is, at the tier that actually owns it (Story
+  /// MOTIR-4669 · MOTIR-4649). A repository is connected ONCE, to the
+  /// ORGANISATION, and which projects use it is visibility configuration —
+  /// MOTIR-2029's rule for the code graph, applied to the thing the graph is
+  /// built FROM. Two workspaces of one organisation connecting the same
+  /// repository were two connections and two graphs built from identical bytes;
+  /// this column is what stops that being expressible.
+  ///
+  /// ⚠️ NULLABLE TODAY, AND THAT IS A DEPLOY-WINDOW PROPERTY RATHER THAN A MODEL
+  /// ONE. The migration adds it nullable and backfills it to zero nulls, because
+  /// a NOT NULL in the same migration would break every insert the OLD build
+  /// makes in the window between the migration running and the new pods serving.
+  /// Every writer stamps it (`githubRepoRepository.upsert` requires it), so a row
+  /// written in that window is not left null either. TIGHTENING it to NOT NULL is
+  /// a follow-up once the old build is gone, and it is FILED rather than left as
+  /// a sentence here.
+  ///
+  /// `workspaceId` above is KEPT and still non-null: it is the tier a repository
+  /// is connected FROM and what the shipped RLS policies still key on. Rewriting
+  /// those policies onto this column is MOTIR-4677's card, deliberately not this
+  /// one — a card that moved the column AND the policies would be untestable in
+  /// the way that matters, because nothing in its diff would say whether a
+  /// failure came from the column or from the policy, and one of those two
+  /// failure modes is a data-exposure bug.
+  organizationId String?  @map("organization_id")
   /// GitHub's numeric repository id (as a string) — stable across renames.
   repoId         String   @map("repo_id")
   owner          String
@@ -5728,6 +5779,11 @@ model GithubRepo {
   /// takes its mirrored repos with it, exactly as it did when they hung off the
   /// installation.
   workspace                   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// The owning ORGANISATION (MOTIR-4649) — modelled on BOTH sides, like every
+  /// other FK in this schema (the CLAUDE.md migration rule). Cascade, for the same
+  /// reason the workspace relation has it: a deleted organisation takes its
+  /// mirrored repos with it.
+  organization                Organization?                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pullRequests                GithubPullRequest[]
   /// Metered CI runs on this repo (Story MOTIR-1775 · MOTIR-1896). SetNull, like
   /// `ProjectRepo.githubRepoId`: disconnecting the repo must not delete the
@@ -5759,6 +5815,16 @@ model GithubRepo {
   @@unique([installationId, repoId])
   @@index([installationId])
   @@index([workspaceId])
+  /// Serves the org-tier reads this column exists for, and — once MOTIR-4677
+  /// rewrites them — the RLS predicate itself, exactly as `@@index([workspaceId])`
+  /// serves `github_repo_workspace_or_system` today.
+  ///
+  /// ⚠️ A hand-written PARTIAL index on this table must not reuse `(organization_id)`
+  /// as its whole column list, for the reason `project_repository` records at
+  /// length (MOTIR-1960): Prisma's differ pairs a database index to a datamodel
+  /// index BY COLUMN LIST, and the pairing turns an inexpressible `WHERE` clause
+  /// into a permanent spurious RENAME.
+  @@index([organizationId])
   @@map("github_repo")
 }
 

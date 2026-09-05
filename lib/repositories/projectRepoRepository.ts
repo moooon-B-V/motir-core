@@ -88,6 +88,9 @@ interface JoinedRow {
   repoRowId: string | null;
   repoProvider: string | null;
   repoWorkspaceId: string | null;
+  /** The mirror row's ORGANISATION (MOTIR-4649) — nullable in the column, and
+   *  doubly so here because the LEFT JOIN itself can miss. */
+  repoOrganizationId: string | null;
   repoInstallationId: string | null;
   repoHostId: string | null;
   repoOwner: string | null;
@@ -151,6 +154,7 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             id: r.repoRowId,
             provider: r.repoProvider!,
             workspaceId: r.repoWorkspaceId!,
+            organizationId: r.repoOrganizationId,
             installationId: r.repoInstallationId!,
             repoId: r.repoHostId!,
             owner: r.repoOwner!,
@@ -230,6 +234,7 @@ export const projectRepoRepository = {
         gr."id"                AS "repoRowId",
         gr."provider"          AS "repoProvider",
         gr."workspace_id"      AS "repoWorkspaceId",
+        gr."organization_id"   AS "repoOrganizationId",
         gr."installation_id"   AS "repoInstallationId",
         gr."repo_id"           AS "repoHostId",
         gr."owner"             AS "repoOwner",

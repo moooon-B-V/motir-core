@@ -19,6 +19,12 @@ export interface UpsertGithubInstallationInput {
    *  still requires a `workspaceId: string`, which is what keeps the destructive
    *  reconcile (`deleteExcept`) unreachable on the shared path. */
   workspaceId: string | null;
+  /** The ORGANISATION this connection belongs to (MOTIR-4649), or NULL for the
+   *  same row `workspaceId` is null for — Motir's shared provisioning
+   *  installation, which is owned by no tenant and can name neither tier.
+   *  Nullable in the TYPE as well as the column, so the one row that legitimately
+   *  has no organisation is expressible rather than fudged. */
+  organizationId: string | null;
   accountLogin: string;
   accountType: string;
 }
@@ -29,6 +35,9 @@ export interface UpsertGithubInstallationInput {
 export interface UpsertGitlabConnectionInput {
   installationId: string;
   workspaceId: string;
+  /** The owning ORGANISATION (MOTIR-4649). Required here — a GitLab connection is
+   *  always a tenant's own grant, so there is no shared-installation case. */
+  organizationId: string;
   accountLogin: string;
   accountType: string;
   accessTokenEncrypted: string;

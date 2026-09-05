@@ -12,6 +12,16 @@ export interface UpsertGithubRepoInput {
    *  installation holds several tenants' repos, so the installation cannot
    *  answer this. */
   workspaceId: string;
+  /** WHOSE this repository is at the tier that OWNS it (Story MOTIR-4669 ·
+   *  MOTIR-4649). A repository is connected once, to the organisation; the
+   *  workspace above is the tier it was connected FROM.
+   *
+   *  REQUIRED on every write, deliberately, even though the column is nullable:
+   *  the column is nullable for the DEPLOY WINDOW (an old build must still be
+   *  able to insert while the migration is applied), and making the input
+   *  required is what guarantees the NEW build never writes a null. A caller with
+   *  no organisation in hand has to go and read one, which is the point. */
+  organizationId: string;
   repoId: string;
   owner: string;
   name: string;
