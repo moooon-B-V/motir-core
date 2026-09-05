@@ -341,3 +341,75 @@ provider-agnostic base (the shared surface), not a parallel copy:
   provider through the DTO so the same component renders both (Panel 4).
 - **Self-managed GitLab is deferred** (see the honest-differences section) — do
   not add an instance-URL field unless a later design pass adds it.
+
+---
+
+## ⚠️ AMENDMENT — MOTIR-4672 (Story MOTIR-4669), 2026-09-05: the tier moves, and this asset owns the GITLAB removal
+
+**Panels 1–6 above keep their layout and are re-read at a new tier. Nothing in them is
+redrawn.** A repository is connected **ONCE, to the ORGANISATION**; which projects use it is
+visibility configuration — the rule MOTIR-2029 settles for the code graph, applied to the thing
+the graph is built FROM.
+
+**What that supersedes above.** Every _"Settings → Workspace → Git"_ placement reference reads
+**Settings → Organisation → Git**, and the breadcrumb with it. The single-OAuth model, the in-app
+project selection, the MR/pipeline vocabulary and the shared-`GitProvider`-seam argument are
+untouched — the tier moved, the provider story did not.
+
+**The org INVENTORY is drawn ONCE, and not here.** `design/github/github.mock.html` Panel 6 owns the
+inventory table, its four index states and the `Used by N projects` column, because the inventory is
+provider-agnostic and two drawings of one table drift. Panel 7 below repeats two rows of it only as
+the surface the dialog opens FROM.
+
+### Panel 7 — the ORG-LEVEL removal, GitLab arm: an in-app destructive confirm
+
+- **GitLab is in-app, so Motir owns the act** — the OAuth token can enumerate and detach projects
+  (the same property that makes Panel 2b's picker honest). The removal is therefore an ordinary
+  **destructive confirm dialog**, shown at the moment of the act.
+- **It names every affected project before it runs** (_Atlas_, _Corridor_), in a labelled
+  `PROJECTS THAT LOSE IT` block — not a count, and not a link to go and find out. The count was
+  already on the row behind it (`Used by 2 projects`), which is what makes this a **confirmation
+  rather than a revelation**.
+- It states the org-wide blast radius in the first sentence — _"removed from **every project in
+  moooon**, not only the one you came from"_ — because the same word (_disconnect_) at the project
+  tier means something an order of magnitude smaller.
+- **⚠️ It is NOT a permanence warning.** The code index is kept **30 days**; re-adding the project
+  before then cancels the removal and nothing re-indexes. `CODE_GRAPH_RETENTION_WINDOW_DAYS` is
+  user-facing and `repo_disconnected` is windowed, so _"this cannot be undone"_ would be false — and
+  false in the direction that teaches people to click through warnings.
+- **⚠️ The number is an INTERPOLATION.** The `30` is the rendered value of `{days}` bound to
+  `CODE_GRAPH_RETENTION_WINDOW_DAYS` (`lib/codeGraph/offboarding.ts`, which states that rule
+  itself). Never retype it.
+
+### Why the two arms look different — the asymmetry is drawn, not smoothed
+
+|                  | **GitLab (here)**                                                                                   | **GitHub (`design/github/` Panel 7)**                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| who performs it  | Motir, in-app                                                                                       | github.com — selection is the App's install screen                                          |
+| shape            | a **confirm dialog**, modal                                                                         | a **disclosure**, then a link-out                                                           |
+| primary action   | `Disconnect` — `bg-(--el-danger)` fill with `--el-danger-text` ink, the ONE place that ink is legal | `Continue on GitHub ↗` — accent fill, external glyph                                        |
+| when it is shown | at the moment of the act                                                                            | **before** leaving, because once the admin is on github.com there is no dialog left to show |
+
+The **project-level** removal is neither — a quiet row action whose copy reassures — and it belongs
+to `design/repository-set/` (**MOTIR-4674**).
+
+### Per-element `--el-*` roles added by this amendment
+
+| Element                                | Token(s)                                                                                                                |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| modal scrim / board recess             | `--el-canvas`, radius `--radius-card`                                                                                   |
+| dialog panel                           | `--el-card` / `--el-border` / `--radius-modal` / `--shadow-modal`                                                       |
+| dialog alert glyph                     | `--el-danger` (a graphic beside the label, which stays on `--el-text` — graphics need 3:1)                              |
+| dialog body copy · emphasis            | `--el-text-secondary` · `--el-text`                                                                                     |
+| affected-projects block                | `--el-surface-soft` + `--el-border-soft`, label `--el-text-eyebrow`                                                     |
+| project chips                          | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, `--radius-badge`, `--spacing-chip-*`                       |
+| retention sentence                     | `--el-text-secondary`, emphasis `--el-text`                                                                             |
+| dialog foot                            | `--el-surface-soft`, rule `--el-border-soft`                                                                            |
+| **`Disconnect` (destructive primary)** | fill `--el-danger` · ink **`--el-danger-text`** — legal here and ONLY here, because the element carries the danger FILL |
+| inventory row (repeated for context)   | as `design/github/` Panel 6; owner segment `--el-text-secondary`                                                        |
+
+### Primitives composed — no new design-system entry
+
+`Modal` (radius + shadow tokens) · `Card` · `Pill` · `Button` (`ghost` + `danger`) · `Segmented` via
+`GitSettingsShell`'s `ProviderSwitch` · the settings-area shell. Nothing new is invented; the dialog
+is the shipped modal grammar with a named-projects block inside it.

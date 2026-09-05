@@ -364,3 +364,127 @@ these, it does not build new ones:
 **No new design-system entry is required.** If MOTIR-895 finds it needs one
 (e.g. a distinct merged-PR colour), that is a NEW `design/` subtask — not a code
 workaround.
+
+---
+
+## ⚠️ AMENDMENT — MOTIR-4672 (Story MOTIR-4669), 2026-09-05: the tier moves to the ORGANISATION
+
+**Panels 1–5 above keep their layout and are re-read at a new tier. Nothing in them is
+redrawn.** A repository is connected **ONCE, to the ORGANISATION**; which projects use it is
+visibility configuration — the rule MOTIR-2029 settles for the code graph, applied to the thing
+the graph is built FROM. The surface was right; the tier was not.
+
+**What that supersedes above, precisely.** The _Placement_ section's derivation —
+_"the installation entity is `GithubInstallation { workspaceId }` and repo selection is
+workspace-wide → the surface is workspace-scoped"_ — was correct about the schema it read and is
+superseded by the schema MOTIR-4649 writes: `GithubInstallation` and `GithubRepo` become
+organisation-scoped. So the route is **Settings → Organisation → Git**, the breadcrumb reads
+`Settings › Organisation › Git`, and the page's heading, empty state and copy say _organisation_,
+never _workspace_. The _two grants_ model, the identity binding, the PR/CI surfaces and the Panel-5
+link affordance are untouched.
+
+**The `Git` row is NOT re-specified here.** A rail is amended in the area that owns it, so the org
+settings navigation row that reaches Panel 6 is **MOTIR-4673**, in `design/org-admin/`. Panel 6
+draws the rail only so the page is not floating; its placement, label and gate are settled there.
+
+### Panel 6 — Settings → Organisation → Git: the INVENTORY
+
+- **Shared chrome, composed not re-specified.** The provider `Segmented` (GitHub | GitLab) is
+  `GitSettingsShell` + `ProviderSwitch`, and its markup and `.seg` rules are copied verbatim from
+  `design/gitlab/gitlab.mock.html` so the two assets cannot drift.
+- **The connection card** carries the organisation connection's lifecycle: the installed App, who
+  installed it and when, a `Pill` (mint, badge-check) reading **Connected**, and the
+  **Manage on GitHub** link-out. It is the org's, not a member's — the member's own
+  `GithubIdentity` moved to the account tier (MOTIR-4675, `design/settings/`).
+- **The inventory table** is the substantive addition — one row per connected repository:
+
+  | column      | content                                                                                                                                         |
+  | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Repository  | repo glyph + `owner/name`, owner in `--el-text-secondary` (see the ink note below)                                                              |
+  | Provider    | the provider mark + label — the inventory spans both, so the pressed Segmented does not answer this                                             |
+  | Index       | a `Pill` in **all four** states: **Current** (mint, check) · **Stale** (peach, clock) · **Indexing…** (sky, dots) · **Never indexed** (neutral) |
+  | Used by     | **`Used by N projects`**, drawn AT REST                                                                                                         |
+  | _(actions)_ | the org-level removal — `Remove on GitHub` for GitHub, `Disconnect` for GitLab                                                                  |
+
+- **⚠️ `Used by N projects` is a COLUMN, not a sentence, and it is the whole disclosure
+  mechanism.** A warning inside a dialog is read past; a count that was on screen all along is not,
+  and the dialog naming _Atlas, Beacon_ is then a confirmation rather than a revelation. It is drawn
+  **collapsed** (chevron-right, rows 1 / 3) and **expanded** (chevron-down, row 2 — the project
+  names as neutral chips, in place, not a link out of the page).
+- **A repository used by ZERO projects is drawn** (`design-system`, _Used by no project yet_). That
+  is a **legal state**: the repository belongs to the organisation, stays in the inventory and keeps
+  its index, so the next project that adds it pays nothing. The card foot says so. An asset that
+  omitted this row would invite the _"nothing uses it, drop the graph"_ optimisation the story
+  forbids.
+- **Layout.** The row is a **CSS grid**, not a flex row, and the head shares the same template. A
+  flex item's `min-width` is `auto`, so an over-long button in a later column silently steals from
+  the repository name; the grid gives the name column a floor. The shell is drawn at **1100px** —
+  the same settings shell as Panels 1–2 measured at a desktop width, not a different one.
+- **⚠️ Ink — the one place this amendment deliberately differs from Panel 2.** The inventory row's
+  owner segment is **`--el-text-secondary`**, where `repo-row .r-owner` two panels up is
+  `--el-text-muted`. The difference is the **hover tint**, not a style choice: the inventory row
+  tints to `--el-surface`, on which `--el-text-muted` measures **4.17:1** and fails AA, while the
+  resting-only Panel-2 row keeps its muted ink on the white card at 4.54:1. `--el-text-secondary` is
+  6.24–6.80:1 on both, so it is right in either state.
+  **And an override under the `:hover` selector does NOT satisfy the guard** —
+  `tests/design-state-ink-contrast.test.ts` resolves the ink from the RESTING rule and the surface
+  from the state, so the resting declaration is the one that has to be safe.
+
+### Panel 7 — the ORG-LEVEL removal, GitHub arm: the disclosure comes BEFORE the link-out
+
+- **Motir cannot remove a GitHub repository.** Selection is the App's install screen, and
+  `github.repos.foot` already says so. Once the admin is on github.com there is no dialog left to
+  show them — **so the org-wide consequence is stated on the way out**, in an in-app disclosure whose
+  primary action is `Continue on GitHub ↗`.
+- It **names every affected project** (_Atlas_, _Beacon_) and states the retention truthfully: the
+  code index is kept **30 days**, re-selecting the repository before then cancels the removal, and
+  only after that is it swept.
+- **⚠️ It is NOT a permanence warning.** `CODE_GRAPH_RETENTION_WINDOW_DAYS` is user-facing,
+  `repo_disconnected` is windowed, and the shipped copy already promises that re-selecting cancels
+  the removal. A screen saying _"this cannot be undone"_ would be **false**, and false in the
+  direction that teaches people to click through warnings.
+- **⚠️ The number is an INTERPOLATION and must never be retyped.** The `30` in the mock is the
+  rendered value of `{days}` bound to `CODE_GRAPH_RETENTION_WINDOW_DAYS`
+  (`lib/codeGraph/offboarding.ts`, which states that rule itself) — exactly as the shipped
+  `github.repos.codeIndex` string already binds it.
+- **The two removals are visibly different affordances**, and that is the point:
+
+  |                  | **GitHub (Panel 7, here)**                           | **GitLab (`design/gitlab/` Panel 7)**      |
+  | ---------------- | ---------------------------------------------------- | ------------------------------------------ |
+  | who performs it  | github.com                                           | Motir, in-app                              |
+  | shape            | a **disclosure** — facts, then a link-out            | an ordinary **destructive confirm** dialog |
+  | primary action   | `Continue on GitHub ↗` (accent fill, external glyph) | `Disconnect` (danger fill)                 |
+  | when it is shown | **before** leaving, because there is no later moment | at the moment of the act                   |
+
+  The **project-level** removal is neither of these — it is a quiet row action whose copy reassures
+  (_"Removes it from this project only…"_) — and it belongs to `design/repository-set/`
+  (**MOTIR-4674**), not here.
+
+### Per-element `--el-*` roles added by this amendment
+
+| Element                                       | Token(s)                                                                                                                                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| provider `Segmented` track / option / pressed | `--el-tabnav-track` · `--el-text-secondary` · pressed `--el-page-bg` + `--el-text-strong` + `--shadow-subtle`, glyph `--el-tabnav-active`                               |
+| inventory head row                            | `--el-text-eyebrow` on `--el-card`, rule `--el-border-soft`                                                                                                             |
+| inventory row · its hover tint                | `--el-card` → `--el-surface` on hover; rule `--el-border-soft`                                                                                                          |
+| repository name · owner segment               | `--el-text` · **`--el-text-secondary`** (never `--el-text-muted` — the hover tint, above)                                                                               |
+| index-state pills                             | `--el-tint-mint` / `--el-tint-peach` / `--el-tint-sky` + `--el-text-strong`; _Never indexed_ is the neutral `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary` |
+| `Used by N projects` control + its chevron    | `--el-text-secondary` · glyph `--el-icon-muted`                                                                                                                         |
+| project chips (expanded)                      | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, radius `--radius-badge`, padding `--spacing-chip-*`                                                        |
+| org-removal row action                        | the shipped danger-ghost: text `--el-danger` on border `--el-border`                                                                                                    |
+| disclosure card                               | `--el-card` / `--el-border` / `--radius-card` / `--shadow-elevated`; foot `--el-surface-soft`                                                                           |
+| disclosure fact rows                          | glyph `--el-icon-muted`, body `--el-text-secondary`, emphasis `--el-text`                                                                                               |
+| disclosure primary action                     | fill `--el-accent` · ink `--el-accent-text`                                                                                                                             |
+
+Shape flows only through element-semantic tokens (`--radius-card` / `--radius-badge` /
+`--radius-control` / `--radius-btn`; `--spacing-card-padding` / `--spacing-control-*` /
+`--spacing-chip-*`; `--height-btn-sm` / `--height-control`). No Tier-0 `--color-*`, no raw
+`rounded-*` / `p-*` / `h-*`, no invented hue.
+
+### Primitives composed — still no new design-system entry
+
+`Card` · `Pill` (existing `status` / `severity` / `tone` axes only) · `Button`
+(`primary` / `secondary` / `ghost` / danger-ghost) · `Segmented` (via `GitSettingsShell`'s
+`ProviderSwitch`) · `SectionLabel` · the settings-area shell. The inventory table is a composition
+of `Card` + rows, not a new primitive; the disclosure is `Card` + `Button`s, not a new dialog
+component.
