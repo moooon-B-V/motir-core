@@ -60,6 +60,13 @@ export const STRUCTURAL_GUARD_SPECS = [
   // shares their memoisation-free shape, so it belongs in the same lane rather
   // than in the sharded job where it would be sized against a database budget.
   'tests/theme/composedSurfaceInkCoverage.test.ts',
+  // ── tests/theme/ — the `Modal.Body`-bypass guard (MOTIR-2491) ─────────────
+  // Parses every `.tsx` under `app/`, `components/` and the design system's
+  // `src/` through the compiler API and classifies each `<Modal>` call site by
+  // SHAPE: a bare one may hold only what a short confirm holds. Same cost
+  // profile as the ink guards — one whole-tree parse, no database, nothing
+  // rendered — and it imports nothing from `lib/` or `app/`.
+  'tests/theme/modalScrollContainer.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —

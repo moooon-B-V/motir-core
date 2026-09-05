@@ -84,46 +84,53 @@ export function EditFilterDialog({
       size="md"
     >
       <form
-        className="flex flex-col gap-4"
+        className="flex min-h-0 flex-1 flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           if (!saving && name.trim()) void save();
         }}
       >
-        <Input
-          id={nameId}
-          label={t('edit.nameLabel')}
-          placeholder={t('edit.namePlaceholder')}
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            if (nameError) setNameError(null);
-          }}
-          error={nameError ?? undefined}
-          errorVariant="box"
-          autoFocus
-          required
-        />
-        <Textarea
-          id={descId}
-          label={t('edit.descriptionLabel')}
-          placeholder={t('edit.descriptionPlaceholder')}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-        />
-        <VisibilityRadioCards
-          value={visibility}
-          onChange={setVisibility}
-          canShare={viewer.canShare || filter.visibility === 'project'}
-          legend={t('edit.visibilityLegend')}
-        />
-        {goingPrivate ? (
-          <p className="rounded-(--radius-card) bg-(--el-tint-peach) px-3 py-2 text-xs text-(--el-text-strong)">
-            {t('edit.goPrivateNote')}
-          </p>
-        ) : null}
-
+        {/* Name, description, the two visibility cards and — when a shared
+            filter is being made private — the go-private note stack to ~700px
+            at a 700px-tall viewport, past the panel's 90vh cap; as a bare
+            `<form>` the footer was clipped outside the panel with no scrollbar
+            (MOTIR-2491, measured at 1280×700). `Modal.Body` owns the scroll
+            recipe; the footer stays pinned and inside the form. */}
+        <Modal.Body className="gap-4">
+          <Input
+            id={nameId}
+            label={t('edit.nameLabel')}
+            placeholder={t('edit.namePlaceholder')}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (nameError) setNameError(null);
+            }}
+            error={nameError ?? undefined}
+            errorVariant="box"
+            autoFocus
+            required
+          />
+          <Textarea
+            id={descId}
+            label={t('edit.descriptionLabel')}
+            placeholder={t('edit.descriptionPlaceholder')}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+          />
+          <VisibilityRadioCards
+            value={visibility}
+            onChange={setVisibility}
+            canShare={viewer.canShare || filter.visibility === 'project'}
+            legend={t('edit.visibilityLegend')}
+          />
+          {goingPrivate ? (
+            <p className="rounded-(--radius-card) bg-(--el-tint-peach) px-3 py-2 text-xs text-(--el-text-strong)">
+              {t('edit.goPrivateNote')}
+            </p>
+          ) : null}
+        </Modal.Body>
         <Modal.Footer>
           <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
             {t('edit.cancel')}

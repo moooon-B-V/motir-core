@@ -218,12 +218,19 @@ export function StartSprintDialog({
       size="md"
     >
       <form
+        className="mt-1 flex min-h-0 flex-1 flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           void handleStart();
         }}
       >
-        <div className="flex flex-col gap-(--spacing-md)">
+        {/* The fields scroll and the footer stays pinned. In the TALLEST state —
+            the already-active alert on top of a custom-duration window — this
+            body is ~680px at a 700px-tall viewport, more than the panel's 90vh
+            cap; as a bare `<div>` it was clipped by the panel with no
+            scrollbar and BOTH footer buttons cut off (MOTIR-2491, measured at
+            1280×700). `Modal.Body` owns the scroll recipe. */}
+        <Modal.Body className="gap-(--spacing-md)">
           {showActiveAlert ? (
             <div
               role="alert"
@@ -336,7 +343,7 @@ export function StartSprintDialog({
               })}
             </span>
           </div>
-        </div>
+        </Modal.Body>
 
         <Modal.Footer>
           <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={submitting}>
