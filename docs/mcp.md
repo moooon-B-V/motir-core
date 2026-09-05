@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **55 tools**.
+`initialize` handshake and registers **56 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -2120,7 +2120,7 @@ it fill.
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Requires `project:browse`.
 
-#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal`
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the
 tree. These two are the other door: **you decide the tree, and Motir reviews it
@@ -2488,6 +2488,54 @@ plan to propose again. On a `generating` plan the last withdrawal does **not** e
 it — that pass has not finished writing.
 
 Same statuses, same key, same freeze as `update_plan_proposal` above.
+
+##### `update_plan` — correct the PLAN'S OWN title and summary
+
+The three tools above all address a PROPOSAL. This one addresses the **plan** — the
+two lines a reviewer reads _above_ the tree, before any card. `create_plan` wrote
+them once and nothing could reach them afterwards, so the cheapest possible mistake
+had the most expensive remedy in this surface: withdraw every proposal (which ENDS a
+`planned` plan as `declined` / `discarded`), re-create the plan, re-append every
+proposal with every `planItem:` ref rebuilt, re-close it. One wrong sentence cost the
+whole plan.
+
+| Input     | Type           | Required | Notes                                                        |
+| --------- | -------------- | -------- | ------------------------------------------------------------ |
+| `planId`  | string         | yes      | The id `create_plan` returned.                               |
+| `title`   | string \| null | no       | The plan's own short label. `null` clears it.                |
+| `summary` | string \| null | no       | The Markdown summary shown above the tree. `null` clears it. |
+
+**Sparse, and a call that sends neither is refused.** An omitted field is left
+exactly as it was; an explicit `null` clears it. `INVALID_PROPOSAL` for a call that
+changes nothing — the same refusal `update_plan_proposal` gives an empty correction.
+
+**It touches NOTHING else, and that is asserted rather than assumed.** The plan keeps
+every proposal it had, its `status`, its `plannedAt` and the staleness flags derived
+from it. A brief edit corrects what the plan SAYS about itself; it does not re-open a
+closed plan, re-date it, or make a reviewer's read of the tree stale.
+
+**Legal on `generating` AND `planned`; `approved` and `declined` are FROZEN** — the
+same boundary the two correction doors draw, because it is the same question: a plan
+being written or awaiting a decision is editable, a decided plan is a record. The
+refusal is `PLAN_NOT_EDITABLE` and it names the status.
+
+**The edit is on the plan's TIMELINE**, as a `brief_edited` event carrying the harness
+and model that made it. That is a decision rather than a side effect: a `planned` plan
+is a thing a person is deciding about, and silently rewriting the sentence they are
+reading would trade one honesty problem for another. It is deliberately not the
+`edited` verb, which means _a proposal changed_ and renders as a proposal count.
+
+```jsonc
+// The summary said the org was the billing unit for code indexing. It is not.
+update_plan({ planId, summary: "…the org is the ATTRIBUTION unit; indexing is absorbed." })
+// → the same plan id, the same three proposals, still `planned`.
+```
+
+Requires **`ai:view_plan`** — the key `plansService.correctPlanBrief` asserts, the
+same one every other authoring write names. A CLI-minted token does not carry it.
+
+Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an `approved` or `declined` plan;
+`INVALID_PROPOSAL` for a call that sends neither field.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
 

@@ -76,7 +76,7 @@ export async function PATCH(
     ...('estimateMinutes' in b
       ? { estimateMinutes: typeof b.estimateMinutes === 'number' ? b.estimateMinutes : null }
       : {}),
-    // The card's ORDERED STEPS (MOTIR-4619 · AMENDMENT 13 D3), parsed exactly as
+    // The card's ORDERED STEPS (MOTIR-4619 · AMENDMENT 14 D3), parsed exactly as
     // the internal deepen route parses it — the two edit paths accept the same
     // shape, which is what this route's shipped comment asks of them. Present
     // but not an array becomes `null` (this parser's convention for every

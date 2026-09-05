@@ -9,7 +9,7 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MATERIALIZE writes the rows (Story MOTIR-3810 · Subtask MOTIR-4618) —
-// `docs/decisions/agent-authored-plans.md` AMENDMENT 13 D5.
+// `docs/decisions/agent-authored-plans.md` AMENDMENT 14 D5.
 //
 // The carrier (MOTIR-4616) made a proposal able to HOLD a card's steps. This is
 // the moment they stop being a proposal: approve creates the work item and, in

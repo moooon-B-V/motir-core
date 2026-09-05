@@ -368,7 +368,7 @@ describe('the PROPOSED to-do list in proposal mode (MOTIR-4622)', () => {
     expect(screen.queryByTestId('proposal-todos')).toBeNull();
     cleanup();
 
-    // A `modify` shows none BY DECISION (AMENDMENT 13 D2, Part XV §15.4): its
+    // A `modify` shows none BY DECISION (AMENDMENT 14 D2, Part XV §15.4): its
     // target is a committed card whose list is a person's PROGRESS.
     renderProposal(MODIFY);
     expect(screen.queryByTestId('proposal-todos')).toBeNull();

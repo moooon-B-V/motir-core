@@ -244,7 +244,7 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     },
     todos: {
       addOnly:
-        'AMENDMENT 13 D2 — a `modify` patch carries NO `todos` (`patchSchema` declares none and ' +
+        'AMENDMENT 14 D2 — a `modify` patch carries NO `todos` (`patchSchema` declares none and ' +
         '`applyModify` writes only PLAN_ITEM_PATCH_KEYS), so on any op but `add` there is no ' +
         'proposed side at all. And the target side must NOT be substituted for it the way the ' +
         "MOTIR-4143 rail fields substitute theirs: a committed card's list is a person's " +

@@ -134,7 +134,7 @@ export const PLAN_ITEM_SETTABLE_RAIL_FIELDS: readonly PlanItemChangeField[] = Ar
  * MOTIR-4622) — `design/ai-planning/design-notes.md` Part XV.
  *
  * ⚠️ `executor` IS RESOLVED HERE, not carried raw. `agent-authored-plans.md`
- * AMENDMENT 13 D5 seeds a materialized row's executor as
+ * AMENDMENT 14 D5 seeds a materialized row's executor as
  * `row.executor ?? proposal.executor ?? 'human'`, and the whole point of this
  * surface is that **the reviewer reads what approve will WRITE**. Sending the
  * raw `null` and letting the client decide would put the seed rule in two
@@ -194,7 +194,7 @@ export interface PlanProposalPeekDto {
    * The card's proposed STEPS, read-only (MOTIR-4622 · Part XV).
    *
    * On an `add` that carries them; **`null` on a `modify` and a `remove`, and
-   * that is a decision rather than a gap** (AMENDMENT 13 D2 / D6). A `modify`'s
+   * that is a decision rather than a gap** (AMENDMENT 14 D2 / D6). A `modify`'s
    * target is a COMMITTED card whose list is a person's PROGRESS: `QuickViewData`
    * carries no to-do field, and a `modify` patch carries no `todos`, so there is
    * nothing to show and nothing this plan could change. Part XV panel 6 draws

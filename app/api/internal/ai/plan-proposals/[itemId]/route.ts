@@ -164,7 +164,7 @@ export async function PATCH(
     ...('executor' in patch
       ? { executor: typeof patch.executor === 'string' ? patch.executor : null }
       : {}),
-    // The card's ORDERED STEPS (MOTIR-4619 · AMENDMENT 13 D3). Read by PRESENCE
+    // The card's ORDERED STEPS (MOTIR-4619 · AMENDMENT 14 D3). Read by PRESENCE
     // like the keys above it — absent leaves the proposal's list alone, an
     // explicit `null` clears it — with ONE difference that is a property of the
     // value rather than of this route: a list has no sparse edit, so a supplied

@@ -678,7 +678,7 @@ export const planReviewService = {
       // them separately is the drift this card exists to make impossible.
       const changes = item.op === 'modify' ? buildChanges(item.patch, target, nameParent) : [];
 
-      // THE PROPOSED STEPS, resolved for READING (MOTIR-4622 · AMENDMENT 13 D5,
+      // THE PROPOSED STEPS, resolved for READING (MOTIR-4622 · AMENDMENT 14 D5,
       // D6; `design/ai-planning/design-notes.md` Part XV).
       //
       // ⚠️ `executor` IS RESOLVED HERE — `row.executor ?? proposal.executor ??

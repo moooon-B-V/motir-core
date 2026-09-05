@@ -1,0 +1,2128 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Search spend on the usage dashboard (MOTIR-4554 · amendment to 7.2.10)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — AMENDMENT to design/ai-usage/usage.mock.html.
+      Card MOTIR-4554, under the story MOTIR-4334; the UI code subtask MOTIR-4558 is
+      `blocked_by` this design gate.
+
+      BASE ASSET (amended, NOT replaced, and byte-unchanged by this card):
+        design/ai-usage/usage.mock.html + usage.png (subtask 7.2.10, card MOTIR-820).
+        Its <style> token block and its lucide sprite are spliced into this file
+        VERBATIM so the two assets can never drift; the balance hero, the monthly
+        trend, the drill control, the per-MODEL breakdown, the role gating, the
+        low-balance / out-of-credits states and the ACCESS PATH are all UNTOUCHED.
+
+      WHY THE SHIPPED ASSET CANNOT ABSORB THIS. usage.mock.html draws eight panels
+      and EVERY quantity on them is token-denominated: the cost summary, the drill,
+      the per-MODEL breakdown, the paginated run log. A search has NO MODEL and NO
+      TOKENS. It cannot be a row in the per-model breakdown and it cannot be a token
+      count anywhere — so it needs its own figure and its own row treatment, and per
+      the standing convention it gets a NEW file rather than an amendment that
+      re-exports eight panels nobody changed.
+
+      ⚠️ AND THIS IS THE GAP THAT ASSET ALREADY NAMED. usage.mock.html's Panel 5
+      amendment (MOTIR-4303) records, in its own words, that the run log is planning
+      runs ONLY while the balance above it is the WHOLE ledger — and that "search is
+      rendered nowhere at all", with "nothing on the surface saying so". It filed
+      that as MOTIR-4325 and deliberately did not draw it. **This asset is the
+      answer to that note**, under MOTIR-4334, which supersedes it. The pointer in
+      design-notes.md is amended in the same pass, because MOTIR-4325 is archived and
+      a deferral that points at a dead card is a deferral nobody can follow.
+
+      GROUNDED IN (read at run time, NOT invented):
+        · motir-ai/docs/credit-model.md §4b — `search: { totalSpend, monthSpend }` on
+          GET /v1/usage: ORG-LEVEL and SCOPE-INDEPENDENT.
+        · the same record §4b.1 (MOTIR-4552) — the per-RUN half. `searchRuns.runs`
+          FOLLOWS the drill; `attributedSpend` / `unattributedSpend` are org-level and
+          all-time, so attributed + unattributed === search.totalSpend, exactly.
+        · lib/dto/aiUsage.ts (MOTIR-4555) — `OrgUsageDTO.search: SearchSpendDTO | null`
+          and `.searchRuns: SearchRunsDTO | null`. EVERY figure drawn here is a named
+          field of one of them; nothing is drawn that no read supplies.
+        · motir-gateway/docs/decisions/motir-search-channel.md §5 — an out-of-credit
+          org goes into overdraft and search refuses nothing, so there is no paused
+          state to draw here either.
+        · MOTIR-2778 §4 — a search outside any run, and a search from an untrusted
+          token, are BOTH legitimate and BOTH charged. That is what the un-attributed
+          remainder IS: a real, explainable quantity, never a reconciliation failure.
+        · app/(authed)/settings/organization/usage/_components/OrgUsageClient.tsx —
+          the shipped surface: SummaryPanel, the drill control, ModelChip,
+          jobKindLabel / jobKindTint, the pager, the empty / loading / error states.
+          Read for grounding; MOTIR-4554 changes no code.
+
+      THE THREE QUESTIONS THIS ASSET EXISTS TO SETTLE (the card's own list):
+        (1) How does the figure behave under the DRILL? — panel 1 + panel 2.
+        (2) What does a search row look like in the ACTIVITY LOG? — panel 3.
+        (3) What happens to the UN-ATTRIBUTED remainder? — panel 4.
+
+      ⚠️ THE TINT DECISION, and it is the one place this asset deliberately DIFFERS
+      from its sibling the billing panel's own search-line asset (MOTIR-4551 — a sibling branch, not yet in this tree). On the BILLING panel the
+      search glyph takes --el-tint-sky, which is free there. HERE all six --el-tint-*
+      slots are already spent, and five of them on JOB KINDS: lavender = generate +
+      the tier chip, sky = expand, mint = augment, peach = plan, yellow = low balance,
+      rose = the error icon. A search row is NOT a job kind — it is a different KIND
+      OF CHARGE — so giving it a tint would put two meanings on one colour inside one
+      table, and reusing sky would make a search row and an `expand` run read alike at
+      a glance. It takes the NEUTRAL chip plus the search glyph instead, which is what
+      "not one of the job kinds" looks like in this asset's own vocabulary.
+
+      Panels (review EACH — mistake #31):
+        (1) THE SUMMARY FIGURE IN PLACE — the shipped stat row at real width with a
+            FOURTH card beside it, org scope, every figure's scope LABELLED.
+        (2) THE SAME ROW UNDER THE DRILL — scoped to one project. The org-level
+            figures do not narrow and SAY SO; the attributed figure does.
+        (3) THE ACTIVITY LOG HOLDING A MIX — search rows interleaved with token rows
+            in ONE paginated list, so the mixed table is what the reviewer judges.
+        (4) THE UN-ATTRIBUTED REMAINDER — its drawn treatment, and its ZERO case
+            beside it, because they must not look the same.
+        (5) STATES — no search spend for this scope (NOT the dashboard's global empty
+            state, since token spend may be non-zero) · figures unavailable · the
+            plain-member view under the shipped 6.10.4 gate · the META org.
+        (6) THE ACCESS PATH — the org menu's "Usage & cost" entry, reproduced from
+            usage.mock.html panel 1. No new door is invented.
+      Toggle dark mode to confirm --el-* token parity. See design-notes.md
+      § "Amendment 2026-09-05 — search spend on the usage dashboard" for the
+      per-element primitive + copy + token spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --color-warning: #f08c3a;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 800px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+      }
+      @media (max-width: 760px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ── Page shell — mirrors app/(authed)/settings/* (org-admin grammar) ──── */
+      .page {
+        padding: 28px 28px 32px;
+      }
+      .crumb {
+        display: block;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-bottom: 10px;
+      }
+      .page > h2 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page > .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+        max-width: 64ch;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-top: 22px;
+      }
+
+      /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head .ttl {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .card-body {
+        padding: 14px var(--spacing-card-padding) 16px;
+      }
+      .card-body.flush {
+        padding: 0 var(--spacing-card-padding);
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+      }
+
+      /* ── Stat-card grid (Cards) — the org cost summary ───────────────────── */
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 760px) {
+        .stat-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .stat {
+        padding: 18px 20px;
+      }
+      .stat .lbl {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-muted);
+      }
+      .stat .lbl svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+      }
+      .stat .big {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 34px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.1;
+        margin-top: 8px;
+        letter-spacing: -0.01em;
+      }
+      .stat .unit {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text-muted);
+        font-family: var(--font-sans);
+        letter-spacing: 0;
+      }
+      .stat .med {
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin-top: 8px;
+      }
+      .stat .sub2 {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 6px;
+      }
+      .stat .delta {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-top: 6px;
+      }
+      .stat .delta.up {
+        color: var(--el-warning);
+      }
+      .stat .delta.down {
+        color: var(--el-success);
+      }
+      .stat .delta svg {
+        width: 13px;
+        height: 13px;
+      }
+
+      /* allotment meter — the org balance as a share of its monthly allotment */
+      .meter {
+        height: 8px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        margin-top: 14px;
+        overflow: hidden;
+      }
+      .meter > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+      }
+
+      /* ── Monthly trend — a token-only bar sparkline (no canvas/image) ─────── */
+      .trend {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        height: 132px;
+        padding: 8px 4px 0;
+      }
+      .trend .col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        height: 100%;
+        justify-content: flex-end;
+      }
+      .trend .bar {
+        width: 100%;
+        max-width: 46px;
+        border-radius: var(--radius-control) var(--radius-control) 0 0;
+        background: var(--el-tint-lavender);
+      }
+      .trend .col.cur .bar {
+        background: var(--el-accent);
+      }
+      .trend .mo {
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .trend .col.cur .mo {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .trend .val {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Scope drill control (Combobox/breadcrumb) ───────────────────────── */
+      .scope {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .scope .seg {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        border-radius: var(--radius-input);
+        padding: 0 var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .scope .seg.active {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .scope .seg .ava {
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        flex: none;
+      }
+      .scope .seg .chev {
+        color: var(--el-text-muted);
+      }
+      .scope .seg svg {
+        width: 15px;
+        height: 15px;
+      }
+      .scope .sep {
+        color: var(--el-text-secondary);
+        font-size: 15px;
+      }
+      .scope-note {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin: 10px 0 0;
+        line-height: 1.5;
+      }
+
+      /* ── Tables (the at-scale list pattern — per-model + run log) ─────────── */
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .tbl th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        padding: 0 12px 10px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        white-space: nowrap;
+      }
+      .tbl th.num,
+      .tbl td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .tbl td {
+        padding: 12px 12px 12px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text);
+        vertical-align: middle;
+      }
+      .tbl tr:last-child td {
+        border-bottom: 0;
+      }
+      .tbl td.num.credits {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .tbl td .muted {
+        color: var(--el-text-muted);
+      }
+
+      /* model chip + per-model usage bar (palette, not grey-only · finding #54) */
+      .model {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 9999px;
+        flex: none;
+      }
+      .dot.opus {
+        background: var(--el-accent);
+      }
+      .dot.sonnet {
+        background: var(--el-info);
+      }
+      .dot.haiku {
+        background: var(--el-success);
+      }
+      .dot.deepseek {
+        background: var(--el-accent-teal, var(--color-accent-teal));
+      }
+      .usebar {
+        height: 8px;
+        width: 100%;
+        min-width: 120px;
+        border-radius: var(--radius-badge);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .usebar > span {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-badge);
+      }
+      .usebar > span.opus {
+        background: var(--el-accent);
+      }
+      .usebar > span.sonnet {
+        background: var(--el-info);
+      }
+      .usebar > span.haiku {
+        background: var(--el-success);
+      }
+      .usebar > span.deepseek {
+        background: var(--color-accent-teal);
+      }
+
+      /* job-kind pill tones */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.1;
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-tier {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-generate {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-expand {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-augment {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      /* MOTIR-4303 (2026-09-03) — the ONE planning kind. Added BESIDE the three
+         above, never replacing them: `AiUsage.jobKind` is persisted history, so
+         the older tints keep labelling runs an organization has already paid for. */
+      .pill-plan {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .pill-warn {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill-readonly {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        font-size: 12px;
+        padding: 0 var(--spacing-btn-x-sm);
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* ── Pagination bar (the at-scale list control — NOT load-all) ────────── */
+      .pager {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .pager .pbtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border-strong);
+        color: var(--el-text);
+        background: transparent;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .pager .pbtn.is-disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .pager .pbtn svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* ── Notes / banners ─────────────────────────────────────────────────── */
+      .note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        border: 1px dashed var(--el-border-strong);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .note.credits-aff {
+        background: var(--el-tint-sky);
+        border: 0;
+        color: var(--el-text-strong);
+      }
+      /* low-balance warning — hue in a BANNER tint, NOT a page-level surface (finding #35) */
+      .banner-warn {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .banner-warn svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-warning);
+      }
+      .banner-warn .bt {
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .banner-warn .bt strong {
+        font-weight: 600;
+      }
+
+      /* ── EmptyState / ErrorState family (components/ui/EmptyState) ────────── */
+      .state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 40px 28px;
+      }
+      .state .ico {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+      }
+      .state.err .ico {
+        background: var(--el-tint-rose);
+        color: var(--el-danger-on-surface);
+      }
+      .state.blocked .ico {
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+      .state .ico svg {
+        width: 22px;
+        height: 22px;
+      }
+      .state h4 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .state p {
+        margin-top: 8px;
+        max-width: 44ch;
+        font-size: 13px;
+        color: var(--el-text-muted);
+        line-height: 1.5;
+      }
+      .state .actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+      }
+      .state .passive-slot {
+        margin-top: 18px;
+        padding: 12px 16px;
+        border-radius: var(--radius-card);
+        border: 1px dashed var(--el-border-strong);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        max-width: 46ch;
+        line-height: 1.45;
+      }
+
+      /* ── Skeleton — the loading dashboard. Drawn inline: `components/ui/`
+         has no Skeleton primitive, only PageSkeleton. ──────────────────────── */
+      .sk {
+        background: linear-gradient(
+          90deg,
+          var(--el-surface) 0%,
+          var(--el-muted) 50%,
+          var(--el-surface) 100%
+        );
+        border-radius: var(--radius-control);
+      }
+      .sk-line {
+        height: 10px;
+      }
+      .sk-stat {
+        padding: 18px 20px;
+      }
+
+      /* ── Read-only chip note (the member view) ───────────────────────────── */
+      .ro-note {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .ro-note svg {
+        width: 14px;
+        height: 14px;
+      }
+      .miniwrap {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .miniwrap > .mh {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .miniwrap > .mb {
+        padding: 14px 16px 16px;
+      }
+
+      /* ── TopNav + org menu (the ACCESS PATH — mirrors TopNav.tsx + org-admin) ─ */
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topnav .left,
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        background: var(--el-surface);
+        border: 1px solid transparent;
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        max-width: 220px;
+      }
+      .trigger .org-ava {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .trigger .tlabel {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-secondary);
+        flex: none;
+      }
+      .mini-search {
+        height: var(--height-btn-md);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .mini-search svg {
+        width: 14px;
+        height: 14px;
+      }
+      .user-ava {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+      }
+      .menu {
+        position: relative;
+        margin-top: 6px;
+        width: 300px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .menu-head {
+        padding: 8px 10px 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-muted);
+      }
+      .menu-sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 2px;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .opt.active {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .opt .ot {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.25;
+        min-width: 0;
+        flex: 1;
+      }
+      .opt .ot .od {
+        font-size: 11px;
+        color: var(--el-text-muted);
+        font-weight: 400;
+      }
+      .opt svg.li {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .opt.active svg.li {
+        color: var(--el-accent-on-surface);
+      }
+      .entry-call {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 4px;
+      }
+      .entry-call svg {
+        width: 16px;
+        height: 16px;
+        color: var(--el-accent-on-surface);
+        flex: none;
+      }
+    </style>
+    <style>
+      /* ══ AMENDMENT-ONLY additions (MOTIR-4554) ════════════════════════════════
+         Every colour below is an --el-* token and every shaped surface a
+         [data-style] shape token — same rules as the base asset. Nothing here
+         restyles a base class; these are NEW elements only. */
+
+      /* ① The SCOPE LABEL that rides every figure. This asset's central problem
+         is that two figures sit side by side and only one of them narrows when
+         the drill moves — so the label is not decoration, it is the fix. It is
+         --el-text-secondary rather than --el-text-muted because it lands inside
+         a .stat card AND (panel 5) on --el-surface-soft, and muted clears AA on
+         only one of those. */
+      .scopetag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+      }
+      .scopetag svg {
+        width: 12px;
+        height: 12px;
+      }
+      /* The two values it can take, distinguished by WEIGHT of statement rather
+         than by hue: a figure that ignores the selector above it has to say so
+         louder than one that obeys it. */
+      .scopetag.fixed {
+        color: var(--el-text-strong);
+      }
+
+      /* ② The search chip in the run log. NOT a --el-tint-* and deliberately so
+         — see the tint decision in the header comment. It is the base asset's
+         own .pill-neutral treatment plus the search glyph, which is what "not
+         one of the job kinds" looks like in this asset's vocabulary. */
+      .pill-search {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-search svg {
+        width: 12px;
+        height: 12px;
+        margin-right: 4px;
+      }
+
+      /* ③ The EM-DASH that stands in a token column for a row that has no
+         tokens. A cell, not a value: it is --el-text-secondary and centred in
+         the numeric column so the eye reads "not applicable" rather than zero. */
+      .tbl td .nodata {
+        color: var(--el-text-secondary);
+        letter-spacing: 0.08em;
+      }
+
+      /* ④ The REMAINDER row — the residual line under the attributed rows. It is
+         a table row, not a footnote, because the number has to sit in the same
+         credits column the rows above it sum into or the reader cannot check it. */
+      .tbl tr.residual td {
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+      }
+      .tbl tr.residual td.num {
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .residual-why {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+
+      /* ⑤ A two-up band for the panels that compare two states. */
+      .twoup {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .twoup {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Search spend on the usage dashboard (MOTIR-4554 · amendment to 7.2.10)</h1>
+        <p>
+          An <strong>amendment</strong> to <code>design/ai-usage/usage.mock.html</code>, not a
+          redesign of it. Every quantity on that asset is token-denominated; a search has
+          <strong>no model and no tokens</strong>, so it cannot be a row in the per-model breakdown
+          and cannot be a token count anywhere. This asset answers the three questions that follow —
+          how the figure behaves under the DRILL, what a search row looks like in the ACTIVITY LOG,
+          and what happens to the UN-ATTRIBUTED remainder. It is also the answer to the note that
+          asset's own Panel 5 left:
+          <em>“search is rendered nowhere at all … nothing on the surface saying so.”</em> Every
+          figure is a named field of <code>OrgUsageDTO.search</code> /
+          <code>.searchRuns</code> (MOTIR-4555). Toggle dark mode to verify --el-* token parity.
+        </p>
+      </div>
+      <button class="toggle" onclick="toggleTheme()">Toggle dark</button>
+    </div>
+
+    <!-- ══════ PANEL 1 — THE SUMMARY FIGURE IN PLACE, AT ORG SCOPE ════════════ -->
+    <div class="panel-label">
+      1 · <strong>IN PLACE — the shipped stat row at real width, with a FOURTH card.</strong> The
+      three shipped cards are copied verbatim and are untouched. The new one sits beside them so the
+      reader judges it in its real neighbourhood.
+      <strong>Every figure carries a SCOPE LABEL</strong>
+      — the decision this panel exists for. At org scope the labels agree and nothing looks unusual;
+      panel 2 is where they come apart, and the label is what makes that legible instead of
+      mysterious.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <span class="crumb">Organization · moooon · Usage &amp; cost</span>
+          <h2>Usage &amp; cost</h2>
+          <p class="sub">
+            What this organization has spent, and on what. Credits are a usage allotment, not a
+            currency.
+          </p>
+          <div class="stack">
+            <div class="scope">
+              <span class="seg">moooon <span class="pill pill-neutral">Org</span></span>
+              <span class="seg"
+                >All workspaces <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+              ></span>
+            </div>
+
+            <div class="stat-grid" style="grid-template-columns: 1.4fr 1fr 1fr 1fr">
+              <!-- HERO — VERBATIM from usage.mock.html, unchanged -->
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Credit balance</span
+                >
+                <div class="big">12,480<span class="unit"> credits</span></div>
+                <div class="sub2">moooon · <span class="pill pill-tier">Basic tier</span></div>
+                <div class="meter" title="62% of this month’s allotment remaining">
+                  <span style="width: 62%"></span>
+                </div>
+                <div class="sub2">62% of this month’s 20,000-credit allotment remaining</div>
+              </div>
+              <!-- VERBATIM, unchanged -->
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sigma" /></svg>Token spend, this
+                  month</span
+                >
+                <div class="med">7,520 credits</div>
+                <div class="delta up">
+                  <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+18% vs May
+                </div>
+                <span class="scopetag"
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>Follows this scope</span
+                >
+              </div>
+              <!-- ═══ THE NEW CARD — search spend, ORG-LEVEL ═══ -->
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search spend, this
+                  month</span
+                >
+                <div class="med">312 credits</div>
+                <div class="sub2">1,204 credits all time</div>
+                <span class="scopetag fixed"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Whole organization</span
+                >
+              </div>
+              <!-- ═══ THE NEW CARD — attributed spend, WHICH DOES narrow ═══ -->
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>…of which attributed</span
+                >
+                <div class="med">246 credits</div>
+                <div class="sub2">66 credits not attributed to a run</div>
+                <span class="scopetag"
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>Follows this scope</span
+                >
+              </div>
+            </div>
+
+            <div class="note">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                >A <strong>web search</strong> is charged per search, at 1 credit each, and has no
+                model and no tokens — so it never appears in the per-model breakdown above. It is
+                shown as its own figure for the same reason.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 2 — THE SAME ROW UNDER THE DRILL ═════════════════════════ -->
+    <div class="panel-label">
+      2 · <strong>THE DRILL — and the decision this asset exists to make.</strong> Scoped to one
+      project. <code>OrgUsageDTO.search</code> is <strong>org-level and scope-independent</strong>
+      (a search made outside any run has no project to attribute to), while
+      <code>searchRuns.attributedSpend</code> DOES narrow with the drill. So the two search figures
+      no longer agree, and
+      <strong
+        >a number that silently ignored the selector above it would be the surface lying
+        quietly</strong
+      >. Each figure states its own scope, in the same place, in the same words:
+      <em>Whole organization</em> or <em>Follows this scope</em>. Both are true and both are useful;
+      what is not acceptable is being unable to tell which is which.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <span class="crumb">Organization · moooon · Usage &amp; cost</span>
+          <h2>Usage &amp; cost</h2>
+          <div class="stack">
+            <div class="scope">
+              <span class="seg">moooon</span>
+              <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; opacity: 0.5">
+                <use href="#i-chevright" />
+              </svg>
+              <span class="seg">Engineering</span>
+              <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; opacity: 0.5">
+                <use href="#i-chevright" />
+              </svg>
+              <span class="seg"
+                >Mobile App <span class="pill pill-neutral">Project</span>
+                <svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+              ></span>
+            </div>
+
+            <div class="stat-grid" style="grid-template-columns: 1fr 1fr 1fr">
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-sigma" /></svg>Token spend, this
+                  month</span
+                >
+                <div class="med">2,140 credits</div>
+                <span class="scopetag"
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>Mobile App</span
+                >
+              </div>
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search spend, this
+                  month</span
+                >
+                <div class="med">312 credits</div>
+                <span class="scopetag fixed"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Whole organization ·
+                  unchanged by this drill</span
+                >
+              </div>
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>…of which attributed</span
+                >
+                <div class="med">84 credits</div>
+                <div class="sub2">by runs in Mobile App</div>
+                <span class="scopetag"
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>Mobile App</span
+                >
+              </div>
+            </div>
+
+            <div class="note">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                ><strong>Why the middle figure did not change.</strong> Search is charged to the
+                organization. A search made inside a planning run can be attributed to that run’s
+                project — that is the third figure — but a search made outside any run has no
+                project, so the organization total is the only honest place to count them all.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 3 — THE ACTIVITY LOG HOLDING A MIX ═══════════════════════ -->
+    <div class="panel-label">
+      3 · <strong>The activity log, holding a MIX.</strong> Search rows interleaved with token rows
+      in ONE paginated list, drawn against real neighbours so the mixed table is what gets judged —
+      not an isolated row. Two things are decided here: a search row carries the
+      <strong>NEUTRAL chip with the search glyph</strong>, never a <code>--el-tint-*</code>, because
+      it is not a job kind and all six tints are already spent on this surface (five of them on job
+      kinds — reusing <code>sky</code> would make a search row and an <code>expand</code> run read
+      alike); and the token columns carry an <strong>EM-DASH</strong>, not a zero, because a search
+      has no tokens at all and a `0` would claim it used none.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <span class="crumb">Organization · moooon · Usage &amp; cost · Activity</span>
+          <h2>Recent activity</h2>
+          <p class="sub">
+            Everything that debited credits, newest first. Filtered to the current scope (org-wide).
+            Older entries load a page at a time.
+          </p>
+          <div class="stack">
+            <div class="card">
+              <div class="card-head">
+                <div class="ttl">
+                  <h3>Activity</h3>
+                  <span class="pill pill-neutral">3,186 total</span>
+                </div>
+                <span class="ro-note"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Scope: moooon (org)</span
+                >
+              </div>
+              <div class="card-body flush">
+                <table class="tbl">
+                  <thead>
+                    <tr>
+                      <th style="width: 19%">When</th>
+                      <th>Entry</th>
+                      <th>Model</th>
+                      <th class="num">Tokens</th>
+                      <th class="num">Credits</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><span class="muted">Sep 05 · 14:22</span></td>
+                      <td>
+                        <span class="pill pill-plan">Planning</span>
+                        <span class="muted" style="margin-left: 6px">Mobile App</span>
+                      </td>
+                      <td>
+                        <span class="model"><span class="dot opus"></span>Opus 4.8</span>
+                      </td>
+                      <td class="num"><span class="muted">312k</span></td>
+                      <td class="num credits">86</td>
+                    </tr>
+                    <!-- ═══ A SEARCH ROW, between two token rows ═══
+                         Neutral chip + the search glyph: not a job kind, so not a
+                         job-kind tint. No model. Em-dash in the token column. -->
+                    <tr>
+                      <td><span class="muted">Sep 05 · 14:19</span></td>
+                      <td>
+                        <span class="pill pill-search"
+                          ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Web search</span
+                        >
+                        <span class="muted" style="margin-left: 6px">Mobile App · 4 searches</span>
+                      </td>
+                      <td><span class="nodata" aria-label="no model">—</span></td>
+                      <td class="num"><span class="nodata" aria-label="no tokens">—</span></td>
+                      <td class="num credits">4</td>
+                    </tr>
+                    <tr>
+                      <td><span class="muted">Sep 05 · 13:58</span></td>
+                      <td>
+                        <span class="pill pill-plan">Planning</span>
+                        <span class="muted" style="margin-left: 6px">Mobile App</span>
+                      </td>
+                      <td>
+                        <span class="model"><span class="dot sonnet"></span>Sonnet 4.6</span>
+                      </td>
+                      <td class="num"><span class="muted">148k</span></td>
+                      <td class="num credits">22</td>
+                    </tr>
+                    <tr>
+                      <td><span class="muted">Sep 05 · 11:40</span></td>
+                      <td>
+                        <span class="pill pill-search"
+                          ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Web search</span
+                        >
+                        <span class="muted" style="margin-left: 6px"
+                          >Billing API · 11 searches</span
+                        >
+                      </td>
+                      <td><span class="nodata" aria-label="no model">—</span></td>
+                      <td class="num"><span class="nodata" aria-label="no tokens">—</span></td>
+                      <td class="num credits">11</td>
+                    </tr>
+                    <tr>
+                      <td><span class="muted">Sep 05 · 09:12</span></td>
+                      <td>
+                        <span class="pill pill-expand">Expand story</span>
+                        <span class="muted" style="margin-left: 6px">Web App</span>
+                      </td>
+                      <td>
+                        <span class="model"><span class="dot deepseek"></span>DeepSeek-V4</span>
+                      </td>
+                      <td class="num"><span class="muted">96k</span></td>
+                      <td class="num credits">9</td>
+                    </tr>
+                    <tr>
+                      <td><span class="muted">Sep 04 · 17:30</span></td>
+                      <td>
+                        <span class="pill pill-generate">Generate plan</span>
+                        <span class="muted" style="margin-left: 6px">Mobile App</span>
+                      </td>
+                      <td>
+                        <span class="model"><span class="dot opus"></span>Opus 4.8</span>
+                      </td>
+                      <td class="num"><span class="muted">358k</span></td>
+                      <td class="num credits">98</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="card-foot">
+                <span class="muted">Showing 1–6 of 3,186</span>
+                <span class="pager">
+                  <span class="pbtn is-disabled"
+                    ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                  >
+                  <span>Page 1 of 531</span>
+                  <span class="pbtn"
+                    >Next <svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                  ></span>
+                </span>
+              </div>
+            </div>
+
+            <div class="note">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                ><strong>One list, not two.</strong> Splitting search into its own table would put
+                the reconciliation back on the reader — the question this page answers is “where did
+                my credits go”, and the answer has to be readable in one column.</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 4 — THE UN-ATTRIBUTED REMAINDER ══════════════════════════ -->
+    <div class="panel-label">
+      4 · <strong>The UN-ATTRIBUTED remainder, and its ZERO case beside it.</strong> Attributed rows
+      will not sum to the org total, because searches made outside a run still debit (<code
+        >MOTIR-2778</code
+      >
+      §4 makes two such arrivals legitimate). That difference is a
+      <strong>real, explainable quantity — not a reconciliation failure</strong> — and an
+      unexplained gap between a total and its rows is precisely the complaint this story exists to
+      end. It is drawn as a
+      <strong>residual ROW in the same credits column the rows above sum into</strong>, never a
+      footnote: a number the reader can add up by eye is a number they can trust.
+      <strong>At zero the row is ABSENT, not rendered as “0”</strong> — a residual line reading zero
+      invites the reader to look for a problem that is not there.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="twoup">
+          <!-- (a) a remainder exists -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ttl">
+                <div>
+                  <h3>Search spend by run</h3>
+                  <p class="hsub">a · some searches were made outside a run</p>
+                </div>
+              </div>
+              <span class="pill pill-neutral">312 credits</span>
+            </div>
+            <div class="card-body flush">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Run</th>
+                    <th class="num">Searches</th>
+                    <th class="num">Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <span class="pill pill-plan">Planning</span>
+                      <span class="muted" style="margin-left: 6px">Mobile App · Sep 05</span>
+                    </td>
+                    <td class="num"><span class="muted">84</span></td>
+                    <td class="num credits">84</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="pill pill-plan">Planning</span>
+                      <span class="muted" style="margin-left: 6px">Billing API · Sep 04</span>
+                    </td>
+                    <td class="num"><span class="muted">109</span></td>
+                    <td class="num credits">109</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="pill pill-augment">Augment tree</span>
+                      <span class="muted" style="margin-left: 6px">Web App · Sep 02</span>
+                    </td>
+                    <td class="num"><span class="muted">53</span></td>
+                    <td class="num credits">53</td>
+                  </tr>
+                  <tr class="residual">
+                    <td>Not attributed to a run</td>
+                    <td class="num"><span class="nodata" aria-label="not counted">—</span></td>
+                    <td class="num">66</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-foot">
+              <span class="residual-why">
+                <strong>246 attributed + 66 not attributed = 312.</strong> A search made outside a
+                planning run still costs credits and still appears in the total; it just has no run
+                to name.
+              </span>
+            </div>
+          </div>
+
+          <!-- (b) the remainder is zero -->
+          <div class="card">
+            <div class="card-head">
+              <div class="ttl">
+                <div>
+                  <h3>Search spend by run</h3>
+                  <p class="hsub">b · every search came from a run</p>
+                </div>
+              </div>
+              <span class="pill pill-neutral">193 credits</span>
+            </div>
+            <div class="card-body flush">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Run</th>
+                    <th class="num">Searches</th>
+                    <th class="num">Credits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <span class="pill pill-plan">Planning</span>
+                      <span class="muted" style="margin-left: 6px">Mobile App · Sep 05</span>
+                    </td>
+                    <td class="num"><span class="muted">84</span></td>
+                    <td class="num credits">84</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <span class="pill pill-plan">Planning</span>
+                      <span class="muted" style="margin-left: 6px">Billing API · Sep 04</span>
+                    </td>
+                    <td class="num"><span class="muted">109</span></td>
+                    <td class="num credits">109</td>
+                  </tr>
+                  <!-- NO residual row. The rows sum to the total, so there is
+                       nothing to explain and nothing to draw. -->
+                </tbody>
+              </table>
+            </div>
+            <div class="card-foot">
+              <span class="residual-why">
+                The rows sum to the total, so <strong>no residual line is drawn at all</strong>. A
+                line reading “Not attributed — 0” would invite the reader to look for a problem that
+                does not exist.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 5 — STATES ═══════════════════════════════════════════════ -->
+    <div class="panel-label">
+      5 · <strong>States.</strong> (a) NO SEARCH SPEND for this scope — deliberately NOT the
+      dashboard's global empty state, because token spend may be non-zero and the page is not empty;
+      (b) FIGURES UNAVAILABLE — <code>OrgUsageDTO.search</code> is <code>null</code>, meaning the
+      boundary did not report the block. An em-dash, never a zero, and per-CARD: the token figures
+      beside it are unaffected; (c) the PLAIN MEMBER under the shipped 6.10.4 gate — their own
+      project's attributed spend, and no org-wide figure; (d) the META org, which shows the
+      unlimited treatment and no billed figure at all.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="twoup">
+          <div class="card stat">
+            <span class="lbl"
+              ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>a · Search spend, this
+              month</span
+            >
+            <div class="med">0 credits</div>
+            <div class="sub2">No searches this month.</div>
+            <span class="scopetag fixed"
+              ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Whole organization</span
+            >
+            <div class="note" style="margin-top: 14px">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                >A genuine zero. The page is <strong>not</strong> empty — token spend beside it is
+                7,520 credits — so the dashboard's global empty state must not appear here.</span
+              >
+            </div>
+          </div>
+
+          <div class="card stat">
+            <span class="lbl"
+              ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>b · Search spend, this
+              month</span
+            >
+            <div class="med"><span class="nodata" aria-label="unavailable">—</span></div>
+            <div class="sub2">Figures unavailable</div>
+            <span class="scopetag fixed"
+              ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Whole organization</span
+            >
+            <div class="note" style="margin-top: 14px">
+              <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+              <span
+                >Search figures aren’t available right now. Your searches are still being charged —
+                this is the display, not the billing.
+                <strong>The token figures beside this card are unaffected</strong>, so this is a
+                per-card treatment and never a page error.</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="twoup" style="margin-top: 16px">
+          <div class="card">
+            <div class="card-head">
+              <div class="ttl">
+                <div>
+                  <h3>c · Plain member</h3>
+                  <p class="hsub">the shipped 6.10.4 gate, unchanged</p>
+                </div>
+              </div>
+              <span class="ro-note"
+                ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>Read-only</span
+              >
+            </div>
+            <div class="card-body">
+              <div class="stat-grid" style="grid-template-columns: 1fr 1fr">
+                <div class="card stat">
+                  <span class="lbl"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sigma" /></svg>Token spend</span
+                  >
+                  <div class="med">2,140 credits</div>
+                  <span class="scopetag"
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>Mobile App</span
+                  >
+                </div>
+                <div class="card stat">
+                  <span class="lbl"
+                    ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search, attributed</span
+                  >
+                  <div class="med">84 credits</div>
+                  <span class="scopetag"
+                    ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg>Mobile App</span
+                  >
+                </div>
+              </div>
+              <div class="note" style="margin-top: 14px">
+                <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+                <span
+                  >A member sees their own project's slice.
+                  <strong
+                    >The organization-wide search total and the un-attributed remainder are
+                    owner/admin only</strong
+                  >
+                  — they are org-level figures, and the same 6.10.4 gate that withholds the org
+                  token total withholds them.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div class="ttl">
+                <div>
+                  <h3>d · The META org</h3>
+                  <p class="hsub">moooon B.V. — internal, never billed</p>
+                </div>
+              </div>
+              <span class="pill pill-neutral">Unlimited</span>
+            </div>
+            <div class="card-body">
+              <div class="note">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                <span
+                  >The shipped <code>isMeta</code> treatment is unchanged: the balance reads
+                  <strong>Unlimited</strong> rather than a figure. Search spend is still
+                  <strong>recorded and shown</strong> here — it is internal cost visibility, which
+                  is what that branch is for — but no figure on this page is a bill.</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 6 — the ACCESS PATH (how the page is reached) ════════════════ -->
+    <div class="panel-label">
+      6 ·
+      <strong
+        >ACCESS PATH — reproduced from <code>usage.mock.html</code> panel 1, unchanged.</strong
+      >
+      <strong>NO NEW DOOR IS INVENTED</strong> — search spend joins a page that already has one, and
+      drawing the door here is what proves it. The original label follows. 1 · Access path — FROM
+      WHICH UI the page is reached. The org menu in the TopNav (the 6.10 org-admin entry, same menu
+      that holds Settings / Members) carries a “Usage &amp; cost” item; clicking it opens this
+      dashboard. Drawn, not just named — show the door, not only the room.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <!-- the shell TopNav — the org button is the entry to the whole org-admin area -->
+        <div class="topnav">
+          <div class="left">
+            <button class="trigger" aria-label="Organization menu">
+              <span class="org-ava">M</span>
+              <span class="tlabel">moooon</span>
+              <svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg>
+            </button>
+          </div>
+          <div class="right">
+            <span class="mini-search"
+              ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search</span
+            >
+            <span class="user-ava">Z</span>
+          </div>
+        </div>
+        <!-- the org menu OPEN — "Usage & cost" is the entry affordance for THIS page -->
+        <div style="padding: 18px 20px 22px">
+          <p style="font-size: 12px; color: var(--el-text-muted); margin: 0 0 12px">
+            <strong style="color: var(--el-text-secondary)">The “moooon ▾” org menu, open.</strong>
+            The same menu that opens org <em>Settings</em> and <em>Members</em> (6.10) now carries a
+            <strong>“Usage &amp; cost”</strong> item — the door to this dashboard. Billing/checkout
+            stays a separate “Coming soon” slot (Epic 8); usage is the half that ships here.
+          </p>
+          <div class="menu" style="margin: 0">
+            <div class="menu-head">moooon</div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-settings" /></svg>
+              <span class="ot"><span class="nm">Settings</span></span>
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-users" /></svg>
+              <span class="ot"><span class="nm">Members</span></span>
+            </div>
+            <!-- THE ENTRY POINT for this designed page -->
+            <div class="opt active">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-coins" /></svg>
+              <span class="ot"
+                ><span class="nm">Usage &amp; cost</span
+                ><span class="od">Token credits across all workspaces</span></span
+              >
+            </div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-sparkle" /></svg>
+              <span class="ot"
+                ><span class="nm">Billing</span><span class="od">Coming soon</span></span
+              >
+            </div>
+            <div class="menu-sep"></div>
+            <div class="opt">
+              <svg viewBox="0 0 24 24" class="li"><use href="#i-plus" /></svg>
+              <span class="ot"><span class="nm">New workspace</span></span>
+            </div>
+          </div>
+          <p class="entry-call">
+            <svg viewBox="0 0 24 24"><use href="#i-arrow-down" /></svg>
+            Selecting “Usage &amp; cost” opens the page below (breadcrumb: Organization · moooon ·
+            Usage &amp; cost).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 2 — org cost summary (PRIMARY) ════════════════ -->
+
+    <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </g>
+        <g
+          id="i-sigma"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"
+          />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <g
+          id="i-arrow-up"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 12 7-7 7 7" />
+          <path d="M12 19V5" />
+        </g>
+        <g
+          id="i-updown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </g>
+        <g
+          id="i-chevleft"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m15 18-6-6 6-6" />
+        </g>
+        <g
+          id="i-chevright"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+        <g
+          id="i-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </g>
+        <g
+          id="i-retry"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-pause"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="14" y="4" width="4" height="16" rx="1" />
+          <rect x="6" y="4" width="4" height="16" rx="1" />
+        </g>
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+          />
+        </g>
+        <g
+          id="i-chevdown"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-arrow-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14" />
+          <path d="m19 12-7 7-7-7" />
+        </g>
+        <g
+          id="i-search"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+      </defs>
+    </svg>
+
+    <script>
+      function toggleTheme() {
+        const h = document.documentElement;
+        h.dataset.theme = h.dataset.theme === 'dark' ? 'light' : 'dark';
+      }
+    </script>
+  </body>
+</html>

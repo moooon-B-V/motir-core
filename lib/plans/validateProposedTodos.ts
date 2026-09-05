@@ -1,6 +1,6 @@
 // ── The proposed to-do list's bar, at BOTH proposal write boundaries ──────────
 // (Story MOTIR-3810 · MOTIR-4616; `docs/decisions/agent-authored-plans.md`
-// AMENDMENT 13 D4.)
+// AMENDMENT 14 D4.)
 //
 // A proposal can carry a card's ordered STEPS, and approve turns them into real
 // `work_item_todo` rows. So the proposal path is a SECOND writer of those rows —
@@ -54,7 +54,7 @@ function trimmedLength(value: string): number {
  * proposal of `kind`.
  *
  * `undefined` / `null` pass — a proposal with no steps is the ordinary case, and
- * NOTHING here makes a list mandatory (AMENDMENT 13 D4). That a `manual` card
+ * NOTHING here makes a list mandatory (AMENDMENT 14 D4). That a `manual` card
  * has one is a planning RULE with two homes, deliberately not a validator.
  *
  * @param todos  the proposed list, as it arrived (or as the sparse merge left it)
@@ -76,7 +76,7 @@ export function validateProposedTodos(
     );
   }
 
-  // The CONTAINER gate (AMENDMENT 13 D4). A container's steps are its CHILDREN,
+  // The CONTAINER gate (AMENDMENT 14 D4). A container's steps are its CHILDREN,
   // so a story with a checklist is a story whose children were never planned —
   // and the schema is the right place to say so, rather than a reviewer three
   // days later. Read off `TYPEABLE_KINDS`, the same single source of truth the

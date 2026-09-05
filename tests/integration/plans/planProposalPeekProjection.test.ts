@@ -221,7 +221,7 @@ describe('the proposal envelope the peek reads (MOTIR-4183)', () => {
   });
 
   // ── MOTIR-4622 — the PROPOSED STEPS reach the peek ────────────────────────
-  // `agent-authored-plans.md` AMENDMENT 13 D5 / D6. The assertions are about
+  // `agent-authored-plans.md` AMENDMENT 14 D5 / D6. The assertions are about
   // the RESOLVED executor and the `null` on the other ops, because both are
   // decisions rather than plumbing: the peek must show what approve will WRITE,
   // and a `modify` must show no list at all.

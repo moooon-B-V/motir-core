@@ -297,7 +297,7 @@ describe('guards a coverage number cannot see', () => {
   it('a `modify` may not carry steps, and a committed card’s list survives approve untouched', async () => {
     const fx = await makeWorkItemFixture();
     // A committed card with a list somebody has already made progress on — the
-    // exact thing AMENDMENT 13 D2 refuses to let a plan rewrite.
+    // exact thing AMENDMENT 14 D2 refuses to let a plan rewrite.
     const target = await createTestWorkItem(fx, { title: 'A card mid-flight', kind: 'task' });
     await workItemTodosService.addTodo(target.id, { text: 'Already done by a person' }, fx.ctx);
     const before = await workItemTodosService.listTodos(target.id, fx.ctx);

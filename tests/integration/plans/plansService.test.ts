@@ -1796,7 +1796,7 @@ describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
 
 // ── MOTIR-4616 ─────────────────────────────────────────────────────────────────
 // The CARRIER — a proposal can hold the card's ordered STEPS
-// (`docs/decisions/agent-authored-plans.md` AMENDMENT 13 D1-D4). These prove the
+// (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1-D4). These prove the
 // two WRITE boundaries over real Postgres: the append and the deepen. What
 // approve does with the rows is MOTIR-4618's, and every DOOR onto the field is
 // MOTIR-4619's — this block stops at `proposedFields`.

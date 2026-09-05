@@ -106,7 +106,7 @@ export type PlanAuthorSourceDto = WorkItemPlanningSourceDto;
  * and no `position`, because a fractional index is minted from its NEIGHBOURS at
  * write time — a key computed at append would be a key computed against a list
  * that does not exist. **ARRAY ORDER IS LIST ORDER**
- * (`docs/decisions/agent-authored-plans.md` AMENDMENT 13 D1); materialize mints
+ * (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1); materialize mints
  * the keys.
  *
  * And no `doneAt` / `doneById`: a proposal never ticks. A plan that arrived with
@@ -123,7 +123,7 @@ export interface ProposedTodoInput {
   /**
    * Who this step is for. Omitted / `null` ⇒ SEEDED at materialize from the
    * proposal's own `executor`, and from `human` when it carries none
-   * (AMENDMENT 13 D5, restating the store's §2 seed rule for the proposal path,
+   * (AMENDMENT 14 D5, restating the store's §2 seed rule for the proposal path,
    * where the card whose executor `addTodo` reads does not exist yet).
    */
   executor?: ExecutorDto | null;
@@ -245,9 +245,9 @@ export interface PlanItemProposedFields {
   /**
    * The card's ORDERED STEPS (Story MOTIR-3810 · MOTIR-4616) — a `manual` card's
    * to-do list, proposed with the card so the reviewer reads what approve will
-   * write (`docs/decisions/agent-authored-plans.md` AMENDMENT 13 D1).
+   * write (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1).
    *
-   * `add` ONLY, and that is a DECISION rather than an omission (AMENDMENT 13 D2):
+   * `add` ONLY, and that is a DECISION rather than an omission (AMENDMENT 14 D2):
    * {@link PlanItemPatch} deliberately has no twin, because a committed card's
    * list carries a PERSON'S PROGRESS — every row has `doneAt` / `doneById` — and
    * a plan is not the editor of somebody's progress. A re-plan that overwrote
@@ -262,7 +262,7 @@ export interface PlanItemProposedFields {
    * never be looser than the list it feeds. Refused on a CONTAINER kind: a
    * story's steps are its children.
    *
-   * OPTIONAL, and nothing here makes it mandatory on anything (AMENDMENT 13 D4).
+   * OPTIONAL, and nothing here makes it mandatory on anything (AMENDMENT 14 D4).
    * That a `manual` card HAS one is a planning RULE, and it lives in the two rule
    * homes — `motir-meta`'s `type-manual.md` pack and `A_MANUAL_CARD_BAR` in
    * motir-ai's `SHARED_PLANNING_RULES` — not in this field's validator.
@@ -628,7 +628,7 @@ export interface UpdateProposalInput {
   executor?: string | null;
   /**
    * The card's ORDERED STEPS — DEEPENABLE, because a step list is what a card
-   * SAYS (`docs/decisions/agent-authored-plans.md` AMENDMENT 13 D3).
+   * SAYS (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D3).
    *
    * AMENDMENT 3 D3 fixed this set with a rule — *a deepen may change what a card
    * SAYS and who ACTS on it, never where it SITS or SHIPS* — and AMENDMENT 4 D3a
@@ -752,6 +752,35 @@ export const CORRECT_PROPOSAL_KEYS = [
 export type CorrectProposalKey = (typeof CORRECT_PROPOSAL_KEYS)[number];
 
 /**
+ * The PLAN'S OWN heading — its `title` and `summary` (MOTIR-4637).
+ *
+ * ⚠️ NOT a proposal's fields. {@link CorrectProposalInput} above corrects one
+ * card ON a plan; this corrects the two lines a reviewer reads ABOVE the tree,
+ * before any card. They were write-once from `create_plan` until this input
+ * existed, so a single wrong sentence — one the product itself tells an agent to
+ * write dispositions into — could only be repaired by withdrawing every proposal
+ * (which ENDS a `planned` plan, `declined` / `discarded`) and re-authoring the
+ * whole thing under a new id.
+ *
+ * SPARSE, exactly like its siblings: a key you omit is left alone and an explicit
+ * `null` clears it. Both fields are nullable on the row and both are nullable
+ * here, so a summary written by mistake can be removed rather than only replaced.
+ */
+export interface CorrectPlanBriefInput {
+  title?: string | null;
+  summary?: string | null;
+}
+
+/**
+ * The keys {@link CorrectPlanBriefInput} declares — the same DECLARED-SOURCE
+ * discipline the two constants above are held to, and for the same reason: a key
+ * on the input that no transport reads is invisible from both ends.
+ */
+export const CORRECT_PLAN_BRIEF_KEYS = ['title', 'summary'] as const;
+
+export type CorrectPlanBriefKey = (typeof CORRECT_PLAN_BRIEF_KEYS)[number];
+
+/**
  * The COMPILE-TIME half of the drift guard: each input's keys and its constant
  * are the same set, in BOTH directions.
  *
@@ -766,12 +795,16 @@ type UpdateKeyMissingFromConstant = Exclude<keyof UpdateProposalInput, UpdatePro
 type UpdateKeyMissingFromInterface = Exclude<UpdateProposalKey, keyof UpdateProposalInput>;
 type CorrectKeyMissingFromConstant = Exclude<keyof CorrectProposalInput, CorrectProposalKey>;
 type CorrectKeyMissingFromInterface = Exclude<CorrectProposalKey, keyof CorrectProposalInput>;
+type BriefKeyMissingFromConstant = Exclude<keyof CorrectPlanBriefInput, CorrectPlanBriefKey>;
+type BriefKeyMissingFromInterface = Exclude<CorrectPlanBriefKey, keyof CorrectPlanBriefInput>;
 const _proposalInputKeysAreExhaustive: [
   UpdateKeyMissingFromConstant,
   UpdateKeyMissingFromInterface,
   CorrectKeyMissingFromConstant,
   CorrectKeyMissingFromInterface,
-] extends [never, never, never, never]
+  BriefKeyMissingFromConstant,
+  BriefKeyMissingFromInterface,
+] extends [never, never, never, never, never, never]
   ? true
   : never = true;
 void _proposalInputKeysAreExhaustive;

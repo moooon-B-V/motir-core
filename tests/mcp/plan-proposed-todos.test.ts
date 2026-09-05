@@ -308,7 +308,7 @@ describe('update_plan_proposal — the CORRECTION door carries `todos`', () => {
 
     // The patch schema declares no `todos`, and the service's `applyModify`
     // writes only `PLAN_ITEM_PATCH_KEYS`, so a key sent here reaches no column:
-    // the target's list is untouched by a plan (AMENDMENT 13 D2).
+    // the target's list is untouched by a plan (AMENDMENT 14 D2).
     const target = await createTestWorkItem(fx, { title: 'A committed card', kind: 'task' });
     const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
       planId,

@@ -19,6 +19,14 @@ export type AbandonedPlanCandidate = Plan & {
   _count: { items: number };
 };
 
+/**
+ * The `Plan` update shape, NAMED BY THE OWNING REPOSITORY (MOTIR-4296).
+ * Callers above this layer build their write payload against this alias;
+ * `Prisma.PlanUncheckedUpdateInput` itself is named only here. Mirrors
+ * `planItemRepository`'s `PlanItemUpdateInput` exactly.
+ */
+export type PlanUpdateInput = Prisma.PlanUncheckedUpdateInput;
+
 // Plan repository — single Prisma operations on the `plan` table (Story 7.21 ·
 // MOTIR-1336). Writes require `tx` (a compile-time guarantee they run in a
 // transaction); pure read paths use the `db` singleton. No business logic, no
@@ -294,11 +302,7 @@ export const planRepository = {
     return rows[0] ?? null;
   },
 
-  async update(
-    id: string,
-    data: Prisma.PlanUncheckedUpdateInput,
-    tx: Prisma.TransactionClient,
-  ): Promise<Plan> {
+  async update(id: string, data: PlanUpdateInput, tx: Prisma.TransactionClient): Promise<Plan> {
     return tx.plan.update({ where: { id }, data });
   },
 

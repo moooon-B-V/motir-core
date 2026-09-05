@@ -8,7 +8,7 @@ import {
 } from '@/lib/workItemTodos/limits';
 
 // MOTIR-4616 — the proposed to-do list's bar, as pure logic (no DB).
-// `docs/decisions/agent-authored-plans.md` AMENDMENT 13 D4.
+// `docs/decisions/agent-authored-plans.md` AMENDMENT 14 D4.
 //
 // ⚠️ EVERY LENGTH HERE IS BUILT FROM THE IMPORTED CONSTANT, never from a
 // literal — the same discipline `lib/workItemTodos/limits.ts`'s own header
@@ -157,7 +157,7 @@ describe('validateProposedTodos — the row shape', () => {
   });
 });
 
-describe('validateProposedTodos — the container gate (AMENDMENT 13 D4)', () => {
+describe('validateProposedTodos — the container gate (AMENDMENT 14 D4)', () => {
   it('allows a non-empty list on every LEAF kind', () => {
     for (const kind of ['task', 'subtask', 'bug']) {
       expect(() => validateProposedTodos([{ text: 'Create the key' }], kind, LABEL)).not.toThrow();

@@ -190,6 +190,7 @@
     "event_appended": "{n, plural, other {追加了 # 条提案}}",
     "event_edited": "{n, plural, other {编辑了 # 条提案}}",
     "event_withdrawn": "{n, plural, other {撤回了 # 条提案}}",
+    "event_brief_edited": "已编辑计划标题和摘要",
     "event_removed": "{n, plural, other {移除了 # 条提案}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",

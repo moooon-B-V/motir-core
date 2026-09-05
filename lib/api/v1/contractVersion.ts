@@ -318,7 +318,7 @@
  * - `1.25.0` — MOTIR-3810 / MOTIR-4620 adds `todos` to a plan PROPOSAL's
  *   `proposedFields`: the card's ORDERED STEPS, proposed with the card so a
  *   reviewer reads the list they will tick before approving it
- *   (`docs/decisions/agent-authored-plans.md` AMENDMENT 13 D6). Each row is
+ *   (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D6). Each row is
  *   `{ text, notesMd, commandText, executor }`, array order is list order, and
  *   approve writes one real to-do row per element.
  *
