@@ -8,7 +8,7 @@ import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubAppInstallUrl, githubInstallationManageUrl } from '@/lib/github/appLinks';
 import { encodeInstallState } from '@/lib/github/installState';
-import { GITHUB_BANNER_TONE, type GithubBannerStatus } from '@/lib/github/bannerStatus';
+import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
@@ -17,7 +17,7 @@ import { SectionLabel } from '@/components/ui/SectionLabel';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { GithubIdentityDTO, GithubInstallationDTO } from '@/lib/dto/github';
 import { GitSettingsShell } from '../_components/GitSettingsShell';
-import { SettingsBanner, GrantRow, IdentityHeader } from '../_components/gitSettingsPrimitives';
+import { GrantRow, IdentityHeader } from '../_components/gitSettingsPrimitives';
 import { DisconnectButton } from './_components/DisconnectButton';
 
 // Settings → Workspace → GitHub (Story 7.10 · MOTIR-895) — Server Component. The
@@ -70,13 +70,11 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
   ]);
 
   const sp = await searchParams;
+  // The status → tone map, the allow-list and the copy lookup all moved into
+  // `GitConnectBanner` (MOTIR-4676) so the OTHER surfaces a flow can now return
+  // to render the same banner without restating any of it. This page is one
+  // host among several now, not the host.
   const bannerStatus = sp.github;
-  // An unrecognised ?github= value renders no banner at all — the map is the
-  // allow-list, so a hand-typed status cannot reach `t('banner.<anything>')`.
-  const bannerTone =
-    bannerStatus && bannerStatus in GITHUB_BANNER_TONE
-      ? GITHUB_BANNER_TONE[bannerStatus as GithubBannerStatus]
-      : undefined;
   // Carry a signed state through the install round-trip so GitHub echoes it back
   // to the setup handler (MOTIR-1588), which binds the installation to this
   // workspace. Encoded per-request from the acting user + workspace.
@@ -86,9 +84,7 @@ export default async function GithubSettingsPage({ searchParams }: GithubSetting
 
   return (
     <GitSettingsShell provider="github">
-      {bannerTone ? (
-        <SettingsBanner tone={bannerTone} message={t(`banner.${bannerStatus}`)} />
-      ) : null}
+      <GitConnectBanner status={bannerStatus} />
 
       {!identity ? (
         <NotConnectedPanel

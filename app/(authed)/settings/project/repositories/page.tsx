@@ -9,6 +9,7 @@ import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
+import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
 import { RepositoriesRoom } from './_components/RepositoriesRoom';
 import { guardSettingsPage } from '../_guard';
 
@@ -36,7 +37,18 @@ import { guardSettingsPage } from '../_guard';
 // Motir still hosts, each a link, and says that moving this project's
 // repositories does not move theirs (§14.4).
 
-export default async function ProjectRepositoriesPage() {
+// ⚠️ A GIT CONNECT FLOW CAN NOW RETURN HERE (MOTIR-4676). This room is one of
+// the surfaces that STARTS a connect (`GITHUB_RETURN_SURFACES.projectRepositories`),
+// so it renders the `?github=<status>` outcome exactly as the workspace Git page
+// does — through the shared `GitConnectBanner`, which owns the status → tone map
+// so the two surfaces cannot disagree about what an outcome means.
+interface ProjectRepositoriesPageProps {
+  searchParams: Promise<{ github?: string }>;
+}
+
+export default async function ProjectRepositoriesPage({
+  searchParams,
+}: ProjectRepositoriesPageProps) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -68,11 +80,19 @@ export default async function ProjectRepositoriesPage() {
   // painted ahead of it — so the header is SPLIT, with the title above the
   // boundary and its two paragraphs below. Every other pane in this card paints
   // its whole header from the gate.
+  const sp = await searchParams;
+
   return (
     <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('title')}</h1>
       </header>
+
+      {/* ABOVE the Suspense boundary, deliberately: the banner is about the round
+          trip the reader just took, it needs none of the room read, and a
+          confirmation that waits for a database is a confirmation that arrives
+          after the reader has started wondering. */}
+      <GitConnectBanner status={sp.github} />
 
       <Suspense fallback={<SettingsPaneFrame />}>
         <RepositoriesPaneBody
