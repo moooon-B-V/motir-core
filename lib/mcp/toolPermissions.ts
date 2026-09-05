@@ -284,6 +284,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // silently changing what a sandboxed agent may do to a plan.
   update_plan_proposal: 'ai:view_plan',
   withdraw_plan_proposal: 'ai:view_plan',
+  // The PLAN'S OWN title / summary (MOTIR-4637). Same key, and again by the rule
+  // rather than by family resemblance: `plansService.correctPlanBrief` asserts
+  // `ai:view_plan` itself, as its FIRST act, exactly as its three siblings do.
+  // `CLI_TOKEN_GRANT` is deliberately NOT widened for it either — a sandboxed run
+  // that may not reshape the plan it was handed may not rewrite what that plan
+  // says about itself, and `tests/mcp/update-plan.test.ts` asserts that refusal
+  // off the constant.
+  update_plan: 'ai:view_plan',
 
   // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
   // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /

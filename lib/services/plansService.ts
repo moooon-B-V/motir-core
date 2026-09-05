@@ -22,7 +22,7 @@ import {
   type PlanRevisionAgentActor,
 } from '@/lib/services/planRevisionsService';
 
-import { planRepository } from '@/lib/repositories/planRepository';
+import { planRepository, type PlanUpdateInput } from '@/lib/repositories/planRepository';
 import {
   planItemRepository,
   type PlanItemCreateInput,
@@ -115,6 +115,8 @@ import type {
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
+  CorrectPlanBriefInput,
+  CorrectPlanBriefKey,
   PlanItemOpDto,
   WorkItemPendingPlanStatusDto,
   WorkItemPendingProposalDto,
@@ -3318,6 +3320,111 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'generating');
+  },
+
+  /**
+   * CORRECT THE PLAN'S OWN BRIEF — its `title` and `summary` (MOTIR-4637).
+   *
+   * ⚠️ THE PLAN, NOT A PROPOSAL. `correctProposal` below repairs one card ON a
+   * plan; this repairs the two lines a reviewer reads ABOVE the tree, before any
+   * card. They were the last write-once thing about a plan under review: every
+   * other part of it had a correction door — a proposal's fields
+   * (`correctProposal`), its ops, its membership (`withdrawProposal`), even its
+   * SET (an append carrying `revision`) — while the two fields read FIRST could
+   * only be repaired by withdrawing every proposal, which ENDS a `planned` plan
+   * as `declined` / `discarded`, and re-authoring the whole thing under a new id.
+   * The cheaper mistake had the more expensive remedy.
+   *
+   * THREE things it deliberately does NOT touch, and the tests assert each
+   * directly: the plan's PROPOSALS, its STATUS, and its `plannedAt` (with the
+   * staleness flags derived from it). A brief edit is a correction to what the
+   * plan SAYS about itself, not a change to what it proposes — so it may not
+   * re-open a closed plan, re-date it, or make a reviewer's read of the tree
+   * stale.
+   *
+   * SPARSE, like every sibling: an omitted field is left alone and an explicit
+   * `null` clears it. Sending neither is `InvalidProposalError`, the same refusal
+   * `correctProposal` gives an empty correction — a call that changes nothing is
+   * a caller mistake, not a no-op worth a trail row.
+   *
+   * ⚠️ IT IS ON THE TRAIL, and that is a DECISION rather than a convenience. A
+   * `planned` plan is a thing a person is deciding about; rewriting the sentence
+   * they are reading with no trace would trade one honesty problem for another.
+   * The row is `brief_edited` — a verb of its own, because `edited` means *a
+   * proposal changed* and the timeline renders it as a proposal count.
+   *
+   * Legal on `generating` AND `planned` — the same boundary AMENDMENT 8 drew for
+   * the correction doors, because it is the same question: a plan being written
+   * or awaiting a decision is editable, a DECIDED plan is a record.
+   * `approved` / `declined` are FROZEN and the refusal names the status
+   * (`PlanNotEditableError`).
+   */
+  async correctPlanBrief(
+    planId: string,
+    input: CorrectPlanBriefInput,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto> {
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
+    if (!plan) throw new PlanNotFoundError(planId);
+    // The same key the rest of the author writes assert (`addProposals` /
+    // `markPlanned` / `editAddProposal` / `correctProposal`). NOT
+    // `ai:decide_plan`: correcting what a plan says about itself is authoring,
+    // not deciding.
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
+
+    // Built BEFORE the transaction — it reads nothing and can refuse an empty
+    // call without taking the plan's row lock.
+    const data: PlanUpdateInput = {};
+    const touched: CorrectPlanBriefKey[] = [];
+    if (input.title !== undefined) {
+      data.title = normalizeSelfReported(input.title);
+      touched.push('title');
+    }
+    if (input.summary !== undefined) {
+      data.summary = normalizeSelfReported(input.summary);
+      touched.push('summary');
+    }
+    if (touched.length === 0) {
+      throw new InvalidProposalError('A correction must change something.');
+    }
+
+    const { row, items } = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+      async (tx) => {
+        // Lock, then RE-READ under the lock — the same one-shot discipline every
+        // other status-gated write on this row uses. Read before the lock the
+        // gate is a TOCTOU check; read under it, a plan approved between the two
+        // reads is refused rather than edited after the fact.
+        const locked = await planRepository.lockById(planId, tx);
+        if (!locked) throw new PlanNotFoundError(planId);
+        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+        if (!fresh) throw new PlanNotFoundError(planId);
+        assertPlanProposalsEditable(fresh);
+
+        const updated = await planRepository.update(planId, data, tx);
+
+        // The edit, on the plan's content trail (MOTIR-3535), in the same
+        // transaction as the write it records.
+        //
+        // THE AGENT ACTOR, not the person — `correctProposal`'s reasoning
+        // verbatim: this method exists precisely so an AGENT can reach a
+        // `planned` plan, and a reviewer must be able to see WHICH harness and
+        // model rewrote the sentence they were reading.
+        await planRevisionsService.recordRevision(
+          {
+            planId,
+            changeKind: 'brief_edited',
+            ...generationActor(fresh, ctx),
+            diff: { fields: touched, correction: true },
+          },
+          tx,
+        );
+        return { row: updated, items: await planItemRepository.findByPlan(planId, tx) };
+      },
+    );
+    return toPlanWithItemsDto(row, items);
   },
 
   /**
