@@ -54,6 +54,20 @@ export type MockSource = { path: string; source: string };
 const stripCssComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, ' ');
 
 /**
+ * A `<style>` / `<script>` element, opening tag to closing tag.
+ *
+ * ⚠️ `<\/style\s*>` rather than `<\/style>` — an end tag may legally carry
+ * whitespace before its `>`, and HTML parsers accept `</style >`. A filter that
+ * misses that form stops at the wrong place: the "stylesheet" would then run on
+ * into the document, and `markupOf` would leave a stylesheet in the markup for
+ * the class scan to read selectors out of. (CodeQL `js/bad-tag-filter`, which
+ * is right about it — this pattern is the tree's own text, not hostile input,
+ * but a mock's shim block is exactly the place a stray space would appear.)
+ */
+const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
+const SCRIPT_BLOCK = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi;
+
+/**
  * The CSS a document DECLARES: every `<style>` block, comments stripped.
  *
  * ⚠️ `style="…"` attributes are deliberately NOT included, unlike
@@ -63,7 +77,7 @@ const stripCssComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//
  */
 export function stylesheetOf(html: string): string {
   const blocks: string[] = [];
-  for (const match of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)) blocks.push(match[1]!);
+  for (const match of html.matchAll(STYLE_BLOCK)) blocks.push(match[1]!);
   return stripCssComments(blocks.join('\n'));
 }
 
@@ -82,9 +96,7 @@ export function stylesheetOf(html: string): string {
  * happened not to use `$`.)
  */
 export function markupOf(html: string): string {
-  return html
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ');
+  return html.replace(STYLE_BLOCK, ' ').replace(SCRIPT_BLOCK, ' ');
 }
 
 /**
@@ -144,14 +156,37 @@ export function declaredClasses(html: string): Set<string> {
   return names;
 }
 
-/** `&amp;` → `&`: the entity forms an HTML `class` attribute may legally use. */
+/** The named character references an HTML `class` attribute realistically carries. */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00a0',
+};
+
+/**
+ * `&amp;` → `&`: the entity forms an HTML `class` attribute may legally use.
+ *
+ * ⚠️ ONE PASS, DELIBERATELY. Chaining `.replace(/&amp;/g, '&')` before
+ * `.replace(/&lt;/g, '<')` DOUBLE-unescapes: the first pass turns `&amp;lt;`
+ * into `&lt;`, which the second then turns into `<`, so a class attribute
+ * written to contain the literal text `&lt;` decodes to a different string than
+ * the browser gives the CSS engine — and this guard's whole job is to compare
+ * the two lists the way the browser sees them. A single scan replaces each
+ * entity from the ORIGINAL text and never re-reads what it produced.
+ * (CodeQL `js/double-escaping`.)
+ */
 const decodeEntities = (value: string): string =>
-  value
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)));
+  value.replace(
+    /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|([a-zA-Z][a-zA-Z0-9]*));/g,
+    (whole, decimal?: string, hex?: string, name?: string) => {
+      if (decimal !== undefined) return String.fromCodePoint(Number(decimal));
+      if (hex !== undefined) return String.fromCodePoint(Number.parseInt(hex, 16));
+      return NAMED_ENTITIES[name!] ?? whole;
+    },
+  );
 
 /**
  * Every class an element CARRIES, with its occurrence count.
@@ -449,6 +484,31 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     // The entity decodes, and the template literal in the script is not markup.
     expect([...usedClasses(fixture).keys()].sort()).toEqual(['[&_svg]:h-[18px]', 'text-[19px]']);
     expect(inertUtilities({ path: 'fixture', source: fixture })).toEqual([]);
+  });
+
+  it('closes a `<style>` / `<script>` whose end tag carries whitespace', () => {
+    // CodeQL `js/bad-tag-filter`, pinned. `</style >` is a legal end tag, and a
+    // filter that misses it runs the "stylesheet" on into the document — so the
+    // class scan would read selectors out of prose, and `markupOf` would hand a
+    // stylesheet to the attribute scan.
+    const fixture = [
+      '<style>.declared { color: red; }</style >',
+      '<span class="declared undeclared-[9px]"></span>',
+      '<script>const s = `class="from-[script]"`;</script >',
+    ].join('\n');
+    expect([...declaredClasses(fixture)]).toEqual(['declared']);
+    expect([...usedClasses(fixture).keys()].sort()).toEqual(['declared', 'undeclared-[9px]']);
+    expect(inertUtilities({ path: 'fixture', source: fixture })).toEqual([
+      { token: 'undeclared-[9px]', count: 1 },
+    ]);
+  });
+
+  it('decodes each entity from the ORIGINAL text, never from its own output', () => {
+    // CodeQL `js/double-escaping`, pinned. Chained replaces turn `&amp;lt;` into
+    // `&lt;` and then into `<`; one pass leaves it as the literal `&lt;`, which
+    // is what the browser hands the CSS engine.
+    const fixture = '<span class="a&amp;lt;b [&amp;_svg]:h-[18px] c&#65;d"></span>';
+    expect([...usedClasses(fixture).keys()].sort()).toEqual(['[&_svg]:h-[18px]', 'a&lt;b', 'cAd']);
   });
 
   it('reports an inert utility when one is actually there', () => {
