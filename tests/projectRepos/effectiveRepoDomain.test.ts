@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GithubRepo } from '@/generated/prisma/client';
-import { resolveEffectiveRepoDomain, mergeDomainsByName } from '@/lib/projectRepos/effectiveDomain';
+import {
+  resolveEffectiveRepoDomain,
+  mergeDomainsByName,
+  layersConnectedRepos,
+  projectsLayeringConnectedRepos,
+} from '@/lib/projectRepos/effectiveDomain';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { listDispatchRepoNames } from '@/lib/workItems/dispatchRepo';
@@ -114,6 +119,53 @@ describe('resolveEffectiveRepoDomain — the two registries, kept apart', () => 
 
     expect(domain.dispatchable.map((r) => r.name)).toEqual(dispatchable.map((r) => r.name));
     expect(dispatchable.map((r) => r.name).sort()).toEqual(['acme-api', 'motir-core']);
+  });
+});
+
+describe('layersConnectedRepos / projectsLayeringConnectedRepos — the rung, written once (MOTIR-4802)', () => {
+  // The three rungs above, read as the ONE boolean the inverse question needs.
+  // These are the same three cases the async tests exercise through Postgres;
+  // asserting them on the predicate is what makes it safe for a SECOND caller
+  // (the organisation inventory) to reach the ladder without a second copy of it.
+  it('layers for a set-less project, whatever the onboarding run says', () => {
+    expect(layersConnectedRepos({ hasSet: false, hasOwnCode: false })).toBe(true);
+    // The reason `resolveEffectiveRepoDomain` owes NO onboarding read on this
+    // rung: the answer does not depend on it.
+    expect(layersConnectedRepos({ hasSet: false, hasOwnCode: true })).toBe(true);
+  });
+
+  it('does NOT layer for a project born in Motir — its set answers alone', () => {
+    expect(layersConnectedRepos({ hasSet: true, hasOwnCode: false })).toBe(false);
+  });
+
+  it('layers for a project that arrived WITH code, on top of its set', () => {
+    expect(layersConnectedRepos({ hasSet: true, hasOwnCode: true })).toBe(true);
+  });
+
+  it('selects the layering members of a batch, and answers an empty batch with an empty set', () => {
+    const layering = projectsLayeringConnectedRepos([
+      { projectId: 'set-less', hasSet: false, hasOwnCode: false },
+      { projectId: 'born-here', hasSet: true, hasOwnCode: false },
+      { projectId: 'arrived-with-code', hasSet: true, hasOwnCode: true },
+    ]);
+
+    expect([...layering].sort()).toEqual(['arrived-with-code', 'set-less']);
+    expect(projectsLayeringConnectedRepos([]).size).toBe(0);
+  });
+
+  it('agrees with the resolver on the same project — one definition, two readers', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'motir-core');
+
+    const domain = await resolveEffectiveRepoDomain(fx.projectId, fx.ctx);
+
+    // The property the inverse read depends on: `layersConnected` on the
+    // resolved domain and the predicate's verdict are the same fact.
+    expect(
+      projectsLayeringConnectedRepos([
+        { projectId: fx.projectId, hasSet: domain.hasSet, hasOwnCode: false },
+      ]).has(fx.projectId),
+    ).toBe(domain.layersConnected);
   });
 });
 

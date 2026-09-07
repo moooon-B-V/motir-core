@@ -390,6 +390,39 @@ export const projectRepoRepository = {
     return tx.projectRepo.findMany({ where: { githubRepoId }, orderBy: { position: 'asc' } });
   },
 
+  /**
+   * WHICH of these workspaces' projects have a repository SET at all — the
+   * ladder's first input, for a whole organisation in ONE read (MOTIR-4802).
+   *
+   * `hasSet` is "any row, established or not" (the same reading
+   * `projectRepoSetService.getRepoNameDomains` takes), so this asks only for
+   * DISTINCT `project_id` and never builds the rows. The organisation inventory
+   * needs it for every project of every workspace that has a repository
+   * connected; resolving that one project at a time is N reads per render.
+   *
+   * ⚠️ IT MUST RUN UNDER A TRANSACTION THAT HAS BOUND `app.organization_id` —
+   * `project_repository`'s `FOR ALL` policy is workspace-keyed and has NO system
+   * arm, so `withSystemContext` returns NOTHING here and a bare workspace
+   * context returns the caller's own workspace only. Either would be a SILENT
+   * SUBSET: every project it could not see reads `hasSet: false`, which the
+   * ladder then answers as "layers the connected registry" — a wrong answer that
+   * looks like a computed one. `project_repository_org_read` (`FOR SELECT`,
+   * MOTIR-4677's sibling) is the arm that admits the rest, and
+   * `bindOrganizationContext` is what turns it on.
+   */
+  async listProjectIdsWithRows(
+    workspaceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (workspaceIds.length === 0) return [];
+    const rows = await tx.projectRepo.findMany({
+      where: { workspaceId: { in: [...workspaceIds] } },
+      select: { projectId: true },
+      distinct: ['projectId'],
+    });
+    return rows.map((row) => row.projectId);
+  },
+
   /** CLEAR every project's link to one repository — the org-level disconnect's
    *  write (Story MOTIR-4669 · MOTIR-4679). Returns how many rows it touched.
    *

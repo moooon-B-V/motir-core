@@ -209,7 +209,17 @@ describe('⚠️ THE FULL LIFECYCLE — link, unlink to ZERO, re-link', () => {
     // …still in the inventory…
     const inventory = await organizationRepoService.listInventory(fx.ctx);
     expect(inventory.map((r) => r.repo.id)).toContain(repoId);
-    expect(inventory.find((r) => r.repo.id === repoId)?.projects).toEqual([]);
+    // ⚠️ AND `Used by` NOW READS THE SCOPE LADDER, NOT THE LINK COUNT
+    // (MOTIR-4802). Removing the only set row leaves the project with NO SET,
+    // which is the ladder's first rung: its domain becomes the workspace's
+    // CONNECTED repositories, and this repository is one of them. So the link
+    // count is zero — asserted above, and it is what "zero projects" was ever
+    // about here — while the usage list correctly still names the project. The
+    // old `toEqual([])` was this file agreeing with the defect: it read "no
+    // project uses this" off a table that cannot answer that question.
+    expect(inventory.find((r) => r.repo.id === repoId)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
 
     // …and re-linking it pays nothing, which is what "legal" was protecting.
     await organizationRepoService.linkExistingRepo(
