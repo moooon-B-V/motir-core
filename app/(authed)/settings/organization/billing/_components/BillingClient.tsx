@@ -14,6 +14,7 @@ import {
   Crown,
   ExternalLink,
   Eye,
+  Info,
   Layers,
   Lock,
   Pause,
@@ -41,6 +42,52 @@ import { searchLineFigures } from './searchFigures';
 // sibling Usage & cost dashboard), so the line shows the CAP ceiling, not a
 // used/limit ratio — honest to the contract, not a faked meter.
 const FREE_CAPS = { workItems: 250, projects: 3, storageGb: 2 } as const;
+
+// THE EXEMPT PREDICATE — one flag, read once (MOTIR-4818; design/billing
+// AMENDMENT 2026-09-07). An org that is never charged and never capped cannot
+// be shown the paying-customer storefront: its price, its caps and its two
+// checkouts are not figures it will not be charged, they are figures that are
+// FALSE. This mirrors the policy the server already enforces in two places:
+//
+//   • `lib/billing/entitlements.ts` `pmTierForOrg` — *"the META org (moooon
+//     B.V., `isMeta`) short-circuits to the internal `meta` tier — EVERY CAP
+//     LIFTED — regardless of subscription"*, the single chokepoint
+//     `entitlementsService` resolves every §4 cap gate through;
+//   • `lib/services/billingService.ts:252` — `if (org?.isMeta) return
+//     notApplicableAiAccess();`, which switches the AI paywall off outright.
+//
+// ⚠️ It keys on `isMeta` and NEVER on `internalBilling`, which means the
+// OPPOSITE thing: such an org IS charged (every debit lands, then a paired
+// `internal_offset` credit makes it whole, MOTIR-4570) and IS capped, so every
+// line of the storefront is a true statement about it and MOTIR-4572 was right
+// to stop hiding them. Widening this to the classification flag would hide a
+// real price from an org that really owes it — the more expensive direction.
+function isBillingExempt(data: BillingStatusDTO): boolean {
+  return data.isMeta;
+}
+
+// The exempt status chip — panel 3 (d)/(e)'s `.pill-exempt`.
+// ⚠️ `--el-tint-peach`, deliberately NOT `--el-tint-sky`: sky is `.pill-trial`
+// on this same surface, and "exempt" reading as "on the free trial" is the
+// exact confusion this state exists to end.
+function ExemptPill({ t }: { t: T }) {
+  return (
+    <Pill className="border-transparent bg-(--el-tint-peach) text-(--el-text-strong)">
+      {t('exempt.pill')}
+    </Pill>
+  );
+}
+
+// The exempt body — `.banner.banner-info`, reused verbatim from the mock.
+// Informational, never a warning: nothing here is wrong.
+function ExemptBanner({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding)">
+      <Info className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--el-info)' }} aria-hidden />
+      <p className="font-sans text-sm text-(--el-text-strong)">{text}</p>
+    </div>
+  );
+}
 
 export interface BillingClientProps {
   orgId: string;
@@ -497,6 +544,11 @@ function MotirLine({
   const seat = data.catalog.seatPlan.prices;
   const annualSeat = seat.annual.amountUsd;
   const renews = fmtDate(sub?.currentPeriodEnd ?? null);
+  // Panel 3 (d) — REPLACES this line's body for an exempt org; never renders
+  // beside it. GONE, each for its own reason: the CAPS block (there are none),
+  // the seat calculator and its `N × $5` total (a price quote to the house),
+  // and `Upgrade Motir` (a checkout for an org that is never charged).
+  const exempt = isBillingExempt(data);
 
   return (
     <Card
@@ -513,7 +565,9 @@ function MotirLine({
               <p className="font-sans text-xs text-(--el-text-muted)">{t('motir.tagline')}</p>
             </div>
           </div>
-          {scaled ? (
+          {exempt ? (
+            <ExemptPill t={t} />
+          ) : scaled ? (
             <Pill className="bg-(--el-tint-mint) text-(--el-text-strong) border-transparent">
               {t('motir.scaled')}
             </Pill>
@@ -523,7 +577,9 @@ function MotirLine({
         </div>
       }
     >
-      {scaled ? (
+      {exempt ? (
+        <ExemptBanner text={t('exempt.motir')} />
+      ) : scaled ? (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-sans text-sm text-(--el-text)">
@@ -640,6 +696,16 @@ function MotirAiLine({
   const catalogTier = data.catalog.aiPlans.find((p) => p.key === tier?.key);
   const fee = catalogTier?.prices?.[cadence]?.amountUsd ?? null;
   const renews = fmtDate(subscription.currentPeriodEnd);
+  // Panel 3 (e) — REPLACES this line's body for an exempt org. GONE: the `Free`
+  // chip and "on the one-time free trial" (it is EXEMPT, not trialing — the AI
+  // paywall is off for it, `billingService.ts:252`), and `Choose a Motir AI
+  // plan`. The Usage & cost cross-link STAYS: those figures are real, and they
+  // are the reason this org reads this page — so it is rendered for every
+  // member here rather than under `canManage`, which the ordinary line's whole
+  // action row sits behind. The usage page itself admits any org member (an
+  // admin sees the org view, a member their own project slice, gated
+  // server-side in `aiUsageService`), so the link never leads somewhere shut.
+  const exempt = isBillingExempt(data);
 
   return (
     <Card
@@ -654,76 +720,14 @@ function MotirAiLine({
               <p className="font-sans text-xs text-(--el-text-muted)">{t('ai.tagline')}</p>
             </div>
           </div>
-          <StatusPill status={status} t={t} />
+          {exempt ? <ExemptPill t={t} /> : <StatusPill status={status} t={t} />}
         </div>
       }
     >
-      <div className="flex flex-col gap-4">
-        {key === 'past_due' ? <PastDueBanner t={t} /> : null}
-        {key === 'canceled' ? <CanceledBanner t={t} /> : null}
-
-        {tier && status !== 'canceled' ? (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <TierPill name={tier.name} />
-                <span className="font-sans text-sm text-(--el-text)">
-                  {t('ai.creditsPerMo', { n: fmt(allotment) })}
-                </span>
-              </div>
-              {fee !== null ? (
-                <span className="font-sans text-sm font-medium text-(--el-text-strong)">
-                  {t('ai.planFee')} {t('ai.feePerMo', { n: fee })}
-                </span>
-              ) : null}
-            </div>
-            <div>
-              <p className="font-sans text-xs text-(--el-text-muted)">
-                {t('ai.allotmentThisMonth')}
-              </p>
-              <Meter pct={pct} low={low} />
-              <p className="mt-2 font-sans text-xs text-(--el-text-muted)">
-                {t('ai.creditsLeft', { left: fmt(Math.max(0, balance)), total: fmt(allotment) })}
-              </p>
-            </div>
-            {key === 'trialing' ? (
-              <p className="font-sans text-xs text-(--el-text-muted)">
-                <strong className="text-(--el-text-secondary)">{t('trial.label')}.</strong>{' '}
-                {t('trial.note')}
-              </p>
-            ) : (
-              <p className="font-sans text-xs text-(--el-text-muted)">{t('ai.creditsNote')}</p>
-            )}
-            {renews ? (
-              <p className="font-sans text-xs text-(--el-text-muted)">
-                {t('ai.renews', { date: renews })}
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <p className="font-sans text-sm text-(--el-text-secondary)">{t('ai.noPlanYet')}</p>
-        )}
-
-        {canManage ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" size="sm" onClick={goPlans}>
-              {key === 'canceled'
-                ? t('canceled.cta')
-                : status === null
-                  ? t('ai.choosePlan')
-                  : t('ai.changePlan')}
-            </Button>
-            {status !== null ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={portal}
-                loading={redirecting}
-                leftIcon={<ExternalLink className="h-4 w-4" />}
-              >
-                {t('ai.managePlan')}
-              </Button>
-            ) : null}
+      {exempt ? (
+        <div className="flex flex-col gap-4">
+          <ExemptBanner text={t('exempt.ai')} />
+          <div>
             <Link
               href="/settings/organization/usage"
               className="inline-flex items-center gap-1.5 font-sans text-sm text-(--el-link) hover:underline"
@@ -732,8 +736,85 @@ function MotirAiLine({
               {t('ai.viewUsage')}
             </Link>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {key === 'past_due' ? <PastDueBanner t={t} /> : null}
+          {key === 'canceled' ? <CanceledBanner t={t} /> : null}
+
+          {tier && status !== 'canceled' ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <TierPill name={tier.name} />
+                  <span className="font-sans text-sm text-(--el-text)">
+                    {t('ai.creditsPerMo', { n: fmt(allotment) })}
+                  </span>
+                </div>
+                {fee !== null ? (
+                  <span className="font-sans text-sm font-medium text-(--el-text-strong)">
+                    {t('ai.planFee')} {t('ai.feePerMo', { n: fee })}
+                  </span>
+                ) : null}
+              </div>
+              <div>
+                <p className="font-sans text-xs text-(--el-text-muted)">
+                  {t('ai.allotmentThisMonth')}
+                </p>
+                <Meter pct={pct} low={low} />
+                <p className="mt-2 font-sans text-xs text-(--el-text-muted)">
+                  {t('ai.creditsLeft', { left: fmt(Math.max(0, balance)), total: fmt(allotment) })}
+                </p>
+              </div>
+              {key === 'trialing' ? (
+                <p className="font-sans text-xs text-(--el-text-muted)">
+                  <strong className="text-(--el-text-secondary)">{t('trial.label')}.</strong>{' '}
+                  {t('trial.note')}
+                </p>
+              ) : (
+                <p className="font-sans text-xs text-(--el-text-muted)">{t('ai.creditsNote')}</p>
+              )}
+              {renews ? (
+                <p className="font-sans text-xs text-(--el-text-muted)">
+                  {t('ai.renews', { date: renews })}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p className="font-sans text-sm text-(--el-text-secondary)">{t('ai.noPlanYet')}</p>
+          )}
+
+          {canManage ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="primary" size="sm" onClick={goPlans}>
+                {key === 'canceled'
+                  ? t('canceled.cta')
+                  : status === null
+                    ? t('ai.choosePlan')
+                    : t('ai.changePlan')}
+              </Button>
+              {status !== null ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={portal}
+                  loading={redirecting}
+                  leftIcon={<ExternalLink className="h-4 w-4" />}
+                >
+                  {t('ai.managePlan')}
+                </Button>
+              ) : null}
+              <Link
+                href="/settings/organization/usage"
+                className="inline-flex items-center gap-1.5 font-sans text-sm text-(--el-link) hover:underline"
+              >
+                <Coins className="h-4 w-4" aria-hidden />
+                {t('ai.viewUsage')}
+              </Link>
+            </div>
+          ) : null}
+        </div>
+      )}
     </Card>
   );
 }
