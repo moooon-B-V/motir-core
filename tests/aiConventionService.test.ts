@@ -447,10 +447,21 @@ describe('aiConventionService — project-admin gate', () => {
     // The WHOLE context bag, exact shape: the per-repo `repoRef` — which
     // motir-ai treats as authoritative over `repos[]` — rides beside the
     // unchanged repo SET, so no boundary change is implied.
+    // ⚠️ `indexed: false` ON EVERY ROW, AND IT IS WHAT THE LEDGER SAYS HERE
+    // (MOTIR-4826). The field is read from the succeeded-`system.code-graph-index`
+    // runs; this fixture seeds the grant mirror and no index run at all, so false
+    // is measured rather than assumed. It rides on `context.code` for every
+    // consumer of that bag, this one included — the convention path reads
+    // `repoRef` and ignores it, which is why nothing else in this suite moves.
     const repoSet = [
-      { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
-      { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' },
-      { provider: 'github', repoRef: 'moooon/motir-gateway', defaultBranch: 'master' },
+      { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main', indexed: false },
+      { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main', indexed: false },
+      {
+        provider: 'github',
+        repoRef: 'moooon/motir-gateway',
+        defaultBranch: 'master',
+        indexed: false,
+      },
     ];
     expect(refreshCodeAuditMock.mock.calls.map((call) => call[1])).toEqual([
       { code: { repos: repoSet, repoRef: 'moooon/motir-ai' } },
@@ -531,9 +542,14 @@ describe('aiConventionService — project-admin gate', () => {
     // connected repo that was NOT named — appears in none of them.
     expect(refreshCodeAuditMock).toHaveBeenCalledTimes(2);
     const repoSet = [
-      { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
-      { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' },
-      { provider: 'github', repoRef: 'moooon/motir-gateway', defaultBranch: 'master' },
+      { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main', indexed: false },
+      { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main', indexed: false },
+      {
+        provider: 'github',
+        repoRef: 'moooon/motir-gateway',
+        defaultBranch: 'master',
+        indexed: false,
+      },
     ];
     expect(refreshCodeAuditMock.mock.calls.map((call) => call[1])).toEqual([
       { code: { repos: repoSet, repoRef: 'moooon/motir-gateway' } },
