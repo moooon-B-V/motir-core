@@ -3451,8 +3451,9 @@
   --el-notif-commented: var(--color-info); /* was --el-type-task */
   --el-notif-assigned: var(--color-accent-green); /* was --el-type-story */
   --el-notif-transitioned: var(--color-accent-teal); /* was --el-type-subtask */
-  /* The EXECUTOR badge on a Home row's assignee avatar (Story MOTIR-2649 ·
-     Subtask MOTIR-2653, per design/home/design-notes.md §"The agent state").
+  /* The EXECUTOR badge on a Workbench row's assignee avatar (Story MOTIR-2649 ·
+     Subtask MOTIR-2653, per design/workbench/design-notes.md §"The agent state"
+     — that area was renamed with the surface by MOTIR-4779).
      Same mapping form as --el-notif-mentioned above and for the same reason:
      it resolves to the accent fill today, but owning its own slot means a
      palette can move agent badges without dragging the CTA with them. The
