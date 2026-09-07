@@ -5,10 +5,14 @@ import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { organizationRepoService } from '@/lib/services/organizationRepoService';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { Prisma } from '@/generated/prisma/client';
+import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { getGitProvider } from '@/lib/git';
 import {
+  ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
@@ -487,6 +491,153 @@ describe('the CONCURRENCY translation — a raw P2002 never escapes', () => {
     const lost = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
     expect(lost.reason).toBeInstanceOf(ProjectRepoNameTakenError);
     expect(lost.reason).not.toBeInstanceOf(RealizedRepoAlreadyClaimedError);
+  });
+});
+
+describe('a lost race whose P2002 names NO constraint — Bug MOTIR-4833', () => {
+  // The two cases above depend on a scheduler to decide which caller loses and
+  // where. These do not: they stage the same race deterministically, so the
+  // ANSWER can be asserted rather than sampled.
+  //
+  // ⚠️ WHY THE UNTARGETED ERROR IS THE REALISTIC ONE, and not a contrived input.
+  // `project_repository` is FORCE ROW LEVEL SECURITY and the app connects as a
+  // non-superuser role, so PostgreSQL's index-value description is suppressed and
+  // the `23505` carries no `DETAIL`; `@prisma/adapter-pg` builds `meta.target`
+  // from `DETAIL` alone, never from the `constraint` name the database DID send.
+  // Under the app role there is therefore NO target on this path at all — which
+  // is why the old `else` (a bare `ProjectRepoNameTakenError`) was not a rare
+  // wrong answer but the standing one for every lost race.
+  //
+  // The INSERT is stubbed rather than genuinely raced for two reasons: the shape
+  // of `meta` must not depend on which database role the suite happens to run as,
+  // and a real lost race gives no way to guarantee the loser reaches the INSERT
+  // rather than a pre-check. The pre-check stub reproduces exactly what a lost
+  // race produces — a read that could not see the winner's uncommitted row.
+
+  function untargetedUniqueViolation(): Prisma.PrismaClientKnownRequestError {
+    return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: 'test',
+      meta: { modelName: 'ProjectRepo' },
+    });
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  it('is answered as the CLAIM — and the API says CLAIM, not "that name is taken"', async () => {
+    // The winner links repoA, the ordinary way.
+    await organizationRepoService.linkExistingRepo(
+      fx.projectId,
+      { githubRepoId: repoA, role: 'api' },
+      fx.ctx,
+    );
+
+    // The loser: its claim pre-check ran before the winner committed, so it
+    // reaches the INSERT — and the INSERT fails with a violation naming nothing.
+    vi.spyOn(projectRepoRepository, 'findByProjectAndGithubRepoId').mockResolvedValueOnce(null);
+    vi.spyOn(projectRepoRepository, 'create').mockRejectedValueOnce(untargetedUniqueViolation());
+
+    const err = await organizationRepoService
+      .linkExistingRepo(
+        fx.projectId,
+        { githubRepoId: repoA, role: 'shared', name: 'motir-core-two' },
+        fx.ctx,
+      )
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(RealizedRepoAlreadyClaimedError);
+    // The regression, stated as the assertion it needs: this is the answer that
+    // used to be "that name is taken" — a rename instruction for a condition a
+    // rename cannot fix, on two provably DIFFERENT names.
+    expect(err).not.toBeInstanceOf(ProjectRepoNameTakenError);
+
+    // AC5 — the boundary the product actually answers from. A 409 is not enough:
+    // it is the CODE that decides which fix a person is sent to.
+    const res = mapProjectRepoError(err);
+    expect(res?.status).toBe(409);
+    expect((await res!.json()).code).toBe('REALIZED_REPO_ALREADY_CLAIMED');
+  });
+
+  it('is answered as the NAME collision when that is what the set actually holds', async () => {
+    await organizationRepoService.linkExistingRepo(
+      fx.projectId,
+      { githubRepoId: repoA, role: 'api', name: 'shared-name' },
+      fx.ctx,
+    );
+
+    // A DIFFERENT repository, so nothing is claimed twice — only the name is
+    // taken. The resolution has to tell the two apart from the same untargeted
+    // error, which is the whole point of asking the set rather than the message.
+    vi.spyOn(projectRepoRepository, 'findByProjectAndNameInsensitive').mockResolvedValueOnce(null);
+    vi.spyOn(projectRepoRepository, 'create').mockRejectedValueOnce(untargetedUniqueViolation());
+
+    const err = await organizationRepoService
+      .linkExistingRepo(
+        fx.projectId,
+        { githubRepoId: repoB, role: 'api', name: 'shared-name' },
+        fx.ctx,
+      )
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ProjectRepoNameTakenError);
+    expect(err).not.toBeInstanceOf(RealizedRepoAlreadyClaimedError);
+  });
+
+  it('a REAL lost INSERT — real index, real abort, real resolution — answers the CLAIM', async () => {
+    // The other cases stub the INSERT so that `meta`'s shape cannot depend on the
+    // environment. This one stubs NOTHING below the pre-check: the winner's row is
+    // committed, the loser's claim pre-check is made to miss it exactly as a read
+    // that ran before the commit would, and the real `@@unique([projectId,
+    // githubRepoId])` index raises the real `23505` inside the real transaction.
+    //
+    // It is the case the resolution exists for, and the one no stub can prove: the
+    // `23505` ABORTS the transaction, so the disambiguating read cannot happen in
+    // the `catch` beside the INSERT and has to run after it unwinds.
+    await organizationRepoService.linkExistingRepo(
+      fx.projectId,
+      { githubRepoId: repoA, role: 'api' },
+      fx.ctx,
+    );
+
+    vi.spyOn(projectRepoRepository, 'findByProjectAndGithubRepoId').mockResolvedValueOnce(null);
+
+    const err = await organizationRepoService
+      .linkExistingRepo(
+        fx.projectId,
+        { githubRepoId: repoA, role: 'shared', name: 'motir-core-two' },
+        fx.ctx,
+      )
+      .catch((e: unknown) => e);
+
+    // The two names are provably DIFFERENT ('motir-core' and 'motir-core-two'), so
+    // a name collision is not merely the wrong answer here — it is an impossible
+    // one, and it is what this path returned before MOTIR-4833.
+    expect(err).toBeInstanceOf(RealizedRepoAlreadyClaimedError);
+    expect(err).not.toBeInstanceOf(ProjectRepoNameTakenError);
+
+    // And the set is what it should be: the winner's single row.
+    expect(await adminDb.projectRepo.count({ where: { projectId: fx.projectId } })).toBe(1);
+  });
+
+  it('keeps its own name when the set explains nothing — a retryable 409, never a rename', async () => {
+    // Neither uniqueness is occupied, so the duplicate is one this code does not
+    // understand. Naming it honestly is the entire fix: the previous behaviour
+    // was to call it a name collision, which is the one answer that sends a
+    // person to a fix that cannot work.
+    vi.spyOn(projectRepoRepository, 'create').mockRejectedValueOnce(untargetedUniqueViolation());
+
+    const err = await organizationRepoService
+      .linkExistingRepo(fx.projectId, { githubRepoId: repoA, role: 'api' }, fx.ctx)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ProjectRepoLinkConflictError);
+    expect(err).not.toBeInstanceOf(ProjectRepoNameTakenError);
+
+    const res = mapProjectRepoError(err);
+    expect(res?.status).toBe(409);
+    expect((await res!.json()).code).toBe('PROJECT_REPO_LINK_CONFLICT');
   });
 });
 
