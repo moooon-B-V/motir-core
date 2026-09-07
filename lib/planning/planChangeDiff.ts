@@ -172,6 +172,36 @@ export function proposalForItem(
   return index.removalsById.get(itemId) ?? index.changesById.get(itemId);
 }
 
+/**
+ * Does the PENDING PROPOSAL touch this committed row? The third conjunct the
+ * plan-change canvases add to the grouping predicate
+ * (`design/ai-planning/design-notes.md` Part XVI, DECISION 2): the road is the
+ * epics AND what the change is about, so a row the proposal touches stays on the
+ * level the reviewer is standing on instead of moving behind the group's door.
+ *
+ * ⚠️ THIS IS MEMBERSHIP IN THE PROPOSAL, NEVER `diffStateForItem`'s VERDICT, and
+ * the difference is the trap Part XVI §16.8 names. `diffStateForItem` answers
+ * "what state does this row draw in", and it returns `'locked'` for EVERY
+ * terminal-status row on the level whenever the index is non-empty — regardless
+ * of whether the plan touches it. Most parentless defects on a mature tree are
+ * `done`, so keying on it would drag nearly the whole group back onto the road
+ * the moment any plan is pending. `locked` is a property of the row's own
+ * status, not of the proposal, and it does not qualify.
+ *
+ * A MATERIALIZED `add` qualifies through `adds`: its `nodeId` IS the committed
+ * work item's id ({@link isMaterializedAdd}), which is exactly the row
+ * `decoratePlanChangeLevel` merges the add frame onto — and grouping that row
+ * away is what re-opens MOTIR-3206 (the merge cannot land, the entry survives in
+ * `pendingAdds`, and the accepted card is appended a second time as a keyless
+ * ghost). A still-PENDING add cannot collide here: its `nodeId` carries the
+ * `proposed:` prefix, which no work-item id has.
+ */
+export function touchedByProposal(index: PlanChangeDiffIndex, workItemId: string): boolean {
+  if (index.isEmpty) return false;
+  if (index.changesById.has(workItemId) || index.removalsById.has(workItemId)) return true;
+  return index.adds.some((add) => add.nodeId === workItemId);
+}
+
 /** The proposed items that belong on the level currently in focus. `focusNodeId`
  *  is the canvas focus (null at the top level) — for a committed item that is its
  *  work-item id, which is exactly what an `add` parented on it carries. */
