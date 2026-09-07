@@ -6502,7 +6502,8 @@
       "refusalMessage": "Let's set your project up first. A few short questions about what you're building and who it's for, and I'll have enough to plan it with you.",
       "sourceItems": "{count} work items",
       "sourceItemsCapped": "{count}+ work items"
-    }
+    },
+    "returnAck": "You finished setting up. Picking up where we left off."
   },
   "codeHealth": {
     "title": "Code health",

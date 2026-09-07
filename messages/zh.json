@@ -6498,7 +6498,8 @@
       "refusalMessage": "我们先把项目建立起来。几个关于你在做什么、做给谁的简短问题，我就有足够的信息和你一起规划了。",
       "sourceItems": "{count} 个工作项",
       "sourceItemsCapped": "{count}+ 个工作项"
-    }
+    },
+    "returnAck": "设置已完成。我们从刚才的地方继续。"
   },
   "codeHealth": {
     "title": "代码健康度",

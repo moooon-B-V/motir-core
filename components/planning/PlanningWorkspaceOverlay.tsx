@@ -471,6 +471,7 @@ export function PlanningWorkspaceOverlay({
           // what decides whether the banner is an invitation or a 403.
           canManage={can('ai:configure')}
           initialTarget={settled?.target ?? null}
+          {...(justReturned ? { justReturnedFromOnboarding: true } : {})}
           initialCanvasTrail={settled?.trail}
         />
       )}

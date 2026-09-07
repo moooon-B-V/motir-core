@@ -185,3 +185,42 @@ describe('a repeated query parameter is not silently dropped', () => {
     ]);
   });
 });
+
+describe('AC8 · the return is ACKNOWLEDGED in the CONVERSATION', () => {
+  // ⚠️ ASSERTED AT THE SEAM AND AT THE SOURCE, and the reason is worth stating:
+  // the flag's TRAVEL is asserted where it travels (`tests/components/
+  // planning-workspace-overlay.test.tsx` drives the overlay and reads it off the
+  // host), and the LINE itself has no render harness of its own — `PlanChangeRail`
+  // is only ever rendered through the host today. What a source read can hold is
+  // that the line is in the rail rather than anywhere else, which is the whole
+  // decision: the rail is where the session speaks, a toast fades and a returning
+  // user can miss it, and a banner over the canvas would put chrome between them
+  // and the thing they came back for. MOTIR-4762's recording is what watches a
+  // person read it.
+  const rail = readFileSync(join(process.cwd(), 'components/planning/PlanChangeRail.tsx'), 'utf8');
+
+  it('the line lives in the RAIL, above the opener', () => {
+    expect(rail).toContain('justReturnedFromOnboarding');
+    expect(rail).toContain('data-testid="planning-return-ack"');
+    const ack = rail.indexOf('planning-return-ack');
+    const opener = rail.indexOf('The opener —');
+    expect(ack).toBeGreaterThan(-1);
+    expect(ack).toBeLessThan(opener);
+  });
+
+  it('it is NOT a toast and NOT a banner over the canvas', () => {
+    for (const surface of ['components/planning/PlanningWorkspaceHost.tsx']) {
+      const src = readFileSync(join(process.cwd(), surface), 'utf8');
+      // The host passes the flag straight through; it draws nothing itself.
+      expect(src).toContain('justReturnedFromOnboarding');
+      expect(src).not.toContain('planning-return-ack');
+      expect(src).not.toMatch(/toast/i);
+    }
+  });
+
+  it('the ABANDONED path can never set it — nothing was completed', () => {
+    // The flag rides the return MARKER, and only the completed exit writes one.
+    const abandoned = onboardingReturnHref(outbound({ kind: 'project' }), 'abandoned')!;
+    expect(abandoned).not.toContain(PLANNING_RETURN_PARAM);
+  });
+});

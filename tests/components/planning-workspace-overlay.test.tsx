@@ -73,6 +73,7 @@ vi.mock('@/components/planning/PlanningWorkspaceHost', () => ({
     onClose,
     closeGuardRef,
     onKeepPlanningAfterBack,
+    justReturnedFromOnboarding,
   }: {
     launch: { mode: string; from: string; itemKey: string | null };
     anchorId: string | null;
@@ -82,6 +83,8 @@ vi.mock('@/components/planning/PlanningWorkspaceHost', () => ({
     onClose?: () => void;
     closeGuardRef?: { current: (() => boolean) | null };
     onKeepPlanningAfterBack?: () => void;
+    /** MOTIR-4770 — the round trip closed, and the rail says so. */
+    justReturnedFromOnboarding?: boolean;
   }) => {
     const [mountId] = useState(() => ++mountSeq);
     // The host registers the close VETO (MOTIR-4731). `vetoClose` lets a test
@@ -102,6 +105,7 @@ vi.mock('@/components/planning/PlanningWorkspaceHost', () => ({
         data-anchor-id={anchorId ?? ''}
         data-target={initialTarget?.identifier ?? ''}
         data-trail={(initialCanvasTrail ?? []).map((c) => c.id).join(',')}
+        {...(justReturnedFromOnboarding ? { 'data-just-returned': 'true' } : {})}
         data-can-manage={String(canManage ?? false)}
       >
         <button type="button" onClick={onClose}>
@@ -910,5 +914,52 @@ describe('the ROUTING VERDICT is HONOURED (MOTIR-4769)', () => {
     mount();
     await act(async () => {});
     expect(resolveOnboardingRouting).not.toHaveBeenCalled();
+  });
+});
+
+describe('THE ROUND TRIP closes (MOTIR-4770)', () => {
+  const rich = {
+    itemCount: 214,
+    itemCountTruncated: false,
+    repositories: [{ ref: 'acme/widgets', indexed: true }],
+    repositoryConnected: true,
+    repositoryIndexed: true,
+  } satisfies OnboardingSubstrate;
+
+  it('AC6 · a RETURNING user is not read and routed again', async () => {
+    // They were routed thirty seconds ago and have just done what they were sent
+    // to do. Reading them again — and possibly routing them again — is the loop
+    // the return marker exists to prevent.
+    openAt('plan=project&planFrom=project&planReturned=1');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(resolveOnboardingRouting).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('planning-reading-state')).toBeNull();
+    expect(screen.getByTestId('host')).toBeTruthy();
+  });
+
+  it('AC8 · the return is ACKNOWLEDGED, and the flag reaches the rail', async () => {
+    openAt('plan=project&planFrom=project&planReturned=1');
+    mount({ substrate: rich });
+    await act(async () => {});
+    // The host is the surface that owns the conversation, so the flag is what
+    // travels; the line itself is `PlanChangeRail`'s and is asserted there.
+    expect(screen.getByTestId('host').getAttribute('data-just-returned')).toBe('true');
+  });
+
+  it('an ordinary open carries NO acknowledgement — nothing was completed', async () => {
+    openAt('plan=project&planFrom=project');
+    mount();
+    await act(async () => {});
+    expect(screen.getByTestId('host').getAttribute('data-just-returned')).toBeNull();
+  });
+
+  it('the marker alone does NOT open a workspace', async () => {
+    // It says *you have just come back*, not *the workspace is open*.
+    openAt('planReturned=1');
+    mount({ substrate: rich });
+    await act(async () => {});
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
