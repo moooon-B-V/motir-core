@@ -106,9 +106,26 @@ test('four projects, four destinations', async ({ page, chapter, beat, acceptanc
 
     // The window says what it is READING, by name — the sentence the whole story
     // argues for, before any plan exists to judge.
+    //
+    // ⚠️ HELD OPEN DELIBERATELY, BECAUSE THE THING BEING ASSERTED IS TRANSIENT
+    // BY DESIGN (MOTIR-4827). The reading state lives exactly as long as the
+    // verdict takes, and against the lane's fixture mock that is close to
+    // instant — so two sequential queries against it are a race: this failed in
+    // CI with the element VISIBLE at one line and GONE at the next, which is
+    // `CLAUDE.md`'s own *never assert on an optimistic/transient surface without
+    // a deterministic signal* one altitude up. The fix is not a longer timeout
+    // and not a weaker assertion: it is to make the window real. The verdict
+    // arrives on the job-status GET, so that response is delayed until this
+    // chapter has read the state — the same instrument, and the same reason, as
+    // arming a `waitForResponse` before the action it follows.
+    await page.route(/\/api\/ai\/jobs\//, async (route) => {
+      await new Promise((r) => setTimeout(r, 3_000));
+      await route.continue();
+    });
     await expect(readingState(page)).toBeVisible();
     await expect(readingState(page)).toContainText('work items');
     await beat();
+    await page.unroute(/\/api\/ai\/jobs\//);
 
     // …and then it is simply a workspace. NO onboarding, no hand-off: a regular
     // session waits to be told what to plan.
