@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding } from '../helpers/db';
-import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import {
+  createTestWorkItem,
+  makeWorkItemFixture,
+  type WorkItemFixture,
+} from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { organizationRepoService } from '@/lib/services/organizationRepoService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -134,7 +138,54 @@ async function secondWorkspaceInSameOrg(opts: { accessLevel?: 'open' | 'private'
     });
   }
   const ctx: ServiceContext = { userId: fx.ownerId, workspaceId: ws.id };
-  return { workspaceId: ws.id, projectId: project.id, projectName: project.name, ctx };
+  return {
+    workspaceId: ws.id,
+    projectId: project.id,
+    projectName: project.name,
+    ctx,
+    // Enough of a `WorkItemFixture` for `createTestWorkItem`, which reads only
+    // the ids, the identifier and the ctx — so `nameOnWork` below can seed work
+    // in THIS workspace as well as in the main one.
+    fx: {
+      ...fx,
+      workspace: ws,
+      project,
+      workspaceId: ws.id,
+      projectId: project.id,
+      projectIdentifier: project.identifier,
+      ctx,
+    } as WorkItemFixture,
+  };
+}
+
+/**
+ * NAME a repository on a project's WORK — the evidence the NAMED rung reads
+ * (MOTIR-4821). This is what separates a project that has CHOSEN a repository
+ * from one that merely MAY REACH it, and it is the only way a set-less project
+ * can express the choice at all (`work_item.targetRepos`).
+ *
+ * Pinned through `adminDb` after the shipped create path has allocated the key
+ * and position: the pin is a column this fixture only has to be present, and
+ * routing it through the authoring service would drag the whole repo-domain
+ * resolver into a test about a disclosure column.
+ */
+async function nameOnWork(target: { fx: WorkItemFixture }, repoName: string) {
+  const item = await createTestWorkItem(target.fx, {
+    // A root-level `task`, not a `subtask`: a subtask must have a parent, and the
+    // pin is the only thing this fixture is about.
+    kind: 'task',
+    title: `work on ${repoName}`,
+  });
+  await adminDb.workItem.update({
+    where: { id: item.id },
+    data: { targetRepo: repoName, targetRepos: [repoName] },
+  });
+  return item;
+}
+
+/** The main fixture's project, in the shape `nameOnWork` takes. */
+function mainProject() {
+  return { fx };
 }
 
 /** Link a repository into a project through the shipped add path. */
@@ -225,22 +276,37 @@ describe('`Used by N projects` — ONE read, two consumers', () => {
   });
 });
 
-// ⚠️ "USES" IS THE SCOPE LADDER, NOT `project_repository` — MOTIR-4802.
+// ⚠️ "USES" IS WHAT A PROJECT HAS **CHOSEN** — MOTIR-4802 CORRECTED BY MOTIR-4821.
 //
-// The read shipped asking the LINK TABLE, and a repository a project WORKS ON
-// need not have a link row: `lib/projectRepos/effectiveDomain.ts`'s first rung
-// gives a project with no SET the workspace's CONNECTED repositories as its whole
-// domain, and that rung is the common one. On Motir's own project — six connected,
+// The read shipped asking the LINK TABLE alone, and a repository a project WORKS
+// ON need not have a link row, so on Motir's own project — six connected,
 // indexed repositories, an empty set — EVERY inventory row read `Used by no
-// project yet`, which is the exact opposite of the claim the tier move shipped
-// on, in the column the DISCONNECT dialogue leans on.
+// project yet` (MOTIR-4802). The fix answered from the SCOPE LADDER instead, and
+// the ladder is a permissive default: `effectiveDomain.ts`'s first rung hands a
+// project with NO SET the whole connected registry precisely because it has never
+// chosen. Read backwards that says every empty project uses every repository, and
+// a scratch project created and left empty was duly named against all seven, on
+// the disclosure a DESTRUCTIVE act rests on (MOTIR-4821).
+//
+// ⚠️ SO EVERY TEST IN THIS BLOCK THAT ASSERTS A SET-LESS PROJECT IS NAMED NOW
+// SEEDS `nameOnWork` FIRST, AND THAT LINE IS THE FIX RATHER THAN FIXTURE
+// PLUMBING. Without it these tests passed on the over-reporting predicate — they
+// asserted that a project with a domain containing the repository is named, which
+// is exactly the false claim. With it they assert the project NAMED the
+// repository on its work, which is a choice. The two are indistinguishable on a
+// fixture whose project has no work at all, which is why the defect shipped
+// green.
 //
 // Each test below is one rung of that ladder, read from the other end. The
 // `hasSet` cases are not decoration: they are what keeps the zero above a real
 // state rather than a defect nobody notices.
-describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4802)', () => {
+describe('`Used by N projects` — CHOSEN, not merely reachable (MOTIR-4802 · MOTIR-4821)', () => {
   it('names a project whose repositories are CONNECTED and whose set is EMPTY — the reported defect', async () => {
-    // The shipped Motir project's exact shape, at fixture scale.
+    // The shipped Motir project's exact shape, at fixture scale: no repository
+    // SET, and real work naming the repositories it is connected to.
+    await nameOnWork(mainProject(), 'motir-core');
+    await nameOnWork(mainProject(), 'motir-gateway');
+
     const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
 
     for (const repoId of [repoGithub, repoGitlab]) {
@@ -267,6 +333,7 @@ describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4
     // The third rung — the set FIRST, connected UNDER it — so the project holds
     // the repository it linked AND the one its workspace is connected to.
     await link(fx.projectId, repoGitlab, fx.ctx);
+    await nameOnWork(mainProject(), 'motir-core');
     await adminDb.migrateOnboarding.create({
       data: {
         workspaceId: fx.workspaceId,
@@ -294,6 +361,11 @@ describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4
     // project's domain. A second workspace's set-less project layers ITS
     // workspace's registry — which here is empty — and holds nothing.
     const second = await secondWorkspaceInSameOrg();
+    await nameOnWork(mainProject(), 'motir-core');
+    // The sibling names it too — and is STILL not listed, because its workspace
+    // is not the one the repository is connected in. A name on work is evidence
+    // of a choice, never a way around the workspace scoping.
+    await nameOnWork(second, 'motir-core');
 
     const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
 
@@ -311,6 +383,7 @@ describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4
     // usage wherever it comes from.
     const second = await secondWorkspaceInSameOrg();
     await link(second.projectId, repoGithub, second.ctx);
+    await nameOnWork(mainProject(), 'motir-core');
 
     const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
     const row = usage.find((u) => u.githubRepoId === repoGithub);
@@ -342,6 +415,7 @@ describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4
         archived: false,
       },
     });
+    await nameOnWork(second, 'motir-ai');
 
     const outsider = await adminDb.user.create({
       data: {
@@ -375,6 +449,8 @@ describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4
     // `listInventory` composes `listRepositoryUsage`, and that composition is the
     // whole disclosure argument. The ladder must not have been added to one of
     // the two consumers.
+    await nameOnWork(mainProject(), 'motir-core');
+
     const inventory = await organizationRepoService.listInventory(fx.ctx);
     const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
 
@@ -385,6 +461,124 @@ describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4
     }
     expect(inventory.find((r) => r.repo.id === repoGithub)?.projects.map((p) => p.id)).toEqual([
       fx.projectId,
+    ]);
+  });
+});
+
+// ⚠️ THE OVER-REPORT — MOTIR-4821, the regression MOTIR-4802's fix introduced.
+//
+// The two projects below are IDENTICAL to the predicate that shipped: both sit in
+// the connected workspace, both have NO repository set, so the ladder hands both
+// the whole connected registry and the inventory named BOTH against every
+// repository. One of them is the real project, working in the repository every
+// day; the other is a scratch project somebody created and left empty. **They
+// must come out DIFFERENT**, and no permissive default can separate them —
+// which is why this is a predicate about EVIDENCE rather than about reach.
+//
+// This block fails on the shipped code in the direction that matters: the scratch
+// project is NAMED there, on the disclosure the org-level disconnect dialogue
+// leans on.
+describe('`Used by N projects` does NOT name a project that never chose (MOTIR-4821)', () => {
+  /** A second project in the SAME workspace, set-less exactly like the first. */
+  async function scratchProject() {
+    const project = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: `SCR${Math.floor(Math.random() * 10_000)}`,
+    });
+    return {
+      projectId: project.id,
+      fx: {
+        ...fx,
+        project,
+        projectId: project.id,
+        projectIdentifier: project.identifier,
+      } as WorkItemFixture,
+    };
+  }
+
+  it('⚠️ THE REGRESSION: two set-less projects, one working in the repository and one empty, come out DIFFERENT', async () => {
+    const scratch = await scratchProject();
+    await nameOnWork(mainProject(), 'motir-core');
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+    const row = usage.find((u) => u.githubRepoId === repoGithub);
+
+    // Both are browsable, both layer the registry, and only one has chosen.
+    expect(row?.projects.map((p) => p.id)).toEqual([fx.projectId]);
+    expect(row?.projects.map((p) => p.id)).not.toContain(scratch.projectId);
+  });
+
+  it('a project that has NAMED NOTHING is named against NO repository — the scratch project', async () => {
+    // The reporter's own tell: a project called `test`, created and left empty,
+    // read as using all seven. Nothing it could have chosen exists, so every row
+    // must be silent about it.
+    const scratch = await scratchProject();
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    for (const row of usage) {
+      expect(row.projects.map((p) => p.id)).not.toContain(scratch.projectId);
+    }
+  });
+
+  it('the DISCONNECT dialogue inherits it — `listInventory` still composes the one read', async () => {
+    // The column and the dialogue read the same list by construction, so the
+    // over-report reached the destructive surface too. Asserting it HERE is what
+    // stops a later change fixing the column and leaving the dialogue behind.
+    const scratch = await scratchProject();
+    await nameOnWork(mainProject(), 'motir-core');
+
+    const inventory = await organizationRepoService.listInventory(fx.ctx);
+    const row = inventory.find((r) => r.repo.id === repoGithub);
+
+    expect(row?.projects.map((p) => p.id)).toEqual([fx.projectId]);
+    expect(row?.projects.map((p) => p.id)).not.toContain(scratch.projectId);
+  });
+
+  it('matches the repository name case-insensitively and through the `owner/name` form', async () => {
+    // `repoNameKey`'s rule, which `mergeDomainsByName` already applies within the
+    // domain: two spellings that differ only in case, or a ref carrying its owner,
+    // name ONE checkout. A pin copied out of the GitHub surface arrives as
+    // `owner/name`, and it is a choice however it is spelled.
+    await nameOnWork(mainProject(), 'moooon/Motir-Core');
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    expect(usage.find((u) => u.githubRepoId === repoGithub)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
+  });
+
+  it('reads the `targetRepo` SCALAR too — a row written before the array existed still counts', async () => {
+    // `targetRepo` IS `targetRepos[0]` for anything written since the array
+    // landed, but a legacy row carries only the scalar. Dropping it would leave a
+    // project silently missing from a disconnect dialogue, which is the same
+    // failure this card is about, pointed the other way.
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'legacy pin' });
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { targetRepo: 'motir-core', targetRepos: [] },
+    });
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    expect(usage.find((u) => u.githubRepoId === repoGithub)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
+  });
+
+  it('a project that LINKED the repository is named even with no work at all — the link IS the choice', async () => {
+    // The EXPLICIT half must not be narrowed by the NAMED one. Picking a
+    // repository through `Add repository` (MOTIR-4678) is a choice already made,
+    // and a project that has linked one and not started yet still loses it.
+    const scratch = await scratchProject();
+    await link(scratch.projectId, repoGithub, fx.ctx);
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    expect(usage.find((u) => u.githubRepoId === repoGithub)?.projects.map((p) => p.id)).toEqual([
+      scratch.projectId,
     ]);
   });
 });

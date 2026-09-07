@@ -116,6 +116,11 @@ describe('the inventory — one row per connected repository', () => {
     expect(screen.getByText('design-system')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Used by 0/ })).toBeNull();
     expect(screen.getByText(/A repository no project uses stays connected/)).toBeTruthy();
+    // …and the same disclosure at rest, said ONCE for the organisation rather
+    // than by naming N projects on every row (MOTIR-4821).
+    expect(
+      screen.getByText(/no repositories of its own can also reach the ones connected/),
+    ).toBeTruthy();
   });
 });
 
@@ -155,6 +160,20 @@ describe('the DISCONNECT dialog', () => {
     expect(screen.getByText('3 projects lose this repository.')).toBeTruthy();
     const body = screen.getByText(/The code index Motir built from it is kept/);
     expect(body.textContent).toContain(String(CODE_GRAPH_RETENTION_WINDOW_DAYS));
+  });
+
+  it('⚠️ discloses the permissive default ONCE, instead of naming projects that never chose (MOTIR-4821)', () => {
+    // The list names projects that CHOSE this repository — a link, or work that
+    // names it. A project with no repositories of its own can still REACH it
+    // through the scope ladder's first rung, and that is a property of the
+    // organisation rather than of any one project. Naming those projects
+    // individually is the over-report this line replaces: the dialogue warned
+    // that a scratch project which had never touched the repository would lose
+    // it, on the disclosure a DESTRUCTIVE act rests on.
+    renderInventory();
+    fireEvent.click(screen.getAllByRole('button', { name: /Disconnect/ })[0]!);
+
+    expect(screen.getByText(/no repositories of its own can also reach this one/)).toBeTruthy();
   });
 
   it('⚠️ makes NO permanence claim — re-adding inside the window cancels it', () => {
