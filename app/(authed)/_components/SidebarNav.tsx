@@ -340,10 +340,12 @@ export function SidebarNav({
     const primaryItems: SidebarItem[] = [
       {
         // The signed-in landing surface (Story MOTIR-2649 · Subtask
-        // MOTIR-2654, design/home/ Panel A) — the FIRST primary entry, above
-        // Dashboard, because it is where signing in now lands and where a
-        // reader goes to ask "what is waiting on me". `/dashboard` keeps its
-        // route AND the row below: nothing is re-homed.
+        // MOTIR-2654, design/home/ Panel A) — the FIRST primary entry, because
+        // it is where signing in now lands and where a reader goes to ask "what
+        // is waiting on me". `/dashboard` keeps its route AND a row of its own:
+        // nothing is re-homed. (This clause named Dashboard as the row directly
+        // below until MOTIR-4799 demoted it under Backlog; Home still leads the
+        // rail, which is the half that was load-bearing.)
         //
         // ⚠️ PROJECT-scoped, like every row under it (MOTIR-2761) — which is
         // why this section is the ONLY place it is rendered. It used to be
@@ -353,12 +355,6 @@ export function SidebarNav({
         label: t('nav.home'),
         href: AUTHED_LANDING_PATH,
         active: isActive(pathname, AUTHED_LANDING_PATH),
-      },
-      {
-        icon: <LayoutDashboard />,
-        label: t('nav.dashboard'),
-        href: '/dashboard',
-        active: isActive(pathname, '/dashboard'),
       },
       {
         icon: <CircleDot />,
@@ -422,17 +418,40 @@ export function SidebarNav({
         active: isActive(pathname, '/plans'),
       },
       {
-        // The backlog / sprint-planning surface (Subtask 4.2.3) — between
-        // Boards and Reports, with the layout-list glyph (4.2.1 design notes).
+        // The backlog / sprint-planning surface (Subtask 4.2.3), with the
+        // layout-list glyph (4.2.1 design notes). It sits after Plans and, since
+        // MOTIR-4799, immediately before Dashboard — the line here read "between
+        // Boards and Reports" until then, which had already stopped being true
+        // when Roadmap, Plans and Triage arrived between the two.
         icon: <LayoutList />,
         label: t('nav.backlog'),
         href: '/backlog',
         active: isActive(pathname, '/backlog'),
       },
       {
+        // ⚠️ DEMOTED here from second place, below Backlog (MOTIR-4799). Yue:
+        // "move the Dashboard nav item all the way down after Backlog in the
+        // left nav, the reason is dashboard is not important" — a product
+        // judgement, recorded so the next reader knows this position was DECIDED
+        // rather than inherited. The row sat directly under Home from the day
+        // MOTIR-2654 added Home above it, which encoded the opposite claim: that
+        // Dashboard is the second thing a reader wants. `/dashboard` keeps its
+        // route and its row; only the position moved.
+        //
+        // The ordered list is asserted in
+        // `tests/components/SidebarNav-primary-order.test.tsx`, off the rendered
+        // rail — before that file this array's order was decided in comments and
+        // checked nowhere.
+        icon: <LayoutDashboard />,
+        label: t('nav.dashboard'),
+        href: '/dashboard',
+        active: isActive(pathname, '/dashboard'),
+      },
+      {
         // The incoming-work front door (Story 6.11 · Subtask 6.11.6) — the
         // triage inbox of un-acted-on bug reports & feature requests. `Inbox`
-        // is the 6.11 design-notes glyph; sits after Backlog.
+        // is the 6.11 design-notes glyph; sits after Dashboard (it followed
+        // Backlog directly until MOTIR-4799 moved Dashboard between them).
         icon: <Inbox />,
         label: t('nav.triage'),
         href: '/triage',

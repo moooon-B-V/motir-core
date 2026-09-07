@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, within, type RenderResult } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // MOTIR-2373 — the top bar's CONTROL BUDGET below `md`
 // (design/shell/design-notes.md § *The top bar's control budget*, MOTIR-2374).
@@ -255,7 +256,9 @@ describe('the top bar’s control budget below md (MOTIR-2373)', () => {
     // left cluster is hamburger + tier nav, and the 168px ceiling is computed
     // with no brand in it.
     const { container } = await renderBar();
-    const brand = container.querySelector('a[href="/dashboard"]')!;
+    // The brand's destination is the LANDING, not `/dashboard` (MOTIR-4799) —
+    // composed from the owner constant so this selector cannot go stale again.
+    const brand = container.querySelector(`a[href="${AUTHED_LANDING_PATH}"]`)!;
     expect(has(brand, 'hidden')).toBe(true);
     expect(has(brand, 'md:flex')).toBe(true);
   });

@@ -114,8 +114,18 @@ function pairs(): { selector: string; glyph: string; fill: string }[] {
 
 describe('the shell brand tile (MOTIR-2557)', () => {
   it('paints the mark’s box with the tokens the design pinned', () => {
-    const link = /<Link\s+href="\/dashboard"[\s\S]*?className="([^"]+)"/.exec(TOP_NAV);
-    expect(link, 'the brand slot is a Link to /dashboard').toBeTruthy();
+    // MOTIR-4799 — anchored on the slot's ACCESSIBLE NAME, not on its
+    // destination. This read `href="\/dashboard"` and went red when the mark was
+    // pointed at the landing, which is the third time a brand-slot referrer has
+    // pinned a destination that then moved. The `aria-label` is what makes this
+    // Link the BRAND slot; the href is what the product is still deciding
+    // (MOTIR-4782 moves it again, to `/workbench`), so the identifier belongs on
+    // the stable half.
+    const link =
+      /<Link\s+href=\{[^}]+\}\s+aria-label=\{t\('topNav\.brandHome'\)\}[\s\S]*?className="([^"]+)"/.exec(
+        TOP_NAV,
+      );
+    expect(link, 'the brand slot is the Link labelled topNav.brandHome').toBeTruthy();
     const classes = link![1]!.split(/\s+/);
 
     expect(classes).toContain('bg-(--el-surface)');
