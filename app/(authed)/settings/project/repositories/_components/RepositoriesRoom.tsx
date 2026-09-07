@@ -345,10 +345,20 @@ export function RepositoriesRoom({
   // What it no longer decides is what the ORG SECTION holds: that is the ladder's
   // `connectedInDomain`, passed in rather than re-derived, so the server and this
   // island cannot disagree and neither can this room and the org inventory.
+  //
+  // ⚠️ AND `hostOwner` DECIDES WHOSE THE LAYERED HALF IS (bug MOTIR-4867). The
+  // connected registry is workspace-scoped — deliberately, so a repository Motir
+  // CREATES for this workspace is a legal `targetRepo` (MOTIR-1931) — so it can
+  // hold a repository under the PROVISIONING organisation, which is neither the
+  // organisation's nor `yours`. It is passed down from the server view rather
+  // than read here: `provisioningOrgLogin()` is a server env value, and a client
+  // island that read it would answer this question differently from the render
+  // it is replacing.
   const { fromOrganization, motirHosted } = splitRoomSections(
     rows,
     connected,
     view.connectedInDomain,
+    view.hostOwner,
   );
 
   // ⚠️ THE EMPTY STATE IS FOR A PROJECT WITH NEITHER REGISTRY — nothing else.
