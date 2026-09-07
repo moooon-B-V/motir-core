@@ -1294,12 +1294,48 @@ After connecting, the row settles through the same two states as everyone else's
 
 ## 15.8 · Empty, loading, partial, refused (panel 5)
 
-| State                            | What it says                                                                                                                                                                                                      |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A · no repositories yet**      | `EmptyState` — _"Atlas has no code yet"_ + what will happen at plan approval + **Review the plan**. Not an error, and not an empty table.                                                                         |
-| **B · the set is mid-establish** | The count `Pill` becomes **Setting up** (`LoaderCircle`), a peach `alert` names the repository still being made, and the rows are skeletons. Says explicitly that leaving loses nothing (the ADR's resumability). |
-| **C · a partial set**            | `skipped` and `connected` rows are shown in the set strip but excluded from the count — the reason `needsCollaboratorInvite` gives in code. A partial set therefore needs NO special case.                        |
-| **D · GitHub refused**           | A rose `alert` above the list states the scope of the failure (_1 of 3 invitations for Jonas Vik_), insists the repositories are fine, and offers **Try again**.                                                  |
+| State                                                | What it says                                                                                                                                                                                                                             |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A · no repositories yet**                          | `EmptyState` — _"Atlas has no code yet"_ + what will happen at plan approval + **Review the plan**. Not an error, and not an empty table.                                                                                                |
+| **A′ · Motir hosts none, but the ORGANISATION does** | Same `EmptyState`, different sentence — _"Motir hasn't made any repositories for Atlas"_ + the count of connected repositories + who grants access to those + **See this project's repositories**. **AMENDED by MOTIR-4803**, see below. |
+| **B · the set is mid-establish**                     | The count `Pill` becomes **Setting up** (`LoaderCircle`), a peach `alert` names the repository still being made, and the rows are skeletons. Says explicitly that leaving loses nothing (the ADR's resumability).                        |
+| **C · a partial set**                                | `skipped` and `connected` rows are shown in the set strip but excluded from the count — the reason `needsCollaboratorInvite` gives in code. A partial set therefore needs NO special case.                                               |
+| **D · GitHub refused**                               | A rose `alert` above the list states the scope of the failure (_1 of 3 invitations for Jonas Vik_), insists the repositories are fine, and offers **Try again**.                                                                         |
+
+### AMENDMENT (bug MOTIR-4803, 2026-09-07) — state A needed SPLITTING, not widening
+
+State A above says _"Atlas has no code yet"_, and that sentence quantifies over the PROJECT's code
+while this pane is scoped to the repositories **Motir made**. The two came apart the moment a project
+could hold repositories it did not get from Motir: on Motir's own project — six repositories connected
+to the organisation, an empty `project_repository` set — the pane renders an empty state asserting the
+project has no code at all. **A reader cannot tell a scoped page from a broken one**, which is the
+report this bug arrived as, alongside the question _"what IS the difference between `Code access` and
+`Repositories`?"_
+
+**What is NOT amended: the READ.** §15's pane still lists the SET, and the page header's paragraph
+(MOTIR-3126) still gives the reason — a connected repository has no collaborator invitation for Motir
+to report, grant or revoke, so a row for one would be strictly worse than its absence. The list was
+never the defect. **The sentence was wider than the list**, and the fix narrows the sentence rather
+than widening the list.
+
+So state A splits in two, on `resolveEffectiveRepoDomain(…).connected.length`:
+
+- **A (unchanged)** — nothing anywhere. The plan-approval sentence and **Review the plan**.
+- **A′** — Motir hosts none of it, the organisation holds N. It says what Motir has not done, how many
+  repositories the project actually works on, who grants access to those (§15's own `partialNote`
+  voice, verbatim: _"a repository the team already owns is reached through GitHub, not through
+  Motir"_), and it points at the room that answers _which repositories_.
+
+**Why A′ has a link out, when §17.4 forbids exactly that shape.** §17.4's rule is about an empty state
+standing in for an ACT the room could perform — _"nothing to pick"_ signposting elsewhere turns one
+intent into two errands. There is no act here and there cannot be: granting access to a repository
+Motir does not host is not this room's to perform, by the decision above. So A′ is §17.5's shape
+instead — an absence plus one sentence naming **who** can act and **where** — which is what turns an
+absence into an answer rather than a bug report.
+
+**No new primitive, no new panel, no new affordance type**: the same `EmptyState`, the same
+`FolderGit2`, the same single secondary `<a>`-as-button. Only the three strings and the destination
+differ (§15.15's table carries them as `empty.connected*`).
 
 ## 15.9 · Primitives — every element, and what it is
 
@@ -1428,15 +1464,18 @@ Namespace `settings.codeAccess.*` unless noted. MOTIR-1945 owns the entries; thi
 
 ### Empty, loading, partial, refused
 
-| Key                   | String                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `empty.title`         | {projectName} has no code yet                                                                                                                                            |
-| `empty.body`          | When a plan is approved, Motir creates this project's repositories — and everyone who can edit {projectName} gets invited to them. There is nothing to grant until then. |
-| `empty.action`        | Review the plan                                                                                                                                                          |
-| `establishing.pill`   | Setting up                                                                                                                                                               |
-| `establishing.banner` | Motir is still creating **{repo}**. Invitations go out as each repository lands — nothing here is lost if you leave.                                                     |
-| `partialNote`         | Only the repositories Motir made are counted. A repository the team already owns is reached through GitHub, not through Motir.                                           |
-| `failedBanner`        | GitHub wouldn't take {failed} of {total} invitations for **{name}**. The repositories are fine — only the invitation failed, and it can be sent again.                   |
+| Key                     | String                                                                                                                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `empty.title`           | {projectName} has no code yet                                                                                                                                                                                                                                    |
+| `empty.body`            | When a plan is approved, Motir creates this project's repositories — and everyone who can edit {projectName} gets invited to them. There is nothing to grant until then.                                                                                         |
+| `empty.action`          | Review the plan                                                                                                                                                                                                                                                  |
+| `empty.connectedTitle`  | Motir hasn't made any repositories for {projectName}                                                                                                                                                                                                             |
+| `empty.connectedBody`   | This page counts only the repositories Motir made. {projectName} works on {count, plural, one {one repository} other {# repositories}} connected to your organisation instead — a repository the team already owns is reached through GitHub, not through Motir. |
+| `empty.connectedAction` | See this project's repositories                                                                                                                                                                                                                                  |
+| `establishing.pill`     | Setting up                                                                                                                                                                                                                                                       |
+| `establishing.banner`   | Motir is still creating **{repo}**. Invitations go out as each repository lands — nothing here is lost if you leave.                                                                                                                                             |
+| `partialNote`           | Only the repositories Motir made are counted. A repository the team already owns is reached through GitHub, not through Motir.                                                                                                                                   |
+| `failedBanner`          | GitHub wouldn't take {failed} of {total} invitations for **{name}**. The repositories are fine — only the invitation failed, and it can be sent again.                                                                                                           |
 
 ### Accessible names — the superstring audit
 
