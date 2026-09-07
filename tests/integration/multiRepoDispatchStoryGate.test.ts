@@ -11,6 +11,7 @@ import { createV1ProjectCaller, type V1ProjectCaller } from '../fixtures/apiV1Fi
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // STORY GATE for MOTIR-2731 — running a card that ships in more than one
 // repository (Subtask MOTIR-3140).
@@ -68,6 +69,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: caller.fixture.workspaceId,
+      organizationId: await organizationIdOf(caller.fixture.workspaceId),
       repoId: `repo-${randomToken(8)}`,
       owner: 'moooon',
       name,

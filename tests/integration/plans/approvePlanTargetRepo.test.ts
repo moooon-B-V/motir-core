@@ -13,6 +13,7 @@ import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { randomToken } from '../../helpers/random';
+import { organizationIdOf } from '../../helpers/organizationOf';
 
 // The plan → materialize REPO PIN (Story MOTIR-1775 · MOTIR-1884) over real
 // Postgres. The seam this proves is what makes a TWO-repo project dispatchable at
@@ -69,6 +70,7 @@ async function connectRepo(workspaceId: string, name: string, owner = 'acme'): P
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `${name}-${randomToken(8)}`,
       owner,
       name,

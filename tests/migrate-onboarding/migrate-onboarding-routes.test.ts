@@ -76,6 +76,7 @@ async function seedConnectedRepo(fx: WorkItemFixture) {
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: `repo-${rand}`,
       owner: 'acme',
       name: 'widgets',

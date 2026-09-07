@@ -14,6 +14,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { organizationIdOf } from '../../helpers/organizationOf';
 
 // MOTIR-3078 — the `retire_spurious_project_repo_rows` forward data migration.
 //
@@ -103,6 +104,7 @@ async function connectWorkspaceRepo(workspaceId: string, name: string): Promise<
     data: {
       installationId: inst.id,
       workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `${name}-3078`,
       owner: 'moooon-B-V',
       name,
@@ -363,6 +365,7 @@ describe('retire_spurious_project_repo_rows — blast radius, idempotence, fresh
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         repoId: '930001',
         owner: 'motir-projects',
         name: 'motir',

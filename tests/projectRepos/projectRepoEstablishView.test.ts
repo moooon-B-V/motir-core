@@ -8,6 +8,7 @@ import { ProjectRepoInvalidFieldError } from '@/lib/projectRepos/errors';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // The establish step's READ MODEL + the two set operations MOTIR-1782 adds to make
 // the design's editable set real (Story MOTIR-1775).
@@ -67,6 +68,7 @@ async function connectRepos(workspaceId: string, names: string[]) {
         data: {
           installationId: inst.id,
           workspaceId,
+          organizationId: await organizationIdOf(workspaceId),
           repoId: `${name}-${created.length}`,
           owner: 'acme-inc',
           name,

@@ -24,6 +24,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // PROPOSING the repository set over real Postgres (Story MOTIR-1775 · MOTIR-1881).
 // The derivation itself is proved in `projectRepoProposal.test.ts` (pure); what is
@@ -72,6 +73,7 @@ async function connectRepo(workspaceId: string, name: string): Promise<GithubRep
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `${name}-${randomToken(8)}`,
       owner: 'acme',
       name,
