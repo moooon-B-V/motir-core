@@ -13,6 +13,8 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
 import { projectsLayeringConnectedRepos } from '@/lib/projectRepos/effectiveDomain';
+import { repoNameKey } from '@/lib/workItems/repoName';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -149,27 +151,50 @@ export const organizationRepoService = {
    * not in returns nothing, by `filterBrowsable`'s null-role rail. A separate
    * count would announce the existence of a project the viewer cannot name.
    *
-   * ⚠️ "USES" IS THE SCOPE LADDER, NOT `project_repository` (MOTIR-4802). This
-   * read shipped asking the raw link table, and a repository a project WORKS ON
-   * need not have a link row: `lib/projectRepos/effectiveDomain.ts` records the
-   * ladder, whose FIRST rung — a project with no set at all — takes the
-   * workspace's CONNECTED repositories as its whole domain, and that rung is the
-   * common one. On Motir's own project (six connected, indexed repositories, an
-   * empty set) every inventory row read `Used by no project yet`, which is the
-   * exact opposite of the claim the tier move shipped on, in the column the
-   * DISCONNECT dialogue leans on.
+   * ⚠️ "USES" IS WHAT A PROJECT HAS **CHOSEN** — CORRECTED 2026-09-07 (MOTIR-4821);
+   * the struck text stood here and shipped a FALSE claim on a destructive
+   * disclosure.
    *
-   * So the answer is composed of TWO halves, and the ladder is not re-derived
-   * here — `projectsLayeringConnectedRepos` owns the rung:
+   * ~~"USES" IS THE SCOPE LADDER, NOT `project_repository` (MOTIR-4802). The answer
+   * is composed of two halves: EXPLICIT links, plus every project of the
+   * repository's OWN workspace whose domain layers the connected registry.~~
+   *
+   * The FIRST half was right and is unchanged. The SECOND was a permissive
+   * default read backwards. `lib/projectRepos/effectiveDomain.ts` answers *if this
+   * project dispatches work, which repositories MAY it reach?*, and it hands a
+   * project with no set at all the workspace's whole connected registry precisely
+   * BECAUSE that project has never chosen. Inverting it produces *which projects
+   * USE this repository*, which no permissive default can support: a scratch
+   * project created and left empty was named against all seven of the
+   * organisation's repositories, in the column the DISCONNECT dialogue leans on,
+   * so a person deciding whether disconnecting will hurt anybody was shown
+   * projects that had never touched it (MOTIR-4821). Reusing the module that owns
+   * a question is right; assuming the relation is SYMMETRIC because one direction
+   * is authoritative is not.
+   *
+   * MOTIR-4802's report is answered by the same correction rather than reverted.
+   * It was filed because Motir's own project — six connected repositories, an
+   * empty set — read `Used by no project yet` on repositories it demonstrably
+   * works in. What makes that project different from the scratch one is not its
+   * domain (identical) but its WORK: it names those repositories on its work
+   * items, and the scratch project names nothing. So:
    *
    *   EXPLICIT  a `project_repository` link, whichever workspace it comes from —
    *             the org tier's whole point is that a project may link a
    *             repository connected from a sibling workspace.
-   *   LAYERED   every project of the repository's OWN workspace whose domain
-   *             layers the connected registry. `listConnectedRepoNames` is
-   *             workspace-scoped, so a project layers the repositories connected
-   *             in ITS workspace and no other — this is the same scoping the
-   *             resolver applies, inverted.
+   *   NAMED     a project of the repository's OWN workspace whose domain layers
+   *             the connected registry AND which names this repository on a work
+   *             item (`work_item.targetRepos` — the only way a set-less project
+   *             can express the choice at all). `listConnectedRepoNames` is
+   *             workspace-scoped, so the layering half stays scoped the same way.
+   *
+   * The ladder is still not re-derived here — `projectsLayeringConnectedRepos`
+   * owns the rung, and it now gates the evidence rather than standing in for it.
+   *
+   * ⚠️ THE PERMISSIVE DEFAULT IS STILL REAL AND IS STILL DISCLOSED — as a
+   * property of the ORGANISATION, said once in the inventory card's foot and in
+   * the disconnect dialogue, never by naming N projects that never chose
+   * anything.
    *
    * Two BULK reads gather the ladder's inputs for the whole organisation, rather
    * than N project-scoped `resolveEffectiveRepoDomain` calls per render. Each
@@ -275,26 +300,62 @@ export const organizationRepoService = {
       byWorkspace.set(project.workspaceId, list);
     }
     const browsable = new Set<string>();
+    // WHICH REPOSITORY NAMES EACH LAYERING PROJECT HAS ACTUALLY NAMED ON ITS WORK
+    // — the evidence half of the NAMED rung (MOTIR-4821), keyed by
+    // `repoNameKey` so `owner/name` and a differently-cased `name` compare as the
+    // one checkout identity `mergeDomainsByName` already treats them as.
+    //
+    // ⚠️ IT IS GATHERED INSIDE THE ACCESS LOOP, AND THAT PLACEMENT IS THE RAIL.
+    // `filterBrowsable` runs per workspace because the actor's role is
+    // workspace-scoped, so a workspace the actor is not in returns nothing — and
+    // reading work items only for the projects it just ADMITTED is what keeps this
+    // read inside the actor's own membership without a new RLS arm. Reading the
+    // whole organisation's work first and filtering afterwards would bind a
+    // workspace context the actor may have no membership in; `work_item`'s
+    // policy compares the workspace and nothing else, so it would answer.
+    const namedByProject = new Map<string, Set<string>>();
     for (const [workspaceId, projects] of byWorkspace) {
       const allowed = await projectAccessService.filterBrowsable(projects, {
         userId: ctx.userId,
         workspaceId,
       });
       for (const p of allowed) browsable.add(p.id);
+      // Only the LAYERING ones: a project that reaches this list through an
+      // explicit link is already answered, and asking for its work would be a
+      // read whose result nothing consults.
+      const layeringHere = allowed
+        .filter((p) => p.workspaceId === workspaceId && layering.has(p.id))
+        .map((p) => p.id);
+      if (layeringHere.length === 0) continue;
+      const names = await withWorkspaceContext({ userId: ctx.userId, workspaceId }, (tx) =>
+        workItemRepository.listRepoNamesByProject(workspaceId, layeringHere, tx),
+      );
+      for (const [projectId, list] of names) {
+        const keys = new Set<string>();
+        for (const name of list) {
+          const key = repoNameKey(name);
+          if (key) keys.add(key);
+        }
+        namedByProject.set(projectId, keys);
+      }
     }
 
     return repos.map((repo) => {
-      // EXPLICIT first, then LAYERED — a stable order, and the one a reader
-      // expects: the projects that named this repository, then the ones whose
-      // domain contains it because their workspace is connected to it.
+      // EXPLICIT first, then NAMED — a stable order, and the one a reader
+      // expects: the projects that LINKED this repository, then the ones that
+      // named it on their work.
       const explicit = linksByRepo.get(repo.id) ?? [];
-      const layered = (projectIdsByWorkspace.get(repo.workspaceId) ?? []).filter((id) =>
-        layering.has(id),
+      // NAMED, not merely LAYERED: the project's domain must reach the repository
+      // AND its work must name it. Dropping the second conjunct is exactly the
+      // MOTIR-4821 regression — every set-less project against every repository.
+      const repoKey = repoNameKey(repo.name);
+      const named = (projectIdsByWorkspace.get(repo.workspaceId) ?? []).filter(
+        (id) => layering.has(id) && repoKey !== null && namedByProject.get(id)?.has(repoKey),
       );
       return {
         githubRepoId: repo.id,
         repoRef: `${repo.owner}/${repo.name}`,
-        projects: [...new Set([...explicit, ...layered])]
+        projects: [...new Set([...explicit, ...named])]
           .filter((id) => browsable.has(id))
           .map((id) => projectsById.get(id))
           .filter((p): p is NonNullable<typeof p> => !!p)
