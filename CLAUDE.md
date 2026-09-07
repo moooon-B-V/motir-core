@@ -689,6 +689,18 @@ follow, and the second is the one that bites:
   confirmation is the **evidence `id` the call returns**, and putting it on the
   card is what makes it checkable by somebody else. No call ⇒ nothing was
   published, whatever the pull request says.
+- **⚠️ A FULL-PAGE `.png` IS NORMALLY TOO LARGE TO SEND INLINE — use the mint
+  door for it (MOTIR-4750).** `publish_design_result` takes each asset EITHER as
+  `contentBase64` or as the `pathname` of a grant, and the inline form is not
+  merely slower for a big asset: the bytes have to be EMITTED by you as a tool
+  argument, and a multi-sheet board is several megabytes (this tree's
+  `design/ai-chat/planning-workspace.png` is 3.9 MB, 5.2 MB of base64). So for
+  anything over roughly a megabyte: call **`create_design_upload`** with the
+  card's key and one entry per file, PUT each file's bytes straight to the
+  `uploadUrl` it returns (`curl -X PUT --upload-file …` with that
+  `Content-Type`), then send each `pathname` to `publish_design_result`.
+  **One publish uses one form for all of its assets** — a mix is refused by
+  name.
 
 > ⚠️ **This warning is OLDER than the tool, and it is kept because the hazard
 > outlived the mechanism.** It was written when CI did the publishing: the
