@@ -289,10 +289,23 @@ export const homeService = {
         tx,
       );
     });
-    return pageWith(rows, limit, ctx.userId, (row) =>
-      // The probe row's `completedAt` is non-null by construction: the read
-      // filters on `completedAt >= <window>`, so a null could not have matched.
-      encodeHomeCursor({ at: row.completedAt ?? row.updatedAt, id: row.id }),
+    return pageWith(
+      rows,
+      limit,
+      ctx.userId,
+      (row) =>
+        // The `?? row.updatedAt` arm is UNREACHABLE: this read filters on
+        // `completedAt >= <window>`, so a null could not have matched it. The
+        // fallback stays because a cursor is the one value that must not be null —
+        // an absent token breaks paging for everyone on the tab — and the type
+        // does not know what the predicate guarantees. The invariant is asserted
+        // against real Postgres by `tests/integration/workbench/story-gate.test.ts`
+        // — "no row this read returns can have a null completion time", which goes
+        // red the moment somebody widens the slice, at which point this directive
+        // stops being true at the same instant.
+        /* v8 ignore start */
+        encodeHomeCursor({ at: row.completedAt ?? row.updatedAt, id: row.id }),
+      /* v8 ignore stop */
     );
   },
 

@@ -93,6 +93,16 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `bareTransactionScan` through the same compiler API, opens no database and
   // imports nothing from `lib/` or `app/` — the lane's shape exactly.
   'tests/work-items/status-write-guard.test.ts',
+  // ── tests/workbench/ — the status-KEY-literal guard (MOTIR-4784) ──────────
+  // The write guard's twin, on the READ side. The Workbench partitions on
+  // `workflow_status.CATEGORY`, and a predicate written against a status KEY is
+  // correct on our own project — whose statuses happen to carry the default
+  // names — and silently wrong for the first customer who renames a column.
+  // `statusLiteralScan.ts` walks a NAMED surface rather than two whole roots,
+  // which is the one way it differs from its siblings here; everything else is
+  // the lane's shape — the compiler API, no database, nothing imported from
+  // `lib/` or `app/`.
+  'tests/workbench/status-literal-guard.test.ts',
   // ── tests/hosting/ — the abandoned-platform guard (MOTIR-3497's sweep) ─────
   // Found by the WIDENED predicate, and it had been sitting one character away
   // from being derived the whole time: `abandonedPathGuard.ts` exports

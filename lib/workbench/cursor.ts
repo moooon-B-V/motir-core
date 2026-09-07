@@ -78,9 +78,26 @@ function splitToken(
   let raw: string;
   try {
     raw = Buffer.from(token, 'base64url').toString('utf8');
+    // ⚠️ THE CATCH IS UNREACHABLE, and it stays. `Buffer.from(x, 'base64url')`
+    // DISCARDS characters outside the alphabet rather than throwing, so no
+    // string entering this function reaches it — the arm is a fact about Node's
+    // decoder, not about this module. Kept because this token arrives from a
+    // URL on a LANDING page: a decoder that ever starts throwing must degrade to
+    // page one, not 500 the first screen after signing in. The invariant is
+    // asserted over a corpus of malformed tokens by
+    // `tests/workbench/cursor-invariants.test.ts` — "never throws, whatever
+    // arrives in the URL", whose last case asserts the decoder's own contract.
+    //
+    // ⚠️ `start`/`stop`, NOT `next N` — measured on this provider (MOTIR-4784).
+    // `next N` counts the DIRECTIVE'S OWN line as the first of the N, so the
+    // one-line form suppresses only itself and a multi-line comment swallows its
+    // own text (`workItemRepository.ts` records the same measurement from the
+    // other direction). The bracketed form has no arithmetic to get wrong.
+    /* v8 ignore start */
   } catch {
     return null;
   }
+  /* v8 ignore stop */
   const separator = raw.indexOf('|');
   if (separator <= 0) return null;
   const iso = raw.slice(0, separator);

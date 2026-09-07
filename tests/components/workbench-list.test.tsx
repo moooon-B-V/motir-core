@@ -161,6 +161,15 @@ describe('the Workbench row — the cells the design added', () => {
     ).toBeTruthy();
   });
 
+  it('says Unassigned for an assignee who is no longer a workspace MEMBER', () => {
+    // A person can leave a workspace while still holding assignments — the row
+    // keeps the id and the member list stops carrying the name. The mapper is
+    // total over that, because the alternative is a row rendering a raw cuid.
+    renderRows([dto({ identifier: 'G-1', assigneeId: 'u_departed' })]);
+    expect(within(screen.getByTestId('workbench-row-G-1')).getByText('Unassigned')).toBeTruthy();
+    expect(within(screen.getByTestId('workbench-row-G-1')).queryByText('u_departed')).toBeNull();
+  });
+
   it('resolves the assignee name, and says Unassigned rather than nothing', () => {
     renderRows([
       dto({ identifier: 'A-1', assigneeId: 'u2' }),
@@ -377,6 +386,20 @@ describe('Recently finished — the fifth column', () => {
     const ahead = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
     renderRows([finished({ identifier: 'F-2', completedAt: ahead })], 'finished');
     expect(within(screen.getByTestId('workbench-row-F-2')).getByText('today')).toBeTruthy();
+  });
+
+  it('renders an EMPTY finished cell rather than a date it does not have', () => {
+    // Unreachable through the shipped read — Recently finished filters on
+    // `completedAt >= <window>`, so every row it returns carries one — but the
+    // cell is total anyway, because the alternative is `Invalid Date` in a
+    // column on the landing page. Cheap to build here (the component takes
+    // props), so it is COVERED rather than adjudicated: the arm is only
+    // unreachable through one caller, and a component is not owned by its
+    // callers.
+    renderRows([finished({ identifier: 'F-0', completedAt: null })], 'finished');
+    const cells = within(screen.getByTestId('workbench-row-F-0')).getAllByRole('cell');
+    expect(cells).toHaveLength(5); // Title · Your role · Assignee · Status · Finished
+    expect(cells.at(-1)?.textContent).toBe('');
   });
 
   it('draws Cancelled BESIDE Done, and not as the same thing', () => {
