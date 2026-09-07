@@ -11,6 +11,7 @@ import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { isOrgAdminRole } from '@/lib/organizations/roles';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { onboardingSubstrateService } from '@/lib/services/onboardingSubstrateService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
@@ -321,6 +322,29 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     onboardingRanAt: activeProject?.onboardingRanAt,
   });
 
+  // WHAT THE PLAN WINDOW WILL SAY IT IS READING (MOTIR-4768) — resolved HERE,
+  // once, by the Server Component that already has the project, and handed down
+  // as a prop. The overlay is a client island and may not reach a service; it
+  // also must add no request to its own open, which is why this is a prop rather
+  // than a fetch on mount (AC4).
+  //
+  // ⚠️ `null` FOR AN ESTABLISHED PROJECT, AND THAT IS BOTH HALVES OF THE ANSWER.
+  // A project whose first plan has been approved has no reading state to show
+  // (AC5) — and it also pays for no read, because the question is not asked. The
+  // marker is the right discriminator for THAT question and only that one: it
+  // says whether this project has ever had a plan approved, which is exactly
+  // what decides whether a session is about to read the project for the first
+  // time. It is NOT a gate on the window (MOTIR-4765 removed that, and it is not
+  // coming back through this prop) — a never-onboarded project opens the
+  // workspace either way; this only decides what it SAYS while it opens.
+  const planningSubstrate =
+    ctx && activeProject && !activeProject.onboardingRanAt
+      ? await onboardingSubstrateService.readOnboardingSubstrate(activeProject.id, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        })
+      : null;
+
   // The notification bell's initial unread badge (Subtask 5.7.5) — the cheap
   // partial-index aggregate (5.7.4 getUnreadCount), resolved once here and
   // threaded into TopNav so the badge paints without a client round-trip; the
@@ -578,6 +602,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     <PlanningWorkspaceOverlay
                       projectKey={activeProject.identifier}
                       projectName={activeProject.name}
+                      substrate={planningSubstrate}
                     />
                   </Suspense>
                 ) : null}

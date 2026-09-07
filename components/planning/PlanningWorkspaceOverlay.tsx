@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/Modal';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
 import { PlanningWorkspaceSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
+import { PlanningReadingState } from '@/components/planning/PlanningReadingState';
 import { useProjectAccess } from '@/app/(authed)/_components/ProjectAccessProvider';
 import {
   parsePlanningOverlay,
@@ -21,6 +22,7 @@ import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
+import type { OnboardingSubstrate } from '@/lib/dto/onboardingSubstrate';
 
 // THE PLANNING WORKSPACE OVERLAY (MOTIR-4729, under story MOTIR-4725) — the
 // workspace as a full-screen layer over whatever authed page is open, which is
@@ -85,6 +87,21 @@ export interface PlanningWorkspaceOverlayProps {
   /** The active project's `MOTIR`-style key. */
   projectKey: string;
   projectName: string;
+  /**
+   * WHAT THIS PROJECT ALREADY HAS, resolved once by the layout (MOTIR-4768) —
+   * the values the READING state names on screen.
+   *
+   * ⚠️ `null` MEANS ESTABLISHED, AND IT IS NOT A GATE. A project whose first
+   * plan has been approved has no reading state to show, and pays for no read
+   * either — the layout does not ask. A never-onboarded project opens this
+   * workspace exactly as an established one does (MOTIR-4765); this prop only
+   * decides what it SAYS while it opens.
+   *
+   * ⚠️ IT ARRIVES AS A PROP RATHER THAN A FETCH. This component is a client
+   * island and may not reach a service; more to the point, it must add no
+   * request to its own open — the layout already had the project in hand.
+   */
+  substrate: OnboardingSubstrate | null;
 }
 
 // ⚠️ THERE IS NO `onboardingRanAt` PROP, AND THAT IS THE DELIBERATE SHAPE
@@ -117,6 +134,7 @@ interface AnchorLoad {
 export function PlanningWorkspaceOverlay({
   projectKey,
   projectName,
+  substrate,
 }: PlanningWorkspaceOverlayProps) {
   const t = useTranslations('planningWorkspace');
   const ta = useTranslations('projectAccess');
@@ -327,6 +345,19 @@ export function PlanningWorkspaceOverlay({
             backLabel={ta('backToProjects')}
           />
         </div>
+      ) : substrate !== null ? (
+        // ⚠️ BEFORE THE ANCHOR READ, DELIBERATELY (MOTIR-4768). A never-onboarded
+        // project has no plan to anchor to and nothing on the canvas to scope,
+        // so waiting on `fetchPlanningAnchor` to draw the reading state would
+        // put a skeleton in front of the one moment the user most needs a
+        // sentence. What Motir is reading does not depend on which card the
+        // reader launched from.
+        //
+        // ⚠️ AND MOTIR-4769 IS WHAT TAKES IT DOWN. The routing verdict either
+        // moves the user to onboarding or lets the session plan, and either way
+        // this state has done its job. That sibling owns the dismissal; this
+        // card owns what is on screen until then.
+        <PlanningReadingState substrate={substrate} />
       ) : waitingForAnchor ? (
         <PlanningWorkspaceSkeleton />
       ) : (

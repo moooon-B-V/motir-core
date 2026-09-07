@@ -142,8 +142,18 @@ afterEach(cleanup);
  * that ejected established, code-bearing projects. The helper takes no override
  * because there is no longer a value that changes what this component does.
  */
-function mount() {
-  return render(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+function mount(over: { substrate?: OnboardingSubstrate | null } = {}) {
+  return render(
+    <PlanningWorkspaceOverlay
+      projectKey="ACME"
+      projectName="Acme"
+      // ⚠️ `null` BY DEFAULT — an ESTABLISHED project, which is what this whole
+      // suite has always been about. A substrate is the READING state's input
+      // (MOTIR-4768) and only a project whose first plan has never been approved
+      // has one; the layout resolves it for those and for nobody else.
+      substrate={over.substrate ?? null}
+    />,
+  );
 }
 
 /** Put the overlay in the address, as a door's `shallowPush` would. */
@@ -250,7 +260,9 @@ describe('closing writes the address, and only the address', () => {
     // Back: the address changes under the component, exactly as Next syncs
     // `useSearchParams` with a `popstate`.
     params = new URLSearchParams('');
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
 
     expect(screen.queryByTestId('host')).toBeNull();
@@ -271,7 +283,9 @@ describe('closing writes the address, and only the address', () => {
     await act(async () => {});
 
     params = new URLSearchParams('');
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
 
     expect(document.activeElement).toBe(opener);
@@ -350,7 +364,9 @@ describe('the ANCHOR read', () => {
     // An approve's `router.refresh()` re-renders with the SAME address. The host
     // seeds three things in `useState` initializers, so a remount here would
     // throw away the conversation and the canvas's drill state.
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
     expect(screen.getByTestId('host').getAttribute('data-mount')).toBe(firstMount);
 
@@ -360,7 +376,9 @@ describe('the ANCHOR read', () => {
       ancestors: [],
     });
     params = new URLSearchParams('plan=contextual&planFrom=work-item&planItem=MOTIR-8');
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
 
     expect(screen.getByTestId('host').getAttribute('data-mount')).not.toBe(firstMount);
@@ -472,7 +490,9 @@ describe('the host may VETO a close (the pending guard’s seam, MOTIR-4731)', (
     await act(async () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
 
     // Still mounted — the guard needs a workspace to ask over.
@@ -491,7 +511,9 @@ describe('the host may VETO a close (the pending guard’s seam, MOTIR-4731)', (
     await act(async () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
 
     fireEvent.click(screen.getByRole('button', { name: 'Keep planning' }));
@@ -511,7 +533,9 @@ describe('the host may VETO a close (the pending guard’s seam, MOTIR-4731)', (
     await act(async () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
 
     expect(screen.queryByTestId('host')).toBeNull();
@@ -560,7 +584,9 @@ describe('coverage · Keep planning after a Back, for every launch shape', () =>
     await act(async () => {
       window.dispatchEvent(new PopStateEvent('popstate'));
     });
-    view.rerender(<PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" />);
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={null} />,
+    );
     await act(async () => {});
 
     fireEvent.click(screen.getByRole('button', { name: 'Keep planning' }));
@@ -580,5 +606,93 @@ describe('coverage · Keep planning after a Back, for every launch shape', () =>
 
     fireEvent.click(screen.getByRole('button', { name: 'Keep planning' }));
     expect(shallowPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('the READING state — what the window says while a session decides (MOTIR-4768)', () => {
+  const thin = {
+    itemCount: 0,
+    itemCountTruncated: false,
+    repositories: [],
+    repositoryConnected: false,
+    repositoryIndexed: false,
+  } satisfies OnboardingSubstrate;
+
+  const rich = {
+    itemCount: 214,
+    itemCountTruncated: false,
+    repositories: [{ ref: 'acme/widgets', indexed: true }],
+    repositoryConnected: true,
+    repositoryIndexed: true,
+  } satisfies OnboardingSubstrate;
+
+  it('AC1 · a never-onboarded project sees it, naming what is being read', async () => {
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(screen.getByTestId('planning-reading-state')).toBeTruthy();
+    expect(screen.getByText('acme/widgets')).toBeTruthy();
+    expect(screen.getByText('214 work items')).toBeTruthy();
+  });
+
+  it('AC5 · an ESTABLISHED project never sees it — the layout resolves no substrate', async () => {
+    // `null` is both halves of the answer: nothing to show, and nothing read.
+    // The window still OPENS — MOTIR-4765 took the wall down and this prop is
+    // not it coming back.
+    openAt('plan=project&planFrom=project');
+    mount();
+    await act(async () => {});
+
+    expect(screen.queryByTestId('planning-reading-state')).toBeNull();
+    expect(screen.getByTestId('host')).toBeTruthy();
+  });
+
+  it('AC4 · NO request is added to the open — the substrate arrives as a prop', async () => {
+    // The window that used to eject this project now opens it, and the thing it
+    // shows must not cost a round trip on mount. The anchor read is the only
+    // fetch this component has ever made, and a project launch does not make it.
+    fetchPlanningAnchor.mockClear();
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(fetchPlanningAnchor).not.toHaveBeenCalled();
+    expect(screen.getByTestId('planning-reading-state')).toBeTruthy();
+  });
+
+  it('AC2 · the THIN substrate still renders it — a sentence, not an empty list', async () => {
+    // This is the project most likely to be routed away seconds later, so the
+    // sentence it shows is the last thing the user reads before they move.
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: thin });
+    await act(async () => {});
+
+    expect(screen.getByTestId('planning-reading-state')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Having a look at your project' })).toBeTruthy();
+    expect(screen.queryByRole('listitem')).toBeNull();
+  });
+
+  it('it renders in place of the workspace, and still navigates NOWHERE', async () => {
+    // The reading state replaces what the canvas would show; it does not sit
+    // beside a half-drawn workspace. And it changes nothing about MOTIR-4765:
+    // no push, from any state of this prop.
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(screen.queryByTestId('host')).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('an ANCHORED launch shows the reading state without waiting on the anchor read', async () => {
+    // A never-onboarded project has no plan to anchor to and nothing on the
+    // canvas to scope, so waiting on `fetchPlanningAnchor` would put a skeleton
+    // in front of the one moment the user most needs a sentence.
+    openAt('plan=item&planFrom=work-item&planItem=ACME-7');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(screen.getByTestId('planning-reading-state')).toBeTruthy();
   });
 });

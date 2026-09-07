@@ -3,6 +3,11 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import {
+  ONBOARDING_SUBSTRATE_ITEM_CAP,
+  type OnboardingSubstrate,
+  type OnboardingSubstrateRepository,
+} from '@/lib/dto/onboardingSubstrate';
 
 // THE ONBOARDING SUBSTRATE READ (Story MOTIR-4753 · MOTIR-4756).
 //
@@ -30,47 +35,15 @@ import { resolveCodeContext } from '@/lib/ai/codeContext';
 // connection half is `resolveCodeContext`'s and the indexed half is the same
 // `job_run` ledger read the wizard's INDEX step already waits on.
 
-/**
- * How many committed work items one substrate read looks at.
- *
- * ⚠️ THE SAME CAP THE DISCOVERY GROUNDING ALREADY USES —
- * `migrateOnboardingService`'s `findByProject(..., { take: 200 })`. It is named
- * here rather than repeated as a literal so the two cannot drift, and so the
- * number a consumer is told about is the number the read was taken at.
- */
-export const ONBOARDING_SUBSTRATE_ITEM_CAP = 200;
-
-/** What a project already has — a statement of fact, with no verdict attached. */
-export type OnboardingSubstrate = {
-  /**
-   * Committed work items, counted up to {@link ONBOARDING_SUBSTRATE_ITEM_CAP}.
-   *
-   * ⚠️ READ IT WITH {@link OnboardingSubstrate.itemCountTruncated}. On its own
-   * this number cannot distinguish *"the project has 200 items"* from *"the
-   * project has 200 items and more"*, and the consumer downstream is about to
-   * make a COMPLETENESS judgement out of it.
-   */
-  itemCount: number;
-  /**
-   * Did the count STOP at the cap? `true` means `itemCount` is a floor and not a
-   * total.
-   *
-   * A capped count that presents as exact is precisely the input that turns a
-   * careful judgement into a confident wrong one, which is why this is a
-   * first-class field rather than an implementation detail of the read.
-   */
-  itemCountTruncated: boolean;
-  /** Is a git repository connected to this project's workspace at all? */
-  repositoryConnected: boolean;
-  /**
-   * Has at least one connected repository got a code graph?
-   *
-   * ⚠️ NARROWER THAN `repositoryConnected`, AND THE TWO ARE NOT INTERCHANGEABLE:
-   * a connected-but-unindexed repository is connected and its code cannot be
-   * READ yet. Scope note inherited from the ledger read: this answers *a first
-   * graph EXISTS*, never *the graph is FRESH*.
-   */
-  repositoryIndexed: boolean;
+// ⚠️ THE SHAPE MOVED TO `lib/dto/` (MOTIR-4768) and is re-exported here, so no
+// caller moved. It had to: the plan window RENDERS this substrate, and
+// `PlanningReadingState` / `PlanningWorkspaceOverlay` are `'use client'` islands
+// that `tests/planning/planChangeArchitecture.test.ts` refuses — correctly — to
+// let import a service module at all. A service is `server-only`; its DTO is not.
+export {
+  ONBOARDING_SUBSTRATE_ITEM_CAP,
+  type OnboardingSubstrate,
+  type OnboardingSubstrateRepository,
 };
 
 /**
@@ -111,11 +84,23 @@ export async function readOnboardingSubstrate(
           jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
         );
 
+  // ⚠️ ORDER IS THE MIRROR'S, and it is left alone deliberately: the reading
+  // state renders one row per repository, and a surface whose rows reshuffle
+  // between two renders of the same project reads as something changing when
+  // nothing has.
+  const repositories = connectedRefs.map((ref) => ({
+    ref,
+    indexed: indexedRefs.includes(ref),
+  }));
+
   return {
     itemCount: itemCountTruncated ? itemCap : items.length,
     itemCountTruncated,
-    repositoryConnected: connectedRefs.length > 0,
-    repositoryIndexed: connectedRefs.some((ref) => indexedRefs.includes(ref)),
+    repositories,
+    // BOTH derived from the list above, so a caller reading the booleans and a
+    // caller reading the names can never be told different things.
+    repositoryConnected: repositories.length > 0,
+    repositoryIndexed: repositories.some((repo) => repo.indexed),
   };
 }
 

@@ -91,6 +91,9 @@ describe('readOnboardingSubstrate', () => {
     expect(await read(fx)).toEqual({
       itemCount: 0,
       itemCountTruncated: false,
+      // The NAMES, not just the booleans (MOTIR-4768) — empty here, and empty is
+      // the honest floor answer rather than an absent key.
+      repositories: [],
       repositoryConnected: false,
       repositoryIndexed: false,
     });
@@ -143,6 +146,46 @@ describe('readOnboardingSubstrate', () => {
     expect(service).toContain(`{ take: ${ONBOARDING_SUBSTRATE_ITEM_CAP} }`);
   });
 
+  describe('the repositories are NAMED, and the booleans are derived from them (MOTIR-4768)', () => {
+    // The reading state has to say *"reading acme/widgets and 214 work items"*,
+    // and a boolean cannot be named. The call already resolved these refs and
+    // threw them away; it now returns them. No new query, and no new question.
+    it('returns the ref and the per-repo index state', async () => {
+      const fx = await makeWorkItemFixture();
+      const repoRef = await seedConnectedRepo(fx, 'acme', 'widgets');
+      await seedSucceededIndexJob(fx, repoRef);
+      expect((await read(fx)).repositories).toEqual([{ ref: 'acme/widgets', indexed: true }]);
+    });
+
+    it('a CONNECTED but unindexed repository is named, and says so', async () => {
+      const fx = await makeWorkItemFixture();
+      await seedConnectedRepo(fx, 'acme', 'widgets');
+      const substrate = await read(fx);
+      expect(substrate.repositories).toEqual([{ ref: 'acme/widgets', indexed: false }]);
+      // The row is DRAWN either way — what changes is its sub-line. A repository
+      // whose graph is still building is a thing Motir is reading, not a thing
+      // it is missing.
+      expect(substrate.repositoryConnected).toBe(true);
+      expect(substrate.repositoryIndexed).toBe(false);
+    });
+
+    it('the two booleans are DERIVED, so they cannot disagree with the list', async () => {
+      // Asserted as a property over both shapes rather than restated: a caller
+      // reading the booleans and a caller reading the names are answering the
+      // same question, and this is what stops them drifting.
+      const fx = await makeWorkItemFixture();
+      for (const seed of [
+        async () => {},
+        async () => void (await seedConnectedRepo(fx, 'acme', 'widgets')),
+      ]) {
+        await seed();
+        const s = await read(fx);
+        expect(s.repositoryConnected).toBe(s.repositories.length > 0);
+        expect(s.repositoryIndexed).toBe(s.repositories.some((r) => r.indexed));
+      }
+    });
+  });
+
   describe('the repository half', () => {
     it('reports CONNECTED with no index — the two are not interchangeable', async () => {
       const fx = await makeWorkItemFixture();
@@ -177,6 +220,7 @@ describe('readOnboardingSubstrate', () => {
       expect(await read(fx)).toEqual({
         itemCount: 0,
         itemCountTruncated: false,
+        repositories: [{ ref: repoRef, indexed: true }],
         repositoryConnected: true,
         repositoryIndexed: true,
       });

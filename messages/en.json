@@ -6461,7 +6461,23 @@
     },
     "footerRestingTitle": "Roadmap — as saved",
     "footerRestingBody": "Nothing proposed. The conversation has changed nothing.",
-    "searchLabel": "Search this project"
+    "searchLabel": "Search this project",
+    "reading": {
+      "eyebrow": "Before we plan",
+      "title": "Reading your project",
+      "titleThin": "Having a look at your project",
+      "lede": "Motir is looking at what you already have, so the plan starts from it rather than from a blank page.",
+      "ledeThin": "There's no repository connected here yet, and no work items — so there's nothing for Motir to read. That's normal for a new project, and it's the next thing we'll fix together.",
+      "repoIndexed": "Code graph ready",
+      "repoConnecting": "Building the code graph",
+      "items": "{count} work items",
+      "itemsSub": "Everything in your backlog",
+      "itemsCapped": "{count}+ work items",
+      "itemsCappedSub": "Reading the most recent {count}",
+      "chip": "Reading",
+      "activity": "This usually takes a few seconds.",
+      "activityThin": "One moment."
+    }
   },
   "codeHealth": {
     "title": "Code health",
