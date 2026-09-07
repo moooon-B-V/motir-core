@@ -101,31 +101,48 @@ test('four projects, four destinations', async ({ page, chapter, beat, acceptanc
       message: 'I can see acme-index-e2e and your 3 work items. What do you want to plan first?',
     });
 
-    await signIn(page, 'routing-continue@e2e.motir.test', ROUTING_JOURNEY_PASSWORD);
-    await openPlanWindow(page);
-
     // The window says what it is READING, by name — the sentence the whole story
     // argues for, before any plan exists to judge.
     //
-    // ⚠️ HELD OPEN DELIBERATELY, BECAUSE THE THING BEING ASSERTED IS TRANSIENT
-    // BY DESIGN (MOTIR-4827). The reading state lives exactly as long as the
-    // verdict takes, and against the lane's fixture mock that is close to
-    // instant — so two sequential queries against it are a race: this failed in
-    // CI with the element VISIBLE at one line and GONE at the next, which is
-    // `CLAUDE.md`'s own *never assert on an optimistic/transient surface without
-    // a deterministic signal* one altitude up. The fix is not a longer timeout
-    // and not a weaker assertion: it is to make the window real. The verdict
-    // arrives on the job-status GET, so that response is delayed until this
-    // chapter has read the state — the same instrument, and the same reason, as
-    // arming a `waitForResponse` before the action it follows.
+    // ⚠️ HELD BY A GATE, NOT BY A DELAY, AND REGISTERED BEFORE THE WINDOW OPENS
+    // (MOTIR-4827). The reading state lives exactly as long as the verdict takes,
+    // and against this lane's fixture mock that is close to instant — so two
+    // sequential queries against it race, and CI proved it twice: VISIBLE at one
+    // line, GONE at the next.
+    //
+    // The first repair delayed the job-status GET by three seconds and STILL
+    // failed, because it was installed AFTER `openPlanWindow` returned — the
+    // dispatch's 200 is not the poll, and the first poll had already been served
+    // by the time the route existed. Two lessons, and the second is the one worth
+    // keeping: a route must be armed BEFORE the traffic it means to catch (the
+    // same rule as arming `waitForResponse` before its action), and a fixed delay
+    // is a guess about how long an observation takes.
+    //
+    // So the poll is HELD on an explicit promise and released once the assertions
+    // have run. No timing assumption survives: the verdict cannot land until this
+    // chapter says so.
+    let releasePoll: () => void = () => {};
+    const pollHeld = new Promise<void>((resolve) => {
+      releasePoll = resolve;
+    });
     await page.route(/\/api\/ai\/jobs\//, async (route) => {
-      await new Promise((r) => setTimeout(r, 3_000));
+      await pollHeld;
       await route.continue();
     });
+
+    await signIn(page, 'routing-continue@e2e.motir.test', ROUTING_JOURNEY_PASSWORD);
+    await openPlanWindow(page);
+
     await expect(readingState(page)).toBeVisible();
     await expect(readingState(page)).toContainText('work items');
     await beat();
-    await page.unroute(/\/api\/ai\/jobs\//);
+
+    // ⚠️ RELEASED, NOT UNROUTED. `page.unroute` while a held route is still
+    // pending throws *Route is already handled!* — the handler resumes into a
+    // route the unroute has already torn down. After the release this handler is
+    // a pass-through, so leaving it registered costs the later chapters nothing
+    // and removes a teardown that has no safe moment to run.
+    releasePoll();
 
     // …and then it is simply a workspace. NO onboarding, no hand-off: a regular
     // session waits to be told what to plan.
