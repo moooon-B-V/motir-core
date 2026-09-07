@@ -5745,6 +5745,76 @@ mapping inside its own scope. **This asset already does that**, via
 `data-appearance-scope` on the dark stage, which is why removing the escapes was
 sufficient here.
 
+### ⚠️ Amendment 2026-09-07 (MOTIR-4687) — the correspondence is now GUARDED, in both directions
+
+The amendment above ends with _"a mock author owes two checks, not one"_ and a
+code block that says to run the second one by hand. **It is a spec now:**
+`tests/design-mock-utility-correspondence.test.ts`, in the
+`vitest.design.config.ts` lane, so an asset-only pull request runs it.
+
+**It rules on the correspondence in BOTH directions, because the two are one
+defect seen from two ends:**
+
+- **(A) INERT** — an element carries an arbitrary-value class that no rule in
+  that file declares, so it renders at whatever it inherits. The population
+  MOTIR-4687 fixed was 115 occurrences of 12 un-prefixed utilities across 8
+  assets, and every one of them was a wanted style rather than a vestigial
+  class, so all 11 remaining groups were DECLARED: `text-[11.5px]` ×26 and
+  `text-[19px]` ×4 in `../ai-planning/peek-proposed-todos.mock.html`,
+  `text-(--el-link)` ×24 across `delivery-set` / `repository-set` /
+  `repository-set-quick-view`, `bg-(--el-surface-soft)` /
+  `transition-[transform,background-color,border-color,color]` /
+  `duration-(--transition-duration)` ×16 each in
+  `../ai-chat/plan-change-run-live.mock.html`, `bg-(--el-muted)` ×5 in
+  `../ai-planning/peek-proposal-mode.mock.html`, `shadow-(--shadow-modal)` /
+  `p-(--spacing-icon-btn)` / `text-(--el-text-muted)` ×2 each in
+  `../shell/rail-bottom-section.mock.html`, and
+  `px-(--spacing-card-padding)` ×1 in `repository-set`. That arm is at ZERO.
+- **(B) DEAD** — a rule is declared that no element in ANY mock carries. This is
+  MOTIR-4150: three assets ship `.max-w-md { max-width: 28rem; }`, nothing
+  references it, and a card read the measure off it and called it _"the value
+  the asset draws"_. 1493 declarations across 89 assets, held as a counted debt
+  table that can only shrink (MOTIR-4811 · MOTIR-4814).
+
+**The costs are opposite and that is why the pair is one guard:** (A) silently
+un-styles the ASSET, (B) misleads a READER. And note the direction of the risk
+in (A) — an un-styled element usually inherits `--el-text`, which PASSES
+contrast, so the defect makes every ink guard in the tree GREENER rather than
+redder.
+
+### ⚠️ AND A VARIANT PREFIX IS NOT AN EXCUSE — the decision, in writing
+
+The obvious reading of a `hover:` or `[&_svg]:` utility that no rule declares is
+that a STATIC mock never enters that state, so the class is a harmless no-op.
+**Measured, that reading is wrong for the large majority of the population** —
+604 occurrences of 14 utilities across 11 assets — and it is stated here rather
+than assumed, because assuming it is how these went unmeasured:
+
+- **`[&_…]:` is STRUCTURAL, not stateful (500 of the 604).** It compiles to a
+  descendant rule (`& svg { height: 18px }`) and applies unconditionally. The
+  `<svg>` inside each of those spans carries `width="24" height="24"`, so
+  **every navigation icon in seven shell / home / landing assets renders at 24px
+  against the 18px its own markup asks for** — in the browser and in the
+  exported `.png`. `../shell/rail-bottom-section.mock.html` DECLARES the rule
+  and is the control that rules out "the mocks intend 24px". → **MOTIR-4810.**
+- **The state variants (104) mostly are not conditional either.**
+  `placeholder:` paints on an empty input with no interaction at all;
+  `data-[state=open]:` is set in the MARKUP of a menu asset drawn open; and
+  `hover:` / `focus-visible:` / `active:` fire in the browser these assets are
+  actually reviewed in. → **MOTIR-4813.**
+
+**So: a variant utility a mock names is DECLARED or DELETED, never left
+standing.** "It is a variant, so it never applies" is a claim about a specific
+element in a specific document, and it is a REMOVE with its reason written down
+— not a third disposition.
+
+**A fourth trap, one level in: a rule may lie about its own name.**
+`.text-\(--el-text-faint\)` is declared as `color: var(--el-text-secondary)` in
+five assets and as `var(--el-text-faint)` in eleven, and since every ink guard
+classifies ink by reading the token name off the DECLARATION, the re-pointed
+form hands the guard its answer. If an ink is wrong, change the CLASS on the
+element — never what the class means. → **MOTIR-4812.**
+
 ---
 
 ## ⭐ The PENDING-PLAN indicator on the item page (MOTIR-4256 — `pending-plan-indicator.mock.html`)
