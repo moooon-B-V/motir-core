@@ -39,11 +39,29 @@ const ROOTS = ['app', 'components', 'lib'];
 const OWNER = join('lib', 'navigation', 'landing.ts');
 
 /**
- * A `/home` STRING LITERAL — `'/home'`, `"/home"`, or a template opening
- * `` `/home?… ` ``. `/homepage` and a `/home` inside prose do not match; the
- * point is the value a route or a link is built FROM.
+ * A LANDING STRING LITERAL — `'/workbench'`, `"/workbench"`, or a template
+ * opening `` `/workbench?… ` ``. `/workbenches` and a `/workbench` inside prose
+ * do not match; the point is the value a route or a link is built FROM.
+ *
+ * ⚠️ THE VALUE MOVED (MOTIR-4782, `/home` → `/workbench`) AND THE OLD ONE IS
+ * STILL SCANNED, by `RETIRED_LANDING_LITERAL` below. Re-pointing this regex and
+ * walking away would have retired the guard at the exact moment it was most
+ * useful: a rename is when stale copies of the old answer are created, and this
+ * rule exists because six defects came from stale copies of one.
  */
-const HOME_LITERAL = /(['"`])\/home(\?[^'"`]*)?\1/;
+const LANDING_LITERAL = /(['"`])\/workbench(\?[^'"`]*)?\1/;
+
+/**
+ * The PREVIOUS landing, still forbidden — `'/home'`, `"/home"`, `` `/home?…` ``.
+ *
+ * `next.config.ts` answers it with a permanent 308 and is the one file that
+ * names it, which no scan here reaches: this walks `app/`, `components/` and
+ * `lib/` only. So under those three roots the string has no legitimate use at
+ * all, and an appearance is either a literal that was never swept or a new one
+ * typed from memory — the ROTTED shape, caught on the day it is written rather
+ * than by the next reader who follows it.
+ */
+const RETIRED_LANDING_LITERAL = /(['"`])\/home(\?[^'"`]*)?\1/;
 
 /** A `/dashboard` string literal, same shape. */
 const DASHBOARD_LITERAL = /(['"`])\/dashboard(\/[^'"`]*)?\1/;
@@ -175,7 +193,9 @@ describe('the landing has ONE owner (MOTIR-3373)', () => {
       const rel = relative(ROOT, file).split(sep).join('/');
       if (rel === OWNER.split(sep).join('/')) continue;
       codeLines(file).forEach((line, i) => {
-        if (HOME_LITERAL.test(line)) offenders.push(`${rel}:${i + 1} — ${line.trim()}`);
+        if (LANDING_LITERAL.test(line)) offenders.push(`${rel}:${i + 1} — ${line.trim()}`);
+        if (RETIRED_LANDING_LITERAL.test(line))
+          offenders.push(`${rel}:${i + 1} — ${line.trim()}  (the RETIRED /home address)`);
       });
     }
 
@@ -295,13 +315,25 @@ describe('the onboarding scan itself (MOTIR-4403)', () => {
     expect(scan('href={`/onboarding/direction/${tier}`}')).toEqual([]);
   });
 
-  it('the /home scan draws the same two lines — the shape this one was copied from', () => {
-    const home = (source: string): number[] =>
+  it('the landing scan draws the same two lines — the shape this one was copied from', () => {
+    const landing = (source: string): number[] =>
       codeLinesOf(source)
-        .map((line, i) => (HOME_LITERAL.test(line) ? i + 1 : 0))
+        .map((line, i) => (LANDING_LITERAL.test(line) ? i + 1 : 0))
         .filter((n) => n > 0);
-    expect(home(`redirect('/home');`)).toEqual([1]);
-    expect(home(`redirect('/homepage');`)).toEqual([]);
-    expect(home(`// sends the reader to '/home'`)).toEqual([]);
+    expect(landing(`redirect('/workbench');`)).toEqual([1]);
+    expect(landing(`redirect('/workbenches');`)).toEqual([]);
+    expect(landing(`// sends the reader to '/workbench'`)).toEqual([]);
+  });
+
+  it('the RETIRED /home address is still scanned for (MOTIR-4782)', () => {
+    const retired = (source: string): number[] =>
+      codeLinesOf(source)
+        .map((line, i) => (RETIRED_LANDING_LITERAL.test(line) ? i + 1 : 0))
+        .filter((n) => n > 0);
+    expect(retired(`redirect('/home');`)).toEqual([1]);
+    expect(retired('const to = `/home?tab=watching`;')).toEqual([1]);
+    // The same two exemptions the live scan grants: a different route, and prose.
+    expect(retired(`redirect('/homepage');`)).toEqual([]);
+    expect(retired(`// the old address, now a 308 to '/home'`)).toEqual([]);
   });
 });

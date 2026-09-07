@@ -299,7 +299,7 @@ test('the rail is for daily work — Docs, Keyboard shortcuts and Legal document
 
   await chapter('A signed-in rail carries daily work — and neither departed row', async () => {
     await signUp(page, EMAIL);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 60_000 });
 
     // The second workspace reveals the tier (so `Security` renders), and the
     // project fills the rail's primary section — a reviewer watching this needs
@@ -312,7 +312,7 @@ test('the rail is for daily work — Docs, Keyboard shortcuts and Legal document
     // workspace wherever the shell decides, and `createFirstProject` drives the
     // no-project CTA, so the spec says where it is rather than inheriting it.
     await page.goto(POST_AUTH_LANDING);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 60_000 });
     await createFirstProject(page, PROJECT);
     await expect(rail).toBeVisible();
 
@@ -358,7 +358,7 @@ test('the rail is for daily work — Docs, Keyboard shortcuts and Legal document
       await expect(cheatsheet).toHaveCount(0);
       // Back in the APP, not merely back to no-dialog: a closed modal that took the
       // shell with it would satisfy the assertion above on its own.
-      await expect(page.getByTestId('home-page')).toBeVisible();
+      await expect(page.getByTestId('workbench-page')).toBeVisible();
       await expect(railHelp).toBeVisible();
       await beat();
     },

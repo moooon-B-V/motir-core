@@ -884,7 +884,7 @@
     "invitedToCollaborate": "{inviterName} 邀请你一起协作。",
     "inviteExpired": "邀请已过期",
     "inviteExpiredSubhead": "邀请有效期为7天。如果你仍想加入，请向邀请人索取新链接。",
-    "backToDashboard": "返回工作台",
+    "backToDashboard": "返回仪表盘",
     "inviteUsed": "邀请已被使用",
     "inviteUsedSubhead": "如果你用其他邮箱加入了，请用那个账户登录。",
     "signInWithInvitedEmail": "请用受邀邮箱登录",
@@ -959,8 +959,8 @@
   },
   "shell": {
     "nav": {
-      "home": "主页",
-      "dashboard": "工作台",
+      "workbench": "工作台",
+      "dashboard": "仪表盘",
       "issues": "工作项",
       "ready": "就绪",
       "runs": "运行",
@@ -1082,7 +1082,7 @@
       "workspaceHeading": "工作区",
       "projectHeading": "项目",
       "accountHeading": "账户",
-      "goToDashboard": "前往工作台",
+      "goToDashboard": "前往仪表盘",
       "goToIssues": "前往工作项",
       "goToBoards": "前往面板",
       "goToReports": "前往报表",
@@ -5714,6 +5714,11 @@
         "askOwner": "请联系所有者升级"
       }
     },
+    "exempt": {
+      "pill": "不计费",
+      "motir": "此组织不为 Motir 计费。所有套餐上限均已解除，因此没有需要突破的额度，也无需购买席位。",
+      "ai": "此组织不为 Motir AI 计费。无论余额显示为多少，规划都会照常运行；额度仅用于记录内部成本，不产生账单。"
+    },
     "internalBilling": {
       "badge": "内部计费",
       "note": "该组织与客户完全一样计费，随后被补偿——下方每个数字都是真实的，余额净额为零。"
@@ -6184,6 +6189,7 @@
       "lead": "Motir 可读取哪些仓库由 GitHub App 自己的页面决定，因此移除操作在那里完成。以下是它将产生的影响。",
       "gitlabLead": "它将从 {org} 的每个项目中移除，而不仅仅是你当前所在的项目。",
       "projects": "{count, plural, =0 {目前没有项目使用该仓库。} other {# 个项目将失去该仓库。}}",
+      "alsoReachable": "尚未拥有自有仓库的项目，无论此处是否列出，都仍可访问该仓库。",
       "codeIndex": "Motir 为它构建的代码索引会保留 {days} 天。在此之前重新添加该仓库即可取消移除；超过之后再添加则需要完整重新索引。",
       "continueOnGithub": "前往 GitHub 继续",
       "confirm": "断开连接",
@@ -6199,14 +6205,14 @@
     "inventory": {
       "title": "仓库",
       "caption": "连接到该组织的全部仓库。任何项目都可以挑选使用；索引只构建一次并共享。",
-      "foot": "没有项目使用的仓库仍保持连接与索引——下一个添加它的项目无需付出任何代价。",
+      "foot": "没有项目使用的仓库仍保持连接与索引——下一个添加它的项目无需付出任何代价。本组织中尚未拥有自有仓库的项目，无论上面是否列出，都仍可访问其工作区已连接的仓库。",
       "empty": "尚未连接任何仓库。请在某个项目的「仓库」设置中添加。",
       "provider": {
         "github": "GitHub",
         "gitlab": "GitLab"
       },
       "index": {
-        "current": "最新",
+        "indexed": "已建立索引",
         "stale": "已过期",
         "indexing": "正在建立索引…",
         "never": "从未建立索引"
@@ -7212,19 +7218,24 @@
     },
     "frameLoading": "正在加载设计稿…"
   },
-  "home": {
-    "heading": "主页",
-    "subtitle": "{project} 中所有等待你处理的工作。",
+  "workbench": {
+    "heading": "工作台",
+    "subtitle": "你在 {project} 中正在做的事，以及刚刚做完的事。",
+    "finishedWindow": "最近 {days} 天完成的工作。更早的工作仍然保留在工作项上，以及面板上。",
     "tabs": {
-      "label": "主页视图",
-      "myWork": "我的工作",
-      "watching": "关注中"
+      "label": "工作台视图",
+      "toDo": "待开始",
+      "inProgress": "进行中",
+      "recentlyFinished": "最近完成",
+      "watching": "关注中",
+      "toApprove": "待审批"
     },
     "columns": {
       "title": "标题",
       "role": "你的角色",
       "assignee": "负责人",
-      "status": "状态"
+      "status": "状态",
+      "finished": "完成于"
     },
     "row": {
       "unassigned": "未分配",
@@ -7237,14 +7248,27 @@
       }
     },
     "empty": {
-      "myWork": {
-        "title": "暂无等待你处理的工作",
-        "body": "分配给你或你提交的工作会显示在这里。从「就绪」中挑一项开始吧。",
+      "toDo": {
+        "title": "没有待开始的工作",
+        "body": "分配给你或你提交、且尚未开始的工作会显示在这里。从「就绪」中挑一项开始吧。",
         "action": "去找一项开始"
+      },
+      "inProgress": {
+        "title": "没有进行中的工作",
+        "body": "你名下暂时没有正在推进的工作——无论是你自己还是智能体。",
+        "action": "看看待开始的工作"
+      },
+      "recentlyFinished": {
+        "title": "本周还没有完成的工作",
+        "body": "你名下进入完成状态的工作，会在这里保留一周。"
       },
       "watching": {
         "title": "你还没有关注任何工作项",
         "body": "在工作项详情页点击关注，即可跟进但不承担它。"
+      },
+      "approvals": {
+        "title": "没有等待你审批的工作",
+        "body": "需要你签字确认才能继续的工作会显示在这里。"
       }
     },
     "pager": {

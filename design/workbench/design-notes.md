@@ -113,7 +113,7 @@ transliteration.
   why the link form was chosen over the client `Segmented`. **To do is the
   DEFAULT and is therefore spelled as the ABSENCE of the param**, so a link to
   the Workbench and a link to To do are the same link (the shipped
-  `lib/home/tab.ts` rule, carried).
+  `lib/workbench/tab.ts` rule, carried).
 - **Counts** ride each tab as the shipped board count badge
   (`--el-count-bg` / `--el-count-text`, `--radius-badge`,
   `h-[18px] min-w-[20px] text-[11px] font-semibold`).

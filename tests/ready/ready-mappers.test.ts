@@ -51,6 +51,10 @@ function makeWorkItem(overrides: Partial<WorkItem> = {}): WorkItem {
     implementationHarness: null,
     implementationModel: null,
     ciState: null,
+    // Null on every ready item by construction: `completedAt` (MOTIR-4780) is
+    // stamped only on entry to a done-category status, and a done item is not
+    // in the ready set.
+    completedAt: null,
     createdAt: FIXED_DATE,
     updatedAt: FIXED_DATE,
     ...overrides,

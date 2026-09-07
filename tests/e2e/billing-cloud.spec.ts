@@ -141,7 +141,10 @@ test('@smoke paywall: a free / out-of-credits org hitting AI sees the upgrade pr
   expect(access.status()).toBe(200);
   expect((await access.json()).balance).toBeLessThanOrEqual(0);
 
-  await expect(page.getByText('AI planning is a paid feature')).toBeVisible();
+  // BY ROLE — `PaywallShell` renders the title as an `<h2>`; an unscoped
+  // `getByText` also matches the hidden streamed copy and loses strict mode
+  // (MOTIR-4822).
+  await expect(page.getByRole('heading', { name: 'AI planning is a paid feature' })).toBeVisible();
   const seePlans = page.getByRole('link', { name: 'See Motir AI plans' });
   await expect(seePlans).toHaveAttribute('href', billingPath);
 
@@ -209,7 +212,11 @@ test('@smoke permission gate: a non-admin member gets the view-only / ask-your-o
   await page.goto(billingPath);
   expect((await load).status()).toBe(403);
 
-  await expect(page.getByText('Billing is managed by your org owner')).toBeVisible();
+  // BY ROLE — the forbidden state is an `EmptyState`, whose title is an `<h2>`
+  // (MOTIR-4822, as above).
+  await expect(
+    page.getByRole('heading', { name: 'Billing is managed by your org owner' }),
+  ).toBeVisible();
   // The only affordance is "contact an owner" — never an active billing CTA.
   await expect(page.getByRole('button', { name: 'Choose a Motir AI plan' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Change plan' })).toHaveCount(0);

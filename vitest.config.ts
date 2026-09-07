@@ -1620,13 +1620,14 @@ export default defineConfig({
         // `lib/dto/home.ts` is types only and emits no statements, so it is
         // deliberately absent: a threshold on a file with nothing to cover
         // passes vacuously, which is the failure MOTIR-2655 exists to prevent.
-        'lib/home/**',
+        'lib/workbench/**',
         'lib/services/homeService.ts',
         'lib/mappers/homeMappers.ts',
-        // MOTIR-2653's page. `app/**/home/**`, not `app/(authed)/home/**` — a
-        // literal route-group path matches no reported file (the note above),
-        // so the threshold would pass vacuously.
-        'app/**/home/_components/**',
+        // MOTIR-2653's page, renamed with the route by MOTIR-4782.
+        // `app/**/workbench/**`, not `app/(authed)/workbench/**` — a literal
+        // route-group path matches no reported file (the note above), so the
+        // threshold would pass vacuously.
+        'app/**/workbench/_components/**',
         // Story MOTIR-2694 · Subtask MOTIR-2696 — the plan-tree embedding write
         // path. Every one of these is new code this card wrote and tested, so
         // all four are GATED in `thresholds` below rather than report-only;
@@ -3653,20 +3654,29 @@ export default defineConfig({
         },
         'app/**/_components/DesignResultPanel.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2649 · Subtask MOTIR-2655 — MEASURED before being pinned,
-        // on this branch, with `tests/integration/home/`: 100 branches / 100
-        // functions / 100 lines on the service and the mapper, and 100 / 100 /
-        // 92.3 on the cursor. Pinned at the repo's 90 floor rather than at the
-        // measured number, so a later refactor has room without the gate being
-        // loosened to make a build pass.
-        'lib/home/cursor.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/home/tab.ts': { branches: 90, functions: 90, lines: 90 },
+        // on this branch, with `tests/integration/workbench/`: 100 branches /
+        // 100 functions / 100 lines on the service and the mapper, and 100 /
+        // 100 / 92.3 on the cursor. Pinned at the repo's 90 floor rather than at
+        // the measured number, so a later refactor has room without the gate
+        // being loosened to make a build pass. (MOTIR-4782 renamed
+        // `lib/home/` → `lib/workbench/`; the floors are unchanged.)
+        'lib/workbench/cursor.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/workbench/tab.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/homeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/homeMappers.ts': { branches: 90, functions: 90, lines: 90 },
         // Subtask MOTIR-2653 — the page's own modules, MEASURED before being
-        // pinned with `tests/components/home-list.test.tsx`.
-        'app/**/home/_components/HomeList.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/home/_components/HomeTabs.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/**/home/_components/homeRows.ts': { branches: 90, functions: 90, lines: 90 },
+        // pinned with `tests/components/workbench-list.test.tsx`.
+        'app/**/workbench/_components/WorkbenchList.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/workbench/_components/WorkbenchTabs.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/workbench/_components/workbenchRows.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2982 · Subtask MOTIR-2992 — the agent-authored plan
         // surface, MEASURED on this branch before being pinned (the sequence
         // this block prescribes throughout), with `tests/mcp/author-plan.test.ts`,

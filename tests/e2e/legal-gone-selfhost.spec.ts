@@ -116,6 +116,6 @@ test('@smoke self-host: /legal is gone from the app host, and sign-up still read
   await expectSignUpHasNoLegalNotice(page);
 
   await signUp(page, SELF_HOST_EMAIL);
-  await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
   await expectNoRailLegalRow(page);
 });

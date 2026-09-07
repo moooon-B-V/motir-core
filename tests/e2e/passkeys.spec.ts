@@ -50,7 +50,7 @@ async function signUp(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 /**
@@ -146,7 +146,7 @@ test.describe('passkeys', () => {
     );
     await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
     expect((await assertion).status()).toBe(200);
-    await page.waitForURL('**/home');
+    await page.waitForURL('**/workbench');
 
     // Asserted NEGATIVELY, because the point is what never happened: a passkey
     // mints a session outright, so neither the password step nor the two-factor

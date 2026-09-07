@@ -87,7 +87,6 @@ export const SIGNED_IN_SEGMENTS = [
   'dashboard',
   'direction',
   'filters',
-  'home',
   'invite',
   'items',
   'onboarding',
@@ -101,6 +100,9 @@ export const SIGNED_IN_SEGMENTS = [
   'settings',
   'sprints',
   'triage',
+  // MOTIR-4782 — the signed-in landing, renamed from `home` (which the app
+  // still answers on, as a 308; a redirect source is not a served segment).
+  'workbench',
 ] as const;
 
 /**

@@ -841,6 +841,14 @@
         background: var(--el-tint-yellow);
         color: var(--el-warning);
       }
+      /* 7c — the EXEMPT org's exhausted balance (amendment 2026-09-07, MOTIR-4809).
+         INFORMATIONAL, not a warning: nothing is wrong and nothing is paused, so
+         it takes the sky tint + the info hue rather than 7b's yellow + warning.
+         Both are existing --el-* slots; the glyph carries no text, so 3:1 applies. */
+      .state.exempt .ico {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
       .state .ico svg {
         width: 22px;
         height: 22px;
@@ -1814,9 +1822,17 @@
 
     <!-- ════════════════ PANEL 7 — low-balance + out-of-credits states ════════════════ -->
     <div class="panel-label">
-      7 · Low-balance + out-of-credits — a --el-warning tint BANNER (not a page-level tinted surface
-      · finding #35) when the balance runs low, and the zero/blocked state that explains planning is
-      paused. NO active buy/upgrade control — the Epic-8 upgrade flow attaches to a passive slot.
+      7 · Low-balance + out-of-credits + <strong>exempt</strong> — a --el-warning tint BANNER (not a
+      page-level tinted surface · finding #35) when the balance runs low, and the zero state at
+      <code>balance &lt;= 0</code>. NO active buy/upgrade control — the Epic-8 upgrade flow attaches
+      to a passive slot. <strong>AMENDED 2026-09-07 (MOTIR-4809):</strong> 7b's condition NARROWS to
+      <code>balance &lt;= 0 &amp;&amp; !isMeta</code>, and <strong>7c</strong> takes
+      <code>balance &lt;= 0 &amp;&amp; isMeta</code> — an org exempt from the credit gate is never
+      paused, so 7b's sentence is false for it. It is <code>isMeta</code> and never
+      <code>internalBilling</code>: an org that is <code>internalBilling</code> but NOT
+      <code>isMeta</code>, held at zero, IS genuinely refused and keeps 7b. 7a needs no branch — it
+      is already <code>!outOfCredits &amp;&amp; allotment &gt; 0</code>, and an exempt org has no
+      allotment. See <code>design-notes.md</code> § the 2026-09-07 amendment.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1848,7 +1864,7 @@
 
             <!-- out of credits / blocked -->
             <div>
-              <p class="crumb">b · Out of credits (planning paused)</p>
+              <p class="crumb">b · Out of credits (planning paused) — <code>!isMeta</code></p>
               <div class="state blocked">
                 <span class="ico"
                   ><svg viewBox="0 0 24 24"><use href="#i-pause" /></svg
@@ -1862,6 +1878,28 @@
                 <div class="passive-slot">
                   Buying more credits and changing your plan arrive with billing in a later release.
                   This is where that option will appear.
+                </div>
+              </div>
+            </div>
+
+            <!-- exempt org — REPLACES b at the same balance, never renders beside it -->
+            <div style="grid-column: 1 / -1">
+              <p class="crumb">
+                c · Exempt org, same exhausted balance — <code>isMeta</code>. This card REPLACES b;
+                the two never render together.
+              </p>
+              <div class="state exempt">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                ></span>
+                <h4>This organization isn’t charged for planning</h4>
+                <p>
+                  <strong>moooon</strong> is exempt from the credit gate, so planning runs whatever
+                  the balance reads. The figures below are recorded for internal cost visibility.
+                </p>
+                <div class="passive-slot">
+                  The balance can be negative here. That is the cost this organization has incurred,
+                  not an amount owed — nothing on this page is a bill.
                 </div>
               </div>
             </div>

@@ -35,6 +35,7 @@ export function toHomeWorkItemRowDto(row: HomeWorkItemRow, viewerId: string): Ho
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     estimateMinutes: row.estimateMinutes,
     updatedAt: row.updatedAt.toISOString(),
+    completedAt: row.completedAt === null ? null : row.completedAt.toISOString(),
     project: {
       id: row.project.id,
       identifier: row.project.identifier,

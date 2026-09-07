@@ -2173,6 +2173,41 @@ model WorkItem {
   // no-`@map` columns; not an enum (a third provider-neutral value would be a
   // contained change, and the roll-up filters on the literal).
   ciState               String?
+  // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
+  // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
+  // Workbench's "Recently finished" tab is the first reader; it is also the
+  // first honest input to cycle time and throughput, which nothing in this
+  // schema could express before (there is no status-history table, and
+  // `WorkflowTransition` models the workflow's ALLOWED edges, not a log).
+  //
+  // ⚠️ `updatedAt` IS NOT A SUBSTITUTE, and that is the whole reason this
+  // column exists. It moves on ANY edit — a re-title, a label, a comment-driven
+  // touch — so a "finished this week" list built on it lists work finished in
+  // June that somebody renamed today. The two columns answer different
+  // questions and only one of them is about completion.
+  //
+  // CATEGORY, never a status KEY. Statuses are project-defined open vocabulary
+  // (`workflow_status` rows, not an enum), so "done" is resolved per project
+  // through `workflowsService.getTerminalStatusKeysByProjects` — the same
+  // resolver `workItemsService.isReady` and `homeService` already ask. A
+  // hardcoded `'done' | 'cancelled'` pair would be a subset carrying a totality
+  // certificate: exhaustive over the literal, silent about every status a
+  // customer adds.
+  //
+  // Written at ONE seam — `workItemsService.applyStatusTransition`, inside the
+  // same `$transaction` and under the same `lockById` as the status write, so
+  // the stamp cannot drift from the status it describes and two racing
+  // transitions cannot produce two stamps. `tests/rls/status-write-guard.test.ts`
+  // is what keeps a future write path from reaching `work_item.status` around it.
+  //
+  // A `done → cancelled` hop does NOT re-stamp (both are done-category: the
+  // item never left, so its completion moment did not move); a
+  // `done → in_progress` hop CLEARS it, because a re-opened card has not
+  // finished. camelCase with NO `@map`, matching this table's other 35 columns
+  // — the same within-table-consistency call already recorded for `storyPoints`
+  // and `sprintId` / `backlogRank` (decision-authority rung 2 > the card's
+  // `@map` prose).
+  completedAt           DateTime?
   createdAt             DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
 
@@ -2331,6 +2366,16 @@ model WorkItem {
   // names a handful of items) and the column is NULL on the vast majority of
   // rows, so a plain single-column index stays small.
   @@index([sessionBranch])
+  // The FINISHED-WINDOW read (Story MOTIR-4777 · MOTIR-4780 · MOTIR-4781) — the
+  // Workbench's "Recently finished" tab asks one project for the rows whose
+  // `completedAt` falls inside a rolling window, ordered `completedAt DESC`.
+  // This composite serves the range predicate AND the sort off one index, which
+  // is what keeps the tab from degenerating into a scan of every finished row
+  // the project has ever had. Leading with `projectId` matches the surface's
+  // ACTIVE-PROJECT scope (`docs/decisions/home-scope.md`) and the shape of every
+  // other composite on this table. `completedAt` is NULL on the overwhelming
+  // majority of rows, which keeps the index small.
+  @@index([projectId, completedAt])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn

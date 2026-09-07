@@ -400,9 +400,17 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   // and hiding the strip would strand them; the project-level empty state hides
   // it precisely because there is then nothing to press.
   await expect(tabStrip(page)).toBeVisible();
-  await expect(page.getByText('Nothing declined')).toBeVisible();
+  // BY ROLE — the tab-empty state is an `EmptyState`, whose title is an `<h2>`;
+  // an unscoped `getByText` also matches the hidden streamed copy of the subtree
+  // and loses strict mode (MOTIR-4822; `CLAUDE.md`, the loading-boundary rule).
+  await expect(page.getByRole('heading', { name: 'Nothing declined' })).toBeVisible();
+  // Read THROUGH the heading's own card — the description is a `<p>` with no
+  // role to ask for, so scoping is what buys it the same immunity.
   await expect(
-    page.getByText("This project's other plans are in the remaining tabs."),
+    page
+      .getByRole('heading', { name: 'Nothing declined' })
+      .locator('..')
+      .getByText("This project's other plans are in the remaining tabs."),
   ).toBeVisible();
   // …and it does NOT repeat the first-run call to action: "generate your first
   // plan" is false on its face in a project holding twenty-odd of them.
@@ -443,7 +451,8 @@ test('Plans: the empty tab, an empty list view, a list that SHRINKS, and a plan 
   // there is — the empty one, where the list is not rendered at all.
   await tab(page, 'Declined').click();
   await page.waitForURL('**/plans?status=declined');
-  await expect(page.getByText('Nothing declined')).toBeVisible();
+  // BY ROLE, for the same reason as the first Declined-tab assertion (MOTIR-4822).
+  await expect(page.getByRole('heading', { name: 'Nothing declined' })).toBeVisible();
 
   // ── ERROR: the plan was decided while the reader was looking at it ─────────
   //

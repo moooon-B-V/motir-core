@@ -242,8 +242,15 @@ test('a non-admin cannot change the setting — the page itself refuses', async 
   // the surface at all; the editor's read-only banner is for an actor who CAN
   // open the page and cannot manage, which a member is not. Asserting the real
   // boundary rather than the imagined one is the point of running the walk.
-  await expect(page.getByText('Admins only')).toBeVisible();
-  await expect(page.getByText(/configured by project admins/)).toBeVisible();
+  // BY ROLE — `NoAccessState` renders it as `EmptyState`'s `<h2>`; an unscoped
+  // `getByText` also matches the hidden streamed copy of the subtree and loses
+  // strict mode (MOTIR-4822).
+  const noAccessHeading = page.getByRole('heading', { name: 'Admins only' });
+  await expect(noAccessHeading).toBeVisible();
+  // Read THROUGH the heading's own card, for the same reason.
+  await expect(
+    noAccessHeading.locator('..').getByText(/configured by project admins/),
+  ).toBeVisible();
 
   // And there is no toggle to reach — the setting is not merely un-writable, it
   // is not on the page.

@@ -5,7 +5,8 @@ import { homeService } from '@/lib/services/homeService';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { decodeHomeCursor, encodeHomeCursor } from '@/lib/home/cursor';
+import { decodeHomeCursor, encodeHomeCursor } from '@/lib/workbench/cursor';
+import type { HomeTabCountsDto } from '@/lib/dto/home';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   createTestProject,
@@ -463,10 +464,10 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
 
 describe('the Home page cursor', () => {
   it('round-trips a keyset', () => {
-    const cursor = { updatedAt: new Date('2026-08-11T10:20:30.000Z'), id: 'wi_abc' };
+    const cursor = { at: new Date('2026-08-11T10:20:30.000Z'), id: 'wi_abc' };
     const decoded = decodeHomeCursor(encodeHomeCursor(cursor));
     expect(decoded?.id).toBe('wi_abc');
-    expect(decoded?.updatedAt.toISOString()).toBe('2026-08-11T10:20:30.000Z');
+    expect(decoded?.at.toISOString()).toBe('2026-08-11T10:20:30.000Z');
   });
 
   it('degrades an unusable token to page one rather than throwing', () => {
@@ -521,18 +522,20 @@ describe('homeService.tabCounts — the tab badges', () => {
     // (4 + the watched one they reported) and 1 watched — the private project's
     // item and its watch are on the other side of the project axis, so the
     // owner's watching count drops from the workspace-wide 2 to 1.
-    expect(await homeService.tabCounts(hctx(fx))).toEqual({ myWork: 5, watching: 1 });
+    expect(await homeService.tabCounts(hctx(fx))).toEqual(
+      counts({ myWork: 5, toDo: 5, watching: 1 }),
+    );
 
     // …and the owner IS a workspace manager, so they may browse the private
     // project: pointed at it, they see its one row. This is the positive control
     // that keeps the line above from passing on the access rule by accident.
-    expect(await homeService.tabCounts(hctx(fx, secret.id))).toEqual({ myWork: 0, watching: 1 });
+    expect(await homeService.tabCounts(hctx(fx, secret.id))).toEqual(counts({ watching: 1 }));
 
     // The plain member owns only the hidden one, which they cannot browse — so
     // both counts are 0 with that project active, and the number beside the tab
     // agrees with what the tab will actually show.
     const memberCtx = { userId: member.id, workspaceId: fx.workspaceId, projectId: secret.id };
-    expect(await homeService.tabCounts(memberCtx)).toEqual({ myWork: 0, watching: 0 });
+    expect(await homeService.tabCounts(memberCtx)).toEqual(counts());
     expect((await homeService.listMyWork(memberCtx)).items).toEqual([]);
   });
 
@@ -557,7 +560,7 @@ describe('homeService.tabCounts — the tab badges', () => {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
       }),
-    ).toEqual({ myWork: 0, watching: 0 });
+    ).toEqual(counts());
   });
 });
 
@@ -574,6 +577,33 @@ describe('homeService.tabCounts — the tab badges', () => {
 /** Put a row in a status directly; the reads under test don't care how it got there. */
 async function setStatus(id: string, status: string): Promise<void> {
   await adminDb.workItem.update({ where: { id }, data: { status } });
+}
+
+/**
+ * The full {@link HomeTabCountsDto}, defaulted to zero (MOTIR-4781).
+ *
+ * ⚠️ ASSERTED WHOLE rather than field by field, deliberately: these tests are
+ * about the badge agreeing with the list it sits beside, and a subset assertion
+ * would go on passing if a new tab's number were wrong or absent. Every case
+ * below states every number, and the ones it does not name are zero because the
+ * fixture has nothing in them.
+ *
+ * ⚠️ `toDo` HOLDS THE FIXTURE'S ROWS, and that is a real property rather than
+ * an accident. `createTestWorkItem` writes the schema's column default `"open"`
+ * — a status key no `workflow_status` row carries — and To do is the COMPLEMENT
+ * of *in progress* and *done* precisely so a row like that lands somewhere a
+ * reader can see instead of vanishing from all three tabs.
+ */
+function counts(over: Partial<HomeTabCountsDto> = {}): HomeTabCountsDto {
+  return {
+    myWork: 0,
+    toDo: 0,
+    inProgress: 0,
+    recentlyFinished: 0,
+    approvals: 0,
+    watching: 0,
+    ...over,
+  };
 }
 
 describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
@@ -708,6 +738,13 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     // a reader with 2 000 closed items and none open saw a full page of them.
     expect(await homeService.listMyWork(hctx(fx))).toEqual({ items: [], nextCursor: null });
     expect(await homeService.listWatching(hctx(fx))).toEqual({ items: [], nextCursor: null });
-    expect(await homeService.tabCounts(hctx(fx))).toEqual({ myWork: 0, watching: 0 });
+    // ⚠️ `recentlyFinished` is 0 here for a FIXTURE reason, not a product one,
+    // and saying so is what keeps this from reading as a claim about the new
+    // tab: `setStatus` writes `work_item.status` directly, so these rows never
+    // passed through `applyStatusTransition` and carry no `completedAt` for the
+    // window to match. The finished window's real coverage is its own suite
+    // (`tests/integration/workbench/workbench-reads.test.ts`), which transitions
+    // rows the way the product does.
+    expect(await homeService.tabCounts(hctx(fx))).toEqual(counts());
   });
 });

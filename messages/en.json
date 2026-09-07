@@ -959,7 +959,7 @@
   },
   "shell": {
     "nav": {
-      "home": "Home",
+      "workbench": "Workbench",
       "dashboard": "Dashboard",
       "issues": "Work Items",
       "ready": "Ready",
@@ -5718,6 +5718,11 @@
         "askOwner": "Ask an owner to upgrade"
       }
     },
+    "exempt": {
+      "pill": "Not billed",
+      "motir": "This organization isn’t billed for Motir. Every plan cap is lifted for it, so there is nothing to outgrow and no seats to buy.",
+      "ai": "This organization isn’t charged for Motir AI. Planning runs whatever the balance reads, and credits are recorded for internal cost visibility rather than billed."
+    },
     "internalBilling": {
       "badge": "Internal billing",
       "note": "This organization is charged exactly like a customer and then made whole — every figure below is real, and the balance nets to zero."
@@ -6188,6 +6193,7 @@
       "lead": "Which repositories Motir can read is the GitHub App’s own screen, so the removal happens there. Here is what it will do.",
       "gitlabLead": "It is removed from every project in {org}, not only the one you came from.",
       "projects": "{count, plural, =0 {No project uses this repository yet.} one {# project loses this repository.} other {# projects lose this repository.}}",
+      "alsoReachable": "Any project with no repositories of its own can also reach this one, whether or not it is named here.",
       "codeIndex": "The code index Motir built from it is kept for {days} days. Re-adding the repository before then cancels the removal; after that, re-adding it means a full index.",
       "continueOnGithub": "Continue on GitHub",
       "confirm": "Disconnect",
@@ -6203,14 +6209,14 @@
     "inventory": {
       "title": "Repositories",
       "caption": "Every repository connected to this organisation. Any project can pick one; the index is built once and shared.",
-      "foot": "A repository no project uses stays connected and stays indexed — the next project that adds it pays nothing.",
+      "foot": "A repository no project uses stays connected and stays indexed — the next project that adds it pays nothing. Any project here that has no repositories of its own can also reach the ones connected in its workspace, whether or not it is named above.",
       "empty": "No repositories are connected yet. Add one from a project’s Repositories settings.",
       "provider": {
         "github": "GitHub",
         "gitlab": "GitLab"
       },
       "index": {
-        "current": "Current",
+        "indexed": "Indexed",
         "stale": "Stale",
         "indexing": "Indexing…",
         "never": "Never indexed"
@@ -7216,19 +7222,24 @@
     },
     "frameLoading": "Loading the mock…"
   },
-  "home": {
-    "heading": "Home",
-    "subtitle": "Everything in {project} that is waiting on you.",
+  "workbench": {
+    "heading": "Workbench",
+    "subtitle": "What you are doing in {project}, and what you have just done.",
+    "finishedWindow": "Finished in the last {days} days. Older work stays on the item, and on the board.",
     "tabs": {
-      "label": "Home views",
-      "myWork": "My work",
-      "watching": "Watching"
+      "label": "Workbench views",
+      "toDo": "To do",
+      "inProgress": "In progress",
+      "recentlyFinished": "Recently finished",
+      "watching": "Watching",
+      "toApprove": "To approve"
     },
     "columns": {
       "title": "Title",
       "role": "Your role",
       "assignee": "Assignee",
-      "status": "Status"
+      "status": "Status",
+      "finished": "Finished"
     },
     "row": {
       "unassigned": "Unassigned",
@@ -7241,14 +7252,27 @@
       }
     },
     "empty": {
-      "myWork": {
-        "title": "Nothing is waiting on you",
-        "body": "Work you are assigned or filed will show up here. Pick something up from Ready to get started.",
+      "toDo": {
+        "title": "Nothing to start",
+        "body": "Work you are assigned or filed, and have not started yet, shows up here. Pick something up from Ready to get going.",
         "action": "Find something to start"
+      },
+      "inProgress": {
+        "title": "Nothing in flight",
+        "body": "Nothing you own is being worked on right now — by you or by an agent.",
+        "action": "See what to start"
+      },
+      "recentlyFinished": {
+        "title": "Nothing finished this week",
+        "body": "Work you own that reaches a done status will show up here for a week after it lands."
       },
       "watching": {
         "title": "You are not watching anything",
         "body": "Watch an item from its detail page to follow it without owning it."
+      },
+      "approvals": {
+        "title": "Nothing is waiting on your approval",
+        "body": "Work that needs your sign-off before it can go on will show up here."
       }
     },
     "pager": {

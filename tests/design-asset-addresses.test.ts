@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DOCS_REDIRECTS, SETTINGS_REDIRECTS } from '../next.config';
+import { DOCS_REDIRECTS, LANDING_REDIRECTS, SETTINGS_REDIRECTS } from '../next.config';
 
 // MOTIR-2316 — a design asset is a REFERRER to the app's addresses, and it is
 // the only referrer no other check can see.
@@ -102,8 +102,9 @@ const APP_ROUTES = appRoutePatterns();
 // docs one — a redirect source is an address the app answers on, whichever map
 // declares it, and a map this list forgets makes the guard report a live
 // address as resolving to nothing. (MOTIR-2534 added the second map.)
-const REDIRECT_SOURCES = [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS].map((rule) =>
-  rule.source.replace(/^\//, '').split('/'),
+// (MOTIR-4782 added the third, `/home` → `/workbench`.)
+const REDIRECT_SOURCES = [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS, ...LANDING_REDIRECTS].map(
+  (rule) => rule.source.replace(/^\//, '').split('/'),
 );
 
 const isDynamic = (segment: string) => /^\[.+\]$/.test(segment) || /^:.+/.test(segment);
@@ -236,22 +237,34 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
-  // ── A route a design asset SPECIFIES, before the card it gates builds it ──
-  //  The ordinary direction for a design: the asset is the layout source of
-  //  truth for a `code` card that is `blocked_by` it, and it has to be able to
-  //  say where the surface lives. `/workbench` resolves the moment MOTIR-4782
-  //  merges, and `carries no KNOWN entry that has stopped applying` is what
-  //  makes these rows delete themselves then rather than sit here claiming
-  //  something untrue.
+  // ── The RETIRED landing, which the app still answers on ──────────────────
+  //  MOTIR-4782 moved the signed-in landing from `/home` to `/workbench` and
+  //  kept the old address alive as a permanent 308 (`LANDING_REDIRECTS`), so
+  //  `/home` classifies as `redirects-away` rather than `resolves-to-nothing`.
+  //
+  //  ⚠️ THE TEN SHELL / AUTH / PROJECTS / SETTINGS ASSETS THAT NAMED IT ARE
+  //  CORRECTED, NOT PARKED (MOTIR-4783). They were parked here for exactly one
+  //  card — the sweep that owns the design assets' address lines — and that card
+  //  discharged them: nine mock sources had `href="/home"` re-pointed, thirteen
+  //  visible rail labels now read `Workbench`, four prose lines in the auth and
+  //  ai-chat assets name the new address, and seven PNGs were re-exported for
+  //  the ones where the change is visible. What is left below is the pair that
+  //  names the old address ON PURPOSE.
+  //
+  //  The two Workbench assets name `/home` DELIBERATELY and permanently — the
+  //  asset's job is to record what the surface was renamed FROM, the same way
+  //  the `KNOWN_PATHS` rename rows below record the old `design/home/` path. A
+  //  reader arriving from an old citation has to be able to tell "this moved"
+  //  from "this is gone".
   {
     file: 'design/workbench/design-notes.md',
-    address: '/workbench',
-    why: 'The address the surface moves to. MOTIR-4782 creates the route and its 308 from /home; this asset is its spec. DELETE THIS ROW when that card merges.',
+    address: '/home',
+    why: 'The rename record — the address the surface moved FROM, and the 308 that keeps it landing. Permanent.',
   },
   {
     file: 'design/workbench/workbench.mock.html',
-    address: '/workbench',
-    why: 'Every panel s frame bar and every tab href name the address the page will answer on. Same card, same removal. DELETE THIS ROW when MOTIR-4782 merges.',
+    address: '/home',
+    why: "The mock's header carries the same rename record as the notes, for a reader who opens the asset rather than the spec. Permanent.",
   },
   // ── A route on a DIFFERENT host, kept in the unified chrome's nav ─────────
   // `design/public-site/` (MOTIR-3880) draws the ONE chrome every motir.co
@@ -975,11 +988,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
   },
   {
-    file: 'design/shell/rail-bottom-section.mock.html',
-    address: '/settings/workspace/github',
-    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
-  },
-  {
     file: 'design/shell/top-bar.mock.html',
     address: '/settings/workspace/github',
     why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
@@ -1435,17 +1443,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/workbench/workbench.mock.html',
     path: 'design/home',
     why: "The mock's own header comment carries the same rename record as the notes, for a reader who opens the asset rather than the spec.",
-  },
-  // ── A route a design asset SPECIFIES, which the card it gates has not built ─
-  //  The ordinary direction for a design: the asset is the spec, and the page
-  //  it names is built by the `code` card that is `blocked_by` it. It resolves
-  //  the moment that card merges, and `carries no KNOWN_PATHS entry that has
-  //  stopped applying` is what makes this row delete itself then rather than
-  //  sit here claiming something untrue.
-  {
-    file: 'design/workbench/design-notes.md',
-    path: 'app/(authed)/workbench/page.tsx',
-    why: 'MOTIR-4782 creates it; this asset is its layout source of truth. DELETE THIS ROW when that card merges.',
   },
   // ── A source path a design asset RECORDED, which the app has since moved ──
   // The `KNOWN` table's point-in-time rows, one axis over: the same MOTIR-2534

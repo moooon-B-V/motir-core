@@ -150,7 +150,7 @@ describe('the configured wire still carries a manifest url end to end, with noth
     //     on the `href` rather than on the service's return value because a value
     //     that reaches no prop is, from the row's side, indistinguishable from one
     //     that was never configured.
-    renderWithIntl(<ReconsentCard documents={outstanding} destination="/home" />);
+    renderWithIntl(<ReconsentCard documents={outstanding} destination="/workbench" />);
     expect(screen.getByRole('link', { name: /read the new version/i }).getAttribute('href')).toBe(
       CONFIGURED_TERMS_URL,
     );

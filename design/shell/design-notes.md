@@ -978,8 +978,44 @@ frame shares one document, the compiled `@media (width >= …)` blocks are re-em
 ## The rail's bottom section — every row it renders (MOTIR-4130 · MOTIR-4254)
 
 `rail-bottom-section.mock.html` / `.png` is **the design of record for the authed rail's bottom
-section**: the four rows it carries, at all three widths the shell draws, in both arms of every
+section**: the three rows it carries, at all three widths the shell draws, in both arms of every
 conditional row.
+
+> ### ⚠️ AMENDED by MOTIR-4640 — the `Git` row LEAVES, and this time the FLOOR NARROWS
+>
+> The section is **three rows**: Settings · Security · Job runs. **Its floor is `Job runs`, alone.**
+>
+> **⚠️ Do not reuse the `Docs`/`Legal` sentence below.** That move could say _the floor did not
+> move_ because **both departing rows were already conditional**, so neither was in the floor. That
+> is **false of this one.** `Git` was **unconditional** and it **was in the floor**, so the
+> arithmetic runs the other way: the floor goes from two rows to **one**, and **every** deployment
+> loses a row here — not only a configured one. Saying it was cheap because the last one was would
+> be exactly the kind of sentence this asset exists to prevent.
+>
+> **The row LEAVES rather than disappears**, and to THREE destinations rather than one, because the
+> old row had gathered three tiers' business behind a single glyph:
+>
+> | what was behind the `Git` row     | where it lives now                    | whose tier   |
+> | --------------------------------- | ------------------------------------- | ------------ |
+> | the host connection's lifecycle   | **Settings → Organisation → Git**     | organisation |
+> | your own git account              | **Settings → Account → Git accounts** | user         |
+> | which repositories a project uses | **Settings → Project → Repositories** | project      |
+>
+> **Cited, not restated** — what each of those surfaces contains is that surface's own design to
+> state. (An earlier draft of the card sent the whole row to the project's `Code` room, MOTIR-1764's
+> subject. That was wrong, and the card was amended: none of the three destinations is that room.)
+>
+> **The door is not lost.** `lib/settings/organizationSettingsNav.ts` carries a `Git` row of its own
+> at the organisation tier, so the capability keeps an entry point — which is what
+> `docs/decisions/organization-tier.md` §6 requires (_"relocating a surface preserves its gate"_).
+> What ends is a PROJECT rail carrying an ORGANISATION surface, which is the tenancy mismatch this
+> whole story exists to remove.
+>
+> ⚠️ **Shipped code is mid-move and that is expected, not a contradiction.** `SidebarNav.tsx` still
+> renders the row, re-pointed at `/settings/organization/git` by MOTIR-4680, whose comment says _the
+> ROW stays and is RE-POINTED rather than removed_. That was true **of that card's scope** — the
+> surface changed tier and removal was not its job. **MOTIR-4643 removes the row**, and this
+> amendment is the design it removes it to.
 
 **⚠️ It carried SIX until MOTIR-4254, and two of them LEFT rather than changed.** `Docs` and `Legal`
 moved to the shell's **Help menu** — MOTIR-4238's asset in this area is the design of record for both
@@ -1026,13 +1062,19 @@ Declaration order, from `app/(authed)/_components/SidebarNav.tsx`'s `sections.pu
 | 1   | **Settings** | `settings`     | `/settings/project`, else the settings home | CONDITIONAL — `showSettingsDoor`      |
 | 2   | **Security** | `shield-check` | `/settings/workspace/security`              | CONDITIONAL — `workspaceTierRevealed` |
 | 3   | **Job runs** | `list-checks`  | `/settings/workspace/jobs`                  | always                                |
-| 4   | **Git**      | `git-branch`   | `/settings/workspace/github`                | always                                |
 
-**Two of the four are conditional, and the section's FLOOR is two rows** — Job runs · Git. That floor
-is the open product's common case, not an edge state, which is why the asset draws it beside the
-complete arm at every width rather than describing it. (It was three rows in this asset's first
-revision, when the `Docs` row was unconditional and dead — see MOTIR-4167 below; and six until
-MOTIR-4254 moved two of them to the Help menu.)
+**Two of the three are conditional, and the section's FLOOR is ONE row** — Job runs, alone. That
+floor is the open product's common case, not an edge state, which is why the asset draws it beside
+the complete arm at every width rather than describing it. (It was three rows in this asset's first
+revision, when the `Docs` row was unconditional and dead — see MOTIR-4167 below; six until
+MOTIR-4254 moved two of them to the Help menu; and four until MOTIR-4640 took `Git` out.)
+
+⚠️ **`Git`'s destination in this table was `/settings/workspace/github` for as long as the row was
+listed, and that address stopped existing when MOTIR-4680 moved the surface to the organisation
+tier.** The row is gone now so the entry goes with it — but it is worth recording that the row was
+stale in TWO ways at once, because that is the failure mode the section's own history describes: a
+row added by a card about somewhere else, then re-pointed by another card about somewhere else, with
+nothing pointing back here either time.
 
 **The floor is where the whole move is cheap, and it is worth stating as arithmetic rather than as
 reassurance.** Both departing rows were CONDITIONAL, so neither was in the floor to begin with. A
@@ -1052,8 +1094,9 @@ MOTIR-4167 history are both properties of those ROWS, not of this section, so th
 They are **moved, not copied**: a second copy here would be the divergence this area's own ledger
 exists to prevent, and the next reader would have no way to tell which was authoritative.
 
-**What stays here is the fact about THIS section**: it is four rows, two of them conditional, and its
-floor did not move.
+**What stays here is the fact about THIS section**: after MOTIR-4640 it is **three rows**, two of
+them conditional, and its **floor is one row**. The `Docs`/`Legal` move left the floor untouched; the
+`Git` move did not, and the two are not described with the same sentence.
 
 ### The divergence ledger — which source wins for this element
 
@@ -1064,6 +1107,54 @@ floor did not move.
 | 3   | `navigation-pending.mock.html`, `top-bar.mock.html` and `design/workbench/workbench.mock.html` draw four rows, or three | Those rails are **context for something else** — a pending grammar, a control budget, a landing surface — and are not the source for this section. They are re-exportable and may be swept, but a reader asking _what belongs here_ reads THIS asset. | MOTIR-4130 |
 
 | 4 | **This asset's own earlier revisions** drew `Docs` and `Legal` as rail rows, and carried their absent-arm reasoning | **Both rows are GONE from this section, and so is that reasoning** — they moved to the **Help menu**, whose asset (MOTIR-4238) is the design of record for both doors now. A rail answers _where inside this project can I go today_; neither door is a daily-work destination. Nothing else moved: the other four rows keep their destinations and their order, and the floor is unchanged at two. | MOTIR-4254 |
+
+| 5 | **This asset's own previous revision** drew `Git` as an unconditional row, and put it in the floor | **The row is GONE from this section**, and its three destinations are named above rather than described. The floor is `Job runs` alone — this move NARROWED it, which the MOTIR-4254 move did not, and the two must not share a sentence. The door survives at the organisation tier's own rail. | MOTIR-4640 |
+
+### The six assets that draw this section — a disposition each (re-measured for MOTIR-4640)
+
+The count below is **taken by re-running the method**, not copied from the MOTIR-4130 table above:
+the three `.pen` sources are parsed as JSON and walked to their `Nav Section Bottom` frame; the three
+`.mock.html` assets are loaded in Chromium and every `[data-surface="sidebar"]`'s rows enumerated.
+
+**Fifteen rails across six assets, and TWELVE of them draw the departing `Git` row.**
+
+| Asset                                  | Rails | Draws `Git` | Bottom rows measured now         | Disposition                       |
+| -------------------------------------- | ----- | ----------- | -------------------------------- | --------------------------------- |
+| `desktop.pen`                          | 1     | **no**      | Settings · Docs                  | unchanged — nothing to amend      |
+| `desktop-collapsed.pen`                | 1     | **no**      | icon-only, no text nodes         | unchanged — nothing to amend      |
+| `mobile-drawer.pen`                    | 1     | **no**      | Settings · Docs                  | unchanged — nothing to amend      |
+| `navigation-pending.mock.html`         | 4     | **yes ×4**  | Settings · Job runs · Git · Docs | **recorded, not amended** (below) |
+| `top-bar.mock.html`                    | 1     | **yes ×1**  | Settings · Job runs · Git · Docs | **recorded, not amended** (below) |
+| `design/workbench/workbench.mock.html` | 7     | **yes ×7**  | Job runs · Git · Docs            | **recorded, not amended** (below) |
+
+⚠️ **THE SIXTH ROW MOVED AND GREW WHILE THIS AMENDMENT SAT IN REVIEW — which is
+the argument for re-running the method rather than copying a table, arriving on
+schedule.** It was the LANDING surface's own mock — then named for the `home`
+area — with SIX rails when this section was first written; MOTIR-4779 renamed
+that surface to `design/workbench/workbench.mock.html`, and it now draws SEVEN. A table carried forward would have cited a file that no longer
+exists and a count nobody re-took, and `design-asset-addresses` caught precisely
+that — on the merge queue, which is the last place a stale citation is still
+cheap. The numbers above are from a re-run against `origin/main` after that
+rename landed.
+
+**Why the three `.pen` sources need nothing.** They never drew `Git` — that is the four-row shortfall
+the MOTIR-4130 measurement recorded, and it is unchanged by a row leaving. Ledger row 2 already
+settles that they are not edited at all: Pencil is not in this tree, so a `.pen` edit would produce a
+source disagreeing with the `.png` every consumer opens.
+
+**Why the three `.mock.html` assets are RECORDED rather than amended, and the evidence for it.**
+Ledger row 3 already holds that those rails are context for something else — a pending grammar, a
+control budget, a landing surface — and that a reader asking _what belongs in this section_ reads
+THIS asset. The measurement supplies the confirming fact: **all twelve of those rails still draw
+`Docs`**, a row that left in MOTIR-4254 and was never swept out of them. So leaving them is the
+established disposition for a departure here, not a new exemption invented for this one — and
+sweeping `Git` while `Docs` stayed would leave them wrong in a way that is harder to reason about
+than wrong-as-of-a-date.
+
+⚠️ **What that costs, stated rather than hidden:** twelve rails in this repository will draw a row
+the product does not render once MOTIR-4643 lands. They are point-in-time records and this asset is
+the source of record for the section — but a sweep of all three, taking `Docs` and `Git` together, is
+worth its own card, and nothing here should be read as saying they are correct.
 
 **The toolchain question this card had to answer first, and its evidence.** No `.pen` renderer or
 exporter exists anywhere in the repository: the only files naming `.pen` are two guards, `CLAUDE.md`

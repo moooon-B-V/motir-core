@@ -3104,3 +3104,114 @@ them; both definitions are theme.css's own, verbatim.
 viewport, `deviceScaleFactor: 2`) · this section. The migrate half — the rail that renders the kept
 set — is `design/onboarding-migrate/design-notes.md` § _AMENDMENT (2026-09-06 · MOTIR-4766)_ and
 Panel 6 of that area's mock, published under the same card.
+
+### ⭐ AMENDMENT (2026-09-07 · MOTIR-4825) — Panel 7 · the THIRD reading state: connected, and no code graph yet
+
+The two reading states above assume the code can be read. **A repository can be CONNECTED and have no
+graph** — an index that failed, one still running, or a person who connected their repository and
+pressed **Plan with AI** a minute later. In that state every graph tool answers empty, and empty is
+indistinguishable from a repository with nothing in it, so the honest-looking route is onboarding —
+a questionnaire about a codebase Motir was thirty seconds from being able to read. Panel 7 is what
+the surface does instead.
+
+#### ⚠️ TWO INSTRUMENTS, AND NEITHER IS THE OTHER'S CAPTION (Yue, 2026-09-07)
+
+This is the load-bearing decision of the panel, and it was settled twice in one turn — first
+_"the planner SHOULD tell the user, the repo is being indexed"_, then _"with the banner and say
+it"_.
+
+|                        | what it carries                                                                                                                            | where it lives                                                                      | how it ends                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------- |
+| **THE BANNER**         | the STATE — the repository, that it is being indexed, and whether that has started or is under way                                         | pinned at the top of the window body, ABOVE the reading card                        | disappears when the index lands |
+| **THE PLANNER'S TURN** | the REASON — in the second person, naming their repository, saying a good plan needs the code and that planning starts when the index does | the conversation rail, rendered exactly as panels 3–4 render an outcome's `message` | scrolls, like any turn          |
+
+**Why both.** A banner alone leaves somebody guessing why they are waiting; a turn alone puts a
+durable state into a transcript that scrolls away, so a person who comes back two minutes later has
+to read history to find out whether anything is happening. They are answering different questions —
+_what is happening_ and _why am I waiting_ — and the failure mode of collapsing them is silent: the
+build that keeps only the banner looks finished.
+
+**The turn is the VERDICT's own `message`, not product copy.** That is the whole reason the fourth
+routing outcome is a `motir-ai` card: `MOTIR-4767` AC10 requires `message` on every outcome,
+REFUSED rather than defaulted, _"because a stand-in sentence written at the parse seam would be
+Motir speaking in the planner's voice about a project it did not read"_. Here it HAS read something
+— that there is nothing to read yet — and says so.
+
+#### The banner's two live wordings
+
+`Queued` and `In progress` differ in the **tail pill** and the **sub-line**, and never in the title.
+The person is waiting for the same thing either way, and a title that changes under them reads as a
+second event; the tail is the one place the distinction earns its keep, because it is what tells
+somebody who came back whether anything has moved.
+
+- **Queued** — _Indexing acme/widgets_ · _Just started_ · tail `Queued`
+- **In progress** — _Indexing acme/widgets_ · _Reading the code so the plan can start from it_ · tail `In progress`
+
+#### ⚠️ STILL NOT A PROGRESS BAR — panel 1's rule, and the same reason
+
+`motir-core` is told an index has SUCCEEDED and is never told how far along it is, so a track and a
+fill would be a claim nothing can support. Three dots and the two tail wordings are the entire
+affordance. This is not a fresh judgement: it is Panel 1's _NOT A PROGRESS BAR_ note holding on a
+second state, and it would be the easiest thing in this asset to break, because indexing FEELS like
+the one wait that has a percentage.
+
+#### The EXIT, drawn because the person opened this window to plan
+
+The reading card says it in one line — _"You can close this and come back — it keeps going without
+you."_ — and the composer's disabled form says _"Ready as soon as the index is"_ rather than going
+silent. **When the index lands the window moves on by itself**: the reading state is a client
+island, so it refetches on an authoritative read rather than waiting to be reloaded. Nobody has to
+come back and press anything.
+
+#### The FAILED arm — one of the three ways this state is reached at all
+
+An index can fail, and Panel 6's _not a dead end_ rule binds here as much as anywhere: the failed
+banner carries **two** ways onward.
+
+- **Try again** re-enqueues.
+- **Plan anyway** hands the routing run a project with no readable repository — a case the verdict
+  already knows, so it becomes an ordinary onboarding route rather than a bespoke failure path.
+
+The copy names no cause it has not been told (`motir-core` learns that an index did not succeed, not
+why) and apologises for no bug: _"I couldn't index acme/widgets — nothing is lost."_
+
+#### Per-element token roles (panel 7 only)
+
+| element                                   | colour                                                                                 | shape                                    |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------- |
+| indexing banner                           | `--el-tint-sky` on `--el-border-soft`                                                  | `--radius-card`, `--spacing-control-x/y` |
+| its title                                 | `--el-text-strong`                                                                     | —                                        |
+| its sub-line                              | `--el-text-secondary`                                                                  | —                                        |
+| its tail chip                             | `.pill.sky` — `--el-tint-sky` + `--el-text-strong`                                     | `--radius-badge`, `--spacing-chip-x/y`   |
+| the three dots                            | `--el-text-secondary`                                                                  | `999px` (circular — not style-dependent) |
+| FAILED banner                             | `--el-danger-surface`, border `--el-danger-on-surface`                                 | `--radius-card`                          |
+| its warning glyph                         | `--el-danger-on-surface`                                                               | —                                        |
+| its title · sub-line                      | `--el-text` · `--el-text-secondary`                                                    | —                                        |
+| its two buttons                           | `.btn.sm.primary` / `.btn.sm.ghost` — `--el-accent` + `--el-accent-text` / `--el-text` | `--radius-btn`, `--height-btn-sm`        |
+| source rows, reading card, rail, composer | unchanged — composed from panels 1–2                                                   | unchanged                                |
+
+**Why the sky pair clears AA, stated rather than assumed.** `--el-tint-sky` is this asset's own
+tinted-surface convention and it already carries `--el-text-strong` on `.pill.sky` and on the source
+rows; the sub-line takes **`--el-text-secondary`**, which is 6.18–6.80:1 on every grey surface in
+both themes and is the token `CLAUDE.md` names as right whichever surface an element lands on.
+**`--el-text-muted` is NOT used here**: its 4.54:1 was measured on the white page and it fails on
+`--el-surface` / `--el-surface-soft` / `--el-muted`, and a tint is not the surface that reading was
+taken on. The FAILED banner keeps its LABEL on `--el-text` and puts the hue in the GLYPH and the
+BORDER — the composition `CLAUDE.md` prefers for a large danger label, since graphics need only
+3:1 — so **`--el-danger-text` appears nowhere in this panel either**; it is the ink for a
+`--el-danger` FILL and measures 1.00–1.04:1 on a light page.
+
+#### Primitives composed (no hand-rolling)
+
+The overlay frame (`.ws` / `.wcanvas` / `.wtop` / `.wbody`), the reading card, the source rows, the
+rail with its AI bubble and its disabled composer, the pills and the buttons are all composed from
+panels 1–2 and 3–4 unchanged. **The only new element is the banner itself**, and it is a flex row of
+existing tokens rather than a new primitive.
+
+#### Deliverable
+
+`design/ai-chat/reading-and-handoff.mock.html` panel 7 · a re-exported
+`design/ai-chat/reading-and-handoff.png` (1200 viewport, `deviceScaleFactor: 2`, `EXACT` against the
+committed export) · this section. It AMENDS `MOTIR-4766`'s asset rather than opening a new one:
+this is one more state of the same screen — the plan window reading a project — and a separate file
+would leave a reader to work out that they are the same surface.

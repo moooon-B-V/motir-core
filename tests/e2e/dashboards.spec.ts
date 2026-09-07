@@ -234,7 +234,7 @@ test.describe('dashboards @smoke', () => {
   }) => {
     const t = await seedTenant();
     await signIn(page, t.ownerEmail, TEST_PASSWORD);
-    // Sign-in lands on `/home` since MOTIR-2654, so the dashboards surface is
+    // Sign-in lands on `/workbench` since MOTIR-2654, so the dashboards surface is
     // now somewhere this spec NAVIGATES to rather than somewhere it arrives.
     await page.goto('/dashboard');
 
@@ -336,7 +336,7 @@ test.describe('dashboards @smoke', () => {
 
     // The member sees ONLY the shared dashboard, marked View only.
     await signIn(page, memberEmail, TEST_PASSWORD);
-    // Sign-in lands on `/home` since MOTIR-2654, so the dashboards surface is
+    // Sign-in lands on `/workbench` since MOTIR-2654, so the dashboards surface is
     // now somewhere this spec NAVIGATES to rather than somewhere it arrives.
     await page.goto('/dashboard');
     await expect(page.getByTestId(`dashboard-row-${shared.id}`)).toBeVisible();
@@ -400,7 +400,7 @@ test.describe('dashboards @smoke', () => {
     );
 
     await signIn(page, t.ownerEmail, TEST_PASSWORD);
-    // Sign-in lands on `/home` since MOTIR-2654, so the dashboards surface is
+    // Sign-in lands on `/workbench` since MOTIR-2654, so the dashboards surface is
     // now somewhere this spec NAVIGATES to rather than somewhere it arrives.
     await page.goto('/dashboard');
 
