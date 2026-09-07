@@ -1,5 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { bindOrganizationContext } from '@/lib/organizations/context';
 import type { NormalizedWorkflowJobEvent } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
@@ -108,12 +109,13 @@ export const ciRunnerProvisioningService = {
     //   * `github_installation` / `github_repo` — policy is
     //     `system_admin OR workspace_id = …`, so the webhook (no session, no
     //     active workspace) reads them under `withSystemContext`.
-    //   * `project_repository` / `workspace` — policy gates PURELY on
-    //     `app.workspace_id` with NO system escape, so `withSystemContext` would
-    //     read NOTHING here in production (where the app connects as the
-    //     non-BYPASSRLS `motir_app` role) and every job would resolve to
-    //     "unattributed". They are read under `withWorkspaceServiceContext`,
-    //     bound to the REPO's workspace.
+    //   * `project_repository` / `workspace` — neither has a system escape, so
+    //     `withSystemContext` would read NOTHING here in production (where the
+    //     app connects as the non-BYPASSRLS `motir_app` role) and every job
+    //     would resolve to "unattributed". They are read under
+    //     `withWorkspaceServiceContext` bound to the REPO's workspace, PLUS
+    //     `bindOrganizationContext` — MOTIR-4839, and the attribution block
+    //     below carries which arm each table needs.
     //
     // ⚠️ The REPO row is the tenant, never the installation (MOTIR-1931,
     // `notes.html` #186). Under Motir's shared provisioning installation
@@ -134,6 +136,9 @@ export const ciRunnerProvisioningService = {
       return {
         kind: 'connected' as const,
         workspaceId: repo.workspaceId,
+        // Carried out for the attribution transaction's organisation binding
+        // (MOTIR-4839). NOT NULL on `github_repo` as of 20260907090000.
+        organizationId: repo.organizationId,
         githubRepoId: repo.id,
       };
     });
@@ -154,6 +159,24 @@ export const ciRunnerProvisioningService = {
     }
 
     const tenant = await withWorkspaceServiceContext(connection.workspaceId, async (tx) => {
+      // ⚠️ BIND THE ORGANISATION TOO (MOTIR-4839 · bug MOTIR-4835) — the same
+      // edit, for the same reason, as `ciMinutesMeterService`, whose block
+      // carries the full account. In short: MOTIR-4669 made a repository
+      // ORG-owned, so the link row's workspace is routinely NOT the repository's,
+      // and the workspace GUC bound above admits neither the
+      // `project_repository` row (`project_repository_org_read`, 20260906000000)
+      // nor the anchor's `workspace` row (`workspace_org_service_read`,
+      // 20260818010000 — the userless arm, which is what a service context is).
+      // Both arms are FOR SELECT, so this widens reads to the ORGANISATION and no
+      // further: a link in another org stays invisible.
+      //
+      // ⚠️ IT IS THE SAME EDIT ON PURPOSE. The note below says these two sites
+      // must not answer differently; this binding is part of the answer, so a
+      // change here that does not land there — or the reverse — recreates exactly
+      // the divergence that note exists to prevent, silently, because both sides
+      // of it are legitimate-looking null returns.
+      await bindOrganizationContext(tx, connection.organizationId);
+
       // ⚠️ ATTRIBUTION, and the SAME disposition as the meter's (MOTIR-4648) —
       // the two sites ask one question and must not answer it differently.
       // `ProjectRepo.githubRepoId` is no longer `@unique`, so:
