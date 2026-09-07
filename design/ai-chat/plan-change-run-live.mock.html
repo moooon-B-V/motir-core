@@ -516,6 +516,9 @@
         .bg-\(--el-surface\) {
           background-color: var(--el-surface);
         }
+        .bg-\(--el-surface-soft\) {
+          background-color: var(--el-surface-soft);
+        }
         .bg-\(--el-warning-surface\) {
           background-color: var(--el-warning-surface);
         }
@@ -625,6 +628,12 @@
         }
         .opacity-80 {
           opacity: 80%;
+        }
+        .transition-\[transform\,background-color\,border-color\,color\] {
+          transition-property: transform, background-color, border-color, color;
+        }
+        .duration-\(--transition-duration\) {
+          transition-duration: var(--transition-duration);
         }
         .placeholder\:text-\(--el-text-muted\) {
           &::placeholder {

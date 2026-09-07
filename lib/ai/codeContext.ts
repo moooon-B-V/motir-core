@@ -1,5 +1,6 @@
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Resolve the CODE half of a planning-job context bag (Subtask 7.10.15 ·
@@ -35,6 +36,22 @@ export interface JobCodeRepo {
   /** `owner/name` — the ref motir-ai keys its per-repo code-graph stores on. */
   repoRef: string;
   defaultBranch: string;
+  /**
+   * HAS THIS REPOSITORY GOT A CODE GRAPH (Story MOTIR-4753 · MOTIR-4826)?
+   *
+   * ⚠️ A FACT ON THE WIRE, NEVER A DECISION. `motir-core` supplies it exactly as
+   * it supplies the ref itself; what an unindexed repository MEANS — whether the
+   * person waits, or is onboarded, or plans anyway — is the routing verdict's
+   * judgement (`motir-ai` MOTIR-4828), and nothing here may branch on it.
+   *
+   * ⚠️ AND IT EXISTS BECAUSE THE ALTERNATIVE IS INDISTINGUISHABLE. A session
+   * given only the ref sees every code-graph tool answer EMPTY for a repository
+   * whose index has not run — which reads exactly like a repository with nothing
+   * in it, and the two support opposite verdicts. Read from the SAME succeeded-
+   * index ledger the wizard's INDEX step waits on and the onboarding substrate
+   * read reports from, so the three cannot disagree.
+   */
+  indexed: boolean;
 }
 
 /** The `context.code` unit of a planning-job envelope (the plural contract). */
@@ -46,23 +63,36 @@ export async function resolveCodeContext(ctx: {
   userId: string;
   workspaceId: string;
 }): Promise<JobCodeContext | undefined> {
-  const repos = await withWorkspaceContext(
+  const { repos, indexedRefs } = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
     async (tx) => {
       const installation = await githubInstallationRepository.findByWorkspaceId(
         ctx.workspaceId,
         tx,
       );
-      if (!installation) return [];
-      return githubRepoRepository.listByInstallation(installation.id, tx);
+      if (!installation) return { repos: [], indexedRefs: [] as string[] };
+      const rows = await githubRepoRepository.listByInstallation(installation.id, tx);
+      // ⚠️ ONE LEDGER READ FOR THE WHOLE SET, and only when there IS a set — the
+      // same shape `readOnboardingSubstrate` uses, and the same read, so the
+      // envelope and the reading state can never tell a user two different
+      // things about the same repository.
+      const indexedRefs =
+        rows.length === 0
+          ? []
+          : await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx);
+      return { repos: rows, indexedRefs };
     },
   );
   if (repos.length === 0) return undefined;
   return {
-    repos: repos.map((repo) => ({
-      provider: repo.provider,
-      repoRef: `${repo.owner}/${repo.name}`,
-      defaultBranch: repo.defaultBranch,
-    })),
+    repos: repos.map((repo) => {
+      const repoRef = `${repo.owner}/${repo.name}`;
+      return {
+        provider: repo.provider,
+        repoRef,
+        defaultBranch: repo.defaultBranch,
+        indexed: indexedRefs.includes(repoRef),
+      };
+    }),
   };
 }

@@ -132,7 +132,7 @@ function mockSubmitJob() {
 describe('aiPlanEditsService.submitAugment', () => {
   it('submits an augment job with the prompt + tenant + code context', async () => {
     vi.mocked(resolveCodeContext).mockResolvedValue({
-      repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main' }],
+      repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main', indexed: true }],
     });
     mockSubmitJob();
 
@@ -521,7 +521,7 @@ describe('aiPlanEditsService — the generateExplanations opt-in rides every pla
     // the field is added to the envelope, it does not replace what the caller
     // built (the `code` hole included).
     vi.mocked(resolveCodeContext).mockResolvedValue({
-      repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main' }],
+      repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main', indexed: true }],
     });
     await aiPlanEditsService.submitReplan('MOTIR-100', ctxWithExplanations);
 

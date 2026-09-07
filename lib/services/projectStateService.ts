@@ -1,7 +1,6 @@
 import type { MigrateIndexRepoDto, MigrateIndexStatusDto } from '@/lib/dto/migrateOnboarding';
-import type { ProjectStateDto } from '@/lib/dto/projectState';
+import type { ProjectPlanningGateDto, ProjectStateDto } from '@/lib/dto/projectState';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
-import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
@@ -29,8 +28,9 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 // open-core boundary; the planner already reaches those through the job envelope.
 //
 // COMPOSITION, deliberately: every answer is the SHIPPED one.
-//   * established?      → `resolvePlanningHostGate` (the function the planning
-//                          doors read), never a re-derivation of the marker
+//   * established?      → the project's own `onboardingRanAt` marker. It read
+//                          `resolvePlanningHostGate` until MOTIR-4765 took the
+//                          `onboarding` verdict off that gate; see the call site
 //   * code connected?   → `githubInstallationService.listOrganizationInstallations`
 //                          (MOTIR-4836) — the ORGANISATION's connections and the
 //                          repositories they grant, which is the tier a
@@ -156,15 +156,19 @@ export const projectStateService = {
   async getProjectState(projectKey: string, ctx: ServiceContext): Promise<ProjectStateDto> {
     const project = await projectsService.getByKey(projectKey, ctx);
 
-    // The verdict is the shipped gate's, not a marker re-read. `hasActiveProject`
-    // and `canBrowse` are true BY CONSTRUCTION at this point — the key resolved
-    // to a project and `getByKey` asserted browse — so the gate reduces here to
-    // the onboarding question, which is the one this read exists to answer.
-    const planningGate = resolvePlanningHostGate({
-      hasActiveProject: true,
-      canBrowse: true,
-      onboardingRanAt: project.onboardingRanAt,
-    });
+    // ⚠️ READ OFF THE MARKER, NOT OFF `resolvePlanningHostGate` (MOTIR-4765).
+    // This line used to call the host gate, because the gate answered the
+    // ESTABLISHED question as a side effect of answering the routing one, and
+    // deriving it here would have been a re-derivation that could drift. That
+    // gate no longer HAS an `onboarding` verdict — a never-onboarded project
+    // opens the workspace like any other, because whether it can be planned is
+    // the planner's judgement (MOTIR-4767) — so there is nothing left to borrow.
+    // `hasActiveProject` and `canBrowse` were true by construction here anyway
+    // (the key resolved and `getByKey` asserted browse), which is why the call
+    // only ever contributed the marker branch this line now makes directly.
+    const planningGate: ProjectPlanningGateDto = project.onboardingRanAt
+      ? 'workspace'
+      : 'onboarding';
 
     const code = await resolveCodeState(ctx);
     const repoSet = await projectRepoSetService.listByProject(project.id, ctx);

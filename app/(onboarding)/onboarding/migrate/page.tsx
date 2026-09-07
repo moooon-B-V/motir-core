@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import { onboardingReturnHref } from '@/lib/planning/onboardingReturn';
+import { searchParamsToEntries } from '@/lib/navigation/searchParamsToEntries';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
@@ -17,7 +19,22 @@ import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 // step (never restarts). The client island drives the step transitions through
 // the migrate API routes (advance / skip-import / index-status poll); it never
 // calls the service layer directly.
-export default async function MigrateOnboardingPage() {
+export default async function MigrateOnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // ⚠️ WHERE A FINISHED JOURNEY LANDS IS NOT ALWAYS `/roadmap` (MOTIR-4770). A
+  // user who reached onboarding from the plan window was SENT here by a routing
+  // verdict, and they were promised they would land back in the window they
+  // opened. The return address rides the query the hand-off wrote; `null` means
+  // they came in by another door — the entrance, a bookmark, a fresh sign-up —
+  // and those keep the destination they always had.
+  const back = onboardingReturnHref(
+    new URLSearchParams(searchParamsToEntries(await searchParams)),
+    'completed',
+  );
+
   const session = await getSession();
   if (!session) redirect('/sign-in?next=%2Fonboarding%2Fmigrate');
 
@@ -61,7 +78,7 @@ export default async function MigrateOnboardingPage() {
   // project. That is a defect in the run's terminal CONDITION (it completes only
   // if the client walks the last hop — the same pull-only shape as MOTIR-2082),
   // filed as MOTIR-2092 rather than bolted onto this gate.
-  if (ctx.project.onboardingRanAt) redirect('/roadmap');
+  if (ctx.project.onboardingRanAt) redirect(back ?? '/roadmap');
 
   const run = await migrateOnboardingService.getForProject(ctx.projectId, {
     userId: ctx.userId,
@@ -70,7 +87,7 @@ export default async function MigrateOnboardingPage() {
 
   // A completed run means the project's plan was approved — onboarding is done.
   // Land the user on the roadmap, not the wizard.
-  if (run?.status === 'completed') redirect('/roadmap');
+  if (run?.status === 'completed') redirect(back ?? '/roadmap');
 
   return (
     <MigrateWizard
