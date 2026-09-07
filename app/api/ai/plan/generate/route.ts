@@ -58,7 +58,18 @@ export async function POST(req: Request): Promise<Response> {
   const prompt = typeof rawPrompt === 'string' && rawPrompt.trim() ? rawPrompt.trim() : null;
 
   try {
-    const { jobId, planId } = await aiGenerationService.startGeneration(ctx, { prompt });
+    // ⚠️ `routeOnboarding` IS DERIVED HERE, NEVER READ OFF THE BODY (MOTIR-4769).
+    // THIS route is the universal plan window's door; the migrate wizard reaches
+    // the same service by calling it directly, and that run must never be
+    // routed — it would send a user who is already in onboarding back to the
+    // start of it. The marker is the discriminator for the OTHER half of the
+    // question (*has this project ever had a plan approved?*), and it is read
+    // from the context the gate already resolved, so this costs no round trip
+    // and no caller can assert it.
+    const { jobId, planId } = await aiGenerationService.startGeneration(ctx, {
+      prompt,
+      routeOnboarding: !ctx.project.onboardingRanAt,
+    });
     return NextResponse.json(
       { jobId, planId },
       { headers: { 'Cache-Control': 'private, no-store' } },

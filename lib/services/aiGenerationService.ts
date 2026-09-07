@@ -6,6 +6,7 @@ import {
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
+import { routeOnboardingContextFor } from '@/lib/ai/routeOnboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -54,6 +55,21 @@ export interface StartGenerationInput {
   /** Optional human label / summary stamped on the opened Plan. */
   title?: string | null;
   summary?: string | null;
+  /**
+   * ASK FOR A ROUTING VERDICT (MOTIR-4769) — *is this the plan window opening on
+   * a project that has never been planned?*
+   *
+   * ⚠️ ONLY ONE DISPATCH SETS IT, and the reason it is a caller's answer rather
+   * than something this service infers is that the SAME submit serves the
+   * migrate wizard's own generate step. That run is also a first plan over an
+   * empty tree, and routing it would send a user who is already in onboarding
+   * back to the start of it.
+   *
+   * ⚠️ AND IT IS NOT A CLIENT'S ANSWER EITHER — the route derives it, because a
+   * caller who could ask for a verdict on somebody else's terms could route a
+   * user into onboarding they do not need.
+   */
+  routeOnboarding?: boolean;
 }
 
 export const aiGenerationService = {
@@ -152,6 +168,14 @@ export const aiGenerationService = {
         // conditionally: absence means "the producer predates this field" and
         // sends motir-ai back to inferring it from the tree.
         [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
+        // ⚠️ ASK FOR A ROUTING VERDICT, but ONLY on the routing run (MOTIR-4769).
+        // This same submit is what the migrate wizard's GENERATE step reaches,
+        // and a verdict there would send a user who is ALREADY in onboarding
+        // back to the start of it. `input.routeOnboarding` is the caller saying
+        // *this is the plan window opening*, and the helper still refuses to set
+        // the flag for a project whose first plan has been approved — there is
+        // nothing to route such a project to.
+        ...(input.routeOnboarding ? routeOnboardingContextFor(ctx.project) : {}),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
       },
