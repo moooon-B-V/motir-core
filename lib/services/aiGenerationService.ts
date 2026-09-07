@@ -1,6 +1,7 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
@@ -103,6 +104,39 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // ⚠️ AND THE MISSING GRAPH IS REPAIRED, NOT ONLY REPORTED (Story MOTIR-4753 ·
+    // MOTIR-4826). A repository can be CONNECTED and unindexed — an index that
+    // failed, one still running, or somebody who connected their repository and
+    // opened the plan window a minute later — and in that state the verdict is
+    // about to be told there is nothing to read. Telling it, and doing nothing,
+    // would leave the person waiting for a graph nobody asked for.
+    //
+    // The shipped, idempotent workspace sweep is the whole mechanism: it reads
+    // the succeeded-index ledger and enqueues ONLY the repositories missing one,
+    // so an index already running or already succeeded enqueues nothing and no
+    // second guard is needed here.
+    //
+    // ⚠️ BEST-EFFORT, DELIBERATELY. This repairs a cause; it is not what the
+    // caller asked for. A sweep that fails must not fail the routing run — the
+    // verdict is still worth having, and the person still needs an answer.
+    //
+    // ⚠️ AND IT DECIDES NOTHING. `motir-core` does not read `indexed` back to
+    // choose a destination; the fact goes on the wire above and the route is the
+    // planner's (MOTIR-4828). A branch here would put the routing decision back
+    // where five of this story's cards took it out of.
+    if (code?.repos.some((repo) => !repo.indexed)) {
+      try {
+        await codeGraphIndexService.sweepReposMissingFirstIndex({
+          workspaceId: ctx.workspaceId,
+        });
+      } catch (err) {
+        console.error(
+          'startRoutingRun could not enqueue a first index for workspace; the verdict still runs:',
+          ctx.workspaceId,
+          err,
+        );
+      }
+    }
     const repositories = await resolveProjectRepoContext(ctx.projectId, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
