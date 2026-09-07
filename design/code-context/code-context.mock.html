@@ -1849,10 +1849,6 @@
             <div class="shellMain">
               <div class="pageHead">
                 <h3 class="pageTitle">Code</h3>
-                <span class="btn primary"
-                  ><svg aria-hidden="true"><use href="#i-plus" /></svg>Add or remove
-                  repositories</span
-                >
               </div>
               <div class="tabs">
                 <div class="tab on">Repositories<span class="cnt">2</span></div>
@@ -2004,38 +2000,36 @@
       </section>
       <section class="panel">
         <h2 class="panelTitle">
-          <span class="panelNum">R</span>REPOSITORIES &mdash; the section that replaces the git
-          settings page.
+          <span class="panelNum">R</span>REPOSITORIES &mdash; read-only rows, and where the two
+          actions went.
         </h2>
         <p class="panelNote">
-          <strong>The button says what the user wants to do, not where it goes.</strong>
-          &ldquo;Manage on GitHub&rdquo; named a destination and left the intent to be inferred;
-          <strong>Add or remove repositories</strong> names the intent. The picker it opens offers
-          <strong>every repository the ORG has</strong> &mdash; not the workspace&rsquo;s &mdash;
-          because that is the set an org admin may configure into any project (panel&nbsp;S). ⚠️
-          <strong
-            >TWO DIFFERENT ACTIONS LIVED BEHIND THE OLD <em>Git</em> ROW, AND ONLY ONE OF THEM IS
-            THIS BUTTON.</strong
-          >
-          Configuring which repositories a project works on is an <strong>org-admin</strong> act.
-          Connecting <strong>your own</strong> account is not: <code>GithubIdentity</code> is
-          <code>userId @unique</code>, and <code>projectSettingsNav.ts</code> calls it &ldquo;the
-          one action nobody can take on [a member&rsquo;s] behalf&rdquo;. Both reached the same
-          page, so collapsing the row without carrying BOTH forward removes a capability. This
-          section draws both: the admin action as the header button, the personal one as its own row
-          that every member sees.
+          ⚠️
+          <strong>AMENDED (MOTIR-4866) &mdash; THIS SECTION HAS NO ACTION OF ITS OWN.</strong>
+          It drew an <em>Add or remove repositories</em> button in the page head and a
+          <em>Connect your GitHub account</em> row beneath the list.
+          <strong>MOTIR-1768&rsquo;s re-scope moved both off this page</strong>, and this asset had
+          absorbed only the first of that re-scope&rsquo;s three removals &mdash; &sect;4 retired
+          the <em>Index</em> tab and this panel was never swept, so the two halves of the document
+          drew two different pages. The rows are <strong>read-only</strong>; the section&rsquo;s
+          only affordance is a link to <strong>Settings &rarr; Project &rarr; Repositories</strong>.
+          ⚠️ <strong>THE CAPABILITY RULE IS SATISFIED, NOT WAIVED.</strong> Two different actions
+          lived behind the old <em>Git</em> row &mdash; configuring which repositories a project
+          works on (<strong>org admin</strong>) and connecting <strong>your own</strong> account
+          (<strong>any member</strong>; <code>GithubIdentity</code> is <code>userId @unique</code>,
+          which <code>projectSettingsNav.ts</code> calls &ldquo;the one action nobody can take on [a
+          member&rsquo;s] behalf&rdquo;) &mdash; and <strong>both are carried forward</strong>, to
+          <code class="m">/settings/project/repositories</code> and
+          <code class="m">/settings/account/git</code>, which ship them today. Nothing a member
+          could do before is gone; it is reached by a different door.
         </p>
         <div class="panelBody">
           <div>
-            <div class="cap">Org admin &mdash; the configuration action</div>
+            <div class="cap">The page &mdash; read-only rows, no action of its own</div>
             <div class="frame">
               <div class="frameBody">
                 <div class="pageHead">
                   <h3 class="pageTitle">Code</h3>
-                  <span class="btn primary"
-                    ><svg aria-hidden="true"><use href="#i-plus" /></svg>Add or remove
-                    repositories</span
-                  >
                 </div>
                 <div class="tabs">
                   <div class="tab on">Repositories<span class="cnt">3</span></div>
@@ -2091,7 +2085,7 @@
           </div>
           <div>
             <div class="cap">
-              Member &mdash; no configuration action, and the one action that IS theirs
+              Admin and member see the SAME page &mdash; and where each action went
             </div>
             <div class="frame">
               <div class="frameBody">
@@ -2143,31 +2137,17 @@
                     </span>
                   </div>
                 </div>
-                <div class="aside" style="margin-top: 12px">
-                  <div class="asideLead">
-                    <span class="asideGlyph"
-                      ><svg aria-hidden="true"><use href="#i-users" /></svg
-                    ></span>
-                    <div>
-                      <h3 class="asideTitle">Connect your GitHub account</h3>
-                      <p class="asideSub">
-                        So Motir can act as you when it opens pull requests, and so you can clone
-                        this project&rsquo;s code.
-                      </p>
-                    </div>
-                  </div>
-                  <div class="warnFoot">
-                    <span class="btn secondary"
-                      ><svg aria-hidden="true"><use href="#i-link" /></svg>Connect your
-                      account</span
-                    >
-                  </div>
-                </div>
                 <p class="outNote" style="margin-top: 12px">
-                  ⚠️ This row is <strong>per user</strong> (<code class="m"
-                    >GithubIdentity.userId @unique</code
-                  >) and is the reason the old <em>Git</em> row was ungated. It must survive the
-                  collapse, or the move removes a capability rather than a concept.
+                  ⚠️ <strong>The connect row is NOT here (MOTIR-4866).</strong> It is
+                  <strong>per user</strong> &mdash;
+                  <code class="m">GithubIdentity.userId @unique</code> &mdash; which is both why the
+                  old <em>Git</em> row was ungated and why the row belongs to the ACCOUNT tier
+                  rather than to a project page. It lives at
+                  <code class="m">/settings/account/git</code>, which ships it today, so the
+                  capability survives the collapse by moving rather than by being drawn here.
+                  <code class="m">/settings/project/code-access</code>&rsquo;s
+                  <code class="m">connectHref</code> points THERE &mdash; not at this page, which
+                  has no connect row to arrive at.
                 </p>
               </div>
             </div>
