@@ -19,6 +19,16 @@
   rows: this asset owns the BOTTOM section, and design/shell/desktop.pen still
   owns the primary one.
 
+  REVISED by MOTIR-4640. The Git row LEAVES this section too — and unlike the
+  Docs/Legal departure, THIS ONE NARROWS THE FLOOR. Git was UNCONDITIONAL and
+  was IN the floor, so the arithmetic that made the last move cheap does not
+  apply and is not reused: the floor goes from two rows to ONE, Job runs alone.
+  The row leaves rather than disappears, and its contents are reachable at three
+  destinations named in design-notes.md — Settings > Organisation > Git (the
+  host connection), Settings > Account > Git accounts (your own identity), and
+  Settings > Project > Repositories (which repos a project uses). The section is
+  three rows with two conditionals.
+
   REVISED by MOTIR-4254. The Docs and Legal rows LEFT this section: a rail
   answers "where inside this project can I go today", and neither the terms of
   service nor the documentation index is a daily-work destination. Both doors
@@ -26,9 +36,9 @@
   drawer's utility strip). MOTIR-4238's asset in this same area is the design
   of record for them now, and carries the absent-arm reasoning that used to
   live in these notes; it lands on its own pull request, which merges first. The three complete arms lose both rows; the three floor arms
-  never had either, so THE FLOOR IS UNCHANGED at Job runs · Git — which is why
-  the move costs an unconfigured deployment nothing. The section is four rows
-  with two conditionals. Only that section data changed: the rails are still
+  never had either, so THAT move left the floor UNCHANGED at Job runs · Git
+  — which is why it cost an unconfigured deployment nothing. (MOTIR-4640 has
+  since taken Git out of that floor; see the revision above.) Only that section data changed: the rails are still
   the real Sidebar markup.
 
   REVISED by MOTIR-4167. The Docs row lost its hard-coded app-relative path — a
@@ -36,7 +46,8 @@
   reading surface to motir-marketing — and reads MOTIR_DOCS_URL, an absolute url
   or null, so it is CONDITIONAL now like the Legal row beside it. The complete
   arms draw it at https://motir.co/docs; the floor arms no longer draw it, so the
-  section's floor is Job runs · Git. Only that section data changed: the rails
+  section's floor was Job runs · Git at the time — MOTIR-4640 has since narrowed
+  it to Job runs alone. Only that section data changed: the rails
   are still the real Sidebar markup, edited in the two places the generator's
   data would have moved.
 -->
@@ -3675,8 +3686,8 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 4 rows</span
-              ><span class="fc-note">Settings · Security · Job runs · Git</span>
+              <span class="fc-label">Complete &mdash; 3 rows</span
+              ><span class="fc-note">Settings · Security · Job runs</span>
             </figcaption>
             <div class="rail" style="width: 240px">
               <nav
@@ -3862,29 +3873,6 @@
                               <path d="m3 17 2 2 4-4"></path>
                               <path d="m3 7 2 2 4-4"></path></svg></span
                           ><span class="flex-1 truncate">Job runs</span></a
-                        ><a
-                          href="/settings/workspace/github"
-                          class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-git-branch"
-                              aria-hidden="true"
-                            >
-                              <path d="M15 6a9 9 0 0 0-9 9V3"></path>
-                              <circle cx="18" cy="6" r="3"></circle>
-                              <circle cx="6" cy="18" r="3"></circle></svg></span
-                          ><span class="flex-1 truncate">Git</span></a
                         >
                       </div>
                     </div>
@@ -3895,8 +3883,8 @@
           </figure>
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Floor &mdash; 2 rows</span
-              ><span class="fc-note">Job runs · Git</span>
+              <span class="fc-label">Floor &mdash; 1 row</span
+              ><span class="fc-note">Job runs, alone</span>
             </figcaption>
             <div class="rail" style="width: 240px">
               <nav
@@ -4034,29 +4022,6 @@
                               <path d="m3 17 2 2 4-4"></path>
                               <path d="m3 7 2 2 4-4"></path></svg></span
                           ><span class="flex-1 truncate">Job runs</span></a
-                        ><a
-                          href="/settings/workspace/github"
-                          class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-git-branch"
-                              aria-hidden="true"
-                            >
-                              <path d="M15 6a9 9 0 0 0-9 9V3"></path>
-                              <circle cx="18" cy="6" r="3"></circle>
-                              <circle cx="6" cy="18" r="3"></circle></svg></span
-                          ><span class="flex-1 truncate">Git</span></a
                         >
                       </div>
                     </div>
@@ -4080,8 +4045,8 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 4 glyphs</span
-              ><span class="fc-note">settings · shield-check · list-checks · git-branch</span>
+              <span class="fc-label">Complete &mdash; 3 glyphs</span
+              ><span class="fc-note">settings · shield-check · list-checks</span>
             </figcaption>
             <div class="rail" style="width: 56px">
               <nav
@@ -4274,31 +4239,7 @@
                               <path d="M13 12h8"></path>
                               <path d="M13 19h8"></path>
                               <path d="m3 17 2 2 4-4"></path>
-                              <path d="m3 7 2 2 4-4"></path></svg></span></a
-                        ><a
-                          href="/settings/workspace/github"
-                          aria-label="Git"
-                          class="relative mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) transition-colors hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                          data-state="closed"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px]"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-git-branch"
-                              aria-hidden="true"
-                            >
-                              <path d="M15 6a9 9 0 0 0-9 9V3"></path>
-                              <circle cx="18" cy="6" r="3"></circle>
-                              <circle cx="6" cy="18" r="3"></circle></svg></span
+                              <path d="m3 7 2 2 4-4"></path></svg></span
                         ></a>
                       </div>
                     </div>
@@ -4309,8 +4250,8 @@
           </figure>
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Floor &mdash; 2 glyphs</span
-              ><span class="fc-note">list-checks · git-branch</span>
+              <span class="fc-label">Floor &mdash; 1 glyph</span
+              ><span class="fc-note">list-checks, alone</span>
             </figcaption>
             <div class="rail" style="width: 56px">
               <nav
@@ -4453,31 +4394,7 @@
                               <path d="M13 12h8"></path>
                               <path d="M13 19h8"></path>
                               <path d="m3 17 2 2 4-4"></path>
-                              <path d="m3 7 2 2 4-4"></path></svg></span></a
-                        ><a
-                          href="/settings/workspace/github"
-                          aria-label="Git"
-                          class="relative mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) transition-colors hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                          data-state="closed"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px]"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-git-branch"
-                              aria-hidden="true"
-                            >
-                              <path d="M15 6a9 9 0 0 0-9 9V3"></path>
-                              <circle cx="18" cy="6" r="3"></circle>
-                              <circle cx="6" cy="18" r="3"></circle></svg></span
+                              <path d="m3 7 2 2 4-4"></path></svg></span
                         ></a>
                       </div>
                     </div>
@@ -4503,7 +4420,7 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 4 rows</span
+              <span class="fc-label">Complete &mdash; 3 rows</span
               ><span class="fc-note">the configured, revealed, admin state</span>
             </figcaption>
             <div class="rail" style="width: 300px">
@@ -4719,29 +4636,6 @@
                                   <path d="m3 17 2 2 4-4"></path>
                                   <path d="m3 7 2 2 4-4"></path></svg></span
                               ><span class="flex-1 truncate">Job runs</span></a
-                            ><a
-                              href="/settings/workspace/github"
-                              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                              ><span
-                                aria-hidden="true"
-                                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                                ><svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="24"
-                                  height="24"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  class="lucide lucide-git-branch"
-                                  aria-hidden="true"
-                                >
-                                  <path d="M15 6a9 9 0 0 0-9 9V3"></path>
-                                  <circle cx="18" cy="6" r="3"></circle>
-                                  <circle cx="6" cy="18" r="3"></circle></svg></span
-                              ><span class="flex-1 truncate">Git</span></a
                             >
                           </div>
                         </div>
@@ -4754,7 +4648,7 @@
           </figure>
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Floor &mdash; 2 rows</span
+              <span class="fc-label">Floor &mdash; 1 row</span
               ><span class="fc-note">the open product&rsquo;s common case</span>
             </figcaption>
             <div class="rail" style="width: 300px">
@@ -4922,29 +4816,6 @@
                                   <path d="m3 17 2 2 4-4"></path>
                                   <path d="m3 7 2 2 4-4"></path></svg></span
                               ><span class="flex-1 truncate">Job runs</span></a
-                            ><a
-                              href="/settings/workspace/github"
-                              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                              ><span
-                                aria-hidden="true"
-                                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                                ><svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="24"
-                                  height="24"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  class="lucide lucide-git-branch"
-                                  aria-hidden="true"
-                                >
-                                  <path d="M15 6a9 9 0 0 0-9 9V3"></path>
-                                  <circle cx="18" cy="6" r="3"></circle>
-                                  <circle cx="6" cy="18" r="3"></circle></svg></span
-                              ><span class="flex-1 truncate">Git</span></a
                             >
                           </div>
                         </div>
@@ -4963,15 +4834,32 @@
         <p class="panel-n">
           Declaration order, from <code>app/(authed)/_components/SidebarNav.tsx</code>&rsquo;s
           <code>sections.push({ id: 'bottom' })</code>.
-          <b>The section is four rows and two of them are conditional.</b> It carried six until
-          MOTIR-4254: the documentation and legal rows moved to the shell&rsquo;s Help menu, and
+          <b>The section is three rows and two of them are conditional.</b> It carried six until
+          MOTIR-4254, when the documentation and legal rows moved to the shell&rsquo;s Help menu,
+          and
           <b>the absent-arm reasoning for both moved with them</b>
           &mdash; it describes those rows, so it belongs where the rows are. Read it in
           <code>design/shell/design-notes.md</code> &sect; <i>The Help menu</i>, which is the design
-          of record for both doors now. <b>The FLOOR did not move</b>: it was
-          <i>Job runs &middot; Git</i> before and is <i>Job runs &middot; Git</i> after, because
-          both departing rows were already conditional &mdash; so what shortened is the COMPLETE
-          arm, and an unconfigured deployment loses nothing at all.
+          of record for both doors now.
+        </p>
+        <p class="legend">
+          <b>&#9888; The FLOOR MOVED this time, and the earlier sentence must not be reused.</b>
+          MOTIR-4254 could say the floor was untouched because
+          <i>both departing rows were already conditional</i>, so neither was in it.
+          <b>That is false of MOTIR-4640.</b> Git was <b>unconditional</b> and it
+          <b>was in the floor</b>, so the arithmetic runs the other way: the floor goes from
+          <i>Job runs &middot; Git</i> to <i>Job runs</i>, <b>two rows to one</b>, and every
+          deployment loses a row here rather than only a configured one.
+        </p>
+        <p class="legend">
+          <b>The row LEAVES rather than disappears</b> &mdash; the same disposition
+          <code>Docs</code> and <code>Legal</code> got, but to three destinations rather than one,
+          because the old row had gathered three different tiers&rsquo; business behind one glyph:
+          the host connection&rsquo;s lifecycle is
+          <b>Settings &rsaquo; Organisation &rsaquo; Git</b>, your own account is
+          <b>Settings &rsaquo; Account &rsaquo; Git accounts</b>, and which repositories a project
+          works on is <b>Settings &rsaquo; Project &rsaquo; Repositories</b>. What each of those
+          contains is theirs to state, not this asset&rsquo;s.
         </p>
         <table>
           <thead>
@@ -5005,18 +4893,11 @@
               <td>always</td>
               <td>—</td>
             </tr>
-            <tr>
-              <td><b>Git</b></td>
-              <td><code>git-branch</code></td>
-              <td><code>/settings/workspace/github</code></td>
-              <td>always</td>
-              <td>—</td>
-            </tr>
           </tbody>
         </table>
         <p class="legend">
           Every row is a <code>SidebarItem</code>, and
-          <b>all four take an <code>active</code> arm</b> &mdash; every destination is inside this
+          <b>all three take an <code>active</code> arm</b> &mdash; every destination is inside this
           shell, so <code>pathname</code> can match. That is a property the section only gained by
           losing the two rows that did not have one: the two departed rows pointed off-shell, so the
           rail was never on screen at their destinations. They are anchors without an
