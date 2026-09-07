@@ -170,6 +170,7 @@ export function AiPlanningSettingsEditor({
   aiConfigured,
   canViewLessons = false,
   pause = null,
+  providerTableUrl = null,
 }: {
   projectKey: string;
   projectName: string;
@@ -183,6 +184,17 @@ export function AiPlanningSettingsEditor({
    *  no link rather than a link that 403s. */
   canViewLessons?: boolean;
   pause?: AutoPlanPauseView | null;
+  /**
+   * The absolute url of the published provider table, or `null` on a build that
+   * has not configured the legal manifest.
+   *
+   * Resolved SERVER-side (`lib/legal/links.ts` is `server-only`) and passed down,
+   * which is the idiom MOTIR-4010 established for all three legal-linking
+   * surfaces — it also keeps the operator's document list out of the client
+   * bundle. `null` is the unconfigured build and is the common case for the open
+   * product, so it is a real arm rather than a defensive default.
+   */
+  providerTableUrl?: string | null;
 }) {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
@@ -436,6 +448,66 @@ export function AiPlanningSettingsEditor({
           disabled={locked}
           serverError={serverError?.field === 'aiPlannerModel' ? serverError.message : null}
         />
+
+        {/* THE DATA-PRACTICE PROMISE (Story MOTIR-3665 · MOTIR-3670; design
+            §D2-D4, panel 7). At the FOOT of this card and nowhere else: the
+            promise qualifies the act of CHOOSING A MODEL, so it belongs where
+            that choice is made, and it reads in the right order — pick the
+            model, then learn what happens to what you send it. Under the page
+            title it would read as a claim about auto-plan and sprint packing
+            too, which are cadence settings and not egress.
+
+            ⚠️ TWO SENTENCES, TWO KINDS OF STATEMENT, and the design depends on
+            the difference (§D3). The first is a COMMITMENT — a fact about our
+            own systems, ours to make, stated in the same words on the public
+            provider page. The second is a REPORT — a provider's published
+            position, which cannot be undertaken on its behalf, so it must not be
+            written in a voice that makes it sound like a second promise. They
+            are separate i18n keys for exactly that reason: a translator needs to
+            know which is which, and a revision to one must not silently re-open
+            the other.
+
+            ⚠️ NO PROVIDER FACT APPEARS HERE. No retention window, no training
+            answer, no provider names — those live in the gateway
+            (`motir/datapolicy`) and on the published page, and a third copy in a
+            React component is how that data has already gone stale four times.
+            `tests/settings/aiPlanningDataPractice.test.tsx` asserts the absence
+            rather than trusting this comment. */}
+        <Callout
+          tint="plain"
+          icon={<Info className="size-[15px]" aria-hidden />}
+          testId="ai-planning-data-practice"
+        >
+          <span className="block">
+            {t('aiPlanning.planner.dataPracticeCommitment')}{' '}
+            {t('aiPlanning.planner.dataPracticeReport')}
+          </span>
+          {/* The link is the WHOLE mechanism by which a reader reaches the
+              per-provider answers, since nothing above restates one — and it is
+              an ABSOLUTE url on the operator's own host, because MOTIR-4103 moved
+              `content/legal/` and `app/(public)/legal/` out of this repository. A
+              bare `/legal/model-providers` would resolve against this app and
+              survive only on MOTIR-3884's 301.
+
+              `null` (an unconfigured manifest) renders NO link, and the
+              commitment sentence stands alone — it is true on a self-hosted build
+              whether or not anyone published a provider page. That follows the
+              precedent one card down, whose own comment is the rule: "a link to a
+              page the reader cannot open is worse than no link". It is NOT
+              `signUpLegalLinks`' both-or-neither case, where the paragraph would
+              otherwise assert agreement to a document nobody published; here only
+              the pointer is missing, not the claim. */}
+          {providerTableUrl ? (
+            <a
+              href={providerTableUrl}
+              className="text-(--el-link) mt-2 inline-flex items-center gap-1 text-xs font-medium hover:underline"
+              data-testid="ai-planning-provider-table-link"
+            >
+              {t('aiPlanning.planner.dataPracticeLink')}
+              <ArrowRight className="size-3.5" aria-hidden />
+            </a>
+          ) : null}
+        </Callout>
       </SettingsCard>
 
       {/* ── Card 4 · Planning mistakes (+ the shared footer) ────────────────── */}

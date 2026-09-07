@@ -28,6 +28,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { seedCommentsFixture } from './_helpers/comments-seed';
 import { manufactureServerSideHistory, seedScaleActivity } from './_helpers/activity-seed';
+import { actionWrite as sharedActionWrite, pageRefresh } from './_helpers/authoritative-signal';
 
 // Browser sign-up + the manufacture walk + several tab loads: comfortably
 // more than the 30s default (the comments closer uses the same ceiling).
@@ -82,6 +83,15 @@ async function extendFeed(page: Page, fromName: string, toName: string) {
 // ── The authoritative signals this journey's writes commit through ─────────
 // (MOTIR-3694 — CLAUDE.md § *E2E tests wait on the AUTHORITATIVE signal*.)
 //
+// ⚠️ MOTIR-4399 LIFTED BOTH OF THESE into `_helpers/authoritative-signal.ts`,
+// unchanged, so the next spec that needs them imports them instead of
+// re-deriving them — which is exactly what 3694's file-bounded sweep left
+// undone. The two local aliases below keep every call site in this file byte
+// for byte what it was: the module's parameter is a PATHNAME rather than an
+// identifier, and these bind it. Read the module for the contract — why the URL
+// cannot be the predicate, why the status is deliberately not tested, and when
+// a refresh wait is the WRONG remedy.
+//
 // ⚠️ THE URL CANNOT BE THE PREDICATE ON THIS PAGE. Every mutation here is a
 // Server Action, and Next transports those as a POST to the CURRENT page URL
 // carrying a `next-action` header — so the priority edit, the status
@@ -98,27 +108,9 @@ async function extendFeed(page: Page, fromName: string, toName: string) {
 // Note the third and fourth both carry `"blocked_by"`: the RELATIONSHIP is not
 // a discriminator, the blocker's own id is.
 
-/**
- * Resolve when the Server Action whose arguments contain `marker` answers.
- *
- * ⚠️ ARM IT BEFORE THE ACTION — a response that has already arrived can never
- * be waited for.
- *
- * The predicate deliberately does NOT test the status. A write that 500s would
- * then match nothing and hang to the test timeout; matching the request here
- * and asserting the status at the call site fails in seconds and names the code
- * it actually got.
- */
+/** This page's Server-Action write, by a marker in its arguments. */
 function actionWrite(page: Page, identifier: string, marker: string) {
-  return page.waitForResponse((res) => {
-    const req = res.request();
-    return (
-      req.method() === 'POST' &&
-      req.headers()['next-action'] !== undefined &&
-      new URL(res.url()).pathname === `/items/${identifier}` &&
-      (req.postData() ?? '').includes(marker)
-    );
-  });
+  return sharedActionWrite(page, `/items/${identifier}`, marker);
 }
 
 /**
@@ -137,19 +129,9 @@ function actionWrite(page: Page, identifier: string, marker: string) {
  * action's own response, so a link row is on screen before this GET is even
  * issued. The refresh still runs, still reconciles, and is still what this
  * helper waits for — it is simply no longer what paints the rail.
- *
- * The page does not prefetch itself, so a `_rsc` GET of its OWN route is the
- * refresh. Only the writes that call `router.refresh()` may be awaited this way
- * — the rail's own field edits reconcile in client state and issue no such
- * request.
  */
 function detailPageRefresh(page: Page, identifier: string) {
-  return page.waitForResponse(
-    (res) =>
-      res.request().method() === 'GET' &&
-      new URL(res.url()).pathname === `/items/${identifier}` &&
-      (res.request().headers()['rsc'] !== undefined || res.url().includes('_rsc=')),
-  );
+  return pageRefresh(page, `/items/${identifier}`);
 }
 
 /** Post a root comment through the real composer (the 5.1.5 surface). */

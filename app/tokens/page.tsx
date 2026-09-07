@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, Suspense, useState } from 'react';
 import {
   BarChart3,
   BookOpen,
@@ -28,6 +28,8 @@ import {
   chartColor,
 } from '@/components/ui/charts';
 import { Card } from '@/components/ui/Card';
+import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
+import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -1010,6 +1012,46 @@ export default function TokensPage() {
           <Button loading>Loading</Button>
           <Button disabled>Disabled</Button>
         </div>
+      </Section>
+
+      <Section title="Primitives — Hero AI control (the pill + the M orb)">
+        <p
+          className="text-sm"
+          style={{ color: 'var(--el-page-text-muted)', marginBottom: 'var(--spacing-md)' }}
+        >
+          The header pill and the floating <strong>M</strong> orb — the product&apos;s headline
+          affordance and the sanctioned exception to the flat-button norm. They are the REAL shipped
+          components, not stand-ins, so the specimen cannot drift from the app. Each style gives
+          them its own material through{' '}
+          <code className="font-mono text-xs">[data-surface=&apos;ai-cta&apos;]</code> plus{' '}
+          <code className="font-mono text-xs">[data-ai-cta]</code>; toggle{' '}
+          <code className="font-mono text-xs">data-style</code> above to see fill, border, glow and
+          type change together while radius and padding keep flowing through the shape tokens.
+        </p>
+        {/* The orb ships `fixed right-5 bottom-5 z-40`. Here it is `relative`, so
+            the specimen reads as a row and the orb cannot float over the rest of
+            this page — `cn` is tailwind-merge, so the later class replaces the
+            shipped one rather than fighting it. `relative` rather than `static`
+            because the orb's pulse aura is an `absolute inset-0` child and needs
+            a containing block; `static` would let it escape to whatever is
+            positioned above. Nothing the orb is measured for (fill, border,
+            shadow, type) is a function of its position.
+            `useSearchParams` lives under the launcher, so the pair is wrapped in a
+            Suspense boundary — the requirement Next.js puts on a client hook that
+            reads the URL during a static render. */}
+        <Suspense fallback={null}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--spacing-lg)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <PlanWithAILauncher context={{ kind: 'project' }} />
+            <PlanWithAIFab className="relative right-auto bottom-auto z-auto" />
+          </div>
+        </Suspense>
       </Section>
 
       <Section title="Primitives — Spinner">

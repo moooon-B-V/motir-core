@@ -65,19 +65,25 @@
       (connect -> configure -> review + Confirm).
 
       Panels (review EACH — mistake #31):
-        0  THE LANDING — the full-screen universal plan screen (NO left nav) you reach AFTER import:
-           finished-step CARDS (connected · indexed · imported) + the code-aware plan (canvas + chat).
-           Composes the EXISTING PlanningWorkspace (MOTIR-1193/1299); the migrate-NEW bits are the
-           done-cards + the reconcile framing. Conventions + code-health are derived SILENTLY (they
-           live on the Code-health page, 7.14) — nothing to approve.
+        0  REMOVED (MOTIR-4766, Yue 2026-09-06). It drew a bespoke landing — done-cards, a
+           "here's a plan grounded in your code" lead, a canvas of proposed subtasks, a confirm
+           bar — i.e. a planner that had read the repository and handed over a plan nobody asked
+           for. That is not a planning session: a REGULAR session arrives with the context and
+           WAITS for the user to say what to plan. Nothing about the wizard's ending is
+           migrate-specific, so there is nothing here to draw; the panel is now a note saying why,
+           and the design of record is design/ai-chat/planning-workspace.mock.html (and
+           reading-and-handoff.mock.html for a never-onboarded arrival). Conventions +
+           code-health are still derived SILENTLY (they live on the Code-health page, 7.14) —
+           nothing to approve.
         1  Connect (multi-select the project's repos) — composes 7.7.1. MULTI-PROVIDER: GitHub App
            + GitLab OAuth, each repo tagged with its host; reads through the GitProvider seam
            (lib/git, MOTIR-891); GitLab provider = MOTIR-1470.
         2  Index (per-repo progress + aggregate gate) — the NEW step; on complete, conventions +
            code-health are derived silently.
         3  Import work items (OPTIONAL) — composes design/import (937), embedded not redrawn.
-           After import (or skip) -> LAND on Panel 0 (the full-screen plan screen). Planning is NOT
-           a wizard panel — it is the existing universal plan screen.
+           After import (or skip) the wizard simply OPENS the universal plan window and the regular
+           session begins. Planning is NOT a wizard panel and never was — this line used to point
+           at a Panel 0 that contradicted it.
         4  finished-early / error / resume states.
       Toggle dark mode (top-right) to confirm token parity.
     -->
@@ -1200,176 +1206,16 @@
         height: 12px;
       }
 
-      /* ---- Discovery (step 4, 7.2.1) ---- */
-      .chat {
-        display: grid;
-        gap: 12px;
-      }
-      .bubble {
-        max-width: 78%;
-        padding: 11px 14px;
-        border-radius: var(--radius-card);
-        font-size: 13.5px;
-        line-height: 1.5;
-      }
-      .bubble.ai {
-        background: var(--el-surface-soft);
-        border: 1px solid var(--el-border);
-        color: var(--el-text);
-        border-top-left-radius: var(--radius-control);
-      }
-      .bubble.user {
-        background: var(--el-accent);
-        color: var(--el-accent-text);
-        justify-self: end;
-        border-top-right-radius: var(--radius-control);
-      }
-      .composer {
-        display: flex;
-        gap: 10px;
-        margin-top: 14px;
-      }
-      .composer .field {
-        flex: 1;
-        height: var(--height-control);
-        border: 1px solid var(--el-input-border);
-        border-radius: var(--radius-input);
-        background: var(--el-page-bg);
-        color: var(--el-text-muted);
-        display: flex;
-        align-items: center;
-        padding: 0 var(--spacing-input-x);
-        font-size: 13px;
-      }
-
-      /* ---- Generate + review (step 5, 7.3.1) ---- */
-      .canvas {
-        position: relative;
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        background: var(--el-canvas, var(--color-canvas));
-        background-image: radial-gradient(var(--el-border-strong) 1px, transparent 0);
-        background-size: 20px 20px;
-        padding: 18px;
-        min-height: 196px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        align-content: flex-start;
-      }
-      .node {
-        background: var(--el-card);
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        box-shadow: var(--shadow-subtle);
-        padding: 10px 12px;
-        width: 172px;
-      }
-      .node.proposed {
-        border: 1.5px dashed var(--el-accent-on-surface);
-        background: var(--el-surface-soft);
-      }
-      .node .n-kind {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font: 600 10px var(--font-mono);
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--el-text-secondary);
-      }
-      .node .n-kind .k-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: var(--radius-badge);
-      }
-      .node .n-title {
-        font-size: 12.5px;
-        font-weight: 600;
-        margin-top: 5px;
-        line-height: 1.35;
-      }
-      .node .n-repo {
-        margin-top: 6px;
-      }
-      .confirm-bar {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-top: 14px;
-        padding: 12px 16px;
-        border: 1px solid var(--el-accent-on-surface);
-        border-radius: var(--radius-card);
-        background: var(--el-surface-soft);
-      }
-      .confirm-bar .cb-txt {
-        font-size: 13px;
-        color: var(--el-text-secondary);
-      }
-      .confirm-bar .cb-txt strong {
-        color: var(--el-text-strong);
-      }
-      .confirm-bar .spacer {
-        margin-left: auto;
-      }
-
-      /* ---- THE LANDING: full-screen universal plan screen (NO left nav) ---- */
-      .plan-screen {
-        padding: 24px 28px 28px;
-      }
-      .done-cards {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 20px;
-      }
-      .done-card {
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        padding: 10px 14px;
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        background: var(--el-surface);
-      }
-      .done-card .dc-ic {
-        display: grid;
-        place-items: center;
-        width: 22px;
-        height: 22px;
-        border-radius: var(--radius-badge);
-        background: var(--el-tint-mint);
-        color: var(--el-text-strong);
-        flex: none;
-      }
-      .done-card .dc-ic svg {
-        width: 13px;
-        height: 13px;
-      }
-      .done-card .dc-name {
-        font-size: 12.5px;
-        font-weight: 650;
-        color: var(--el-text);
-      }
-      .done-card .dc-meta {
-        display: block;
-        font-size: 11.5px;
-        color: var(--el-text-secondary);
-      }
-      .plan-lead {
-        margin: 0 0 16px;
-        font-size: 13.5px;
-        color: var(--el-text-secondary);
-      }
-      .plan-lead strong {
-        color: var(--el-text-strong);
-      }
-      .plan-body {
-        display: grid;
-        grid-template-columns: 1fr 322px;
-        gap: 18px;
-        align-items: start;
-      }
+      /* ---- The chat / canvas / done-card rules that PANEL 0 used are GONE
+         (MOTIR-4766). Panel 0 drew a bespoke landing — done-cards, a
+         "here's a plan grounded in your code" lead, a canvas of proposed
+         subtasks, a confirm bar — and what the wizard actually opens is the
+         REGULAR planning session, which is designed in `design/ai-chat/` and is
+         not this asset's to redraw. Every class below it (`.chat`, `.bubble`,
+         `.composer`, `.canvas`, `.node`, `.confirm-bar`, `.plan-screen`,
+         `.done-card*`, `.plan-lead`, `.plan-body`) was used by that panel and by
+         nothing else, so they went with it rather than being left as a set a
+         later panel could quietly re-adopt. ---- */
 
       /* ---- Panel 6 states ---- */
       .states-grid {
@@ -1515,190 +1361,50 @@
     </div>
 
     <!-- ==========================================================
-         PANEL 0 — THE LANDING: full-screen universal plan screen (NO left nav).
-         You land here after the (optional) import step. Finished-step CARDS
-         (connected · indexed · imported) + the code-aware plan. This COMPOSES the
-         EXISTING PlanningWorkspace (MOTIR-1193/1299) — the migrate-new bits are the
-         done-cards + the reconcile framing; the canvas/chat is the shipped surface.
+         PANEL 0 — REMOVED (2026-09-06 · MOTIR-4766, at Yue's direction).
+         What the wizard opens at the end is the REGULAR PLANNING SESSION and
+         nothing else, so there is nothing here to draw. The note in its place
+         says so, because an absent panel with no reason attached is one the next
+         card re-draws.
     =========================================================== -->
     <div class="panel-label">
-      Panel 0 · You LAND here after import — the full-screen universal plan screen (NO left nav)
-      <b>(finished-step cards + the code-aware plan · composes the EXISTING PlanningWorkspace)</b>
+      Panel 0 · WHERE THE WIZARD ENDS — the regular planning session, and it is NOT DRAWN HERE
+      <b>(REMOVED · MOTIR-4766 · the design of record is `design/ai-chat/`)</b>
     </div>
     <div class="panel">
-      <div class="wz">
-        <div class="wz-bar">
-          <span class="brand">
-            <span class="logo" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                width="15"
-                height="15"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            </span>
-            Motir
-          </span>
-          <span class="flow-name">acme — planning your project</span>
-          <span class="right">
-            <button class="save-exit" type="button">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 3v5h5" />
-                <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-                <path d="M12 7v5l4 2" />
-              </svg>
-              Save &amp; exit
-            </button>
-            <span class="avatar">YZ</span>
-          </span>
-        </div>
-
-        <div class="plan-screen">
-          <div class="done-cards">
-            <div class="done-card">
-              <span class="dc-ic" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M20 6 9 17l-5-5" /></svg
-              ></span>
-              <span
-                ><span class="dc-name">Connected</span
-                ><span class="dc-meta">3 repositories · GitHub + GitLab</span></span
-              >
-            </div>
-            <div class="done-card">
-              <span class="dc-ic" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M20 6 9 17l-5-5" /></svg
-              ></span>
-              <span
-                ><span class="dc-name">Indexed</span
-                ><span class="dc-meta">5,412 files · 31,208 symbols</span></span
-              >
-            </div>
-            <div class="done-card">
-              <span class="dc-ic" aria-hidden="true"
-                ><svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="3"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M20 6 9 17l-5-5" /></svg
-              ></span>
-              <span
-                ><span class="dc-name">Imported</span
-                ><span class="dc-meta">142 work items · Jira</span></span
-              >
-            </div>
-          </div>
-
-          <p class="plan-lead">
-            <strong>Your codebase is in Motir.</strong> Here's a plan grounded in your code —
-            reconciled with the 142 imported items (no duplicates), each proposed item tagged with
-            the repo it lands in. Chat to adjust it, or add it to your backlog.
-          </p>
-
-          <div class="plan-body">
-            <div>
-              <div class="canvas">
-                <div class="node">
-                  <span class="n-kind"
-                    ><span class="k-dot" style="background: var(--el-type-story)"></span>Story</span
-                  >
-                  <div class="n-title">Notification digests</div>
-                  <div class="n-repo"><span class="pill sky">acme/api</span></div>
-                </div>
-                <div class="node proposed">
-                  <span class="n-kind"
-                    ><span class="k-dot" style="background: var(--el-type-subtask)"></span>Subtask ·
-                    add</span
-                  >
-                  <div class="n-title">Batch reminders in the digest worker</div>
-                  <div class="n-repo"><span class="pill sky">acme/api</span></div>
-                </div>
-                <div class="node proposed">
-                  <span class="n-kind"
-                    ><span class="k-dot" style="background: var(--el-type-subtask)"></span>Subtask ·
-                    add</span
-                  >
-                  <div class="n-title">Digest preferences panel</div>
-                  <div class="n-repo"><span class="pill mint">acme/web</span></div>
-                </div>
-                <div class="node proposed">
-                  <span class="n-kind"
-                    ><span class="k-dot" style="background: var(--el-type-subtask)"></span>Subtask ·
-                    add</span
-                  >
-                  <div class="n-title">Shared email template types</div>
-                  <div class="n-repo"><span class="pill">acme/shared</span></div>
-                </div>
-              </div>
-              <div class="confirm-bar">
-                <span class="cb-txt"><strong>6 proposed</strong> · nothing saved yet</span>
-                <span class="spacer"></span>
-                <button class="btn ghost sm" type="button">Discard</button>
-                <button class="btn primary sm" type="button">Add 6 items to your backlog</button>
-              </div>
-            </div>
-
-            <div class="chat">
-              <div class="bubble ai">
-                I read your <strong>3 repositories</strong> and the <strong>142 items</strong> you
-                imported. Your <code>acme/api</code> digest worker sends one email per event — your
-                backlog doesn't cover batching yet, so I've proposed it. I skipped anything your
-                imported tickets already track.
-              </div>
-              <div class="bubble user">Group the two API subtasks under the digest story.</div>
-              <div class="bubble ai">Done — regrouped. Anything else before you add them?</div>
-              <div class="composer">
-                <span class="field">Tell Motir what to change…</span>
-                <button class="btn primary sm" type="button" aria-label="Send">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M22 2 11 13" />
-                    <path d="M22 2 15 22l-4-9-9-4z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="card soft" style="padding: 18px">
+        <p class="muted-note" style="margin: 0">
+          <strong
+            >This panel used to draw a bespoke landing, and that was wrong (Yue,
+            2026-09-06).</strong
+          >
+          It showed finished-step cards, a <em>"Here's a plan grounded in your code"</em> lead, a
+          canvas already full of proposed subtasks and a confirm bar reading
+          <em>6 proposed · nothing saved yet</em> — a planner that had read the repository and
+          handed over a plan nobody asked for.
+        </p>
+        <p class="muted-note" style="margin: 11px 0 0">
+          <strong>That is not what a planning session is.</strong> In a regular session the planner
+          arrives with the context — the code graph, the imported backlog, the direction — and then
+          <strong>WAITS for the user to say what to plan</strong>. It asks; it does not propose a
+          tree unprompted. Nothing about that is migrate-specific: it is the same session a user
+          gets from <strong>Plan with AI</strong> on any project, on any day, and it is already
+          designed.
+        </p>
+        <p class="muted-note" style="margin: 11px 0 0">
+          <strong>So the wizard's ending is an OPEN, not a surface.</strong> Set-up finishes, the
+          universal plan window opens, and the session begins the way every session begins. The
+          design of record is <span class="code">design/ai-chat/planning-workspace.mock.html</span>
+          (MOTIR-1193 / MOTIR-1299) and, for a project arriving with never-approved onboarding,
+          <span class="code">design/ai-chat/reading-and-handoff.mock.html</span> (MOTIR-4766).
+        </p>
+        <p class="muted-note" style="margin: 11px 0 0">
+          <strong>This asset's own header said as much before the panel contradicted it</strong> —
+          <em
+            >"PLANNING IS NOT DESIGNED HERE — it is the EXISTING universal plan screen … after the
+            (optional) import step the wizard OPENS that screen"</em
+          >. The panel is gone; the header stands.
+        </p>
       </div>
     </div>
 
@@ -3167,6 +2873,275 @@
           </p>
         </div>
       </div>
+      <div class="panel-label">
+        Panel 6 · The PLANNER-DECIDED step set — a rail SHORTER than the full one, and what the user
+        is told about the steps that are not in it
+        <b
+          >(NEW · MOTIR-4766 · the verdict is MOTIR-4767's, the rendering is MOTIR-4759's · reuses
+          Panel 5's SATISFIED treatment)</b
+        >
+      </div>
+      <div class="panel">
+        <p class="muted-note" style="margin: 0 0 14px">
+          Panel 5 gave a step that did not run its own state.
+          <strong>This panel is what happens when SEVERAL of them do not run.</strong> The planner
+          now returns which steps to KEEP (MOTIR-4767), so the rail a user meets is shorter than the
+          full one — and the failure to avoid is the one Panel 5 was written for, at scale: three
+          rows that quietly disappear read as three things taken away, and a rail of four
+          <em>satisfied</em> rows beside one live step reads as a list of things the user did not
+          do.
+          <strong
+            >So the steps that are not kept COLLAPSE INTO ONE ROW, in Panel 5's own treatment, and
+            that row names them.</strong
+          >
+          The rail gets shorter; nothing vanishes.
+        </p>
+        <div class="triptych">
+          <div>
+            <div class="state-cap">The FULL set — nothing to read, so nothing collapses</div>
+            <nav class="rail rail-mini" aria-label="Migration steps">
+              <div class="rail-title">Your migration</div>
+              <div class="rail-sub">Four questions about your direction.</div>
+              <div class="rail-group">Set up your codebase</div>
+              <div class="step upcoming">
+                <span class="marker">1</span
+                ><span
+                  ><span class="s-name">Connect</span
+                  ><span class="s-meta">Nothing connected yet</span></span
+                >
+              </div>
+              <div class="step upcoming">
+                <span class="marker">2</span><span><span class="s-name">Index</span></span>
+              </div>
+              <div class="rail-group">Import your work <span class="opt">optional</span></div>
+              <div class="step optional">
+                <span class="marker" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 3v13" />
+                    <path d="m7 12 5 4 5-4" />
+                    <path d="M5 21h14" /></svg></span
+                ><span
+                  ><span class="s-name">Import work items</span
+                  ><span class="s-meta">Optional</span></span
+                >
+              </div>
+              <div class="rail-group">Your direction</div>
+              <div class="step current" aria-current="step">
+                <span class="marker" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+                    <path d="M12 17h.01" /></svg></span
+                ><span
+                  ><span class="s-name">A few questions</span
+                  ><span class="s-meta">What you're building, and who for</span></span
+                >
+              </div>
+            </nav>
+            <p class="muted-note" style="margin-top: 9px">
+              The floor, unchanged from Panel 5.
+              <strong>No repository and no backlog means the planner keeps everything</strong>, so
+              there is nothing to collapse and no summary row — the rail a user meets here is
+              exactly the rail that shipped.
+            </p>
+          </div>
+          <div>
+            <div class="state-cap">Planner kept ONE — three steps collapse</div>
+            <nav class="rail rail-mini" aria-label="Migration steps">
+              <div class="rail-title">Your migration</div>
+              <div class="rail-sub">Two questions — everything else is already here.</div>
+              <div class="rail-group">Already answered by your project</div>
+              <div class="step satisfied">
+                <span class="marker" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg></span
+                ><span
+                  ><span class="s-name">Connect, Index and Import</span
+                  ><span class="s-meta">Read from acme/widgets and your 214 work items</span></span
+                >
+              </div>
+              <div class="rail-group">Your direction</div>
+              <div class="step current" aria-current="step">
+                <span class="marker" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+                    <path d="M12 17h.01" /></svg></span
+                ><span
+                  ><span class="s-name">A few questions</span
+                  ><span class="s-meta">What you're building, and who for</span></span
+                >
+              </div>
+            </nav>
+            <p class="muted-note" style="margin-top: 9px">
+              <strong>ONE row, and it says the three names.</strong> The group heading is the
+              sentence — <em>Already answered by your project</em> — and the meta line says WHAT
+              answered them, which is the same claim the provenance line makes at the end of the
+              flow. Panel 5's sky tint and read glyph, unchanged; no second visual language for the
+              same fact.
+            </p>
+          </div>
+          <div>
+            <div class="state-cap">Planner kept TWO — the set is a JUDGEMENT, not a rank</div>
+            <nav class="rail rail-mini" aria-label="Migration steps">
+              <div class="rail-title">Your migration</div>
+              <div class="rail-sub">Bring your backlog over, then two questions.</div>
+              <div class="rail-group">Already answered by your project</div>
+              <div class="step satisfied">
+                <span class="marker" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg></span
+                ><span
+                  ><span class="s-name">Connect and Index</span
+                  ><span class="s-meta">Read from acme/widgets</span></span
+                >
+              </div>
+              <div class="rail-group">Import your work <span class="opt">optional</span></div>
+              <div class="step current" aria-current="step">
+                <span class="marker" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 3v13" />
+                    <path d="m7 12 5 4 5-4" />
+                    <path d="M5 21h14" /></svg></span
+                ><span
+                  ><span class="s-name">Import work items</span
+                  ><span class="s-meta">Nothing in the backlog yet</span></span
+                >
+              </div>
+              <div class="rail-group">Your direction</div>
+              <div class="step upcoming">
+                <span class="marker">2</span
+                ><span
+                  ><span class="s-name">A few questions</span
+                  ><span class="s-meta">What you're building, and who for</span></span
+                >
+              </div>
+            </nav>
+            <p class="muted-note" style="margin-top: 9px">
+              A repository that is real but thin.
+              <strong>Connect and Index are satisfied and Import is not</strong> — so the kept set
+              is not a prefix, a suffix or a count, and the rail must render whatever the planner
+              returns rather than <em>the last N steps</em>. The collapsed row can therefore sit
+              above a live step it does not precede in the shipped order.
+            </p>
+          </div>
+        </div>
+
+        <div class="states-grid" style="margin-top: 22px">
+          <div>
+            <div class="state-cap">What the user is told at the end — the same provenance line</div>
+            <div class="card" style="padding: 16px">
+              <div class="step-eyebrow">Your plan is ready</div>
+              <h3 style="margin: 4px 0 10px; font-size: 16px">42 work items, across 6 epics</h3>
+              <div class="provenance">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" />
+                </svg>
+                <span
+                  >Motir planned from <b>acme/widgets</b> and <b>214 imported work items</b>, and
+                  from the two answers you gave. <b>Connect, Index and Import</b> were already
+                  answered by your project, so it did not ask you about them. Everything below is a
+                  proposal — change anything before you add it.</span
+                >
+              </div>
+              <div style="display: flex; gap: 10px; margin-top: 14px">
+                <button class="btn primary sm" type="button">Review the plan</button>
+                <button class="btn ghost sm" type="button">Answer the questions anyway</button>
+              </div>
+            </div>
+            <p class="muted-note" style="margin-top: 9px">
+              <strong>The line grows by one clause and gains no new mechanism.</strong> Panel 5's
+              provenance line already said what Motir planned FROM; a shortened rail adds the second
+              half of the same sentence — which steps that reading stood in for. It stays a
+              STATEMENT: the escape back to the questions is the same button, and the flow does not
+              wait on it.
+            </p>
+          </div>
+          <div>
+            <div class="state-cap">The rules this panel is holding itself to</div>
+            <div class="card soft" style="padding: 16px">
+              <p class="muted-note" style="margin: 0">
+                <strong>1 · A step that is not kept is COLLAPSED, never deleted.</strong> Deleting
+                is the confusion Panel 5 exists to prevent, and it gets worse rather than better as
+                more steps go: a user who came in expecting a wizard and meets two rows has no way
+                to tell whether Motir skipped the rest or lost them.
+              </p>
+              <p class="muted-note" style="margin: 10px 0 0">
+                <strong>2 · One collapsed row, not N satisfied rows.</strong> Panel 5's single
+                <em>Answered from your project</em> row is right for ONE step. Four of them beside
+                one live step is a rail whose subject is what the user did not do — the opposite of
+                what a shorter set is for.
+              </p>
+              <p class="muted-note" style="margin: 10px 0 0">
+                <strong>3 · No row here names a tier.</strong>
+                <em>A few questions</em> and <em>Your direction</em>, exactly as MOTIR-4755 revision
+                2 settled it. <span class="code">discovery</span> /
+                <span class="code">vision</span> / <span class="code">feasibility</span> /
+                <span class="code">validation</span> are the identifiers a kept-step set travels as
+                (MOTIR-4767 validates against them) — and they stay identifiers.
+              </p>
+              <p class="muted-note" style="margin: 10px 0 0">
+                <strong>4 · The rail renders the verdict; it does not audit it.</strong> No count,
+                no threshold and no re-derivation from the substrate decides what is drawn here
+                (MOTIR-4769's own boundary). A kept step the wizard does not have is refused
+                upstream, so the rail never has to draw one.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <p class="muted-note" style="max-width: 1120px; margin: 14px auto 0">
         Every step persists its result — including <strong>per-repo index status</strong> and
         per-repo convention approval (MOTIR-1499's <span class="code">MigrateOnboarding</span> state

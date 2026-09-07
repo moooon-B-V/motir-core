@@ -896,18 +896,71 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'Historical: the app-hosted /p/<key> path MOTIR-3951 deleted, quoted as the address the retargets replace. Permanent.',
   },
 
-  // ── Forward-looking: the ORGANISATION's Git page (Story MOTIR-4669) ───────
-  //    `design/org-admin/design-notes.md`'s Panel-7 amendment specifies the
-  //    organisation settings NAV, whose `git` row points at a route nothing
-  //    has built: `app/(authed)/settings/organization/` holds `billing`,
-  //    `members`, `security` and `usage`, and no `git`. MOTIR-4680 builds the
-  //    page; this row DELETES ITSELF in that commit, and the `carries no KNOWN
-  //    entry that has stopped applying` check above is what turns a forgotten
-  //    deletion into a red build rather than a quiet one.
+  // ── The git surface MOVED A TIER (Story MOTIR-4669 · MOTIR-4680) ─────────
+  //    Twelve assets draw the old address; ALL of them are point-in-time records
+  //    of a surface that shipped, and the address still resolves — as a 308.
+  //    ⚠️ These rows do NOT delete themselves: the redirect is PERMANENT, so the
+  //    condition that made them necessary never ends. That is the difference from
+  //    the forward-looking rows below, which each name the card that removes them.
+  {
+    file: 'design/github/design-notes.md',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/gitlab/design-notes.md',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/home/home.mock.html',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
   {
     file: 'design/org-admin/design-notes.md',
-    address: '/settings/organization/git',
-    why: 'Forward-looking: the org Git page MOTIR-4680 builds. Named in the Panel-7 nav registry as the one NEW row. Delete this entry in the commit that adds the route.',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/repository-set/design-notes.md',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/repository-set/repositories-room.mock.html',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/shell/3d-immersive-shell.mock.html',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/shell/design-notes.md',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/shell/help-menu.mock.html',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/shell/rail-bottom-section.mock.html',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
+  },
+  {
+    file: 'design/shell/top-bar.mock.html',
+    address: '/settings/workspace/github',
+    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
   },
   // ── The ORG level of the console (Story MOTIR-4337) ──────────────────────
   //    ⚠️ TWO FORWARD-LOOKING ROWS STOOD HERE AND ARE GONE, deleted by the card
@@ -1772,6 +1825,36 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/shell/navigation-pending.mock.html',
     path: 'app/(public)/explore/(square)/loading.tsx',
     why: 'The public rendering surface moved to motir-marketing (MOTIR-3951); this asset is a point-in-time record of the file before it was deleted.',
+  },
+  {
+    file: 'design/github/design-notes.md',
+    path: 'app/(authed)/settings/workspace/github',
+    why: 'MOTIR-4680 moved the git connect surface to the ORGANISATION tier and DELETED this route; `/settings/workspace/github` is now a permanent redirect. The assets cite the file as the surface they were drawn against, which is what a point-in-time record is for. Enumerated from a run of this lane.',
+  },
+  {
+    file: 'design/repository-set/design-notes.md',
+    path: 'app/(authed)/settings/workspace/github',
+    why: 'MOTIR-4680 moved the git connect surface to the ORGANISATION tier and DELETED this route; `/settings/workspace/github` is now a permanent redirect. The assets cite the file as the surface they were drawn against, which is what a point-in-time record is for. Enumerated from a run of this lane.',
+  },
+  {
+    file: 'design/repository-set/design-notes.md',
+    path: 'app/(authed)/settings/workspace/github/page.tsx',
+    why: 'MOTIR-4680 moved the git connect surface to the ORGANISATION tier and DELETED this route; `/settings/workspace/github` is now a permanent redirect. The assets cite the file as the surface they were drawn against, which is what a point-in-time record is for. Enumerated from a run of this lane.',
+  },
+  {
+    file: 'design/repository-set/repositories-room.mock.html',
+    path: 'app/(authed)/settings/workspace/github/page.tsx',
+    why: 'MOTIR-4680 moved the git connect surface to the ORGANISATION tier and DELETED this route; `/settings/workspace/github` is now a permanent redirect. The assets cite the file as the surface they were drawn against, which is what a point-in-time record is for. Enumerated from a run of this lane.',
+  },
+  {
+    file: 'design/repository-set/repository-set.mock.html',
+    path: 'app/(authed)/settings/workspace/github/page.tsx',
+    why: 'MOTIR-4680 moved the git connect surface to the ORGANISATION tier and DELETED this route; `/settings/workspace/github` is now a permanent redirect. The assets cite the file as the surface they were drawn against, which is what a point-in-time record is for. Enumerated from a run of this lane.',
+  },
+  {
+    file: 'design/repository-set/takeover.mock.html',
+    path: 'app/(authed)/settings/workspace/github/page.tsx',
+    why: 'MOTIR-4680 moved the git connect surface to the ORGANISATION tier and DELETED this route; `/settings/workspace/github` is now a permanent redirect. The assets cite the file as the surface they were drawn against, which is what a point-in-time record is for. Enumerated from a run of this lane.',
   },
   // ── ⚠️ FOUR ROWS FOR `docs/decisions/internal-billing-classification.md`
   //    STOOD HERE AND ARE GONE (Story MOTIR-4337). They exempted four assets

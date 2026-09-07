@@ -156,7 +156,10 @@ test('@smoke connect flow: not-connected panel → OAuth binds the identity → 
   await signUp(page, email);
 
   // Panel 1 — not connected: the single-grant explanation + the connect CTA.
-  await page.goto('/settings/workspace/gitlab');
+  // ⚠️ AT THE ORGANISATION TIER NOW (Story MOTIR-4669 · MOTIR-4680). The
+  // workspace route is deleted and permanently redirects here; the provider is a
+  // search param because the repository inventory below spans both hosts.
+  await page.goto('/settings/organization/git?provider=gitlab');
   await expect(page.getByRole('heading', { name: 'Connect GitLab' })).toBeVisible();
   await expect(page.getByText('Step 1 · Authorize')).toBeVisible();
   await expect(page.getByText('Step 2 · Projects')).toBeVisible();
@@ -170,7 +173,7 @@ test('@smoke connect flow: not-connected panel → OAuth binds the identity → 
 
   // The connect grant — the OAuth round-trip (real start + callback routes).
   await completeGitlabConnectGrant(page);
-  await page.waitForURL('**/settings/workspace/gitlab?gitlab=connected');
+  await page.waitForURL('**/settings/organization/git?**gitlab=connected');
   await expect(page.getByRole('status')).toHaveText(
     'GitLab connected. Choose projects below to sync merge requests and pipelines.',
   );
@@ -188,11 +191,20 @@ test('@smoke connect flow: not-connected panel → OAuth binds the identity → 
   const workspaceId = await workspaceIdFor(email);
   await seedGitlabProject(workspaceId);
   await page.reload();
-  await expect(page.getByText(`${E2E_GITLAB_PROJECT.owner}/`)).toBeVisible();
-  await expect(page.getByText(E2E_GITLAB_PROJECT.name, { exact: true })).toBeVisible();
-  await expect(page.getByText(E2E_GITLAB_PROJECT.defaultBranch, { exact: true })).toBeVisible();
-  await expect(page.getByText('Synced', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Disconnect' })).toBeVisible();
+  // ⚠️ SCOPED TO THE CONNECTION PANEL. Since MOTIR-4680 this route also renders
+  // the ORGANISATION's repository inventory below, which names the same project —
+  // an unscoped `getByText` is a strict-mode violation, and the one that matters
+  // here is the panel's own row.
+  const projects = page.locator('#main').getByRole('list').first();
+  await expect(projects.getByText(`${E2E_GITLAB_PROJECT.owner}/`).first()).toBeVisible();
+  await expect(projects.getByText(E2E_GITLAB_PROJECT.name, { exact: true }).first()).toBeVisible();
+  await expect(
+    projects.getByText(E2E_GITLAB_PROJECT.defaultBranch, { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText('Synced', { exact: true }).first()).toBeVisible();
+  await expect(
+    page.locator('#main').getByRole('button', { name: 'Disconnect' }).first(),
+  ).toBeVisible();
 });
 
 test('@smoke MR opened → the linked item goes Implemented; merged → Done (token-authed webhooks; missing token 401s)', async ({

@@ -93,9 +93,24 @@ export interface PlanWithAIFabProps {
 // `design/ai-chat/ai-callout-menu.mock.html` reproduces this recipe and reads
 // the same token, and `tests/theme/orb-glyph-contrast.test.ts` fails if either
 // side grows its own copy.
+//
+// ⚠️ AND IT READS FROM `--plan-orb-fill`, with the recipe below as the FALLBACK
+// (MOTIR-4743, the same seam shape the `box-shadow` below already uses). An
+// inline `background-image` beats every stylesheet rule, so until this variable
+// existed no [data-style] block could give the orb its own material — the
+// per-style treatment `design/ai-chat/design-notes.md` § *The STYLE MATRIX*
+// draws was unreachable. A style that sets nothing falls through to this
+// literal, byte-identical to before.
+//
+// ⚠️ A STYLE COMPOSES OVER THIS RECIPE, IT NEVER REPLACES IT, and the added
+// layer is CROWN-CONFINED (`background-size: 100% 20–26%`, above the centred
+// 26/56 glyph box). Measured across the whole circle, glassmorphism's sheen and
+// retrofuturism's crown put the glyph box at 3.17:1 / 2.67:1 and 3.34:1 /
+// 2.78:1 — under the 3:1 floor `tests/theme/orb-glyph-contrast.test.ts`
+// enforces. Confined, both measure the shipped 3.78:1 / 3.10:1.
 const ORB_STYLE: CSSProperties = {
   backgroundImage:
-    'radial-gradient(circle at 33% 27%, color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)), var(--el-accent) 56%, color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight)))',
+    'var(--plan-orb-fill, radial-gradient(circle at 33% 27%, color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)), var(--el-accent) 56%, color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))))',
   // ⚠️ Read from a variable, with the literal as its FALLBACK — an inline
   // `box-shadow` beats every stylesheet rule, so this is the only seam a
   // [data-style] block has onto the orb's depth (MOTIR-3522, same treatment as
@@ -140,6 +155,12 @@ export function PlanWithAIFab({ context = { kind: 'project' }, className }: Plan
           // Switch tracks, a colour swatch, an avatar and a tag remove-×, so the
           // radius cannot carry the role and the orb declares it.
           data-depth="key"
+          // The MATERIAL hook (MOTIR-4743). `data-surface` carries the per-style
+          // rules the two hero controls SHARE (border, glow, type, ink);
+          // `data-ai-cta` says which of the two this is, because they do not
+          // share a fill recipe — see ORB_STYLE's header.
+          data-surface="ai-cta"
+          data-ai-cta="orb"
           style={ORB_STYLE}
           onPointerDown={onPointerDown}
           onClickCapture={onClickCapture}

@@ -32,11 +32,18 @@ function connectionId(workspaceId: string): string {
  *  `provider: 'gitlab'`), as the OAuth callback leaves it. Idempotent. Tokens are
  *  opaque — the status-sync path never reads them. */
 export async function seedGitlabConnection(workspaceId: string): Promise<void> {
-  await withSystemContext((tx) =>
-    githubInstallationRepository.upsertGitlabConnection(
+  await withSystemContext(async (tx) => {
+    // The OWNING organisation (MOTIR-4649) — a GitLab connection is always a
+    // tenant's own grant, so the seed resolves it rather than leaving it null.
+    const { organizationId } = await tx.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    await githubInstallationRepository.upsertGitlabConnection(
       {
         installationId: connectionId(workspaceId),
         workspaceId,
+        organizationId,
         accountLogin: E2E_GITLAB_USER.username,
         accountType: 'User',
         accessTokenEncrypted: 'enc',
@@ -44,8 +51,8 @@ export async function seedGitlabConnection(workspaceId: string): Promise<void> {
         tokenExpiresAt: new Date('2999-01-01T00:00:00.000Z'),
       },
       tx,
-    ),
-  );
+    );
+  });
 }
 
 /** Connect one project to the workspace's EXISTING GitLab connection (a
@@ -68,10 +75,18 @@ export async function seedGitlabProject(
       tx,
     );
     if (!conn) throw new Error(`no GitLab connection for workspace ${workspaceId}`);
+    // The connection's own `organizationId` is nullable (a GitHub app install can
+    // predate the tenancy move), so the owning organisation is read from the
+    // workspace, where it is not.
+    const { organizationId } = await tx.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
     await githubRepoRepository.upsert(
       {
         installationId: conn.id,
         workspaceId: workspaceId,
+        organizationId,
         repoId: project.providerRepoId,
         owner: project.owner,
         name: project.name,

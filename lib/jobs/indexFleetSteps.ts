@@ -5,6 +5,7 @@ import type {
 } from '@/lib/services/codeGraphIndexDispatchService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepository';
 import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
@@ -219,9 +220,28 @@ export async function runIndexFleetSteps(
   // on every pass, which is exactly what a deployment fault should do.
   indexFleetConfig();
 
+  // ⚠️ CLAIM THE REPOSITORY, AND CAPTURE THE HEAD IT IS BEING INDEXED AT
+  // (Story MOTIR-4669 · MOTIR-4724). Two facts nothing else can supply:
+  //
+  //  1. WHICH repository is indexing. `jobRunRepository` records why the ledger
+  //     cannot say: a `running` row has no `output.repoRef`, because this job
+  //     writes `output` only on success. So the claim goes on the REPO row.
+  //  2. WHAT it is being indexed at. The head is read HERE, at the start, and
+  //     stamped on success — never re-read at the end. A push landing mid-run
+  //     then leaves the stored value behind the new head and the repository
+  //     reads `stale`, which is the safe direction: over-reporting staleness
+  //     costs a re-index, under-reporting it tells somebody their graph matches
+  //     their code while they decide whether to trust a plan built from it.
+  //
+  // Best-effort and OUTSIDE the step seam: this is telemetry for a surface, and
+  // an index that ran must never fail because a field write did not.
+  const headAtStart = await claimIndexingRepo(ctx, target.repoRef);
+
   const coreTimings = await indexEveryProject(ctx, services, input, target, dispatchId);
 
-  return await finishIndexRun(ctx, services, input, target, coreTimings);
+  const result = await finishIndexRun(ctx, services, input, target, coreTimings);
+  await settleIndexingRepo(target.repoRef, headAtStart);
+  return result;
 }
 
 /**
@@ -422,4 +442,45 @@ function dispatchFailure(
     );
   }
   return new IndexDispatchFailedError(repoRef, projectId, outcome.outcome, outcome.detail);
+}
+
+/**
+ * Stamp the repository as indexing and read the head it is being indexed AT
+ * (MOTIR-4724). Returns that head, or null when it is not known — a repository
+ * nobody has pushed to since the column landed has none, and null is what stops
+ * the settle below inventing a comparand.
+ *
+ * ⚠️ NEVER THROWS. It runs under `withSystemContext` for the reason every other
+ * job-runtime read here does — no workspace is bound — and swallows its own
+ * failure, because an index that ran is a fact and this is a note about it.
+ */
+async function claimIndexingRepo(ctx: JobContext, repoRef: string): Promise<string | null> {
+  try {
+    return await withSystemContext(async (tx) => {
+      const [owner, name] = repoRef.split('/');
+      if (!owner || !name) return null;
+      const repo = await tx.githubRepo.findFirst({
+        where: { owner, name },
+        select: { defaultBranchHeadSha: true },
+      });
+      await githubRepoRepository.markIndexStarted(repoRef, ctx.runId, tx);
+      return repo?.defaultBranchHeadSha ?? null;
+    });
+  } catch (err) {
+    console.error('[index-fleet] could not claim the indexing repo', repoRef, err);
+    return null;
+  }
+}
+
+/** Release the claim, recording what was indexed when there is something to
+ *  record. A run with no known head clears the claim and writes no sha — the row
+ *  keeps its last real answer rather than gaining a false one. */
+async function settleIndexingRepo(repoRef: string, headAtStart: string | null): Promise<void> {
+  try {
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexSettled(repoRef, { headSha: headAtStart }, tx),
+    );
+  } catch (err) {
+    console.error('[index-fleet] could not settle the indexing repo', repoRef, err);
+  }
 }

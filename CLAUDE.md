@@ -786,6 +786,24 @@ suspect an inherited `main` flake before blaming the diff (reproduce in
 isolation first). This rule was adopted after five specs flaked from the same
 shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
 
+**⚠️ BEFORE YOU DECIDE A `click → expect` PAIR IS RACING, LOOK IT UP —
+`docs/e2e/mutation-assert-sweep.md` (MOTIR-4399).** The whole suite has been
+swept for this shape and every site dispositioned, so a red check's _"is this my
+diff, or is it this?"_ is a table lookup rather than a re-derivation. It also
+carries the finding a sweep needs before it starts arming waits: **most
+`click → expect` pairs in this suite are NOT racing**, because the asserted node
+is rendered from the write's own response — a toast, a returned DTO applied in
+place, a `revalidatePath` payload — so the assertion IS the wait and arming one
+in front of it buys nothing. The helpers are
+`tests/e2e/_helpers/authoritative-signal.ts`.
+
+**And when the surface repaints only on a whole-page `router.refresh()`, ask
+which remedy before writing either one:** if the asserted value could have been
+computed in the browser from the write's own result, the SURFACE owes an
+in-place update (the page-state contract's case 3 below) and amending the spec
+retires the only detector that defect has — MOTIR-4496. If the value is
+server-derived, the SPEC owes a wait on the refresh — MOTIR-3694.
+
 ### The discipline, by operation
 
 - **After a mutation** (a `POST`/`PATCH` write), `await page.waitForResponse(…)`

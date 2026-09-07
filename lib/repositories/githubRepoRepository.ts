@@ -12,6 +12,16 @@ export interface UpsertGithubRepoInput {
    *  installation holds several tenants' repos, so the installation cannot
    *  answer this. */
   workspaceId: string;
+  /** WHOSE this repository is at the tier that OWNS it (Story MOTIR-4669 ·
+   *  MOTIR-4649). A repository is connected once, to the organisation; the
+   *  workspace above is the tier it was connected FROM.
+   *
+   *  REQUIRED on every write, deliberately, even though the column is nullable:
+   *  the column is nullable for the DEPLOY WINDOW (an old build must still be
+   *  able to insert while the migration is applied), and making the input
+   *  required is what guarantees the NEW build never writes a null. A caller with
+   *  no organisation in hand has to go and read one, which is the point. */
+  organizationId: string;
   repoId: string;
   owner: string;
   name: string;
@@ -58,6 +68,106 @@ export const githubRepoRepository = {
   async listByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<GithubRepo[]> {
     return tx.githubRepo.findMany({
       where: { workspaceId },
+      orderBy: [{ owner: 'asc' }, { name: 'asc' }],
+    });
+  },
+
+  /** Record the default branch's CURRENT head, as the push webhook saw it
+   *  (Story MOTIR-4669 · MOTIR-4724). Half of "is the graph behind the code".
+   *
+   *  ⚠️ KEYED ON THE REPO ROW'S OWN id, not on `(installation_id, repo_id)`. The
+   *  first cut took that pair and was handed the PROVIDER's installation id,
+   *  because that is what the webhook has in scope — while `github_repo
+   *  .installation_id` is the internal FK. It matched nothing and wrote nothing,
+   *  silently, and only an end-to-end read of the derived state caught it. One
+   *  id, already resolved by the caller, cannot be the wrong one.
+   *
+   *  Returns the update count; 0 means the row was gone by the time the delivery
+   *  landed, which is an honest outcome rather than an error. */
+  async setDefaultBranchHeadSha(
+    id: string,
+    headSha: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubRepo.updateMany({
+      where: { id },
+      data: { defaultBranchHeadSha: headSha },
+    });
+    return result.count;
+  },
+
+  /** Claim a repository as INDEXING, stamping the run that owns it and the head
+   *  it is being indexed AT (MOTIR-4724).
+   *
+   *  ⚠️ The head is stamped at START, not at finish, and the direction of that
+   *  imprecision is the point: a push landing mid-run leaves the stored value
+   *  behind and the repository reads `stale`. Stamping at finish would read
+   *  `indexed` for a graph that had already missed a commit. */
+  async markIndexStarted(
+    repoRef: string,
+    runId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name },
+      data: { indexingRunId: runId },
+    });
+    return result.count;
+  },
+
+  /** Settle a finished index: record what it indexed and release the claim.
+   *  `headSha` is the head observed when the run STARTED (see above); a run that
+   *  failed passes none, so the row keeps whatever it last successfully indexed
+   *  and only the in-flight claim is cleared. */
+  async markIndexSettled(
+    repoRef: string,
+    args: { headSha?: string | null; indexedAt?: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const [owner, name] = splitRepoRef(repoRef);
+    if (!owner) return 0;
+    const result = await tx.githubRepo.updateMany({
+      where: { owner, name },
+      data: {
+        indexingRunId: null,
+        ...(args.headSha
+          ? { indexedHeadSha: args.headSha, indexedAt: args.indexedAt ?? new Date() }
+          : {}),
+      },
+    });
+    return result.count;
+  },
+
+  /** One repo by its INTERNAL id — the lookup a link write does after a picker
+   *  hands back an id it read from `listByOrganization` (MOTIR-4678). Returns
+   *  null when the id names nothing the current RLS context admits, which is the
+   *  same answer a foreign organisation's id gives: the caller must not be able
+   *  to tell a real id in another org from a fictional one. */
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<GithubRepo | null> {
+    return tx.githubRepo.findUnique({ where: { id } });
+  },
+
+  /** THE ORGANISATION'S whole repository inventory (Story MOTIR-4669 · MOTIR-4678)
+   *  — every repo connected to `organizationId`, ACROSS every workspace of that
+   *  org. This is the read the `Add repository` picker's first segment is built
+   *  from, and the reason it is keyed on the organisation rather than the
+   *  workspace is the story's whole claim: a repository is connected once, to the
+   *  org, and which projects use it is visibility configuration.
+   *
+   *  ⚠️ IT MUST RUN UNDER A TRANSACTION THAT HAS BOUND `app.organization_id`.
+   *  `github_repo`'s shipped `FOR ALL` policy is workspace-keyed, so a plain
+   *  `withWorkspaceContext` sees only the caller's own workspace and this read
+   *  silently returns a SUBSET — which would look like a short picker rather
+   *  than a bug. MOTIR-4677 added `github_repo_org_read` (`FOR SELECT`) for
+   *  exactly this, and `bindOrganizationContext` is what turns it on. */
+  async listByOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubRepo[]> {
+    return tx.githubRepo.findMany({
+      where: { organizationId },
       orderBy: [{ owner: 'asc' }, { name: 'asc' }],
     });
   },
@@ -319,3 +429,13 @@ export const githubRepoRepository = {
     `;
   },
 };
+
+/** `owner/name` → its two halves. A ref without a slash names no repository, and
+ *  the callers above turn that into a zero-row no-op rather than a wildcard
+ *  update — a `where` built from a half-parsed ref is how one repo's write
+ *  reaches another's row. */
+function splitRepoRef(repoRef: string): [string, string] | [null, null] {
+  const cut = repoRef.lastIndexOf('/');
+  if (cut <= 0 || cut === repoRef.length - 1) return [null, null];
+  return [repoRef.slice(0, cut), repoRef.slice(cut + 1)];
+}

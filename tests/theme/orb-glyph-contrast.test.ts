@@ -101,11 +101,34 @@ function gradientArgs(source: string): string[] {
   return splitTopLevel(source.slice(open, close));
 }
 
-/** `ORB_STYLE`'s `backgroundImage`, as the component actually writes it. */
+/**
+ * `ORB_STYLE`'s `backgroundImage` RECIPE, as the component actually writes it.
+ *
+ * ⚠️ UNWRAPPED FROM THE `var()` SEAM (MOTIR-4743), and the assertions below are
+ * unchanged by that. The declaration is now
+ * `var(--plan-orb-fill, <the recipe>)`, so the style layer can give the orb each
+ * style's own material — the fix for the orb rendering byte-identically under all
+ * eleven styles. The RECIPE is the fallback inside it, and the recipe is what the
+ * two design mocks reproduce and what `--orb-lit-mix` lives in: comparing the
+ * whole declaration against a mock would be asking a design asset to carry a
+ * stylesheet seam it has no style layer to use. What this file guards — that the
+ * shipped recipe and both mocks are the same string, by reference to the same
+ * token — is measured on exactly the same content as before.
+ *
+ * The seam itself is asserted in `tests/theme/aiCtaStyleSeam.test.ts`; a
+ * component that dropped the `var()` and painted the recipe directly would go red
+ * there, not here.
+ */
 function shippedGradient(): string {
   const match = /backgroundImage:\s*\n?\s*'([^']+)'/.exec(FAB);
   expect(match, 'ORB_STYLE must declare a single-quoted backgroundImage').toBeTruthy();
-  return match![1]!;
+  const declared = match![1]!;
+  const seam = /^var\(--plan-orb-fill,\s*([\s\S]*)\)$/.exec(declared);
+  expect(
+    seam,
+    'ORB_STYLE must read the style layer’s `--plan-orb-fill` with the recipe as its fallback',
+  ).toBeTruthy();
+  return seam![1]!.trim();
 }
 
 /**

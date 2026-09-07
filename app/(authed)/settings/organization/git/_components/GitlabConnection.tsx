@@ -1,100 +1,42 @@
-import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
 import { ExternalLink, FolderGit2, KeyRound } from 'lucide-react';
+import { getTranslations } from 'next-intl/server';
 import { GitlabMark } from '@/components/icons/GitlabMark';
-import { getSession } from '@/lib/auth';
-import { getWorkspaceContext } from '@/lib/workspaces';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { buttonVariants } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
-import { GitSettingsShell } from '../_components/GitSettingsShell';
-import { SettingsBanner, GrantRow, IdentityHeader } from '../_components/gitSettingsPrimitives';
-import { GitlabDisconnectButton } from './_components/GitlabDisconnectButton';
-import { GitlabProjectSyncSwitch } from './_components/GitlabProjectSyncSwitch';
-import { GitlabProjectPicker } from './_components/GitlabProjectPicker';
+import { GrantRow, IdentityHeader } from '../../../workspace/_components/gitSettingsPrimitives';
+import { GitlabDisconnectButton } from './GitlabDisconnectButton';
+import { GitlabProjectSyncSwitch } from './GitlabProjectSyncSwitch';
+import { GitlabProjectPicker } from './GitlabProjectPicker';
 
-// Settings → Workspace → Git, GitLab variant (Story 7.23 · MOTIR-1478) — Server
-// Component. The GitLab half of the SHARED connect-settings surface, per the
-// MOTIR-1472 design (design/gitlab Panels 1/2/2b). Renders under the same
-// `GitSettingsShell` as the GitHub variant (the provider `Segmented` swaps between
-// them) — the card's "shared connect-settings component, not a separate page."
+// THE GITLAB CONNECTION, AT THE TIER THAT OWNS IT (Story 7.23 · MOTIR-1478,
+// moved by MOTIR-4669 · MOTIR-4680) — `design/gitlab/gitlab.mock.html` Panels
+// 1 / 2 / 2b, which draw this surface inside the ORGANISATION settings rail.
 //
-// GitLab's connect model genuinely differs from GitHub's (the design's honest
-// differences): ONE OAuth authorization covers identity + project access (no
-// separate App install), and project selection is IN-APP (the OAuth `api` scope
-// lets Motir enumerate + connect the user's projects HERE — Panel 2b — rather than
-// on a separate GitLab screen). The connection is WORKSPACE-scoped (unlike GitHub's
-// user identity); it reuses the shared `GithubInstallation` entity under
-// `provider: 'gitlab'` (MOTIR-1474).
+// ⚠️ THIS IS THE HALF THE TIER MOVE DROPPED, and CI is what said so. MOTIR-4680
+// deleted `/settings/workspace/gitlab` and pointed its permanent redirect at
+// `/settings/organization/git`, whose body rendered the GitHub arm only. The
+// provider Segmented still offered a `gitlab` tab, so the surface LOOKED present
+// and answered every GitLab question with GitHub's card: a workspace that had not
+// connected GitLab had no way left to do it, in a product that advertises the
+// provider on its pricing page. `tests/e2e/gitlab.spec.ts` failed on the missing
+// heading, which is exactly the job of a walk that starts at a URL.
 //
-// 4-layer (CLAUDE.md): this page reads ONLY through `gitlabConnectionService`; the
-// mutations (Disconnect, connect/disconnect project) go through Server Actions →
-// service. The projects list is a server surface, so the actions `revalidatePath`
-// (the page-state contract's server-surface case).
+// GitLab's connect model genuinely differs from GitHub's and the panels keep that
+// difference rather than flattening it: ONE OAuth authorization conveys identity
+// AND project access (there is no App to install), and project selection is
+// IN-APP — the `api` scope lets Motir enumerate and connect projects here (Panel
+// 2b) rather than on a screen of GitLab's. The connection is WORKSPACE-scoped and
+// reuses `GithubInstallation` under `provider: 'gitlab'` (MOTIR-1474).
 
 const OAUTH_START_PATH = '/api/gitlab/oauth/start';
 
-// The OAuth start/callback (MOTIR-1474) redirect back with ?gitlab=<status>. Map
-// each terminal outcome to a banner tone + a `gitlab.banner.*` message key.
-const BANNER_TONE: Record<string, 'success' | 'danger' | 'info'> = {
-  connected: 'success',
-  denied: 'danger',
-  state_error: 'danger',
-  error: 'danger',
-  not_configured: 'info',
-  no_workspace: 'info',
-};
-
-interface GitlabSettingsPageProps {
-  searchParams: Promise<{ gitlab?: string }>;
-}
-
-export default async function GitlabSettingsPage({ searchParams }: GitlabSettingsPageProps) {
-  const session = await getSession();
-  if (!session) redirect('/sign-in');
-
-  const t = await getTranslations('gitlab');
-
-  const ctx = await getWorkspaceContext();
-  if (!ctx) {
-    return (
-      <GitSettingsShell provider="gitlab">
-        <EmptyState title={t('noWorkspace.title')} description={t('noWorkspace.description')} />
-      </GitSettingsShell>
-    );
-  }
-
-  const sp = await searchParams;
-  const bannerStatus = sp.gitlab;
-  const bannerTone = bannerStatus ? BANNER_TONE[bannerStatus] : undefined;
-
-  // MOTIR-3448 — allocation row 12: THE FRAME ONLY. One read, so there is
-  // nothing to make concurrent. `GitSettingsShell`'s whole header — title,
-  // subtitle, provider switch — is pure `t('git')` and paints from the gate, so
-  // the boundary goes INSIDE the shell rather than around it. The banner is
-  // read off the query string and is not a read at all, so it stays above too.
-  return (
-    <GitSettingsShell provider="gitlab">
-      {bannerTone ? (
-        <SettingsBanner tone={bannerTone} message={t(`banner.${bannerStatus}`)} />
-      ) : null}
-
-      <Suspense fallback={<SettingsPaneFrame />}>
-        <GitlabConnectionPanel userId={ctx.userId} workspaceId={ctx.workspaceId} />
-      </Suspense>
-    </GitSettingsShell>
-  );
-}
-
-/** The connection read and the panel it chooses between. */
-async function GitlabConnectionPanel({
+/** The connection read, and the panel it chooses between. */
+export async function GitlabConnection({
   userId,
   workspaceId,
 }: {
@@ -114,8 +56,8 @@ async function GitlabConnectionPanel({
 
 /** Panel 1 — the single-OAuth connect card. Two steps (Authorize + Projects), but
  *  ONE grant: GitLab's `api` scope conveys identity AND project access + webhook
- *  rights in the same authorization, so step 2 is the in-app SELECTION the single
- *  grant enables, not a second grant (the design's honest connect model). */
+ *  rights in the same authorization, so step 2 is the in-app SELECTION that grant
+ *  enables, not a second grant (the design's honest connect model). */
 async function NotConnectedPanel({ connectHref }: { connectHref: string }) {
   const t = await getTranslations('gitlab.connect');
   const scopes = ['read_user', 'read_api', 'api'];

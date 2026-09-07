@@ -62,18 +62,32 @@ export interface PlanWithAILauncherProps {
 // top edge; the pink (`--el-highlight`) lives only in the outer glow. All
 // palette-derived (the surface-material colour grammar — color-mix over --el-*).
 //
-// ⚠️ THE SHADOW READS FROM A VARIABLE, and the literal below is its FALLBACK —
-// not indirection for its own sake (MOTIR-3522). An INLINE `box-shadow` beats
-// every stylesheet rule, so while this pill painted its own shadow directly no
-// [data-style] block could give it depth: under `3d-immersive` it was the one
-// control on the page that stayed flat no matter how the style layer was
-// widened. The variable is the seam that lets a style re-point it —
-// `--plan-hero-shadow` is set in the `[data-style='3d-immersive']` block of
-// packages/design-system/theme.css, which adds the key's base edge. Every other
-// style falls through to this literal, unchanged.
+// ⚠️ BOTH DECLARATIONS READ FROM A VARIABLE, and the literals below are their
+// FALLBACKS — not indirection for its own sake (MOTIR-3522 for the shadow,
+// MOTIR-4743 for the fill). An INLINE declaration beats every stylesheet rule,
+// so while this pill painted its own shadow directly no [data-style] block could
+// give it depth: under `3d-immersive` it was the one control on the page that
+// stayed flat no matter how the style layer was widened. The same was true of
+// the FILL under all eleven styles — `design/ai-chat/design-notes.md`
+// § *The STYLE MATRIX* draws a per-style treatment for this control and the
+// stylesheet had no way to reach it. The variables are the seam that lets a
+// style re-point them: `--plan-hero-shadow` is set by the `3d-immersive` block
+// and `--plan-hero-fill` by the per-style hero rules, both in
+// packages/design-system/theme.css. Every style that sets neither falls through
+// to these literals, unchanged.
+//
+// ⚠️ THE FAR STOP IS 86%, NOT 55% (MOTIR-4742 finding A). The label spans the
+// whole pill, so it also sits on the far stop — which at 55% is 45% brand pink
+// and measured 4.64:1 light / **3.98:1 dark**, below the 4.5:1 bar, on the
+// product's headline control. It also contradicted this file's own design note
+// (*"the brand pink lives only in the glow/aura, never under text"*). At 86% the
+// fill is accent-dominant and measures 5.97:1 / 4.64:1; 80% is the first passing
+// value, and 86% is specified so the bar is cleared with margin rather than met.
+// Ten of the eleven styles inherit this stop, so it is not optional for any of
+// them.
 const HERO_STYLE: CSSProperties = {
   backgroundImage:
-    'linear-gradient(135deg, var(--el-accent), color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight)))',
+    'var(--plan-hero-fill, linear-gradient(135deg, var(--el-accent), color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight))))',
   boxShadow: [
     'var(--plan-hero-shadow,',
     'inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),',
@@ -102,6 +116,17 @@ export function PlanWithAILauncher({
       // is a flat chip by default — correct for the 9 filter/tag chips that
       // share the radius, wrong for this one, which is a hero ACTION.
       data-depth="key"
+      // The MATERIAL hook (MOTIR-4743), the axis `data-depth` does not carry.
+      // `data-surface` is what every per-style material rule selects on; the
+      // second attribute is load-bearing rather than a convenience, because the
+      // pill and the orb do NOT share a fill recipe — the orb's first stop is
+      // `--orb-lit-mix`, a guarded contrast knob (MOTIR-3207), and a rule
+      // written against `[data-surface='ai-cta']` alone would set one
+      // `background-image` over both and silently overwrite it. So shared
+      // properties (border, glow, type, ink) are written on `data-surface` and
+      // every fill under `data-ai-cta`.
+      data-surface="ai-cta"
+      data-ai-cta="pill"
       style={HERO_STYLE}
       className={cn(
         // Layout + pill shape (radius/height/padding via shape tokens so the

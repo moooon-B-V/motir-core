@@ -8,6 +8,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectAiSettingsService } from '@/lib/services/projectAiSettingsService';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
+import { legalDocumentUrl } from '@/lib/legal/links';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
@@ -155,6 +156,17 @@ async function AiPlanningPaneBody({
         isAdmin={canManage}
         aiConfigured={isMotirAiConfigured()}
         canViewLessons={canViewLessons}
+        /* The published provider table's absolute url, or `null` on a build with
+           no legal manifest (Story MOTIR-3665 · MOTIR-3670). Resolved HERE
+           because `lib/legal/links.ts` is `server-only` and the editor is a
+           client component — the same shape the other three legal-linking
+           surfaces use (MOTIR-4010), which also keeps the operator's document
+           list out of the client bundle.
+
+           It is NOT a new configuration key: the manifest already carries this
+           document, so an operator who has configured `/legal` at all has
+           configured this too. */
+        providerTableUrl={legalDocumentUrl('model-providers')}
         pause={toPauseView(pause, (iso) => format.relativeTime(new Date(iso)))}
       />
 

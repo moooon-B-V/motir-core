@@ -569,6 +569,50 @@ describe('meterWorkflowRun — attribution is tenant-safe (§5.2)', () => {
     expect(result).toMatchObject({ workspaceId: a.workspaceId, organizationId: a.organizationId });
     expect(result).not.toMatchObject({ workspaceId: b.workspaceId });
   });
+
+  it('⚠️ a repository used by TWO projects meters the ORG, with the project NULL', async () => {
+    // Story MOTIR-4669 · MOTIR-4648 dropped `ProjectRepo.githubRepoId @unique`,
+    // so this lookup can return N rows, and the meter refuses to guess between
+    // them. GitHub has already charged, so the ORGANISATION is metered either
+    // way — that half must not change. What is genuinely unknown is the PROJECT,
+    // and `project_id` is nullable on the usage row for exactly this state.
+    //
+    // Taking `rows[0]` would have been a one-word change and a plausible-looking
+    // line in the meter attributed to a project that may have run nothing.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const second = await projectsService.createProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: (await adminDb.user.findFirstOrThrow()).id,
+      name: 'Beacon',
+      identifier: `B${randomInt(100, 1000)}`,
+    });
+    await adminDb.projectRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: second.id,
+        role: 'web',
+        name: 'acme-web',
+        seedSource: SEED_SOURCE_PLATFORM_STARTER,
+        position: 'a0',
+        githubRepoId: fx.githubRepoId,
+      },
+    });
+    stubGithub();
+
+    const result = await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID);
+
+    expect(result).toMatchObject({
+      workspaceId: fx.workspaceId,
+      organizationId: fx.organizationId,
+    });
+    const usage = await adminDb.ciWorkflowRunUsage.findFirstOrThrow();
+    expect(usage.projectId).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('used by several projects'),
+      expect.objectContaining({ projectCount: 2 }),
+    );
+  });
 });
 
 describe('getOrgPeriodConsumption — the ONE read MOTIR-1901 consumes', () => {

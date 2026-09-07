@@ -2,27 +2,28 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                                      | Files                                                     | Card                 | Section   |
-| -------------------------------------------- | --------------------------------------------------------- | -------------------- | --------- |
-| The Plans surface                            | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I    |
-| AI **sprint** planning                       | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II   |
-| **Who authored a plan**                      | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III  |
-| **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV   |
-| A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V    |
-| A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V    |
-| A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI   |
-| What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI   |
-| The Plans list **tabbed by status**          | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII  |
-| The plan detail's **List ↔ Canvas** switcher | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII |
-| What a **generating** plan offers            | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII |
-| The plan canvas **at arrival**               | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
-| **Show changes** on the plan canvas          | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
-| The timeline's **CONTENT events**            | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
-| The **FIFTH plan status** on every surface   | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
-| **Revising a plan under review**             | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
-| **The plan detail, refined**                 | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
-| **The shipped peek in PROPOSAL mode**        | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
-| **The PROPOSED to-do list in the peek**      | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV   |
+| Surface                                         | Files                                                     | Card                 | Section   |
+| ----------------------------------------------- | --------------------------------------------------------- | -------------------- | --------- |
+| The Plans surface                               | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I    |
+| AI **sprint** planning                          | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II   |
+| **Who authored a plan**                         | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III  |
+| **The status tag's place**                      | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV   |
+| A proposal on its parent's **roadmap level**    | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V    |
+| A proposal **READ view**                        | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V    |
+| A **decided** plan's node treatments            | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI   |
+| What the pane holds **after approve**           | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI   |
+| The Plans list **tabbed by status**             | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII  |
+| The plan detail's **List ↔ Canvas** switcher    | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII |
+| What a **generating** plan offers               | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII |
+| The plan canvas **at arrival**                  | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
+| **Show changes** on the plan canvas             | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
+| The timeline's **CONTENT events**               | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
+| The **FIFTH plan status** on every surface      | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
+| **Revising a plan under review**                | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
+| **The plan detail, refined**                    | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
+| **The shipped peek in PROPOSAL mode**           | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
+| **The PROPOSED to-do list in the peek**         | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV   |
+| **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI  |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -4652,3 +4653,157 @@ no boundary: it is strictly the surface that card was already `blocked_by` this 
 - **No other flag.** The states this Part draws are all reachable from the shipped surface, and the
   one number it does not own — the peek's own geometry — is Part XIV's and is cited rather than
   re-measured.
+
+---
+
+# Part XVI — the plan-change canvases meet the "Not in an epic" group (MOTIR-4773 · `plan-canvas-grouped-roots.mock.html`)
+
+The card this unblocks is **MOTIR-4771**, and its first five acceptance criteria are settled here.
+
+`design/roadmap/design-notes.md` § _The ROOT level's NON-EPIC rows_ (decisions 1–7) drew a grouped
+node for a canvas whose level **is** the tree. The planning workspace overlay draws the tree **with a
+pending change laid over it** — that is the whole reason the surface exists — and MOTIR-4771 asks for
+the grouping on that surface. Grouping is a rule about which rows LEAVE a level; the diff frame is a
+rule about which rows must be SEEN. Nobody had drawn the meeting.
+
+**Everything the roadmap decided is CITED, not re-decided**: the node's face, its name, its drill,
+its `decorative` status and the truncation tile are that section's, unchanged. This Part rules only
+on the composition, and on which surface gets which cap affordance.
+
+## 16.1 Drawn against SHIPPED reality — what was RENDERED, and how
+
+Every card on the board is the **shipped component**, rendered through the **shipped pipeline** and
+lifted into the asset: a throwaway RTL dump ran `buildWorkItemLevel` and then
+`decoratePlanChangeLevel` over a fabricated root level, and each node's `content` was written out as
+markup. Nothing is redrawn, and the boards are positioned by the real layout constants —
+`NODE_W` 280, `NODE_H` 124, `GAP_X` 80, `GAP_Y` 72, `BAND_GAP` 96, origin 40
+(`lib/planning/projectCanvasModel.ts`).
+
+That is also what makes sheet 4 EVIDENCE rather than an illustration: the duplicate card it shows was
+produced by the pipeline, not drawn to make a point.
+
+## 16.2 DECISION 1 — with NO pending proposal, the overlay groups, identically to `/roadmap`
+
+`PlanChangeCanvas` short-circuits on an empty diff (`decoratePlanChangeLevel` returns the level
+untouched when `index.isEmpty`), so in the state a reader is in every time they open the workspace
+before saying anything, there is **no composition at all**. Same node, same
+`roadmap.canvas.group.title` copy, same drill, same tile.
+
+Stated and drawn (sheet 2) rather than inherited by silence, because it is the state MOTIR-4771 was
+reported from and the one a reader will check first.
+
+## 16.3 DECISION 2 — a row the pending proposal TOUCHES stays on the road
+
+**The predicate gains a third conjunct on the plan-change canvases:**
+
+```
+parentId === null && kind !== 'epic' && !touchedByThisProposal(id)
+```
+
+The roadmap's decision 1 justifies its two conjuncts with _"the road IS the epics. This is the
+level's whole subject."_ On a canvas whose subject is a PROPOSED CHANGE, the level's subject is the
+epics **and what the change is about** — so this is the same rule applied to a different subject, not
+a departure from it. Decision 6 of that section already added a conjunct for a surface whose meaning
+differs (sprint scope); this is the third, for the same reason.
+
+**⚠️ TOUCHED means MEMBERSHIP IN THE PROPOSAL, never `diffStateForItem`'s verdict.** A code card will
+reach for `diffStateForItem` because it is the function that answers "what state is this row in", and
+it would be wrong: that function returns `'locked'` for **every** terminal-status row on the level
+whenever the index is non-empty, regardless of whether the plan touches it. Most parentless defects
+on a mature tree are `done`, so keying on it would drag nearly the whole group back onto the road the
+moment any plan is pending. The set is:
+
+```
+index.changesById.has(id) || index.removalsById.has(id) || <a materialized add whose nodeId is id>
+```
+
+`locked` is a property of the row's own status, not of the proposal, and it does not qualify.
+
+### What the alternatives MEASURE — both were rendered, and both fail
+
+| disposition                                                | verdict    | what the render shows                                                              |
+| ---------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------- |
+| **(a)** a touched row stays on the road                    | **CHOSEN** | sheet 3 — both frames on the level the reviewer is on; the group's count falls 3→1 |
+| **(b)** group everything, mark the group                   | rejected   | sheet 4's failures, plus new pixels in slots the roadmap left deliberately empty   |
+| **(c)** group everything, frames only on the drilled level | rejected   | sheet 4                                                                            |
+
+**Sheet 4 is the measurement, and it has two independent failures:**
+
+1. **The `modify` disappears from the level.** MOTIR-4771's `change` frame is not on the board at
+   all — the reviewer's own subject, filed behind a drawer, on the surface that exists to review it.
+2. **⚠️ AN ACCEPTED CARD IS DRAWN TWICE — this is bug MOTIR-3206, re-created by passing one
+   boolean.** A materialized `add` carries the committed work item's **own id** as its `nodeId`
+   (`lib/planning/planChangeDiff.ts`, `isMaterializedAdd`); `decoratePlanChangeLevel` merges the add
+   frame ONTO that node and deletes the entry, and appends whatever is left as a keyless
+   `ProposedAddNode`. Group the committed row away and the merge cannot land, so the entry survives
+   and the card appears a second time — once inside the group, once beside it. That function's own
+   comment names the defect: _"a second, keyless copy of every accepted card on the canvas"_.
+
+**So the constraint on this decision is not a preference and is recorded as a constraint:** a
+disposition that removes a proposal's target from `base.nodes` before the decoration runs re-opens
+MOTIR-3206. **(a) satisfies it by construction** — the touched row never leaves the level, so the
+merge fires exactly as it does today, which is what sheet 3's live `To Do` pill inside the add frame
+shows.
+
+## 16.4 DECISION 3 — the grouped node says NOTHING about its contents beyond the count
+
+`design/roadmap`'s decision 3 leaves the status pill and the progress meter deliberately empty,
+because each would be a claim about work the node does not own. **Both stay empty here, and no third
+slot is added.**
+
+Under decision 2 there is nothing for a change signal to signal: a row the proposal touches is not in
+the group. A "something in here changed" badge is an affordance disposition (b) would have needed and
+(a) does not — recorded so that the absence reads as a decision rather than as an oversight, which is
+the same reason the roadmap section recorded its two empty slots.
+
+## 16.5 DECISION 4 — the cap: one ceiling, two shipped answers, and the overlay inherits neither
+
+`TREE_LEVEL_MAX_TAKE` is 200 rows under a key-ASCENDING sort, so overflow discards the **newest**
+cards. Two surfaces already answer that, differently and correctly:
+
+| surface                            | affordance                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| `/roadmap`                         | the `+ N more` / _Showing N of M_ / **Show all** tile, at every level (roadmap §7)    |
+| the plan DETAIL (`/plans/[id]`)    | opens in the **LIST** when the arrival level's untruncated total exceeds the cap (§6) |
+| **the planning workspace OVERLAY** | **the tile** — decided here                                                           |
+
+**The overlay has no list view**, so §6's arm cannot reach it: that arm chooses which VIEW a reader
+lands in, and the overlay has one. The tile is the only affordance that can exist there, and the
+roadmap's reasoning for it holds unchanged — the cap is per-level, so a drilled level is as silent as
+the root.
+
+**The DETAIL keeps §6 and gains the tile too.** They answer different questions and are not
+alternatives: §6 decides the ARRIVAL VIEW for the ARRIVAL LEVEL; the tile says a LEVEL is truncated
+once the reader is standing on the canvas — after switching views, or after drilling. §6 says in as
+many words that it _"changes nothing about what a level contains"_, which is exactly the gap the tile
+fills.
+
+## 16.6 DECISION 5 — `PlanReviewCanvas` takes the SAME ruling, for a sharper reason
+
+The plan detail's canvas is the fourth `buildWorkItemLevel` consumer and composes the same way —
+`buildWorkItemLevel(wi)` then `mergePlanLevel(committed, items, …)`. It gets decisions 1–3 unchanged.
+
+**And its failure mode under (b)/(c) is worse than the overlay's, which is why the ruling is not
+merely consistent but forced.** `mergePlanLevel` pushes any proposal it could not merge onto a
+committed node as a standalone node, and its own comment says what that means: _"a `modify` /
+`remove` whose target is not at this level (**a drifted plan**)"_. So grouping a proposal's target
+does not just hide a frame there — it makes the plan **read as drifted**, which is a false statement
+about the plan, on the surface the plan is approved from.
+
+## 16.7 What this settles, for the cards that consume it
+
+| card           | what it takes                                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4771** | criteria 1–2 from decision 1; criterion 3 from decision 2 (with its predicate and its constraint); criterion 4 from decision 4; criterion 5 from decision 5 |
+
+**Nothing is TAKEN from `design/roadmap`.** No element it drew is removed and no boundary it set is
+moved: this Part adds a conjunct that is inert on the roadmap (which never has a proposal) and rules
+on two surfaces that section never addressed.
+
+## 16.8 ⚠️ Planning flags
+
+- **The predicate in decision 2 is the one thing a code card must not re-derive.** The
+  `diffStateForItem` trap is a correct-looking wrong answer, and it fails quietly — on a young tree
+  with few `done` roots it behaves indistinguishably from the right one.
+- **No other flag.** Every element drawn is shipped, and the one number this Part does not own —
+  the cap — is cited from `lib/planning/levelCaps.ts` rather than restated.

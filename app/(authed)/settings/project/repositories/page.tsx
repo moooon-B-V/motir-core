@@ -9,8 +9,22 @@ import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
+import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
 import { RepositoriesRoom } from './_components/RepositoriesRoom';
 import { guardSettingsPage } from '../_guard';
+import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
+import { isOrgAdminForWorkspace } from '@/lib/services/organizationAccessService';
+import { organizationsService } from '@/lib/services/organizationsService';
+
+/** The member's own git account (MOTIR-4682) — where the room's connect prompt
+ *  hands off. It was `/settings/workspace/github`, a page MOTIR-4680 redirects
+ *  away; the credential is the member's and lives at the ACCOUNT tier. */
+const GIT_ACCOUNT_PATH = '/settings/account/git';
+
+/** The ORGANISATION's own inventory — `See every repository in <org>`. The
+ *  footer link stopped being a hand-off ("choose which repositories Motir can
+ *  see") and became a VIEW, which is the tier move in one line (§17.2). */
+const ORGANIZATION_GIT_PATH = '/settings/organization/git';
 
 // THE TAKE-IT-OVER ROOM (Story MOTIR-1775 · MOTIR-1939) — the surface behind the
 // ownership promise's `How moving it works` door, the billing panel's
@@ -36,7 +50,18 @@ import { guardSettingsPage } from '../_guard';
 // Motir still hosts, each a link, and says that moving this project's
 // repositories does not move theirs (§14.4).
 
-export default async function ProjectRepositoriesPage() {
+// ⚠️ A GIT CONNECT FLOW CAN NOW RETURN HERE (MOTIR-4676). This room is one of
+// the surfaces that STARTS a connect (`GITHUB_RETURN_SURFACES.projectRepositories`),
+// so it renders the `?github=<status>` outcome exactly as the workspace Git page
+// does — through the shared `GitConnectBanner`, which owns the status → tone map
+// so the two surfaces cannot disagree about what an outcome means.
+interface ProjectRepositoriesPageProps {
+  searchParams: Promise<{ github?: string }>;
+}
+
+export default async function ProjectRepositoriesPage({
+  searchParams,
+}: ProjectRepositoriesPageProps) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -68,11 +93,19 @@ export default async function ProjectRepositoriesPage() {
   // painted ahead of it — so the header is SPLIT, with the title above the
   // boundary and its two paragraphs below. Every other pane in this card paints
   // its whole header from the gate.
+  const sp = await searchParams;
+
   return (
     <div className="mx-auto flex max-w-[46rem] flex-col gap-6">
       <header className="flex flex-col gap-1">
         <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('title')}</h1>
       </header>
+
+      {/* ABOVE the Suspense boundary, deliberately: the banner is about the round
+          trip the reader just took, it needs none of the room read, and a
+          confirmation that waits for a database is a confirmation that arrives
+          after the reader has started wondering. */}
+      <GitConnectBanner status={sp.github} />
 
       <Suspense fallback={<SettingsPaneFrame />}>
         <RepositoriesPaneBody
@@ -103,7 +136,24 @@ async function RepositoriesPaneBody({
   workspaceId: string;
 }) {
   const t = await getTranslations('repositoryTakeover');
-  const view = await projectRepoRoomService.getRoomView(projectId, { userId, workspaceId });
+  // THREE reads, made concurrent: the room, the actor's ORG-admin answer, and the
+  // organisation's name. The last two are MOTIR-4681's — the room draws its add
+  // door or the sentence that says who can, and names the organisation in both
+  // the section heading and the picker.
+  //
+  // ⚠️ `isOrgAdminForWorkspace` is a RENDERING question, not a gate. The gate is
+  // `organizationRepoService`'s `assertOrgAdmin`, inside the transaction that
+  // performs the add — this only decides which affordance is drawn, which is why
+  // it returns a boolean rather than throwing.
+  // `allSettledOrThrow`, never a bare `Promise.all` (MOTIR-3066): each arm opens
+  // its own transaction, and `Promise.all` abandons the others' connections on the
+  // first rejection rather than letting them settle.
+  const [view, canAddRepositories, organization] = await allSettledOrThrow([
+    projectRepoRoomService.getRoomView(projectId, { userId, workspaceId }),
+    isOrgAdminForWorkspace(userId, workspaceId),
+    organizationsService.resolveActiveOrganization(userId, null),
+  ]);
+  const organizationName = organization?.organization.name ?? '';
 
   // ONE timestamp for the whole render, threaded into the rows: `Date.now()` in
   // a client render would disagree with the server's by the round-trip and the
@@ -170,7 +220,10 @@ async function RepositoriesPaneBody({
       <RepositoriesRoom
         projectKey={projectKey}
         view={view}
-        connectHref="/settings/workspace/github"
+        connectHref={GIT_ACCOUNT_PATH}
+        canAddRepositories={canAddRepositories}
+        organizationName={organizationName}
+        organizationInventoryHref={ORGANIZATION_GIT_PATH}
         nowIso={nowIso}
       />
     </>

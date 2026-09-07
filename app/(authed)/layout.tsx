@@ -8,6 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
+import { isOrgAdminRole } from '@/lib/organizations/roles';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
@@ -397,6 +398,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       variant="rail"
                       settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
+                      organization={
+                        activeOrg
+                          ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                          : null
+                      }
+                      billingAvailable={cloudBilling}
                       workspaceTierRevealed={workspaceTierRevealed}
                       publicProjectsAvailable={publicProjectsAvailable}
                       helpMenu={
@@ -493,6 +500,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     variant="drawer"
                     settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
+                    organization={
+                      activeOrg
+                        ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                        : null
+                    }
+                    billingAvailable={cloudBilling}
                     workspaceTierRevealed={workspaceTierRevealed}
                     publicProjectsAvailable={publicProjectsAvailable}
                   />

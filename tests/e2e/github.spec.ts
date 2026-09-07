@@ -136,53 +136,71 @@ async function completeGithubIdentityGrant(page: Page): Promise<void> {
   await page.goto(callback.toString());
 }
 
-test('@smoke connect flow: two-grants panel → OAuth binds the identity → installed App shows the selected repo', async ({
+test('@smoke connect flow: the two grants at their two TIERS → OAuth binds the identity → the org page shows the installed App', async ({
   page,
 }) => {
   const email = 'e2e-github-connect@example.com';
   await signUp(page, email);
 
-  // Panel 1 — not connected: the two-grants explanation + the connect CTA.
-  await page.goto('/settings/workspace/github');
-  await expect(page.getByRole('heading', { name: 'Connect GitHub' })).toBeVisible();
-  await expect(page.getByText('Step 1 · Identity')).toBeVisible();
-  await expect(page.getByText('Step 2 · Repository access')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Connect GitHub' })).toBeVisible();
+  // ⚠️ THE TWO GRANTS NOW SIT AT TWO TIERS (Story MOTIR-4669). Step 1 is the
+  // MEMBER's own identity and lives at Settings → Account → Git accounts; step 2
+  // is the ORGANISATION's App installation and lives at Settings → Organisation
+  // → Git. The old single workspace page conflated them, and this walk is what
+  // catches a tier move that deletes a door without rebuilding it.
 
+  // Tier 1 — the member's own account, not connected yet.
+  await page.goto('/settings/account/git');
+  await expect(page.getByRole('heading', { name: 'Git accounts' })).toBeVisible();
+  await expect(page.getByText('No git account connected')).toBeVisible();
   // The CTA carries the real start-route href (asserted rather than clicked —
-  // its server 302 to GitHub can't be route-intercepted; see the helper).
+  // its server 302 to GitHub can't be route-intercepted; see the helper), and it
+  // NAMES ITS ORIGIN: MOTIR-4676 sends a flow back to the surface that started
+  // it, so a member who connects from their account page returns to their
+  // account page rather than to whichever surface the constant happens to say.
   await expect(page.getByRole('link', { name: 'Connect GitHub' })).toHaveAttribute(
     'href',
-    '/api/github/oauth/start',
+    '/api/github/oauth/start?from=accountGit',
   );
 
-  // Grant 1 — the identity OAuth round-trip (real start + callback routes).
+  // Tier 2 — the organisation has no installation, and the page OFFERS one.
+  // A settings page that names a state it cannot leave is worse than no page.
+  await page.goto('/settings/organization/git');
+  await expect(page.getByText('Step 1 · Identity')).toBeVisible();
+  await expect(page.getByText('Step 2 · Repository access')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Install the Motir GitHub App' })).toBeVisible();
+
+  // Grant 1 — the identity OAuth round-trip (real start + callback routes). With
+  // no origin recorded it lands on the DEFAULT return, which moved with the
+  // surface: `/settings/organization/git`, not the deleted workspace route.
   await completeGithubIdentityGrant(page);
-  await page.waitForURL('**/settings/workspace/github?github=connected');
+  await page.waitForURL('**/settings/organization/git?github=connected');
   await expect(page.getByRole('status')).toHaveText(
     'GitHub identity connected. Install the Motir GitHub App to grant repository access.',
   );
 
-  // Identity bound, App not installed yet — the needs-access state.
+  // The account page now shows the bound identity, and says the half that is
+  // still missing — the organisation's own grant.
+  await page.goto('/settings/account/git');
   await expect(page.getByText(`@${E2E_GITHUB_USER.login}`)).toBeVisible();
-  await expect(page.getByText('Action needed')).toBeVisible();
-  await expect(page.getByText('Identity connected · repository access not granted')).toBeVisible();
+  await expect(
+    page.getByText('Your account is connected. Your organisation’s is not.'),
+  ).toBeVisible();
 
   // Grant 2 — the App installation binding (the setup redirect's persist call),
-  // then the connected panel shows identity + the selected repo with its state.
+  // then the ORG page shows the installation and the repository it selected.
   const ws = await db.workspace.findFirst({
     where: { name: `${email.split('@')[0]}'s Workspace` },
   });
   await seedGithubInstallation(ws!.id);
-  await page.reload();
+  await page.goto('/settings/organization/git');
+  // ⚠️ SCOPED TO `#main`. The page streams its body through an in-page
+  // `<Suspense>`, so before hydration the resolved chunk and its placeholder are
+  // both in the document and an unscoped locator is a strict-mode violation.
+  const main = page.locator('#main');
   await expect(
-    page.getByText(`Motir App installed on ${E2E_REPO.owner} · organization`),
+    main.getByText(`Motir App installed on ${E2E_REPO.owner} · organization`).first(),
   ).toBeVisible();
-  await expect(page.getByText(`${E2E_REPO.owner}/`)).toBeVisible();
-  await expect(page.getByText(E2E_REPO.name, { exact: true })).toBeVisible();
-  await expect(page.getByText(E2E_REPO.defaultBranch, { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Manage on GitHub' }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Disconnect' })).toBeVisible();
+  await expect(main.getByText(E2E_REPO.name, { exact: true }).first()).toBeVisible();
 });
 
 test('@smoke PR opened → the linked item goes Implemented; merged → Done (signed webhooks; unsigned 401s)', async ({

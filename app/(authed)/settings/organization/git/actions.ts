@@ -8,7 +8,7 @@ import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService'
 import { GitlabConnectionNotFoundError, GitlabProjectNotFoundError } from '@/lib/gitlab/errors';
 import type { GitlabSelectableProjectDTO } from '@/lib/dto/gitlab';
 
-// Server Actions for the GitLab settings surface (Story 7.23 · MOTIR-1478). HTTP/
+// Server Actions for the GitLab settings surface (Story 7.23 · MOTIR-1478, moved to the ORG tier by MOTIR-4680). HTTP/
 // transport layer (CLAUDE.md 4-layer): read the session + workspace context, call
 // exactly ONE service method, revalidate. No db.* / $transaction here — the
 // service owns those. GitLab connections are WORKSPACE-scoped (unlike GitHub's
@@ -18,7 +18,7 @@ import type { GitlabSelectableProjectDTO } from '@/lib/dto/gitlab';
 // renders — a `kind` discriminator the client translates via `useTranslations`,
 // so no user-facing copy is built server-side.
 
-const GITLAB_SETTINGS_PATH = '/settings/workspace/gitlab';
+const GITLAB_SETTINGS_PATH = '/settings/organization/git';
 
 export type ProjectActionError = 'not_connected' | 'not_found' | 'unavailable';
 
