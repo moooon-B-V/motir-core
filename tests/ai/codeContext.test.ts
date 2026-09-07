@@ -112,12 +112,25 @@ describe('resolveCodeContext', () => {
 
     // Exact shape — the contract with the 7.10.16 consumer. A 4-repo workspace
     // produces 4 entries (owner asc, name asc — the mirror's display order).
+    //
+    // ⚠️ `indexed: false` ON EVERY ROW, AND IT IS MEASURED RATHER THAN ASSUMED
+    // (MOTIR-4826). The field is read from the SUCCEEDED `system.code-graph-index`
+    // ledger, and this fixture seeds the grant mirror without seeding a single
+    // index run — so false is what the ledger actually says here. The mixed and
+    // indexed cases are driven in
+    // `tests/integration/onboarding/routing-run-triggers-index.test.ts`, which
+    // seeds the runs.
     expect(code).toEqual({
       repos: [
-        { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
-        { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' },
-        { provider: 'github', repoRef: 'moooon/motir-gateway', defaultBranch: 'master' },
-        { provider: 'github', repoRef: 'moooon/motir-meta', defaultBranch: 'main' },
+        { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main', indexed: false },
+        { provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main', indexed: false },
+        {
+          provider: 'github',
+          repoRef: 'moooon/motir-gateway',
+          defaultBranch: 'master',
+          indexed: false,
+        },
+        { provider: 'github', repoRef: 'moooon/motir-meta', defaultBranch: 'main', indexed: false },
       ],
     });
   });
@@ -190,6 +203,12 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             provider: 'github',
             repoRef: 'moooon/motir-ai',
             defaultBranch: 'main',
+            // ⚠️ THE UNION OF TWO INDEPENDENT ADDITIONS, and it is a union because
+            // `resolvePlanningCodeContext` SPREADS the thin entry: `indexed` is
+            // MOTIR-4826's ledger fact, carried up from `resolveCodeContext`, and
+            // the five below are MOTIR-4604's freshness. Neither replaced the
+            // other and the planning envelope carries both.
+            indexed: false,
             indexState: 'never',
             reason: 'never_indexed',
             refreshInFlight: false,
@@ -200,6 +219,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             provider: 'github',
             repoRef: 'moooon/motir-core',
             defaultBranch: 'main',
+            indexed: false,
             indexState: 'never',
             reason: 'never_indexed',
             refreshInFlight: false,
@@ -210,6 +230,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             provider: 'github',
             repoRef: 'moooon/motir-gateway',
             defaultBranch: 'master',
+            indexed: false,
             indexState: 'never',
             reason: 'never_indexed',
             refreshInFlight: false,
@@ -220,6 +241,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             provider: 'github',
             repoRef: 'moooon/motir-meta',
             defaultBranch: 'main',
+            indexed: false,
             indexState: 'never',
             reason: 'never_indexed',
             refreshInFlight: false,

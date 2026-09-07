@@ -145,7 +145,7 @@ export async function proxy(request: NextRequest) {
 
   // While MOTIR_PUBLIC_SITE_URL is unset the moved surfaces are still served
   // HERE — the root `/` runs its own session handling in `app/page.tsx` (no
-  // session → `/sign-in`, session → `/home`), and the deleted pages 404. They
+  // session → `/sign-in`, session → the landing), and the deleted pages 404. They
   // are NOT protected routes, so forward them untouched rather than bouncing a
   // cookie-less request to `/sign-in?next=…` (which would shadow the root's
   // own contract and turn a deleted page's 404 into a sign-in redirect).
@@ -251,7 +251,6 @@ export const config = {
     '/dashboard/:path*',
     '/direction/:path*',
     '/filters/:path*',
-    '/home/:path*',
     '/invite/:path*',
     '/items/:path*',
     '/onboarding/:path*',
@@ -264,5 +263,6 @@ export const config = {
     '/settings/:path*',
     '/sprints/:path*',
     '/triage/:path*',
+    '/workbench/:path*',
   ],
 };

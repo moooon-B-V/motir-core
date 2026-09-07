@@ -93,7 +93,7 @@ describe('signing in', () => {
 
     fireEvent.click(control());
 
-    await waitFor(() => expect(assigned).toEqual(['/home']));
+    await waitFor(() => expect(assigned).toEqual(['/workbench']));
     // The card is still on its email step — no password field, no challenge.
     expect(screen.queryByLabelText(/^password$/i)).toBeNull();
     expect(screen.queryByText(/two-factor/i)).toBeNull();

@@ -55,7 +55,7 @@ const HOST_ADDRESSES = [
   '/items?peek=MOTIR-12',
   '/items/MOTIR-9#comments',
   '/boards',
-  '/home',
+  '/workbench',
 ];
 
 // ───────── Seam 1 — door → address → overlay, every context × every host ─────────

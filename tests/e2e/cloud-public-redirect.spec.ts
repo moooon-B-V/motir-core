@@ -24,8 +24,8 @@ import { signUp } from './_helpers/shell-session';
  * once a browser follows them).
  *
  * ── SIGNED-IN SURFACES ARE UNAFFECTED ───────────────────────────────────────
- * The redirect must not swallow the application: a signed-in visit to `/home`
- * still lands on `/home`, not on the public origin.
+ * The redirect must not swallow the application: a signed-in visit to `/workbench`
+ * still lands on `/workbench`, not on the public origin.
  */
 
 test.describe.configure({ timeout: 120_000 });
@@ -70,7 +70,7 @@ test('the moved public surfaces 308 off the application host', async ({
   // ── Step 7 — a signed-in journey is unaffected ────────────────────────────
   await chapter('signed-in surfaces do not redirect', async () => {
     await signUp(page, 'public-redirect-e2e@example.com');
-    await expect(page).toHaveURL(/\/home$/);
+    await expect(page).toHaveURL(/\/workbench$/);
     await beat();
   });
 });

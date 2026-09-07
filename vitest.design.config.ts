@@ -111,6 +111,21 @@ export default defineConfig({
       // guards is RUN, and because the spec needs neither a database nor a
       // browser, so it costs this lane milliseconds.
       'tests/scripts/render-design-mock-search.test.ts',
+      // `design-mock-utility-correspondence` (MOTIR-4687) is the CORRESPONDENCE
+      // guard: a mock's hand-written utility-shim block and its markup are two
+      // hand-maintained lists that are supposed to agree, and nothing checked
+      // that they did in either direction. It reports a class an element
+      // carries that no rule declares (115 occurrences across 8 assets when it
+      // was written — a heading asking for `text-[19px]` and getting the UA's
+      // `1.5em`), and a rule declared that no element in the tree carries
+      // (MOTIR-4150's `.max-w-md`, read by a card as "the value the asset
+      // draws"). Every ink guard above asks what a rule SAYS; this is the only
+      // one that asks whether any rule APPLIES — and the direction of the risk
+      // is inverted, because an un-styled element inherits `--el-text` and
+      // PASSES contrast, so the defect makes its neighbours greener. It reads
+      // `design/**` and nothing else, no database and no browser, which is this
+      // lane's whole predicate.
+      'tests/design-mock-utility-correspondence.test.ts',
     ],
   },
   resolve: {

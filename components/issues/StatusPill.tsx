@@ -47,21 +47,47 @@ const TONE_BY_CATEGORY: Record<StatusCategoryDto, NonNullable<PillProps['status'
   done: 'done',
 };
 
+/**
+ * Statuses that take the NEUTRAL chip rather than their category's hue
+ * (MOTIR-4777 · MOTIR-4782, `design/workbench/design-notes.md` § Recently
+ * finished).
+ *
+ * `cancelled` is a `done`-category status that means ABANDONED, not
+ * accomplished, and until the Workbench there was no surface where the two sat
+ * side by side — `/home` excluded done work outright, and a board column or a
+ * detail rail shows one card at a time. Recently finished lists them together,
+ * and giving Cancelled the accomplishment tint there would be a false claim in
+ * a colour.
+ *
+ * It is fixed HERE rather than branched at that one list, because the claim is
+ * not local: a cancelled card is not an achievement on `/items`, on a board or
+ * in a mention either. The same discrimination `applyStatusTransition`'s
+ * `completedAt` stamp and `roadmapDoneStatusKeys` already make.
+ */
+const NEUTRAL_STATUS_KEYS: ReadonlySet<string> = new Set(['cancelled']);
+
 /** The glyph a status carries in addition to its label, or none. */
 const GLYPH_BY_STATUS_KEY: Record<string, typeof CircleEllipsis> = {
   implemented: CircleEllipsis,
 };
 
 /**
- * The `Pill` tone for a workflow status: its own tone when it has one, else its
- * lifecycle category's. Exported for the surfaces that need the tone without the
- * component (a legend, a test); everything that renders a chip should use
+ * The HUED `Pill` tone for a workflow status: its own tone when it has one, else
+ * its lifecycle category's. Exported for the surfaces that need the tone without
+ * the component (a legend, a test); everything that renders a chip should use
  * {@link StatusPill} instead so the glyph travels with it.
+ *
+ * **`null` means the NEUTRAL chip**, and two different statuses reach it: one
+ * this project cannot classify (a status a project deleted, with cards still
+ * pointing at it), and one that is deliberately not hued — see
+ * {@link NEUTRAL_STATUS_KEYS}. They render the same chip because they are
+ * making the same claim about it, which is none.
  */
 export function statusPillTone(
   statusKey: string | null | undefined,
   category: StatusCategoryDto | null,
 ): NonNullable<PillProps['status']> | null {
+  if (statusKey && NEUTRAL_STATUS_KEYS.has(statusKey)) return null;
   if (statusKey && TONE_BY_STATUS_KEY[statusKey]) return TONE_BY_STATUS_KEY[statusKey]!;
   return category ? TONE_BY_CATEGORY[category] : null;
 }
@@ -77,9 +103,10 @@ export interface StatusPillProps {
 }
 
 /**
- * ONE work-item status, as its chip. An unresolvable status (no category)
- * renders the neutral chip it always did rather than disappearing — a status a
- * project deleted still has cards pointing at it.
+ * ONE work-item status, as its chip. A status with no hued tone renders the
+ * neutral chip rather than disappearing — an unresolvable one (a status a
+ * project deleted still has cards pointing at it), and `cancelled`, which is
+ * neutral on purpose.
  */
 export function StatusPill({ statusKey, category, label, className }: StatusPillProps) {
   const tone = statusPillTone(statusKey, category);

@@ -396,12 +396,95 @@ export const projectRepoRepository = {
    *
    * Ordered by `position` so a caller that does want a deterministic first row
    * gets the project set's own primary ordering rather than the planner's.
+   *
+   * ⚠️ IT NEEDS MORE THAN `app.workspace_id`, AND WHICH MORE DEPENDS ON THE
+   * CALLER (MOTIR-4841 · bug MOTIR-4835). Its sibling `listProjectIdsWithRows`
+   * below has carried this warning since MOTIR-4802; THIS method — the one three
+   * services call — carried none, and an inconsistent warning is worse than no
+   * warning, because its absence starts carrying information.
+   *
+   * `project_repository` is `FORCE ROW LEVEL SECURITY` with two policies and NO
+   * system arm of its own: `project_repository_active_workspace` (`FOR ALL`, the
+   * row's own workspace) and `project_repository_org_read` (`FOR SELECT`, the
+   * organisation). Since MOTIR-4669 a repository is ORG-owned, so the row you
+   * want routinely belongs to a workspace that is NOT the repository's, and only
+   * the second arm can admit it.
+   *
+   * THAT ARM RESOLVES THE ORGANISATION THROUGH A SUBQUERY OVER `workspace`
+   * (`workspace_id IN (SELECT o.id FROM workspace o WHERE …)`, 20260906180000),
+   * and `workspace` is RLS-forced too — so the arm answers only as well as that
+   * subquery does. Two contexts make it answer, and they are not interchangeable:
+   *
+   *   * `bindOrganizationContext` — `workspace_org_service_read` (20260818010000)
+   *     admits the organisation's workspaces to the subquery when `app.user_id`
+   *     is empty, which is what a service context is. This is what
+   *     `ciMinutesMeterService` and `ciRunnerProvisioningService` bind.
+   *   * `withSystemContext` — `workspace_system_read` admits every workspace row
+   *     to the subquery, and `app_caller_organization_id()` names the
+   *     organisation off the caller's own bound workspace. This is why
+   *     `pullRequestLinkCheckService` was NEVER affected while its two siblings
+   *     were, and nothing in the policy names says so.
+   *
+   * ⚠️ A BARE WORKSPACE CONTEXT IS THE ONE THAT FAILS, and it fails SILENTLY:
+   * the subquery collapses to the caller's own workspace, the read returns a
+   * SUBSET with no error, and every caller meets its own already-reasoned
+   * no-rows branch — attribution to nobody, provisioning refused, a repository
+   * reported unplanned. That is the MOTIR-2956 shape, and it is what MOTIR-4835
+   * found in production.
+   *
+   * ⚠️ AND `20260906000000`'s HEADER SAYS THE OPPOSITE — lines 27 and 31 claim the
+   * predicate mirrors `github_repo_org_read` *"exactly"* and *"needs no
+   * `app.organization_id` at all and therefore keeps working for every existing
+   * caller that binds only a workspace"*. **Both halves are FALSE.**
+   * `github_repo_org_read` genuinely does work from a bare workspace binding,
+   * because `app_caller_organization_id()` reads only the caller's OWN workspace
+   * row — which `workspace_active` admits. This arm has to enumerate the
+   * organisation's OTHER workspaces and cannot, so it is membership-scoped rather
+   * than organisation-scoped. That false guarantee is what made three call sites
+   * look correct on review, and it is corrected HERE rather than in the migration
+   * because that migration is applied everywhere and its file is checksummed by
+   * `prisma migrate deploy`; this repository's precedent for amending a shipped
+   * migration is a later artifact carrying the amendment
+   * (`20260817160000_work_item_parent_tenancy`), never an in-place edit.
    */
   async listByGithubRepoId(
     githubRepoId: string,
     tx: Prisma.TransactionClient,
   ): Promise<ProjectRepo[]> {
     return tx.projectRepo.findMany({ where: { githubRepoId }, orderBy: { position: 'asc' } });
+  },
+
+  /**
+   * WHICH of these workspaces' projects have a repository SET at all — the
+   * ladder's first input, for a whole organisation in ONE read (MOTIR-4802).
+   *
+   * `hasSet` is "any row, established or not" (the same reading
+   * `projectRepoSetService.getRepoNameDomains` takes), so this asks only for
+   * DISTINCT `project_id` and never builds the rows. The organisation inventory
+   * needs it for every project of every workspace that has a repository
+   * connected; resolving that one project at a time is N reads per render.
+   *
+   * ⚠️ IT MUST RUN UNDER A TRANSACTION THAT HAS BOUND `app.organization_id` —
+   * `project_repository`'s `FOR ALL` policy is workspace-keyed and has NO system
+   * arm, so `withSystemContext` returns NOTHING here and a bare workspace
+   * context returns the caller's own workspace only. Either would be a SILENT
+   * SUBSET: every project it could not see reads `hasSet: false`, which the
+   * ladder then answers as "layers the connected registry" — a wrong answer that
+   * looks like a computed one. `project_repository_org_read` (`FOR SELECT`,
+   * MOTIR-4677's sibling) is the arm that admits the rest, and
+   * `bindOrganizationContext` is what turns it on.
+   */
+  async listProjectIdsWithRows(
+    workspaceIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (workspaceIds.length === 0) return [];
+    const rows = await tx.projectRepo.findMany({
+      where: { workspaceId: { in: [...workspaceIds] } },
+      select: { projectId: true },
+      distinct: ['projectId'],
+    });
+    return rows.map((row) => row.projectId);
   },
 
   /** CLEAR every project's link to one repository — the org-level disconnect's

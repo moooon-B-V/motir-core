@@ -5,6 +5,7 @@ import { plansService } from '@/lib/services/plansService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { boardViewportWidth, getBoard, columnByStatus } from './_helpers/board';
+import { resetDatabase } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { test, expect } from './_helpers/promoted-regression';
 
@@ -47,6 +48,16 @@ import { test, expect } from './_helpers/promoted-regression';
 // thing that decides whether the test passed. No `waitForTimeout` anywhere.
 
 const EMAIL = `findings-${Date.now()}@motir.test`;
+
+// The lane's isolation convention (MOTIR-4830). Like `cloud-public-cloud-gate`,
+// this spec's RETRY was already safe — `EMAIL` carries `Date.now()` and
+// Playwright re-imports the module in a fresh worker on retry, measured rather
+// than assumed — and like it, this file used to inherit the previous spec's rows
+// and leave its own, in a lane that runs one worker over one database. One test,
+// seeding its own workspace and project, so nothing relies on state surviving.
+test.beforeEach(async () => {
+  await resetDatabase();
+});
 
 interface Tenant {
   userId: string;

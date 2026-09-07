@@ -8,7 +8,7 @@ import { AccountSidebarHeader } from '@/app/(authed)/_components/AccountSidebarH
 import { OrganizationSidebarHeader } from '@/app/(authed)/_components/OrganizationSidebarHeader';
 
 // MOTIR-3171 — the two rail heads' "← Back to …" link goes to the PROJECT HOME,
-// and the project home is `/home`.
+// and the project home is `/workbench`.
 //
 // The defect this guards against is not a wrong link; it is a link that goes
 // stale. `BACK_HREF` was CORRECT when both files were written — `/dashboard` was
@@ -42,7 +42,7 @@ const USER = { name: 'Yue', email: 'yue@example.com' };
 
 const ORG = { name: 'moooon' };
 
-const HOME = '/home';
+const HOME = '/workbench';
 
 afterEach(cleanup);
 

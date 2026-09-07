@@ -124,7 +124,7 @@ test('a reader behind the current version is held, records their agreement, and 
   page,
 }) => {
   // ── 1. A fresh account is CURRENT and is not held ────────────────────────
-  // `signUp` settles on `/home`, which is itself the assertion: the hook
+  // `signUp` settles on `/workbench`, which is itself the assertion: the hook
   // recorded acceptance, so the gate let this reader straight through. It is
   // also the control for step 3 — without it, "the prompt cleared" would be
   // indistinguishable from "the prompt never appears on this build".
@@ -174,7 +174,7 @@ test('a reader behind the current version is held, records their agreement, and 
   // ── 3. Agreeing records the CURRENT versions and lets them through ───────
   await agree.click();
   await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
-  await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
   // ⚠️ READ THE RECORD BACK, not just the redirect. Being let through proves the
   // gate re-read; it does not prove a row was written, and the row is the whole
@@ -197,5 +197,5 @@ test('a reader behind the current version is held, records their agreement, and 
   // ── 4. The prompt does not recur ─────────────────────────────────────────
   await enterTheApp(page);
   expect(new URL(page.url()).pathname, 'the interstitial came back').toContain(POST_AUTH_LANDING);
-  await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 });

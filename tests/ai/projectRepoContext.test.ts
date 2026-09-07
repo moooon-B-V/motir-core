@@ -295,6 +295,7 @@ describe('the planning-job ENVELOPE', () => {
             provider: 'github',
             repoRef: 'moooon/motir-core',
             defaultBranch: 'main',
+            indexed: false,
             indexState: 'never',
             reason: 'never_indexed',
             refreshInFlight: false,
@@ -404,6 +405,16 @@ describe('the planning-job ENVELOPE', () => {
 
     await aiGenerationService.startGeneration(ctx, { prompt: 'go' });
     const [, , context] = vi.mocked(submitJob).mock.calls[0]!;
+    // ⚠️ AMENDED 2026-09-07 (MOTIR-4826), ON THE RECORD RATHER THAN LOOSENED.
+    // `context.code` gained `indexed` — a per-repository FACT read from the
+    // succeeded-index ledger, so the routing verdict can tell a repository with
+    // no graph from one with nothing in it. That is MOTIR-1598's own list
+    // growing a field, which this guard was never about: what it exists to catch
+    // is the PROJECT SET being merged INTO the grant list, and the assertion
+    // below still catches exactly that — `unrelated-service` is seeded above and
+    // must not appear here. Widening this to `toMatchObject` would have made it
+    // stop catching that, which is why the shape is restated in full instead.
+    //
     // ⚠️ AMENDED BY MOTIR-4604. The guard's subject is unchanged and is what is
     // still asserted: the grant list is the WORKSPACE's, it names `motir-ai`, and
     // the project's own unrelated row (`unrelated-service`) is nowhere in it — the
@@ -416,8 +427,11 @@ describe('the planning-job ENVELOPE', () => {
           provider: 'github',
           repoRef: 'moooon/motir-ai',
           defaultBranch: 'trunk',
-          // The grant list names it; the project's set does not — so the join
-          // finds nothing and the state is `never`, never `indexed`.
+          // `indexed` is the LEDGER fact (MOTIR-4826); the five below are the
+          // freshness join (MOTIR-4604). The grant list names this repository and
+          // the project's set does not, so the join finds nothing and the state is
+          // `never` — never `indexed`, which would claim a currency nothing observed.
+          indexed: false,
           indexState: 'never',
           reason: 'never_indexed',
           refreshInFlight: false,

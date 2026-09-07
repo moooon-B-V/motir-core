@@ -1,11 +1,13 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { resolvePlanningCodeContext } from '@/lib/ai/codeContext';
+import { resolveCodeContext, resolvePlanningCodeContext } from '@/lib/ai/codeContext';
+import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
 import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
+import { routeOnboardingContextFor } from '@/lib/ai/routeOnboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -57,6 +59,121 @@ export interface StartGenerationInput {
 }
 
 export const aiGenerationService = {
+  /**
+   * THE ROUTING RUN (MOTIR-4769) — dispatched when the universal plan window
+   * OPENS on a project whose first plan has never been approved.
+   *
+   * It asks `motir-ai` ONE question (MOTIR-4767): can this project be planned
+   * from what it has, and if not, which onboarding does the user go to? The run
+   * HALTS on every outcome — `continue` included — so it proposes nothing,
+   * closes no plan and needs no `Plan` row. That absence is the point rather
+   * than an omission: `startGeneration` opens a `generating` Plan bound to its
+   * job, and a routing run would leave one of those sitting `generating` for a
+   * job that was never going to write to it.
+   *
+   * ⚠️ THIS IS THE ONLY DISPATCH THAT ASKS. `startGeneration` — the door every
+   * later ask goes through, and the one the migrate wizard's own generate step
+   * reaches — must never set the flag:
+   *
+   *   · the WIZARD's run is also a first plan over an empty tree, so a verdict
+   *     there would send a user who is already in onboarding back to its start;
+   *   · and `onboardingRanAt` is stamped on the first plan APPROVED, so it is
+   *     still null while a `continue` project does its actual planning. A
+   *     marker-derived flag on `startGeneration` would route every ask that user
+   *     made, forever, and plan nothing.
+   *
+   * The helper still refuses to set it for an established project: there is
+   * nothing to route such a project to.
+   */
+  async startRoutingRun(ctx: ProjectContext): Promise<{ jobId: string }> {
+    // The same gate generation runs behind: deciding a user's route is a
+    // planning act on their project, not a free read.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    // The same two context reads generation makes, and for the same reason: the
+    // verdict is a judgement about the code and the backlog, so a run that could
+    // not SEE them would answer a different question from the one being asked.
+    const code = await resolveCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    // ⚠️ AND THE MISSING GRAPH IS REPAIRED, NOT ONLY REPORTED (Story MOTIR-4753 ·
+    // MOTIR-4826). A repository can be CONNECTED and unindexed — an index that
+    // failed, one still running, or somebody who connected their repository and
+    // opened the plan window a minute later — and in that state the verdict is
+    // about to be told there is nothing to read. Telling it, and doing nothing,
+    // would leave the person waiting for a graph nobody asked for.
+    //
+    // The shipped, idempotent workspace sweep is the whole mechanism: it reads
+    // the succeeded-index ledger and enqueues ONLY the repositories missing one,
+    // so an index already running or already succeeded enqueues nothing and no
+    // second guard is needed here.
+    //
+    // ⚠️ BEST-EFFORT, DELIBERATELY. This repairs a cause; it is not what the
+    // caller asked for. A sweep that fails must not fail the routing run — the
+    // verdict is still worth having, and the person still needs an answer.
+    //
+    // ⚠️ AND IT DECIDES NOTHING. `motir-core` does not read `indexed` back to
+    // choose a destination; the fact goes on the wire above and the route is the
+    // planner's (MOTIR-4828). A branch here would put the routing decision back
+    // where five of this story's cards took it out of.
+    if (code?.repos.some((repo) => !repo.indexed)) {
+      try {
+        await codeGraphIndexService.sweepReposMissingFirstIndex({
+          workspaceId: ctx.workspaceId,
+        });
+      } catch (err) {
+        console.error(
+          'startRoutingRun could not enqueue a first index for workspace; the verdict still runs:',
+          ctx.workspaceId,
+          err,
+        );
+      }
+    }
+    const repositories = await resolveProjectRepoContext(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    // ⚠️ SENT UNCONDITIONALLY, like every other planning submit (MOTIR-4343).
+    // The routing run plans nothing, which is exactly why it would be easy to
+    // think it owes no consent flag — but it is a planning job on the planner
+    // and an ABSENT field reads on the far side as ON, so omitting it would
+    // capture mistakes for a project that switched capture off.
+    const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    return submitJob(
+      'plan',
+      {
+        organizationId,
+        isMeta,
+        internalBilling,
+        workspaceId: ctx.workspaceId,
+        projectId: ctx.projectId,
+        projectKey: ctx.project.identifier,
+      },
+      {
+        // No prompt: nothing has been asked for yet. That is what makes this a
+        // routing question rather than a planning one.
+        prompt: null,
+        [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
+        [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+        ...routeOnboardingContextFor(ctx.project),
+        ...(code ? { code } : {}),
+        ...(repositories ? { repositories } : {}),
+      },
+      { userId: ctx.userId },
+    );
+  },
+
   // Open a `generating` Plan + submit the `generate_tree` job for the actor's
   // active project; return the ids the surface needs ({ jobId, planId }). The job
   // is submitted FIRST so the Plan can bind to it via `sourceJobId` — and so a

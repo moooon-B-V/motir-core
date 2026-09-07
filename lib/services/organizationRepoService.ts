@@ -11,6 +11,10 @@ import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAcce
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
+import { projectsLayeringConnectedRepos } from '@/lib/projectRepos/effectiveDomain';
+import { repoNameKey } from '@/lib/workItems/repoName';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -28,6 +32,7 @@ import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import {
   GithubRemovalHappensOnGithubError,
   ProjectRepoInvalidFieldError,
+  ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
@@ -113,21 +118,195 @@ async function inProjectOrg<T>(
   );
 }
 
-/** Translate the `(project_id, github_repo_id)` race into its typed error, so a
- *  raw P2002 never escapes (the concurrency-to-typed-error rule). */
-function translateLinkViolation(
+/**
+ * The two shapes Prisma can put in a `P2002`'s `meta.target`: the COLUMN LIST
+ * (`["project_id", "github_repo_id"]`) or the INDEX NAME
+ * (`project_repository_project_id_github_repo_id_key`). Both are matched, and
+ * both are matched POSITIVELY — see `translateLinkViolation`.
+ */
+function targetFields(err: Prisma.PrismaClientKnownRequestError): string[] | null {
+  const target = err.meta?.['target'];
+  if (Array.isArray(target)) {
+    const fields = target.map(String).filter((f) => f.length > 0);
+    return fields.length > 0 ? fields : null;
+  }
+  if (typeof target === 'string' && target.length > 0) return [target];
+  return null;
+}
+
+/**
+ * The constraint name out of the DRIVER's own error, when `meta.target` has none.
+ *
+ * ⚠️ THIS IS WHERE THE ANSWER ACTUALLY IS UNDER RLS, and it was worth finding:
+ * Prisma drops the constraint name on its way to `meta.target` (the adapter builds
+ * that from `DETAIL` alone), but it PRESERVES the driver's original error beneath
+ * `meta.driverAdapterError`. Measured on a real lost race under the `motir_app`
+ * role:
+ *
+ *   meta = { modelName: 'ProjectRepo', driverAdapterError: { cause: {
+ *     originalCode: '23505',
+ *     originalMessage: 'duplicate key value violates unique constraint
+ *                       "project_repository_project_id_github_repo_id_key"' } } }
+ *
+ * So the index name survives, quoted, in a message PostgreSQL sends whether or not
+ * it is willing to describe the conflicting VALUES — which is exactly the
+ * distinction RLS draws. Reading it turns the ordinary case back into a local,
+ * positive classification with no second query.
+ *
+ * It is read DEFENSIVELY and is never the only path: the message is
+ * server-localized, so a `lc_messages` other than English changes the prose around
+ * the name. Only the QUOTED identifier is taken, and a miss falls through to the
+ * set re-read rather than guessing.
+ */
+function driverConstraintName(err: Prisma.PrismaClientKnownRequestError): string | null {
+  const adapterError = err.meta?.['driverAdapterError'];
+  if (typeof adapterError !== 'object' || adapterError === null) return null;
+  const cause = (adapterError as { cause?: unknown }).cause;
+  if (typeof cause !== 'object' || cause === null) return null;
+  const message = (cause as { originalMessage?: unknown }).originalMessage;
+  if (typeof message !== 'string') return null;
+  return message.match(/"([^"]+)"/)?.[1] ?? null;
+}
+
+/** `@@unique([projectId, githubRepoId])`, in either shape. */
+function namesClaimConstraint(fields: string[]): boolean {
+  // One test covers both shapes: the column is `github_repo_id`, and the index
+  // name `project_repository_project_id_github_repo_id_key` contains it.
+  return fields.some((f) => f.includes('github_repo_id'));
+}
+
+/** `@@unique([projectId, name])`, in either shape. */
+function namesNameConstraint(fields: string[]): boolean {
+  // Two tests, because the index name does NOT contain the bare column: it is
+  // `project_repository_project_id_name_key`. Checked AFTER the claim constraint,
+  // so the ordering never has to arbitrate between them.
+  return fields.some((f) => f === 'name' || f.endsWith('_name_key'));
+}
+
+/**
+ * Translate a unique-constraint violation on the set INSERT into its typed error,
+ * so a raw P2002 never escapes (the concurrency-to-typed-error rule).
+ *
+ * ⚠️ BOTH ARMS ARE POSITIVE, AND THE REMAINDER HAS ITS OWN NAME (Bug MOTIR-4833).
+ * This function used to test for `github_repo_id` and let an `else` throw
+ * `ProjectRepoNameTakenError` — so a violation it could not classify was ASSERTED
+ * to be a name collision. That is not a vaguer answer than the truth, it is a
+ * different and actionable one: it tells a person to rename something, when the
+ * real condition was that another project's write claimed the repository first
+ * and renaming cannot help.
+ *
+ * ⚠️ AND `meta.target` IS ABSENT FOR EVERY LOST RACE ON THIS PATH — which is why
+ * there are three classification layers rather than one. MEASURED, not deduced:
+ *
+ *   1. `project_repository` is `FORCE ROW LEVEL SECURITY`, and the app connects as
+ *      a NON-SUPERUSER role, so PostgreSQL's `BuildIndexValueDescription` declines
+ *      to describe the conflicting key and the `23505` arrives with **no `DETAIL`
+ *      line at all** (verified against this schema's own dev database: as the
+ *      owner `DETAIL` is present, as `motir_app` it is `undefined`, while
+ *      `constraint` — the index name — is present in BOTH).
+ *   2. `@prisma/adapter-pg` derives `meta.target` from `error.detail` ALONE
+ *      (`error.detail?.match(/Key \(([^)]+)\)/)`, `node_modules/@prisma/adapter-pg`),
+ *      and never from `error.constraint`. No `DETAIL` ⇒ no `target`.
+ *
+ * So the index name the database DID report never reaches `meta.target`, the
+ * `github_repo_id` arm was unreachable under RLS, and every lost race — of either
+ * constraint — produced the name error. It stayed invisible because the pre-checks
+ * usually win the race, and because when the NAME race lost the fallback happened
+ * to be the right answer; only the CLAIM race could ever go red.
+ *
+ * ⚠️ THE NAME IS NOT LOST, THOUGH — IT IS ONE LEVEL DOWN. Prisma preserves the
+ * driver's original error under `meta.driverAdapterError`, whose `originalMessage`
+ * quotes the constraint (`driverConstraintName`). So the ordinary case classifies
+ * locally after all, and `resolveUnclassifiedLinkConflict` is the backstop for the
+ * case where neither layer names a constraint rather than the common path.
+ *
+ * ⚠️ EXPORTED FOR ITS OWN UNIT TEST, and that is the point rather than a
+ * concession. The only thing that has ever executed these branches is a
+ * `Promise.allSettled` race whose loser reaches the INSERT — so which arm gets
+ * exercised is decided by a scheduler, and the branch that carried the defect was
+ * covered by luck for as long as it existed. Driving the function directly with
+ * each `meta.target` shape is what turns that into a test.
+ */
+export function translateLinkViolation(
   err: unknown,
   fallback: { name: string; githubRepoId: string; projectId: string },
 ): never {
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-    const target = err.meta?.['target'];
-    const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
-    if (fields.some((f) => f.includes('github_repo_id'))) {
+    // Most reliable first: the STRUCTURED target, when Prisma has one. Then the
+    // constraint name out of the driver's own error, which survives RLS. Then, and
+    // only then, the remainder — resolved against the set by the caller.
+    const fields = targetFields(err) ?? [driverConstraintName(err)].filter((f) => f !== null);
+    if (fields.length > 0 && namesClaimConstraint(fields)) {
       throw new RealizedRepoAlreadyClaimedError(fallback.githubRepoId);
     }
-    throw new ProjectRepoNameTakenError(fallback.name, fallback.projectId);
+    if (fields.length > 0 && namesNameConstraint(fields)) {
+      throw new ProjectRepoNameTakenError(fallback.name, fallback.projectId);
+    }
+    // The instrument this defect cost an elimination argument to reach. One line
+    // here settles the next occurrence by reading it instead of deducing it.
+    console.warn('[organizationRepoService] unclassified P2002 on the repository-set insert', {
+      code: err.code,
+      meta: err.meta,
+      projectId: fallback.projectId,
+      githubRepoId: fallback.githubRepoId,
+    });
+    throw new ProjectRepoLinkConflictError(
+      fallback.projectId,
+      fallback.name,
+      fallback.githubRepoId,
+    );
   }
   throw err;
+}
+
+/**
+ * Resolve an unclassifiable link conflict by ASKING THE SET, once the failed
+ * transaction has unwound.
+ *
+ * ⚠️ IT HAS TO RUN OUT HERE, AND THAT IS THE WHOLE REASON THIS WRAPPER EXISTS.
+ * The obvious place to disambiguate is the `catch` beside the INSERT, where both
+ * the intent and a `tx` are in hand — and it cannot work there: PostgreSQL aborts
+ * the transaction block on the `23505`, so every further statement on that `tx`
+ * fails with `25P02` until it rolls back. By the time control reaches here the
+ * transaction is gone, the WINNER's row is committed, and one read answers the
+ * question the error could not.
+ *
+ * It opens no new authorization surface: the org-admin gate and the project
+ * `repository:manage` gate both passed inside the transaction that just failed,
+ * and this reads the same project's own set under the same workspace context.
+ */
+async function resolveUnclassifiedLinkConflict<T>(
+  projectId: string,
+  ctx: ServiceContext,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (!(err instanceof ProjectRepoLinkConflictError)) throw err;
+    await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      async (tx) => {
+        // The CLAIM is asked first because it is the one a rename cannot fix.
+        const claimed = await projectRepoRepository.findByProjectAndGithubRepoId(
+          projectId,
+          err.githubRepoId,
+          tx,
+        );
+        if (claimed) throw new RealizedRepoAlreadyClaimedError(err.githubRepoId);
+        const named = await projectRepoRepository.findByProjectAndNameInsensitive(
+          projectId,
+          err.repoName,
+          ctx.workspaceId,
+          tx,
+        );
+        if (named) throw new ProjectRepoNameTakenError(err.repoName, projectId);
+      },
+    );
+    // Neither uniqueness explains it. That is a real answer and it keeps its own
+    // name — a 409 the caller can retry, never a name collision it cannot fix.
+    throw err;
+  }
 }
 
 export const organizationRepoService = {
@@ -146,6 +325,59 @@ export const organizationRepoService = {
    * workspace because that is where the actor's role lives — a workspace they are
    * not in returns nothing, by `filterBrowsable`'s null-role rail. A separate
    * count would announce the existence of a project the viewer cannot name.
+   *
+   * ⚠️ "USES" IS WHAT A PROJECT HAS **CHOSEN** — CORRECTED 2026-09-07 (MOTIR-4821);
+   * the struck text stood here and shipped a FALSE claim on a destructive
+   * disclosure.
+   *
+   * ~~"USES" IS THE SCOPE LADDER, NOT `project_repository` (MOTIR-4802). The answer
+   * is composed of two halves: EXPLICIT links, plus every project of the
+   * repository's OWN workspace whose domain layers the connected registry.~~
+   *
+   * The FIRST half was right and is unchanged. The SECOND was a permissive
+   * default read backwards. `lib/projectRepos/effectiveDomain.ts` answers *if this
+   * project dispatches work, which repositories MAY it reach?*, and it hands a
+   * project with no set at all the workspace's whole connected registry precisely
+   * BECAUSE that project has never chosen. Inverting it produces *which projects
+   * USE this repository*, which no permissive default can support: a scratch
+   * project created and left empty was named against all seven of the
+   * organisation's repositories, in the column the DISCONNECT dialogue leans on,
+   * so a person deciding whether disconnecting will hurt anybody was shown
+   * projects that had never touched it (MOTIR-4821). Reusing the module that owns
+   * a question is right; assuming the relation is SYMMETRIC because one direction
+   * is authoritative is not.
+   *
+   * MOTIR-4802's report is answered by the same correction rather than reverted.
+   * It was filed because Motir's own project — six connected repositories, an
+   * empty set — read `Used by no project yet` on repositories it demonstrably
+   * works in. What makes that project different from the scratch one is not its
+   * domain (identical) but its WORK: it names those repositories on its work
+   * items, and the scratch project names nothing. So:
+   *
+   *   EXPLICIT  a `project_repository` link, whichever workspace it comes from —
+   *             the org tier's whole point is that a project may link a
+   *             repository connected from a sibling workspace.
+   *   NAMED     a project of the repository's OWN workspace whose domain layers
+   *             the connected registry AND which names this repository on a work
+   *             item (`work_item.targetRepos` — the only way a set-less project
+   *             can express the choice at all). `listConnectedRepoNames` is
+   *             workspace-scoped, so the layering half stays scoped the same way.
+   *
+   * The ladder is still not re-derived here — `projectsLayeringConnectedRepos`
+   * owns the rung, and it now gates the evidence rather than standing in for it.
+   *
+   * ⚠️ THE PERMISSIVE DEFAULT IS STILL REAL AND IS STILL DISCLOSED — as a
+   * property of the ORGANISATION, said once in the inventory card's foot and in
+   * the disconnect dialogue, never by naming N projects that never chose
+   * anything.
+   *
+   * Two BULK reads gather the ladder's inputs for the whole organisation, rather
+   * than N project-scoped `resolveEffectiveRepoDomain` calls per render. Each
+   * runs under the ONE context that can see all of its rows, and neither may be
+   * moved: `project_repository` answers only under the ORG binding (no system
+   * arm) and `migrate_onboarding` only under SYSTEM context (no org arm). Either
+   * read taken under the wrong one returns a subset that the ladder converts into
+   * a WRONG verdict rather than a short list — the failure this whole card is.
    */
   async listRepositoryUsage(ctx: ServiceContext): Promise<OrgRepoUsageDto[]> {
     // The organisation is resolved from the actor's WORKSPACE row — trusted, not
@@ -156,26 +388,38 @@ export const organizationRepoService = {
     // context, and both would return a SUBSET rather than raise — the MOTIR-2956
     // failure shape, which is why they are bound together rather than one at a
     // time.
-    const { repos, linksByRepo, projectIds } = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const orgId = await resolveOrganizationId(ctx.workspaceId, tx);
-        await assertOrgMember(ctx.userId, orgId, tx);
-        await bindOrganizationContext(tx, orgId);
-        const found = await githubRepoRepository.listByOrganization(orgId, tx);
-        const byRepo = new Map<string, string[]>();
-        const ids = new Set<string>();
-        for (const repo of found) {
-          const links = await projectRepoRepository.listByGithubRepoId(repo.id, tx);
-          byRepo.set(
-            repo.id,
-            links.map((l) => l.projectId),
-          );
-          for (const l of links) ids.add(l.projectId);
-        }
-        return { repos: found, linksByRepo: byRepo, projectIds: [...ids] };
-      },
-    );
+    const { repos, linksByRepo, linkedProjectIds, workspaceIds, setProjectIds } =
+      await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+        async (tx) => {
+          const orgId = await resolveOrganizationId(ctx.workspaceId, tx);
+          await assertOrgMember(ctx.userId, orgId, tx);
+          await bindOrganizationContext(tx, orgId);
+          const found = await githubRepoRepository.listByOrganization(orgId, tx);
+          const byRepo = new Map<string, string[]>();
+          const ids = new Set<string>();
+          for (const repo of found) {
+            const links = await projectRepoRepository.listByGithubRepoId(repo.id, tx);
+            byRepo.set(
+              repo.id,
+              links.map((l) => l.projectId),
+            );
+            for (const l of links) ids.add(l.projectId);
+          }
+          // The ladder's FIRST input, in one read for the whole organisation. It
+          // is gathered HERE and not below because `project_repository` has no
+          // system arm — see the method's own warning.
+          const wsIds = [...new Set(found.map((r) => r.workspaceId))];
+          const withRows = await projectRepoRepository.listProjectIdsWithRows(wsIds, tx);
+          return {
+            repos: found,
+            linksByRepo: byRepo,
+            linkedProjectIds: [...ids],
+            workspaceIds: wsIds,
+            setProjectIds: new Set(withRows),
+          };
+        },
+      );
     if (repos.length === 0) return [];
 
     // The PROJECT rows are read under the system arm `project_workspace_or_system_read`
@@ -183,10 +427,43 @@ export const organizationRepoService = {
     // names, which the access filter below then narrows. No new arm is owed, and
     // no arm is widened: this is the same read `codeGraphOffboardingService`
     // performs on the same table for the same reason.
-    const projectsById = await withSystemContext(async (tx) => {
-      const projects = await projectRepository.findManyByIds(projectIds, tx);
-      return new Map(projects.map((p) => [p.id, p]));
-    });
+    const { projectsById, projectIdsByWorkspace, layering } = await withSystemContext(
+      async (tx) => {
+        // The LAYERING candidates: every non-archived project of a workspace that
+        // has a repository connected. Archived is excluded deliberately — an
+        // archived project is not somebody a disconnect dialogue should warn
+        // about, and `findByWorkspace` is the read that already draws that line.
+        const byWorkspace = new Map<string, string[]>();
+        const found = new Map<string, Project>();
+        for (const workspaceId of workspaceIds) {
+          const projects = await projectRepository.findByWorkspace(workspaceId, tx);
+          byWorkspace.set(
+            workspaceId,
+            projects.map((p) => p.id),
+          );
+          for (const project of projects) found.set(project.id, project);
+        }
+        const candidateIds = [...found.keys()];
+        const ownCode = new Set(
+          await migrateOnboardingRepository.listProjectIdsWithConnectedRepo(candidateIds, tx),
+        );
+        const layers = projectsLayeringConnectedRepos(
+          candidateIds.map((projectId) => ({
+            projectId,
+            hasSet: setProjectIds.has(projectId),
+            hasOwnCode: ownCode.has(projectId),
+          })),
+        );
+        // A LINKED project need not be a candidate: the org tier's whole claim is
+        // that a project may link a repository connected from a sibling
+        // workspace, and that project's own workspace may have none of its own.
+        const outside = linkedProjectIds.filter((id) => !found.has(id));
+        for (const project of await projectRepository.findManyByIds(outside, tx)) {
+          found.set(project.id, project);
+        }
+        return { projectsById: found, projectIdsByWorkspace: byWorkspace, layering: layers };
+      },
+    );
 
     // One filter pass per WORKSPACE — the actor's role is workspace-scoped, so a
     // single call with one ctx would judge every project by their role in one
@@ -198,23 +475,68 @@ export const organizationRepoService = {
       byWorkspace.set(project.workspaceId, list);
     }
     const browsable = new Set<string>();
+    // WHICH REPOSITORY NAMES EACH LAYERING PROJECT HAS ACTUALLY NAMED ON ITS WORK
+    // — the evidence half of the NAMED rung (MOTIR-4821), keyed by
+    // `repoNameKey` so `owner/name` and a differently-cased `name` compare as the
+    // one checkout identity `mergeDomainsByName` already treats them as.
+    //
+    // ⚠️ IT IS GATHERED INSIDE THE ACCESS LOOP, AND THAT PLACEMENT IS THE RAIL.
+    // `filterBrowsable` runs per workspace because the actor's role is
+    // workspace-scoped, so a workspace the actor is not in returns nothing — and
+    // reading work items only for the projects it just ADMITTED is what keeps this
+    // read inside the actor's own membership without a new RLS arm. Reading the
+    // whole organisation's work first and filtering afterwards would bind a
+    // workspace context the actor may have no membership in; `work_item`'s
+    // policy compares the workspace and nothing else, so it would answer.
+    const namedByProject = new Map<string, Set<string>>();
     for (const [workspaceId, projects] of byWorkspace) {
       const allowed = await projectAccessService.filterBrowsable(projects, {
         userId: ctx.userId,
         workspaceId,
       });
       for (const p of allowed) browsable.add(p.id);
+      // Only the LAYERING ones: a project that reaches this list through an
+      // explicit link is already answered, and asking for its work would be a
+      // read whose result nothing consults.
+      const layeringHere = allowed
+        .filter((p) => p.workspaceId === workspaceId && layering.has(p.id))
+        .map((p) => p.id);
+      if (layeringHere.length === 0) continue;
+      const names = await withWorkspaceContext({ userId: ctx.userId, workspaceId }, (tx) =>
+        workItemRepository.listRepoNamesByProject(workspaceId, layeringHere, tx),
+      );
+      for (const [projectId, list] of names) {
+        const keys = new Set<string>();
+        for (const name of list) {
+          const key = repoNameKey(name);
+          if (key) keys.add(key);
+        }
+        namedByProject.set(projectId, keys);
+      }
     }
 
-    return repos.map((repo) => ({
-      githubRepoId: repo.id,
-      repoRef: `${repo.owner}/${repo.name}`,
-      projects: (linksByRepo.get(repo.id) ?? [])
-        .filter((id) => browsable.has(id))
-        .map((id) => projectsById.get(id))
-        .filter((p): p is NonNullable<typeof p> => !!p)
-        .map(toUsingProjectDto),
-    }));
+    return repos.map((repo) => {
+      // EXPLICIT first, then NAMED — a stable order, and the one a reader
+      // expects: the projects that LINKED this repository, then the ones that
+      // named it on their work.
+      const explicit = linksByRepo.get(repo.id) ?? [];
+      // NAMED, not merely LAYERED: the project's domain must reach the repository
+      // AND its work must name it. Dropping the second conjunct is exactly the
+      // MOTIR-4821 regression — every set-less project against every repository.
+      const repoKey = repoNameKey(repo.name);
+      const named = (projectIdsByWorkspace.get(repo.workspaceId) ?? []).filter(
+        (id) => layering.has(id) && repoKey !== null && namedByProject.get(id)?.has(repoKey),
+      );
+      return {
+        githubRepoId: repo.id,
+        repoRef: `${repo.owner}/${repo.name}`,
+        projects: [...new Set([...explicit, ...named])]
+          .filter((id) => browsable.has(id))
+          .map((id) => projectsById.get(id))
+          .filter((p): p is NonNullable<typeof p> => !!p)
+          .map(toUsingProjectDto),
+      };
+    });
   },
 
   /**
@@ -450,70 +772,72 @@ export const organizationRepoService = {
     input: LinkExistingRepoInput,
     ctx: ServiceContext,
   ): Promise<ProjectRepoDto> {
-    return inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
-      // The org-admin gate, in the SERVICE and inside the transaction. The room's
-      // own `repository:manage` is a PROJECT permission — without this a project
-      // admin who is not an org admin could attach the organisation's
-      // repositories through it. A gate on the button is a gate one caller away
-      // from being missing.
-      await assertOrgAdmin(ctx.userId, organizationId, tx);
+    return resolveUnclassifiedLinkConflict(projectId, ctx, () =>
+      inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
+        // The org-admin gate, in the SERVICE and inside the transaction. The room's
+        // own `repository:manage` is a PROJECT permission — without this a project
+        // admin who is not an org admin could attach the organisation's
+        // repositories through it. A gate on the button is a gate one caller away
+        // from being missing.
+        await assertOrgAdmin(ctx.userId, organizationId, tx);
 
-      const repo = await githubRepoRepository.findById(input.githubRepoId, tx);
-      // Not-found and belongs-to-another-org are ONE answer on purpose: a probe
-      // must not be able to tell a real id in a foreign org from a fictional one.
-      if (!repo || repo.organizationId !== organizationId) {
-        throw new ProjectRepoInvalidFieldError(
-          'githubRepoId',
-          'it does not name a repository connected to this organisation.',
-        );
-      }
+        const repo = await githubRepoRepository.findById(input.githubRepoId, tx);
+        // Not-found and belongs-to-another-org are ONE answer on purpose: a probe
+        // must not be able to tell a real id in a foreign org from a fictional one.
+        if (!repo || repo.organizationId !== organizationId) {
+          throw new ProjectRepoInvalidFieldError(
+            'githubRepoId',
+            'it does not name a repository connected to this organisation.',
+          );
+        }
 
-      const name = (input.name ?? repo.name).trim();
-      const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
-        projectId,
-        name,
-        ctx.workspaceId,
-        tx,
-      );
-      if (clash) throw new ProjectRepoNameTakenError(name, projectId);
-
-      const existing = await projectRepoRepository.findByProjectAndGithubRepoId(
-        projectId,
-        repo.id,
-        tx,
-      );
-      // The double-add raises the SAME typed error and the same 409 MOTIR-4648
-      // preserved through `@@unique([projectId, githubRepoId])` — the guarantee
-      // that survived dropping the global unique index.
-      if (existing) throw new RealizedRepoAlreadyClaimedError(repo.id);
-
-      const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
-      let row;
-      try {
-        row = await projectRepoRepository.create(
-          {
-            workspaceId: ctx.workspaceId,
-            projectId,
-            role: input.role,
-            name,
-            ...(input.label !== undefined ? { label: input.label } : {}),
-            // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
-            // seeds from nothing: the repository is the organisation's and has its own
-            // history. The Repositories room splits its two sections on exactly this
-            // question, so a default here would render the row under "Motir hosts…"
-            // offering Take it over for a repository the organisation already owns.
-            seedSource: SEED_SOURCE_ORGANIZATION,
-            state: 'connected',
-            githubRepoId: repo.id,
-            position: keyForAppend(last),
-          },
+        const name = (input.name ?? repo.name).trim();
+        const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
+          projectId,
+          name,
+          ctx.workspaceId,
           tx,
         );
-      } catch (err) {
-        translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
-      }
-      return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
-    });
+        if (clash) throw new ProjectRepoNameTakenError(name, projectId);
+
+        const existing = await projectRepoRepository.findByProjectAndGithubRepoId(
+          projectId,
+          repo.id,
+          tx,
+        );
+        // The double-add raises the SAME typed error and the same 409 MOTIR-4648
+        // preserved through `@@unique([projectId, githubRepoId])` — the guarantee
+        // that survived dropping the global unique index.
+        if (existing) throw new RealizedRepoAlreadyClaimedError(repo.id);
+
+        const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
+        let row;
+        try {
+          row = await projectRepoRepository.create(
+            {
+              workspaceId: ctx.workspaceId,
+              projectId,
+              role: input.role,
+              name,
+              ...(input.label !== undefined ? { label: input.label } : {}),
+              // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
+              // seeds from nothing: the repository is the organisation's and has its own
+              // history. The Repositories room splits its two sections on exactly this
+              // question, so a default here would render the row under "Motir hosts…"
+              // offering Take it over for a repository the organisation already owns.
+              seedSource: SEED_SOURCE_ORGANIZATION,
+              state: 'connected',
+              githubRepoId: repo.id,
+              position: keyForAppend(last),
+            },
+            tx,
+          );
+        } catch (err) {
+          translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
+        }
+        return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
+      }),
+    );
   },
 
   /**
@@ -543,45 +867,47 @@ export const organizationRepoService = {
       installationId: input.installationId,
     });
 
-    return inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
-      const repo = await githubRepoRepository.findByRepoIdAndProvider(
-        input.providerRepoId,
-        'github',
-        tx,
-      );
-      if (!repo || repo.organizationId !== organizationId) {
-        throw new ProjectRepoInvalidFieldError(
-          'providerRepoId',
-          'the install did not select that repository for this organisation.',
-        );
-      }
-      const name = (input.name ?? repo.name).trim();
-      const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
-      let row;
-      try {
-        row = await projectRepoRepository.create(
-          {
-            workspaceId: ctx.workspaceId,
-            projectId,
-            role: input.role,
-            name,
-            ...(input.label !== undefined ? { label: input.label } : {}),
-            // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
-            // seeds from nothing: the repository is the organisation's and has its own
-            // history. The Repositories room splits its two sections on exactly this
-            // question, so a default here would render the row under "Motir hosts…"
-            // offering Take it over for a repository the organisation already owns.
-            seedSource: SEED_SOURCE_ORGANIZATION,
-            state: 'connected',
-            githubRepoId: repo.id,
-            position: keyForAppend(last),
-          },
+    return resolveUnclassifiedLinkConflict(projectId, ctx, () =>
+      inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
+        const repo = await githubRepoRepository.findByRepoIdAndProvider(
+          input.providerRepoId,
+          'github',
           tx,
         );
-      } catch (err) {
-        translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
-      }
-      return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
-    });
+        if (!repo || repo.organizationId !== organizationId) {
+          throw new ProjectRepoInvalidFieldError(
+            'providerRepoId',
+            'the install did not select that repository for this organisation.',
+          );
+        }
+        const name = (input.name ?? repo.name).trim();
+        const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
+        let row;
+        try {
+          row = await projectRepoRepository.create(
+            {
+              workspaceId: ctx.workspaceId,
+              projectId,
+              role: input.role,
+              name,
+              ...(input.label !== undefined ? { label: input.label } : {}),
+              // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
+              // seeds from nothing: the repository is the organisation's and has its own
+              // history. The Repositories room splits its two sections on exactly this
+              // question, so a default here would render the row under "Motir hosts…"
+              // offering Take it over for a repository the organisation already owns.
+              seedSource: SEED_SOURCE_ORGANIZATION,
+              state: 'connected',
+              githubRepoId: repo.id,
+              position: keyForAppend(last),
+            },
+            tx,
+          );
+        } catch (err) {
+          translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
+        }
+        return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
+      }),
+    );
   },
 };

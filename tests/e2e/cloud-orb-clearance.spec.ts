@@ -6,7 +6,7 @@
 // on. It participates in no page's flow, so nothing below it reserved the space
 // it takes: at the end of a scrolled page the last block's bottom edge landed
 // inside that band and the bottom-right control there stopped receiving its own
-// clicks. Reported on `/items` (the List pager's `Next page`) and `/home` (the
+// clicks. Reported on `/items` (the List pager's `Next page`) and `/workbench` (the
 // cursor pager's `Next`).
 //
 // ⚠️ WHY THIS RIDES THE CLOUD LANE AND NOT `home.spec.ts` /
@@ -40,7 +40,7 @@
 // explicit `document.elementFromPoint` check below:
 //
 //   /items Next page: centre (1214,667) inside the orb rect (1204,644 56×56)
-//   /home  Next:      centre (1221,680) inside the same rect
+//   /workbench Next:   centre (1221,680) inside the same rect
 //   elementFromPoint → button.fixed right-5 bottom-5 z-40 …  (the orb)
 //
 // So the PRIMARY assertion here is the explicit hit test, taken at the control's
@@ -65,7 +65,7 @@ test.afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** `/items` List page size is 50 and `/home`'s cursor page size is 25
+/** `/items` List page size is 50 and `/workbench`'s cursor page size is 25
  *  (`HOME_PAGE_SIZE`), so 65 items paginate BOTH surfaces from one seed. The
  *  creator is written as REPORTER, so all 65 land in the owner's "My work".
  *  Comfortably inside the free tier's 250-work-item cap, which is LIVE on this
@@ -209,21 +209,21 @@ test('the /items List pager clears the orb at the end of a scrolled page, and Ne
   await expect(page.getByRole('dialog', { name: 'Motir AI' })).toHaveCount(0);
 });
 
-test("the /home cursor pager's Next clears the orb at the end of a scrolled page", async ({
+test("the Workbench cursor pager's Next clears the orb at the end of a scrolled page", async ({
   page,
 }) => {
   await seedPaginatedProject(page, `orb-clearance-home-${Date.now()}@example.com`);
 
-  await page.goto('/home');
-  await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
+  await page.goto('/workbench');
+  await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
 
   // The seed puts all 65 items in "My work" (creator = reporter), so the
   // 25-row cursor page has a `Next`.
   const next = page.getByRole('link', { name: 'Next', exact: true });
-  await expectReceivesItsOwnClick(page, next, '/home pager Next');
+  await expectReceivesItsOwnClick(page, next, '/workbench pager Next');
 
   await next.click();
-  await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Motir AI' })).toHaveCount(0);
 });
 
@@ -250,7 +250,7 @@ test("the shell reserves at least the orb's full 76px reach, and only while the 
 }) => {
   await seedPaginatedProject(page, `orb-clearance-rule-${Date.now()}@example.com`);
 
-  await page.goto('/home');
+  await page.goto('/workbench');
   await expect(orb(page)).toBeVisible();
 
   const measured = await page.evaluate(() => {

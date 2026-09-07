@@ -56,7 +56,14 @@ describe('⚠️ what this pane must NOT carry', () => {
     // Installing, managing and disconnecting the App are org-admin acts on the
     // ORGANISATION's surface, and a member sent to do one is sent to a door that
     // will not open for them.
-    expect(PAGE).toContain('getWorkspaceInstallation');
+    // ⚠️ THE READ IS THE ORGANISATION'S (MOTIR-4836). It was
+    // `getWorkspaceInstallation` — a `workspace_id` lookup — while the page's own
+    // comment said "the installation is the ORGANISATION's". From a SIBLING
+    // workspace of the installing one that answered null, and state C's "the
+    // organisation has no installation" note was shown to a member of an
+    // organisation that has one. Pinned by NAME so the tier cannot drift back.
+    expect(PAGE).toContain('listOrganizationInstallations');
+    expect(PAGE).not.toContain('getWorkspaceInstallation');
     expect(PAGE).not.toContain('githubAppInstallUrl');
     expect(PAGE).not.toContain('bindInstallationForWorkspace');
     expect(PAGE).not.toContain('removeInstallation');

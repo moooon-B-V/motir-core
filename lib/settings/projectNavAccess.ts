@@ -53,10 +53,10 @@ export interface NavAccessEntry {
  */
 export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
   {
-    // Home (Story MOTIR-2649 · Subtask MOTIR-2654) is the one row here that is
-    // NOT project-scoped: it reads the workspace, resolves the actor's own
-    // browsable-project set through `projectAccessService`, and asserts nothing
-    // past it. So the requirement is genuinely `browse-only` — and it is in this
+    // The Workbench (Story MOTIR-2649 · MOTIR-2654, renamed by MOTIR-4782)
+    // resolves the session and the ACTIVE project and asserts nothing past it,
+    // exactly like `/dashboard` below. So the requirement is genuinely
+    // `browse-only` — and it is in this
     // map anyway, because `canOfferNavDestination` answers FALSE for an href it
     // does not carry. That default is the right one (a room nobody vouched for
     // is not offered), and it means an omission here does not fail loudly: it
@@ -66,7 +66,7 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
     href: AUTHED_LANDING_PATH,
     requires: 'browse-only',
     evidence:
-      'app/(authed)/home/page.tsx resolves the session + workspace context and calls homeService, which filters to the browsable-project set itself. No permission is asserted, and none could be: the surface spans projects rather than sitting in one.',
+      'app/(authed)/workbench/page.tsx resolves the session and getActiveProject(), then calls homeService for the one project. No permission is asserted beyond being able to see that project at all — which is what getActiveProject() already answered.',
   },
   {
     href: '/dashboard',

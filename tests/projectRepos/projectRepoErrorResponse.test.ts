@@ -7,6 +7,7 @@ import {
 } from '@/lib/projects/errors';
 import {
   ProjectRepoInvalidFieldError,
+  ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
   ProjectRepoStateTransitionError,
@@ -48,6 +49,11 @@ describe('mapProjectRepoError', () => {
       // A settled row has no legal hop; a caller that raced and lost lands here,
       // and 409 is what tells them to re-read and try again.
       new ProjectRepoStateTransitionError('row-1', 'created', 'skipped', []),
+      // MOTIR-4833 — the SAME lost race, when the database declined to say which
+      // uniqueness it lost on. Unmapped this would be a 500, which is the one
+      // answer that is worse than the wrong 409 it replaced: the caller's request
+      // was fine and retrying it is exactly the right move.
+      new ProjectRepoLinkConflictError('proj-1', 'acme-web', 'gh-1'),
     ];
     for (const err of conflicts) {
       const res = mapProjectRepoError(err);

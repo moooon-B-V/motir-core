@@ -1,14 +1,15 @@
 import { redirect } from 'next/navigation';
+import { onboardingReturnHref } from '@/lib/planning/onboardingReturn';
+import { searchParamsToEntries } from '@/lib/navigation/searchParamsToEntries';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { readPendingIdea } from '@/lib/onboarding/pendingIdea';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
+import { readOnboardingSubstrate } from '@/lib/services/onboardingSubstrateService';
 import { shouldRouteToMigrateWizard } from '@/lib/onboarding/migrateHandoff';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The onboarding ENTRANCE route (Subtask 7.22.4 / MOTIR-1462) — the new-vs-existing
 // fork the user lands on at `/onboarding`, designed by MOTIR-1461
@@ -30,7 +31,22 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // (`/onboarding/migrate`) instead of showing the start-fresh entrance. Existing
 // items ARE the project's understanding — the 4-tier pre-plan is skipped.
 
-export default async function OnboardingEntrancePage() {
+export default async function OnboardingEntrancePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // ⚠️ WHERE A FINISHED JOURNEY LANDS IS NOT ALWAYS `/roadmap` (MOTIR-4770). A
+  // user who reached onboarding from the plan window was SENT here by a routing
+  // verdict, and they were promised they would land back in the window they
+  // opened. The return address rides the query the hand-off wrote; `null` means
+  // they came in by another door — the entrance, a bookmark, a fresh sign-up —
+  // and those keep the destination they always had.
+  const back = onboardingReturnHref(
+    new URLSearchParams(searchParamsToEntries(await searchParams)),
+    'completed',
+  );
+
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -50,7 +66,7 @@ export default async function OnboardingEntrancePage() {
   // surface, exactly as the discovery route does. A never-onboarded project (null
   // marker) sees the entrance — unless it already has existing work items
   // (MOTIR-1259: a manually-built or seeded tree → route to the migrate wizard).
-  if (ctx.project.onboardingRanAt) redirect('/roadmap');
+  if (ctx.project.onboardingRanAt) redirect(back ?? '/roadmap');
 
   // Existing-item gate (MOTIR-1259): a never-AI-planned project with a
   // non-empty work-item tree skips the start-fresh pre-plan path and routes to
@@ -59,18 +75,36 @@ export default async function OnboardingEntrancePage() {
   // …UNLESS the migrate wizard already handed off to planning (MOTIR-1725) —
   // this route was also the universal "Plan with AI"
   // target, so an unconditional bounce here trapped the hand-off as well.
+  //
+  // ⚠️ AND THE ROUTER ASKS BOTH HALVES OF THE QUESTION NOW (MOTIR-4756). It read
+  // the item count alone, so a project with a connected repository and zero work
+  // items was sent down the start-fresh path — the one path that does NOT read
+  // code. The substrate read answers "what does this project already have?" once,
+  // and the predicate decides on both inputs.
   if (!ctx.project.onboardingRanAt) {
-    const itemCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-      workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId, undefined, tx),
-    );
+    const substrate = await readOnboardingSubstrate(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    // The run is only consulted when something could route us to the wizard —
+    // its only job here is the MOTIR-1725 directional guard, which has nothing to
+    // suppress on a project the predicate would not route anyway.
     const run =
-      itemCount > 0
+      substrate.itemCount > 0 || substrate.repositoryConnected
         ? await migrateOnboardingService.getForProject(ctx.projectId, {
             userId: ctx.userId,
             workspaceId: ctx.workspaceId,
           })
         : null;
-    if (shouldRouteToMigrateWizard({ itemCount, run })) redirect('/onboarding/migrate');
+    if (
+      shouldRouteToMigrateWizard({
+        itemCount: substrate.itemCount,
+        repositoryConnected: substrate.repositoryConnected,
+        run,
+      })
+    ) {
+      redirect('/onboarding/migrate');
+    }
   }
 
   const carriedIdea = await readPendingIdea();

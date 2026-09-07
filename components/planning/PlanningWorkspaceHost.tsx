@@ -153,6 +153,12 @@ export interface PlanningWorkspaceHostProps {
    * root-level anchor (an epic is already on the root level).
    */
   initialCanvasTrail?: readonly CanvasCrumb[];
+  /**
+   * The user has just come BACK from onboarding (MOTIR-4770) — the round trip
+   * closed. Passed straight to the rail, because the acknowledgement belongs in
+   * the conversation rather than anywhere this component draws.
+   */
+  justReturnedFromOnboarding?: boolean;
 }
 
 export function PlanningWorkspaceHost({
@@ -166,6 +172,7 @@ export function PlanningWorkspaceHost({
   onKeepPlanningAfterBack,
   initialTarget = null,
   initialCanvasTrail,
+  justReturnedFromOnboarding,
 }: PlanningWorkspaceHostProps) {
   const t = useTranslations('planningWorkspace');
   const router = useRouter();
@@ -445,6 +452,7 @@ export function PlanningWorkspaceHost({
         <PlanChangeRail
           launch={launch}
           projectName={projectName}
+          {...(justReturnedFromOnboarding ? { justReturnedFromOnboarding: true } : {})}
           state={state}
           index={index}
           targets={targets}

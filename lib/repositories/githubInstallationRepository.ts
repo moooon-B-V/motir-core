@@ -57,6 +57,44 @@ export const githubInstallationRepository = {
     return tx.githubInstallation.findFirst({ where: { workspaceId, provider: 'github' } });
   },
 
+  /**
+   * The ORGANISATION's GitHub installations — the tier a connection is actually
+   * owned at after MOTIR-4649, and the read `findByWorkspaceId` above cannot
+   * stand in for (MOTIR-4836). A workspace's own grant matches `workspace_id`;
+   * a SIBLING workspace of the same organisation matches nothing, so an
+   * organisation-tier surface asking the workspace question is told its
+   * organisation has no connection while its repositories are right there.
+   *
+   * ⚠️ IT RETURNS A LIST, AND THAT IS THE DISPOSITION RATHER THAN AN OVERSIGHT.
+   * Nothing forbids two workspaces of one organisation each installing the App
+   * on a DIFFERENT GitHub account, so N is genuinely reachable — and the honest
+   * answer to "which one is the organisation's connection?" is then all of
+   * them. Picking `rows[0]` would be a guess wearing a singular return type;
+   * `organizationRepoService.listRepositoryUsage` is the precedent for handing
+   * the set to the caller instead.
+   *
+   * ORDERED DETERMINISTICALLY (`created_at`, then `id`) and carrying NO
+   * preference: the oldest connection is not the "real" one, it is merely
+   * first, and a stable order is what keeps a render from reshuffling between
+   * two reads of the same page.
+   *
+   * Filtered to `provider: 'github'` for the same reason `findByWorkspaceId` is
+   * — a GitLab connection lives in this table too (MOTIR-1474).
+   *
+   * The caller must have bound `app.organization_id` (or a workspace whose
+   * organisation this is): `github_installation_org_read` is a FOR SELECT arm,
+   * and without a binding this read is refused rather than wrong.
+   */
+  async listByOrganizationId(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<GithubInstallation[]> {
+    return tx.githubInstallation.findMany({
+      where: { organizationId, provider: 'github' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   /** The workspace's connection for a specific provider (`github` | `gitlab`), or
    *  null. The provider-aware read a GitLab caller uses. */
   async findByWorkspaceAndProvider(

@@ -95,6 +95,40 @@ export const DOCS_REDIRECTS = [
 ] as const;
 
 /**
+ * The signed-in landing's rename (Story MOTIR-4777 / MOTIR-4782).
+ *
+ * A THIRD sibling of the two maps around it, for the reason `SETTINGS_REDIRECTS`
+ * gives about itself: each constant is a named contract some test reads, so
+ * folding a rule into a map it does not belong to makes that name lie.
+ *
+ * `/home` became `/workbench` because the surface stopped being a place a
+ * product puts things it has not decided about and became a place you stand
+ * while you work — and a label that says Workbench over an address bar that says
+ * `home` is exactly the drift MOTIR-3171 and MOTIR-3173 were filed for.
+ *
+ * `permanent: true` (308), not a temporary hop, and not a rewrite:
+ *
+ * - a URL is a promise to strangers, and this is the one every signed-in reader
+ *   has in muscle memory, in their browser history and in whatever they pasted
+ *   into chat;
+ * - **308 rather than 307 because the METHOD must be preserved** — this address
+ *   is only ever GET today, but a redirect outlives the assumptions of the day
+ *   it was written;
+ * - a REWRITE would keep serving the page at the old address, which is the
+ *   half-rename this card exists to avoid: two addresses for one surface, and
+ *   nothing to tell a reader which one is real.
+ *
+ * ⚠️ NEXT CARRIES THE QUERY STRING for a redirect whose destination names no
+ * query of its own, so `/home?tab=watching&cursor=…` arrives intact. That is
+ * what the acceptance criterion about `?tab=` is asserting, and it is a property
+ * of the framework rather than of this rule — which is why the E2E asserts it
+ * rather than this comment claiming it.
+ */
+export const LANDING_REDIRECTS = [
+  { source: '/home', destination: '/workbench', permanent: true },
+] as const;
+
+/**
  * Settings-area address moves (MOTIR-2534 / Story MOTIR-2532).
  *
  * A SIBLING of `DOCS_REDIRECTS`, deliberately not an addition to it. That
@@ -148,7 +182,7 @@ export const SETTINGS_REDIRECTS = [
 
 const nextConfig: NextConfig = {
   async redirects() {
-    return [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS];
+    return [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS, ...LANDING_REDIRECTS];
   },
   // The two `next/og` cards read Inter's bytes off disk at request time
   // (`app/_brand/ogFonts.ts` — satori has no CSS tree and no system font stack,

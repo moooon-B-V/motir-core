@@ -8,7 +8,12 @@ import {
 } from '@/components/planning/ProjectRoadmapCanvas';
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
-import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
+import {
+  buildWorkItemLevel,
+  isNotInEpicRow,
+  LEVEL_MORE_ID,
+  NOT_IN_EPIC_ID,
+} from '@/components/planning/workItemLevel';
 import { fetchRoadmapLevel } from '@/lib/planning/roadmapClient';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { workItemCrumbLabel } from '@/lib/planning/projectCanvasModel';
@@ -336,28 +341,130 @@ export function PlanReviewCanvas({
   // at the same moment it stops being sayable.
   const [levelIsAllProposed, setLevelIsAllProposed] = useState(false);
 
+  // ── THE "Not in an epic" GROUP, and the CAP (MOTIR-4771) ───────────────────
+  //
+  // Part XVI DECISION 5: this canvas takes the SAME ruling as the overlay, and
+  // its failure mode under the rejected dispositions is worse. `mergePlanLevel`
+  // pushes any proposal it could not merge onto a committed node as a standalone
+  // node, and its own comment says what that means — *"a `modify` / `remove`
+  // whose target is not at this level (a DRIFTED plan)"*. So grouping a
+  // proposal's target here does not merely hide a frame: it makes the plan READ
+  // AS DRIFTED, which is a false statement about the plan, on the surface the
+  // plan is approved from.
+  //
+  // THE THIRD CONJUNCT is therefore the SAME rule against this canvas's own merge
+  // key: every node id the plan names stays on the road. It is the set the
+  // "Show changes" emphasis below already walks, which is the point — the rows
+  // the plan is about are the rows the reviewer must be able to see. A pending
+  // `add`'s node id is its `planItemId` and can never be a committed row's id, so
+  // it is inert here; a `modify` / `remove` keys by its TARGET, and a
+  // materialized `add` re-keys to the card it became (MOTIR-3160 / MOTIR-3161),
+  // which are exactly the three the design names.
+  // …plus a pending `add`'s TARGET, which none of those three reaches: an add
+  // proposed UNDER a committed row names it only through `parentNodeId`, and
+  // grouping that row away files the proposal behind a door the reviewer cannot
+  // open (it is drawn one level down, under the row that just left the level).
+  // `op === 'add'` is the whole widening — a `modify` / `remove` already keys by
+  // its own target, so pulling ITS parent onto the road would be over-wide.
+  const touchedNodeIds = useMemo(() => {
+    const ids = new Set(items.map((i) => i.nodeId));
+    for (const i of items) {
+      if (i.op === 'add' && i.parentNodeId !== null) ids.add(i.parentNodeId);
+    }
+    return ids;
+  }, [items]);
+
+  // DECISION 4's second half: *"the DETAIL keeps §6 and gains the tile too."* The
+  // list-view arm (Part XIII §6) chooses the ARRIVAL VIEW for the arrival level;
+  // the tile says a LEVEL is truncated once the reader is standing on the canvas
+  // — after switching views, or after drilling. They answer different questions.
+  // Keyed by the level the reader is STANDING ON, never the root (MOTIR-4501).
+  const showAllRef = useRef(new Set<string>());
+  const [showAllTick, setShowAllTick] = useState(0);
+  const levelKeyRef = useRef<string | null>(null);
+  const handleSelect = useCallback((id: string) => {
+    if (id !== LEVEL_MORE_ID) return;
+    const key = levelKeyRef.current;
+    if (!key) return;
+    showAllRef.current.add(key);
+    setShowAllTick((n) => n + 1);
+  }, []);
+
   const loadLevel = useCallback(
     async (parentId: string | null): Promise<RoadmapLevel> => {
+      // THE GROUPED NODE'S LEVEL — synthetic, so it never asks the API for the
+      // children of an id no work item has. This canvas keeps no level cache, so
+      // the door RE-READS the root rather than reading one back: the MOTIR-4426
+      // property holds here by construction, not by a cache-miss branch.
+      if (parentId === NOT_IN_EPIC_ID) {
+        levelKeyRef.current = null; // synthetic: no `levelTotal`, so no tile on it
+        let grouped: RoadmapLevel = { nodes: [], deps: [] };
+        if (projectKey) {
+          const root = await fetchRoadmapLevel(projectKey, null, 'project');
+          for (const it of root.items) identifierByIdRef.current.set(it.id, it.identifier);
+          const rows = root.items.filter((i) => isNotInEpicRow(i) && !touchedNodeIds.has(i.id));
+          // ⚠️ EDGES SCOPED TO THE ROWS (bug MOTIR-3557) — the root's edge list is
+          // the whole root level's, epics included, and handing it over whole
+          // redraws every root epic as an anonymous "blocked elsewhere" ghost.
+          const rowIds = new Set(rows.map((r) => r.id));
+          grouped = buildWorkItemLevel({
+            items: rows,
+            edges: root.edges.filter((e) => rowIds.has(e.blockedId)),
+            offLevelBlockers: root.offLevelBlockers,
+          });
+        }
+        // Nothing the plan touches is in here (the conjunct above), so no
+        // proposal can merge onto this level and none is parented on the
+        // synthetic id — but the merge still makes a row the plan puts work
+        // UNDER drillable, which is how that proposal stays reachable.
+        const merged = mergePlanLevel(grouped, items, parentId, outcome);
+        // NOT the all-proposed caption: these are committed rows, and the caption
+        // says the opposite (Part IX §1.4).
+        setLevelIsAllProposed(false);
+        return merged;
+      }
+
       // The COMMITTED level. A failure here must not blank the review — the plan
       // is the page's subject and the surrounding tree is context — so it degrades
       // to "just this plan's proposals at that level", which is what the surface
       // showed before this change. `fetchRoadmapLevel` is already best-effort and
       // resolves an empty level rather than throwing, so the degrade is its.
       let committed: RoadmapLevel = { nodes: [], deps: [] };
+      const levelKey = `${projectKey}:${parentId ?? '__root__'}`;
+      // Written before the await, so an activation can never name the level this
+      // load replaced.
+      levelKeyRef.current = levelKey;
       // No project to read a level from — a pre-project discovery run
       // (`GenerationFlow`) proposes a tree before one exists, so there is no
       // committed neighbourhood and the proposals legitimately stand alone.
       if (projectKey) {
-        const wi = await fetchRoadmapLevel(projectKey, parentId, 'project');
+        const wi = await fetchRoadmapLevel(
+          projectKey,
+          parentId,
+          'project',
+          undefined,
+          showAllRef.current.has(levelKey),
+        );
         for (const it of wi.items) identifierByIdRef.current.set(it.id, it.identifier);
         for (const b of wi.offLevelBlockers) identifierByIdRef.current.set(b.id, b.identifier);
-        committed = buildWorkItemLevel(wi);
+        const atRoot = parentId === null;
+        const excluded = atRoot
+          ? new Set(wi.items.filter((i) => touchedNodeIds.has(i.id)).map((i) => i.id))
+          : undefined;
+        committed = buildWorkItemLevel(wi, {
+          // Grouping is a statement about the PROJECT's roots, so it is the root
+          // level's alone — a drilled level's rows are somebody's children.
+          groupNonEpicRoots: atRoot,
+          ...(excluded ? { groupExcludeIds: excluded } : {}),
+          groupCrumbLabel: t('group.title'),
+          levelTotal: wi.levelTotal,
+        });
       }
       const merged = mergePlanLevel(committed, items, parentId, outcome);
       setLevelIsAllProposed(committed.nodes.length === 0 && merged.nodes.length > 0);
       return merged;
     },
-    [items, projectKey, outcome],
+    [items, projectKey, outcome, touchedNodeIds, t],
   );
 
   return (
@@ -365,7 +472,8 @@ export function PlanReviewCanvas({
       <ProjectRoadmapCanvas
         onView={onView}
         loadLevel={loadLevel}
-        reloadKey={`${version}:${proposalsAtLevel(items, null).length}`}
+        onSelect={handleSelect}
+        reloadKey={`${version}:${proposalsAtLevel(items, null).length}:${showAllTick}`}
         initialTrail={initialTrail}
         // The level the reviewer is standing on FOLLOWS its container through
         // approve, rather than being left addressed by an id that has stopped

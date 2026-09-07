@@ -20,10 +20,11 @@ import { DashboardsHome } from './_components/DashboardsHome';
 // touched.
 //
 // ⚠️ `/dashboard` IS NO LONGER A POST-AUTH LANDING. It was, for both credential
-// flows, and this comment said so; MOTIR-2654 moved sign-IN to `/home` and
-// MOTIR-2921 moved sign-UP after it, so BOTH now land on `/home` and settle on
-// its `home-page` marker (`tests/e2e/_helpers/shell-session.ts`, MOTIR-2645's
-// authoritative-signal contract; `docs/decisions/home-scope.md` §2.3).
+// flows, and this comment said so; MOTIR-2654 moved sign-IN to the landing and
+// MOTIR-2921 moved sign-UP after it, so BOTH now land on `AUTHED_LANDING_PATH`
+// — `/workbench` since MOTIR-4782 — and settle on its `workbench-page` marker
+// (`tests/e2e/_helpers/shell-session.ts`, MOTIR-2645's authoritative-signal
+// contract; `docs/decisions/home-scope.md` §2.3).
 // `/dashboard` keeps its route and its own rail entry, and is reached by
 // navigating to it. The marker stays for a spec that lands here deliberately.
 const DASHBOARD_TESTID = 'dashboard-page';

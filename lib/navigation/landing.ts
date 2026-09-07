@@ -34,11 +34,23 @@ import { sanitizeNextPath } from './nextDestination';
 
 /**
  * The signed-in landing — where a reader goes when nothing more specific is
- * asked for. `/home` is project-scoped and renders the shipped create-first door
- * when there is no project (MOTIR-2761), so it is a safe destination for every
- * signed-in actor, including one who has just made an account.
+ * asked for. `/workbench` is project-scoped and renders the shipped create-first
+ * door when there is no project (MOTIR-2761), so it is a safe destination for
+ * every signed-in actor, including one who has just made an account.
+ *
+ * ⚠️ RENAMED from `/home` by MOTIR-4782, and the old address still LANDS: a
+ * permanent 308 in `next.config.ts` carries it here with its query string, so a
+ * bookmark and a pasted `?tab=` link both survive. The move is this one line
+ * because MOTIR-3373 collapsed nine literals into this constant first.
+ *
+ * ⚠️ AND THE CREATE-FIRST DOOR IS ON ITS WAY OUT — MOTIR-4815. A workbench is
+ * somewhere you stand INSIDE a project, so a projectless reader does not belong
+ * on it at all; that card seeds a default project at registration and lands a
+ * new reader in `/onboarding` instead, after which `getActiveProject()` never
+ * returns null and the sentence above loses its second clause. Nothing here
+ * changes until it does.
  */
-export const AUTHED_LANDING_PATH = '/home';
+export const AUTHED_LANDING_PATH = '/workbench';
 
 /**
  * Where the cross-origin idea hand-off goes (MOTIR-1458): the authed discovery
@@ -58,7 +70,7 @@ export const ONBOARDING_ENTRY_PATH = '/onboarding';
  *      auth depend on it, and `sanitizeNextPath` is what stops it being an open
  *      redirect;
  *   2. `/onboarding`, when an idea draft is being carried across;
- *   3. `/home`.
+ *   3. the signed-in landing.
  *
  * @param next the raw `?next=` search param — a string, an array (a hand-edited
  *   URL can repeat the key), `null` from `useSearchParams().get`, or absent.
