@@ -6,6 +6,7 @@ import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
@@ -141,7 +142,9 @@ describe('the context path, from the layout’s props to both hosts (MOTIR-2558)
     it('keeps the brand tile ahead of the path', async () => {
       const bar = await TopNav(layoutProps());
       const { container } = renderWithIntl(wrap(bar));
-      const brand = container.querySelector('a[href="/dashboard"]')!;
+      // MOTIR-4799 — the tile points at the LANDING now; selector composed
+      // from the owner constant rather than re-typed.
+      const brand = container.querySelector(`a[href="${AUTHED_LANDING_PATH}"]`)!;
       expect(brand.className).toContain('bg-(--el-surface)');
     });
   });
