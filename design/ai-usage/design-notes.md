@@ -625,23 +625,22 @@ Both halves are false, for different reasons, and neither is a judgement call.
    THRESHOLD — and the floor IS the threshold.**
    `app/(authed)/settings/organization/usage/_components/OrgUsageClient.tsx:190`
    reads `const outOfCredits = data.balance <= 0`. The paired offset (MOTIR-4570)
-   stops the balance FALLING; it does not lift it above zero. And motir-ai
-   `scripts/reconcile-internal-balance.ts` pins a newly-classified org's ledger at
+   stops the balance FALLING; it does not lift it above zero. And `motir-ai/scripts/reconcile-internal-balance.ts` pins a newly-classified org's ledger at
    **exactly `0`** — `const target = targetArg ? Number(...) : 0` — describing
    itself as bringing the balance _"to where the offset will hold it from now
    on."_ So 7b is an internal org's **permanent resting state**, not the
    unreachable one the amendment assumed.
 2. **The org this is about is `isMeta` and NOT `internalBilling`, so no pairing
-   runs for it at all.** motir-ai `src/seed/dogfoodDirectionDocs.ts` seeds the
+   runs for it at all.** `motir-ai/src/seed/dogfoodDirectionDocs.ts` seeds the
    dogfood org `{ isMeta: true, internalBilling: false }`, and migration
    `20260905120000_organization_internal_billing` deliberately flips no data.
    Its debits are unoffset and the balance drifts **negative** — which
    `lib/dto/aiUsage.ts:108`'s own comment already said.
 3. **And 7b's copy asserts a consequence no gate performs.**
    `aiUsage.outOfCredits.body` says _"new planning runs are paused"_. motir-ai
-   exempts `isMeta` at **both** enforcement points — `src/jobs/worker.ts`
+   exempts `isMeta` at **both** enforcement points — `motir-ai/src/jobs/worker.ts`
    `assertHasCredits` (`if (isMeta) return;`) and
-   `src/services/gatewaySyncService.ts` `getBalanceForOrg`
+   `motir-ai/src/services/gatewaySyncService.ts` `getBalanceForOrg`
    (`hasCredits = isMeta || balanceCredits > 0`). For a meta org that sentence
    has never been true. MOTIR-4576 step 7 says the same: _"Whatever the balance
    reads, start a planning turn and confirm it runs."_
