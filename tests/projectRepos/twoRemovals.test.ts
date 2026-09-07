@@ -166,6 +166,15 @@ describe('`Used by N projects` — ONE read, two consumers', () => {
   });
 
   it('reports a repository NO project uses as an empty list — a legal state', async () => {
+    // ⚠️ THE FIXTURE NOW HAS TO EARN THE ZERO (MOTIR-4802). It used to be the
+    // bare fixture, and that was the DEFECT wearing a passing test: the project
+    // has no repository SET, so the ladder's first rung makes every repository
+    // connected in its workspace part of its domain, and a zero there was the
+    // wrong answer rather than the legal state. Giving the project a set of its
+    // own — a project BORN IN MOTIR — is what makes the connected registry stop
+    // layering, and the zero real.
+    await link(fx.projectId, repoGitlab, fx.ctx);
+
     const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
     expect(usage.find((u) => u.githubRepoId === repoGithub)?.projects).toEqual([]);
   });
@@ -213,6 +222,170 @@ describe('`Used by N projects` — ONE read, two consumers', () => {
 
     const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
     expect(usage.find((u) => u.githubRepoId === repoGitlab)?.projects).toHaveLength(2);
+  });
+});
+
+// ⚠️ "USES" IS THE SCOPE LADDER, NOT `project_repository` — MOTIR-4802.
+//
+// The read shipped asking the LINK TABLE, and a repository a project WORKS ON
+// need not have a link row: `lib/projectRepos/effectiveDomain.ts`'s first rung
+// gives a project with no SET the workspace's CONNECTED repositories as its whole
+// domain, and that rung is the common one. On Motir's own project — six connected,
+// indexed repositories, an empty set — EVERY inventory row read `Used by no
+// project yet`, which is the exact opposite of the claim the tier move shipped
+// on, in the column the DISCONNECT dialogue leans on.
+//
+// Each test below is one rung of that ladder, read from the other end. The
+// `hasSet` cases are not decoration: they are what keeps the zero above a real
+// state rather than a defect nobody notices.
+describe('`Used by N projects` — the SCOPE LADDER, not the link table (MOTIR-4802)', () => {
+  it('names a project whose repositories are CONNECTED and whose set is EMPTY — the reported defect', async () => {
+    // The shipped Motir project's exact shape, at fixture scale.
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    for (const repoId of [repoGithub, repoGitlab]) {
+      const row = usage.find((u) => u.githubRepoId === repoId);
+      expect(row?.projects.map((p) => p.id)).toEqual([fx.projectId]);
+    }
+  });
+
+  it('does NOT name a project BORN IN MOTIR for a repository its set never claimed', async () => {
+    // The rung that makes the zero above legal: a set-holding project with no
+    // code of its own is answered by its set ALONE, so the connected registry
+    // stops layering and `repoGithub` is genuinely nobody's.
+    await link(fx.projectId, repoGitlab, fx.ctx);
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    expect(usage.find((u) => u.githubRepoId === repoGitlab)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
+    expect(usage.find((u) => u.githubRepoId === repoGithub)?.projects).toEqual([]);
+  });
+
+  it('names a project that ARRIVED WITH CODE for both its set row and the connected registry', async () => {
+    // The third rung — the set FIRST, connected UNDER it — so the project holds
+    // the repository it linked AND the one its workspace is connected to.
+    await link(fx.projectId, repoGitlab, fx.ctx);
+    await adminDb.migrateOnboarding.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        kind: 'migrate',
+        step: 'done',
+        status: 'completed',
+        connectedRepoRef: 'moooon/motir-core',
+      },
+    });
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    expect(usage.find((u) => u.githubRepoId === repoGitlab)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
+    expect(usage.find((u) => u.githubRepoId === repoGithub)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
+  });
+
+  it('⚠️ layers a repository into its OWN workspace only — a sibling workspace`s project is NOT named', async () => {
+    // `listConnectedRepoNames` is WORKSPACE-scoped, so the inverse must be too:
+    // the org tier makes a repository PICKABLE from anywhere, not part of every
+    // project's domain. A second workspace's set-less project layers ITS
+    // workspace's registry — which here is empty — and holds nothing.
+    const second = await secondWorkspaceInSameOrg();
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    expect(usage.find((u) => u.githubRepoId === repoGithub)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
+    expect(
+      usage.find((u) => u.githubRepoId === repoGithub)?.projects.map((p) => p.id),
+    ).not.toContain(second.projectId);
+  });
+
+  it('…and an EXPLICIT link from that sibling workspace still counts — a link outranks the scoping', async () => {
+    // The org tier's own claim, and the half the ladder must not eat: a project
+    // may LINK a repository connected from a sibling workspace, and that link is
+    // usage wherever it comes from.
+    const second = await secondWorkspaceInSameOrg();
+    await link(second.projectId, repoGithub, second.ctx);
+
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+    const row = usage.find((u) => u.githubRepoId === repoGithub);
+
+    expect(new Set(row?.projects.map((p) => p.id))).toEqual(
+      new Set([fx.projectId, second.projectId]),
+    );
+    // Once, not twice — a project that both layers and links a repository is one
+    // name in the dialogue, not two.
+    expect(row?.projects).toHaveLength(2);
+  });
+
+  it('⚠️ a LAYERED project is access-filtered exactly as a linked one is', async () => {
+    // The disclosure rail has to hold on the new half too, or the fix trades a
+    // wrong count for a leak. The second workspace's own connected repository
+    // layers into its private project; an org member who is not in that
+    // workspace must not be told the project exists.
+    const second = await secondWorkspaceInSameOrg({ accessLevel: 'private' });
+    const secondRepo = await adminDb.githubRepo.create({
+      data: {
+        installationId: installationRowId,
+        workspaceId: second.workspaceId,
+        organizationId: orgId,
+        repoId: 'gh-2',
+        owner: 'moooon',
+        name: 'motir-ai',
+        defaultBranch: 'main',
+        provider: 'github',
+        archived: false,
+      },
+    });
+
+    const outsider = await adminDb.user.create({
+      data: {
+        email: `out-${Math.floor(Math.random() * 1_000_000)}@example.com`,
+        name: 'Outsider',
+        emailVerified: true,
+      },
+    });
+    await adminDb.workspaceMembership.create({
+      data: { workspaceId: fx.workspaceId, userId: outsider.id, role: 'member' },
+    });
+    await adminDb.organizationMembership.create({
+      data: { organizationId: orgId, userId: outsider.id, role: ORGANIZATION_ROLE.member },
+    });
+
+    const asOutsider = await organizationRepoService.listRepositoryUsage({
+      userId: outsider.id,
+      workspaceId: fx.workspaceId,
+    });
+    expect(asOutsider.find((u) => u.githubRepoId === secondRepo.id)?.projects).toEqual([]);
+
+    // …and the owner, who IS in that workspace, sees it — so the empty above is
+    // the ACCESS filter and not the ladder failing to reach a second workspace.
+    const asOwner = await organizationRepoService.listRepositoryUsage(fx.ctx);
+    expect(
+      asOwner.find((u) => u.githubRepoId === secondRepo.id)?.projects.map((p) => p.id),
+    ).toEqual([second.projectId]);
+  });
+
+  it('the INVENTORY row and the DISCONNECT dialogue read the same list — still one read', async () => {
+    // `listInventory` composes `listRepositoryUsage`, and that composition is the
+    // whole disclosure argument. The ladder must not have been added to one of
+    // the two consumers.
+    const inventory = await organizationRepoService.listInventory(fx.ctx);
+    const usage = await organizationRepoService.listRepositoryUsage(fx.ctx);
+
+    for (const row of inventory) {
+      expect(row.projects.map((p) => p.id)).toEqual(
+        usage.find((u) => u.githubRepoId === row.repo.id)?.projects.map((p) => p.id),
+      );
+    }
+    expect(inventory.find((r) => r.repo.id === repoGithub)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
   });
 });
 

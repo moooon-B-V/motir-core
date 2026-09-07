@@ -506,7 +506,7 @@ describe('the token-layer check on a fixture tree', () => {
 
   it('limb (b) reads a `var()` USE as a use, never as a declaration', () => {
     const painted = mock(
-      'design/home/home.mock.html',
+      'design/workbench/workbench.mock.html',
       ':root { --el-text: #1a1a1a; } .row { color: var(--muted, #787671); }',
     );
     expect(privateColourAliases([painted], SYSTEM)).toEqual([]);
