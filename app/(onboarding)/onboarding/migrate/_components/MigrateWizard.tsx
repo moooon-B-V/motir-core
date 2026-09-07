@@ -359,6 +359,23 @@ function Rail({
         </>
       ) : null}
 
+      {runs('discovery') ? (
+        <>
+          {/* ⚠️ ONE ROW, AND IT NEVER NAMES A TIER (MOTIR-4755 revision 2, after
+              Yue's note that a user does not know what Discovery and Vision
+              are). `discovery` / `vision` / `feasibility` / `validation` are the
+              planner's identifiers for questions the user is simply being asked;
+              a rail that listed them would teach a stranger four words before it
+              told them anything. The row says what it IS. */}
+          <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+            {t('rail.directionGroup')}
+          </p>
+          <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
+            <RailStep label={t('rail.discoveryStep')} state={stateOf(4)} />
+          </ul>
+        </>
+      ) : null}
+
       {runs('import') ? (
         <>
           <p className="mt-5 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">

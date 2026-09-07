@@ -6887,7 +6887,8 @@
       "subShort": "Just what your project couldn't answer.",
       "answeredGroup": "Already answered by your project",
       "answeredMeta": "Motir read your code and your work items",
-      "discoveryStep": "A few questions"
+      "discoveryStep": "A few questions",
+      "directionGroup": "Your direction"
     },
     "common": {
       "back": "Back",

@@ -6883,7 +6883,8 @@
       "subShort": "只问你的项目回答不了的。",
       "answeredGroup": "你的项目已经回答了",
       "answeredMeta": "Motir 读取了你的代码和工作项",
-      "discoveryStep": "几个问题"
+      "discoveryStep": "几个问题",
+      "directionGroup": "你的方向"
     },
     "common": {
       "back": "返回",
