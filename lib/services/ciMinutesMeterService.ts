@@ -1,6 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { withOrgServiceWriteContext } from '@/lib/organizations/context';
+import { bindOrganizationContext, withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { getGitProvider } from '@/lib/git';
 import type { GitProviderId, NormalizedWorkflowRunEvent } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
@@ -126,25 +126,40 @@ export const ciMinutesMeterService = {
     //     `system_admin OR workspace_id = …`, so the webhook (no session, no
     //     active workspace) reads them under `withSystemContext`. This is the
     //     path the shipped PR/push/CI handlers already use.
-    //   * `project_repository` / `workspace` — policy gates PURELY on
-    //     `app.workspace_id` with NO system escape, so `withSystemContext` would
-    //     read NOTHING here in production (where the app connects as the
-    //     non-BYPASSRLS `motir_app` role) and the whole chain would silently
-    //     resolve to "unattributed". They are read under
-    //     `withWorkspaceServiceContext`, bound to the installation's workspace.
+    //   * `project_repository` / `workspace` — neither has a system escape, so
+    //     `withSystemContext` would read NOTHING here in production (where the
+    //     app connects as the non-BYPASSRLS `motir_app` role) and the whole
+    //     chain would silently resolve to "unattributed". They are read under
+    //     `withWorkspaceServiceContext` bound to the REPO's workspace, PLUS
+    //     `bindOrganizationContext` — see the attribution block below for which
+    //     arm each one needs and why the workspace GUC alone is not enough.
     //   * `organization` — `organization_active` gates purely on
     //     `app.organization_id`, likewise with no system escape, so `isMeta` is
     //     read under `withOrgServiceWriteContext`.
     //
-    // A pleasant consequence: because the project-repo row is read under the
-    // REPO's workspace GUC, RLS itself enforces that a repo can only be
-    // attributed inside the tenant that owns it. A row belonging to another
-    // workspace is invisible rather than merely unexpected, so cross-tenant
-    // mis-attribution is structurally impossible, not just unlikely. (That is
-    // also why the pre-MOTIR-1931 bug degraded to under-billing rather than
-    // cross-tenant over-billing: bound to the WRONG tenant's GUC, the
-    // `project_repository` read resolved nothing and the run fell into §5.4's
-    // "metered as a cost, charged to nobody, and LOGGED" bucket.)
+    // ⚠️ THE BOUNDARY RLS ENFORCES HERE IS THE ORGANISATION, NOT THE WORKSPACE —
+    // CORRECTED BY MOTIR-4839 (bug MOTIR-4835), because the sentence that stood
+    // here asserted the opposite and was load-bearing for the next reader:
+    //
+    //   ~~"A pleasant consequence: because the project-repo row is read under the
+    //   REPO's workspace GUC, RLS itself enforces that a repo can only be
+    //   attributed inside the tenant that owns it. A row belonging to another
+    //   workspace is invisible rather than merely unexpected, so cross-tenant
+    //   mis-attribution is structurally impossible."~~
+    //
+    // That was TRUE while a repository could only be used by a project in its own
+    // workspace. MOTIR-4669 made "a row belonging to another workspace" the
+    // SUPPORTED shape — connect once, use from any workspace of the organisation
+    // — so the mechanism that used to enforce a boundary had started SILENCING a
+    // legitimate row instead, and every such run fell into §5.4's unattributed
+    // bucket. The boundary is real and still structural; it is drawn one tier up.
+    //
+    // (HISTORY, and it is the same failure mode this comment used to describe as
+    // safely in the past: the pre-MOTIR-1931 bug degraded to under-billing rather
+    // than cross-tenant over-billing because, bound to the WRONG tenant's GUC,
+    // the `project_repository` read resolved nothing and the run fell into that
+    // same bucket. It read as reassurance; it was a description of the defect
+    // MOTIR-4835 then found in the present tense.)
     const connection = await withSystemContext(async (tx) => {
       const installation = await githubInstallationRepository.findByInstallationId(
         installationId,
@@ -165,6 +180,12 @@ export const ciMinutesMeterService = {
         // the owner login is true for all of them. The installation cannot answer
         // either; it is shared, and its `workspaceId` is NULL.
         workspaceId: repo.workspaceId,
+        // The ORGANISATION, carried out of this block so the attribution
+        // transaction can bind it (MOTIR-4839). `github_repo.organization_id` is
+        // NOT NULL as of 20260907090000, so there is nothing to resolve and no
+        // second read to make — which matters because the read that would have
+        // resolved it is itself inside the transaction the binding is FOR.
+        organizationId: repo.organizationId,
         githubRepoId: repo.id,
       };
     });
@@ -173,6 +194,28 @@ export const ciMinutesMeterService = {
     if (connection.kind === 'unknown_repo') return { outcome: 'unknown_repo' };
 
     const tenant = await withWorkspaceServiceContext(connection.workspaceId, async (tx) => {
+      // ⚠️ BIND THE ORGANISATION TOO (MOTIR-4839 · bug MOTIR-4835). The workspace
+      // GUC alone is not enough any more, and the reason is a tenancy change
+      // rather than an oversight: MOTIR-4669 made a repository ORG-owned, so
+      // `project_repository.workspace_id` — the LINKING project's — is routinely
+      // a DIFFERENT workspace from `github_repo.workspace_id`, which is the one
+      // bound above. Two reads in this block need the organisation:
+      //
+      //   * `project_repository` — `project_repository_active_workspace` matches
+      //     only the row's own workspace; `project_repository_org_read`
+      //     (20260906000000, re-cut by 20260906180000) is the arm that admits a
+      //     sibling's, and it reads `app.organization_id`.
+      //   * `workspace` — the anchor's row is likewise another workspace's.
+      //     `workspace_org_service_read` (20260818010000) admits it, and it is
+      //     specifically the USERLESS arm: `app.user_id` empty AND the org bound,
+      //     which is exactly what a service context is.
+      //
+      // Both are FOR SELECT and additive, so this widens READS to the
+      // organisation and nothing further — a link in another ORG stays invisible,
+      // which `tests/github/siblingWorkspaceAttribution.test.ts` asserts with a
+      // second organisation present in the fixture.
+      await bindOrganizationContext(tx, connection.organizationId);
+
       // ⚠️ ATTRIBUTION, AND IT IS NO LONGER A LOOKUP (MOTIR-4648). This read used
       // to be `findByGithubRepoId`, justified by: *"`ProjectRepo.githubRepoId` is
       // @unique, so a realized repo belongs to AT MOST one project row — the join

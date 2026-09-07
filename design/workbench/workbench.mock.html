@@ -690,6 +690,9 @@
         .bg-\(--el-surface-soft\) {
           background-color: var(--el-surface-soft);
         }
+        .bg-\(--el-tint-mint\) {
+          background-color: var(--el-tint-mint);
+        }
         .bg-\(--el-tabnav-track\) {
           background-color: var(--el-tabnav-track);
         }
@@ -3925,6 +3928,25 @@
       }
       .opacity-55 {
         opacity: 55%;
+      }
+      /* ⚠️ MOTIR-4851 DECLARES THE RAIL'S ICON RULE, which this asset carried
+         80× and declared 0×. MOTIR-4687's direction-(A) guard measured it as
+         INERT_VARIANT_DEBT — a descendant rule with no state in it, so an
+         undeclared one applies never rather than conditionally, and every rail
+         glyph in the export rendered at its `<svg width="24" height="24">`
+         attribute instead of 18px. Adding one full-shell panel replicated the
+         debt ten more times, and a ratchet you are about to raise is a ratchet
+         to FIX instead: the rule is declared here exactly as Tailwind emits it,
+         the count goes 140 → 0, and the row leaves `INERT_VARIANT_DEBT`. */
+      .\[\&_svg\]\:h-\[18px\] {
+        & svg {
+          height: 18px;
+        }
+      }
+      .\[\&_svg\]\:w-\[18px\] {
+        & svg {
+          width: 18px;
+        }
       }
       .text-\(--el-type-epic\) {
         color: var(--el-type-epic);
