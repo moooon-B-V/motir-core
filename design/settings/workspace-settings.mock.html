@@ -1,0 +1,1602 @@
+<!doctype html>
+<!--
+  THE WORKSPACE-SETTINGS AREA — the rail, its registry, both reveal arms, and the
+  switcher row that is its door (Story MOTIR-4843 · MOTIR-4844).
+
+  The FOURTH and last of Motir's settings tiers to become an AREA.
+  `settings/project/`, `settings/account/` and — since MOTIR-4710 —
+  `settings/organization/` each have an area `layout.tsx`, a nav registry in
+  `lib/settings/`, and a `SidebarNav` branch that swaps the rail.
+  `settings/workspace/` has none of the three: its routes appear as loose rows in
+  the rail's no-project bottom section, and the surface's own door is a row
+  inside the ACCOUNT menu.
+
+  THE MODEL OF RECORD is `design/org-admin/org-admin.mock.html` panels 7a–7d
+  (MOTIR-4673), which drew the same thing one tier up. This asset is that
+  composition applied to the workspace, plus the one thing the organisation does
+  not have — A REVEAL THRESHOLD (`docs/decisions/organization-tier.md` §6).
+
+  BUILT FROM THE SHIPPED DESIGN SYSTEM. The token block below is
+  `app/globals.css`'s Tier-0 `--color-*` + Tier-3 `--el-*` + the shape tokens,
+  carried verbatim from `org-admin.mock.html`'s own block so two assets drawing
+  one rail cannot draw it differently. Every rail rule is that asset's, which is
+  itself `design/settings/account-settings.mock.html`'s drawing of the shipped
+  `Sidebar` / `SidebarSection` / `SidebarNavItem`. Every glyph is a real
+  `lucide-react` `__iconNode` path, read out of the installed package. No
+  invented hue, no retyped hex, no hand-drawn glyph.
+
+  READ AGAINST SHIPPED REALITY, not against a mental model: the two glyphs this
+  asset carries over (`ShieldCheck`, `ListChecks`) are read out of
+  `app/(authed)/_components/SidebarNav.tsx`'s bottom section, the rail head is
+  `OrganizationSidebarHeader.tsx`'s composition, and panel 5's popover is
+  `WorkspaceSwitcher.tsx`'s markup — its `WORKSPACES` mono-caps heading, the
+  320px `Popover.Content`, the membership rows with `Check` + role `Pill`, and
+  its two divided entries — with ONE row added.
+
+  ⚠️ THIS ASSET DRAWS THE FRAME, NOT THE PANES. Every pane already has an owner
+  and is composed here as a named stub, never redrawn:
+    • the index page's Name / Members / Danger-zone cards → design/workspaces/settings.pen
+    • the require-2FA card → design/org-admin/security-policy.mock.html (MOTIR-3642)
+    • the jobs dashboard → design/jobs/
+  See design-notes.md § *The workspace-settings AREA*.
+
+  ⚠️ AND IT DOES NOT AMEND design/shell/. The account menu losing its row and the
+  rail's bottom section losing `Security` are the SIBLING card's (MOTIR-4845),
+  which owns `design/shell/account-menu.mock.html` and
+  `design/shell/rail-bottom-section.mock.html`. This asset draws the switcher row
+  (panel 5) because that is the door to the room it draws.
+
+  Panels: 1 the index in situ · 2 Security · 3 Job runs · 4 BELOW the reveal
+  (/settings/organization, with NO workspace rail) · 5 the ACCESS PATH (the
+  switcher popover) · 6 dark · 7 the registry, row by row.
+
+  ⚠️ REVISED 2026-09-07, before this asset ever merged. Panel 4 drew a one-row
+  workspace rail below the reveal, because /settings/workspace/jobs answered at
+  every workspace count while its two siblings 404'd. The story was re-planned:
+  that exemption was an UNFINISHED COLLAPSE rather than a decision — the route
+  had never been given the fold-in the other three workspace surfaces have — so
+  it gains its reveal gate and its dashboard folds into /settings/organization.
+  Below the reveal there is therefore NO workspace rail at all, the registry's
+  revealedOnly axis applies uniformly to all three rows, and §6d is satisfied by
+  RELOCATION rather than by an exception. MOTIR-4859 is the planning bug.
+-->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      The workspace-settings AREA — the rail, both reveal arms, and its door (MOTIR-4844)
+    </title>
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — app/globals.css (light) ─────────── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bab;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-control-x: 10px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+
+      /* Tier 3 — the semantic element layer components consume.
+         ⚠️ DECLARED ON `:root, [data-appearance-scope]`, which is
+         packages/design-system/theme.css's own selector and is what makes the
+         nested dark panel (6) actually recompute: a custom property's `var()` is
+         substituted where the property is DECLARED, so a Tier-3 layer declared
+         on `:root` alone inherits its LIGHT literal into a nested
+         `data-theme="dark"` subtree and the panel renders light under a dark
+         caption (MOTIR-3592 · tests/design-dark-parity.test.ts). */
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        /* the app-shell RAIL — theme.css's values verbatim; the hover shade is a
+           concrete hex there too and so carries its own dark value below. */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --el-accent-on-surface: color-mix(in srgb, var(--color-primary) 82%, var(--el-text));
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1100px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 86ch;
+        line-height: 1.55;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1100px;
+        line-height: 1.55;
+      }
+      /* Ink is --el-text-secondary, not --el-text-muted: this board's body is
+         --el-surface, where muted is 4.17:1 and fails AA (CLAUDE.md's contrast
+         table · docs/decisions/design-board-chrome-aa.md). */
+      .panel-note {
+        max-width: 1100px;
+        margin: 14px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.92em;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+
+      /* ── THE AREA SHELL (rail + content) ──────────────────────────────────
+         Every rule below is design/org-admin/org-admin.mock.html panel 7's,
+         which is itself design/settings/account-settings.mock.html's drawing of
+         the shipped rail (Sidebar + SidebarSection + SidebarNavItem). Copied
+         rather than re-derived on purpose — two assets drawing one rail
+         differently is how a rail nobody had built came to be drawn twice. */
+      .shell {
+        display: flex;
+        min-height: 520px;
+        background: var(--el-page-bg);
+      }
+      .shell .rail {
+        flex: none;
+        width: 252px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .shell .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .shell .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .shell .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .shell .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      /* the WORKSPACE identity — this rail's head. */
+      .shell .who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      /* the ORGANISATION's tile — lavender, where the workspace's is sky, so the
+         two tiers are told apart by hue when a reader moves between the rails.
+         Panel 4 is the only place this asset draws the org's own rail. */
+      .shell .who .org-ava {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .shell .who .ws-ava {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .shell .who .meta {
+        min-width: 0;
+      }
+      .shell .who .nm {
+        font-family: var(--font-serif);
+        font-size: 14.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .shell .who .sub {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .shell .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+      .shell .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .shell .grp + .grp {
+        margin-top: 12px;
+      }
+      .shell .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .shell .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .shell .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .shell .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .shell .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .shell .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .shell .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .shell .nav-row.active .ni {
+        color: var(--el-accent-on-surface);
+      }
+      .shell .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 26px 28px 32px;
+        overflow: hidden;
+      }
+      .shell .page-head {
+        margin-bottom: 20px;
+      }
+      .shell .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .shell .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 5px;
+        max-width: 64ch;
+        line-height: 1.5;
+      }
+      /* the CONTENT STUB — a pane this card deliberately does not redraw, named
+         with the asset that owns it. Not a design element; a pointer. */
+      .stub {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 20px 22px;
+        background: var(--el-surface-soft);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+      }
+      .stub + .stub {
+        margin-top: 14px;
+      }
+      .stub b {
+        color: var(--el-text);
+      }
+
+      /* ── TopNav stub — hosts the workspace switcher (mirrors TopNav.tsx) ─── */
+      .topnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 56px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+      }
+      .topnav .left,
+      .topnav .right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .ctx-sep {
+        color: var(--el-text-secondary);
+        font-size: 15px;
+        margin: 0 2px;
+      }
+      /* a ghost trigger button (components/ui/Button variant=ghost, size=md) */
+      .trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--el-text);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        max-width: 240px;
+      }
+      .trigger.open {
+        background: var(--el-surface);
+      }
+      .trigger .tlabel {
+        font-family: var(--font-serif);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .trigger svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+        flex: none;
+      }
+      .ava {
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      /* ── The switcher POPOVER (components/ui/Popover, width=320) ─────────── */
+      .pop {
+        width: 320px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px 0;
+      }
+      .pop .pop-head {
+        padding: 8px 12px 4px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--el-text-secondary);
+      }
+      .pop ul {
+        list-style: none;
+        margin: 0;
+        padding: 0 4px;
+      }
+      .pop .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px;
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .pop .row:hover {
+        background: var(--el-surface);
+      }
+      .pop .row.on {
+        background: var(--el-surface);
+      }
+      .pop .row .tick {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--el-accent-on-surface);
+      }
+      .pop .row .tick svg {
+        width: 16px;
+        height: 16px;
+      }
+      .pop .row .rl {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pop .row.on .rl {
+        font-weight: 600;
+      }
+      .pop .row .gi {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .pop .row .gi svg {
+        width: 16px;
+        height: 16px;
+      }
+      .pop .sep {
+        height: 1px;
+        background: var(--el-border);
+        margin: 4px 0;
+      }
+      .pill {
+        flex: none;
+        font-size: 11px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+      }
+      /* the ONE row this asset adds */
+      .pop .row.added {
+        outline: 2px dashed var(--el-accent-on-surface);
+        outline-offset: 1px;
+      }
+      .added-flag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-mint);
+        padding: 2px 8px;
+        border-radius: var(--radius-badge);
+      }
+      .popstage {
+        display: flex;
+        gap: 28px;
+        align-items: flex-start;
+        padding: 24px;
+      }
+      .popstage .caption {
+        flex: 1;
+        min-width: 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .popstage .caption b {
+        color: var(--el-text);
+      }
+
+      /* ── the registry table ─────────────────────────────────────────────── */
+      .page {
+        padding: 24px 26px 26px;
+      }
+      .reg {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .reg th {
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 12px 8px 0;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .reg td {
+        padding: 9px 12px 9px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      .reg td:nth-child(2) {
+        color: var(--el-text);
+        font-family: var(--font-mono);
+      }
+      .reg td[rowspan],
+      .reg td.grp-cell {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .reg .ex {
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-mint);
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        margin-left: 6px;
+      }
+      .reg-note {
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        margin: 14px 0 0;
+      }
+      .reg-note b {
+        color: var(--el-text);
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        padding: 20px;
+        align-items: start;
+      }
+      @media (max-width: 760px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+      .darkwrap {
+        background: var(--el-page-bg);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Workspace settings becomes an area</h1>
+        <p>
+          Story <b>MOTIR-4843</b> · Subtask <b>MOTIR-4844</b> — the FOURTH and last settings tier to
+          get a rail. Built from <span class="mono">app/globals.css</span> tokens and the shipped
+          <span class="mono">Sidebar</span> composition; the model is
+          <span class="mono">design/org-admin/org-admin.mock.html</span> panels 7a–7d
+          (<b>MOTIR-4673</b>), which drew the same move one tier up. What the organisation does not
+          have, and this asset must draw, is a <b>reveal threshold</b> — panel 4, where there is no
+          workspace rail at all and every capability is folded into the organisation page. Every
+          pane is COMPOSED here and re-specified nowhere; the shell assets the doors leave are the
+          sibling card <b>MOTIR-4845</b>'s. Source of truth = this HTML; see
+          <span class="mono">design-notes.md</span>. Gates <b>MOTIR-4846</b>, <b>MOTIR-4847</b> and
+          the <b>FOLD-IN</b> card.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ═════════ PANEL 1 — /settings/workspace, in situ ═════════ -->
+    <div class="panel-label">
+      1 · <b><span class="mono">/settings/workspace</span></b> — the index page, unchanged, now
+      inside the area chrome. The <span class="mono">Workspace</span> row is active and no other is;
+      the pane on the right is today's page, card for card.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="who">
+                <span class="ws-ava">E</span>
+                <span class="meta">
+                  <span class="nm">Engineering</span>
+                  <span class="sub">moooon &middot; 6 members</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Workspace settings</span>
+            </div>
+            <nav aria-label="Workspace settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-boxes" /></svg
+                  ></span>
+                  <span class="nl">Workspace</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                  ></span>
+                  <span class="nl">Security</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Operations</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+                  ></span>
+                  <span class="nl">Job runs</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Workspace</h2>
+              <p class="sub">
+                This workspace&rsquo;s name, the people in it, and the way out of it.
+              </p>
+            </div>
+            <div class="stub">
+              <b>Today&rsquo;s <span class="mono">/settings/workspace</span> page, card for card</b>
+              &mdash; the <b>Name</b> card, the <b>Members</b> card and the <b>Danger zone</b>
+              (Leave workspace &middot; Delete workspace), in that order. Drawn by
+              <span class="mono">design/workspaces/settings.pen</span> /
+              <span class="mono">settings.png</span>, which stays the design of record for all
+              three.
+              <b>This asset draws the FRAME and re-specifies no pane.</b>
+            </div>
+            <div class="stub">
+              <b>Nothing moves.</b> <span class="mono">Members</span> stays a card ON this page.
+              Giving it a route of its own is a different deliverable &mdash; a route move, a
+              redirect, and the <span class="mono">WorkspaceFoldInSection</span> host that renders
+              the same card below the reveal &mdash; and this story neither performs it nor depends
+              on it.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ PANEL 2 — /settings/workspace/security ═════════ -->
+    <div class="panel-label">
+      2 · <b><span class="mono">/settings/workspace/security</span></b> — the
+      <span class="mono">Security</span> row active, and <b>no other row active</b>. The area root
+      is <span class="mono">exact</span> in the registry, which is what keeps
+      <span class="mono">Workspace</span> from reading as current on all three routes at once.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="who">
+                <span class="ws-ava">E</span>
+                <span class="meta">
+                  <span class="nm">Engineering</span>
+                  <span class="sub">moooon &middot; 6 members</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Workspace settings</span>
+            </div>
+            <nav aria-label="Workspace settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-boxes" /></svg
+                  ></span>
+                  <span class="nl">Workspace</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                  ></span>
+                  <span class="nl">Security</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Operations</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+                  ></span>
+                  <span class="nl">Job runs</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Security</h2>
+              <p class="sub">
+                How the people in this workspace sign in, and what this workspace requires of them.
+              </p>
+            </div>
+            <div class="stub">
+              <b>The require-2FA policy card is drawn by</b>
+              <span class="mono">design/org-admin/security-policy.mock.html</span>
+              (<b>MOTIR-3642</b>), which draws it for BOTH tiers deliberately &mdash; including the
+              org-mandated locked state. Not redrawn here: one surface, one asset.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ PANEL 3 — /settings/workspace/jobs ═════════ -->
+    <div class="panel-label">
+      3 · <b><span class="mono">/settings/workspace/jobs</span></b> — the
+      <span class="mono">Job runs</span> row active. A third group, because this row is neither
+      configuration nor access: it is the operator surface.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="who">
+                <span class="ws-ava">E</span>
+                <span class="meta">
+                  <span class="nm">Engineering</span>
+                  <span class="sub">moooon &middot; 6 members</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Workspace settings</span>
+            </div>
+            <nav aria-label="Workspace settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-boxes" /></svg
+                  ></span>
+                  <span class="nl">Workspace</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                  ></span>
+                  <span class="nl">Security</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Operations</div>
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+                  ></span>
+                  <span class="nl">Job runs</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Job runs</h2>
+              <p class="sub">
+                Background work for this workspace &mdash; what ran, what failed, and what is
+                waiting in the dead-letter queue.
+              </p>
+            </div>
+            <div class="stub">
+              <b>The dashboard is drawn in</b> <span class="mono">design/jobs/</span> &mdash; its
+              tabs, its filters, its pagination and its dead-letter badge. Not redrawn here.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ PANEL 4 — BELOW THE REVEAL: THE ORG PAGE, NOT A RAIL ═════════ -->
+    <div class="panel-label">
+      4 · <b>BELOW THE REVEAL</b> &mdash; <span class="mono">/settings/organization</span>, and
+      <b>NO workspace rail at all</b>. At ONE workspace all THREE
+      <span class="mono">/settings/workspace/*</span> routes <span class="mono">notFound()</span>,
+      and every capability they carry is hosted here.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell" style="min-height: 460px">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="who">
+                <span class="org-ava">A</span>
+                <span class="meta">
+                  <span class="nm">Acme</span>
+                  <span class="sub">1 workspace &middot; 4 members</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Organisation settings</span>
+            </div>
+            <nav aria-label="Organisation settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-building-2" /></svg
+                  ></span>
+                  <span class="nl">Organisation</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Organisation</h2>
+              <p class="sub">
+                Your organisation&rsquo;s name, its plan, and the sections that belong to it.
+              </p>
+            </div>
+            <div class="stub">
+              <b
+                >The existing <span class="mono">WorkspaceFoldInSection</span>, unchanged by this
+                story</b
+              >
+              &mdash; <span class="mono">NameCard</span> &middot;
+              <span class="mono">MembersCard</span> &middot;
+              <span class="mono">RequireTwoFactorCard</span> &middot;
+              <span class="mono">DangerZoneCard</span>, each keeping its own §6d per-SECTION gate.
+              Four of the workspace tier&rsquo;s capabilities have lived here since
+              <b>MOTIR-3502</b>.
+            </div>
+            <div class="stub">
+              <b>NEW &mdash; the <span class="mono">Job runs</span> fold-in section.</b> The fifth
+              capability, and the one that never had a home here. The dashboard itself is
+              <span class="mono">design/jobs/</span>&rsquo;s and is composed, not redrawn: the
+              <b>Runs</b> tab and the <b>DLQ</b> tab with its count badge for any workspace member,
+              the DLQ <b>replay</b> control for a workspace OWNER, and the <b>System</b> tab for
+              platform staff. <b>Each keeps the gate it asserts today</b> &mdash; this page is
+              org-owner/admin gated as a PAGE, and §6d makes it gate per SECTION, so this section
+              gates on WORKSPACE MEMBERSHIP exactly as the block above it does.
+            </div>
+            <div class="stub">
+              <b>&#9888; THERE IS NO WORKSPACE RAIL ON THIS SCREEN, AND THAT IS THE POINT.</b> The
+              first version of this asset drew a one-row workspace rail here, because
+              <span class="mono">/settings/workspace/jobs</span> answered at every workspace count
+              while its siblings 404&rsquo;d. That exemption was an <b>unfinished collapse</b>, not
+              a decision: the route had never been given the fold-in its three siblings have. With
+              the section above it, all four surfaces hide together and
+              <span class="mono">docs/decisions/organization-tier.md</span> §6d &mdash;
+              <i>a hidden tier may not remove a capability</i> &mdash; is satisfied by
+              <b>RELOCATION</b>, which is what it asks for, rather than by an exception.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="panel-note">
+      <b>Nothing is stranded on the other side of that threshold.</b> Below two workspaces there is
+      no workspace switcher, so there is no door &mdash; and no room: all three
+      <span class="mono">/settings/workspace/*</span> routes <span class="mono">notFound()</span>,
+      and Name, Members, <b>Leave workspace</b>, the require-2FA policy and the job-runs dashboard
+      are all reachable on <span class="mono">/settings/organization</span> for a plain org member
+      who is a workspace member.
+      <b>So the rail&rsquo;s bottom section keeps NEITHER workspace row</b> &mdash; the sibling card
+      <b>MOTIR-4845</b> removes both, on the assets that own that section, and a workspace-tier row
+      inside the PROJECT rail is the tenancy mismatch <b>MOTIR-4640</b> removed for the
+      <span class="mono">Git</span> row a week earlier.
+    </p>
+
+    <!-- ═════════ PANEL 5 — THE ACCESS PATH ═════════ -->
+    <div class="panel-label">
+      5 · <b>THE ACCESS PATH</b> — the workspace switcher open, with the new
+      <span class="mono">Workspace settings</span> row drawn in place. This asset owns the
+      row&rsquo;s label, its glyph and its position; <b>MOTIR-4847</b> builds it.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="topnav">
+          <div class="left">
+            <button class="trigger">
+              <span class="tlabel">moooon</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+            </button>
+            <span class="ctx-sep">&rsaquo;</span>
+            <button class="trigger open">
+              <span class="tlabel">Engineering</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-down" /></svg>
+            </button>
+          </div>
+          <div class="right"><span class="ava">Y</span></div>
+        </div>
+        <div class="popstage">
+          <div class="pop">
+            <div class="pop-head">Workspaces</div>
+            <ul role="list">
+              <li>
+                <div class="row on">
+                  <span class="tick" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                  ></span>
+                  <span class="rl">Engineering</span>
+                  <span class="pill">member</span>
+                </div>
+              </li>
+              <li>
+                <div class="row">
+                  <span class="tick" aria-hidden="true"></span>
+                  <span class="rl">Design</span>
+                  <span class="pill">member</span>
+                </div>
+              </li>
+              <li>
+                <div class="row">
+                  <span class="tick" aria-hidden="true"></span>
+                  <span class="rl">Side Project Crew</span>
+                  <span class="pill">member</span>
+                </div>
+              </li>
+            </ul>
+            <div class="sep"></div>
+            <ul role="list">
+              <li>
+                <div class="row">
+                  <span class="gi" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg
+                  ></span>
+                  <span class="rl">Create workspace</span>
+                </div>
+              </li>
+            </ul>
+            <div class="sep"></div>
+            <ul role="list">
+              <li>
+                <div class="row added">
+                  <span class="gi" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-settings" /></svg
+                  ></span>
+                  <span class="rl">Workspace settings</span>
+                </div>
+              </li>
+              <li>
+                <div class="row">
+                  <span class="gi" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-mail" /></svg
+                  ></span>
+                  <span class="rl">Invite teammates</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <div class="caption">
+            <p style="margin-top: 0">
+              <span class="added-flag">the one row added</span>
+            </p>
+            <p>
+              <b
+                >The popover is <span class="mono">WorkspaceSwitcher.tsx</span>&rsquo;s,
+                unchanged</b
+              >
+              &mdash; a 320px <span class="mono">Popover.Content</span>, the
+              <span class="mono">WORKSPACES</span> mono-caps heading, one row per membership with a
+              <span class="mono">Check</span> on the active one and a neutral role
+              <span class="mono">Pill</span>, then <span class="mono">Create workspace</span> and
+              <span class="mono">Invite teammates</span> behind dividers. Only the
+              <span class="mono">Workspace settings</span> row is new.
+            </p>
+            <p>
+              <b
+                >WHERE IT SITS: in the LAST group, ABOVE
+                <span class="mono">Invite teammates</span>.</b
+              >
+              The three groups answer three different questions &mdash;
+              <i>which workspace am I in</i>, <i>make a new one</i>, and
+              <i>act on THIS one</i> &mdash; and both of the last group&rsquo;s rows are about the
+              active workspace. Settings goes first because
+              <span class="mono">Invite teammates</span> already points <b>into</b> it (<span
+                class="mono"
+                >/settings/workspace#members</span
+              >): the general door above the shortcut through it, never the other way round.
+            </p>
+            <p>
+              <b>WHY THE <span class="mono">Settings</span> GEAR.</b> It is the glyph the account
+              menu&rsquo;s <span class="mono">Workspace settings</span> row carries today and the
+              one the rail&rsquo;s bottom <span class="mono">Settings</span> row carries, so the
+              departure and the arrival read as one move rather than as two rows &mdash; the same
+              argument <b>MOTIR-4673</b> made for keeping <span class="mono">GitBranch</span> when
+              the <span class="mono">Git</span> row changed tier. The row it REPLACES is the account
+              menu&rsquo;s, and that removal is <b>MOTIR-4845</b>&rsquo;s.
+            </p>
+            <p>
+              <b>BELOW THE REVEAL THIS PANEL DOES NOT EXIST.</b> There is no switcher at one
+              workspace, so there is no door here &mdash; and none is owed, because the two rooms it
+              opens onto are <span class="mono">notFound()</span> there. Panel 4 is the arm that
+              matters, and the row it depends on is in the rail, not in this popover.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ PANEL 6 — DARK ═════════ -->
+    <div class="panel-label">
+      6 · <b>Dark parity</b> — the area at <span class="mono">/settings/workspace</span> on
+      <span class="mono">data-theme="dark"</span>. Every colour is the same
+      <span class="mono">--el-*</span> token; only the Tier-0 palette under it flips.
+    </div>
+    <div class="panel">
+      <div class="stage darkwrap" data-theme="dark" data-appearance-scope>
+        <div class="shell" style="min-height: 420px">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
+              >
+              <div class="who">
+                <span class="ws-ava">E</span>
+                <span class="meta">
+                  <span class="nm">Engineering</span>
+                  <span class="sub">moooon &middot; 6 members</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Workspace settings</span>
+            </div>
+            <nav aria-label="Workspace settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row active">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-boxes" /></svg
+                  ></span>
+                  <span class="nl">Workspace</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield-check" /></svg
+                  ></span>
+                  <span class="nl">Security</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Operations</div>
+                <div class="nav-row">
+                  <span class="ni" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+                  ></span>
+                  <span class="nl">Job runs</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="page-head">
+              <h2>Workspace</h2>
+              <p class="sub">
+                This workspace&rsquo;s name, the people in it, and the way out of it.
+              </p>
+            </div>
+            <div class="stub">
+              <b>The same three cards</b> &mdash; Name, Members, Danger zone &mdash; drawn by
+              <span class="mono">design/workspaces/settings.pen</span>. The rail head&rsquo;s tile
+              keeps <span class="mono">--el-tint-sky</span> with
+              <span class="mono">--el-text-strong</span> on it, which is the AA-safe pairing in both
+              themes.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═════════ PANEL 7 — THE REGISTRY ═════════ -->
+    <div class="panel-label">
+      7 · <b>The registry, row by row</b> — a sibling of
+      <span class="mono">lib/settings/organizationSettingsNav.ts</span> and
+      <span class="mono">lib/settings/accountSettingsNav.ts</span>, with the same
+      <span class="mono">{ id, group, href, icon, labelKey, exact? }</span> entry shape and the same
+      group-order discipline. <b>MOTIR-4846</b> builds it.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page">
+          <table class="reg">
+            <thead>
+              <tr>
+                <th>group</th>
+                <th>id</th>
+                <th>route</th>
+                <th>glyph</th>
+                <th>who sees the row</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="grp-cell">general</td>
+                <td>workspace</td>
+                <td class="mono">/settings/workspace <span class="ex">exact</span></td>
+                <td class="mono">Boxes</td>
+                <td>any workspace member, <b>at the reveal</b></td>
+              </tr>
+              <tr>
+                <td class="grp-cell">access</td>
+                <td>security</td>
+                <td class="mono">/settings/workspace/security</td>
+                <td class="mono">ShieldCheck</td>
+                <td>any workspace member, <b>at the reveal</b></td>
+              </tr>
+              <tr>
+                <td class="grp-cell">operations</td>
+                <td>jobs</td>
+                <td class="mono">/settings/workspace/jobs</td>
+                <td class="mono">ListChecks</td>
+                <td>any workspace member, <b>at the reveal</b></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="reg-note">
+            <b
+              >ONE filter axis, <span class="mono">revealedOnly</span>, it DEFAULTS CLOSED, and it
+              applies UNIFORMLY to all three rows.</b
+            >
+            The organisation registry has two (what the actor HOLDS, what the BUILD has); this tier
+            has neither &mdash; every route here is membership-gated with no role above it, and none
+            is cloud-only. What it has instead is the threshold, so the axis is the reveal. It
+            defaults closed for the reason its two siblings default closed: a surface that forgets
+            to thread it drops the row rather than offering a door onto a route that
+            <span class="mono">notFound()</span>s.
+          </p>
+          <p class="reg-note">
+            <b
+              >&#9888; THE THIRD ROW USED TO BE AN EXCEPTION, AND THE EXCEPTION IS RETIRED &mdash;
+              said here because a reader who knows the old behaviour needs to see that it was
+              removed rather than overlooked.</b
+            >
+            <span class="mono">/settings/workspace/jobs</span> answered
+            <b>200 at every workspace count</b> while its two siblings
+            <span class="mono">notFound()</span>ed, and that was written down as a property of the
+            route (<b>MOTIR-3502</b> AC 6). It was an <b>unfinished collapse</b>: the route had
+            never been given the fold-in the other three workspace surfaces have. The FOLD-IN card
+            builds it, this row becomes reveal-gated like its siblings, and the axis stops carrying
+            a carve-out &mdash; which is what lets panel 4 draw a below-reveal state with no
+            workspace rail in it at all.
+          </p>
+          <p class="reg-note">
+            <b
+              >The index row is called <span class="mono">Workspace</span>, not
+              <span class="mono">Settings</span></b
+            >
+            &mdash; the word the switcher&rsquo;s own row uses for the same route. Inside a settings
+            area a row named &ldquo;Settings&rdquo; names its own container; the organisation rail
+            has the same row and calls it <span class="mono">Organisation</span>, the project rail
+            calls it <span class="mono">Details</span>. The SWITCHER keeps its word: it is outside
+            the area, where &ldquo;Workspace settings&rdquo; is what the destination IS.
+          </p>
+          <p class="reg-note">
+            <b
+              >The <span class="mono">security</span> and <span class="mono">jobs</span> glyphs are
+              CARRIED, not chosen</b
+            >
+            &mdash; read out of
+            <span class="mono">app/(authed)/_components/SidebarNav.tsx</span>&rsquo;s bottom
+            section, where those two rows render <span class="mono">&lt;ShieldCheck /&gt;</span> and
+            <span class="mono">&lt;ListChecks /&gt;</span> today. Two doors onto one room that
+            disagree about its icon are two rooms.
+          </p>
+          <p class="reg-note">
+            <b
+              >The <span class="mono">workspace</span> glyph is this asset&rsquo;s own choice, and
+              it is <span class="mono">Boxes</span>:</b
+            >
+            a workspace is the CONTAINER its projects and teammates live in, so its glyph is a set
+            of things held together &mdash; where <span class="mono">Building2</span> (taken by the
+            organisation in <span class="mono">organizationSettingsNav.ts</span>) is the company
+            itself. Stated because the family resemblance is real and deliberate rather than
+            accidental: the project rail&rsquo;s <span class="mono">components</span> row carries
+            the singular <span class="mono">Box</span>, one tier down, in a rail that never renders
+            beside this one.
+          </p>
+          <p class="reg-note">
+            <b
+              >The third group is <span class="mono">operations</span>, and the name is a
+              decision.</b
+            >
+            <span class="mono">general</span> and <span class="mono">access</span> mirror the
+            organisation&rsquo;s. <span class="mono">Job runs</span> is neither: it configures
+            nothing and gates nobody &mdash; it is where you look when something did not happen. It
+            gets its own group rather than being filed under
+            <span class="mono">general</span> because a group whose rows all filter away is not
+            rendered, which is exactly what panel 4 needs to be true in reverse: at one workspace it
+            is the ONLY group that survives, and a third group is what makes that arm cost nothing.
+          </p>
+          <p class="reg-note">
+            <b>The rail HEAD follows the ORGANISATION&rsquo;s shape, not the project&rsquo;s.</b>
+            Three heads exist &mdash;
+            <span class="mono">SettingsSidebarHeader</span> (the project, a
+            <span class="mono">ProjectSwitcher</span>),
+            <span class="mono">AccountSidebarHeader</span> (the user, a static identity) and
+            <span class="mono">OrganizationSidebarHeader</span> (the organisation, a static
+            identity). This one is <b>static</b>: a switcher in a settings rail would let you change
+            WHICH workspace you are configuring from inside the pane, and switching a workspace
+            re-points the active project and navigates away (<span class="mono"
+              >afterContextSwitchTarget</span
+            >) &mdash; a context switch buried in a configuration surface. The switcher stays in the
+            top bar, where it already is and where panel 5 draws it. The TILE is a
+            <b>square</b> with <span class="mono">--radius-control</span>, matching the
+            organisation&rsquo;s: the circle is this product&rsquo;s PERSON grammar, and a workspace
+            is not a person. Its fill is <span class="mono">--el-tint-sky</span> where the
+            organisation&rsquo;s is <span class="mono">--el-tint-lavender</span>, so the two tiers
+            are told apart by hue at a glance when a reader moves between the two rails.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor).
+         Every path below is a real lucide-react `__iconNode`, read out of the
+         installed package rather than drawn. ─────────────────────────────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-boxes"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"
+          />
+          <path d="m7 16.5-4.74-2.85" />
+          <path d="m7 16.5 5-3" />
+          <path d="M7 16.5v5.17" />
+          <path
+            d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"
+          />
+          <path d="m17 16.5-5-3" />
+          <path d="m17 16.5 4.74-2.85" />
+          <path d="M17 16.5v5.17" />
+          <path
+            d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"
+          />
+          <path d="M12 8 7.26 5.15" />
+          <path d="m12 8 4.74-2.85" />
+          <path d="M12 13.5V8" />
+        </g>
+        <g
+          id="i-building-2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 12h4" />
+          <path d="M10 8h4" />
+          <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+          <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" />
+          <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
+        </g>
+        <g
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-list-checks"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M13 5h8" />
+          <path d="M13 12h8" />
+          <path d="M13 19h8" />
+          <path d="m3 17 2 2 4-4" />
+          <path d="m3 7 2 2 4-4" />
+        </g>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-mail"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-settings"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+      </defs>
+    </svg>
+  </body>
+</html>

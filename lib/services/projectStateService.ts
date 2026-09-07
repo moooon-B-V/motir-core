@@ -1,11 +1,9 @@
 import type { MigrateIndexRepoDto, MigrateIndexStatusDto } from '@/lib/dto/migrateOnboarding';
-import type { ProjectStateDto } from '@/lib/dto/projectState';
+import type { ProjectPlanningGateDto, ProjectStateDto } from '@/lib/dto/projectState';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
-import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
-import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
-import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
+import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectsService } from '@/lib/services/projectsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -30,11 +28,13 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 // open-core boundary; the planner already reaches those through the job envelope.
 //
 // COMPOSITION, deliberately: every answer is the SHIPPED one.
-//   * established?      → `resolvePlanningHostGate` (the function the planning
-//                          doors read), never a re-derivation of the marker
-//   * code connected?   → `githubInstallationRepository.findByWorkspaceId` →
-//                          `githubRepoRepository.listByInstallation`, the pair
-//                          `resolveCodeContext` uses
+//   * established?      → the project's own `onboardingRanAt` marker. It read
+//                          `resolvePlanningHostGate` until MOTIR-4765 took the
+//                          `onboarding` verdict off that gate; see the call site
+//   * code connected?   → `githubInstallationService.listOrganizationInstallations`
+//                          (MOTIR-4836) — the ORGANISATION's connections and the
+//                          repositories they grant, which is the tier a
+//                          connection has been owned at since MOTIR-4669
 //   * code indexed?     → the succeeded-index ledger, projected into the wizard's
 //                          `MigrateIndexStatusDto`
 //   * project's repos?  → `projectRepoSetService.listByProject` (MOTIR-1780)
@@ -45,56 +45,98 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 // `findSucceededCodeGraphIndex` the wizard's poll issues — an N+1 the wizard can
 // afford at its single-digit repo count and an MCP read should not inherit.
 
-/** The workspace-scoped half: the installation, its repos, and their index state. */
+/**
+ * The CONNECTED half: is a git host connected to this tenant, which repositories
+ * did it bring, and are they indexed?
+ *
+ * ⚠️ THE ORGANISATION'S, NOT THE WORKSPACE'S (MOTIR-4838). This read used to do
+ * a two-step hop — `githubInstallationRepository.findByWorkspaceId(ctx.workspaceId)`
+ * and the repositories hanging off it — and `findByWorkspaceId` compares
+ * `workspace_id` IN THE SQL. A connection (and the repositories it grants) is
+ * owned by the ORGANISATION as of MOTIR-4669, and the App is installed from ONE
+ * of its workspaces, so from every OTHER workspace the first line answered null,
+ * the second never ran, and this reported `installed: false` with an empty
+ * index. `get_project_state` exists so a planning agent can VERIFY a tenant
+ * precondition instead of asserting one (MOTIR-1968) — a confident, wrong `no`
+ * from it is worse than no read at all, because the first thing it costs is the
+ * caller's reason to check.
+ *
+ * ⚠️ IT IS THE TIER THAT MOVED, NOT THE QUESTION — and that boundary is what
+ * keeps the fix from being a different wrong answer. This half stays the
+ * CONNECTED registry, deliberately distinct from `repoSet`, which is the
+ * PROJECT's own repositories and is read separately below. Re-pointing this at
+ * `projectRepoSetService` would collapse the two into one and delete a
+ * distinction the DTO documents and the suite pins twice: an installation whose
+ * grant covers no repositories is a DIFFERENT state from no installation, and a
+ * project's set is a different question from what its tenant has connected.
+ *
+ * ⚠️ `findByWorkspaceId` IS NOT THE DEFECT AND IS UNTOUCHED. It is honestly
+ * named and correct for a workspace's OWN grant; what was wrong is which
+ * surfaces asked it.
+ *
+ * ⚠️ THE INDEX LEDGER IS STILL WORKSPACE-KEYED, on purpose. `job_run` rows are
+ * written in the workspace that ran the index, so a repository indexed from a
+ * SIBLING workspace reads `pending` here — honestly, since this workspace has no
+ * record of it. Re-tiering the code graph to the organisation is Story
+ * MOTIR-4642's whole subject and needs a policy arm of its own; this card fixes
+ * the two installation hops its sweep named and does not reach past them.
+ */
 async function resolveCodeState(
   ctx: ServiceContext,
 ): Promise<{ installed: boolean; index: MigrateIndexStatusDto }> {
-  // ONE workspace-scoped transaction for all four reads, so the job_run + github
-  // RLS policies see the bound workspace GUC and the whole answer is consistent.
-  return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
-    const installation = await githubInstallationRepository.findByWorkspaceId(ctx.workspaceId, tx);
-    const repos = installation
-      ? await githubRepoRepository.listByInstallation(installation.id, tx)
-      : [];
+  // The organisation's connections, with the repositories each grants. The read
+  // opens its own transaction because it binds an organisation GUC the ledger
+  // reads below neither need nor should see.
+  const installations = await githubInstallationService.listOrganizationInstallations({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  const repos = installations.flatMap((installation) =>
+    installation.repos.map((repo) => ({ provider: installation.provider, repo })),
+  );
 
-    // The whole ledger for this workspace in one query — the N+1 the per-repo
-    // lookup would be. `output.repoRef` is `owner/name`, the same spelling
-    // `resolveCodeContext` builds, so the Set membership test is exact.
-    const indexedRefs = new Set(
-      await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
-    );
-    const running = await jobRunRepository.findRunningCodeGraphIndexForWorkspace(
-      ctx.workspaceId,
-      tx,
-    );
+  // ONE workspace-scoped transaction for both LEDGER reads, so the job_run RLS
+  // policy sees the bound workspace GUC and the two halves are consistent.
+  const { indexedRefs, running } = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    async (tx) => {
+      // The whole ledger for this workspace in one query — the N+1 the per-repo
+      // lookup would be. `output.repoRef` is `owner/name`, the same spelling
+      // `resolveCodeContext` builds, so the Set membership test is exact.
+      const refs = new Set(
+        await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
+      );
+      const run = await jobRunRepository.findRunningCodeGraphIndexForWorkspace(ctx.workspaceId, tx);
+      return { indexedRefs: refs, running: run };
+    },
+  );
 
-    const rows: MigrateIndexRepoDto[] = repos.map((repo) => {
-      const repoRef = `${repo.owner}/${repo.name}`;
-      return {
-        provider: repo.provider,
-        repoRef,
-        // `pending` covers "queued", "in flight" AND "nothing ever tried" — the
-        // ledger cannot separate them per repo (a running row carries no
-        // repoRef), and MOTIR-1961's repos sat in the third of those forever.
-        status: indexedRefs.has(repoRef) ? 'indexed' : 'pending',
-      };
-    });
-    const indexedCount = rows.filter((row) => row.status === 'indexed').length;
-    const total = rows.length;
-
+  const rows: MigrateIndexRepoDto[] = repos.map(({ provider, repo }) => {
+    const repoRef = `${repo.owner}/${repo.name}`;
     return {
-      installed: installation !== null,
-      index: {
-        repos: rows,
-        indexedCount,
-        total,
-        hasRunning: running !== null,
-        // `total > 0` deliberately: "every one of zero repos is indexed" is a
-        // true statement and a useless one. Matches the wizard's Next gate.
-        allIndexed: total > 0 && indexedCount === total,
-      },
+      provider,
+      repoRef,
+      // `pending` covers "queued", "in flight" AND "nothing ever tried" — the
+      // ledger cannot separate them per repo (a running row carries no
+      // repoRef), and MOTIR-1961's repos sat in the third of those forever.
+      status: indexedRefs.has(repoRef) ? 'indexed' : 'pending',
     };
   });
+  const indexedCount = rows.filter((row) => row.status === 'indexed').length;
+  const total = rows.length;
+
+  return {
+    installed: installations.length > 0,
+    index: {
+      repos: rows,
+      indexedCount,
+      total,
+      hasRunning: running !== null,
+      // `total > 0` deliberately: "every one of zero repos is indexed" is a
+      // true statement and a useless one. Matches the wizard's Next gate.
+      allIndexed: total > 0 && indexedCount === total,
+    },
+  };
 }
 
 export const projectStateService = {
@@ -114,15 +156,19 @@ export const projectStateService = {
   async getProjectState(projectKey: string, ctx: ServiceContext): Promise<ProjectStateDto> {
     const project = await projectsService.getByKey(projectKey, ctx);
 
-    // The verdict is the shipped gate's, not a marker re-read. `hasActiveProject`
-    // and `canBrowse` are true BY CONSTRUCTION at this point — the key resolved
-    // to a project and `getByKey` asserted browse — so the gate reduces here to
-    // the onboarding question, which is the one this read exists to answer.
-    const planningGate = resolvePlanningHostGate({
-      hasActiveProject: true,
-      canBrowse: true,
-      onboardingRanAt: project.onboardingRanAt,
-    });
+    // ⚠️ READ OFF THE MARKER, NOT OFF `resolvePlanningHostGate` (MOTIR-4765).
+    // This line used to call the host gate, because the gate answered the
+    // ESTABLISHED question as a side effect of answering the routing one, and
+    // deriving it here would have been a re-derivation that could drift. That
+    // gate no longer HAS an `onboarding` verdict — a never-onboarded project
+    // opens the workspace like any other, because whether it can be planned is
+    // the planner's judgement (MOTIR-4767) — so there is nothing left to borrow.
+    // `hasActiveProject` and `canBrowse` were true by construction here anyway
+    // (the key resolved and `getByKey` asserted browse), which is why the call
+    // only ever contributed the marker branch this line now makes directly.
+    const planningGate: ProjectPlanningGateDto = project.onboardingRanAt
+      ? 'workspace'
+      : 'onboarding';
 
     const code = await resolveCodeState(ctx);
     const repoSet = await projectRepoSetService.listByProject(project.id, ctx);

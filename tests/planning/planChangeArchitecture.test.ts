@@ -353,17 +353,27 @@ describe('the workspace is not hostage to the roadmap read', () => {
   it('the ACCESS gate still resolves BEFORE the workspace renders', () => {
     // The other half of the invariant, and it SURVIVED the move (MOTIR-4732): a
     // `no-access` actor must never be shown a workspace frame for a project they
-    // cannot browse, and a null-marker project must still forward. What changed
-    // is where the inputs come from — the shell's session and its permission
-    // provider, both resolved above this component — so the assertion is that
-    // the gate is consulted and its arms are honoured before the host mounts.
+    // cannot browse. What changed is where the inputs come from — the shell's
+    // session and its permission provider, both resolved above this component —
+    // so the assertion is that the gate is consulted and its arm is honoured
+    // before the host mounts.
+    //
+    // ⚠️ THE SECOND ARM IS GONE ON PURPOSE (MOTIR-4765). This used to also
+    // require `gate === 'onboarding'`, because a null-marker project "must still
+    // forward". It must not: the marker says *"has never had a plan APPROVED"*,
+    // so forwarding on it ejected established, code-bearing projects out of the
+    // window they had just opened. The negative below is the replacement, and it
+    // is the stronger assertion — the verdict cannot be re-derived here because
+    // the type no longer has it.
     const overlay = read(join(ROOT, 'components/planning/PlanningWorkspaceOverlay.tsx'));
     const gateAt = overlay.indexOf('resolvePlanningHostGate({');
     expect(gateAt).toBeGreaterThan(-1);
-    // Both arms are honoured, and the host is mounted only past them.
+    // The access arm is honoured, and the host is mounted only past it.
     expect(overlay).toMatch(/gate === 'no-access'/);
-    expect(overlay).toMatch(/gate === 'onboarding'/);
     expect(overlay.indexOf('<PlanningWorkspaceHost')).toBeGreaterThan(gateAt);
+    // NO onboarding arm: the gate's verdict cannot be re-derived here, because
+    // the type no longer has it. (The navigation half is asserted below.)
+    expect(overlay).not.toMatch(/gate === 'onboarding'/);
     const beforeGate = overlay.slice(0, gateAt);
     // The provider is read ABOVE the gate — that is the ordering half.
     expect(beforeGate).toMatch(/useProjectAccess\(\)/);
@@ -383,27 +393,44 @@ describe('the workspace is not hostage to the roadmap read', () => {
     // there is no access QUERY on this path at all, which is what it now says.
     expect(overlay).not.toMatch(/projectAccessService/);
     expect((overlay.match(/= useProjectAccess\(\)/g) ?? []).length).toBe(1);
-    // …and the redirect for a never-onboarded project is still on this path.
+    // …and the never-onboarded REDIRECT is gone from this path, which is the
+    // half of this guard MOTIR-4765 inverts.
     //
-    // ⚠️ MATCHED ON THE CONSTANT, NOT ON THE LITERAL (MOTIR-4403). This read
-    // `/redirect\('\/onboarding'\)/` until the onboarding entrance got one
-    // owner: the entrance is now `ONBOARDING_ENTRY_PATH`, imported from
-    // `lib/navigation/landing.ts`, and `tests/navigation/landing-owner-guard.
-    // test.ts` FAILS on a re-typed `'/onboarding'` anywhere under `app/`. So the
-    // old pattern asserted the presence of the exact string a sibling guard now
-    // forbids — two guards that cannot both be satisfied. The invariant this one
-    // is about is unchanged and is what it still checks: the never-onboarded
-    // redirect is on this path, above the render.
-    // ⚠️ AND IT IS A `router.push` NOW, NOT A `redirect` (MOTIR-4732). The route
-    // was a Server Component; the overlay is a client island, and a client
-    // forwards by pushing. The invariant is the same one and is what is checked:
-    // a never-onboarded project leaves for onboarding rather than being shown a
-    // workspace, and the destination is the OWNED constant rather than a
-    // re-typed literal.
-    expect(overlay).toMatch(/router\.push\(ONBOARDING_ENTRY_PATH\)/);
-    expect(overlay).toMatch(
-      /import \{ ONBOARDING_ENTRY_PATH \} from '@\/lib\/navigation\/landing'/,
-    );
+    // ⚠️ THIS BLOCK USED TO REQUIRE THE REDIRECT, and its history is worth
+    // keeping because both earlier revisions were right about their own moment
+    // and wrong about this one. It first matched `redirect('/onboarding')`; then
+    // MOTIR-4403 re-pointed it at `ONBOARDING_ENTRY_PATH` (a re-typed literal
+    // under `app/` is forbidden by `tests/navigation/landing-owner-guard.test.ts`);
+    // then MOTIR-4732 made it a client `router.push` when the route became an
+    // overlay. Each revision preserved an invariant nobody had questioned —
+    // *"a never-onboarded project leaves for onboarding rather than being shown
+    // a workspace"* — and that invariant is the defect. `onboardingRanAt` means
+    // *"has never had a plan APPROVED"*, so it fired for projects with an
+    // indexed repository and an imported backlog, and on the overlay it fired
+    // AFTER the user had opened the window.
+    //
+    // The assertion is now the negative, and it is deliberately wider than the
+    // one line it replaces: no push, no router, no import of the entrance
+    // constant. The move to onboarding is a thing the SESSION asks for once it
+    // has read the project (MOTIR-4767) and the surface SHOWS before it happens
+    // (MOTIR-4769) — never something this component does to somebody for
+    // arriving.
+    // ⚠️ TIGHTENED RATHER THAN RELAXED (MOTIR-4769). This read "no `router.push`
+    // at all", which was right while the component had no navigation of any
+    // kind — and the hand-off gives it one: the user presses a button and is
+    // taken to onboarding. That is the opposite of the defect. The defect was a
+    // navigation NOBODY ASKED FOR, fired from an effect on arrival, so that is
+    // what the guard now says: no push inside a `useEffect`, ever.
+    for (const block of overlay.split('useEffect(').slice(1)) {
+      const body = block.slice(0, block.indexOf('\n  }, ['));
+      expect(body, 'a push inside an effect is a navigation nobody asked for').not.toMatch(
+        /router\.push\(/,
+      );
+    }
+    // …and the destination is still not written here: it is computed by
+    // `handoffDestination` from the VERDICT, so no branch in this component
+    // decides where a user goes.
+    expect(overlay).not.toMatch(/ONBOARDING_ENTRY_PATH/);
   });
 
   it('the host takes no roadmap data at all', () => {

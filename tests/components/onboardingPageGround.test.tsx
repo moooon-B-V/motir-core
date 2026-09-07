@@ -21,7 +21,14 @@ import { loadTokenLayer, resolveToken } from '../theme/paletteCascade';
 // and the ink lint measure with.)
 
 vi.mock('@/app/(onboarding)/onboarding/actions', () => ({ startPlanningAction: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  // MOTIR-4770 — the wizard reads the RETURN ADDRESS the hand-off wrote, so it
+  // can send a user who came from the plan window back to it rather than to the
+  // roadmap. An empty bag is somebody who arrived by another door, which is what
+  // this suite (a paint check) is.
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
 import { MigrateWizard } from '@/app/(onboarding)/onboarding/migrate/_components/MigrateWizard';

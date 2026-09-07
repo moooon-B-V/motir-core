@@ -1,4 +1,3 @@
-import type { PlanningHostGate } from '@/lib/planning/workspaceHost';
 import type { MigrateIndexStatusDto, MigrateOnboardingDto } from '@/lib/dto/migrateOnboarding';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 
@@ -35,14 +34,21 @@ export interface ProjectStateProjectDto {
   onboardingRanAt: string | null;
 }
 
-/** Is code connected to the workspace, and is it INDEXED? */
+/** Is code connected to this tenant, and is it INDEXED? */
 export interface ProjectCodeStateDto {
   /**
-   * Whether the workspace has a GitHub App installation at all. Distinct from
-   * `index.total === 0`: an installation whose grant covers no repos is a
-   * DIFFERENT state from no installation, and the two need different fixes
-   * (widen the grant vs. install the App). `resolveCodeContext` collapses both
-   * to `undefined`, which is why this flag is carried explicitly.
+   * Whether the ORGANISATION has a GitHub App installation at all.
+   *
+   * ⚠️ THE ORGANISATION, NOT THE WORKSPACE (MOTIR-4838, correcting MOTIR-1968).
+   * The QUESTION is unchanged — it is still "is a git host connected at all?" —
+   * and only the tier it is asked at moved, to the tier that has owned a
+   * connection since MOTIR-4669. A workspace-keyed read answered `false` for
+   * every sibling workspace of an organisation that IS connected.
+   *
+   * Distinct from `index.total === 0`: an installation whose grant covers no
+   * repos is a DIFFERENT state from no installation, and the two need different
+   * fixes (widen the grant vs. install the App). `resolveCodeContext` collapses
+   * both to `undefined`, which is why this flag is carried explicitly.
    */
   installed: boolean;
   /**
@@ -51,32 +57,64 @@ export interface ProjectCodeStateDto {
    * shape), including its honest aggregate `hasRunning`: the ledger cannot tie a
    * RUNNING index row to one repo, so in-flight is a set-level fact.
    *
+   * ⚠️ THE ORGANISATION's connected set (MOTIR-4838) — it was the WORKSPACE's,
+   * reached through that workspace's own installation, which is what made it
+   * empty from a sibling workspace. Still the CONNECTED registry and still
+   * deliberately distinct from `repoSet` below: what moved is the tier, not the
+   * question.
+   *
    * `pending` means "no succeeded index run matches this repo's ref" — which is
    * exactly the MOTIR-1961 state a repo connected before the index feature
-   * shipped sits in, and the state that was twice asserted away.
+   * shipped sits in, and the state that was twice asserted away. ⚠️ It ALSO
+   * covers a repository indexed from a SIBLING workspace: the index ledger is
+   * workspace-keyed, and re-tiering the code graph to the organisation is Story
+   * MOTIR-4642's subject rather than this field's.
    */
   index: MigrateIndexStatusDto;
 }
+
+/**
+ * Whether a project has ever had a plan APPROVED — `onboarding` for one that has
+ * not, `workspace` for one that has.
+ *
+ * ⚠️ THIS IS NO LONGER `resolvePlanningHostGate`'s VERDICT, AND THE CHANGE IS THE
+ * POINT (MOTIR-4765). The two questions shared one function and one type until
+ * that card, and the sharing is what produced the defect the story exists for:
+ *
+ *   | question                          | answered by                    |
+ *   | --------------------------------- | ------------------------------ |
+ *   | *may this actor open the window?* | `resolvePlanningHostGate`      |
+ *   | *has this project a plan yet?*    | THIS — read off the marker     |
+ *
+ * The host gate has no `onboarding` verdict any more: a never-onboarded project
+ * opens the workspace like any other, because whether it can be PLANNED is the
+ * planner's judgement (MOTIR-4767) rather than a marker's. This report keeps
+ * answering the second question — an agent asking `get_project_state` genuinely
+ * wants to know whether a project has been planned — so it now reads
+ * `project.onboardingRanAt` directly instead of borrowing a verdict that no
+ * longer exists. **The field name, both values and every consumer's shape are
+ * unchanged**; what changed is that the answer is derived where it is meant.
+ */
+export type ProjectPlanningGateDto = 'onboarding' | 'workspace';
 
 /** A project's planning preconditions, as `get_project_state` reports them. */
 export interface ProjectStateDto {
   project: ProjectStateProjectDto;
   /**
-   * The established-project verdict, straight from `resolvePlanningHostGate` —
-   * the SAME function every planning door reads, not a re-derivation of it. Only
-   * `onboarding` (never onboarded) and `workspace` (established) are reachable
-   * here: the two gates that precede them are already answered by the time this
-   * runs — the project was resolved by key (so there IS one) and browse access
-   * was asserted (so the caller may see it), and a failure of either surfaces as
-   * a not-found tool error rather than a verdict.
+   * Established? See {@link ProjectPlanningGateDto}. Both values are reachable:
+   * the two access questions that used to precede them are already answered by
+   * the time this runs — the project was resolved by key (so there IS one) and
+   * browse access was asserted (so the caller may see it), and a failure of
+   * either surfaces as a not-found tool error rather than a verdict.
    */
-  planningGate: PlanningHostGate;
+  planningGate: ProjectPlanningGateDto;
   code: ProjectCodeStateDto;
   /**
    * The PROJECT's repository set (MOTIR-1780) — deliberately distinct from
-   * `code.index.repos`, which is the WORKSPACE's connected set. An empty list is
-   * the honest answer for a project that never ran the establish step, not an
-   * error.
+   * `code.index.repos`, which is the ORGANISATION's connected set (MOTIR-4838
+   * moved that tier; the distinction it is drawn against is unchanged). An empty
+   * list is the honest answer for a project that never ran the establish step,
+   * not an error.
    */
   repoSet: ProjectRepoDto[];
   /**

@@ -142,10 +142,39 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'organization_active',
   },
+  'lib/services/ciMinutesMeterService.ts#meterWorkflowRun': {
+    tables: ['project_repository', 'workspace'],
+    source: 'scan',
+    why:
+      'THE SEVENTEENTH (MOTIR-4839, bug MOTIR-4835) — CI ATTRIBUTION, and the arm it needs was ' +
+      'created by a TENANCY change rather than by a new surface. MOTIR-4669 made a repository ' +
+      "ORG-owned, so `project_repository.workspace_id` — the LINKING project's — is routinely a " +
+      'DIFFERENT workspace from `github_repo.workspace_id`, which is what this block binds. ' +
+      'BOTH tables in the transaction then need an org arm and for different reasons: ' +
+      "`project_repository` because `project_repository_active_workspace` matches only the row's " +
+      'own workspace (project_repository_org_read, 20260906000000, is the arm), and `workspace` ' +
+      "because the ANCHOR row is likewise a sibling's — admitted by workspace_org_service_read " +
+      '(20260818010000), the USERLESS arm, which is exactly what a service context is.\n\n' +
+      '⚠️ WITHOUT THE BIND IT WAS THE MOTIR-2956 SHAPE: zero rows, no error, and the run fell ' +
+      'into \u00a75.4\'s "metered as a cost, charged to nobody" bucket. The existing suites could ' +
+      'not fail on it — every fixture in them puts the repo and its link in ONE workspace, where ' +
+      'the defect and the fix are indistinguishable — so the arm is what makes it observable and ' +
+      '`tests/github/siblingWorkspaceAttribution.test.ts` is what observes it.',
+  },
   'lib/services/ciRunnerAdmissionService.ts#resolveCaps': {
     tables: ['organization'],
     source: 'scan',
     why: 'organization_active',
+  },
+  'lib/services/ciRunnerProvisioningService.ts#recordQueuedJob': {
+    tables: ['project_repository', 'workspace'],
+    source: 'scan',
+    why:
+      "THE EIGHTEENTH (MOTIR-4839) — the meter's twin, and it is deliberately IDENTICAL. The " +
+      "service's own comment binds it: \"the SAME disposition as the meter's (MOTIR-4648) \u2014 the " +
+      'two sites ask one question and must not answer it differently.\" Same two tables, same two ' +
+      'arms, same reason; what differs is only the consequence of the zero-row read \u2014 the meter ' +
+      'charges nobody, this REFUSES the job.',
   },
   'lib/services/entitlementsService.ts#tierForOrg': {
     tables: ['organization'],
@@ -172,6 +201,26 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'arm. ⚠️ The INDEX-ledger half is deliberately NOT here: `job_run` is read under ' +
       '`withSystemContext`, per workspace, because the ledger is workspace-keyed and an ' +
       "organisation is not — that is the system-context guard's axis, not this one.",
+  },
+  'lib/services/githubInstallationService.ts#listOrganizationInstallations': {
+    tables: ['github_installation', 'github_repo'],
+    source: 'scan',
+    why:
+      'MOTIR-4836 — the ORGANISATION`s GitHub connection, for the connection card on ' +
+      'Settings → Organisation → Git and for state C on Settings → Account → Git accounts. ' +
+      '`github_installation` is the ONE table in this sweep that had NO org arm at all when ' +
+      'its call site was written, which is why the defect could not be fixed by binding the ' +
+      'GUC: measured on the live deployment, a sibling workspace of the installing one saw 0 ' +
+      'installations WITH the organisation bound explicitly, and 7 of that organisation`s ' +
+      'repositories in the same transaction. The MOTIR-2956 shape with the worst possible ' +
+      'presentation — the zero rendered as `Connect GitHub`, an ACTION, on an account that ' +
+      'is already installed. `github_installation_org_read` (20260907200000) is what admits ' +
+      'it. `github_repo` is the SECOND table, reported by the scanner and not by the author: ' +
+      'each installation`s repositories are read through `listByInstallation` inside the same ' +
+      'org-bound transaction, so it is this site`s table too and its arm ' +
+      '(`github_repo_org_read`, MOTIR-4677) is what makes the read TOTAL rather than an ' +
+      'installation with an empty repo list — the arm-the-JOIN-target-too clause, arriving ' +
+      'here as a second statement rather than a join.',
   },
   'lib/services/organizationRepoService.ts#listRepositoryUsage': {
     tables: ['github_repo', 'project_repository'],
@@ -442,7 +491,19 @@ describe('the guard has been SEEN to fail', () => {
     expect(withoutJoinArm.has('attachment'), 'the FROM clause is still armed').toBe(true);
     expect(withoutJoinArm.has('workspace'), 'the JOIN target is not').toBe(false);
 
+    // ⚠️ THREE members since MOTIR-4839, not one. The control removes `workspace`'s
+    // org arms wholesale, so it reports every swept site that reaches that table
+    // under the org context — and CI attribution now does, at both of its sites,
+    // for the tenancy reason their sweep entries carry. Their presence here is the
+    // control working: it is the same proof for them as for the storage cap, that
+    // the JOIN target is adjudicated and not just the FROM clause.
     expect(findings(withoutJoinArm)).toEqual([
+      'lib/services/ciMinutesMeterService.ts#meterWorkflowRun :: workspace -> "workspace" ' +
+        'has RLS and NO app.organization_id read arm ' +
+        '(reached via projectRepoRepository.listByGithubRepoId, workspaceRepository.findByIdInTx)',
+      'lib/services/ciRunnerProvisioningService.ts#recordQueuedJob :: workspace -> "workspace" ' +
+        'has RLS and NO app.organization_id read arm ' +
+        '(reached via projectRepoRepository.listByGithubRepoId, workspaceRepository.findByIdInTx)',
       'lib/services/entitlementsService.ts#assertWithinStorageCap :: workspace -> "workspace" ' +
         'has RLS and NO app.organization_id read arm ' +
         '(reached via attachmentRepository.sumSizeByOrganization)',

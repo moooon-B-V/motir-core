@@ -118,8 +118,16 @@ describe('the room — which rows offer a move (design §14, panel 1)', () => {
 //      said the project had none. The empty state must NOT appear.
 //   2. Arrived with code, non-empty set — both sections, each named, and the
 //      takeover offered on the hosted rows only.
-//   3. Born in Motir — the set alone, and the connected heading ABSENT rather than
-//      present-and-empty.
+//   3. Born in Motir — the set alone, and the organisation heading ABSENT rather
+//      than present-and-empty.
+//
+// ⚠️ MOTIR-4820 RE-SOURCED AND RENAMED THE SECOND SECTION. It was `Your own
+// repositories`, fed by the connected list; it is now `From your organisation`,
+// fed by the LADDER — the picked links plus whatever `connectedInDomain` layers.
+// The cases below are unchanged in substance because the ROWS are the same rows;
+// what changed is the name they are asked for by, which is the whole defect: the
+// old heading named the WORKSPACE tier, and a separate, EMPTY `From your
+// organisation` sat above it claiming the project had none.
 //   4. Neither — the one shape the empty state is true of (above).
 //
 // Plus the property the sections exist FOR: nothing in the connected list is
@@ -137,7 +145,7 @@ describe('the two registries (MOTIR-3126)', () => {
     });
 
     expect(screen.queryByText(/No repositories are connected to this project yet/)).toBeNull();
-    const section = screen.getByRole('region', { name: 'Your own repositories' });
+    const section = screen.getByRole('region', { name: 'From your organisation' });
     expect(within(section).getByText('motir-core')).toBeTruthy();
     expect(within(section).getByText('motir-ai')).toBeTruthy();
     // And no hosted section at all — an absence, never an empty-stated one.
@@ -152,7 +160,7 @@ describe('the two registries (MOTIR-3126)', () => {
     });
 
     const hosted = screen.getByRole('region', { name: 'Hosted by Motir' });
-    const yours = screen.getByRole('region', { name: 'Your own repositories' });
+    const yours = screen.getByRole('region', { name: 'From your organisation' });
 
     expect(
       within(hosted).getByRole('button', {
@@ -170,7 +178,7 @@ describe('the two registries (MOTIR-3126)', () => {
     renderRoom({ rows: [hostedRow()], connected: [], connectedInDomain: false });
 
     expect(screen.getByRole('region', { name: 'Hosted by Motir' })).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'Your own repositories' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'From your organisation' })).toBeNull();
   });
 
   it('renders a repository Motir knows no branch for, and one whose ref carries no owner', () => {
@@ -186,7 +194,7 @@ describe('the two registries (MOTIR-3126)', () => {
       connectedInDomain: true,
     });
 
-    const yours = screen.getByRole('region', { name: 'Your own repositories' });
+    const yours = screen.getByRole('region', { name: 'From your organisation' });
     expect(within(yours).getByText('no-branch')).toBeTruthy();
     expect(within(yours).queryByText('main')).toBeNull();
     expect(within(yours).getByText('bare-ref')).toBeTruthy();
@@ -218,7 +226,7 @@ describe('the two registries (MOTIR-3126)', () => {
 
     await click(screen.getByRole('button', { name: /Check .* again/ }));
 
-    const yours = await screen.findByRole('region', { name: 'Your own repositories' });
+    const yours = await screen.findByRole('region', { name: 'From your organisation' });
     await waitFor(() => expect(within(yours).getByText('acme-infra')).toBeTruthy());
     expect(within(yours).getByText('design-tokens')).toBeTruthy();
   });
@@ -245,7 +253,7 @@ describe('the two registries (MOTIR-3126)', () => {
 
     await click(screen.getByRole('button', { name: /Check .* again/ }));
 
-    const yours = await screen.findByRole('region', { name: 'Your own repositories' });
+    const yours = await screen.findByRole('region', { name: 'From your organisation' });
     await waitFor(() => expect(within(yours).getByText('design-tokens')).toBeTruthy());
     // It is the hosted row's own repository — showing it in both sections is the
     // duplicate the split exists to prevent.
@@ -275,19 +283,27 @@ describe('the two registries (MOTIR-3126)', () => {
     await click(screen.getByRole('button', { name: /Check .* again/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(screen.queryByRole('region', { name: 'Your own repositories' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'From your organisation' })).toBeNull();
     expect(screen.queryByText('someone-elses-repo')).toBeNull();
   });
 
-  it('the one link in the connected section hands off to the pane that owns connecting', () => {
+  it('⚠️ the one link in the section is a VIEW of the organisation, not a hand-off', () => {
+    // AMENDED (MOTIR-4820) — it read `Choose which repositories Motir can see`
+    // and pointed at the pane that owned CONNECTING, because this section could
+    // not act on its own rows. §17.2 inverted that: the room performs the add
+    // now, so the link stops being the way to do it and becomes the way to SEE
+    // the organisation's whole inventory. That single change is the tier move in
+    // one line, and it arrives here because the section it was written against
+    // is the one this card folded into the organisation section.
     renderRoom({ rows: [], connected: [connectedRepo('design-tokens')], connectedInDomain: true });
 
-    const yours = screen.getByRole('region', { name: 'Your own repositories' });
+    const yours = screen.getByRole('region', { name: 'From your organisation' });
     expect(
       within(yours)
-        .getByRole('link', { name: 'Choose which repositories Motir can see' })
+        .getByRole('link', { name: 'See every repository in moooon' })
         .getAttribute('href'),
-    ).toBe('/settings/account/git');
+    ).toBe('/settings/organization/git');
+    expect(within(yours).queryByText('Choose which repositories Motir can see')).toBeNull();
   });
 });
 

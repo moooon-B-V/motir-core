@@ -161,16 +161,41 @@ export async function evaluateLinkCheck(subject: LinkCheckSubject): Promise<Link
   if ((subject.labels ?? []).some((l) => l.toLowerCase() === NO_WORK_ITEM_LABEL))
     return { decision: 'exempt', reason: 'labelled' };
 
-  // ⚠️ BIND THE TENANT — the system flag alone reads NOTHING here (MOTIR-2880's
-  // shape, one service over). `project_repository` and `work_item_delivery` are
-  // both `FORCE ROW LEVEL SECURITY` with a single arm — `workspace_id =
-  // current_setting('app.workspace_id')` — and NO `system_admin` arm at all. So
-  // under `motir_app` an unbound read returns zero rows and NO error, which here
+  // ⚠️ BIND THE TENANT — the system flag alone reads NOTHING from
+  // `project_repository` (MOTIR-2880's shape, one service over). It is
+  // `FORCE ROW LEVEL SECURITY` and has NO `system_admin` arm, so under
+  // `motir_app` an unbound read returns zero rows and NO error — which here
   // would read as "this repository is not planned" for every repository in the
   // product and silently disable the whole check. The repo row carries the
   // tenancy (MOTIR-1931) and the caller already resolved it, so the bind goes at
   // the top of the block; it is additive, so `github_pull_request`'s own system
   // arm is unaffected.
+  //
+  // ⚠️ CORRECTED BY MOTIR-4840 (bug MOTIR-4835) — the sentence above used to name
+  // `work_item_delivery` ALONGSIDE `project_repository` as sharing that single
+  // workspace-only arm with "NO `system_admin` arm at all". That is true of the
+  // first and FALSE of the second: `work_item_delivery_workspace_or_system`
+  // (20260828120000) is `FOR ALL` with a `current_setting('app.system_admin') =
+  // 'true'` arm, which the enclosing `withSystemContext` satisfies.
+  //
+  // ⚠️ AND THE SYSTEM FLAG IS WHY THIS SITE SURVIVED A DEFECT ITS TWO SIBLINGS
+  // DID NOT — worth stating, because the three were reported as one bug and are
+  // not. MOTIR-4669 made a repository ORG-owned, so `project_repository`'s row
+  // now routinely belongs to a SIBLING workspace of the one bound here. What
+  // admits it is `project_repository_org_read`, whose predicate resolves the
+  // organisation's workspaces through a subquery over `workspace` — and
+  // `workspace_system_read` admits every `workspace` row to that subquery under
+  // this block's system flag, while `app_caller_organization_id()` reads the
+  // caller's own bound workspace to name the organisation. So the set comes back
+  // whole and the link row is visible.
+  //
+  // `ciMinutesMeterService` and `ciRunnerProvisioningService` ask the same
+  // question from `withWorkspaceServiceContext`, which sets NO system flag, so
+  // that subquery collapsed to the caller's own workspace and both returned
+  // null — MOTIR-4839. The lesson for anyone editing this block: the reads here
+  // depend on the system flag in a way the policy names do not show, so do not
+  // narrow the context on the assumption that a workspace bind is equivalent.
+  // `tests/github/siblingWorkspaceLinkCheck.test.ts` pins it.
   const state = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, subject.repoRow.workspaceId);
 
