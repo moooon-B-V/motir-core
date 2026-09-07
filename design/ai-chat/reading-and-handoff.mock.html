@@ -1,0 +1,1737 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The plan surface READING the project, and the two hand-offs out of it
+      (MOTIR-4766, story MOTIR-4753)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for MOTIR-4766, under story MOTIR-4753 — "The
+      DEPTH of onboarding is a judgement about the project's SUBSTRATE".
+
+      WHAT THIS DRAWS, and why it is a NEW surface in design/ai-chat/ rather than
+      a panel appended to planning-workspace.mock.html: the workspace asset draws
+      the workspace AT WORK — its canvas, its rail, its overlay frame, its exits.
+      This asset draws the ~15 seconds BEFORE any of that exists for a project
+      that has never been planned, and the two doors out of it. Different moment,
+      different reader question, its own three-file set (CLAUDE.md § design
+      assets). The overlay CHROME below is composed from
+      planning-workspace.mock.html sheet 6, never redrawn.
+
+      ── THE FLOW, and which sibling card each behaviour comes from ────────────
+      Every depicted behaviour is grounded in a sibling's descriptionMd. The
+      design invents no mechanism; it decides what the mechanism LOOKS like.
+
+        MOTIR-4765  the gate is removed — the plan window OPENS for a project
+                    whose `onboardingRanAt` is null, instead of ejecting it to
+                    /onboarding. That is why panels 1-2 exist at all.
+        MOTIR-4768  the READING state: it NAMES the connected repository and the
+                    committed work items, from `readOnboardingSubstrate`
+                    (MOTIR-4756: itemCount, itemCountTruncated,
+                    repositoryConnected, repositoryIndexed). "A statement of
+                    activity, not a progress bar" is that card's own wording and
+                    panels 1-2 are held to it.
+        MOTIR-4767  the ROUTING VERDICT, made by the planner and by nothing else:
+                    `continue` | `onboard_new_project` | `onboard_existing_project`,
+                    and on the last of those the KEPT STEPS and WHAT IS MISSING.
+                    Panels 3 and 4 are the two onboarding outcomes; panel 6's
+                    right-hand cell is `continue`.
+        MOTIR-4769  the verdict is HONOURED — the move is SHOWN before it
+                    happens, never a silent redirect, and it carries the kept
+                    steps + the missing-list to the destination.
+        MOTIR-4770  THE ROUND TRIP — the move leaves the (authed) route group, so
+                    the launch context travels with it and onboarding RETURNS the
+                    user to the window they opened. Panel 5. Its own note is
+                    also why there is no draft-loss warning anywhere in this
+                    asset: the thread is a persisted server row, so nothing that
+                    matters is lost by the unmount.
+        MOTIR-4759  the wizard renders exactly the kept set. Drawn in the
+                    sibling asset, design/onboarding-migrate/ Panel 6.
+
+      ── GROUNDED IN SHIPPED REALITY ──────────────────────────────────────────
+      HOST: `components/planning/PlanningWorkspaceOverlay.tsx` — the shipped
+      `Modal size="full"` with `rounded-none border-0 p-0` and `hideClose`, the
+      host drawing its own Close top-LEFT. Its two-pane geometry and the 49px
+      top bar were MEASURED on the real components at 1440x780 by MOTIR-4726 and
+      are recorded in design/ai-chat/planning-workspace.mock.html § sheet 6; this
+      asset inherits those proportions rather than re-measuring them, and draws
+      the frame larger because the READING CARD, not the canvas, is its subject.
+      RAIL: `PlanningWorkspaceHost`'s conversation column.
+      TOKENS: the block below is copied 1:1 from packages/design-system/theme.css,
+      as design/onboarding-migrate/onboarding-migrate.mock.html does, plus
+      --el-canvas and --el-danger-on-surface which that copy omitted. Product UI
+      references Tier-3 --el- and the element-semantic shape tokens ONLY — no
+      Tier-0 --color-, no raw radius/padding/height, no invented hue.
+
+      ── ONE RULE BINDS EVERY STRING HERE ─────────────────────────────────────
+      NO USER-FACING STRING NAMES A DIRECTION TIER, and none says "Pre-plan".
+      MOTIR-4757 retires the term from messages/ and guards it there;
+      MOTIR-4755 revision 2 collapsed the migrate rail's four tier-named rows to
+      ONE after Yue's note that a user does not know what Discovery and Vision
+      are. Discovery / vision / feasibility / validation are identifiers. The
+      copy below says what the user is doing.
+
+      Panels (review EACH):
+        1  READING — a real substrate. Names the repositories and the backlog.
+        2  READING — a thin substrate. One sentence, never an empty list.
+        3  HAND-OFF A — `onboard_new_project`. Nothing readable.
+        4  HAND-OFF B — `onboard_existing_project`. Something real, something
+           missing, and the planner's missing-list as rendered copy.
+        5  THE RETURN, and the ABANDONED path beside it.
+        6  WHAT IT MUST NOT LOOK LIKE — three wrong surfaces, and `continue`.
+      Toggle dark mode (top-right) to confirm token parity.
+    -->
+    <style>
+      /* ==============================================================
+         TOKENS — copied 1:1 from packages/design-system/theme.css.
+         Product UI references Tier-3 --el- + the shape tokens ONLY.
+         ============================================================== */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 3px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-btn-x: 18px;
+        --spacing-control-x: 12px;
+        --spacing-control-y: 8px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-control: 36px;
+        --focus-ring-color: var(--color-primary);
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-identifier: var(--color-slate);
+        --el-text-eyebrow: var(--color-steel);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-success-surface: var(--color-tint-mint);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-card-icon-bg: var(--color-tint-lavender);
+        --el-card-icon-fg: var(--color-charcoal);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-overlay-scrim: #00000066;
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-background);
+      }
+
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-overlay-scrim: #000000a6;
+      }
+
+      /* Two Tier-3 tokens the migrate mock's copy of theme.css omitted and this
+         asset needs: the recessed planning board, and the ONLY legal ink for
+         danger text on a page (CLAUDE.md — --el-danger-text is the ink FOR a
+         danger FILL and is 1.00:1 on a light page). Both are the design system's
+         own names and their definitions are theme.css's, verbatim. */
+      :root {
+        --el-canvas: var(--color-canvas);
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+      }
+
+      /* ============================================================
+         Mock scaffold (review-page chrome, NOT product UI)
+         ============================================================ */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1120px;
+        margin: 0 auto 8px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 840px;
+        line-height: 1.55;
+      }
+      .toggle {
+        flex: none;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font: 600 11px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin: 46px auto 10px;
+        padding-left: 2px;
+        max-width: 1120px;
+      }
+      .panel-label b {
+        color: var(--el-accent-on-surface);
+      }
+      .panel {
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+      .state-cap {
+        font: 600 11px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        margin-bottom: 9px;
+      }
+      .muted-note {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+      }
+      .code {
+        font: 500 11.5px var(--font-mono);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      @media (max-width: 900px) {
+        .pair {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ============================================================
+         PRODUCT UI — the shipped primitives, composed
+         ============================================================ */
+      .card {
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-subtle);
+      }
+      .card.soft {
+        background: var(--el-surface-soft);
+        box-shadow: none;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font: 600 13.5px/1 var(--font-sans);
+        border-radius: var(--radius-btn);
+        padding: 0 var(--spacing-btn-x);
+        height: var(--height-btn-md);
+        cursor: pointer;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn.sm {
+        height: var(--height-btn-sm);
+        font-size: 13px;
+        padding: 0 14px;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        line-height: 1.2;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill.sky {
+        background: var(--el-tint-sky);
+      }
+      .pill.mint {
+        background: var(--el-tint-mint);
+      }
+      .pill.lavender {
+        background: var(--el-tint-lavender);
+      }
+      .pill.neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border: 1px solid var(--el-chip-border);
+      }
+      .eyebrow {
+        font: 600 11px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-eyebrow);
+      }
+
+      /* ── THE OVERLAY FRAME — composed from planning-workspace.mock.html
+         sheet 6, whose numbers were MEASURED on the shipped `Modal size="full"`
+         + `PlanningWorkspaceHost` at 1440x780. Drawn larger here because the
+         reading card is this asset's subject, and at sheet 6's 0.44x scale its
+         copy would be unreadable — which would defeat the point of an asset
+         whose whole argument is what the words say. */
+      .ontop {
+        position: relative;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        overflow: hidden;
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+      }
+      .ws {
+        display: grid;
+        grid-template-columns: 1fr 296px;
+        height: 524px;
+      }
+      /* Panel 4's hand-off card is the tallest thing this asset draws — a FOUND
+         block, a two-row missing list, the kept-step strip and the actions. The
+         frame grows to hold it rather than the card being clipped: at 1440x780
+         the shipped dialog is the viewport, so there is room. */
+      .ws.tall {
+        height: 626px;
+      }
+      .wcanvas {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      /* PlanningWorkspaceHost's own top bar — `border-b border-(--el-border-soft)
+         bg-(--el-surface) px-4 py-2`, measured 49px. */
+      .wtop {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        flex: none;
+      }
+      .wclose {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn);
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .wclose kbd {
+        font: 600 9.5px var(--font-mono);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 0 4px;
+        color: var(--el-text-secondary);
+      }
+      .wtop .wcrumb {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .wtop .wkey {
+        font: 600 11.5px var(--font-mono);
+        color: var(--el-text-identifier);
+      }
+      .wbody {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 22px;
+        background:
+          radial-gradient(circle at 1px 1px, var(--el-border) 1px, transparent 0) 0 0 / 20px 20px,
+          var(--el-canvas);
+      }
+      .wrail {
+        border-left: 1px solid var(--el-border);
+        background: var(--el-card);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .wrail .rhead {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 10px 13px;
+        border-bottom: 1px solid var(--el-border-soft);
+        flex: none;
+      }
+      .wrail .rhead .lbl {
+        font: 600 10px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-secondary);
+      }
+      .wrail .rlog {
+        flex: 1;
+        min-height: 0;
+        padding: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .turn {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .turn.me {
+        flex-direction: row-reverse;
+      }
+      .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: var(--radius-badge);
+        display: grid;
+        place-items: center;
+        font-size: 10.5px;
+        font-weight: 700;
+        flex: none;
+      }
+      .avatar.ai {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .avatar.me {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .bubble {
+        border-radius: var(--radius-card);
+        padding: 8px 11px;
+        font-size: 12px;
+        line-height: 1.45;
+        max-width: 208px;
+      }
+      .bubble.ai {
+        background: var(--el-surface-soft);
+        color: var(--el-text);
+      }
+      .bubble.me {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .composer {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid var(--el-border);
+        padding: 10px 12px;
+      }
+      .composer .inp {
+        flex: 1;
+        min-width: 0;
+        height: var(--height-control);
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        padding: 0 var(--spacing-input-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+      }
+      /* The composer while the session is still deciding — the shipped
+         `disabled` textarea. `--el-text-faint` clears AA on no surface and is
+         legal ONLY because the element says it is inactive, which 1.4.3
+         exempts; every instance carries `aria-disabled="true"` and the ink
+         guard is asked rather than dodged (CLAUDE.md § the two grey traps). */
+      .composer .inp.off {
+        background: var(--el-muted);
+        color: var(--el-text-faint);
+        border-color: var(--el-border);
+      }
+
+      /* ── THE READING CARD ─────────────────────────────────────────────────
+         A raised card on the recessed canvas. It is the shipped Card primitive
+         with a heading, a body line and a LIST OF NAMED THINGS — no bar, no
+         percentage, no count-down. See the notes under panel 1. */
+      .reading {
+        width: 100%;
+        max-width: 520px;
+      }
+      .reading h2 {
+        margin: 5px 0 0;
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text);
+        letter-spacing: -0.01em;
+      }
+      .reading .lede {
+        margin: 8px 0 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .srcs {
+        list-style: none;
+        margin: 16px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .src {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+      }
+      .src .ic {
+        flex: none;
+        width: 26px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .src .ic svg {
+        width: 14px;
+        height: 14px;
+      }
+      .src .nm {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .src .sub {
+        display: block;
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+        line-height: 1.35;
+      }
+      .src .tail {
+        margin-left: auto;
+        flex: none;
+      }
+      /* The ACTIVITY line. Three dots that breathe; no track, no fill, nothing
+         that implies a fraction of a whole. */
+      .activity {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 15px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .dots {
+        display: inline-flex;
+        gap: 4px;
+        flex: none;
+      }
+      .dots i {
+        width: 5px;
+        height: 5px;
+        border-radius: var(--radius-badge);
+        background: var(--el-accent);
+        display: block;
+      }
+      .dots i:nth-child(2) {
+        opacity: 0.6;
+      }
+      .dots i:nth-child(3) {
+        opacity: 0.3;
+      }
+
+      /* ── THE HAND-OFF CARD ────────────────────────────────────────────────
+         Same primitive, different contents. The two hand-offs are told apart by
+         STRUCTURE, not by a colour: A has one paragraph and no evidence block;
+         B carries a FOUND block and the planner's MISSING list, and only B can
+         show a kept-step strip. */
+      .handoff {
+        width: 100%;
+        max-width: 540px;
+      }
+      .handoff h2 {
+        margin: 5px 0 0;
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text);
+        letter-spacing: -0.01em;
+      }
+      .handoff .lede {
+        margin: 9px 0 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      /* The FOUND block — the same voice as the migrate asset's provenance line
+         (design/onboarding-migrate/, MOTIR-4755): a STATEMENT of what was read,
+         never a question and never a control. */
+      .found {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        margin-top: 14px;
+        background: var(--el-surface-soft);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 11px 13px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .found svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-secondary);
+      }
+      .found b {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      /* The MISSING list — the planner's own words, rendered. Not an error list:
+         no red, no warning triangle. A small open circle per row, because each
+         row is a thing that is not there yet. */
+      .missing {
+        list-style: none;
+        margin: 14px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .missing li {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .missing .gap {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        border-radius: var(--radius-badge);
+        border: 1.5px dashed var(--el-border-strong);
+      }
+      .acts {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 18px;
+      }
+      .promise {
+        margin: 14px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      /* The KEPT-STEP strip — a preview of the rail the user is about to meet,
+         in design/onboarding-migrate/'s own vocabulary. `satisfied` is that
+         asset's treatment (sky tint + read glyph) and is reused, never redrawn. */
+      .kept {
+        margin-top: 16px;
+        border-top: 1px solid var(--el-border-soft);
+        padding-top: 13px;
+      }
+      .kept .kcap {
+        display: block;
+        font: 600 10px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .kept .kcap2 {
+        margin-top: 13px;
+      }
+      .kept .krow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 9px;
+      }
+      .kchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        line-height: 1.25;
+      }
+      .kchip svg {
+        width: 12px;
+        height: 12px;
+      }
+      .kchip.run {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .kchip.satisfied {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        border: 1px solid var(--el-border);
+      }
+
+      /* ── THE RETURN ───────────────────────────────────────────────────────
+         An inline system line in the RAIL, because the rail is where the
+         session speaks. Not a toast, not a banner over the canvas. */
+      .sysline {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        background: var(--el-tint-mint);
+        border-radius: var(--radius-control);
+        padding: 8px 10px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .sysline svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+      }
+      /* proposal nodes on the returned canvas — design/roadmap/'s node
+         language, composed at the workspace's scale, never redrawn */
+      .wnodes {
+        position: absolute;
+        inset: 0;
+      }
+      .wn {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-card);
+        padding: 6px 9px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        box-shadow: var(--shadow-subtle);
+      }
+      .wn .dt {
+        width: 7px;
+        height: 7px;
+        border-radius: var(--radius-badge);
+        flex: none;
+      }
+      .wn.prop {
+        border: 1px dashed var(--el-accent);
+        background: var(--el-callout-bg);
+        color: var(--el-callout-text);
+      }
+
+      /* ── THE ABANDONED PATH — an ordinary authed page, no scrim, no dialog.
+         The left nav + top bar of the shipped AppLayout, at board scale. */
+      .hostpage {
+        display: grid;
+        grid-template-columns: 132px 1fr;
+        height: 524px;
+        background: var(--el-page-bg);
+      }
+      .hostnav {
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface);
+        padding: 12px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .hostnav .nrow {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        padding: 5px 8px;
+        border-radius: var(--radius-control);
+      }
+      .hostnav .nrow.on {
+        background: var(--el-muted);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .hostmain {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .hostbar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-card);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .hostbody {
+        flex: 1;
+        min-height: 0;
+        padding: 18px;
+        background: var(--el-surface-soft);
+      }
+
+      /* ── WHAT IT MUST NOT LOOK LIKE ───────────────────────────────────────
+         Danger ink on a page is --el-danger-on-surface, NEVER --el-danger-text
+         (CLAUDE.md: that token is the ink for a danger FILL and measures
+         1.00-1.04:1 on a light page in all ten palettes). The border carries
+         the hue at graphics contrast; the body copy stays on --el-text. */
+      .dont {
+        border: 1px dashed var(--el-danger);
+        border-radius: var(--radius-card);
+        background: var(--el-card);
+        padding: 15px 16px;
+      }
+      .dont .dcap {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font: 700 10.5px var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-danger-on-surface);
+        margin-bottom: 10px;
+      }
+      .dont .dcap svg {
+        width: 13px;
+        height: 13px;
+      }
+      .dont h4 {
+        margin: 0;
+        font-size: 14.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .dont p {
+        margin: 7px 0 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .donts {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      @media (max-width: 900px) {
+        .donts {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Reading your project, and the two doors out of the plan window</h1>
+        <p>
+          MOTIR-4766, under story MOTIR-4753. The plan window now OPENS for a project that has never
+          been planned (MOTIR-4765) instead of ejecting it to <span class="code">/onboarding</span>,
+          and the first thing that happens inside it is that Motir READS what the project already
+          has. Three outcomes follow, and <strong>the planner decides which</strong> — it is not a
+          count, a threshold or a marker (MOTIR-4767). Either the project can be planned and the
+          session simply plans it, or the user is moved to one of two onboardings and
+          <strong>brought back here afterwards</strong> (MOTIR-4770). This asset draws the reading,
+          both hand-offs, the return, and the abandoned path. Toggle the theme →
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ══════════════════════ PANEL 1 ══════════════════════ -->
+    <div class="panel-label">
+      Panel 1 · THE READING STATE, with a real substrate
+      <b>(MOTIR-4768 · it NAMES what it reads)</b>
+    </div>
+    <div class="panel">
+      <div class="ontop">
+        <div class="ws">
+          <div class="wcanvas">
+            <div class="wtop">
+              <span class="wclose">✕ Close <kbd>Esc</kbd></span>
+              <span class="wcrumb">Acme Widgets</span>
+              <span class="pill neutral">Whole project</span>
+            </div>
+            <div class="wbody">
+              <div class="card reading">
+                <span class="eyebrow">Before we plan</span>
+                <h2>Reading your project</h2>
+                <p class="lede">
+                  Motir is looking at what you already have, so the plan starts from it rather than
+                  from a blank page.
+                </p>
+                <ul class="srcs">
+                  <li class="src">
+                    <span class="ic" aria-hidden="true"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M4 3h13a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3z" />
+                        <path d="M4 18h16" /></svg
+                    ></span>
+                    <span
+                      ><span class="nm">acme/widgets</span
+                      ><span class="sub">Code graph ready · 1,204 files</span></span
+                    >
+                    <span class="tail pill sky">Reading</span>
+                  </li>
+                  <li class="src">
+                    <span class="ic" aria-hidden="true"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M4 3h13a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3z" />
+                        <path d="M4 18h16" /></svg
+                    ></span>
+                    <span
+                      ><span class="nm">acme/widgets-api</span
+                      ><span class="sub">Code graph ready · 388 files</span></span
+                    >
+                    <span class="tail pill sky">Reading</span>
+                  </li>
+                  <li class="src">
+                    <span class="ic" aria-hidden="true"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M8 6h13" />
+                        <path d="M8 12h13" />
+                        <path d="M8 18h13" />
+                        <path d="M3 6h.01" />
+                        <path d="M3 12h.01" />
+                        <path d="M3 18h.01" /></svg
+                    ></span>
+                    <span
+                      ><span class="nm">214 work items</span
+                      ><span class="sub">Everything in your backlog</span></span
+                    >
+                    <span class="tail pill sky">Reading</span>
+                  </li>
+                </ul>
+                <p class="activity">
+                  <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  This usually takes a few seconds.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="wrail">
+            <div class="rhead"><span class="lbl">✦ Motir</span></div>
+            <div class="rlog">
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai"
+                  >Give me a moment with your code and your backlog — then I'll know what to
+                  ask.</span
+                >
+              </div>
+            </div>
+            <div class="composer">
+              <span class="inp off" aria-disabled="true">Waiting to read your project…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="state-cap" style="margin: 22px 0 9px">
+        The same row AT THE CAP — <span class="code">itemCountTruncated: true</span>
+      </div>
+      <ul class="srcs" style="max-width: 468px">
+        <li class="src">
+          <span class="ic" aria-hidden="true"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M8 6h13" />
+              <path d="M8 12h13" />
+              <path d="M8 18h13" />
+              <path d="M3 6h.01" />
+              <path d="M3 12h.01" />
+              <path d="M3 18h.01" /></svg
+          ></span>
+          <span
+            ><span class="nm">200+ work items</span
+            ><span class="sub">Reading the most recent 200</span></span
+          >
+          <span class="tail pill sky">Reading</span>
+        </li>
+      </ul>
+      <p class="muted-note" style="margin-top: 9px; max-width: 640px">
+        <strong>One row, drawn twice, because the read tells the surface which to draw.</strong>
+        <span class="code">readOnboardingSubstrate</span> stops at
+        <span class="code">ONBOARDING_SUBSTRATE_ITEM_CAP</span> = 200 and reports the overflow, so
+        at the cap <span class="code">itemCount</span> is a FLOOR and not a total. Rendering it as
+        an exact <em>200 work items</em> would be the surface making a claim the read explicitly
+        refused to make — and it is the same number the planner's judgement is about to be based on.
+      </p>
+      <div class="pair" style="margin-top: 18px">
+        <p class="muted-note">
+          <strong>It names the things, and that is the whole design.</strong> A spinner says
+          <em>something is happening</em>; this says
+          <em>I am reading acme/widgets, acme/widgets-api and 214 work items</em>, which is the
+          product demonstrating in one sentence the thing this story argues for. The rows are the
+          four fields <span class="code">readOnboardingSubstrate</span> returns (MOTIR-4756) and
+          nothing else — <span class="code">repositoryConnected</span> puts a repository row on
+          screen, <span class="code">repositoryIndexed</span> decides whether its sub-line can say
+          <em>Code graph ready</em>, and <span class="code">itemCount</span> is the third row.
+        </p>
+        <p class="muted-note">
+          <strong>NOT A PROGRESS BAR</strong>, and the constraint is MOTIR-4768's own: nothing here
+          knows a duration. A bar has a track, a fill and therefore a claim about how far along it
+          is, and it would have to keep that claim once a model call is in the middle of it. Three
+          quiet dots and <em>usually takes a few seconds</em> promise only what is true.
+          <strong
+            >And <span class="code">itemCountTruncated</span> is why the count is worded
+            carefully</strong
+          >
+          — at the 200-item cap the row reads <em>200+ work items</em>, because the read itself says
+          the number is a floor.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════ PANEL 2 ══════════════════════ -->
+    <div class="panel-label">
+      Panel 2 · THE READING STATE, with a thin substrate
+      <b>(a SENTENCE, never an empty list — this is the case about to be moved)</b>
+    </div>
+    <div class="panel">
+      <div class="ontop">
+        <div class="ws">
+          <div class="wcanvas">
+            <div class="wtop">
+              <span class="wclose">✕ Close <kbd>Esc</kbd></span>
+              <span class="wcrumb">Acme Widgets</span>
+              <span class="pill neutral">Whole project</span>
+            </div>
+            <div class="wbody">
+              <div class="card reading">
+                <span class="eyebrow">Before we plan</span>
+                <h2>Having a look at your project</h2>
+                <p class="lede">
+                  There's no repository connected here yet, and no work items — so there's nothing
+                  for Motir to read. That's normal for a new project, and it's the next thing we'll
+                  fix together.
+                </p>
+                <p class="activity">
+                  <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  One moment.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="wrail">
+            <div class="rhead"><span class="lbl">✦ Motir</span></div>
+            <div class="rlog">
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai">One moment — let me see what's here.</span>
+              </div>
+            </div>
+            <div class="composer">
+              <span class="inp off" aria-disabled="true">Waiting to read your project…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pair" style="margin-top: 14px">
+        <p class="muted-note">
+          <strong>An empty list is the one thing this must not be.</strong> Three rows with
+          <em>none</em> beside each is a report card, and it is handed to the user in the four
+          seconds before they are moved somewhere — which turns the move into a verdict on them. A
+          sentence states the same fact and carries a second clause the list cannot:
+          <em>that's normal, and it's the next thing we'll fix</em>. The heading changes too —
+          <em>Having a look at</em> rather than <em>Reading</em>, because there is nothing to read.
+        </p>
+        <p class="muted-note">
+          <strong>This is not yet a decision.</strong> A thin substrate is the case most likely to
+          be routed away, but the routing is the planner's and it has not answered yet (MOTIR-4767)
+          — so the copy commits to nothing about the destination. The two panels below are what
+          happens next; on this surface the honest thing is still just to say what is here.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════ PANEL 3 ══════════════════════ -->
+    <div class="panel-label">
+      Panel 3 · HAND-OFF A — <span class="code">onboard_new_project</span>
+      <b>(nothing readable · MOTIR-4767's first onboarding outcome, shown by MOTIR-4769)</b>
+    </div>
+    <div class="panel">
+      <div class="ontop">
+        <div class="ws">
+          <div class="wcanvas">
+            <div class="wtop">
+              <span class="wclose">✕ Close <kbd>Esc</kbd></span>
+              <span class="wcrumb">Acme Widgets</span>
+              <span class="pill neutral">Whole project</span>
+            </div>
+            <div class="wbody">
+              <div class="card handoff">
+                <span class="eyebrow">Next</span>
+                <h2>Let's set your project up first</h2>
+                <p class="lede">
+                  There's nothing here yet for me to plan from. A few short questions about what
+                  you're building and who it's for, and I'll have enough to write you a plan.
+                </p>
+                <div class="acts">
+                  <button class="btn primary" type="button">Set up my project</button>
+                  <button class="btn ghost" type="button">Not now</button>
+                </div>
+                <p class="promise">
+                  It takes about five minutes, and you'll land back in this window ready to plan.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="wrail">
+            <div class="rhead"><span class="lbl">✦ Motir</span></div>
+            <div class="rlog">
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai">One moment — let me see what's here.</span>
+              </div>
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai"
+                  >Nothing to go on yet. Let's do the short version of "what are we building" and
+                  I'll take it from there.</span
+                >
+              </div>
+            </div>
+            <div class="composer">
+              <span class="inp off" aria-disabled="true">Back in a few minutes…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pair" style="margin-top: 14px">
+        <p class="muted-note">
+          <strong>It is SHOWN before it happens</strong> (MOTIR-4769) — the user reads this and
+          presses the button; nothing redirects out from under them. <em>Not now</em> is the second
+          exit and it is deliberately present: a user who opened the plan window to look around is
+          allowed to close it again, and a hand-off with one button is a wall with a door painted on
+          it.
+        </p>
+        <p class="muted-note">
+          <strong>The last line is the promise the return keeps</strong> (panel 5). Saying
+          <em>you'll land back in this window</em> is only worth saying because MOTIR-4770 makes it
+          true; until that card ships, the same sentence is the product lying to a user in the
+          moment they are most likely to remember. <strong>No tier is named</strong> —
+          <em>a few short questions about what you're building and who it's for</em> is what the
+          four direction docs are FOR, said in the user's words (MOTIR-4757, MOTIR-4755 rev 2).
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════ PANEL 4 ══════════════════════ -->
+    <div class="panel-label">
+      Panel 4 · HAND-OFF B — <span class="code">onboard_existing_project</span>
+      <b>(something real, something missing · the planner's own missing-list, rendered)</b>
+    </div>
+    <div class="panel">
+      <div class="ontop">
+        <div class="ws tall">
+          <div class="wcanvas">
+            <div class="wtop">
+              <span class="wclose">✕ Close <kbd>Esc</kbd></span>
+              <span class="wcrumb">Acme Widgets</span>
+              <span class="pill neutral">Whole project</span>
+            </div>
+            <div class="wbody">
+              <div class="card handoff">
+                <span class="eyebrow">Next</span>
+                <h2>Two things I still need</h2>
+                <div class="found">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" />
+                  </svg>
+                  <span
+                    >I read <b>acme/widgets</b> and <b>214 work items</b>. There's real code here,
+                    so I won't ask you about any of it.</span
+                  >
+                </div>
+                <ul class="missing">
+                  <li>
+                    <span class="gap" aria-hidden="true"></span>
+                    <span
+                      >The repository is still mostly the starter template — I can see the shape of
+                      the app, but not what makes it yours.</span
+                    >
+                  </li>
+                  <li>
+                    <span class="gap" aria-hidden="true"></span>
+                    <span
+                      >Nothing in the code or the backlog says who this is for, so I can't tell
+                      which of the 214 items matter first.</span
+                    >
+                  </li>
+                </ul>
+                <div class="kept">
+                  <span class="kcap">What you'll be asked</span>
+                  <div class="krow">
+                    <span class="kchip run">A few questions</span>
+                  </div>
+                  <span class="kcap kcap2">Already there — I'll skip these</span>
+                  <div class="krow">
+                    <span class="kchip satisfied"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                      </svg>
+                      Connect</span
+                    >
+                    <span class="kchip satisfied"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                      </svg>
+                      Index</span
+                    >
+                    <span class="kchip satisfied"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                      </svg>
+                      Import work items</span
+                    >
+                  </div>
+                </div>
+                <div class="acts">
+                  <button class="btn primary" type="button">Fill in the gaps</button>
+                  <button class="btn ghost" type="button">Not now</button>
+                </div>
+                <p class="promise">
+                  Two questions, then straight back here and we can get planning.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="wrail">
+            <div class="rhead"><span class="lbl">✦ Motir</span></div>
+            <div class="rlog">
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai"
+                  >Give me a moment with your code and your backlog — then I'll know what to
+                  ask.</span
+                >
+              </div>
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai"
+                  >Read them. There are two gaps I can't close on my own — they're on the
+                  right.</span
+                >
+              </div>
+            </div>
+            <div class="composer">
+              <span class="inp off" aria-disabled="true">Back in a couple of minutes…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pair" style="margin-top: 14px">
+        <p class="muted-note">
+          <strong>The two hand-offs are told apart by STRUCTURE, not by a colour</strong> — which is
+          what makes them distinguishable at a glance and also in a screen reader. Panel 3 is one
+          paragraph and two buttons; this one carries a FOUND block, a MISSING list and a kept-step
+          strip, none of which panel 3 can have because there is nothing to have found. Every word
+          of the missing list is the planner's (MOTIR-4767 returns it); the surface renders it and
+          writes none of it.
+        </p>
+        <p class="muted-note">
+          <strong>The kept-step strip is the apology this route owes.</strong> MOTIR-4767's own
+          argument: sending someone to re-connect a repository they connected last week is the same
+          insult as the interview, one surface along — so the verdict says which steps have anything
+          left to do, and the hand-off shows that BEFORE the user commits. The satisfied chips reuse
+          <span class="code">design/onboarding-migrate/</span>'s sky tint and read glyph (Panel 5,
+          MOTIR-4755) rather than inventing a second way to say the same thing.
+          <strong>The heading counts</strong> — <em>Two things I still need</em> — because a user's
+          first question is how much this is going to cost them.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════ PANEL 5 ══════════════════════ -->
+    <div class="panel-label">
+      Panel 5 · THE RETURN, and the ABANDONED path
+      <b>(MOTIR-4770 · the round trip closes, or it doesn't and nobody is trapped)</b>
+    </div>
+    <div class="panel">
+      <div class="state-cap">1 · Onboarding finished — back in the window they opened</div>
+      <div class="ontop">
+        <div class="ws">
+          <div class="wcanvas">
+            <div class="wtop">
+              <span class="wclose">✕ Close <kbd>Esc</kbd></span>
+              <span class="wcrumb">Acme Widgets</span>
+              <span class="pill neutral">Whole project</span>
+            </div>
+            <div class="wbody" style="place-items: stretch">
+              <div class="wnodes">
+                <span class="wn" style="left: 6%; top: 16%"
+                  ><span class="dt" style="background: var(--el-tint-lavender)"></span>Accounts &
+                  access</span
+                >
+                <span class="wn" style="left: 34%; top: 10%">Sign-in with email</span>
+                <span class="wn" style="left: 34%; top: 30%">Team invites</span>
+                <span class="wn" style="left: 6%; top: 54%"
+                  ><span class="dt" style="background: var(--el-tint-mint)"></span>Widget
+                  editor</span
+                >
+                <span class="wn" style="left: 34%; top: 48%">Draft autosave</span>
+                <span class="wn" style="left: 63%; top: 30%">Share a widget</span>
+              </div>
+            </div>
+            <div class="wtop" style="border-top: 1px solid var(--el-border); border-bottom: 0">
+              <span class="pill neutral">214 work items</span>
+              <span class="wcrumb">acme/widgets · code graph ready</span>
+            </div>
+          </div>
+          <div class="wrail">
+            <div class="rhead"><span class="lbl">✦ Motir</span></div>
+            <div class="rlog">
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai"
+                  >Read them. There are two gaps I can't close on my own — they're on the
+                  right.</span
+                >
+              </div>
+              <div class="sysline">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="m20 6-11 11-5-5" />
+                </svg>
+                <span>You answered the two questions. Picking up where we left off.</span>
+              </div>
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai"
+                  >That's what I was missing. I've got your code and your 214 items — what do you
+                  want to plan first?</span
+                >
+              </div>
+            </div>
+            <div class="composer">
+              <span class="inp">Tell Motir what to plan…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pair" style="margin-top: 14px">
+        <p class="muted-note">
+          <strong>The return is a FOURTH moment, not a mirror of the hand-off.</strong> The hand-off
+          says <em>we need something first</em>; this says
+          <em>we have it — what do you want to plan?</em> So it is not another full-card
+          interstitial: the workspace is simply THERE, ready to do what the user pressed the button
+          for, and the acknowledgement is one line in the conversation.
+          <strong>The line sits in the RAIL because the rail is where the session speaks</strong> —
+          a toast would fade, and a banner over the canvas would put chrome between the user and the
+          thing they came back for.
+        </p>
+        <p class="muted-note">
+          <strong>⚠️ AND THE PLANNER ASKS — it does NOT hand over a plan (Yue, 2026-09-06).</strong>
+          An earlier revision of this panel drew the canvas full of dashed proposals and a footer
+          reading <em>42 proposed work items</em>, with the planner opening on
+          <em>"here's a plan across acme/widgets and all 214 of your items"</em>. That is not what a
+          planning session is.
+          <strong
+            >A regular session arrives with the context and WAITS to be told what to plan</strong
+          >
+          — which is exactly what <span class="code">continue</span> means (MOTIR-4767:
+          <em>the session asks and plans exactly as a regular session does</em>). So the canvas
+          shows the project AS IT STANDS — the items that are already there, no proposals — the
+          footer says what the session can SEE rather than what it has produced, and the composer is
+          live and empty. The same correction removed
+          <span class="code">design/onboarding-migrate/</span>'s Panel 0, which drew the identical
+          mistake at the end of the wizard.
+        </p>
+        <p class="muted-note">
+          <strong>The earlier turns are still above it</strong>, and that is the design claim
+          MOTIR-4770 AC5 makes checkable: the conversation is a persisted server thread (<span
+            class="code"
+            >usePlanChangeConversation</span
+          >'s resume payload, re-read on mount), so the user comes back to the session they left
+          rather than a new one that happens to look similar. Nothing in this asset warns about
+          losing a draft, because at the moment of the move there is nothing to lose — the verdict
+          is decided before any pass runs, so no proposal and no typed message can exist yet.
+        </p>
+      </div>
+
+      <div class="state-cap" style="margin: 26px 0 9px">
+        2 · Onboarding abandoned — an ordinary page, and no workspace re-opening around them
+      </div>
+      <div class="ontop">
+        <div class="hostpage">
+          <div class="hostnav">
+            <span class="nrow">Dashboard</span>
+            <span class="nrow on">Roadmap</span>
+            <span class="nrow">Work items</span>
+            <span class="nrow">Board</span>
+            <span class="nrow">Sprints</span>
+            <span class="nrow">Code health</span>
+          </div>
+          <div class="hostmain">
+            <div class="hostbar">
+              Roadmap
+              <span class="pill neutral" style="margin-left: auto">Plan with AI</span>
+            </div>
+            <div class="hostbody">
+              <div class="card soft" style="max-width: 460px">
+                <span class="eyebrow">Acme Widgets</span>
+                <h2 style="margin: 5px 0 0; font-size: 17px; font-weight: 600">
+                  Nothing on the roadmap yet
+                </h2>
+                <p
+                  style="
+                    margin: 8px 0 0;
+                    font-size: 13px;
+                    line-height: 1.55;
+                    color: var(--el-text-secondary);
+                  "
+                >
+                  When you're ready, <strong>Plan with AI</strong> is in the top bar — it picks up
+                  from wherever you got to.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="muted-note" style="margin-top: 14px; max-width: 760px">
+        <strong>No scrim, no dialog, no re-opened workspace.</strong> Re-opening a window somebody
+        walked away from is the opposite failure to stranding them, and it is the easier one to
+        write by accident — the return path already knows where to go, so the temptation is to take
+        it unconditionally. The launch context is a RETURN ADDRESS and it expires; walking away
+        spends it and lands the user on the host page the context named, with the overlay parameters
+        absent from the address (MOTIR-4770 AC3).
+      </p>
+    </div>
+
+    <!-- ══════════════════════ PANEL 6 ══════════════════════ -->
+    <div class="panel-label">
+      Panel 6 · WHAT IT MUST NOT LOOK LIKE — and the outcome that draws nothing at all
+      <b>(<span class="code">continue</span>: no hand-off, no interstitial, just a session)</b>
+    </div>
+    <div class="panel">
+      <div class="donts">
+        <div class="dont">
+          <div class="dcap">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+            Not an error
+          </div>
+          <h4>"We couldn't plan your project."</h4>
+          <p>
+            Nothing failed. The read worked, and it produced a finding. A failure frame turns the
+            most informative moment in the journey into an apology for a bug that does not exist.
+          </p>
+        </div>
+        <div class="dont">
+          <div class="dcap">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+            Not a refusal
+          </div>
+          <h4>"This project isn't ready for AI planning."</h4>
+          <p>
+            A judgement about the project reads as a judgement about the person who made it. The
+            finding is about what Motir can SEE, and the sentence has to be about that:
+            <em>there's nothing here yet for me to plan from</em>.
+          </p>
+        </div>
+        <div class="dont">
+          <div class="dcap">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+            Not a dead end
+          </div>
+          <h4>A card whose only control is Close.</h4>
+          <p>
+            The user pressed <strong>Plan with AI</strong>. Every surface in this asset carries a
+            way onward and says where it leads; the return (panel 5) is what makes that a promise
+            kept rather than one merely stated.
+          </p>
+        </div>
+      </div>
+
+      <div class="state-cap" style="margin: 26px 0 9px">
+        And the third outcome — <span class="code">continue</span>: the surface that isn't drawn
+      </div>
+      <div class="card soft" style="max-width: 860px">
+        <p class="muted-note" style="margin: 0">
+          <strong
+            >A full repository with rich context means no onboarding at all, and no hand-off surface
+            either.</strong
+          >
+          The reading state (panel 1) resolves straight into an ordinary planning session — the
+          regular framing, the regular questions, the planner waiting to be told what to plan — and
+          the user never learns that a decision was made about them.
+          <strong>That is the success case, and it draws nothing</strong>, which is worth stating
+          explicitly here because an asset full of interstitials invites a builder to add a fourth
+          one saying <em>Good news, we can plan this!</em> Nobody needs to be told that the thing
+          they asked for is happening. <span class="code">continue</span> makes the run a regular
+          planning session from its first system message (MOTIR-4767), and the surface's only job is
+          to get out of the way.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

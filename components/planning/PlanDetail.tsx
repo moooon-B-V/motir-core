@@ -412,11 +412,17 @@ export function PlanDetail({
                 data-testid="plan-detail-establish-band"
                 className="shrink-0 border-b border-(--el-border) bg-(--el-surface)"
               >
+                {/* ⚠️ `connectHref` is the MEMBER's own GitHub account (Story
+                    MOTIR-4669 · MOTIR-4682). Both places it is used ask the
+                    reader to connect THEIR identity — the "connect your own" CTA
+                    and a row's `not invited` action — and an identity is the one
+                    git fact that is not the organisation's to grant. It pointed
+                    at `/settings/workspace/github`, a route MOTIR-4680 deleted. */}
                 <RepositorySetStep
                   projectKey={repositorySet.projectKey}
                   initialView={repositorySet.view}
                   backlogHref="/items"
-                  connectHref="/settings/workspace/github"
+                  connectHref="/settings/account/git"
                   onOutcomeChange={setReportedCodeOutcome}
                 />
               </div>

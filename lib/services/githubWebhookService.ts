@@ -304,6 +304,9 @@ export const githubWebhookService = {
       if (!repo) return { kind: 'unknown_repo' as const };
       return {
         kind: 'resolved' as const,
+        // The repo ROW's id — what the head-sha write keys on (MOTIR-4724). The
+        // delivery carries the PROVIDER's ids; this is the one already resolved.
+        repoRowId: repo.id,
         // The REPO says whose this is (MOTIR-1931). The installation only
         // selected which mirror rows this delivery may touch — under Motir's
         // shared provisioning installation it names no workspace at all.
@@ -317,6 +320,29 @@ export const githubWebhookService = {
     if (resolved.kind === 'unknown_installation')
       return { event: 'push', outcome: 'unknown_installation' };
     if (resolved.kind === 'unknown_repo') return { event: 'push', outcome: 'unknown_repo' };
+
+    // ⚠️ PERSIST THE HEAD (Story MOTIR-4669 · MOTIR-4724) — half of "is the code
+    // graph behind the code", and it was already in this function's hands.
+    // `parsePushEvent` has always returned `headSha` and this handler has always
+    // discarded it, which is why staleness had no local answer and
+    // `listSucceededCodeGraphIndexRepoRefs` records that it "is MOTIR-1754/1766's
+    // axis and deliberately not read here". The alternative to storing it is a
+    // GitHub API call per repository on every page render.
+    //
+    // BEFORE the branch check below, deliberately: this is a fact about the
+    // repository regardless of whether the push warrants a re-index, and a push
+    // to the default branch is exactly the one that must not be skipped.
+    // Best-effort — a failed field write must not fail the ack for a delivery
+    // GitHub will not resend.
+    if (push.headSha && push.branch === resolved.defaultBranch) {
+      try {
+        await withSystemContext((tx) =>
+          githubRepoRepository.setDefaultBranchHeadSha(resolved.repoRowId, push.headSha!, tx),
+        );
+      } catch (err) {
+        console.error('[github-webhook] could not record the default-branch head', err);
+      }
+    }
 
     // Only the STORED default branch feeds the graph — the graph mirrors the
     // repo's shipped mainline, per tenant, per repo (the N-repo cardinality).

@@ -18,10 +18,16 @@ import { GITLAB_OAUTH_NONCE_COOKIE } from '../start/route';
 // Routes are HTTP-only (CLAUDE.md): the service owns the exchange, encryption, the
 // transaction, and the typed errors this maps to redirect statuses.
 
-const SETTINGS_PATH = '/settings/workspace/gitlab';
+// ⚠️ THE SURFACE MOVED A TIER (Story MOTIR-4669 · MOTIR-4680). It was
+// `/settings/workspace/gitlab`, which is deleted and permanently redirects here;
+// the provider travels as a SEARCH PARAM because the repository inventory on this
+// page spans both hosts. Redirecting to the live path rather than through the
+// redirect keeps the banner's query string on one hop — and a constant that names
+// a route the app no longer serves cannot be read as deliberate.
+const SETTINGS_PATH = '/settings/organization/git?provider=gitlab';
 
 function settingsRedirect(status: string): NextResponse {
-  const res = NextResponse.redirect(`${resolveBaseUrlTrimmed()}${SETTINGS_PATH}?gitlab=${status}`);
+  const res = NextResponse.redirect(`${resolveBaseUrlTrimmed()}${SETTINGS_PATH}&gitlab=${status}`);
   // The nonce is single-use — clear it on every terminal outcome.
   res.cookies.delete(GITLAB_OAUTH_NONCE_COOKIE);
   return res;

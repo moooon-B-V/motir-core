@@ -54,10 +54,26 @@ import { guardSettingsPage } from '../_guard';
 // `canEdit` here only governs which affordances render. A non-admin sees the same
 // data, plus the one action that is theirs alone: connecting their own GitHub.
 
-/** The shipped 7.10 connect pane — grant 1 (identity) is all this surface needs;
- *  no repository permission is asked for, because none is needed to be invited to
- *  a repository. Redrawn nowhere (design §15.14). */
-const GITHUB_SETTINGS_PATH = '/settings/workspace/github';
+/**
+ * Where a member goes to connect their OWN git account — grant 1 (identity) is
+ * all this surface needs; no repository permission is asked for, because none is
+ * needed to be invited to a repository. Redrawn nowhere (design §15.14).
+ *
+ * ⚠️ RE-POINTED BY MOTIR-4682, and it is load-bearing rather than tidying. This
+ * was `/settings/workspace/github` — a page that hosted the member's personal
+ * identity beside the workspace's installation, and that MOTIR-4680 redirects
+ * away once the connection moves to the organisation. Left alone, **the one
+ * action nobody can take on a member's behalf** would have lost its door: this
+ * link is the only route to it from the room where a member discovers they need
+ * it.
+ *
+ * The destination is the ACCOUNT tier because that is where the credential
+ * lives — `GithubIdentity` is `userId @unique` and has never belonged to a
+ * workspace. `tests/settings/accountGitAccounts.test.tsx` asserts this constant
+ * names a route that is not redirected away, so the door cannot go stale again
+ * behind a rename.
+ */
+const GIT_ACCOUNT_PATH = '/settings/account/git';
 
 export default async function ProjectCodeAccessPage() {
   const session = await getSession();
@@ -111,7 +127,7 @@ export default async function ProjectCodeAccessPage() {
         canEdit={caps.canEdit}
         selfLogin={identity?.githubLogin ?? null}
         selfAvatarUrl={identity?.avatarUrl ?? null}
-        connectHref={GITHUB_SETTINGS_PATH}
+        connectHref={GIT_ACCOUNT_PATH}
         plansHref="/plans"
         membersHref="/settings/project/members"
       />

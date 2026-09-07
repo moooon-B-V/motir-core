@@ -14,9 +14,18 @@ import { ProviderSwitch } from './ProviderSwitch';
 // translated server-side; the picker (a client island) handles navigation.
 export async function GitSettingsShell({
   provider,
+  hrefs,
+  subtitle,
   children,
 }: {
   provider: 'github' | 'gitlab';
+  /** Where the picker navigates. DATA, not a function — this shell is a Server
+   *  Component and `ProviderSwitch` is a client one, and React refuses a function
+   *  across that boundary. Defaults to the shipped workspace routes. */
+  hrefs?: Record<'github' | 'gitlab', string>;
+  /** Overrides the header's second line — the ORGANISATION page says what the
+   *  tier means, which the workspace page never had to (MOTIR-4680). */
+  subtitle?: string;
   children: ReactNode;
 }) {
   const t = await getTranslations('git');
@@ -25,9 +34,9 @@ export async function GitSettingsShell({
       <header className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="font-serif text-3xl font-semibold text-(--el-text)">{t('title')}</h1>
-          <p className="font-sans text-sm text-(--el-text-muted)">{t('subtitle')}</p>
+          <p className="font-sans text-sm text-(--el-text-muted)">{subtitle ?? t('subtitle')}</p>
         </div>
-        <ProviderSwitch active={provider} />
+        <ProviderSwitch active={provider} {...(hrefs ? { hrefs } : {})} />
       </header>
       {children}
     </div>

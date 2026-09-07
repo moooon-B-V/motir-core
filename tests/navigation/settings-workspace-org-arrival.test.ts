@@ -16,7 +16,13 @@ const code = (rel: string) =>
 const S = 'app/(authed)/settings';
 const ROWS = [
   { row: 11, rel: `${S}/workspace/jobs/page.tsx`, width: '60rem' },
-  { row: 12, rel: `${S}/workspace/gitlab/page.tsx`, width: null },
+  // ⚠️ ROW 12 MOVED A TIER (MOTIR-4680). It was `workspace/gitlab/page.tsx`; the
+  // git connect surface is the ORGANISATION's now — one route for both providers,
+  // with the provider as a search param — and both workspace addresses are
+  // permanent redirects. The ROW is kept rather than renumbered: the numbers are
+  // MOTIR-3448's allocation and renumbering them would break every reference to
+  // that card's own measurements.
+  { row: 12, rel: `${S}/organization/git/page.tsx`, width: null },
   { row: 13, rel: `${S}/organization/page.tsx`, width: '45rem' },
   { row: 14, rel: `${S}/organization/billing/page.tsx`, width: '64rem' },
   // Story MOTIR-1215 · MOTIR-3646 — the org Security pane. Not one of the four
@@ -56,10 +62,20 @@ describe('every settings pane mounts the shared frame (MOTIR-3448; MOTIR-3646 jo
   );
 
   it('row 12 · the boundary sits INSIDE GitSettingsShell, whose header is pure t(...)', () => {
-    const src = code(`${S}/workspace/gitlab/page.tsx`);
-    const shell = src.indexOf('<GitSettingsShell provider="gitlab">\n      {bannerTone');
+    // ⚠️ MATCHED STRUCTURALLY, NOT BY AN EXACT LINE (MOTIR-4680). The old
+    // assertion pinned the literal `<GitSettingsShell provider="gitlab">` and the
+    // banner variable that followed it, which is a shape only that page ever had.
+    // What the RULE is about survives the move: the shell's header is pure
+    // translation (nothing in it awaits a read), so the boundary belongs INSIDE
+    // it — the title and the provider Segmented paint immediately and only the
+    // reads wait.
+    const src = code(`${S}/organization/git/page.tsx`);
+    const shell = src.indexOf('<GitSettingsShell');
     expect(shell).toBeGreaterThan(-1);
     expect(src.indexOf('<Suspense')).toBeGreaterThan(shell);
+    // …and the shell's own header takes no read-derived value beyond the
+    // translated subtitle, so nothing above the boundary can block on a query.
+    expect(src).not.toMatch(/<GitSettingsShell[^>]*\bawait\b/);
   });
 });
 
@@ -122,11 +138,22 @@ describe('the reads (MOTIR-3448)', () => {
     expect(src.indexOf('<Suspense')).toBeGreaterThan(resolve_);
   });
 
-  it('rows 12 and 14 have ONE read each — nothing to make concurrent', () => {
-    const gitlab = code(`${S}/workspace/gitlab/page.tsx`);
-    expect((gitlab.match(/gitlabConnectionService\./g) ?? []).length).toBe(1);
+  it('row 14 has ONE read — nothing to make concurrent', () => {
+    // ⚠️ ROW 12 LEFT THIS CASE (MOTIR-4680). The pane it named had one read; the
+    // organisation's Git page has FOUR — the inventory, its usage fan-in, the
+    // connection and the actor's org role — so "nothing to make concurrent" is no
+    // longer true of it and asserting it would be asserting the old page. Its
+    // concurrency is covered by the `allSettledOrThrow` case below, which is the
+    // claim that actually binds a multi-arm read.
     const billing = code(`${S}/organization/billing/page.tsx`);
     expect((billing.match(/organizationsService\.listMembers\(/g) ?? []).length).toBe(1);
+  });
+
+  it('row 12 makes its FOUR reads concurrent', () => {
+    // The other half of the case above: the page that stopped having one read had
+    // better not be doing them in series.
+    const src = code(`${S}/organization/git/page.tsx`);
+    expect(src).toMatch(/allSettledOrThrow\(\[/);
   });
 
   it('every multi-arm read uses allSettledOrThrow, never a bare Promise.all', () => {

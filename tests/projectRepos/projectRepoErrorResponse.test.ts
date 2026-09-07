@@ -11,7 +11,9 @@ import {
   ProjectRepoNotFoundError,
   ProjectRepoStateTransitionError,
   RealizedRepoAlreadyClaimedError,
+  RepoTransferRefusedError,
 } from '@/lib/projectRepos/errors';
+import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 
 // The repository-SET routes' typed-error → HTTP mapping (Story MOTIR-1775 ·
 // MOTIR-1782). Five route files share it, so the whole point is that they cannot
@@ -88,6 +90,31 @@ describe('mapProjectRepoError', () => {
     const body = (await res!.json()) as Record<string, unknown>;
     expect(body.code).toBe('PROJECT_ACCESS_DENIED');
     expect(Object.keys(body).sort()).toEqual(['code', 'error']);
+  });
+
+  it('⚠️ the ORG-tier gate keeps the ORG tier\u2019s posture: 404 for a non-member, 403 for a member', async () => {
+    // Story MOTIR-4669 · MOTIR-4678. The two arms are NOT flattened into the
+    // project tier's single 403, and the asymmetry is the decision: an
+    // organisation the caller is not in must be indistinguishable from one that
+    // does not exist, while a plain member can already SEE the organisation, so
+    // there is nothing left to hide from them — only the action to refuse.
+    const notAMember = mapProjectRepoError(new OrganizationNotFoundError('org-1'));
+    expect(notAMember?.status).toBe(404);
+    expect((await notAMember!.json()).code).toBe('ORGANIZATION_NOT_FOUND');
+
+    const memberButNotAdmin = mapProjectRepoError(new OrgForbiddenError('user-1', 'org-1'));
+    expect(memberButNotAdmin?.status).toBe(403);
+    expect((await memberButNotAdmin!.json()).code).toBe('ORG_FORBIDDEN');
+  });
+
+  it('answers an UPSTREAM refusal with 502 — not a 4xx blaming the caller', async () => {
+    // MOTIR-711's takeover: GitHub refused, and no change to the request would
+    // fix it. A 4xx here would tell the person to edit something and try again,
+    // which is exactly the wrong instruction — the row is already `failed` with
+    // the reason recorded and is re-promptable.
+    const res = mapProjectRepoError(new RepoTransferRefusedError('repository is archived'));
+    expect(res?.status).toBe(502);
+    expect((await res!.json()).code).toBe('REPO_TRANSFER_REFUSED');
   });
 
   it('returns NULL for anything it does not know, so the route rethrows into a 500', () => {

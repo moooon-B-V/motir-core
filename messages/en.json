@@ -2587,7 +2587,8 @@
         "appearance": "Appearance",
         "twoFactor": "Two-factor",
         "apiTokens": "Tokens",
-        "data": "Data & privacy"
+        "data": "Data & privacy",
+        "gitAccounts": "Git accounts"
       },
       "data": {
         "title": "Data & privacy",
@@ -3548,6 +3549,44 @@
         "components": "Components are managed by project admins. Ask an admin if one needs adding or changing.",
         "ai-planning": "AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing.",
         "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed."
+      }
+    },
+    "organization": {
+      "eyebrow": "Organisation settings",
+      "back": "Back to Motir",
+      "nav": {
+        "group": {
+          "general": "General",
+          "access": "Access",
+          "billing": "Billing"
+        },
+        "organization": "Organisation",
+        "git": "Git",
+        "members": "Members",
+        "security": "Security",
+        "usage": "Usage & cost",
+        "billing": "Billing & plans"
+      }
+    },
+    "gitAccounts": {
+      "heading": "Git accounts",
+      "subtitle": "The git account you sign work with. It is yours, not your organisation’s — nobody can connect it on your behalf.",
+      "host": {
+        "github": "GitHub"
+      },
+      "state": {
+        "connected": "Connected"
+      },
+      "connectedOn": "Connected on {date}",
+      "connect": "Connect GitHub",
+      "disconnect": "Disconnect",
+      "empty": {
+        "title": "No git account connected",
+        "description": "Connecting one lets Motir invite you to the repositories your projects work on, and sign the work you do. It reads your public profile only — it grants no access to any code."
+      },
+      "noInstallation": {
+        "title": "Your account is connected. Your organisation’s is not.",
+        "body": "That is a working state, not a problem — the two are independent. Connecting the organisation to a git host is something an organisation admin does, in Settings → Organisation → Git."
       }
     }
   },
@@ -6068,7 +6107,9 @@
       },
       "installLink": "Install the Motir GitHub App",
       "cta": "Connect GitHub",
-      "foot": "You'll be sent to GitHub to authorize, then to pick repositories."
+      "foot": "You'll be sent to GitHub to authorize, then to pick repositories.",
+      "noInstallHref": "Installing the Motir GitHub App isn’t available on this deployment.",
+      "orgFoot": "You’ll be sent to GitHub to choose which repositories this organisation grants Motir."
     },
     "identity": {
       "connectedAs": "GitHub identity · connected as {name}",
@@ -6137,6 +6178,52 @@
       },
       "repositoryNotCreated": "Repository not created yet",
       "repositorySkipped": "Skipped for this project"
+    },
+    "orgDisconnect": {
+      "title": "Disconnect {repo} from the organisation",
+      "gitlabTitle": "Disconnect {repo} from the organisation?",
+      "lead": "Which repositories Motir can read is the GitHub App’s own screen, so the removal happens there. Here is what it will do.",
+      "gitlabLead": "It is removed from every project in {org}, not only the one you came from.",
+      "projects": "{count, plural, =0 {No project uses this repository yet.} one {# project loses this repository.} other {# projects lose this repository.}}",
+      "codeIndex": "The code index Motir built from it is kept for {days} days. Re-adding the repository before then cancels the removal; after that, re-adding it means a full index.",
+      "continueOnGithub": "Continue on GitHub",
+      "confirm": "Disconnect",
+      "cancel": "Cancel",
+      "happensOnGithub": "happens on GitHub",
+      "happensHere": "happens here"
+    },
+    "projectRemove": {
+      "title": "Remove {repo} from {project}?",
+      "body": "Removes it from {project} only. It stays connected to your organisation, other projects keep it, and the code index is untouched.",
+      "confirm": "Remove"
+    },
+    "inventory": {
+      "title": "Repositories",
+      "caption": "Every repository connected to this organisation. Any project can pick one; the index is built once and shared.",
+      "foot": "A repository no project uses stays connected and stays indexed — the next project that adds it pays nothing.",
+      "empty": "No repositories are connected yet. Add one from a project’s Repositories settings.",
+      "provider": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      },
+      "index": {
+        "current": "Current",
+        "stale": "Stale",
+        "indexing": "Indexing…",
+        "never": "Never indexed"
+      },
+      "usedBy": "{count, plural, one {Used by # project} other {Used by # projects}}",
+      "usedByNone": "Used by no project yet",
+      "usedByExpanded": "Projects working on this repository"
+    },
+    "organization": {
+      "subtitle": "Connect {org} to GitHub or GitLab once. Every project in the organisation can then work on a connected repository — picking one never indexes it again.",
+      "connectionTitle": "Organisation connection",
+      "connectedBy": "Installed by @{login} on {date}",
+      "notConnected": "{org} is not connected to a git host yet.",
+      "adminOnly": "Only owners and admins of {org} can connect or disconnect a git host.",
+      "subtitleGeneric": "Connect your organisation to GitHub or GitLab once. Every project in the organisation can then work on a connected repository — picking one never indexes it again.",
+      "identityAtAccount": "Connect your own account in Settings → Account → Git accounts"
     }
   },
   "aiPlanning": {
@@ -7677,6 +7764,39 @@
       "materialized": "{count, plural, one {# proposal} other {# proposals}} materialized",
       "bugFiled": "Bug filed",
       "open": "Open →"
+    }
+  },
+  "repositoryPicker": {
+    "add": "Add repository",
+    "title": "Add a repository",
+    "subtitle": "Pick one your organisation already has, or connect a new one.",
+    "searchLabel": "Search repositories",
+    "searchPlaceholder": "Filter by name…",
+    "loading": "Loading your organisation’s repositories…",
+    "error": "Couldn’t load your organisation’s repositories. Try again.",
+    "noMatch": "No repository matches that.",
+    "alreadyIndexed": "already indexed · shared",
+    "alreadyInProject": "already in this project",
+    "connectNew": "Connect a new one on GitHub",
+    "noInstallHref": "Connecting a new repository isn’t available on this deployment.",
+    "firstTimeLead": "Connect the first one and it lands in {org} and in this project at the same time.",
+    "segment": {
+      "organization": "In {org} · already connected",
+      "connect": "Connect a new one"
+    },
+    "section": {
+      "heading": "From your organisation",
+      "hint": "Repositories {org} is connected to that this project works on. Picking one never indexes it again.",
+      "foot": "Add another whenever this project needs it.",
+      "footNoPermission": "Only owners and admins of your organisation can add a repository. Ask one of them, or add it from Settings → Organisation → Git.",
+      "seeAll": "See every repository in {org}"
+    },
+    "remove": {
+      "action": "Remove from this project",
+      "title": "Remove {repo} from this project?",
+      "body": "It stays connected to {org}, other projects keep it, and the code index is untouched. You can add it back at any time and nothing will re-index.",
+      "confirm": "Remove",
+      "cancel": "Cancel"
     }
   }
 }

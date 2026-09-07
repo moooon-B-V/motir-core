@@ -2587,7 +2587,8 @@
         "appearance": "外观",
         "twoFactor": "两步验证",
         "apiTokens": "令牌",
-        "data": "数据与隐私"
+        "data": "数据与隐私",
+        "gitAccounts": "Git 账户"
       },
       "data": {
         "title": "数据与隐私",
@@ -3548,6 +3549,44 @@
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——节奏与规划模型——由项目管理员配置。如需调整，请联系管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。"
+      }
+    },
+    "organization": {
+      "eyebrow": "组织设置",
+      "back": "返回 Motir",
+      "nav": {
+        "group": {
+          "general": "通用",
+          "access": "访问与权限",
+          "billing": "账单"
+        },
+        "organization": "组织",
+        "git": "Git",
+        "members": "成员",
+        "security": "安全",
+        "usage": "用量与费用",
+        "billing": "账单与套餐"
+      }
+    },
+    "gitAccounts": {
+      "heading": "Git 账户",
+      "subtitle": "你用来署名工作的 Git 账户。它属于你，而非你的组织——没有人能代你连接它。",
+      "host": {
+        "github": "GitHub"
+      },
+      "state": {
+        "connected": "已连接"
+      },
+      "connectedOn": "连接于 {date}",
+      "connect": "连接 GitHub",
+      "disconnect": "断开连接",
+      "empty": {
+        "title": "尚未连接 Git 账户",
+        "description": "连接后，Motir 可以把你邀请到项目所使用的仓库，并为你的工作署名。它只读取你的公开资料——不会获得任何代码的访问权限。"
+      },
+      "noInstallation": {
+        "title": "你的账户已连接，你的组织尚未连接。",
+        "body": "这是一个正常状态，而不是问题——两者相互独立。将组织连接到 Git 平台是组织管理员的操作，位于「设置 → 组织 → Git」。"
       }
     }
   },
@@ -6064,7 +6103,9 @@
       },
       "installLink": "安装 Motir GitHub App",
       "cta": "连接 GitHub",
-      "foot": "你将被带到 GitHub 进行授权，然后选择仓库。"
+      "foot": "你将被带到 GitHub 进行授权，然后选择仓库。",
+      "noInstallHref": "此部署不支持安装 Motir GitHub App。",
+      "orgFoot": "你将前往 GitHub，选择本组织授予 Motir 的仓库。"
     },
     "identity": {
       "connectedAs": "GitHub 身份 · 已连接为 {name}",
@@ -6133,6 +6174,52 @@
       },
       "repositoryNotCreated": "仓库尚未创建",
       "repositorySkipped": "此项目已跳过"
+    },
+    "orgDisconnect": {
+      "title": "将 {repo} 从组织中断开连接",
+      "gitlabTitle": "确定将 {repo} 从组织中断开连接？",
+      "lead": "Motir 可读取哪些仓库由 GitHub App 自己的页面决定，因此移除操作在那里完成。以下是它将产生的影响。",
+      "gitlabLead": "它将从 {org} 的每个项目中移除，而不仅仅是你当前所在的项目。",
+      "projects": "{count, plural, =0 {目前没有项目使用该仓库。} other {# 个项目将失去该仓库。}}",
+      "codeIndex": "Motir 为它构建的代码索引会保留 {days} 天。在此之前重新添加该仓库即可取消移除；超过之后再添加则需要完整重新索引。",
+      "continueOnGithub": "前往 GitHub 继续",
+      "confirm": "断开连接",
+      "cancel": "取消",
+      "happensOnGithub": "在 GitHub 上完成",
+      "happensHere": "在此处完成"
+    },
+    "projectRemove": {
+      "title": "确定将 {repo} 从 {project} 中移除？",
+      "body": "仅从 {project} 中移除。它仍与你的组织保持连接，其他项目继续保留，代码索引不受影响。",
+      "confirm": "移除"
+    },
+    "inventory": {
+      "title": "仓库",
+      "caption": "连接到该组织的全部仓库。任何项目都可以挑选使用；索引只构建一次并共享。",
+      "foot": "没有项目使用的仓库仍保持连接与索引——下一个添加它的项目无需付出任何代价。",
+      "empty": "尚未连接任何仓库。请在某个项目的「仓库」设置中添加。",
+      "provider": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      },
+      "index": {
+        "current": "最新",
+        "stale": "已过期",
+        "indexing": "正在建立索引…",
+        "never": "从未建立索引"
+      },
+      "usedBy": "{count, plural, other {# 个项目在使用}}",
+      "usedByNone": "暂无项目使用",
+      "usedByExpanded": "正在使用该仓库的项目"
+    },
+    "organization": {
+      "subtitle": "将 {org} 与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
+      "connectionTitle": "组织连接",
+      "connectedBy": "由 @{login} 于 {date} 安装",
+      "notConnected": "{org} 尚未连接任何 Git 平台。",
+      "adminOnly": "只有 {org} 的所有者和管理员可以连接或断开 Git 平台。",
+      "subtitleGeneric": "将你的组织与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
+      "identityAtAccount": "在「设置 → 账户 → Git 账户」中连接你自己的账户"
     }
   },
   "aiPlanning": {
@@ -7673,6 +7760,39 @@
       "materialized": "已落地 {count, plural, other {# 条提案}}",
       "bugFiled": "已提交缺陷",
       "open": "打开 →"
+    }
+  },
+  "repositoryPicker": {
+    "add": "添加仓库",
+    "title": "添加仓库",
+    "subtitle": "从组织已连接的仓库中挑选一个，或连接一个新的。",
+    "searchLabel": "搜索仓库",
+    "searchPlaceholder": "按名称筛选…",
+    "loading": "正在加载组织的仓库…",
+    "error": "无法加载组织的仓库，请重试。",
+    "noMatch": "没有匹配的仓库。",
+    "alreadyIndexed": "已建立索引 · 共享",
+    "alreadyInProject": "已在此项目中",
+    "connectNew": "在 GitHub 上连接新仓库",
+    "noInstallHref": "此部署暂不支持连接新仓库。",
+    "firstTimeLead": "连接第一个仓库后，它会同时进入 {org} 和这个项目。",
+    "segment": {
+      "organization": "在 {org} 中 · 已连接",
+      "connect": "连接新仓库"
+    },
+    "section": {
+      "heading": "来自你的组织",
+      "hint": "{org} 已连接、且这个项目正在使用的仓库。挑选它们不会重新建立索引。",
+      "foot": "这个项目需要时可随时添加。",
+      "footNoPermission": "只有组织的所有者和管理员可以添加仓库。请联系他们，或在「设置 → 组织 → Git」中添加。",
+      "seeAll": "查看 {org} 的全部仓库"
+    },
+    "remove": {
+      "action": "从此项目中移除",
+      "title": "确定从此项目中移除 {repo}？",
+      "body": "它仍与 {org} 保持连接，其他项目继续保留，代码索引不受影响。你可以随时重新添加，且不会重新建立索引。",
+      "confirm": "移除",
+      "cancel": "取消"
     }
   }
 }

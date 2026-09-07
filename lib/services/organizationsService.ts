@@ -19,10 +19,10 @@ import {
   AlreadyOrgMemberError,
   LastOrgOwnerError,
   OrganizationNotFoundError,
-  OrgForbiddenError,
   OrgInviteeNotFoundError,
   OrgSlugCollisionError,
 } from '@/lib/organizations/errors';
+import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAccessService';
 import {
   toCurrentOrganizationDTO,
   toOrganizationDTO,
@@ -730,33 +730,6 @@ export const organizationsService = {
 
 // ── Internal authorization helpers (read the actor's own membership; the
 // org_membership RLS policy's userId branch admits it under the bound context) ─
-
-async function assertOrgMember(
-  userId: string,
-  organizationId: string,
-  tx: Prisma.TransactionClient,
-): Promise<OrganizationRole> {
-  const membership = await organizationMembershipRepository.findByOrgAndUserInTx(
-    organizationId,
-    userId,
-    tx,
-  );
-  // Cross-tenant no-leak: a non-member sees the org as not-found, never as
-  // forbidden (the 404-not-403 rule).
-  if (!membership) throw new OrganizationNotFoundError(organizationId);
-  return membership.role;
-}
-
-async function assertOrgAdmin(
-  userId: string,
-  organizationId: string,
-  tx: Prisma.TransactionClient,
-): Promise<void> {
-  const role = await assertOrgMember(userId, organizationId, tx);
-  // The actor IS in the org (so it's visible to them) but lacks admin rights →
-  // 403, distinct from the not-found gate above.
-  if (!isOrgAdminRole(role)) throw new OrgForbiddenError(userId, organizationId);
-}
 
 async function assertNotLastOwner(
   organizationId: string,

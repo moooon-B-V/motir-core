@@ -391,8 +391,11 @@ function ConnectPanel({ onAdvance, busy }: { onAdvance: () => void; busy: boolea
       />
       <Card>
         <div className="flex flex-col gap-3">
+          {/* The git connect surface moved to the ORGANISATION tier (Story
+              MOTIR-4669 · MOTIR-4680) and the workspace route is deleted; this
+              link follows it rather than riding the permanent redirect. */}
           <Link
-            href="/settings/workspace/github"
+            href="/settings/organization/git"
             className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'w-fit gap-2')}
           >
             <ExternalLink className="size-4" aria-hidden />

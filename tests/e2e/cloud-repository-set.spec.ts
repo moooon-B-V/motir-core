@@ -312,7 +312,12 @@ test('approve a plan that has two parts, and get a repository for each — then 
   await chapter('The user connects their GitHub account', async () => {
     // The step redraws none of the connect pane — it hands off to the shipped one.
     await page.getByRole('link', { name: 'Connect GitHub' }).click();
-    await expect(page).toHaveURL(/\/settings\/workspace\/github$/);
+    // ⚠️ THE MEMBER'S OWN ACCOUNT, at the tier that owns it (Story MOTIR-4669 ·
+    // MOTIR-4682). This landed on `/settings/workspace/github` until the git
+    // surface moved: an identity is the one git fact nobody can grant on
+    // somebody else's behalf, so it sits under Account, while the
+    // ORGANISATION's App installation sits under Settings → Organisation → Git.
+    await expect(page).toHaveURL(/\/settings\/account\/git$/);
     await completeGithubIdentityGrant(page);
     await expect(page.getByText(REPO_SET_LOGIN).first()).toBeVisible();
     await beat();
@@ -399,7 +404,14 @@ test('approve a plan that has two parts, and get a repository for each — then 
  * OAuth MockAgent, so nothing leaves localhost.
  */
 async function completeGithubIdentityGrant(page: Page): Promise<void> {
-  const start = await page.request.get('/api/github/oauth/start', { maxRedirects: 0 });
+  // `?from=accountGit` is what the page's own CTA carries (MOTIR-4676 returns a
+  // flow to the surface that STARTED it), so the round trip lands back on the
+  // account page and the connected login is on screen — which is what the next
+  // line asserts. Without it the flow takes the DEFAULT return, which is the
+  // organisation's page and does not draw a personal identity at all.
+  const start = await page.request.get('/api/github/oauth/start?from=accountGit', {
+    maxRedirects: 0,
+  });
   expect(start.status(), 'the start route redirects to GitHub').toBe(307);
   const authorizeUrl = new URL(start.headers()['location']!);
   expect(`${authorizeUrl.origin}${authorizeUrl.pathname}`).toBe(

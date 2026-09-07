@@ -86,8 +86,15 @@ interface JoinedRow {
   // The realized `github_repo` half — every column NULL when the row is
   // unrealized (or when its mirror row was deleted / is invisible under RLS).
   repoRowId: string | null;
+  repoDefaultBranchHeadSha: string | null;
+  repoIndexedHeadSha: string | null;
+  repoIndexedAt: Date | null;
+  repoIndexingRunId: string | null;
   repoProvider: string | null;
   repoWorkspaceId: string | null;
+  /** The mirror row's ORGANISATION (MOTIR-4649) — nullable in the column, and
+   *  doubly so here because the LEFT JOIN itself can miss. */
+  repoOrganizationId: string | null;
   repoInstallationId: string | null;
   repoHostId: string | null;
   repoOwner: string | null;
@@ -149,8 +156,13 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
         ? null
         : {
             id: r.repoRowId,
+            defaultBranchHeadSha: r.repoDefaultBranchHeadSha,
+            indexedHeadSha: r.repoIndexedHeadSha,
+            indexedAt: r.repoIndexedAt,
+            indexingRunId: r.repoIndexingRunId,
             provider: r.repoProvider!,
             workspaceId: r.repoWorkspaceId!,
+            organizationId: r.repoOrganizationId,
             installationId: r.repoInstallationId!,
             repoId: r.repoHostId!,
             owner: r.repoOwner!,
@@ -230,6 +242,7 @@ export const projectRepoRepository = {
         gr."id"                AS "repoRowId",
         gr."provider"          AS "repoProvider",
         gr."workspace_id"      AS "repoWorkspaceId",
+        gr."organization_id"   AS "repoOrganizationId",
         gr."installation_id"   AS "repoInstallationId",
         gr."repo_id"           AS "repoHostId",
         gr."owner"             AS "repoOwner",
@@ -237,7 +250,18 @@ export const projectRepoRepository = {
         gr."default_branch"    AS "repoDefaultBranch",
         gr."archived"          AS "repoArchived",
         gr."created_at"        AS "repoCreatedAt",
-        gr."updated_at"        AS "repoUpdatedAt"
+        gr."updated_at"        AS "repoUpdatedAt",
+        -- THE INDEX-STATE COLUMNS RIDE ALONG (MOTIR-4724). They are here because
+        -- this projection reconstructs a WHOLE GithubRepo by hand: a column added
+        -- to the model and not added here is a TYPE ERROR rather than a silently
+        -- missing field, which is what makes the hand-built row safe to keep. The
+        -- room does not render them today; the row is honest either way.
+        -- (No backticks in this block: it is inside a tagged template, and one
+        --  would end the literal — which is exactly how this first broke.)
+        gr."default_branch_head_sha" AS "repoDefaultBranchHeadSha",
+        gr."indexed_head_sha"        AS "repoIndexedHeadSha",
+        gr."indexed_at"              AS "repoIndexedAt",
+        gr."indexing_run_id"         AS "repoIndexingRunId"
       FROM "project_repository" pr
       LEFT JOIN "github_repo" gr ON gr."id" = pr."github_repo_id"
       -- The APPROVING USER's record only: permission = 'admin' is what selects it
@@ -312,22 +336,88 @@ export const projectRepoRepository = {
   },
 
   /**
-   * The set row that already claims a realized `GithubRepo`, if any — the
-   * pre-check behind the "a repo created for project A is never project B's"
-   * guarantee.
+   * ⚠️ `findByGithubRepoId` IS GONE, AND ITS ABSENCE IS THE POINT (MOTIR-4648).
    *
-   * NOT workspace-filtered in its WHERE, on purpose: the corruption to prevent is
-   * cross-PROJECT, and a project in another WORKSPACE is invisible to this read
-   * anyway (RLS hides it under the app role). So the DB's `github_repo_id` unique
-   * index is the real, tenant-blind guard and its P2002 is translated to a typed
-   * error; this read is what turns the common, same-tenant case into a clean 409
-   * instead of a raced insert.
+   * It was `findFirst({ where: { githubRepoId } })`, and its own comment said why
+   * that was sound: *"the DB's `github_repo_id` unique index is the real,
+   * tenant-blind guard."* The index is dropped — a repository belongs to the
+   * ORGANISATION and a repository in two projects is the ordinary case — so the
+   * same call would return AN answer rather than THE answer, silently, and
+   * whichever row the planner happened to hand back first.
+   *
+   * A method that quietly changes from total to arbitrary is worse than one that
+   * disappears, so it disappeared. Its four callers each took one of the two
+   * reads below, with a stated disposition at the call site.
    */
-  async findByGithubRepoId(
+
+  /**
+   * The row in THIS PROJECT that already claims a realized `GithubRepo`, if any —
+   * the pre-check behind the surviving guarantee: one repository appears at most
+   * once in one project's set.
+   *
+   * NOT workspace-filtered in its WHERE, exactly as its predecessor was not: the
+   * corruption to prevent is within a project, and another workspace's rows are
+   * invisible to this read anyway (RLS hides them under the app role). The DB's
+   * `@@unique([projectId, githubRepoId])` is the real, tenant-blind guard and its
+   * P2002 is translated to a typed error; this read is what turns the common,
+   * same-tenant case into a clean 409 instead of a raced insert.
+   */
+  async findByProjectAndGithubRepoId(
+    projectId: string,
     githubRepoId: string,
     tx: Prisma.TransactionClient,
   ): Promise<ProjectRepo | null> {
-    return tx.projectRepo.findFirst({ where: { githubRepoId } });
+    return tx.projectRepo.findFirst({ where: { projectId, githubRepoId } });
+  },
+
+  /**
+   * EVERY set row realizing one `GithubRepo` — the read for a caller that
+   * genuinely wants the SET rather than a single owner.
+   *
+   * Deliberately plural in its NAME as well as its type, so a caller has to
+   * decide what a length of two means for it. That decision is the whole of what
+   * MOTIR-4648 asked for at the four call sites: two of them are ATTRIBUTION and
+   * must not start guessing, and one is EXISTENTIAL and never needed a single row
+   * at all.
+   *
+   * Ordered by `position` so a caller that does want a deterministic first row
+   * gets the project set's own primary ordering rather than the planner's.
+   */
+  async listByGithubRepoId(
+    githubRepoId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo[]> {
+    return tx.projectRepo.findMany({ where: { githubRepoId }, orderBy: { position: 'asc' } });
+  },
+
+  /** CLEAR every project's link to one repository — the org-level disconnect's
+   *  write (Story MOTIR-4669 · MOTIR-4679). Returns how many rows it touched.
+   *
+   *  ⚠️ It NULLS the link; it does not delete the rows, and that is
+   *  `ProjectRepo.githubRepo`'s own `onDelete: SetNull` decision rather than this
+   *  method's — a project's PLAN for a repository outlives its connection to one,
+   *  and deleting the rows would delete the plans as a side effect of an
+   *  integration change. `state` is left alone deliberately: the row records that
+   *  the repository WAS connected, and rewriting that history is a different act
+   *  from disconnecting.
+   *
+   *  ⚠️ WORKSPACE-SCOPED, and the caller LOOPS. `project_repository` carries one
+   *  policy — `FOR ALL USING (workspace_id = app.workspace_id)` — with no system
+   *  arm, and this card's new `project_repository_org_read` is `FOR SELECT` only
+   *  (permissive policies OR-combine for reads; widening the write arm would hand
+   *  a sibling workspace a DELETE it never had). So an org-level clear is one
+   *  bound write PER affected workspace, not one sweeping statement. The
+   *  authorisation happened once, at the org-admin gate; this is the execution. */
+  async clearGithubRepoLinks(
+    githubRepoId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.projectRepo.updateMany({
+      where: { githubRepoId, workspaceId },
+      data: { githubRepoId: null },
+    });
+    return result.count;
   },
 
   /** The set's LAST position key (the append anchor), or null on an empty set. */

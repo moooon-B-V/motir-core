@@ -1,6 +1,8 @@
 import type { ProjectRepoConnectedDto, ProjectRepoDto } from '@/lib/dto/projectRepos';
+import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 
-// THE ROOM'S TWO SECTIONS, split by ONE rule (MOTIR-3126) —
+// THE ROOM'S SECTIONS, split by ONE rule each (MOTIR-3126; a THIRD arrived with
+// MOTIR-4669 · MOTIR-4681) —
 // `/settings/project/repositories` renders the Motir-hosted SET and the
 // workspace-CONNECTED repositories separately, and this is the only place that
 // decides which side a repository falls on.
@@ -16,6 +18,22 @@ import type { ProjectRepoConnectedDto, ProjectRepoDto } from '@/lib/dto/projectR
 // (`ProjectRepoRoomViewDto.connectedInDomain`, resolved by
 // `lib/projectRepos/effectiveDomain.ts` on the server). This function only removes
 // duplicates from a list the caller has already been told belongs on the page.
+//
+// ── ⚠️ THE THIRD SECTION, AND THE SEAM IT CLOSES (MOTIR-4681) ────────────────
+// A repository PICKED from the organisation gets a `project_repository` row — it
+// has to, because `@@unique([projectId, githubRepoId])` is the guarantee
+// MOTIR-4648 preserved. That row therefore enters `view.rows`, and `rows` was
+// rendered wholesale as Motir-hosted `TakeoverRow`s: a picked repository would
+// have offered **Take it over** for a repository the organisation already owns,
+// and `connectedNotInSet`'s name de-duplication would have removed it from the
+// section it belongs to at the same time.
+//
+// The discriminator is the row's own `seedSource`, and it is a FACT the write
+// records rather than a heuristic the reader infers: every other seed source
+// answers *"what will Motir put in the repository it is about to create?"*;
+// `SEED_SOURCE_ORGANIZATION` answers *"nothing — it already exists."* A
+// name-match or an owner-match would each have been a second guess layered on the
+// one that already misfires here.
 
 /**
  * The repository NAME a set row occupies in the domain — the REALIZED repo's own
@@ -56,6 +74,33 @@ export function connectedNotInSet(
     out.push(repo);
   }
   return out;
+}
+
+/**
+ * Split the set's rows into the two things a reader is actually looking at: the
+ * repositories that came FROM THE ORGANISATION, and the ones Motir hosts or plans
+ * to (MOTIR-4681).
+ *
+ * ⚠️ ONE ROW NEVER APPEARS IN BOTH, and the split is total: every row falls on
+ * exactly one side, so a row cannot be lost by a future third arm being added
+ * without its own branch.
+ *
+ * The org side carries `Remove from this project` — the first affordance a
+ * repository in that half has ever had, and a legitimate one: a project's LINK to
+ * an organisation repository is exactly the thing a project may change. The
+ * hosted side keeps the takeover, which is meaningless for a repository the
+ * organisation already owns.
+ */
+export function splitSetRowsByOrigin(rows: readonly ProjectRepoDto[]): {
+  fromOrganization: ProjectRepoDto[];
+  motirHosted: ProjectRepoDto[];
+} {
+  const fromOrganization: ProjectRepoDto[] = [];
+  const motirHosted: ProjectRepoDto[] = [];
+  for (const row of rows) {
+    (isOrganizationSeedSource(row.seedSource) ? fromOrganization : motirHosted).push(row);
+  }
+  return { fromOrganization, motirHosted };
 }
 
 /**

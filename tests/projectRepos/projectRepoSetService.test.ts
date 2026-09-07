@@ -437,10 +437,25 @@ describe('uniqueness — one row per (project, name)', () => {
   });
 });
 
-describe('uniqueness — a realized repo is claimed by AT MOST ONE project row', () => {
-  it('rejects a second project claiming the same GithubRepo', async () => {
-    // The corruption to prevent: a repo created for project A recorded as project
-    // B's, which would send B's agents into A's code.
+// ⚠️ RE-WRITTEN, NOT RELAXED (Story MOTIR-4669 · MOTIR-4648). This block used to
+// be titled *"uniqueness — a realized repo is claimed by AT MOST ONE project
+// row"*, and its first case asserted that a second project claiming the same
+// `GithubRepo` was REFUSED, with the reason: *"the corruption to prevent: a repo
+// created for project A recorded as project B's, which would send B's agents into
+// A's code."*
+//
+// That premise is reversed. A repository belongs to the ORGANISATION and which
+// projects use it is visibility configuration (MOTIR-2029, applied to the thing
+// the code graph is built FROM) — so a repository in two projects is the ORDINARY
+// CASE, and the old assertion now pins a behaviour the product must not have.
+// The old sentences are kept above rather than deleted: a guard that inverts is
+// worth being able to read the previous contract of.
+//
+// The guarantee that SURVIVED is narrower and is still enforced by the DATABASE:
+// one repository appears at most once in ONE project's set. Both halves are
+// asserted below.
+describe('uniqueness — one repository, at most once per PROJECT', () => {
+  it('ALLOWS a second project to claim the same GithubRepo — the ordinary case now', async () => {
     const fx = await makeWorkItemFixture();
     const other = await createTestProject({
       workspaceId: fx.workspaceId,
@@ -460,22 +475,38 @@ describe('uniqueness — a realized repo is claimed by AT MOST ONE project row',
       fx.ctx,
     );
     await projectRepoSetService.attachRealizedRepo(rowA.id, repo.id, fx.ctx);
-    await expect(
-      projectRepoSetService.attachRealizedRepo(rowB.id, repo.id, fx.ctx),
-    ).rejects.toBeInstanceOf(RealizedRepoAlreadyClaimedError);
-    // A's claim is untouched.
+    const attachedB = await projectRepoSetService.attachRealizedRepo(rowB.id, repo.id, fx.ctx);
+
+    expect(attachedB.projectId).toBe(other.id);
+    // …and A keeps it. Neither project takes it from the other, which is the
+    // property the `@unique` used to deliver by making the situation impossible.
     const stillA = await adminDb.projectRepo.findUnique({ where: { id: rowA.id } });
     expect(stillA?.githubRepoId).toBe(repo.id);
   });
 
+  it('REJECTS a second row in the SAME project claiming it — the surviving 409', async () => {
+    const fx = await makeWorkItemFixture();
+    const repo = await connectRepo(fx.workspaceId, 'shared-repo');
+    const rowA = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'web', name: 'shared-repo' },
+      fx.ctx,
+    );
+    const rowDup = await projectRepoSetService.addRow(
+      fx.projectId,
+      { role: 'api', name: 'shared-repo-again' },
+      fx.ctx,
+    );
+    await projectRepoSetService.attachRealizedRepo(rowA.id, repo.id, fx.ctx);
+    // The SAME typed error the old contract raised — this card narrowed what the
+    // 409 is about, it did not remove it.
+    await expect(
+      projectRepoSetService.attachRealizedRepo(rowDup.id, repo.id, fx.ctx),
+    ).rejects.toBeInstanceOf(RealizedRepoAlreadyClaimedError);
+  });
+
   it('is enforced BY THE DATABASE, not merely by the service pre-check', async () => {
     const fx = await makeWorkItemFixture();
-    const other = await createTestProject({
-      workspaceId: fx.workspaceId,
-      actorUserId: fx.ownerId,
-      identifier: 'OTHER',
-      name: 'Other',
-    });
     const repo = await connectRepo(fx.workspaceId, 'shared-repo');
     const rowA = await projectRepoSetService.addRow(
       fx.projectId,
@@ -483,17 +514,20 @@ describe('uniqueness — a realized repo is claimed by AT MOST ONE project row',
       fx.ctx,
     );
     await projectRepoSetService.attachRealizedRepo(rowA.id, repo.id, fx.ctx);
+    // Written through the admin client, so this is `@@unique([projectId,
+    // githubRepoId])` answering — not the service's pre-check, which a concurrent
+    // write would race past.
     await expect(
       adminDb.projectRepo.create({
         data: {
           workspaceId: fx.workspaceId,
-          projectId: other.id,
-          role: 'web',
-          name: 'shared-repo',
+          projectId: fx.projectId,
+          role: 'api',
+          name: 'shared-repo-raced',
           seedSource: SEED_SOURCE_PLATFORM_STARTER,
           state: 'connected',
           githubRepoId: repo.id,
-          position: 'a0',
+          position: 'a2',
         },
       }),
     ).rejects.toMatchObject({ code: 'P2002' });
