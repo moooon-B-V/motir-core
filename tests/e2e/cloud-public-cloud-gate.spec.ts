@@ -1,6 +1,7 @@
 import { projectsService } from '@/lib/services/projectsService';
 import { signUp } from './_helpers/shell-session';
 import { test, expect } from './_helpers/promoted-regression';
+import { resetDatabase } from './_helpers/db-reset';
 import type { Page } from '@playwright/test';
 
 // Story MOTIR-3908 — PUBLIC PROJECTS ARE A CLOUD CAPABILITY, watched in a
@@ -35,6 +36,17 @@ const KEY = 'PUBG';
 const ACCESS_GROUP = 'Project access level';
 const START_CONFIRM = 'Start building in public';
 const STATUS_BADGE = 'Building in public';
+
+// The lane's isolation convention (MOTIR-4830). This spec's RETRY was already
+// safe — `EMAIL` carries `Date.now()` and Playwright re-imports the module in a
+// fresh worker on retry, which was measured rather than assumed — so what the
+// reset buys here is the other half: this file used to inherit whatever the
+// previous spec left in the shared database and leave its own rows for the
+// next, in a lane that runs `fullyParallel: false` with one worker. One test,
+// seeding its own workspace and project, so nothing relies on state surviving.
+test.beforeEach(async () => {
+  await resetDatabase();
+});
 
 /** The admin's own workspace, from the shipped route through the browser's
  *  session — no `@/lib/db` singleton statements from an E2E spec. */

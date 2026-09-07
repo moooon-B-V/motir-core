@@ -37,12 +37,24 @@ interface PolicyRow {
   qual: string | null;
 }
 
-/** The four arms this story added, and the tables they widen reads on. */
+/**
+ * The org read arms, and the tables they widen reads on.
+ *
+ * ⚠️ FIVE NOW, NOT FOUR (MOTIR-4836). `github_installation_org_read` was added
+ * later than the other four and by a different card, which is exactly why it
+ * belongs in THIS list rather than in a guard of its own: every property below
+ * — the uncorrelated resolver, the `FOR SELECT` command, the absence of
+ * `app.workspace_id` from the predicate — is a property of the SHAPE, and a
+ * sixth arm written without them would be as expensive and as dangerous as the
+ * first cut of these was. A guard that enumerates its subjects only earns its
+ * keep if each new subject is added to it.
+ */
 const ORG_READ_ARMS = [
   'github_repo_org_read',
   'github_pull_request_org_read',
   'github_check_run_org_read',
   'project_repository_org_read',
+  'github_installation_org_read',
 ] as const;
 
 async function arms(): Promise<PolicyRow[]> {
@@ -59,7 +71,7 @@ afterAll(async () => {
 });
 
 describe('the org read arms resolve the organisation ONCE, not once per row', () => {
-  it('all four exist', async () => {
+  it('all five exist', async () => {
     expect((await arms()).map((p) => p.polname).sort()).toEqual([...ORG_READ_ARMS].sort());
   });
 
@@ -83,7 +95,7 @@ describe('the org read arms resolve the organisation ONCE, not once per row', ()
     ).toEqual([]);
   });
 
-  it('all four call the shared resolver', async () => {
+  it('all five call the shared resolver', async () => {
     for (const p of await arms()) {
       expect(p.qual ?? '', p.polname).toContain('app_caller_organization_id');
     }
@@ -110,10 +122,12 @@ describe('the org read arms resolve the organisation ONCE, not once per row', ()
   });
 
   it('⚠️ the arms are FOR SELECT, and the FOR ALL policies are untouched', async () => {
-    // The half that is about authority rather than cost, restated here because
-    // this file rewrites all four predicates: DELETE is authorised by `USING`
-    // alone, so an org arm that were `FOR ALL` would hand a sibling workspace a
-    // delete it never had.
+    // The half that is about authority rather than cost: DELETE is authorised by
+    // `USING` alone, so an org arm that were `FOR ALL` would hand a sibling
+    // workspace a delete it never had. It bites hardest on
+    // `github_installation` (MOTIR-4836), where the row IS the connection — a
+    // sibling workspace gaining the ability to delete or re-point it would take
+    // the whole organisation's GitHub access with it.
     const rows = await adminDb.$queryRaw<{ polname: string; polcmd: string }[]>`
       SELECT polname, polcmd::text
         FROM pg_policy
