@@ -547,6 +547,81 @@ describe('provisioning + the user-orgs surface', () => {
     expect(active!.role).toBe('owner');
   });
 
+  // MOTIR-4801 — the TWO-ORGANIZATION fixture. Every other fixture in this suite
+  // creates one org, which is exactly why two surfaces shipped asking an
+  // actor-scoped question ("which org am I in?") about an entity-scoped subject
+  // ("whose repositories does this project draw on?") and nothing went red:
+  // with one membership `orgs[0]` is accidentally the right answer.
+  it('resolveWorkspaceOrganization names the org that OWNS the workspace, not the actor first membership', async () => {
+    const user = await createTestUser();
+    // The FIRST org membership, in `organization_membership.createdAt` order —
+    // what `resolveActiveOrganization(user, null)` falls through to.
+    const { workspace: firstWorkspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: user.id,
+    });
+    const firstOrgId = await orgIdOfWorkspace(firstWorkspace.id);
+
+    const secondOrg = await organizationsService.createOrganization({
+      name: 'Second Co',
+      actorUserId: user.id,
+    });
+    const { workspace: secondWorkspace } = await workspacesService.createWorkspace({
+      name: 'Second Workspace',
+      ownerUserId: user.id,
+      organizationId: secondOrg.id,
+    });
+
+    // The actor-scoped read answers the SAME org for both workspaces, because it
+    // never sees a workspace at all. This is the behaviour that is correct for
+    // the org switcher and wrong for a page about a project.
+    const active = await organizationsService.resolveActiveOrganization(user.id, null);
+    expect(active!.organization.id).toBe(firstOrgId);
+    // The defect in one line: this is the value the two surfaces rendered for a
+    // reader sitting in `secondWorkspace`.
+    expect(active!.organization.id).not.toBe(secondOrg.id);
+
+    // The entity-scoped read answers the org that owns each workspace.
+    const ownerOfSecond = await organizationsService.resolveWorkspaceOrganization(
+      user.id,
+      secondWorkspace.id,
+    );
+    expect(ownerOfSecond).not.toBeNull();
+    expect(ownerOfSecond!.id).toBe(secondOrg.id);
+    expect(ownerOfSecond!.name).toBe('Second Co');
+
+    const ownerOfFirst = await organizationsService.resolveWorkspaceOrganization(
+      user.id,
+      firstWorkspace.id,
+    );
+    expect(ownerOfFirst!.id).toBe(firstOrgId);
+  });
+
+  it('resolveWorkspaceOrganization resolves for an ORG ADMIN who is not a member of the workspace', async () => {
+    // The read runs under `withWorkspaceContext`, so the workspace row is
+    // admitted by `workspace_active` rather than by membership — without that
+    // the org-admin path would throw `no such workspace` and 500 the page.
+    const owner = await createTestUser();
+    const admin = await createTestUser();
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Acme',
+      ownerUserId: owner.id,
+    });
+    const orgId = await orgIdOfWorkspace(workspace.id);
+    await organizationsService.addMember({
+      organizationId: orgId,
+      userId: admin.id,
+      role: 'admin',
+      actorUserId: owner.id,
+    });
+
+    const resolved = await organizationsService.resolveWorkspaceOrganization(
+      admin.id,
+      workspace.id,
+    );
+    expect(resolved!.id).toBe(orgId);
+  });
+
   it('renames an organization as an owner', async () => {
     const owner = await createTestUser();
     const { workspace } = await workspacesService.createWorkspace({
