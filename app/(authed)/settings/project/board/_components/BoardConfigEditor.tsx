@@ -1070,6 +1070,7 @@ function DeleteColumnModal({
   const blocked = column.cardCount > 0 && column.statuses.length > 0;
   return (
     <Modal open onOpenChange={(o) => !o && onCancel()} size="sm">
+      {/* modal-scroll-container: measured 1280x700, tallest = the guard variant for the To Do column (its status pills wrap, ~26px per extra row), panel 304px */}
       {blocked ? (
         <>
           <h2 className="flex items-center gap-2.5 font-serif text-lg font-semibold text-(--el-text-strong)">

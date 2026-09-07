@@ -11,6 +11,18 @@ import {
   type AuditCoverageSeed,
 } from './_helpers/audit-coverage-seed';
 
+// ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
+// workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
+// you are already on. So an address that used to BE the workspace is now a host
+// page plus four namespaced parameters, and a `waitForURL` that matched the old
+// path matches nothing. The assertions about what the workspace DOES are
+// unchanged — only how it is reached and how its arrival is detected.
+//
+// (`/planning?…` still resolves: `app/(authed)/planning/page.tsx` forwards an old
+// link to the host page it belonged to. Its own coverage is in
+// `tests/integration/planning/planChangeSeams.test.ts`; these specs address the
+// overlay directly, which is what a reader would write today.)
+
 // Story MOTIR-2244 — audit coverage, end to end (MOTIR-2253).
 //
 // The `verification_recipe`, automated: an ADMIN learns from /planning that
@@ -116,10 +128,12 @@ const bulkButton = (page: Page) =>
 /** The workspace's own exit chrome — "Back to roadmap" / "Back to {item}" —
  *  is the authoritative "the host mounted" landmark: it renders regardless of
  *  what the canvas is doing, so waiting on it never races the canvas read. */
-const exitChrome = (page: Page) => page.getByRole('link', { name: /^Back to / });
+// ⚠️ The exit chrome is a BUTTON labelled `Close` since MOTIR-4729 — an overlay
+// has no destination to name, which is what `Back to …` was doing.
+const exitChrome = (page: Page) => page.getByRole('button', { name: /^Close/ });
 
 async function openPlanning(page: Page): Promise<void> {
-  await page.goto('/planning');
+  await page.goto('/roadmap?plan=project&planFrom=project');
   await expect(exitChrome(page)).toBeVisible();
 }
 

@@ -140,9 +140,12 @@ Each was patched where it was found. The mechanism survived all three, one level
 up, over SURFACES — which is why the fourth instance was the largest continuous
 region on every signed-in screen.
 
-**The surfaces this app renders, and where each is classified.** The eight
+**The surfaces this app renders, and where each is classified.** The nine
 `data-surface` values the codebase emits, plus the shell canvas and the
-class-keyed panel surface:
+class-keyed panel surface. (The count is a reading of the table below, never the
+rule — `tests/theme/immersive-surface-ladder.test.ts` derives the emitted
+population and fails on any member with no row, so a stale number here is a typo
+rather than a gap.)
 
 | Surface class          | Hook                                                  | Where                                          |
 | ---------------------- | ----------------------------------------------------- | ---------------------------------------------- |
@@ -156,6 +159,20 @@ class-keyed panel surface:
 | Board column           | the column in the `overflow-x-auto` row               | §4 — the clip-safe float                       |
 | Text field             | `[data-surface='input']`                              | §4 — RECESSED                                  |
 | Buttons / rows / pills | `data-depth`, the radius default                      | §4 + §4a                                       |
+| Hero AI control        | `[data-surface='ai-cta']`, `data-depth="key"`         | §4 + §4a — a physical KEY (MOTIR-4743)         |
+
+> **The hero AI control's row is a KEY whose depth this style already owns, and
+> its `data-surface` hook is for MATERIAL rather than for a plane.** The "Plan
+> with AI" pill and the floating M orb both carry `data-depth="key"` (MOTIR-3522),
+> and this style gives them their thickness through `--plan-hero-shadow` /
+> `--plan-orb-shadow` — a `var()` seam the components read, because an inline
+> `box-shadow` beats every stylesheet rule. The material hook was added by
+> MOTIR-4743 so the ten OTHER styles can give the control their own fill, border,
+> glow and type (`design/ai-chat/design-notes.md` § _The STYLE MATRIX_); this
+> style deliberately writes no rule against it. One would either lose to the same
+> inline declaration or replace the key's base edge with a decorative fill,
+> taking a control OFF the plane ladder while leaving it declared on it — a
+> contradiction, not a restyle.
 
 **Deliberately FLAT, with the reason — the half of the rule that makes it a rule
 and not a longer list:**

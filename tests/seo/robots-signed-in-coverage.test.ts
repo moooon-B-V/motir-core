@@ -7,8 +7,8 @@ import { topLevelSegments } from '../helpers/twoFactorGuardSweeps';
 // live in the structural-guard lane (MOTIR-3144).
 //
 // ── Why it is a separate file ───────────────────────────────────────────────
-// `topLevelSegments` recurses through `app/(authed)`, `app/(onboarding)` and
-// `app/(planning)`, reading every nested route group and asking each directory
+// `topLevelSegments` recurses through `app/(authed)` and `app/(onboarding)`,
+// reading every nested route group and asking each directory
 // whether it serves a page — whole-tree filesystem work, on the cost profile the
 // lane exists to keep out of the sharded database job. Importing it makes a spec
 // a lane CANDIDATE, and `tests/ci-structural-guards-lane.test.ts` says so by
@@ -33,7 +33,11 @@ import { topLevelSegments } from '../helpers/twoFactorGuardSweeps';
 const ROOT = process.cwd();
 const APP = join(ROOT, 'app');
 const POLICY = join(ROOT, 'lib', 'robotsPolicy.ts');
-const SIGNED_IN_GROUPS = ['(authed)', '(onboarding)', '(planning)'] as const;
+// ⚠️ `(planning)` was a third until MOTIR-4732 retired the route group. `planning`
+// is still a SERVED signed-in segment and still `Disallow`ed — the forward for
+// old links lives at `app/(authed)/planning/` now, so the sweep finds it under
+// `(authed)` and the policy list below needs no change.
+const SIGNED_IN_GROUPS = ['(authed)', '(onboarding)'] as const;
 
 /** The `SIGNED_IN_SEGMENTS` array literal, read out of the policy's source. */
 function authoredSegments(): string[] {

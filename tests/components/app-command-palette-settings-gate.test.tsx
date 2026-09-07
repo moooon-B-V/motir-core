@@ -18,9 +18,12 @@ import { PROJECT_SETTINGS_ROUTES } from '@/lib/settings/projectSettingsNav';
 // no deep link an actor cannot use — and the structural property that makes it
 // hold.
 
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => '/dashboard',
+  // MOTIR-4730 — the palette's planning door reads the address.
+  useSearchParams: () => navSearchParams,
 }));
 vi.mock('@/app/(authed)/_project-actions', () => ({
   setActiveProjectAction: vi.fn(async () => undefined),

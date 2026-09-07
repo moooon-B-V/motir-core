@@ -25,11 +25,15 @@ const { refresh, createIssueActionSpy, listCreateLinkCandidatesSpy } = vi.hoiste
   listCreateLinkCandidatesSpy: vi.fn(),
 }));
 
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh, push: vi.fn() }),
   // AppCommandPalette (rendered by the ⌘K test) reads usePathname for its
   // post-switch navigation (MOTIR-1312); provide it so the render doesn't throw.
   usePathname: () => '/dashboard',
+  // MOTIR-4730 — the palette's planning door reads the address to compose the
+  // overlay onto it, so a partial navigation mock is now a crash.
+  useSearchParams: () => navSearchParams,
 }));
 vi.mock('@/app/(authed)/items/actions', () => ({
   createIssueAction: createIssueActionSpy,

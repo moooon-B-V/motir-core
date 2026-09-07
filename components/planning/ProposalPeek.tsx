@@ -250,6 +250,7 @@ export function ProposalPeek({
         hideClose
         className="h-[680px] max-h-[82vh] w-[90vw] p-0"
       >
+        {/* modal-scroll-container: measured 1280x700, tallest = the not-found peek; same pinned panel as the ready state, panel 574px */}
         <div className="flex h-full flex-col" data-testid="proposal-peek-missing">
           <IssueQuickViewPanel state="notfound" peekKey={targetKey} onClose={onClose} />
         </div>
@@ -267,6 +268,7 @@ export function ProposalPeek({
         hideClose
         className="h-[680px] max-h-[82vh] w-[90vw] p-0"
       >
+        {/* modal-scroll-container: measured 1280x700, tallest = the loading peek; same pinned panel as the ready state, panel 574px */}
         <div className="flex h-full flex-col" data-testid="proposal-peek-loading">
           <IssueQuickViewPanel state="loading" peekKey={targetKey} onClose={onClose} />
         </div>
@@ -321,6 +323,7 @@ export function ProposalPeek({
       hideClose
       className="h-[680px] max-h-[82vh] w-[90vw] p-0"
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = the ready peek; the panel pins its own height and IssueQuickViewPanel's two columns scroll, panel 574px */}
       <div className="flex h-full flex-col" data-testid="proposal-peek">
         <IssueQuickViewPanel
           key={item.planItemId}

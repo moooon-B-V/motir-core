@@ -7,7 +7,10 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   Coins,
+  Info,
+  Search,
   Eye,
   Lock,
   Pause,
@@ -20,6 +23,12 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import type { OrgUsageDTO, UsageScope } from '@/lib/dto/aiUsage';
+import {
+  activityEntries,
+  activityPageCount,
+  searchUsageFigures,
+  type FigureScope,
+} from './searchUsage';
 
 const RUN_LOG_PAGE_SIZE = 10;
 const LOW_BALANCE_FRACTION = 0.1; // a balance under 10% of the allotment is "low"
@@ -157,21 +166,26 @@ export function OrgUsageClient({ orgId, orgName }: OrgUsageClientProps) {
     );
   }
 
-  // The META org (moooon B.V.) is unlimited + never billed: it can't be "out of
-  // credits" or "low", and there is no allotment bar — usage still debits (for
-  // internal cost visibility) so its balance can drift negative, but that number
-  // is never surfaced as a warning.
-  const outOfCredits = !data.isMeta && data.balance <= 0;
+  // ⚠️ NO ORG IS EXEMPT FROM THESE STATES ANY MORE (Story MOTIR-4337 ·
+  // MOTIR-4572). Five `isMeta` reads stood in this block and hid exactly the
+  // panels most worth exercising: out-of-credits, the low-balance warning and
+  // the allotment bar. The org with the most product usage and the strongest
+  // motivation to check them was the only org that could never see them.
+  //
+  // The comment they carried — *"usage still debits so its balance can drift
+  // negative, but that number is never surfaced"* — described the defect
+  // precisely. What replaces it is not a second suppression: an org classified
+  // `internalBilling` incurs every debit a customer incurs and the LEDGER pairs
+  // each one with an offsetting credit in the same transaction (MOTIR-4570), so
+  // its balance is real, it nets to zero, and these three computations are
+  // simply true for it. Rendering out-of-credits gates nothing — the balance
+  // never falls, so the state is reachable in a test and unreachable in life.
+  const outOfCredits = data.balance <= 0;
   const allotment = data.tier?.monthlyCreditAllotment ?? 0;
   const lowBalance =
-    !data.isMeta &&
-    !outOfCredits &&
-    allotment > 0 &&
-    data.balance / allotment < LOW_BALANCE_FRACTION;
+    !outOfCredits && allotment > 0 && data.balance / allotment < LOW_BALANCE_FRACTION;
   const remainingPct =
-    !data.isMeta && allotment > 0
-      ? Math.max(0, Math.min(100, Math.round((data.balance / allotment) * 100)))
-      : null;
+    allotment > 0 ? Math.max(0, Math.min(100, Math.round((data.balance / allotment) * 100))) : null;
 
   return (
     <div className="flex flex-col gap-5" aria-busy={status === 'loading'}>
@@ -206,6 +220,15 @@ type T = ReturnType<typeof useTranslations>;
 
 function fmt(n: number): string {
   return n.toLocaleString();
+}
+
+function when(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function fmtTokens(n: number): string {
@@ -298,6 +321,34 @@ function ModelChip({ model, label }: { model: string | null; label: string }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Panel 2 — org cost summary
+// The SCOPE TAG that rides every spend figure (MOTIR-4558, the asset's panels
+// 1–2). Not decoration: at org scope the tags agree and nothing looks unusual,
+// and at a project scope they come apart — the org-level search total does not
+// narrow while everything beside it does. The tag is what makes that legible
+// instead of mysterious.
+//
+// `--el-text-secondary` because it lands on a Card AND (the member view) on
+// `--el-surface-soft`, and `--el-text-muted` clears AA on only one of those. The
+// ORGANIZATION variant is `--el-text-strong`: a figure that ignores the selector
+// above it has to say so louder than one that obeys it.
+function ScopeTag({ scope, t }: { scope: FigureScope; t: T }) {
+  const org = scope === 'organization';
+  return (
+    <span
+      className={`mt-1.5 inline-flex items-center gap-1 font-sans text-[0.6875rem] font-semibold tracking-wide uppercase ${
+        org ? 'text-(--el-text-strong)' : 'text-(--el-text-secondary)'
+      }`}
+    >
+      {org ? (
+        <Info className="h-3 w-3" aria-hidden />
+      ) : (
+        <ChevronsUpDown className="h-3 w-3" aria-hidden />
+      )}
+      {org ? t('summary.scopeOrg') : t('summary.scopeFollows')}
+    </span>
+  );
+}
+
 function SummaryPanel({
   data,
   remainingPct,
@@ -310,6 +361,7 @@ function SummaryPanel({
   t: T;
 }) {
   const history = data.monthlyHistory;
+  const search = searchUsageFigures(data);
   const maxCredits = Math.max(1, ...history.map((h) => h.credits));
   const cur = history[history.length - 1];
   const prev = history[history.length - 2];
@@ -320,34 +372,36 @@ function SummaryPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
         {/* Balance hero */}
         <Card>
           <span className="flex items-center gap-1.5 font-sans text-xs font-medium text-(--el-text-muted)">
             <Coins className="h-4 w-4" aria-hidden />
             {t('summary.balance')}
           </span>
+          {/* THE NUMBER, for every org. `summary.unlimited` stood here behind an
+              `isMeta` ternary and is deleted with it: a word where a figure
+              belongs is the shape this story exists to remove. */}
           <div className="mt-2 font-serif text-[2.125rem] leading-none text-(--el-text)">
-            {data.isMeta ? (
-              t('summary.unlimited')
-            ) : (
-              <>
-                {fmt(data.balance)}
-                <span className="ml-1 font-sans text-sm text-(--el-text-muted)">
-                  {t('summary.creditsUnit')}
-                </span>
-              </>
-            )}
+            {fmt(data.balance)}
+            <span className="ml-1 font-sans text-sm text-(--el-text-muted)">
+              {t('summary.creditsUnit')}
+            </span>
           </div>
-          <div className="mt-2 flex items-center gap-2 font-sans text-xs text-(--el-text-muted)">
+          <div className="mt-2 flex flex-wrap items-center gap-2 font-sans text-xs text-(--el-text-muted)">
             <span>{data.org.name}</span>
-            {data.isMeta ? (
-              <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
-                {t('summary.internal')}
-              </Pill>
-            ) : data.tier ? (
+            {/* A LABEL, never a value. The tier pill is unconditional now, and
+                the classification sits BESIDE it rather than instead of it —
+                the chip says what kind of org this is and changes no figure on
+                the page. */}
+            {data.tier ? (
               <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
                 {t('summary.tier', { tier: data.tier.name })}
+              </Pill>
+            ) : null}
+            {data.internalBilling ? (
+              <Pill className="bg-(--el-tint-sky) text-(--el-text-strong) border-transparent">
+                {t('summary.internalBilling')}
               </Pill>
             ) : null}
           </div>
@@ -378,6 +432,7 @@ function SummaryPanel({
             {t('summary.credits', { n: fmt(data.totalSpend) })}
           </div>
           <p className="mt-1 font-sans text-xs text-(--el-text-muted)">{t('summary.since')}</p>
+          <ScopeTag scope="follows-scope" t={t} />
         </Card>
 
         {/* Spent this month + delta */}
@@ -398,8 +453,88 @@ function SummaryPanel({
                 : t('summary.deltaDown', { pct: Math.abs(delta) })}
             </p>
           ) : null}
+          <ScopeTag scope="follows-scope" t={t} />
         </Card>
+
+        {/* ── Search spend (MOTIR-4558) ────────────────────────────────────────
+            Its own figures beside token spend, because a search has NO MODEL and
+            NO TOKENS: it can be no row in the per-model breakdown and no token
+            count anywhere. `null` here is the META org, which renders none of
+            this — it is never billed. */}
+        {search ? (
+          <>
+            <Card>
+              <span className="flex items-center gap-1.5 font-sans text-xs font-medium text-(--el-text-muted)">
+                <Search className="h-4 w-4" aria-hidden />
+                {t('summary.searchThisMonth')}
+              </span>
+              <div className="mt-2 font-sans text-lg font-semibold text-(--el-text)">
+                {/* ⚠️ AN EM-DASH, NEVER A ZERO. `null` means the boundary did not
+                    report the block; a `0` would tell a customer they were not
+                    charged for search. */}
+                {search.figuresUnavailable ? (
+                  <span
+                    className="font-medium tracking-wide text-(--el-text-secondary)"
+                    aria-label={t('summary.searchUnavailableValue')}
+                  >
+                    &mdash;
+                  </span>
+                ) : (
+                  t('summary.credits', { n: fmt(search.monthSpend ?? 0) })
+                )}
+              </div>
+              {search.figuresUnavailable ? null : (
+                <p className="mt-1 font-sans text-xs text-(--el-text-muted)">
+                  {t('summary.searchAllTime', { n: fmt(search.totalSpend ?? 0) })}
+                </p>
+              )}
+              {/* The ONE figure on this page that does not narrow with the drill. */}
+              <ScopeTag scope="organization" t={t} />
+            </Card>
+
+            <Card>
+              <span className="flex items-center gap-1.5 font-sans text-xs font-medium text-(--el-text-muted)">
+                <Search className="h-4 w-4" aria-hidden />
+                {t('summary.searchAttributed')}
+              </span>
+              <div className="mt-2 font-sans text-lg font-semibold text-(--el-text)">
+                {search.figuresUnavailable ? (
+                  <span
+                    className="font-medium tracking-wide text-(--el-text-secondary)"
+                    aria-label={t('summary.searchUnavailableValue')}
+                  >
+                    &mdash;
+                  </span>
+                ) : (
+                  t('summary.credits', { n: fmt(search.attributedSpend ?? 0) })
+                )}
+              </div>
+              {/* THE REMAINDER. Attributed rows do not sum to the org total,
+                  because searches made outside a run still debit (MOTIR-2778 §4)
+                  — a real, explainable quantity, and an unexplained gap between a
+                  total and its rows is the reconciliation failure this story
+                  exists to end. ⚠️ At ZERO it is not drawn at all: a line reading
+                  "not attributed — 0" invites the reader to look for a problem
+                  that does not exist. */}
+              {search.hasRemainder ? (
+                <p className="mt-1 font-sans text-xs text-(--el-text-secondary)">
+                  {t('summary.searchUnattributed', { n: fmt(search.unattributedSpend ?? 0) })}
+                </p>
+              ) : null}
+              <ScopeTag scope="follows-scope" t={t} />
+            </Card>
+          </>
+        ) : null}
       </div>
+
+      {search?.figuresUnavailable ? (
+        <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+          <p className="font-sans text-xs text-(--el-text-secondary)">
+            {t('summary.searchUnavailable')}
+          </p>
+        </div>
+      ) : null}
 
       {/* Monthly trend */}
       {history.length > 0 ? (
@@ -686,10 +821,18 @@ function RunLogPanel({
   onPage: (page: number) => void;
   t: T;
 }) {
-  const { runs, page, pageSize, total } = data.recentRuns;
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = (page - 1) * pageSize + runs.length;
+  const { page, pageSize, total } = data.recentRuns;
+  // ONE list, not two: splitting search into its own table would put the
+  // reconciliation back on the reader. `activityEntries` merges THIS PAGE of
+  // each source, newest first — it does not join them and it does not fetch
+  // more, so the list stays page-at-a-time exactly as it was.
+  const entries = activityEntries(data);
+  // Sized on BOTH lists. The shipped pager sized on `recentRuns` alone, which
+  // with a second paged list in the same table would make any search page beyond
+  // the run count unreachable. This adds pages; it never loads all.
+  const pageCount = activityPageCount(data);
+  const from = entries.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = (page - 1) * pageSize + entries.length;
   const scopeLabel =
     data.activeProject?.name ??
     data.activeWorkspace?.name ??
@@ -752,39 +895,80 @@ function RunLogPanel({
           </tr>
         </thead>
         <tbody>
-          {runs.map((r) => (
-            <tr key={r.jobId} className="border-(--el-border-soft) border-b last:border-b-0">
-              <td className="py-2 font-sans text-xs text-(--el-text-muted)">
-                {new Date(r.startedAt).toLocaleString(undefined, {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </td>
-              <td className="py-2">
-                <span className="flex flex-wrap items-center gap-1.5">
-                  <Pill
-                    className={`${jobKindTint(r.jobKind)} text-(--el-text-strong) border-transparent`}
-                  >
-                    {jobKindLabel(r.jobKind, t)}
-                  </Pill>
-                  <span className="font-sans text-xs text-(--el-text-muted)">
-                    {r.projectName || t('activity.unknownProject')}
+          {entries.map((e) =>
+            e.kind === 'run' ? (
+              <tr
+                key={`run:${e.run.jobId}`}
+                className="border-(--el-border-soft) border-b last:border-b-0"
+              >
+                <td className="py-2 font-sans text-xs text-(--el-text-muted)">{when(e.at)}</td>
+                <td className="py-2">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Pill
+                      className={`${jobKindTint(e.run.jobKind)} text-(--el-text-strong) border-transparent`}
+                    >
+                      {jobKindLabel(e.run.jobKind, t)}
+                    </Pill>
+                    <span className="font-sans text-xs text-(--el-text-muted)">
+                      {e.run.projectName || t('activity.unknownProject')}
+                    </span>
                   </span>
-                </span>
-              </td>
-              <td className="hidden py-2 sm:table-cell">
-                <ModelChip model={r.model} label={r.model ?? '—'} />
-              </td>
-              <td className="py-2 text-right tabular-nums text-(--el-text-muted)">
-                {fmtTokens(r.inputTokens + r.outputTokens)}
-              </td>
-              <td className="py-2 text-right font-medium tabular-nums text-(--el-text-strong)">
-                {fmt(r.credits)}
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="hidden py-2 sm:table-cell">
+                  <ModelChip model={e.run.model} label={e.run.model ?? '—'} />
+                </td>
+                <td className="py-2 text-right tabular-nums text-(--el-text-muted)">
+                  {fmtTokens(e.run.inputTokens + e.run.outputTokens)}
+                </td>
+                <td className="py-2 text-right font-medium tabular-nums text-(--el-text-strong)">
+                  {fmt(e.run.credits)}
+                </td>
+              </tr>
+            ) : (
+              /* A SEARCH row. ⚠️ The chip is NEUTRAL and carries the search
+                 glyph — deliberately NOT a `--el-tint-*`. A search is not a job
+                 kind, it is a different kind of charge, and all six tint slots on
+                 this surface are already spent (five of them on job kinds), so a
+                 tint would put two meanings on one colour inside one table and
+                 reusing `sky` would make a search read like an `expand` run.
+                 The model and token cells take an EM-DASH, never a `0`: a search
+                 does not use zero tokens, it uses none, and a `0` claims the
+                 first. */
+              <tr
+                key={`search:${e.search.jobId}`}
+                className="border-(--el-border-soft) border-b last:border-b-0"
+              >
+                <td className="py-2 font-sans text-xs text-(--el-text-muted)">{when(e.at)}</td>
+                <td className="py-2">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Pill tone="neutral">
+                      <Search className="mr-1 h-3 w-3" aria-hidden />
+                      {t('activity.webSearch')}
+                    </Pill>
+                  </span>
+                </td>
+                <td className="hidden py-2 sm:table-cell">
+                  <span
+                    className="font-sans text-xs tracking-wider text-(--el-text-secondary)"
+                    aria-label={t('activity.noModel')}
+                  >
+                    &mdash;
+                  </span>
+                </td>
+                <td className="py-2 text-right">
+                  <span
+                    className="font-sans tracking-wider text-(--el-text-secondary)"
+                    aria-label={t('activity.noTokens')}
+                  >
+                    &mdash;
+                  </span>
+                </td>
+                <td className="py-2 text-right font-medium tabular-nums text-(--el-text-strong)">
+                  {fmt(e.search.credits)}
+                </td>
+              </tr>
+            ),
+          )}
         </tbody>
       </table>
     </Card>

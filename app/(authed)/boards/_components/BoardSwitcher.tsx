@@ -645,6 +645,7 @@ function BoardFormModal({
       size="sm"
       title={mode === 'create' ? t('newBoardTitle') : t('renameBoardTitle')}
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = create mode (name, the two board-type tiles, the seed hint), panel 347px */}
       <div className="flex flex-col gap-4">
         <Input
           label={t('boardNameLabel')}

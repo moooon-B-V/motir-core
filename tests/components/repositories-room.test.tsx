@@ -100,9 +100,11 @@ describe('the room — which rows offer a move (design §14, panel 1)', () => {
         'No repositories are connected to this project yet. Connect the code you already have on GitHub, or approve a plan and Motir will create them for you.',
       ),
     ).toBeTruthy();
-    // The empty state now has a way out — the workspace pane that owns connecting.
+    // The empty state has a way out — and after MOTIR-4669 it is the ACCOUNT's
+    // Git pane, not the deleted workspace one: connecting a personal identity is
+    // the member's own act, at the tier that owns it.
     expect(screen.getByRole('link', { name: 'Connect a repository' }).getAttribute('href')).toBe(
-      '/settings/workspace/github',
+      '/settings/account/git',
     );
   });
 });
@@ -285,7 +287,7 @@ describe('the two registries (MOTIR-3126)', () => {
       within(yours)
         .getByRole('link', { name: 'Choose which repositories Motir can see' })
         .getAttribute('href'),
-    ).toBe('/settings/workspace/github');
+    ).toBe('/settings/account/git');
   });
 });
 
@@ -513,7 +515,7 @@ describe('the decision modal (panels 2–3)', () => {
     // MOTIR-1900's own copy and its two actions, verbatim — no second prompt.
     expect(screen.getByText(enMessages.repositorySet.accessLead)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Connect GitHub' }).getAttribute('href')).toBe(
-      '/settings/workspace/github',
+      '/settings/account/git',
     );
     expect(screen.getByRole('button', { name: 'Later' })).toBeTruthy();
     // No picker, and nothing to confirm.
@@ -995,7 +997,14 @@ function room(view: ProjectRepoRoomViewDto) {
     <RepositoriesRoom
       projectKey="ACME"
       view={view}
-      connectHref="/settings/workspace/github"
+      connectHref="/settings/account/git"
+      // Story MOTIR-4669 · MOTIR-4681 — this file's cases predate the org
+      // section, so the room is rendered here as a NON-admin sees it: the add
+      // door is drawn by `tests/projectRepos/addRepositoryPicker.tsx`, which
+      // owns that axis.
+      canAddRepositories={false}
+      organizationName="moooon"
+      organizationInventoryHref="/settings/organization/git"
       nowIso={NOW}
     />
   );

@@ -90,6 +90,7 @@ describe('aiUsageService.getUsage', () => {
     // The run's project id was enriched with the motir-core project NAME.
     expect(res.recentRuns.runs[0]?.projectName).toBe(project.name);
     expect(res.isMeta).toBe(false);
+    expect(res.internalBilling).toBe(false);
     // The org admin's call to motir-ai used the org scope.
     expect(getOrgUsageMock).toHaveBeenCalledWith(
       expect.objectContaining({ scope: 'org', coreOrganizationId: workspace.organizationId }),
@@ -110,6 +111,35 @@ describe('aiUsageService.getUsage', () => {
     });
 
     expect(res.isMeta).toBe(true);
+    // A DIFFERENT flag, and it did not move (MOTIR-4567).
+    expect(res.internalBilling).toBe(false);
+  });
+
+  it('carries `internalBilling` for a classified org — and changes no figure with it (MOTIR-4567)', async () => {
+    const { workspace, owner } = await createTestWorkspace();
+    getOrgUsageMock.mockResolvedValue(rawResponse({}));
+
+    const before = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+
+    await adminDb.organization.update({
+      where: { id: workspace.organizationId },
+      data: { internalBilling: true },
+    });
+    const after = await aiUsageService.getUsage({
+      organizationId: workspace.organizationId,
+      actorUserId: owner.id,
+    });
+
+    expect(before.internalBilling).toBe(false);
+    expect(after.internalBilling).toBe(true);
+    expect(after.isMeta).toBe(false);
+    // Classifying an org changes WHICH KIND of org the dashboard says it is, and
+    // NOT ONE FIGURE on it — the balance, the allotment, the breakdown and the
+    // run log are computed exactly as they are for a paying org.
+    expect({ ...after, internalBilling: false }).toEqual(before);
   });
 
   it('narrows a non-admin member to their own project scope server-side', async () => {

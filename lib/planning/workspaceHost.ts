@@ -1,7 +1,12 @@
 // The ESTABLISHED-project planning-workspace HOST's gate (Subtask MOTIR-1729).
 //
-// `/planning` (`PLANNING_WORKSPACE_PATH`) is where "Plan with AI" now lands. It
-// is an ADDITIONAL surface, NOT a relaxation of the onboarding gates: a project
+// ⚠️ The route this was written for is GONE (MOTIR-4732) and this function is
+// NOT — `PlanningWorkspaceOverlay` calls it, unchanged, because the gate is a
+// pure decision about an actor and a project rather than about a URL. Read
+// "`/planning`" below as "the planning workspace", wherever it is mounted.
+//
+// The workspace is where "Plan with AI" lands. It is an ADDITIONAL surface, NOT
+// a relaxation of the onboarding gates: a project
 // that never finished onboarding is forwarded to `/onboarding`, which keeps
 // owning the first-run fork and the MOTIR-1259 existing-item router (and, past
 // MOTIR-1725, the migrate wizard's hand-off). So the two surfaces split cleanly

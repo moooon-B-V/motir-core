@@ -620,3 +620,121 @@ flip is the whole change.
   the two states it produces, so the row does not have to be redrawn when it lands.
 - **Search across lessons.** Twelve rows do not need one; if a project ever has hundreds, that is its
   own card and its own decision about what is searched.
+
+---
+
+# Amendment — THE DATA-PRACTICE PROMISE (Story MOTIR-3665 · Subtask MOTIR-3666)
+
+**Panel 7.** Two sentences and a link, at the foot of the existing **Planner** card. That is the
+whole amendment. The design gate for **MOTIR-3670**, which builds it.
+
+Panels 0–6 and every earlier primitive, copy string and token role above are MOTIR-914's and
+MOTIR-1739's, unchanged. This amendment adds **no primitive, no CSS and no new grammar**.
+
+## D1. What this replaces, and why the replacement is so much smaller
+
+An earlier revision of this card drew a **five-control data-policy card** — three policy switches, a
+model picker whose excluded rows explained themselves, and an excluded-everything state. It was
+withdrawn before it merged. Recorded here because the reasoning is the useful part and a later
+reader will otherwise re-propose it:
+
+- **The residency switch was false.** It promised EU residency and its enforcement was the gateway's
+  `transfer-basis` group, which holds exactly Anthropic and OpenAI — **both established in the
+  USA**. `motir/residency/residency.go` states in its own package doc that the group's membership is
+  _"both required, neither geographic"_ and that it is _"deliberately not for a region"_.
+- **The control surface belonged to a different KIND of product.** OpenRouter — an LLM router —
+  ships `data_collection` and `zdr` as per-request filters, and handles region as a separate
+  endpoint at enterprise tier. **Linear**, the nearest competitor to _this_ product, answers the same
+  need with a blanket promise, the provider list in its DPA, and a model picker: no data-policy
+  filter of any kind. motir-core's settings page is the second kind of product; motir-gateway is the
+  first, and the filter stayed there (MOTIR-3669).
+
+The full record is MOTIR-3665's re-scope and the planning bug MOTIR-4752.
+
+## D2. Placement — the foot of the Planner card, and the argument is the placement
+
+A `callout` in the **neutral** role (`--el-surface` + `--el-border`), below the model picker, inside
+the card body. Three placements were possible:
+
+| option                                                      | verdict                                                                                                                                                                                                                   |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Foot of the Planner card, under the picker** — **chosen** | ✓ The promise qualifies the act of _choosing a model_, so it belongs where that choice is made. It also reads in the right order: pick the model, then learn what happens to what you send it.                            |
+| Page header, under the title                                | ✗ It would read as a claim about the whole page — including auto-plan and sprint packing, which are cadence settings and not egress. A promise that appears to cover more than it does is worse than one placed narrowly. |
+| Its own card                                                | ✗ A card is where a DECISION lives on this page; every one of the four has a control. A card with nothing to change reads as a control whose switch is missing.                                                           |
+
+## D3. The copy, and what each half is allowed to be
+
+> Neither Motir nor its gateway trains on this project's content. What a provider does with a
+> request once it reaches them is that provider's own published position.
+> **What each provider states →**
+
+**The two sentences are different KINDS of statement and the design depends on the difference.**
+
+- **Sentence one is a COMMITMENT.** It is a fact about moooon B.V.'s own systems, it is ours to
+  make, and it is stated in the same words on the public provider page (`content/legal/model-providers.md`
+  § _What motir-gateway does with your prompt_, motir-marketing). A reader is entitled to hold us
+  to it.
+- **Sentence two is a REPORT.** What a provider does is that provider's published position and
+  cannot be undertaken on its behalf. It must not be written in a voice that makes it sound like a
+  second promise — which is why it ends by handing the reader to the page carrying each provider's
+  own answer, rather than summarising any of them.
+
+**⚠️ NO PROVIDER FACT MAY APPEAR IN THE COMPONENT.** No retention window, no "trains: yes", no
+provider names. Those live in the gateway (`motir/datapolicy`) and on the provider page. A third
+copy in a React component is how this data has already gone stale four times, and MOTIR-3670 carries
+a test asserting the absence.
+
+**⚠️ THE LINK TARGET IS NOT A ROUTE THIS REPOSITORY SERVES.** MOTIR-4101 / MOTIR-4103 moved
+`content/legal/` **and** `app/(public)/legal/` out of motir-core, so a bare `/legal/model-providers`
+resolves against `app.motir.co` and survives only via MOTIR-3884's 301. The mock draws the
+destination; **MOTIR-3670 resolves the href through motir-core's existing public-site origin**
+(MOTIR-3910 set it, MOTIR-3884's sweep names every absolute-URL reader) rather than hard-coding a
+host or introducing a second way to spell it.
+
+## D4. Primitives and tokens — nothing new
+
+| Element                     | Primitive / token                             | Note                                                                                                                                                                    |
+| --------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The promise box             | the `callout` in its **neutral** role         | `--el-surface` + `--el-border` + `--el-text-secondary`, already defined in §9. Not a tint: this is not a gate, a guardrail or a rationale — it is standing information. |
+| Its glyph                   | `Info` (lucide), `--el-icon-*` as §9 gives it | the same glyph the other neutral callouts use                                                                                                                           |
+| The link                    | the asset's own **`.clink`**                  | `--el-text-strong` + underline, **not** `--el-link` — §9's existing rule, kept for its recorded AA reason. Reused rather than restyled.                                 |
+| Everything else on the card | unchanged                                     | the switch, the hint, the picker and the shared footer are MOTIR-914's                                                                                                  |
+
+**No new primitive, no new CSS rule, no new symbol, no new token.** If the implementer finds one is
+needed, that is a new `design/` subtask.
+
+## D5. The non-admin case — NOT drawn, and that is the finding
+
+It is read-only copy. It renders identically for a member who cannot edit the page, so a second
+panel would differ from panel 7 by nothing at all, and drawing one would assert a distinction the
+implementation must then invent. Panel 5's lock banner and disabled controls are unchanged and still
+govern everything above this callout.
+
+## D6. A11y
+
+- The callout is ordinary prose inside the card body — no `role`, no live region. It is present on
+  load and never changes, so announcing it would be noise.
+- The link is an ordinary `<a>` in the document's tab order, with its own visible text ("What each
+  provider states") rather than a bare "learn more" — the destination is legible out of context,
+  which is what a screen-reader link list needs.
+- It carries an arrow glyph that is decorative; the link text alone names the destination.
+
+## D7. i18n
+
+New copy lands under `settings.aiPlanning.*` with **zh parity in the same PR** (the catalog gate).
+The two sentences are **separate keys**: they are different kinds of statement (§D3), a translator
+needs to know which is a commitment and which is a report, and a future revision to one must not
+silently re-open the other.
+
+## D8. Viewport
+
+**One width, 1200 CSS px** — the width this asset has always been exported at. Unchanged, and this
+amendment introduces no second viewport.
+
+## D9. Out of scope for this asset — stated, not implied
+
+- **Any data-policy CONTROL.** Retired with the re-scope; the filter is the gateway's and is
+  reached per request (MOTIR-3669), not from this page.
+- **The provider table itself** — `motir-marketing/design/legal/` owns it. This asset links to it and
+  never restates it.
+- **The GA default provider** — MOTIR-4744.

@@ -49,6 +49,21 @@ export const EXEMPT_TOOLS = {
     'caller learns the inline note hit the 64 KiB cap and that the complete text lives in the ' +
     '`note_file` asset, which is the difference between a rendering bound and data loss ' +
     '(MOTIR-3782).',
+  create_acceptance_upload:
+    'Returns an UPLOAD GRANT — `{ workItemKey, video: { pathname, uploadUrl, contentType, ' +
+    'maxBytes }, trace }`. A presigned PUT URL and the key it is bound to is not a ' +
+    'representation of any resource at all: it is a capability that expires in minutes, and ' +
+    '`/api/v1` publishes no acceptance-evidence component to derive from either — the receipt ' +
+    'is reached over the CI-authed `/api/work-items/[id]/acceptance-evidence` routes and read ' +
+    'by the panel server-side. By architecture rather than by omission (MOTIR-4704).',
+  publish_acceptance_result:
+    'Returns the published RECEIPT\u2019s confirmation \u2014 `{ id, workItemKey, status, ' +
+    'chapterCount, sizeBytes, createdAt }`. Same boundary as its design twin above: no v1 ' +
+    'operation exposes acceptance evidence, so `V1_RESOURCE_COMPONENTS` has nothing to derive ' +
+    'from. \u26a0\ufe0f `status` is load-bearing rather than decorative \u2014 a receipt lands ' +
+    '`pending` and only a person moves it to `approved`, so a caller that reads this field ' +
+    'learns the publish SUCCEEDED and the story is still not accepted, which is the whole ' +
+    'shape of the gate (MOTIR-4704).',
   link_work_items:
     'Returns the created EDGE ROW (`WorkItemLinkDto` — `id`, `fromId`, `toId`, `kind`, ' +
     '`createdById`). v1 has a link-create endpoint, but its 201 body is an inline ' +

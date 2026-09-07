@@ -2462,6 +2462,136 @@
         a plan waits. Nothing paused renders when auto-plan is off, or when no plan is undecided:
         that is the left-hand card, unchanged from panel 2.
       </p>
+
+      <!-- ══════════ PANEL 7 — THE DATA-PRACTICE PROMISE (MOTIR-3666) ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">7</span>
+          <span class="t">The data-practice promise, where the model is chosen</span>
+          <span class="d"
+            >Two sentences and a link on the EXISTING Planner card · no new control</span
+          >
+        </div>
+        <div class="pad split">
+          <div class="col" style="flex: 1; min-width: 380px">
+            <span class="cap">Planner — with the promise beneath the picker</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                ></span>
+                <div>
+                  <h3>Planner</h3>
+                  <p class="hsub">
+                    The model that drafts plans, sprints and explanations for this project.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="srow">
+                  <span class="sw on" role="switch" aria-checked="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Draft a why for each item</span>
+                    <p class="hint">
+                      Every proposed work item gets a short "why this matters" you can read without
+                      opening the code.
+                    </p>
+                  </span>
+                </div>
+                <div class="dep" style="margin-left: 0; padding-left: 0; border-left: 0">
+                  <span class="lbl">Planner model</span>
+                  <p class="hint">
+                    Leave this on Default unless you have a reason to pin one. Usage is billed to
+                    this workspace either way.
+                  </p>
+                  <div class="cbx">
+                    <div class="trigger" role="combobox" aria-expanded="false">
+                      <span>Thorough</span>
+                      <span class="sec">deepseek-v4-pro</span>
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevrons" /></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="callout">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  <span
+                    >Neither Motir nor its gateway trains on this project's content. What a provider
+                    does with a request once it reaches them is that provider's own published
+                    position.
+                    <a class="clink" href="/legal/model-providers"
+                      >What each provider states
+                      <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg
+                    ></a>
+                  </span>
+                </div>
+              </div>
+              <div class="card-foot">
+                <span class="dirty">Unsaved changes</span>
+                <button class="btn btn-secondary">Cancel</button>
+                <button class="btn btn-primary">Save changes</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="col" style="flex: 1; min-width: 340px">
+            <span class="cap">What the promise may and may not claim</span>
+            <div class="callout">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                ><strong>The first sentence is a COMMITMENT and Motir's own to make.</strong>
+                Neither Motir nor its gateway trains on the content — that is a fact about our own
+                systems, it is stated in the same words on the public provider page, and it is the
+                half a reader is entitled to hold us to.</span
+              >
+            </div>
+            <div class="callout">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                ><strong>The second is a REPORT, and it must not read as a promise.</strong> What a
+                provider does is that provider's published position, not something Motir can
+                undertake on its behalf — which is exactly why the sentence hands the reader to the
+                page that carries each provider's own answer rather than summarising it here.</span
+              >
+            </div>
+            <div class="callout">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                ><strong>No provider fact appears in this component.</strong> No retention window,
+                no "trains: yes", no provider names. Those live in the gateway
+                (<code>motir/datapolicy</code>) and on the provider page; a third copy in a React
+                component is how this data has already gone stale four times.</span
+              >
+            </div>
+            <div class="callout">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                ><strong>No non-admin panel is drawn, deliberately.</strong> This is read-only copy
+                — it renders identically for a member who cannot edit the page, so a second panel
+                would differ from this one by nothing. The lock banner and the disabled controls
+                above it are panel 5's and are unchanged.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 7 — the whole amendment.</strong> A <code>callout</code> in the neutral role
+        at the foot of the EXISTING Planner card body, below the model picker: no new card, no new
+        control, no new primitive and no new CSS. The link reuses the asset's own
+        <code>.clink</code> grammar, which takes <code>--el-text-strong</code> + an underline rather
+        than <code>--el-link</code> — a rule §9 already carries, for the AA reason recorded there.
+        <strong>Placement is the argument:</strong> the promise sits where the model is chosen,
+        because choosing the model is the act it qualifies. Higher up the page it would read as a
+        claim about auto-plan; on its own card it would read as a control.
+        <strong
+          >⚠️ The link target is motir-marketing's since MOTIR-4103, not a route this repository
+          serves</strong
+        >
+        — the mock draws the destination, and §D3 records that the implementing card resolves the
+        href through motir-core's existing public-site origin rather than hard-coding a host.
+      </p>
     </div>
   </body>
 </html>

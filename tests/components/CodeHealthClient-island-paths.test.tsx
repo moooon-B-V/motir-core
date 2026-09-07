@@ -5,6 +5,20 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { CodeHealthClient } from '@/app/(authed)/code-health/_components/CodeHealthClient';
 import type { CodeAuditFindingDTO, CodeAuditSurfaceDTO } from '@/lib/dto/codeHealth';
 
+// ⚠️ THE PLANNING DOORS READ THE ADDRESS (MOTIR-4730). Every surface that mounts
+// one — and this tree mounts one — now calls `usePathname` / `useSearchParams`,
+// because the workspace opens OVER the page you are on rather than navigating to
+// `/planning`. Outside a router context the real hooks return `null` and the
+// door throws on its first render, so the mock is no longer optional here.
+const nav = vi.hoisted(() => ({
+  pathname: '/dashboard',
+  searchParams: new URLSearchParams(),
+}));
+vi.mock('next/navigation', () => ({
+  usePathname: () => nav.pathname,
+  useSearchParams: () => nav.searchParams,
+}));
+
 // The /code-health island's remaining paths — the ones the per-repo-read and
 // resume suites do not drive. They are gathered here because MOTIR-2223 puts the
 // run's lifecycle in this file for the first time, and the per-file coverage

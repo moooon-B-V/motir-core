@@ -413,6 +413,12 @@ const REGISTRY: Record<string, RegistryEntry> = {
   comment: commentEntry,
   deleted: deletedEntry,
   // -- in-flight 5.2 / 5.4 collection shapes (registered ahead of merge) ----
+  // A card's STEPS. Two writers, ONE shape: `workItemTodosService` for a row a
+  // person adds by hand, and `plansService.buildAddDiff` for the rows approval
+  // materializes from a proposal (Story MOTIR-3810 · MOTIR-4618). Both write
+  // `{ added: [{ id, text }] }`, which is what makes the history read the same
+  // whichever door the rows came through.
+  todos: collectionField(),
   attachments: collectionField(),
   labels: collectionField(),
   components: collectionField(),

@@ -204,6 +204,7 @@ export function WidgetConfigModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={t(`addTitle_${type}`)} size="sm">
+      {/* modal-scroll-container: measured 1280x700, tallest = created_vs_resolved editor on a saved-filter source (project + filter pickers, period, days back, cumulative), panel 527px */}
       <div className="flex flex-col gap-4">
         <DataSourceField
           projects={projects}

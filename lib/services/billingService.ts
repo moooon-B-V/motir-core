@@ -125,9 +125,15 @@ export const billingService = {
       organizationId: input.organizationId,
       access: { role: access.role, canManageBilling: isOrgOwnerRole(access.role) },
       isMeta: org?.isMeta ?? false,
+      internalBilling: org?.internalBilling ?? false,
       motir: { scaledTrackerSubscription, aiIncludedSeat: org?.aiIncludedSeat ?? false },
       motirAi: { tier: usage.tier, balance: usage.balance, subscription },
       ci,
+      // The FOURTH billed line, off the SAME `getOrgUsage` read `motirAi` above
+      // uses — no second request. `?? null` is load-bearing: an absent block is
+      // UNAVAILABLE, and zeroing it here would render "you spent nothing on
+      // search" on a boundary that never answered.
+      search: usage.search ?? null,
       catalog: BILLING_CATALOG,
     };
   },

@@ -100,3 +100,69 @@ export interface PlatformUserPageDTO {
    */
   actions: PlatformAuditLogDTO[];
 }
+
+/**
+ * One organization in the operator LOOKUP's result list (MOTIR-4565, design
+ * `platform-admin/design-notes.md` Panel 10).
+ *
+ * Thin for the same reason `PlatformUserSummaryDTO` is: a lookup result is a row
+ * somebody is about to click, and every field on it is readable without opening
+ * the tenant — which is a cross-tenant read, and therefore something to hand out
+ * by the spoonful.
+ *
+ * ⚠️ IT CARRIES BOTH CLASSIFICATION FLAGS, SEPARATELY. The design draws two
+ * chips with two labels, and a single `internal: boolean` here would make that
+ * impossible to render honestly — it is the conflation
+ * `docs/decisions/internal-billing-classification.md` §1 refuses, expressed as a
+ * DTO.
+ */
+export interface PlatformOrganizationSummaryDTO {
+  id: string;
+  name: string;
+  slug: string;
+  /** ISO-8601 — when the organization was created. */
+  createdAt: string;
+  /** Motir's own COGS: caps lifted, AI paywall off, excluded from revenue. */
+  isMeta: boolean;
+  /** Charged exactly like a customer, then made whole by a paired offset. */
+  internalBilling: boolean;
+}
+
+/**
+ * One organization as the operator ORG PAGE renders it (design Panel 11).
+ *
+ * ⚠️ IT CARRIES NO USAGE, NO RECENT JOBS AND NO MEMBERS, and that absence is an
+ * ALLOCATION rather than an omission: the design's own allocation table gives
+ * those three panels to MOTIR-733, and this story draws them as reserved
+ * regions. The workspace and project levels below an org are that card's
+ * entirely.
+ *
+ * The paid-plan state it does carry is the two columns motir-core already holds
+ * (`aiIncludedSeat` and the scaled-tracker subscription's presence) — never a
+ * cross-service read, which is Story 10.1's own boundary.
+ */
+export interface PlatformOrganizationDetailDTO extends PlatformOrganizationSummaryDTO {
+  /** Whether the org holds a paid Motir AI plan (the bundled seat). */
+  aiIncludedSeat: boolean;
+  /** Whether a scaled-tracker (per-seat PM) subscription is on record. */
+  hasScaledTrackerSubscription: boolean;
+}
+
+/**
+ * The operator ORG PAGE's whole payload (MOTIR-4566 / MOTIR-4568, design
+ * Panels 11 and 12).
+ *
+ * One shape rather than two calls, because the page's two halves are ONE audited
+ * read: the organization, and every operator write on it. See
+ * `platformBillingClassificationService.getOrganizationPage` for why that matters
+ * to the trail — two calls would write two audit rows per page view.
+ */
+export interface PlatformOrganizationPageDTO {
+  organization: PlatformOrganizationDetailDTO;
+  /**
+   * Every operator WRITE on this organization, newest first. Reads are filtered
+   * out by the service — this is the log the design calls *"every operator write
+   * on this organization"*, and a page view is not one.
+   */
+  actions: PlatformAuditLogDTO[];
+}

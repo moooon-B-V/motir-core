@@ -12,7 +12,7 @@ import { AdminShell } from './_components/AdminShell';
  * The platform-admin route group — `docs/decisions/platform-staff-auth.md` §4.
  *
  * A sibling of `(authed)` / `(auth)` / `(public)` / `(onboarding)` /
- * `(planning)`, inside motir-core, because the console reuses the shipped auth,
+ * `(onboarding)`, inside motir-core, because the console reuses the shipped auth,
  * the app shell, the design system and the `--el-*` / shape tokens (design
  * `console.mock.html` composes them with no bespoke admin CSS). It is operator
  * UI over motir-core's own data and holds no metering, so nothing about it
@@ -88,7 +88,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         footerStaff: t('shell.footerStaff'),
         exitToApp: t('shell.exitToApp'),
         soonUsage: t('nav.soonUsage'),
-        soonTenants: t('nav.soonTenants'),
         soonGovernance: t('nav.soonGovernance'),
       }}
     >

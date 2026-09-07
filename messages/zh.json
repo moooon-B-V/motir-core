@@ -190,6 +190,7 @@
     "event_appended": "{n, plural, other {追加了 # 条提案}}",
     "event_edited": "{n, plural, other {编辑了 # 条提案}}",
     "event_withdrawn": "{n, plural, other {撤回了 # 条提案}}",
+    "event_brief_edited": "已编辑计划标题和摘要",
     "event_removed": "{n, plural, other {移除了 # 条提案}}",
     "eventActor": "{label} · {actor}",
     "eventSpan": "{from} – {to}",
@@ -291,6 +292,7 @@
     "rowOpenAria": "打开 {name}",
     "openTargetAsItStands": "查看工作项的当前状态",
     "railChangedMark": "将变更",
+    "proposedTodosSubtitle": "这个工作项提议的步骤",
     "railChangeCount": "此计划将变更它可设置的 {m} 个字段中的 {n} 个。",
     "railChangeNone": "此计划不变更这些字段，只变更描述与说明。",
     "railAddAll": "此处的每个值都是批准后将创建的内容。",
@@ -596,6 +598,12 @@
     }
   },
   "errors": {
+    "notFound": {
+      "title": "找不到该页面",
+      "description": "地址可能有误，或者它指向的内容已被删除——也可能被移到了你无权访问的位置。",
+      "workItemsAction": "前往工作项",
+      "homeAction": "前往 Motir"
+    },
     "actions": {
       "pickProjectFirst": "请先选择一个项目。",
       "unknownRelationship": "未知的关系类型。",
@@ -2579,7 +2587,8 @@
         "appearance": "外观",
         "twoFactor": "两步验证",
         "apiTokens": "令牌",
-        "data": "数据与隐私"
+        "data": "数据与隐私",
+        "gitAccounts": "Git 账户"
       },
       "data": {
         "title": "数据与隐私",
@@ -3282,7 +3291,10 @@
         "modelDefault": "默认",
         "modelDefaultSecondary": "推荐",
         "modelThorough": "深入",
-        "modelFast": "快速"
+        "modelFast": "快速",
+        "dataPracticeCommitment": "Motir 及其网关都不会使用本项目的内容训练模型。",
+        "dataPracticeReport": "请求到达服务商之后，该服务商如何处理，取决于其自行公布的政策。",
+        "dataPracticeLink": "查看各服务商的公开说明"
       },
       "lessonCapture": {
         "title": "规划失误",
@@ -3537,6 +3549,44 @@
         "components": "模块由项目管理员管理。如需新增或修改，请联系管理员。",
         "ai-planning": "本项目的 AI 规划——节奏与规划模型——由项目管理员配置。如需调整，请联系管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。"
+      }
+    },
+    "organization": {
+      "eyebrow": "组织设置",
+      "back": "返回 Motir",
+      "nav": {
+        "group": {
+          "general": "通用",
+          "access": "访问与权限",
+          "billing": "账单"
+        },
+        "organization": "组织",
+        "git": "Git",
+        "members": "成员",
+        "security": "安全",
+        "usage": "用量与费用",
+        "billing": "账单与套餐"
+      }
+    },
+    "gitAccounts": {
+      "heading": "Git 账户",
+      "subtitle": "你用来署名工作的 Git 账户。它属于你，而非你的组织——没有人能代你连接它。",
+      "host": {
+        "github": "GitHub"
+      },
+      "state": {
+        "connected": "已连接"
+      },
+      "connectedOn": "连接于 {date}",
+      "connect": "连接 GitHub",
+      "disconnect": "断开连接",
+      "empty": {
+        "title": "尚未连接 Git 账户",
+        "description": "连接后，Motir 可以把你邀请到项目所使用的仓库，并为你的工作署名。它只读取你的公开资料——不会获得任何代码的访问权限。"
+      },
+      "noInstallation": {
+        "title": "你的账户已连接，你的组织尚未连接。",
+        "body": "这是一个正常状态，而不是问题——两者相互独立。将组织连接到 Git 平台是组织管理员的操作，位于「设置 → 组织 → Git」。"
       }
     }
   },
@@ -5303,8 +5353,15 @@
       "monthlySpendSub": "全组织每月扣减的额度。最近 6 个月。",
       "creditsChip": "额度",
       "creditsUnit": "额度",
-      "unlimited": "无限制",
-      "internal": "内部"
+      "searchThisMonth": "本月搜索花费",
+      "searchAllTime": "累计 {n} 积分",
+      "searchAttributed": "其中可归因",
+      "searchUnattributed": "{n} 积分未归属到任何运行",
+      "searchUnavailable": "暂时无法获取搜索数据。你的搜索仍在正常计费——这是显示问题，不是计费问题。",
+      "searchUnavailableValue": "暂无数据",
+      "scopeFollows": "随当前范围变化",
+      "scopeOrg": "整个组织",
+      "internalBilling": "内部计费"
     },
     "affordance": "额度是内部用量配额 —— 不是货币，这也不是账单。每次规划运行按其消耗的 token 扣减额度。购买更多额度与变更套餐将在后续版本随计费功能推出。",
     "drill": {
@@ -5351,7 +5408,10 @@
       "pagerPage": "第 {n} / {m} 页",
       "prev": "上一页",
       "next": "下一页",
-      "unknownProject": "未知项目"
+      "unknownProject": "未知项目",
+      "webSearch": "网页搜索",
+      "noModel": "无模型",
+      "noTokens": "无 token"
     },
     "member": {
       "readOnly": "只读",
@@ -5480,14 +5540,21 @@
       "optionMoveCta": "迁移仓库",
       "viewUsage": "查看用量与费用"
     },
-    "internal": {
-      "badge": "内部",
-      "title": "内部组织",
-      "tagline": "Motir 自有工作区 —— 无限制，永不计费。",
-      "subtitle": "{org} 使用 Motir 内部方案。Motir 与 Motir AI 的所有功能均无限制，也无需计费 —— 本组织已豁免计费。",
-      "motirLine": "Motir · 无限制",
-      "aiLine": "Motir AI · 无限制",
-      "usageNote": "AI 用量仍会记录，便于在「用量与费用」页面查看内部成本。"
+    "search": {
+      "name": "Motir 搜索",
+      "tagline": "规划运行为获取最新资料而发起的网页搜索。",
+      "perUse": "按次计费",
+      "monthLabel": "本月已用",
+      "totalLabel": "累计已用",
+      "creditsUnit": "积分",
+      "rate": "每次网页搜索从你的 Motir AI 余额中扣除 1 积分。没有包含额度，也没有可用尽的配额——只有运行实际使用时才计费。",
+      "zeroTitle": "本月没有产生搜索费用。",
+      "zeroBody": "只有规划运行实际使用搜索时才会计费，因此这里没有数据表示没有使用过，而不是数据不可用。",
+      "overdraftTitle": "余额用尽后搜索仍可继续使用。",
+      "overdraftBody": "积分耗尽的组织将进入透支状态，搜索不会被拒绝。拒绝仍然发生在规划轮次的关卡处，与原先一致。",
+      "unavailable": "暂时无法获取搜索数据。你的搜索仍在正常计费——这是显示问题，不是计费问题。",
+      "unavailableValue": "暂无数据",
+      "viewRuns": "查看是哪些运行产生的"
     },
     "payment": {
       "title": "支付与发票",
@@ -5643,6 +5710,10 @@
         "body": "在 {org} 组织升级套餐前，规划将保持暂停。只有组织所有者可以变更套餐或购买额度。",
         "askOwner": "请联系所有者升级"
       }
+    },
+    "internalBilling": {
+      "badge": "内部计费",
+      "note": "该组织与客户完全一样计费，随后被补偿——下方每个数字都是真实的，余额净额为零。"
     }
   },
   "draftWithAi": {
@@ -6032,7 +6103,9 @@
       },
       "installLink": "安装 Motir GitHub App",
       "cta": "连接 GitHub",
-      "foot": "你将被带到 GitHub 进行授权，然后选择仓库。"
+      "foot": "你将被带到 GitHub 进行授权，然后选择仓库。",
+      "noInstallHref": "此部署不支持安装 Motir GitHub App。",
+      "orgFoot": "你将前往 GitHub，选择本组织授予 Motir 的仓库。"
     },
     "identity": {
       "connectedAs": "GitHub 身份 · 已连接为 {name}",
@@ -6101,6 +6174,52 @@
       },
       "repositoryNotCreated": "仓库尚未创建",
       "repositorySkipped": "此项目已跳过"
+    },
+    "orgDisconnect": {
+      "title": "将 {repo} 从组织中断开连接",
+      "gitlabTitle": "确定将 {repo} 从组织中断开连接？",
+      "lead": "Motir 可读取哪些仓库由 GitHub App 自己的页面决定，因此移除操作在那里完成。以下是它将产生的影响。",
+      "gitlabLead": "它将从 {org} 的每个项目中移除，而不仅仅是你当前所在的项目。",
+      "projects": "{count, plural, =0 {目前没有项目使用该仓库。} other {# 个项目将失去该仓库。}}",
+      "codeIndex": "Motir 为它构建的代码索引会保留 {days} 天。在此之前重新添加该仓库即可取消移除；超过之后再添加则需要完整重新索引。",
+      "continueOnGithub": "前往 GitHub 继续",
+      "confirm": "断开连接",
+      "cancel": "取消",
+      "happensOnGithub": "在 GitHub 上完成",
+      "happensHere": "在此处完成"
+    },
+    "projectRemove": {
+      "title": "确定将 {repo} 从 {project} 中移除？",
+      "body": "仅从 {project} 中移除。它仍与你的组织保持连接，其他项目继续保留，代码索引不受影响。",
+      "confirm": "移除"
+    },
+    "inventory": {
+      "title": "仓库",
+      "caption": "连接到该组织的全部仓库。任何项目都可以挑选使用；索引只构建一次并共享。",
+      "foot": "没有项目使用的仓库仍保持连接与索引——下一个添加它的项目无需付出任何代价。",
+      "empty": "尚未连接任何仓库。请在某个项目的「仓库」设置中添加。",
+      "provider": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      },
+      "index": {
+        "current": "最新",
+        "stale": "已过期",
+        "indexing": "正在建立索引…",
+        "never": "从未建立索引"
+      },
+      "usedBy": "{count, plural, other {# 个项目在使用}}",
+      "usedByNone": "暂无项目使用",
+      "usedByExpanded": "正在使用该仓库的项目"
+    },
+    "organization": {
+      "subtitle": "将 {org} 与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
+      "connectionTitle": "组织连接",
+      "connectedBy": "由 @{login} 于 {date} 安装",
+      "notConnected": "{org} 尚未连接任何 Git 平台。",
+      "adminOnly": "只有 {org} 的所有者和管理员可以连接或断开 Git 平台。",
+      "subtitleGeneric": "将你的组织与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
+      "identityAtAccount": "在「设置 → 账户 → Git 账户」中连接你自己的账户"
     }
   },
   "aiPlanning": {
@@ -6173,9 +6292,14 @@
     "noProjectTitle": "未选择项目",
     "noProjectDescription": "从切换器中选择或创建一个项目，即可用 Motir AI 规划。",
     "canvasAria": "{project} 的计划",
-    "backToRoadmap": "返回路线图",
-    "backToItem": "返回 {item}",
-    "backToCodeHealth": "返回代码健康度",
+    "close": "关闭",
+    "closeGuard": {
+      "title": "关闭前先添加这 {count} 个提议的工作项？",
+      "body": "在你确认之前不会保存任何内容。现在关闭将丢弃它们。",
+      "discard": "丢弃 {count} 个提议",
+      "keepPlanning": "继续规划",
+      "confirm": "确认并添加"
+    },
     "escKey": "Esc",
     "emptyCanvasTitle": "画布上还没有内容",
     "emptyCanvasDescription": "该项目还没有可绘制的工作项。可以手动添加一个，或从路线图开始规划第一版计划。",
@@ -7147,7 +7271,6 @@
       "monitoring": "监控",
       "governance": "治理",
       "soonUsage": "10.1",
-      "soonTenants": "10.1",
       "soonGovernance": "10.3"
     },
     "topBar": {
@@ -7251,6 +7374,10 @@
             "password_reset_sent": "已发送密码重置",
             "suspend": "已停用",
             "unsuspend": "已解除停用"
+          },
+          "org": {
+            "internal_billing_set": "已标记为内部计费",
+            "internal_billing_unset": "已移除内部计费标记"
           }
         }
       }
@@ -7353,6 +7480,80 @@
         "colLastFired": "上次触发",
         "colExpected": "应触发于",
         "never": "从未"
+      }
+    },
+    "orgs": {
+      "breadcrumb": "平台 · 租户",
+      "breadcrumbAria": "面包屑导航",
+      "crumbPlatform": "平台",
+      "crumbTenants": "租户",
+      "title": "组织",
+      "subtitle": "按名称或标识查找组织。打开任一组织都会记录一次跨租户读取。",
+      "searchLabel": "名称或标识",
+      "searchPlaceholder": "moooon、acme、northwind…",
+      "searchSubmit": "搜索",
+      "tooShort": "请至少输入 {n} 个字符。",
+      "idleTitle": "搜索组织",
+      "idleDescription": "在上方输入名称或标识。最多显示 {n} 条；你打开的每一条都会记入审计日志。",
+      "noneTitle": "没有匹配“{query}”的组织",
+      "noneDescription": "请检查拼写，或改用标识搜索。若某个组织确实存在却未显示，那是缺陷——此查找会读取全部租户，而不只是你所属的那些。",
+      "resultsTitle": "结果",
+      "resultsCount": "{n} 个组织",
+      "capped": "仅显示前 {n} 条匹配。请缩小查询范围以查看其余结果。",
+      "auditBanner": "你正以平台staff身份查看 {name}。此次跨租户读取已记入审计日志（操作者 {operator}）。",
+      "createdAt": "创建于 {at}",
+      "paidAiPlan": "付费 AI 套餐",
+      "scaledTracker": "按席位订阅",
+      "internalBillingNote": "该组织与客户完全一样计费，随后被补偿：每一笔扣费都会照常发生，并在同一事务中配上一笔等额抵扣，因此余额净额为零，而两侧条目都保持可见。",
+      "chip": {
+        "isMeta": "isMeta",
+        "internalBilling": "internalBilling"
+      },
+      "pending": {
+        "usageTitle": "用量与成本",
+        "usageEmptyTitle": "尚未构建",
+        "membersTitle": "成员",
+        "membersEmptyTitle": "尚未构建",
+        "jobsTitle": "最近作业",
+        "jobsEmptyTitle": "尚未构建",
+        "broughtBy": "该面板属于 {owner}。此处画作预留区域而非占位数字——写个 0 会看起来像一个答案。"
+      },
+      "action": {
+        "classify": "标记为内部计费",
+        "unclassify": "移除内部计费标记",
+        "classified": "已标记为内部计费",
+        "unclassified": "已移除内部计费标记",
+        "failedTitle": "未能更新计费分类",
+        "readOnlyNotice": "更改组织的计费分类需要 superadmin 权限。你的账号可以查看本页，但不能执行该操作。",
+        "error": {
+          "REASON_REQUIRED": "必须填写原因——它是日后让这条记录可读的关键。",
+          "NOT_FOUND": "该组织已不存在。",
+          "ALREADY_IN_STATE": "未做更改——该组织已处于此状态。可能另一位操作者刚刚改过；请刷新查看当前状态。",
+          "NOT_PERMITTED": "你的账号无法更改计费分类。",
+          "FAILED": "更改未生效，也未记录任何内容。请重试。"
+        }
+      },
+      "confirm": {
+        "reasonLabel": "原因——必填，将写入审计日志",
+        "reasonHint": "日后任何查看该组织的操作者都会看到。仅写“内部”说明不了任何事。",
+        "cancel": "取消",
+        "classify": {
+          "title": "将 {name} 标记为内部计费？",
+          "body": "该组织产生的每一笔 AI 扣费都会在同一事务中配上一笔等额抵扣——因此与客户完全一样计费，余额净额为零，两侧条目都保持可见。此操作不改变任何费率、不解除任何上限、不涉及任何 Stripe 对象，其他操作者也可以撤销。",
+          "confirm": "标记为内部"
+        },
+        "unclassify": {
+          "title": "移除 {name} 的内部计费标记？",
+          "body": "自此之后的新扣费不再被抵扣，该组织的余额将像任何客户一样下降。已写入的账本条目全部原样保留——该标记决定接下来发生什么，而不是已经发生过什么。",
+          "confirm": "移除标记"
+        }
+      },
+      "log": {
+        "title": "该组织上的平台操作",
+        "scope": "本组织",
+        "emptyTitle": "尚无操作者写入",
+        "emptyDescription": "每次分类更改都会出现在这里，包含操作人与原因。读取不属于操作，不会列出。",
+        "noReason": "未记录原因"
       }
     }
   },
@@ -7559,6 +7760,39 @@
       "materialized": "已落地 {count, plural, other {# 条提案}}",
       "bugFiled": "已提交缺陷",
       "open": "打开 →"
+    }
+  },
+  "repositoryPicker": {
+    "add": "添加仓库",
+    "title": "添加仓库",
+    "subtitle": "从组织已连接的仓库中挑选一个，或连接一个新的。",
+    "searchLabel": "搜索仓库",
+    "searchPlaceholder": "按名称筛选…",
+    "loading": "正在加载组织的仓库…",
+    "error": "无法加载组织的仓库，请重试。",
+    "noMatch": "没有匹配的仓库。",
+    "alreadyIndexed": "已建立索引 · 共享",
+    "alreadyInProject": "已在此项目中",
+    "connectNew": "在 GitHub 上连接新仓库",
+    "noInstallHref": "此部署暂不支持连接新仓库。",
+    "firstTimeLead": "连接第一个仓库后，它会同时进入 {org} 和这个项目。",
+    "segment": {
+      "organization": "在 {org} 中 · 已连接",
+      "connect": "连接新仓库"
+    },
+    "section": {
+      "heading": "来自你的组织",
+      "hint": "{org} 已连接、且这个项目正在使用的仓库。挑选它们不会重新建立索引。",
+      "foot": "这个项目需要时可随时添加。",
+      "footNoPermission": "只有组织的所有者和管理员可以添加仓库。请联系他们，或在「设置 → 组织 → Git」中添加。",
+      "seeAll": "查看 {org} 的全部仓库"
+    },
+    "remove": {
+      "action": "从此项目中移除",
+      "title": "确定从此项目中移除 {repo}？",
+      "body": "它仍与 {org} 保持连接，其他项目继续保留，代码索引不受影响。你可以随时重新添加，且不会重新建立索引。",
+      "confirm": "移除",
+      "cancel": "取消"
     }
   }
 }

@@ -184,6 +184,11 @@
         --el-link-pressed: var(--color-link-pressed);
         --el-danger: var(--color-destructive);
         --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-info: var(--color-info);
@@ -660,10 +665,18 @@
       .listbox .opt.active {
         background: var(--el-option-active-bg);
       }
+      /* ⚠️ --el-text-secondary, not --el-text-muted (MOTIR-4674). This rule was
+         carried over from takeover.mock.html and never exercised in this asset;
+         the picker is its first use, and muted is 4.12:1 on
+         --el-option-active-bg — the surface an ACTIVE option paints. */
       .listbox .opt .sub {
         font-size: 12px;
-        color: var(--el-text-muted);
+        color: var(--el-text-secondary);
       }
+      /* ⚠️ --el-text-eyebrow, not --el-text-faint (MOTIR-4674). Same story as
+         `.opt .sub` above — carried over, never exercised, and the picker's two
+         SEGMENT headings are the information the whole panel turns on, so they
+         are not decoration. Faint clears AA on no surface at all. */
       .listbox .grp {
         padding: 8px var(--spacing-control-x) 4px;
         font-family: ui-monospace, Menlo, monospace;
@@ -671,7 +684,7 @@
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: var(--el-text-faint);
+        color: var(--el-text-eyebrow);
       }
       /* Modal */
       .modal {
@@ -1365,6 +1378,92 @@
       .connected .repo .nm {
         font-weight: 500;
         color: var(--el-text);
+      }
+      /* ══ AMENDMENT MOTIR-4674 — the room's DOOR, its picker, and the
+            project-side removal (Panels 5–9) ══ */
+      /* the pane head becomes a two-slot row: the title block, and the door */
+      .pane-head-row {
+        display: flex;
+        /* .pane-head is a COLUMN — this override has to say so explicitly, or
+           the door stacks under the summary line instead of sitting beside the
+           title. */
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .pane-head-row > div {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .pane-head-row > div {
+        min-width: 0;
+      }
+      .pane-head-row > .btn {
+        flex: none;
+      }
+      /* the connected row's ONE action — a quiet danger affordance, NOT a
+         filled destructive button: it unlinks one row and nothing else, so its
+         weight has to read lighter than the organisation's own removal.
+         --el-danger-on-surface, never --el-danger-text (that ink is legal only
+         ON a danger FILL) and never raw --el-danger, which is under AA on the
+         dark page in three palettes. */
+      .quiet-danger {
+        flex: none;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-danger-on-surface);
+        cursor: pointer;
+      }
+      /* the picker's option row: the repo name, then its state */
+      .listbox .opt .repo {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .listbox .opt .repo .owner {
+        color: var(--el-text-secondary);
+      }
+      .listbox .opt .repo .nm {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      /* `already indexed · shared` — the state that carries the whole promise
+         of the tier move. A neutral chip, because it is a FACT about the
+         repository rather than a step in a flow. */
+      .listbox .opt .shared {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-chip-border);
+        background: var(--el-chip-bg);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .listbox .opt .shared svg {
+        color: var(--el-icon-muted);
+      }
+      /* a repository this project already has: listed, legible, unpickable.
+         `opacity` is the shipped disabled treatment and 1.4.3 exempts a
+         disabled control, so the ink is not measured here. */
+      .listbox .opt.disabled-opt {
+        opacity: 0.55;
+      }
+      .listbox .opt .sub {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
       }
       .connected .branch {
         flex: none;
@@ -2093,6 +2192,417 @@
         Connecting is workspace-level (<code class="k">/settings/workspace/github</code>), so the
         room links there rather than growing a connect flow of its own — the same hand-off its rows
         already make.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           AMENDMENT — MOTIR-4674 (Story MOTIR-4669). THE ROOM GAINS ITS DOOR.
+           Panels 1–4 above draw the room RENDERING two registries. It could not
+           CHANGE either: connecting was a workspace-level act elsewhere, and
+           §16.11 says so in as many words — "the room links there and grows no
+           connect flow of its own."
+           That is what MOTIR-4669 inverts. A repository is connected ONCE, to
+           the ORGANISATION, and which projects use it is visibility
+           configuration — so the act a project performs is ADD, it happens
+           HERE, and it is ONE action with TWO segments.
+           Panels 5–9 draw the door, the picker, its empty organisation, the
+           non-org-admin arm, and the project-side removal.
+           ⚠️ NOT drawn here, and cited rather than redrawn: the ORGANISATION's
+           repository inventory and its `Disconnect from organisation` dialog —
+           design/github/ + design/gitlab/ Panels 6–7 (MOTIR-4672). This asset
+           owns the PROJECT's side of the same model.
+           ══════════════════════════════════════════════════════════════════ -->
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 5 — THE ROOM WITH ITS DOOR
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 5 · <b>The room, with `Add repository`</b> — the door is IN the room that already
+        exists, and the connected row gains one action
+      </div>
+      <p class="panel-note">
+        <b>The picker belongs to the room that already exists.</b> Three revisions of a sibling
+        design drew it somewhere else and each was rejected; the defect record is MOTIR-4668. The
+        room has four assets and a header that says it renders the project's whole repository domain
+        — a feature drawing its own version of that room produces two designs of one surface that
+        drift.
+      </p>
+      <div class="panel">
+        <div class="settings">
+          <div class="set-rail">
+            <div class="grp">
+              <div class="h">General</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-sliders-horizontal" /></svg>
+                Details
+              </div>
+              <div class="rail-row active">
+                <svg class="i"><use href="#i-folder-git-2" /></svg>
+                Repositories
+              </div>
+            </div>
+            <div class="grp">
+              <div class="h">Access</div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-users" /></svg>
+                Members &amp; access
+              </div>
+              <div class="rail-row">
+                <svg class="i"><use href="#i-key-round" /></svg>
+                Code access
+              </div>
+            </div>
+          </div>
+          <div class="set-pane">
+            <div class="pane-head pane-head-row">
+              <div>
+                <div class="eyebrow">Project settings</div>
+                <h3>Repositories</h3>
+                <p>
+                  Which of your organisation's repositories Acme booking works on. Adding one never
+                  indexes it again.
+                </p>
+                <p class="summary">0 moving · 1 hosted by Motir · 3 yours</p>
+              </div>
+              <!-- THE DOOR. Primary, in the pane head, beside the title — the
+                   room's only add path, and the same picker org settings opens. -->
+              <button class="btn btn-primary" type="button">
+                <svg class="i sm"><use href="#i-plus" /></svg>
+                Add repository
+              </button>
+            </div>
+
+            <div class="section">
+              <div class="seclabel">Hosted by Motir</div>
+              <p class="hint">
+                Motir created these and pays for their CI. Move any of them to your own GitHub
+                whenever you want.
+              </p>
+              <div class="rows">
+                <div class="row created">
+                  <div class="row-main">
+                    <div class="row-head">
+                      <span class="pill pill-neutral mono">api</span>
+                      <span class="row-state ok">
+                        <svg class="i"><use href="#i-circle-check-big" /></svg>
+                        Created
+                      </span>
+                    </div>
+                    <div class="repo-link">
+                      <svg class="gh ghm"><use href="#i-github" /></svg>
+                      <a class="name" href="#">motir-projects/acme-booking-api</a>
+                      <svg class="i sm" style="color: var(--el-icon-muted)">
+                        <use href="#i-external-link" />
+                      </svg>
+                    </div>
+                    <p class="helper">Hosted by Motir · seeded from the Motir Next.js starter.</p>
+                  </div>
+                  <div class="row-aside">
+                    <button class="icon-btn" type="button" aria-label="Repository actions">
+                      <svg class="i"><use href="#i-ellipsis" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="seclabel">From your organisation</div>
+              <p class="hint">
+                Connected once to <b>moooon</b> and shared with every project that adds them. Motir
+                indexed each of these already — nothing re-indexes when a project picks one up.
+              </p>
+              <div class="connected">
+                <ul>
+                  <li>
+                    <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                    <span class="repo">
+                      <span class="owner">acme-inc/</span><span class="nm">acme-booking-web</span>
+                    </span>
+                    <span class="branch">main</span>
+                    <!-- ⚠️ NEW, and the ONLY action a connected row has ever carried.
+                         It removes ONE ProjectRepo link. See Panel 9. -->
+                    <button class="quiet-danger" type="button">Remove from this project</button>
+                  </li>
+                  <li>
+                    <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                    <span class="repo">
+                      <span class="owner">acme-inc/</span><span class="nm">design-tokens</span>
+                    </span>
+                    <span class="branch">main</span>
+                    <button class="quiet-danger" type="button">Remove from this project</button>
+                  </li>
+                  <li>
+                    <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                    <span class="repo">
+                      <span class="owner">acme-inc/</span><span class="nm">acme-infra</span>
+                    </span>
+                    <span class="branch">trunk</span>
+                    <button class="quiet-danger" type="button">Remove from this project</button>
+                  </li>
+                </ul>
+                <footer>
+                  <span>Connected to the organisation, not to this project alone.</span>
+                  <a class="link" href="#">See every repository in moooon</a>
+                </footer>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="lands">
+        <b>The footer's link changes what it promises, and that is the tier move in one line.</b>
+        It used to read <i>"Choose which repositories Motir can see"</i> — a hand-off to the act
+        this room could not perform. The room performs it now, so the link stops being the way to
+        add and becomes what it should always have been: a way to SEE the organisation's whole
+        inventory (design/github Panel 6, MOTIR-4672).
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 6 — THE PICKER: ONE LIST, TWO SEGMENTS
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 6 · <b>`Add repository` — one list, two segments</b>: the organisation's already-
+        connected repositories, then <i>connect a new one</i>, with BOTH provider behaviours
+      </div>
+      <div class="panel">
+        <div class="scrim">
+          <div class="modal" style="width: 33rem">
+            <div class="modal-head">
+              <h4>Add repository</h4>
+              <p class="helper">
+                Pick one your organisation already has, or connect a new one — either way it lands
+                in Acme booking.
+              </p>
+            </div>
+            <div class="combo">
+              <svg class="i sm" style="color: var(--el-icon-muted)"><use href="#i-search" /></svg>
+              <span>Search repositories…</span>
+            </div>
+            <div class="listbox">
+              <!-- SEGMENT 1 — already connected to the organisation. Picking is
+                   INSTANT and costs nothing: the index exists and is shared. -->
+              <div class="grp">In moooon · already connected</div>
+              <div class="opt active">
+                <svg class="i sm"><use href="#i-github" /></svg>
+                <span class="repo">
+                  <span class="owner">acme-inc/</span><span class="nm">acme-booking-api</span>
+                </span>
+                <span class="shared">
+                  <svg class="i sm"><use href="#i-check" /></svg>
+                  already indexed · shared
+                </span>
+              </div>
+              <div class="opt">
+                <svg class="i sm"><use href="#i-github" /></svg>
+                <span class="repo">
+                  <span class="owner">acme-inc/</span><span class="nm">acme-mobile</span>
+                </span>
+                <span class="shared">
+                  <svg class="i sm"><use href="#i-check" /></svg>
+                  already indexed · shared
+                </span>
+              </div>
+              <div class="opt disabled-opt">
+                <svg class="i sm"><use href="#i-github" /></svg>
+                <span class="repo">
+                  <span class="owner">acme-inc/</span><span class="nm">acme-booking-web</span>
+                </span>
+                <span class="sub">already in this project</span>
+              </div>
+
+              <!-- SEGMENT 2 — connect a new one. ONE act: the organisation
+                   connection AND the project link. The only path that indexes. -->
+              <div class="grp">Connect a new one</div>
+              <div class="opt">
+                <svg class="i sm"><use href="#i-github" /></svg>
+                <span class="repo"><span class="nm">Choose repositories on GitHub</span></span>
+                <span class="sub">
+                  opens GitHub
+                  <svg class="i sm" style="color: var(--el-icon-muted)">
+                    <use href="#i-external-link" />
+                  </svg>
+                </span>
+              </div>
+              <div class="opt">
+                <svg class="i sm"><use href="#i-folder-git-2" /></svg>
+                <span class="repo"><span class="nm">Browse your GitLab projects</span></span>
+                <span class="sub">in Motir</span>
+              </div>
+            </div>
+            <p class="helper xs">
+              Picking one already in moooon links it immediately — no re-index, no wait. Connecting
+              a new one is the only path that costs an index.
+            </p>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note">
+        <b>The provider asymmetry is drawn, not smoothed.</b> <i>Connect a new one</i> is a link-out
+        to the App's install screen for GitHub and an in-app browse for GitLab — the same honest
+        inverse the connect surface already draws (design/gitlab §2b). A picker that drew only the
+        in-app arm would leave the commoner path improvised.
+      </p>
+      <div class="lands">
+        <b
+          ><code class="k">already indexed · shared</code> is a STATE, and it is the whole promise
+          of the tier move.</b
+        >
+        It says the code graph for this repository exists, belongs to the organisation, and is not
+        rebuilt because a second project picked it up. Without it the row is indistinguishable from
+        the segment below, which is exactly the pair the user is being asked to tell apart.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 7 — A FIRST-TIME ORGANISATION
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 7 · <b>A first-time organisation</b> — only the second segment. It is a PICKER with
+        one segment, never an empty state that sends you somewhere else
+      </div>
+      <div class="panel">
+        <div class="scrim">
+          <div class="modal" style="width: 33rem">
+            <div class="modal-head">
+              <h4>Add repository</h4>
+              <p class="helper">
+                moooon has no repositories connected yet — connect the first one and it lands in
+                Acme booking at the same time.
+              </p>
+            </div>
+            <div class="listbox">
+              <div class="grp">Connect a new one</div>
+              <div class="opt active">
+                <svg class="i sm"><use href="#i-github" /></svg>
+                <span class="repo"><span class="nm">Choose repositories on GitHub</span></span>
+                <span class="sub">
+                  opens GitHub
+                  <svg class="i sm" style="color: var(--el-icon-muted)">
+                    <use href="#i-external-link" />
+                  </svg>
+                </span>
+              </div>
+              <div class="opt">
+                <svg class="i sm"><use href="#i-folder-git-2" /></svg>
+                <span class="repo"><span class="nm">Browse your GitLab projects</span></span>
+                <span class="sub">in Motir</span>
+              </div>
+            </div>
+            <p class="helper xs">
+              The organisation connection happens because you added a repository — never as an
+              errand you run first.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="lands">
+        <b>An empty-state panel with a link out is the exact shape this amendment forbids.</b>
+        <i>"Nothing to pick"</i> must never render as a message whose job is to send somebody to
+        another page: that is one intent turned into two errands, which is the same defect at the
+        project tier that the whole story removes at the organisation tier. So the zero case is
+        drawn as a picker with one segment — the search field is gone because there is nothing to
+        search, and everything else is where it was.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 8 — NOT AN ORG ADMIN
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 8 · <b>A project admin who is NOT an org admin</b> — the set, and no add affordance.
+        Not a disabled button, and not a silent absence either
+      </div>
+      <div class="panel">
+        <div class="set-pane" style="width: 620px">
+          <div class="pane-head pane-head-row">
+            <div>
+              <div class="eyebrow">Project settings</div>
+              <h3>Repositories</h3>
+              <p>
+                Which of your organisation's repositories Acme booking works on. Adding one never
+                indexes it again.
+              </p>
+              <p class="summary">0 moving · 1 hosted by Motir · 3 yours</p>
+            </div>
+          </div>
+          <div class="section">
+            <div class="seclabel">From your organisation</div>
+            <p class="hint">
+              Connected once to <b>moooon</b> and shared with every project that adds them. Motir
+              indexed each of these already — nothing re-indexes when a project picks one up.
+            </p>
+            <div class="connected">
+              <ul>
+                <li>
+                  <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                  <span class="repo">
+                    <span class="owner">acme-inc/</span><span class="nm">acme-booking-web</span>
+                  </span>
+                  <span class="branch">main</span>
+                  <button class="quiet-danger" type="button">Remove from this project</button>
+                </li>
+                <li>
+                  <svg class="i lg"><use href="#i-folder-git-2" /></svg>
+                  <span class="repo">
+                    <span class="owner">acme-inc/</span><span class="nm">design-tokens</span>
+                  </span>
+                  <span class="branch">main</span>
+                  <button class="quiet-danger" type="button">Remove from this project</button>
+                </li>
+              </ul>
+              <footer>
+                <span>
+                  Adding a repository is an organisation-admin action. An org admin can add one here
+                  or from the organisation's Git settings.
+                </span>
+              </footer>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="lands">
+        <b>ABSENT, with a sentence — not disabled, and not silent.</b> A disabled button is a
+        promise the product then refuses, and the rail already makes that call for a whole area
+        (MOTIR-2468: an entry point is a promise about a room). But a room whose one action simply
+        vanishes leaves a reader wondering whether they are looking at a bug, so the section's
+        footer says WHO can do it and WHERE — which is what turns an absence into an answer. The
+        room itself stays visible on <code class="k">repository:manage</code>; only the ADD path
+        asserts org admin, and it does so on every door.
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 9 — THE PROJECT-SIDE REMOVAL
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 9 · <b>Remove from this project</b> — a row action whose copy REASSURES. Compare it
+        with the organisation's dialog, which it must not resemble
+      </div>
+      <div class="panel">
+        <div class="scrim">
+          <div class="modal" style="width: 27rem">
+            <div class="modal-head">
+              <h4>Remove acme-booking-web from Acme booking?</h4>
+              <p class="helper">
+                Removes it from <b>Acme booking</b> only. It stays connected to your organisation,
+                other projects keep it, and the code index is untouched.
+              </p>
+            </div>
+            <p class="helper xs">Add it back from this room at any time — nothing re-indexes.</p>
+            <div class="modal-foot" style="justify-content: flex-end">
+              <button class="btn btn-ghost btn-sm" type="button">Cancel</button>
+              <button class="btn btn-secondary btn-sm" type="button">Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="lands">
+        <b
+          >The two removals share a word and not a blast radius, so they must not share a weight.</b
+        >
+        This one deletes ONE <code class="k">ProjectRepo</code> row: it enqueues no offboarding, it
+        touches no <code class="k">CodeGraphOffboardReason</code>, and its confirm is a secondary
+        button under copy that spends its whole length saying what does NOT happen. The
+        organisation's is a destructive confirm naming every affected project, or — for GitHub — a
+        disclosure before a link-out (design/github + design/gitlab Panel 7, MOTIR-4672). Each LABEL
+        names its own tier, so neither depends on the reader knowing which page they are on.
       </div>
     </div>
   </body>

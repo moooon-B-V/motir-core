@@ -66,6 +66,39 @@
     with the step it explained rather than being left to explain a mechanism that
     is gone. `nextjs-prisma-vercel-starter` carries its own copy of the lane and
     the Action; MOTIR-4097 follows there.
+- **Amendment (2026-09-06, applied by MOTIR-4704) — THE MCP DOOR THE AMENDMENT
+  ABOVE NAMED NOW EXISTS. For four days it did not.** The 2026-09-01 amendment
+  retired the uploader and said the agent publishes "over the Motir MCP surface";
+  that surface had no acceptance publisher on it, and neither did the two other
+  documents that repeated the sentence (`motir-core/CLAUDE.md`,
+  `playwright.acceptance.config.ts`). The card that retired the uploader pointed
+  at `attach_file`, which cannot be the door — it writes a plain `Attachment`
+  with no evidence row, no status, no freeze rule and no panel. So the capability
+  was shipped, the routes were live, and every document an agent read named a
+  door that was not there. **The failure was SILENT in the way this whole ADR
+  exists to prevent:** an agent that reads the rule, finds no tool, and moves on
+  produces a green lane, a merged pull request and a story with no receipt.
+  - The door is **`create_acceptance_upload` + `publish_acceptance_result`**,
+    thin adapters over `createUploadTokens` / `recordFromPathnames` — §2's
+    storage rules, §1's eligibility gate, the prefix check and the authoritative
+    `head` all still run in the service, once.
+  - **TWO calls, not one.** `publish_design_result` takes its assets inline;
+    a recording cannot. The MCP route is a serverless function whose body cap
+    the mint-then-PUT path exists to bypass, and base64 bytes would have to be
+    EMITTED by the agent — 6.7 M characters for a 5 MB clip. So the agent mints
+    a presigned PUT, uploads the bytes directly, and registers the pathname.
+  - **The runner is now ASKED.** `WHAT_TO_DO.test` in
+    `lib/dispatch/promptTemplate.ts` gains the publish step on a card that
+    records a receipt — conditionally, because `type: test` is every test card
+    and only some of them record one. This is the half that makes the
+    planner/runner pair actually close: the planner writes the acceptance E2E
+    subtask, and the product now tells the runner what to do with what it
+    recorded, instead of leaving that to prose in the card body.
+  - **Why a tool at all, rather than pointing agents at §4's HTTP routes:** the
+    routes ask the runner to know a Motir address and hold a PAT, which a
+    dispatched agent in a repository Motir does not own has neither of. That is
+    the same requirement the retired script could not meet, one layer up. MCP is
+    the door that travels, on a credential the runner already holds.
 - **Story / Subtask:** MOTIR-1627 (Story acceptance gate — E2E acceptance video,
   review & approve, BYOK, motir-ai-plan-gated) · Subtask MOTIR-1628.
 - **Consumed by:** MOTIR-1629 (data model + video allowlist), MOTIR-1630
@@ -296,8 +329,9 @@ before their first acceptance video is friction with no cost upside.
 > and still falls back to an `integration` PAT — but the CLIENT that used them
 > here (the publish step, `scripts/upload-acceptance-video.mjs`, and the
 > `.github/actions/upload-acceptance-video/` Action MOTIR-1651 shipped for BYOK
-> consumers) is retired. Motir's own receipt is published by the AGENT over the
-> MCP surface. Read this section as the contract an external CI may still
+> consumers) is retired. Motir's own receipt is published by the AGENT, through
+> `create_acceptance_upload` + `publish_acceptance_result` on the MCP surface
+> (MOTIR-4704 — those tools did not exist when this banner was written). Read this section as the contract an external CI may still
 > implement against; do NOT read it as a description of what this repository's
 > workflows do, because they no longer do any of it. `docs/e2e/acceptance-video-byok.md`
 > carries the same banner._

@@ -31,7 +31,11 @@ beforeEach(async () => {
   vi.clearAllMocks();
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.example');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: false });
+  vi.mocked(resolveTenantOrg).mockResolvedValue({
+    organizationId: 'org_1',
+    isMeta: false,
+    internalBilling: false,
+  });
   vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
   cap = captureJobEvents();
 });

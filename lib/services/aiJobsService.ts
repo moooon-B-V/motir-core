@@ -17,13 +17,14 @@ export const aiJobsService = {
   // client. Returns the jobId.
   async submitNoopJob(projectKey: string, ctx: WorkspaceContext): Promise<{ jobId: string }> {
     const project = await projectsService.getByKey(projectKey, ctx);
-    const { organizationId, isMeta } = await resolveTenantOrg({
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
     const tenant = {
       organizationId,
       isMeta,
+      internalBilling,
       workspaceId: ctx.workspaceId,
       projectId: project.id,
       projectKey: project.identifier,

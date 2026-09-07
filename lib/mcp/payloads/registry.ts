@@ -124,6 +124,12 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // withdraw removes one.
   update_plan_proposal: planPayload as unknown as PayloadDefinition<never>,
   withdraw_plan_proposal: planPayload as unknown as PayloadDefinition<never>,
+  // The plan's OWN title / summary (MOTIR-4637) — the same plan definition again,
+  // for the same reason: `correctPlanBrief` hands back the whole
+  // `PlanWithItemsDto` so a caller sees the corrected heading AND its untouched
+  // proposal set without a second read. No `planItemIds`: it creates no proposal
+  // and touches none.
+  update_plan: planPayload as unknown as PayloadDefinition<never>,
   open_plan_session: planSessionPayload as unknown as PayloadDefinition<never>,
   append_plan_turn: planSessionPayload as unknown as PayloadDefinition<never>,
   submit_plan_session: planSubmitPayload as unknown as PayloadDefinition<never>,

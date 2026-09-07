@@ -353,6 +353,7 @@ export function PublicSubdomainCard({
         }}
         title={t('release.title', { hostname: subdomain?.hostname ?? '' })}
       >
+        {/* modal-scroll-container: measured 1280x700, tallest = a release after two renames: three hostnames listed, the warning with the cap sentence, the fallback line, panel 545px */}
         <div className="flex flex-col gap-4">
           <p className="font-sans text-[13px] text-(--el-text)">
             {t('release.lead', { count: releasedHostnames.length })}

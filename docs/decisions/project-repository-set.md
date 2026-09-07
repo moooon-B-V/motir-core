@@ -1178,6 +1178,161 @@ makes the product correct with the data that exists; recording the association i
 let this rung eventually retire, and it is the thing to build next if a project's repository
 record is wanted for its own sake.
 
+## AMENDMENT (2026-09-06, MOTIR-4669) — a repository belongs to the ORGANISATION, and the uniqueness contract that said otherwise is FALSE, not relaxed
+
+Two things are recorded here: the guarantee that replaced §1's implicit one, and the tenancy
+decision the whole story turns on. Neither section above is deleted or rewritten — §1.4, §1.5 and
+§4.4 stand exactly as they were, and this amendment says which of their consequences no longer
+holds and why.
+
+### A · The uniqueness contract
+
+`ProjectRepo.githubRepoId` was `@unique`, and `prisma/schema.prisma` stated the consequence in
+prose:
+
+> _"a realized repo is claimed by AT MOST ONE project row, so a repo created for project A can
+> never be recorded as project B's."_
+
+**That sentence is FALSE now, and the distinction from "relaxed" is the point.** Until MOTIR-4648
+dropped the index, the situation it forbids was **inexpressible**: a single unique constraint made
+it impossible to create, which is why nothing downstream ever had to answer what it would mean.
+Relaxing a rule leaves the old behaviour available; this removes a claim the product was making.
+
+**What SURVIVES is narrower and is still enforced by the DATABASE, not by application code:**
+
+```
+@@unique([projectId, githubRepoId])   // one repository, at most once, in ONE project's set
+```
+
+- It is what the shipped **409** on a double-add now means: _already in THIS project_, never
+  _claimed by somebody_.
+- Postgres treats NULLs as distinct in a unique index, which is exactly right here — every
+  `proposed` row is unrealized, and a project may hold many.
+- **Removing a concept is allowed; removing a capability is not.** Four shipped call sites asked
+  the old index _"which project owns this repository?"_ — `ciMinutesMeterService`,
+  `ciRunnerProvisioningService`, `projectRepoSetService`'s claim guard and
+  `pullRequestLinkCheckService`. MOTIR-4648 gave each an answer that still works, and split the
+  read in two so the difference is forced at the call site:
+  `findByProjectAndGithubRepoId` (the CLAIM guard, scoped to one project) and
+  `listByGithubRepoId` (the SET, so a caller has to decide what TWO means). The old total read
+  `findByGithubRepoId` is **gone**, and a test asserts it stayed gone — it would type-check and
+  return a plausible row.
+
+### B · The tenancy: connected ONCE, to the organisation
+
+> A repository is connected **once, to the ORGANISATION**. Which projects use it is **visibility
+> configuration**.
+
+This is **MOTIR-2029**'s decision for the code GRAPH, applied to the thing the graph is built FROM.
+**Cited, not restated:** that record owns the graph's half, and the two must not be left to be
+inferred from each other.
+
+⚠️ **MOTIR-2029's decision lives on the WORK ITEM, not in `docs/decisions/`** — verified: no file
+here references it, and `code-graph-index-fleet.md` (§14, the offboarding vocabulary) does not carry
+the fan-out question. So this amendment cites a card rather than a document, deliberately: a link to
+a record that does not exist reads as a citation and checks as nothing.
+
+**The four tenants, and what each owns.** The question is always _whose thing is this?_
+
+| tenant      | surface                           | who                                            | owns                                                                                                     |
+| ----------- | --------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **ORG**     | Settings → Organisation → Git     | org admin                                      | the host connection's lifecycle, and the whole repository inventory with each row's `Used by N projects` |
+| **PROJECT** | Settings → Project → Repositories | room: `repository:manage` · **add: org admin** | which of the organisation's repositories this project works on                                           |
+| **PROJECT** | the `Code` rail row               | browse                                         | READ only                                                                                                |
+| **USER**    | Settings → Account → Git accounts | any member                                     | your own `GithubIdentity` — `userId @unique`, a personal credential                                      |
+
+**⚠️ Adding is ORG ADMIN whichever door you enter by.** The Repositories room asserts
+`repository:manage`, a PROJECT permission, so without an explicit org check a project admin who is
+not an org admin could connect a repository to the organisation through it. The assertion lives in
+the SERVICE (`organizationRepoService`), inside the transaction — a gate on a button is a gate one
+caller away from being missing.
+
+**⚠️ READING the inventory is org MEMBERSHIP, not org admin**, and the asymmetry is required rather
+than generous. `docs/decisions/organization-tier.md` §6 forbids a relocation that narrows an
+audience — _"a hidden tier may not remove a capability … relocating a surface preserves its
+gate"_ — and the surface this inventory moved from, `/settings/workspace/github`, checks a session
+and a workspace context and **no role at all**. Its consequence: `Used by N projects` must read the
+**access-filtered** project set, and the count must be that list's length. A count of four beside
+two names is the same disclosure arriving as a number.
+
+### C · The two removals are asymmetric, and each names its own tier
+
+|                | **Remove from this project**          | **Disconnect from organisation**                                                  |
+| -------------- | ------------------------------------- | --------------------------------------------------------------------------------- |
+| what changes   | one `ProjectRepo` row                 | every project's link, across the organisation's workspaces                        |
+| the code graph | **nothing**                           | offboarded — `repo_disconnected`, **windowed** `CODE_GRAPH_RETENTION_WINDOW_DAYS` |
+| reversible     | re-add any time; the graph never left | re-add inside the window and nothing re-indexes                                   |
+| who            | `repository:manage`                   | org admin                                                                         |
+
+**⚠️ The org-level disconnect CLEARS the links; it does not delete the rows.**
+`ProjectRepo.githubRepo` is `onDelete: SetNull` and says why on itself — a project's PLAN for a
+repository outlives its connection to one, so the role, name and seed source survive and the row
+can be re-established. Deleting the rows would delete the projects' plans as a side effect of an
+integration change.
+
+**⚠️ Awareness is a COLUMN, not a sentence.** `Used by N projects` renders on every inventory row
+AT REST, expandable to the names. A warning inside a dialog is read past; a count that was on screen
+all along is not, and the dialog naming _Atlas, Beacon_ is then a confirmation rather than a
+revelation. ONE read serves both, so the row and the dialog cannot disagree.
+
+**⚠️ And the org dialog is NOT a permanence warning.** The window is user-facing, the reason is
+windowed, and the shipped copy already promises that re-adding cancels the removal. A screen saying
+_"this cannot be undone"_ would be FALSE — and false in the direction that teaches people to click
+through warnings. Every user-facing string INTERPOLATES the constant; the number is never retyped
+(`lib/codeGraph/offboarding.ts` states that rule on itself).
+
+### D · Two rules that stop the obvious wrong optimisations
+
+These are **rules**, not notes. Both describe changes a reasonable implementer would make for
+tidiness, and both would re-introduce per-project ownership through the back door.
+
+1. **A project-level remove enqueues NO offboarding.** It deletes one `ProjectRepo` row and nothing
+   else — no new member on `CodeGraphOffboardReason`, no queue write of any kind. The absence is
+   asserted on the enqueue seam's call count, because a remove that quietly offboarded would return
+   200 and look correct, and the damage would surface days later as a repository nobody can plan
+   against.
+2. **Zero projects using a repository is a LEGAL state.** It belongs to the organisation, stays in
+   the inventory and stays indexed. _"Nothing uses it any more, so drop the graph"_ would make the
+   next project that adds it pay for a full re-index — the exact cost this tenancy move removes.
+
+### E · The GitHub asymmetry — the disclosure precedes the link-out
+
+**Motir cannot remove a GitHub repository.** Which repositories the App may read is GitHub's own
+install screen, and the shipped copy already says so (`github.repos.foot`). So the two providers get
+two different affordances, and the difference is drawn rather than smoothed:
+
+|                 | **GitHub**                                           | **GitLab**                          |
+| --------------- | ---------------------------------------------------- | ----------------------------------- |
+| who performs it | github.com                                           | Motir, in-app                       |
+| shape           | a **disclosure**, then a link-out                    | an ordinary destructive **confirm** |
+| when            | **before** leaving, because there is no later moment | at the moment of the act            |
+
+A Motir-side "stop tracking" for GitHub is **forbidden**: it would delete the mirror row while
+leaving the App's grant in place, and the repository would reappear on the next installation
+reconcile — two sources of truth for one fact. The removal arrives through the
+`installation_repositories` delivery, which already prunes the row and enqueues the windowed
+offboarding.
+
+### F · Why the dedup boundary is the ORGANISATION and not the repository
+
+Two organisations connecting the same repository index it **twice**, and that is correct.
+
+The organisation is the **isolation boundary** — the tenancy every RLS policy, every credit ledger
+and every access gate is written on. A graph shared across organisations would be a cross-tenant
+read of derived content, reachable by whoever connected the repository second; the saving is real
+and it is not a saving the product may take. Inside one organisation the dedup is total, which is
+where the cost actually lives: N projects of one customer, one index.
+
+### What this amendment does NOT decide
+
+- **The code graph's own tenancy** — **MOTIR-4642** keys the graph to the organisation. This story
+  moves the repository; that one moves the graph, and this record deliberately stops at the
+  boundary rather than pre-empting it.
+- **Index FRESHNESS** — whether a graph is current or stale is MOTIR-1754/1766's axis. Neither the
+  indexed commit nor the comparison lives in motir-core today.
+- **`repoSetOwnership`** (§3) is untouched: it answers _who hosts the repository_, which is a
+  different question from _who is it connected at_, and the two are independent.
+
 ## Deferred to the spike — asserted nowhere in this document
 
 MOTIR-1777 verifies four GitHub mechanics, and **no decision above depends on their

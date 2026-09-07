@@ -58,16 +58,37 @@ export async function resolveAcceptanceStory(
 ): Promise<WorkItem | Response> {
   const resolved = await resolveWorkItemByIdentifier(identifier, ctx);
   if (resolved instanceof Response) return resolved;
-  const story: WorkItem = resolved;
+  return (await findOwningStoryParent(resolved, ctx)) ?? resolved;
+}
 
-  if (story.kind !== 'story' && story.parentId) {
-    const parentId = story.parentId;
-    const parent = await withWorkspaceContext(ctx, (tx) =>
-      workItemRepository.findById(parentId, tx),
-    );
-    if (parent && parent.kind === 'story') return parent;
-  }
-  return story;
+/**
+ * The HOP itself: the parent STORY that owns this item's receipt, or null when
+ * the item owns it directly (it IS a story, it has no parent, or its parent is
+ * not a story — the last case is left as-is so the caller rejects it
+ * NOT_A_STORY rather than attaching a receipt to an epic).
+ *
+ * ⚠️ EXTRACTED, NOT COPIED (MOTIR-4704). The MCP publish tools resolve their
+ * target through the read door the rest of the MCP surface uses, which raises a
+ * typed error rather than the 404 `Response` the CI routes return — so they
+ * cannot call {@link resolveAcceptanceStory}, whose first half is that
+ * HTTP-shaped resolution. They need the SECOND half, and that half is what
+ * MOTIR-4144's warning is about: a second copy of this hop is how the publisher
+ * and the status read come to disagree about which card's receipt is under
+ * discussion, silently — the read answering "no receipt" for a story that has
+ * one. So the rule lives here once and every door reaches it, rather than each
+ * door owning a plausible-looking three lines.
+ *
+ * Takes the minimal shape rather than a `WorkItem` so a caller holding a DTO
+ * can ask the same question without a cast.
+ */
+export async function findOwningStoryParent(
+  item: { kind: string; parentId: string | null },
+  ctx: { userId: string; workspaceId: string },
+): Promise<WorkItem | null> {
+  if (item.kind === 'story' || !item.parentId) return null;
+  const parentId = item.parentId;
+  const parent = await withWorkspaceContext(ctx, (tx) => workItemRepository.findById(parentId, tx));
+  return parent && parent.kind === 'story' ? parent : null;
 }
 
 export interface AcceptancePublishGate {

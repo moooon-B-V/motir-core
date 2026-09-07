@@ -6,7 +6,10 @@ import { useTranslations } from 'next-intl';
 import { FolderGit2 } from 'lucide-react';
 import type { AuditCoverageDTO } from '@/lib/dto/codeHealth';
 
-// The audit-coverage BANNER on /planning (MOTIR-2250 · design/audit-coverage).
+// The audit-coverage BANNER in the planning workspace (MOTIR-2250 ·
+// design/audit-coverage). It rode the `/planning` ROUTE until MOTIR-4732; the
+// workspace is an OVERLAY now (MOTIR-4725) and the banner is in the same seam of
+// it, between the top bar and the panes.
 //
 // ⚠️ ONE LINE, FULL-BLEED, NO DISMISS — all three are the design, not styling.
 //

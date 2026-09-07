@@ -60,6 +60,13 @@ export const STRUCTURAL_GUARD_SPECS = [
   // shares their memoisation-free shape, so it belongs in the same lane rather
   // than in the sharded job where it would be sized against a database budget.
   'tests/theme/composedSurfaceInkCoverage.test.ts',
+  // ── tests/theme/ — the `Modal.Body`-bypass guard (MOTIR-2491) ─────────────
+  // Parses every `.tsx` under `app/`, `components/` and the design system's
+  // `src/` through the compiler API and classifies each `<Modal>` call site by
+  // SHAPE: a bare one may hold only what a short confirm holds. Same cost
+  // profile as the ink guards — one whole-tree parse, no database, nothing
+  // rendered — and it imports nothing from `lib/` or `app/`.
+  'tests/theme/modalScrollContainer.test.ts',
   // ── tests/ — the coverage gate's own guard (MOTIR-3497) ───────────────────
   // The instance the IMPORT-shaped membership predicate could not see. It pays
   // one memoised `tinyglobby` resolution of the whole `coverage.include` set —
@@ -291,6 +298,18 @@ export const STRUCTURAL_GUARD_SPECS = [
   // `node:path` and two dependency-free helpers under `tests/`, so it carries
   // no coverage into the merged report.
   'tests/ci-docs-guards-lane.test.ts',
+  // ── tests/ — the acceptance-lane IMPORT-DIRECTION guard (MOTIR-4751) ──────
+  // Same shape as the entry above: it reads `playwright.acceptance.config.ts`
+  // for the lane's own `testMatch`, walks every `*.spec.ts` under that config's
+  // `testDir` and asks which of the two interchangeable fixture modules each
+  // one imports. It opens no database, renders nothing, and imports only
+  // `node:fs` / `node:path` and `tests/helpers/importGraph`, so it carries no
+  // coverage into the merged report.
+  //
+  // It does its OWN walk rather than importing a scanner, so nothing derives it
+  // — hence the `SELF_WALKING_MEMBERS` entry beside this one in
+  // `tests/ci-structural-guards-lane.test.ts`.
+  'tests/e2e-acceptance-lane-imports.test.ts',
 ] as const;
 
 /**
@@ -313,6 +332,36 @@ export const DATABASE_BOUND_GUARDS: Readonly<Record<string, string>> = {
   'tests/permissions/roleAssignment.test.ts':
     'imports @/lib/db and ../helpers/adminDb — it checks the role-assignment ' +
     'matrix against real rows, not only against source.',
+  // ── The two planning-envelope gates (MOTIR-4343, MOTIR-4736) ──────────────
+  //
+  // Both are HYBRIDS, and the reasons below say so rather than claiming they are
+  // purely database-bound. Each pairs a live half — drive the real planning
+  // entrances against real Postgres and read what crossed the wire — with a
+  // static half that walks `lib/**/*.ts` for `submitJob(` call sites. The lane
+  // cannot host either: it forbids importing `@/lib/*` (asserted below), and
+  // these drive services, `plansService` transactions and fixtures.
+  //
+  // ⚠️ THEY BECAME CANDIDATES ONLY WHEN THE WALKER WAS EXTRACTED, and the
+  // exposure is the finding, not the change. `candidateGuardsIn` derives from
+  // "imports a scanner module", so while each spec did its walk INLINE the
+  // predicate could not see it — the consent gate had been doing whole-tree
+  // filesystem work inside a sharded, coverage-instrumented spec since
+  // MOTIR-4343, unregistered. Sharing one walker (`./submitJobSites`) is what
+  // made it visible. That is exactly the class this register exists to track,
+  // so it is DECLARED here rather than hidden by un-sharing the walker.
+  'tests/integration/ai/planningSubmitCarriesConsentFlag.test.ts':
+    'imports @/lib/db, ../../helpers/adminDb and ../../fixtures — the half that ' +
+    'matters drives startGeneration and submitRevise against real Postgres with ' +
+    'the project setting switched off, and asserts the value that reached the ' +
+    'wire. Its call-site walk over lib/ is DB-free and rides along; splitting it ' +
+    'out would separate a presence check from the value check the file says in ' +
+    'its own header cannot substitute for it.',
+  'tests/integration/ai/planningSubmitCarriesOnboardingFlag.test.ts':
+    'imports @/lib/db, ../../helpers/adminDb and ../../fixtures — it drives the ' +
+    'migrate wizard through migrateOnboardingService against real Postgres (a ' +
+    'run row, a completed import, a seeded repo) to prove the onboarding marker ' +
+    'and the de-duplicate prompt ride the SAME submit. Same hybrid shape as its ' +
+    'consent sibling above, and inseparable for the same reason.',
 };
 
 /**

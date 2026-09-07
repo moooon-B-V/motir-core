@@ -138,6 +138,7 @@ export function SubscribeDialog({
       title={t('subscribe.title', { name: filter.name })}
       size="md"
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = a new weekly subscription (frequency, day and time pickers, explainer), panel 393px */}
       <div className="flex flex-col gap-4">
         {loading ? (
           <div className="h-24 animate-pulse rounded-(--radius-card) bg-(--el-muted)" aria-hidden />

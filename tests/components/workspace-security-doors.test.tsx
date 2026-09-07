@@ -17,9 +17,13 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // fold-in instead — so nothing is lost, only re-homed.
 
 let pathname = '/dashboard';
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   usePathname: () => pathname,
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  // MOTIR-4730 — the planning door in this tree reads the address, so a
+  // partial navigation mock is a crash rather than a gap.
+  useSearchParams: () => navSearchParams,
 }));
 vi.mock('@/lib/auth/client', () => ({ signOut: vi.fn(async () => undefined) }));
 vi.mock('@/app/(authed)/_project-actions', () => ({ setActiveProjectAction: vi.fn() }));
@@ -85,8 +89,11 @@ describe('the settings rail', () => {
       expect(container.innerHTML, `revealed=${revealed}`).toContain(
         'href="/settings/workspace/jobs"',
       );
+      // Git moved to the ORGANISATION tier (MOTIR-4680) — a different change
+      // from this file's §6 fold, and the row is still here at both counts,
+      // which is what this case is about.
       expect(container.innerHTML, `revealed=${revealed}`).toContain(
-        'href="/settings/workspace/github"',
+        'href="/settings/organization/git"',
       );
     }
   });

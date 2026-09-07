@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -55,6 +54,13 @@ import { plansService } from '@/lib/services/plansService';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import {
+  allSubmitSitesInLib,
+  PLANNING_KIND,
+  planningSitesMissing,
+  submitSites,
+  type SubmitSite,
+} from '../../helpers/submitJobSites';
 import type { ProjectContext } from '@/lib/projects';
 import type { WorkItemFixture } from '../../fixtures';
 
@@ -222,15 +228,6 @@ describe('a project that switched capture OFF sends `false` on BOTH bypassing en
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * The one planning kind on the wire (ADR `session-model.md` §6 step 2 —
- * MOTIR-3943 collapsed the five). A submit naming a RETIRED planning kind is a
- * separate property with its own guard in
- * `tests/integration/ai/storyGate.oneKindOnTheWire.test.ts`; here that guard's
- * output is a precondition, so the planning population is exactly this literal.
- */
-const PLANNING_KIND = 'plan';
-
-/**
  * The token a planning submit must carry. It is the COMPUTED KEY form
  * (`[RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: …`) rather than the bare string,
  * because that is the discipline `lib/ai/lessonCapture.ts` states in its own
@@ -240,167 +237,32 @@ const PLANNING_KIND = 'plan';
  */
 const REQUIRED_TOKEN = '[RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]';
 
-interface SubmitSite {
-  file: string;
-  kind: string | null;
-  /** The call's argument text, comments stripped. */
-  args: string;
-}
-
-/** Is `/` at `i` the start of a REGEX literal rather than a division operator? */
-function startsRegex(src: string, i: number): boolean {
-  let j = i - 1;
-  while (j >= 0 && /\s/.test(src[j]!)) j--;
-  if (j < 0) return true;
-  return '(,=:[!&|?{};+-*%^~<>'.includes(src[j]!);
-}
-
 /**
- * Return `src` with every COMMENT replaced by spaces of the same length, leaving
- * string literals, regex literals and every byte offset exactly where they were.
- *
- * ⚠️ THIS IS WHY THE GUARD CANNOT BE A `grep`. Every one of these call sites is
- * wrapped in a long comment explaining the field — including, at two of them, the
- * constant's own name — so a pattern that searched the raw call text would find
- * the token in the PROSE and pass a site that sends nothing.
- *
- * ⚠️ AND WHY IT TRACKS REGEX LITERALS, which looks like over-engineering until
- * you run it: `lib/` really does contain `/<a\s+[^>]*href=["']([^"']+)["']…/gi`
- * (`lib/email.ts`) and backtick-bearing patterns in `lib/markdown/`. A walker
- * that read those quotes as string delimiters would desynchronise for the rest of
- * the file — and it would do it SILENTLY, in the direction that under-counts: the
- * call sites after the mis-parse simply stop being seen, and an absence assertion
- * over a population that quietly shrank is exactly the failure this whole file is
- * about.
+ * ⚠️ THE SOURCE WALKER MOVED, THE PROPERTY DID NOT (MOTIR-4736). `submitSites`
+ * and its comment-blanking / regex-literal handling used to live in this file.
+ * A SECOND envelope field now needs the same population — the onboarding marker,
+ * guarded in `planningSubmitCarriesOnboardingFlag.test.ts` — and two copies of a
+ * parser whose every subtlety is load-bearing is two places for the same silent
+ * under-count to be reintroduced. The walker's own reasoning (why not a `grep`,
+ * why offsets must survive the strip, why regex literals are tracked) travelled
+ * with it to `tests/helpers/submitJobSites.ts`; the counterfactual that proves it
+ * can go RED stays HERE, because it is what makes THIS file's absence assertions
+ * evidence rather than a green tick.
  */
-function blankComments(src: string): string {
-  const out = src.split('');
-  let i = 0;
-  const blank = (from: number, to: number): void => {
-    for (let k = from; k < to && k < out.length; k++) if (out[k] !== '\n') out[k] = ' ';
-  };
-  while (i < src.length) {
-    const c = src[i]!;
-    const next = src[i + 1];
-    if (c === '/' && next === '/') {
-      const start = i;
-      while (i < src.length && src[i] !== '\n') i++;
-      blank(start, i);
-      continue;
-    }
-    if (c === '/' && next === '*') {
-      const start = i;
-      i += 2;
-      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
-      i = Math.min(i + 2, src.length);
-      blank(start, i);
-      continue;
-    }
-    if (c === "'" || c === '"' || c === '`') {
-      i++;
-      while (i < src.length) {
-        if (src[i] === '\\') {
-          i += 2;
-          continue;
-        }
-        if (src[i] === c) {
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-    if (c === '/' && startsRegex(src, i)) {
-      i++;
-      let inClass = false;
-      while (i < src.length && src[i] !== '\n') {
-        if (src[i] === '\\') {
-          i += 2;
-          continue;
-        }
-        if (src[i] === '[') inClass = true;
-        else if (src[i] === ']') inClass = false;
-        else if (src[i] === '/' && !inClass) {
-          i++;
-          break;
-        }
-        i++;
-      }
-      continue;
-    }
-    i++;
-  }
-  return out.join('');
-}
-
-/**
- * Enumerate every `submitJob(` CALL in one source file and return, per call, the
- * kind literal it names and its full (comment-free) argument text.
- *
- * Derived from the call sites themselves — a balanced scan of the comment-blanked
- * source — rather than from any list of the entrances that exist today. That is
- * the whole point of this guard: a seventh entrance nobody has written yet is a
- * call site, so it is in the population by construction.
- */
-function submitSites(file: string, src: string): SubmitSite[] {
-  const code = blankComments(src);
-  const sites: SubmitSite[] = [];
-  const CALL = 'submitJob(';
-  let at = code.indexOf(CALL);
-  while (at !== -1) {
-    // A DECLARATION, not a call — `export async function submitJob(` in the
-    // client itself. Its first parameter is a typed `kind`, so it could never be
-    // an offender; skipping it keeps the population honest anyway.
-    if (/\bfunction\s+$/.test(code.slice(Math.max(0, at - 30), at))) {
-      at = code.indexOf(CALL, at + CALL.length);
-      continue;
-    }
-    let i = at + CALL.length;
-    let depth = 1;
-    while (i < code.length && depth > 0) {
-      const c = code[i]!;
-      if (c === "'" || c === '"' || c === '`') {
-        const quote = c;
-        i++;
-        while (i < code.length) {
-          if (code[i] === '\\') {
-            i += 2;
-            continue;
-          }
-          if (code[i] === quote) break;
-          i++;
-        }
-      } else if (c === '(' || c === '{' || c === '[') depth++;
-      else if (c === ')' || c === '}' || c === ']') depth--;
-      i++;
-    }
-    const args = code.slice(at + CALL.length, i - 1);
-    const kind = /^\s*'([a-z_]+)'/.exec(args)?.[1] ?? null;
-    sites.push({ file, kind, args });
-    at = code.indexOf(CALL, i);
-  }
-  return sites;
-}
-
-/** The offenders: a planning submit whose bag does not name the constant. */
 function offendersAmong(sites: SubmitSite[]): string[] {
-  return sites
-    .filter((s) => s.kind === PLANNING_KIND && !s.args.includes(REQUIRED_TOKEN))
-    .map((s) => `${s.file}: submitJob('${s.kind}', …) sends no ${REQUIRED_TOKEN}`);
+  return planningSitesMissing(sites, REQUIRED_TOKEN);
 }
 
 describe('no `submitJob` call site can send a planning kind without the consent flag', () => {
   async function allSites(): Promise<SubmitSite[]> {
-    const { globSync } = await import('node:fs');
-    const files = globSync('lib/**/*.ts');
+    const { files, sites } = await allSubmitSitesInLib();
     // The walker itself is asserted, because a walker that finds nothing passes
     // every absence: this is the tautology check that makes the assertion below
     // evidence rather than a green tick.
     expect(files.length, 'the source walk found no files').toBeGreaterThan(50);
     expect(files).toContain('lib/services/aiPlanEditsService.ts');
     expect(files).toContain('lib/services/aiGenerationService.ts');
-    return files.flatMap((f) => submitSites(f, readFileSync(f, 'utf8')));
+    return sites;
   }
 
   it('every planning `submitJob` in `lib/` names the consent-flag constant', async () => {

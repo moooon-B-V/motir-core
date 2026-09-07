@@ -65,7 +65,7 @@ export const conventionEstablishService = {
     });
     if (code) return { submitted: false, reason: 'has_connected_repo' };
 
-    const { organizationId, isMeta } = await resolveTenantOrg({
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: input.userId,
       workspaceId: input.workspaceId,
     });
@@ -76,6 +76,7 @@ export const conventionEstablishService = {
       {
         organizationId,
         isMeta,
+        internalBilling,
         workspaceId: input.workspaceId,
         projectId: input.projectId,
         projectKey: input.projectKey,

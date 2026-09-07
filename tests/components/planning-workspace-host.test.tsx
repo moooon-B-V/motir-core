@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { parsePlanningLaunch, planningLaunchBackHref } from '@/lib/planning/launcher';
+import { parsePlanningLaunch } from '@/lib/planning/launcher';
 import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
 
@@ -20,7 +20,25 @@ import type { PlanningTarget } from '@/lib/planning/planningTargets';
 // draw), and swaps in the empty state otherwise.
 
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+/** The host's `onClose` is REQUIRED since MOTIR-4732 — there is no `backHref`
+ *  fallback left, because the reader never leaves the page. */
+const noop = () => {};
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
+
+// The `@`-mention search is the ONE network-backed thing inside the real
+// composer. Stubbed so the picker can be driven without a debounce and a
+// endpoint — what is under test is that the HOST adds what the composer hands
+// it, not what the search returns. Inert unless a test types an `@` query.
+vi.mock('@/lib/hooks/useWorkItemTargetSearch', () => ({
+  useWorkItemTargetSearch: (query: string, enabled: boolean) => ({
+    results:
+      enabled && query.trim().length >= 2
+        ? [{ id: 'wi_9', identifier: 'MOTIR-9', title: 'Billing', kind: 'story' }]
+        : [],
+    loading: false,
+    tooShort: query.trim().length < 2,
+  }),
+}));
 
 vi.mock('@/components/planning/PlanChangeCanvas', () => ({
   PlanChangeCanvas: ({
@@ -135,12 +153,14 @@ function renderHost(
     initialTarget = null,
     initialCanvasTrail,
     canManage = false,
+    onClose,
   }: {
     state?: PlanChangeConversationState;
     anchorId?: string | null;
     initialTarget?: PlanningTarget | null;
     initialCanvasTrail?: readonly { id: string; label: string }[];
     canManage?: boolean;
+    onClose?: () => void;
   } = {},
 ) {
   const launch = parsePlanningLaunch(searchParams);
@@ -151,7 +171,7 @@ function renderHost(
       projectName="Acme"
       launch={launch}
       anchorId={anchorId}
-      backHref={planningLaunchBackHref(launch)}
+      onClose={onClose ?? noop}
       initialTarget={initialTarget}
       initialCanvasTrail={initialCanvasTrail}
       canManage={canManage}
@@ -170,7 +190,7 @@ function hostElement(searchParams: Record<string, string | string[] | undefined>
       projectName="Acme"
       launch={launch}
       anchorId={null}
-      backHref={planningLaunchBackHref(launch)}
+      onClose={noop}
       initialTarget={null}
       canManage={false}
     />
@@ -259,7 +279,7 @@ describe('PlanningWorkspaceHost — the frame opens BEFORE any canvas data (MOTI
     // the page having already awaited the roots.
     renderHost({ mode: 'replan', from: 'project' });
 
-    expect(screen.getByRole('link', { name: /Back to roadmap/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Close/ })).toBeTruthy();
     expect(screen.getByText('Acme')).toBeTruthy();
     expect(screen.getByTestId('planning-mode-chip').textContent).toBe('plan change');
     // The conversation is live immediately — it depends on no roadmap data, so a
@@ -538,47 +558,82 @@ describe('PlanningWorkspaceHost — the anchor reaches the CANVAS too (MOTIR-207
 });
 
 describe('PlanningWorkspaceHost — the shell carries its own exit chrome', () => {
-  it('closes back to the roadmap for a project-scoped launch', () => {
+  // ⚠️ RE-POINTED (MOTIR-4729). These asserted a `<Link>` labelled with the
+  // ORIGIN — *Back to roadmap* / *Back to MOTIR-7* — and a `keydown` listener on
+  // `document`. Both belonged to the ROUTE: an overlay has no destination to
+  // name, and the dialog owns `Esc` (one handler, not two — the collision
+  // `design/runs/design-notes.md` warned about). The tests are re-pointed at
+  // what replaced them rather than deleted, because the property they were
+  // protecting — the shell carries its OWN way out, since it has no app nav —
+  // is unchanged.
+
+  it('renders ONE Close control, as a button, labelled without a destination', () => {
     renderHost({ mode: 'replan', from: 'project' });
 
-    const close = screen.getByRole('link', { name: /Back to roadmap/ });
-    expect(close.getAttribute('href')).toBe('/roadmap');
+    const close = screen.getByRole('button', { name: /Close/ });
+    // Not a link: there is nowhere to go. The reader is already on the page.
+    expect(close.tagName).toBe('BUTTON');
+    expect(screen.queryByRole('link', { name: /Back to/ })).toBeNull();
+    // The `Esc` hint stays beside it — the key still closes, from the dialog.
+    expect(within(close).getByText('Esc')).toBeTruthy();
   });
 
-  it('closes back to the work item it was launched from', () => {
-    renderHost({ mode: 'contextual', from: 'work-item', item: 'MOTIR-7' });
+  it('says the same thing whatever the launch was — the label names no origin', () => {
+    const project = renderHost({ mode: 'replan', from: 'project' });
+    const projectLabel = screen.getByRole('button', { name: /Close/ }).textContent;
+    project.unmount();
 
-    const close = screen.getByRole('link', { name: /Back to MOTIR-7/ });
-    expect(close.getAttribute('href')).toBe('/items/MOTIR-7');
+    renderHost({ mode: 'contextual', from: 'work-item', item: 'MOTIR-7' });
+    const close = screen.getByRole('button', { name: /Close/ });
+    expect(close.textContent).toBe(projectLabel);
+    // The RAIL still says which item the turn is about — that is its job. The
+    // exit chrome is what stopped naming a destination.
+    expect(close.textContent).not.toContain('MOTIR-7');
   });
 
-  it('Esc returns to the originating surface', () => {
-    renderHost({ mode: 'contextual', from: 'work-item', item: 'MOTIR-7' });
+  it('calls `onClose` — the seam the overlay routes every vector through', () => {
+    const onClose = vi.fn();
+    renderHost({ mode: 'contextual', from: 'work-item', item: 'MOTIR-7' }, { onClose });
+
+    fireEvent.click(screen.getByRole('button', { name: /Close/ }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // It does NOT navigate: the page underneath must not unmount.
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('has NO navigation fallback left — closing never routes anywhere', () => {
+    // ⚠️ RE-POINTED (MOTIR-4732). This asserted the `backHref` arm, which
+    // existed for one caller: the `(planning)` page, a Server Component that
+    // could not hand a callback across the boundary. That page is deleted, the
+    // prop with it, and `onClose` is required — there is nowhere to navigate
+    // BACK to, because the reader never left.
+    const onClose = vi.fn();
+    renderHost({ mode: 'contextual', from: 'work-item', item: 'MOTIR-7' }, { onClose });
+
+    fireEvent.click(screen.getByRole('button', { name: /Close/ }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('no longer listens for `Esc` itself — the dialog owns the key', () => {
+    const onClose = vi.fn();
+    renderHost({ mode: 'replan', from: 'project' }, { onClose });
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(push).toHaveBeenCalledWith('/items/MOTIR-7');
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
-  it('Esc does NOT close while focus is in a text field (the field owns it first)', () => {
-    renderHost({ mode: 'replan', from: 'project' });
-
-    const input = document.createElement('input');
-    document.body.appendChild(input);
-    fireEvent.keyDown(input, { key: 'Escape' });
-
-    expect(push).not.toHaveBeenCalled();
-    input.remove();
-  });
-
-  it('Esc does NOT close when another surface already handled the key', () => {
-    renderHost({ mode: 'replan', from: 'project' });
-
-    // e.g. the canvas leaving full screen, or a menu closing — it preventDefaults.
-    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
-    event.preventDefault();
-    document.dispatchEvent(event);
-
-    expect(push).not.toHaveBeenCalled();
+  it('mounts the workspace CHROME-FITTED, not viewport-sized', () => {
+    // Inside a `h-dvh` dialog panel a second `h-dvh` child overflows by whatever
+    // the panel's own box costs. `PlanningWorkspace`'s own docstring offers this
+    // variant for exactly a chrome-fitted container.
+    const { container } = renderHost({ mode: 'replan', from: 'project' });
+    const frame = container.querySelector('.grid');
+    expect(frame?.className).toContain('h-full');
+    expect(frame?.className).not.toContain('h-dvh');
   });
 });
 
@@ -629,5 +684,59 @@ describe('PlanningWorkspaceHost — the audit-coverage banner is admin-only', ()
 
     expect(screen.queryByRole('status')).toBeNull();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('coverage · the TARGET SET the host owns (MOTIR-4733)', () => {
+  it('ADDS a target the composer’s `@` picker hands it', async () => {
+    // The other half of the set the host owns. The composer's mention picker is
+    // its only producer, so it is driven for real — only the search is stubbed
+    // (see the mock at the top of this file), because a candidate list is not
+    // what this asserts.
+    renderHost({ mode: 'replan', from: 'project' });
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
+
+    const composer = screen.getByRole('textbox');
+    await act(async () => {
+      fireEvent.change(composer, { target: { value: '@Billing' } });
+    });
+
+    const option = screen.queryByRole('option', { name: /MOTIR-9/ });
+    // If the listbox did not open, say so rather than passing on a missing
+    // element — a `queryBy` that finds nothing is not a green test.
+    expect(option, 'the mention listbox did not open').not.toBeNull();
+    // ⚠️ `mouseDown`, not `click`: the option commits on POINTER DOWN so the
+    // composer's input never loses focus to it (`TargetSearchListbox`). A
+    // `click` here would assert nothing and pass silently.
+    await act(async () => {
+      fireEvent.mouseDown(option!);
+    });
+
+    // The CANVAS rings it — which is the point of the set living on the host
+    // rather than in the rail: both panes read it.
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('wi_9');
+  });
+
+  it('removes the entrance’s pre-filled target when the chip’s ⨉ is pressed', () => {
+    // `addTarget` / `removeTarget` live on the HOST, not the rail, because both
+    // panes read the set: the composer collects it and the canvas rings it. They
+    // are handed to the real composer, so this drives the real chip — the only
+    // place either is reachable from.
+    const target = { id: 'wi_7', identifier: 'MOTIR-7', title: 'The anchor', kind: 'subtask' };
+    renderHost(
+      { mode: 'contextual', from: 'work-item', item: 'MOTIR-7' },
+      { initialTarget: target as PlanningTarget },
+    );
+
+    // The canvas RINGS it while it is in the set…
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('wi_7');
+
+    const remove = screen.getByRole('button', { name: /MOTIR-7/ });
+    fireEvent.click(remove);
+
+    // …and stops the moment it leaves. The entrance's item is a SEED, not a
+    // lock: the user can drop it and plan about something else.
+    expect(screen.getByTestId('canvas-stub').getAttribute('data-targets')).toBe('');
+    expect(screen.queryByTestId('planning-target-chip')).toBeNull();
   });
 });

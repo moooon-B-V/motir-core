@@ -25,6 +25,7 @@ import {
   UPDATE_PLAN_ITEM_TOOL_NAME,
   UPDATE_PLAN_PROPOSAL_TOOL_NAME,
   WITHDRAW_PLAN_PROPOSAL_TOOL_NAME,
+  UPDATE_PLAN_TOOL_NAME,
   registerAuthorPlan,
 } from './tools/authorPlan';
 import {
@@ -49,6 +50,11 @@ import {
   PUBLISH_DESIGN_RESULT_TOOL_NAME,
   registerPublishDesignResult,
 } from './tools/publishDesignResult';
+import {
+  CREATE_ACCEPTANCE_UPLOAD_TOOL_NAME,
+  PUBLISH_ACCEPTANCE_RESULT_TOOL_NAME,
+  registerPublishAcceptanceResult,
+} from './tools/publishAcceptanceResult';
 import { SEARCH_WORK_ITEMS_TOOL_NAME, registerSearchWorkItems } from './tools/searchWorkItems';
 import { WHOAMI_TOOL_NAME, registerWhoami } from './tools/whoami';
 import { LIST_PROJECTS_TOOL_NAME, registerListProjects } from './tools/listProjects';
@@ -116,6 +122,7 @@ export const MCP_TOOL_NAMES = [
   UPDATE_PLAN_ITEM_TOOL_NAME,
   UPDATE_PLAN_PROPOSAL_TOOL_NAME,
   WITHDRAW_PLAN_PROPOSAL_TOOL_NAME,
+  UPDATE_PLAN_TOOL_NAME,
   OPEN_PLAN_SESSION_TOOL_NAME,
   APPEND_PLAN_TURN_TOOL_NAME,
   SUBMIT_PLAN_SESSION_TOOL_NAME,
@@ -127,6 +134,8 @@ export const MCP_TOOL_NAMES = [
   REINFORCE_LESSON_TOOL_NAME,
   ATTACH_FILE_TOOL_NAME,
   PUBLISH_DESIGN_RESULT_TOOL_NAME,
+  CREATE_ACCEPTANCE_UPLOAD_TOOL_NAME,
+  PUBLISH_ACCEPTANCE_RESULT_TOOL_NAME,
   LINK_PULL_REQUEST_TOOL_NAME,
   UNLINK_PULL_REQUEST_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
@@ -258,6 +267,14 @@ export function registerMcpTools(
   // MOTIR-3057's `/api/v1` route, over the same service path.
   registerAttachFile(target, resolveContext);
   registerPublishDesignResult(target, resolveContext);
+  // The ACCEPTANCE publish door (bug MOTIR-4704) — the receipt half of the pair
+  // whose design half is the line above. MOTIR-4096 retired the CI uploader on
+  // the premise that the agent would publish over MCP, and this is the surface
+  // that premise named; until it existed, three documents described a door that
+  // was not here. TWO tools rather than one because a recording cannot travel as
+  // a tool argument: mint a presigned PUT, upload the bytes straight to the
+  // store, register the pathname.
+  registerPublishAcceptanceResult(target, resolveContext);
   // The pull-request LINK door (Story MOTIR-3525 · MOTIR-3526) — an executing
   // agent declares which card its pull request delivers, at the one moment it
   // knows with certainty. The branch/title parse stays as the fallback for a

@@ -1,7 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
-import { planningWorkspaceHref, type PlanningLaunchContext } from '@/lib/planning/launcher';
+import {
+  parsePlanningLaunch,
+  parsePlanningOverlay,
+  withPlanningOverlay,
+  type PlanningLaunchContext,
+} from '@/lib/planning/launcher';
+import { workItemCrumbLabel } from '@/lib/planning/projectCanvasModel';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
@@ -17,11 +23,11 @@ import { truncateAuthTables } from '../../helpers/db';
 //
 // The three joints, in the order a user crosses them:
 //
-//   1. LAUNCHER → HOST. `planningWorkspaceHref()` (MOTIR-1729's launcher half)
-//      writes a query; the `/planning` ROUTE reads it back. The pure round trip
-//      is unit-tested; what is NOT is that the route actually WIRES the parse,
-//      the gate and the back-href into the props the host renders from. So this
-//      drives the real page module over a real project row.
+//   1. LAUNCHER → READER. The launcher writes a query; something reads it back.
+//      The pure round trip is unit-tested; what is NOT is that the real readers
+//      actually parse what the real writer emits. Since MOTIR-4732 there are two
+//      of them — the OVERLAY, client-side, and the `/planning` FORWARD,
+//      server-side — and both are driven below.
 //
 //   2. CONVERSATION → JOB. The thread's ACCUMULATED intent (MOTIR-1728) is what
 //      the plan-edit job receives — every user turn in order, across a RESUME,
@@ -100,7 +106,28 @@ const { POST: openSessionRoute } = await import('@/app/api/ai/plan-change/sessio
 const { POST: appendTurnRoute } = await import('@/app/api/ai/plan-change/session/turns/route');
 const { POST: submitRoute } = await import('@/app/api/ai/plan-change/session/submit/route');
 const { POST: approvePlanRoute } = await import('@/app/api/plans/[id]/approve/route');
-const { default: PlanningWorkspacePage } = await import('@/app/(planning)/planning/page');
+// ⚠️ RE-POINTED (MOTIR-4732). This used to import `app/(planning)/planning/page`
+// and drive the route's Server Component. That route is DELETED — the workspace
+// is an overlay (MOTIR-4729) — so the two joints it tested moved:
+//
+//   · what the launcher WRITES and a server READS is now the `/planning`
+//     FORWARD, the one surviving reader of the route-era query and what an old
+//     bookmark lands on;
+//   · what turns an anchor into the canvas's ARRIVAL LEVEL is now
+//     `GET /api/work-items/planning-anchor` (MOTIR-4727), which the overlay
+//     fetches because a client island may not reach a service.
+//
+// Both are driven below against the same real, really-nested project. What is
+// GONE with the page is its own gate arms (sign-in, no-project, the onboarding
+// forward) — those now run in the overlay off `resolvePlanningHostGate`, a pure
+// function with its own coverage, and the page that composed them no longer
+// exists to be tested.
+const { planningForwardTarget, default: PlanningForwardPage } =
+  await import('@/app/(authed)/planning/page');
+const { GET: anchorRoute } = await import('@/app/api/work-items/planning-anchor/route');
+// The SHIPPED approve client — what the close-with-pending guard's *Confirm &
+// add* reaches through `usePlanChangeConversation.approve` (MOTIR-4731).
+const { approvePlanRequest } = await import('@/lib/planning/planReviewClient');
 
 const BASE = 'http://localhost:3000';
 
@@ -112,19 +139,60 @@ function post(path: string, body?: unknown): Request {
   });
 }
 
-/** The searchParams Next hands a page, built from the href the LAUNCHER emits —
- *  the seam itself: nothing here restates the query by hand. */
-function searchParamsFrom(context: PlanningLaunchContext): Record<string, string> {
-  const url = new URL(planningWorkspaceHref(context), BASE);
-  return Object.fromEntries(url.searchParams.entries());
+/** The OVERLAY address a door writes for `context`, on `page` — through the
+ *  SHIPPED merge, so a host page that already has a query is handled the way a
+ *  real door handles it rather than by string concatenation here. */
+function overlayAddress(context: PlanningLaunchContext, page = '/backlog'): string {
+  return withPlanningOverlay(page, context);
 }
 
-/** Render the `/planning` Server Component and return the host element's props. */
-async function renderPlanningPage(context: PlanningLaunchContext) {
-  const element = (await PlanningWorkspacePage({
-    searchParams: Promise.resolve(searchParamsFrom(context)),
-  })) as { type: unknown; key: string | null; props: Record<string, unknown> };
-  return element;
+/** The launch the OVERLAY reads back off that address. */
+function launchFromOverlay(context: PlanningLaunchContext) {
+  return parsePlanningOverlay(new URL(overlayAddress(context), BASE).searchParams);
+}
+
+/** The ROUTE-era address an old bookmark still carries. */
+function legacySearchParams(context: PlanningLaunchContext): Record<string, string> {
+  const params = new URLSearchParams({
+    mode:
+      context.kind === 'work-item'
+        ? context.hasPlan
+          ? 'replan'
+          : 'contextual'
+        : context.kind === 'roadmap'
+          ? 'roadmap'
+          : context.kind === 'convention-refine'
+            ? 'contextual'
+            : context.hasPlan === undefined
+              ? 'project'
+              : context.hasPlan
+                ? 'replan'
+                : 'generation',
+    from: context.kind,
+  });
+  if (context.kind === 'work-item') params.set('item', context.itemKey);
+  if (context.kind === 'convention-refine') params.set('repo', context.repoKey);
+  return Object.fromEntries(params.entries());
+}
+
+/** Drive the real anchor ROUTE — what the overlay fetches for a work-item launch. */
+async function readAnchor(itemKey: string) {
+  const res = await anchorRoute(
+    new Request(`${BASE}/api/work-items/planning-anchor?key=${encodeURIComponent(itemKey)}`),
+  );
+  if (res.status !== 200) return null;
+  return (await res.json()) as {
+    anchor: { id: string; identifier: string; title: string; kind: string };
+    ancestors: { id: string; identifier: string; title: string }[];
+  };
+}
+
+/** The canvas's arrival trail, composed exactly as the overlay composes it. */
+function trailFrom(found: Awaited<ReturnType<typeof readAnchor>>) {
+  return (found?.ancestors ?? []).map((a) => ({
+    id: a.id,
+    label: workItemCrumbLabel(a.identifier, a.title),
+  }));
 }
 
 let fx: WorkItemFixture;
@@ -184,118 +252,165 @@ async function markOnboarded(): Promise<void> {
   };
 }
 
-// ───────────────────────── Seam 1 — launcher → host ─────────────────────────
+// ──────────────── Seam 1 — the launcher → what a SERVER reads ────────────────
+//
+// ⚠️ RE-POINTED (MOTIR-4732). This joint used to be *the launcher writes a
+// query, the `/planning` route reads it back into the host's props*. The route
+// is deleted; the property is not. What a launcher writes is now read in two
+// places, and both are driven here against the real modules:
+//
+//   · the OVERLAY, client-side, off `parsePlanningOverlay`;
+//   · the `/planning` FORWARD, server-side, off `parsePlanningLaunch` — the one
+//     surviving reader of the route-era names, and what an old bookmark lands on.
+//
+// The page's own gate arms (sign-in, no-project, the onboarding forward) went
+// with the page: they are `resolvePlanningHostGate`'s now, which the overlay
+// calls and which has its own coverage.
 
-describe('seam · the launcher’s href is what the /planning HOST resolves', () => {
-  it('carries a project launch’s mode + origin from the href into the host’s props', async () => {
+describe('seam · the launcher’s OVERLAY address is what the overlay resolves', () => {
+  it('carries a project launch’s mode + origin across the write/read boundary', async () => {
     await markOnboarded();
 
-    const element = await renderPlanningPage({ kind: 'project', hasPlan: true });
-
-    // The contract that had NO consumer when it was written: the route parses
-    // exactly what the launcher wrote.
-    expect(element.props['launch']).toEqual({
+    expect(launchFromOverlay({ kind: 'project', hasPlan: true })).toEqual({
       mode: 'replan',
       from: 'project',
       itemKey: null,
       repoKey: null,
     });
-    expect(element.props['backHref']).toBe('/roadmap');
-    expect(element.props['projectKey']).toBe(fx.project.identifier);
-    expect(element.props['projectName']).toBe(fx.project.name);
   });
 
-  it('carries a work-item launch’s target key through to the host and its Close href', async () => {
+  it('carries a work-item launch’s target key', async () => {
     await markOnboarded();
 
-    const element = await renderPlanningPage({ kind: 'work-item', itemKey: 'PROD-7' });
-
-    expect(element.props['launch']).toEqual({
+    expect(launchFromOverlay({ kind: 'work-item', itemKey: 'PROD-7' })).toEqual({
       mode: 'contextual',
       from: 'work-item',
       itemKey: 'PROD-7',
       repoKey: null,
     });
-    // The origin the user came from — resolved from the SAME parsed context,
-    // not re-derived by the page.
-    expect(element.props['backHref']).toBe('/items/PROD-7');
   });
 
-  it('carries a convention-refine launch’s repo key and returns to code health', async () => {
+  it('carries a convention-refine launch’s repo key', async () => {
     await markOnboarded();
 
-    const element = await renderPlanningPage({
-      kind: 'convention-refine',
-      repoKey: 'moooon/motir-core',
-    });
-
-    expect(element.props['launch']).toEqual({
+    expect(launchFromOverlay({ kind: 'convention-refine', repoKey: 'moooon/motir-core' })).toEqual({
       mode: 'contextual',
       from: 'convention-refine',
       itemKey: null,
       repoKey: 'moooon/motir-core',
     });
-    expect(element.props['backHref']).toBe('/code-health');
   });
 
-  it('opens the SAME workspace whether the REAL project tree is empty or populated (MOTIR-2069)', async () => {
-    // This seam used to assert the page read the tree and reported a `hasItems`
-    // boolean. That read is gone: it was a duplicate of the one the canvas makes
-    // itself, and awaiting it is what kept `/planning` from painting anything
-    // until the whole root level had come back. The canvas now decides empty vs
-    // populated off the level it reads, so the page's OUTPUT must no longer vary
-    // with the tree at all — which is exactly what makes the frame paintable
-    // before any of it resolves.
+  it('leaves the HOST page’s own query untouched — the reason the names are namespaced', async () => {
     await markOnboarded();
 
-    const empty = await renderPlanningPage({ kind: 'project' });
-    expect(empty.props).not.toHaveProperty('hasItems');
-    expect(empty.props['projectKey']).toBe(fx.project.identifier);
-
-    await seedItem({ kind: 'epic', title: 'Billing' });
-
-    const populated = await renderPlanningPage({ kind: 'project' });
-    expect(populated.props).not.toHaveProperty('hasItems');
-    // Same props against a real tree with real rows in it — the page is blind to
-    // the tree, by construction.
-    expect(populated.props).toEqual(empty.props);
-  });
-
-  it('FORWARDS a never-onboarded project to /onboarding — the gate is not bypassed', async () => {
-    // The fixture project has a null `onboardingRanAt`, which is the first-run
-    // state. `/onboarding` keeps owning it; the host is an additional surface.
-    await expect(renderPlanningPage({ kind: 'project', hasPlan: true })).rejects.toBeInstanceOf(
-      TestRedirect,
-    );
-    await expect(renderPlanningPage({ kind: 'project', hasPlan: true })).rejects.toMatchObject({
-      to: '/onboarding',
-    });
-  });
-
-  it('bounces a signed-out visitor to sign-in before any project read', async () => {
-    session.current = null;
-    await expect(renderPlanningPage({ kind: 'project' })).rejects.toMatchObject({ to: '/sign-in' });
-  });
-
-  it('renders the pick-a-project state with no active project, never a crash', async () => {
-    await markOnboarded();
-    activeCtx.current = null;
-
-    const element = await renderPlanningPage({ kind: 'project' });
-    // Not the host — the empty state. The host is only mounted for a project.
-    expect(element.props).not.toHaveProperty('launch');
+    // A door on the drilled roadmap. The workspace opens; the level does not move.
+    const address = overlayAddress({ kind: 'roadmap' }, '/roadmap?item=PROD-12');
+    const url = new URL(address, BASE);
+    expect(url.searchParams.get('item')).toBe('PROD-12');
+    expect(parsePlanningOverlay(url.searchParams)?.from).toBe('roadmap');
   });
 });
 
-// ───────────── Seam 1b — the anchor → the CANVAS's arrival level ─────────────
+describe('seam · an OLD /planning link still lands in the workspace (the forward)', () => {
+  // The migration's client for stragglers: a bookmark, a chat message, a stale
+  // tab. Driven through the real forward module over the real launcher's parse.
+
+  it('sends a work-item launch to that item’s page, workspace open over it', async () => {
+    await markOnboarded();
+
+    const target = planningForwardTarget(
+      legacySearchParams({ kind: 'work-item', itemKey: 'PROD-7' }),
+    );
+    const url = new URL(target, BASE);
+
+    expect(url.pathname).toBe('/items/PROD-7');
+    expect(parsePlanningOverlay(url.searchParams)).toEqual({
+      mode: 'contextual',
+      from: 'work-item',
+      itemKey: 'PROD-7',
+      repoKey: null,
+    });
+  });
+
+  it('sends a convention-refine launch to code health', async () => {
+    await markOnboarded();
+
+    const url = new URL(
+      planningForwardTarget(legacySearchParams({ kind: 'convention-refine', repoKey: 'r' })),
+      BASE,
+    );
+    expect(url.pathname).toBe('/code-health');
+    expect(parsePlanningOverlay(url.searchParams)?.repoKey).toBe('r');
+  });
+
+  it('sends everything else to the roadmap, including a bare /planning', async () => {
+    await markOnboarded();
+
+    expect(new URL(planningForwardTarget({}), BASE).pathname).toBe('/roadmap');
+    const replan = new URL(
+      planningForwardTarget(legacySearchParams({ kind: 'project', hasPlan: true })),
+      BASE,
+    );
+    expect(replan.pathname).toBe('/roadmap');
+    expect(parsePlanningOverlay(replan.searchParams)?.mode).toBe('replan');
+  });
+
+  it('the PAGE really redirects — not just the mapping it is built from', async () => {
+    // `planningForwardTarget` is the pure half and every case above drives it.
+    // This drives the SERVER COMPONENT: `redirect()` throws in Next, and the
+    // suite's `TestRedirect` makes the throw inspectable, so what is asserted is
+    // that the page hands that exact address to the framework.
+    await markOnboarded();
+
+    await expect(
+      PlanningForwardPage({
+        searchParams: Promise.resolve({ mode: 'contextual', from: 'work-item', item: 'PROD-7' }),
+      }),
+    ).rejects.toMatchObject({
+      to: planningForwardTarget({ mode: 'contextual', from: 'work-item', item: 'PROD-7' }),
+    });
+
+    // …and a bare `/planning`, the shape a stale bookmark most often has.
+    await expect(PlanningForwardPage({ searchParams: Promise.resolve({}) })).rejects.toBeInstanceOf(
+      TestRedirect,
+    );
+  });
+
+  it('does not smuggle a target a hand-edited old address did not own', async () => {
+    // The anti-smuggling rule survives the migration in both directions: the
+    // legacy parse drops it, and the overlay writer never emits it.
+    const url = new URL(
+      planningForwardTarget({ mode: 'roadmap', from: 'roadmap', item: 'PROD-1' }),
+      BASE,
+    );
+    expect(parsePlanningOverlay(url.searchParams)?.itemKey).toBeNull();
+  });
+
+  it('parses the launch through the SHIPPED module, not a copy of the names', async () => {
+    // The forward is the last reader of `mode` / `from` / `item` / `repo`. If the
+    // legacy parse ever moved, this is what notices.
+    expect(parsePlanningLaunch({ mode: 'replan', from: 'work-item', item: 'PROD-3' })).toEqual({
+      mode: 'replan',
+      from: 'work-item',
+      itemKey: 'PROD-3',
+      repoKey: null,
+    });
+  });
+});
+
+// ───────── Seam 1b — the anchor → the CANVAS's arrival level ─────────
 //
-// The `?item=` anchor used to reach only the CONVERSATION: the page resolved it,
-// spent it on the chat's target set, and mounted the canvas with no level at all,
-// so a workspace summoned about a subtask three levels down opened on the project's
-// epics and drew that subtask's target ring on a level the user was not on
-// (MOTIR-2070). What no unit can see is whether the page ACTUALLY derives the trail
-// from the real tree — a unit test would assert against its own fixture of the
-// ancestor chain. So this drives the real page over a real, really-nested project.
+// The `?item=` anchor used to reach only the CONVERSATION: the workspace opened
+// on the project's epics and drew that subtask's target ring on a level the user
+// was not on (MOTIR-2070). What no unit can see is whether the trail is ACTUALLY
+// derived from the real tree — a unit test asserts against its own fixture of the
+// ancestor chain.
+//
+// ⚠️ RE-POINTED (MOTIR-4732). The page that made this read on the server is
+// deleted; the overlay is a client island, so the read crosses HTTP now
+// (`GET /api/work-items/planning-anchor`, MOTIR-4727). Same real, really-nested
+// project, same assertions — one layer over.
 
 describe('seam · a work-item launch opens the canvas ON the anchor’s level', () => {
   it('derives the trail from the REAL ancestor chain, root→parent, anchor excluded', async () => {
@@ -312,85 +427,104 @@ describe('seam · a work-item launch opens the canvas ON the anchor’s level', 
       parentId: story.id,
     });
 
-    const element = await renderPlanningPage({ kind: 'work-item', itemKey: subtask.identifier });
+    const found = await readAnchor(subtask.identifier);
 
     // The canvas opens on the level CONTAINING the anchor: the last crumb is the
     // anchor's PARENT, so the anchor itself is one of the nodes drawn — with its
     // siblings and dependency edges, the context a plan-change turn about it needs.
-    expect(element.props['initialCanvasTrail']).toEqual([
+    expect(trailFrom(found)).toEqual([
       { id: epic.id, label: `${epic.identifier} · Epic 7: AI Planning Layer` },
       { id: story.id, label: `${story.identifier} · Contextual planning from each work item` },
     ]);
     // …and the anchor still reaches the conversation + the target set, unchanged.
-    expect(element.props['anchorId']).toBe(subtask.id);
-    expect(element.props['initialTarget']).toMatchObject({
-      id: subtask.id,
-      identifier: subtask.identifier,
-    });
+    expect(found?.anchor.id).toBe(subtask.id);
+    expect(found?.anchor.identifier).toBe(subtask.identifier);
   });
 
   it('leaves a ROOT-level anchor (an epic) at the root — it is already on that level', async () => {
     await markOnboarded();
     const epic = await seedItem({ kind: 'epic', title: 'Billing' });
 
-    const element = await renderPlanningPage({ kind: 'work-item', itemKey: epic.identifier });
+    const found = await readAnchor(epic.identifier);
 
-    expect(element.props['initialCanvasTrail']).toEqual([]);
-    expect(element.props['anchorId']).toBe(epic.id);
+    expect(trailFrom(found)).toEqual([]);
+    expect(found?.anchor.id).toBe(epic.id);
   });
 
-  it('falls back to the ROOT level for an unresolvable ?item=, with no error state', async () => {
+  it('falls back to the ROOT level for an unresolvable key, with no error state', async () => {
     await markOnboarded();
     await seedItem({ kind: 'epic', title: 'Billing' });
 
-    // A hand-edited / another tenant's / deleted key: the resolve throws and the
-    // page swallows it. The workspace must still open — on the project conversation
-    // at the root level, exactly as before this fix.
-    const element = await renderPlanningPage({ kind: 'work-item', itemKey: 'PROD-9999' });
+    // A hand-edited / another tenant's / deleted key: the route answers the
+    // no-existence-leak 404 and the client turns it into `null`. The workspace
+    // must still open — on the project conversation at the root level.
+    const found = await readAnchor('PROD-9999');
 
-    expect(element.props['initialCanvasTrail']).toEqual([]);
-    expect(element.props['anchorId']).toBeNull();
-    expect(element.props['initialTarget']).toBeNull();
-    // The workspace still OPENS — the failed resolve degrades to the project
-    // conversation at the root, it does not swallow the host (MOTIR-2069 left
-    // the canvas to decide what to draw, so this is the whole surface).
-    expect(element.props['projectKey']).toBe(fx.project.identifier);
+    expect(found).toBeNull();
+    expect(trailFrom(found)).toEqual([]);
   });
 
-  it('KEYS the host on the anchor, so re-entering about another item re-seeds it', async () => {
-    // The workspace's own canvas peek carries the per-item Plan door, so that
-    // launch is a SAME-ROUTE navigation: React reconciles the host in place and
-    // every `useState` seed (the canvas level, the pre-filled target set) keeps
-    // the PREVIOUS item's value while the chrome switches to the new one
-    // (MOTIR-2076). The key is what makes a different anchor a different
-    // workspace — asserted here because no in-place re-render can be observed
-    // from a single render, and the E2E that drives the real door is the only
-    // other place it shows.
+  it('a STORY anchor opens on its own level — one crumb, the epic above it', async () => {
+    // The middle of the three shapes, and the one a fixture test would most
+    // easily get wrong: not the leaf, not the root.
     await markOnboarded();
-    const epic = await seedItem({ kind: 'epic', title: 'Billing' });
+    const epic = await seedItem({ kind: 'epic', title: 'Epic 7: AI Planning Layer' });
+    const story = await seedItem({ kind: 'story', title: 'The overlay', parentId: epic.id });
+    await seedItem({ kind: 'subtask', title: 'A child nobody asked for', parentId: story.id });
 
-    const anchored = await renderPlanningPage({ kind: 'work-item', itemKey: epic.identifier });
-    expect(anchored.key).toBe(epic.identifier);
+    const found = await readAnchor(story.identifier);
 
-    // …and it must be keyed on the ANCHOR ALONE: a same-anchor re-render (the
-    // `router.refresh()` an approve fires) must NOT remount and discard the
-    // conversation and the canvas's drill state.
-    const again = await renderPlanningPage({ kind: 'work-item', itemKey: epic.identifier });
-    expect((again as { key: string | null }).key).toBe((anchored as { key: string | null }).key);
-
-    const project = await renderPlanningPage({ kind: 'project', hasPlan: true });
-    expect(project.key).toBe('project');
+    // ANCESTORS ONLY: the story's own children are NOT the level — opening
+    // inside it would hide the item the conversation is about (MOTIR-2070).
+    expect(trailFrom(found)).toEqual([
+      { id: epic.id, label: `${epic.identifier} · Epic 7: AI Planning Layer` },
+    ]);
+    expect(found?.anchor.id).toBe(story.id);
+    expect(found?.anchor.kind).toBe('story');
   });
 
-  it('leaves the project-scoped launch untouched — no anchor, no trail', async () => {
+  it('reads against the ACTIVE project only — another tenant’s row is never reachable', async () => {
+    // The no-existence-leak contract at this layer. `tests/api/planning-anchor-route.test.ts`
+    // asserts the byte-identical 404 for a forbidden key and an unknown one, on
+    // two scenarios built for it; what THIS seam adds is that the route resolves
+    // the key against the caller's ACTIVE project — so a second tenant holding
+    // the same identifier gets its own row, never the stranger's.
+    await markOnboarded();
+    const mine = await seedItem({ kind: 'epic', title: 'Mine' });
+
+    const stranger = await makeWorkItemFixture();
+    const theirs = await workItemsService.createWorkItem(
+      { projectId: stranger.projectId, kind: 'epic', title: 'Theirs' },
+      { userId: stranger.ownerId, workspaceId: stranger.workspaceId },
+    );
+
+    const found = await readAnchor(theirs.identifier);
+    // Same identifier string, different tenant: what comes back is MINE, and the
+    // stranger's title never crosses.
+    expect(found?.anchor.id).not.toBe(theirs.id);
+    if (found) expect(found.anchor.title).not.toBe('Theirs');
+
+    // …and a key no project owns is the ordinary 404.
+    const unknown = await anchorRoute(
+      new Request(`${BASE}/api/work-items/planning-anchor?key=${fx.project.identifier}-99999`),
+    );
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toEqual({
+      code: 'NOT_FOUND',
+      error: 'Work item not available.',
+    });
+
+    // The control: a key the actor MAY see still answers.
+    expect((await readAnchor(mine.identifier))?.anchor.id).toBe(mine.id);
+  });
+
+  it('a project-scoped launch carries no anchor to read at all', async () => {
     await markOnboarded();
     await seedItem({ kind: 'epic', title: 'Billing' });
 
-    const element = await renderPlanningPage({ kind: 'project', hasPlan: true });
-
-    expect(element.props['initialCanvasTrail']).toEqual([]);
-    expect(element.props['anchorId']).toBeNull();
-    expect(element.props['initialTarget']).toBeNull();
+    // The overlay only reads for a `work-item` origin — the address is what says
+    // so, and the anti-smuggling rule is what makes that trustworthy.
+    expect(launchFromOverlay({ kind: 'project', hasPlan: true })?.itemKey).toBeNull();
   });
 });
 
@@ -500,6 +634,59 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     approvePlanRoute(post(`/api/plans/${planId}/approve`), {
       params: Promise.resolve({ id: planId }),
     });
+
+  it('the GUARD’s *Confirm & add* reaches materialize through the SHIPPED client', async () => {
+    // ⚠️ THE LAST LINK OF THE CLOSE-WITH-PENDING SEAM (MOTIR-4731 / MOTIR-4733).
+    // `tests/components/plan-close-guard.test.tsx` proves the guard's *Confirm &
+    // add* calls the host's `approve` and closes only on the success callback —
+    // with a stubbed conversation, because a happy-dom render cannot drive a
+    // database. THIS is the other half: `approve` calls `approvePlanRequest`
+    // (`lib/hooks/usePlanChangeConversation.ts:1075`), the SHIPPED client, and
+    // that client is driven here against the REAL route over real Postgres. So
+    // the chain is covered end to end without either half faking the other.
+    const epic = await seedItem({ kind: 'epic', title: 'Billing' });
+
+    await openSessionRoute();
+    await appendTurnRoute(post('/api/ai/plan-change/session/turns', { body: 'Add auth' }));
+    const submitted = await submitRoute();
+    const { planId } = (await submitted.json()) as { planId: string };
+
+    await engineProposes(planId, [
+      {
+        op: 'add',
+        proposedFields: { title: 'Auth for billing', kind: 'story' },
+        parentRef: epic.id,
+      },
+    ]);
+
+    // The client builds the request the guard's Confirm produces; `fetch` is
+    // routed to the real handler because a Vitest process has no server. Nothing
+    // about the REQUEST is restated here — the client owns its method, its path
+    // and its headers, which is the drift this seam exists to catch.
+    const seen: { url: string; method?: string }[] = [];
+    vi.stubGlobal('fetch', async (input: RequestInfo, init?: RequestInit) => {
+      const url = String(input);
+      seen.push({ url, method: init?.method });
+      const id = url.split('/api/plans/')[1]!.split('/')[0]!;
+      return approvePlanRoute(new Request(`${BASE}${url}`, { method: init?.method ?? 'GET' }), {
+        params: Promise.resolve({ id: decodeURIComponent(id) }),
+      });
+    });
+
+    try {
+      const approved = await approvePlanRequest(planId);
+      expect(approved.id).toBe(planId);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(seen).toEqual([{ url: `/api/plans/${planId}/approve`, method: 'POST' }]);
+
+    // …and the proposal became a real row under the real parent. A guard that
+    // closed on anything less would be closing on a promise.
+    const children = await adminDb.workItem.findMany({ where: { parentId: epic.id } });
+    expect(children.map((c) => c.title)).toContain('Auth for billing');
+  });
 
   it('runs the whole loop: converse → submit → the run’s proposals → approve → work items', async () => {
     const epic = await seedItem({ kind: 'epic', title: 'Billing' });

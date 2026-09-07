@@ -1,4 +1,13 @@
-import { Bell, Database, KeyRound, Languages, Palette, ShieldCheck, User } from 'lucide-react';
+import {
+  Bell,
+  Database,
+  GitBranch,
+  KeyRound,
+  Languages,
+  Palette,
+  ShieldCheck,
+  User,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The account-settings navigation REGISTRY (Story 7.8 · Subtask 7.8.12) — ONE
@@ -155,6 +164,37 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
     // command-palette action id (`account-settings-apiTokens`), the `labelKey`
     // indexes `settings.account.nav.apiTokens`, and neither is a surface a
     // reader ever sees — that story renames the LABEL, not the key.
+  },
+  {
+    id: 'gitAccounts',
+    group: 'security',
+    href: '/settings/account/git',
+    icon: GitBranch,
+    labelKey: 'gitAccounts',
+    // Story MOTIR-4669 · MOTIR-4682 — the member's own git identity, moved DOWN
+    // a tier while everything else in that story moves UP. `GithubIdentity` is
+    // `userId @unique`: it has never belonged to a workspace, and
+    // `projectSettingsNav.ts` already calls connecting it "the one action nobody
+    // can take on [a member's] behalf."
+    //
+    // SECURITY group, THIRD — and both halves are read off this registry rather
+    // than chosen. The group, because this is a CREDENTIAL and credentials live
+    // here (`twoFactor`, `apiTokens`); it is not a preference and not data. The
+    // ORDER, by extending the rule the group already states on `twoFactor`
+    // ("above API tokens: a second factor is the more consequential of the two
+    // things this group holds"): a second factor PROTECTS the account, an API
+    // token ACTS AS YOU inside Motir, and a git identity grants Motir nothing
+    // about your account at all. Third.
+    //
+    // ⚠️ `GitBranch` is the SAME glyph the organisation's `Git` row carries
+    // (MOTIR-4673), deliberately: two rows in two navigations, of one family, so
+    // a reader who has seen one recognises the other as *the git surface at the
+    // tier they are standing on*. The LABEL is what tells them apart —
+    // `Git accounts`, plural and account-scoped, never the org's bare `Git`.
+    //
+    // Landed in the SAME commit as `app/(authed)/settings/account/git/page.tsx`,
+    // which keeps the route↔registry totality assertion green by construction —
+    // the move every row since MOTIR-4324 has made.
   },
   {
     id: 'data',

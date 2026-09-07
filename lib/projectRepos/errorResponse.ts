@@ -15,6 +15,7 @@ import {
   RealizedRepoAlreadyClaimedError,
   RepoTransferRefusedError,
 } from '@/lib/projectRepos/errors';
+import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organizations/errors';
 
 /**
  * Shared typed-error → HTTP mapping for the repository-SET routes (Story
@@ -38,6 +39,8 @@ import {
  *     correct response)
  *   ProjectRepoInvalidFieldError                    → 422 (a value the shape
  *     rules reject — a blank or over-long name, an illegal character)
+ *   OrganizationNotFoundError → 404 · OrgForbiddenError → 403 (the ORG-tier gate
+ *     on the add paths, MOTIR-4678 — see the note at the arm)
  */
 export function mapProjectRepoError(err: unknown): NextResponse | null {
   if (err instanceof ProjectNotFoundError || err instanceof ProjectRepoNotFoundError) {
@@ -68,6 +71,17 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
   }
   if (err instanceof ProjectRepoInvalidFieldError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+  }
+  // The ORG-tier gate on the add paths (MOTIR-4678). Its two arms keep the ORG
+  // tier's own posture rather than being flattened into the project one: a
+  // non-member of the organisation gets 404 (an org they are not in must be
+  // indistinguishable from one that does not exist), a plain member gets 403
+  // (they can already see it, so there is nothing left to hide).
+  if (err instanceof OrganizationNotFoundError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  if (err instanceof OrgForbiddenError) {
+    return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
   }
   // The takeover's upstream failure (MOTIR-711): GitHub refused, and no change to
   // the request would fix it — so it is a 502, not a 4xx blaming the caller. The

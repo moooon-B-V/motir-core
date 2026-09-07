@@ -188,6 +188,11 @@ const SELF_WALKING_MEMBERS = [
   // MOTIR-4299 / MOTIR-4300. Its own `readdirSync` over four roots; it imports no
   // scanner, so nothing derives it.
   'tests/ciFleet/orchestratorPortBoundary.test.ts',
+  // MOTIR-4751. Its own `readdirSync` over the acceptance config's `testDir`;
+  // the only thing it imports is `importGraph`'s `specifiersOf`, which parses
+  // text handed to it and reaches no filesystem of its own — so, like the
+  // entries above, nothing derives it.
+  'tests/e2e-acceptance-lane-imports.test.ts',
 ] as const;
 
 describe('the structural-guard lane (MOTIR-3144)', () => {

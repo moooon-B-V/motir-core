@@ -5,7 +5,7 @@
 // objects). The 7.4.5 plan-detail + 7.4.13 plans-list UIs bind to these.
 
 import type { JobStatus } from '@/lib/ai/types';
-import type { WorkItemPlanningSourceDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemPlanningSourceDto } from '@/lib/dto/workItems';
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 import type { SprintBlockerDto } from '@/lib/dto/sprints';
 
@@ -96,6 +96,38 @@ export type PlanOriginDto = 'user' | 'cadence';
  * `work-item-provenance.md` Decision 2 lists).
  */
 export type PlanAuthorSourceDto = WorkItemPlanningSourceDto;
+
+/**
+ * ONE proposed STEP of a card's to-do list (Story MOTIR-3810 · MOTIR-4616) —
+ * the element type of {@link PlanItemProposedFields.todos}.
+ *
+ * A mirror of `AddTodoInput` (`lib/services/workItemTodosService.ts`) minus the
+ * things a proposal cannot have: no `id`, because the row does not exist yet,
+ * and no `position`, because a fractional index is minted from its NEIGHBOURS at
+ * write time — a key computed at append would be a key computed against a list
+ * that does not exist. **ARRAY ORDER IS LIST ORDER**
+ * (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1); materialize mints
+ * the keys.
+ *
+ * And no `doneAt` / `doneById`: a proposal never ticks. A plan that arrived with
+ * rows already checked would be asserting that work had been done, which is the
+ * one thing a proposal cannot know.
+ */
+export interface ProposedTodoInput {
+  /** WHAT to do — ONE operation, capped at `TODO_TEXT_MAX_LENGTH`. */
+  text: string;
+  /** The INSTRUCTIONS — optional Markdown, the *how* of this one operation. */
+  notesMd?: string | null;
+  /** The command to copy, if this step has one. */
+  commandText?: string | null;
+  /**
+   * Who this step is for. Omitted / `null` ⇒ SEEDED at materialize from the
+   * proposal's own `executor`, and from `human` when it carries none
+   * (AMENDMENT 14 D5, restating the store's §2 seed rule for the proposal path,
+   * where the card whose executor `addTodo` reads does not exist yet).
+   */
+  executor?: ExecutorDto | null;
+}
 
 /**
  * The proposed fields of an `add` PlanItem — the new node's values, which live
@@ -210,6 +242,32 @@ export interface PlanItemProposedFields {
    * (`planReviewService.buildChanges`, MOTIR-3868).
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
+  /**
+   * The card's ORDERED STEPS (Story MOTIR-3810 · MOTIR-4616) — a `manual` card's
+   * to-do list, proposed with the card so the reviewer reads what approve will
+   * write (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1).
+   *
+   * `add` ONLY, and that is a DECISION rather than an omission (AMENDMENT 14 D2):
+   * {@link PlanItemPatch} deliberately has no twin, because a committed card's
+   * list carries a PERSON'S PROGRESS — every row has `doneAt` / `doneById` — and
+   * a plan is not the editor of somebody's progress. A re-plan that overwrote
+   * four ticked rows would be the day the checkbox stopped meaning anything, and
+   * it would happen under one approval by someone reading titles. The doors that
+   * DO edit a live card's list are the item page's own section and the
+   * item-scoped assistant (MOTIR-1344).
+   *
+   * Validated at BOTH write boundaries against the STORE's own caps —
+   * `lib/plans/validateProposedTodos.ts`, importing the three constants from
+   * `lib/workItemTodos/limits.ts` and never a literal, so the proposal path can
+   * never be looser than the list it feeds. Refused on a CONTAINER kind: a
+   * story's steps are its children.
+   *
+   * OPTIONAL, and nothing here makes it mandatory on anything (AMENDMENT 14 D4).
+   * That a `manual` card HAS one is a planning RULE, and it lives in the two rule
+   * homes — `motir-meta`'s `type-manual.md` pack and `A_MANUAL_CARD_BAR` in
+   * motir-ai's `SHARED_PLANNING_RULES` — not in this field's validator.
+   */
+  todos?: ProposedTodoInput[] | null;
 }
 
 /**
@@ -568,6 +626,28 @@ export interface UpdateProposalInput {
    * surface byte-identical (AMENDMENT 4 D3a).
    */
   executor?: string | null;
+  /**
+   * The card's ORDERED STEPS — DEEPENABLE, because a step list is what a card
+   * SAYS (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D3).
+   *
+   * AMENDMENT 3 D3 fixed this set with a rule — *a deepen may change what a card
+   * SAYS and who ACTS on it, never where it SITS or SHIPS* — and AMENDMENT 4 D3a
+   * is the one widening it has taken, for `executor`, on exactly that reasoning.
+   * A to-do list is the card's own words about the work at a finer grain than
+   * `descriptionMd`, so it falls on the SAYS side; it says nothing about where
+   * the card sits or which repository it ships in, so D3's excluded columns are
+   * untouched.
+   *
+   * ⚠️ REPLACED WHOLE, never merged per row — a list has no meaningful partial
+   * edit, the same reason {@link CorrectProposalInput.blockedByRefs} replaces its
+   * set. Sparse at the KEY: absent leaves the proposal's list alone, an explicit
+   * `[]` or `null` CLEARS it.
+   *
+   * Re-validated on the MERGED result, so a deepen that flips `kind` to a
+   * container on a proposal already carrying steps is refused — the kind gate
+   * reads the merge, not the patch alone.
+   */
+  todos?: ProposedTodoInput[] | null;
 }
 
 /**
@@ -651,6 +731,7 @@ export const UPDATE_PROPOSAL_KEYS = [
   'estimateMinutes',
   'explanationMd',
   'executor',
+  'todos',
 ] as const;
 
 export type UpdateProposalKey = (typeof UPDATE_PROPOSAL_KEYS)[number];
@@ -671,6 +752,35 @@ export const CORRECT_PROPOSAL_KEYS = [
 export type CorrectProposalKey = (typeof CORRECT_PROPOSAL_KEYS)[number];
 
 /**
+ * The PLAN'S OWN heading — its `title` and `summary` (MOTIR-4637).
+ *
+ * ⚠️ NOT a proposal's fields. {@link CorrectProposalInput} above corrects one
+ * card ON a plan; this corrects the two lines a reviewer reads ABOVE the tree,
+ * before any card. They were write-once from `create_plan` until this input
+ * existed, so a single wrong sentence — one the product itself tells an agent to
+ * write dispositions into — could only be repaired by withdrawing every proposal
+ * (which ENDS a `planned` plan, `declined` / `discarded`) and re-authoring the
+ * whole thing under a new id.
+ *
+ * SPARSE, exactly like its siblings: a key you omit is left alone and an explicit
+ * `null` clears it. Both fields are nullable on the row and both are nullable
+ * here, so a summary written by mistake can be removed rather than only replaced.
+ */
+export interface CorrectPlanBriefInput {
+  title?: string | null;
+  summary?: string | null;
+}
+
+/**
+ * The keys {@link CorrectPlanBriefInput} declares — the same DECLARED-SOURCE
+ * discipline the two constants above are held to, and for the same reason: a key
+ * on the input that no transport reads is invisible from both ends.
+ */
+export const CORRECT_PLAN_BRIEF_KEYS = ['title', 'summary'] as const;
+
+export type CorrectPlanBriefKey = (typeof CORRECT_PLAN_BRIEF_KEYS)[number];
+
+/**
  * The COMPILE-TIME half of the drift guard: each input's keys and its constant
  * are the same set, in BOTH directions.
  *
@@ -685,12 +795,16 @@ type UpdateKeyMissingFromConstant = Exclude<keyof UpdateProposalInput, UpdatePro
 type UpdateKeyMissingFromInterface = Exclude<UpdateProposalKey, keyof UpdateProposalInput>;
 type CorrectKeyMissingFromConstant = Exclude<keyof CorrectProposalInput, CorrectProposalKey>;
 type CorrectKeyMissingFromInterface = Exclude<CorrectProposalKey, keyof CorrectProposalInput>;
+type BriefKeyMissingFromConstant = Exclude<keyof CorrectPlanBriefInput, CorrectPlanBriefKey>;
+type BriefKeyMissingFromInterface = Exclude<CorrectPlanBriefKey, keyof CorrectPlanBriefInput>;
 const _proposalInputKeysAreExhaustive: [
   UpdateKeyMissingFromConstant,
   UpdateKeyMissingFromInterface,
   CorrectKeyMissingFromConstant,
   CorrectKeyMissingFromInterface,
-] extends [never, never, never, never]
+  BriefKeyMissingFromConstant,
+  BriefKeyMissingFromInterface,
+] extends [never, never, never, never, never, never]
   ? true
   : never = true;
 void _proposalInputKeysAreExhaustive;

@@ -12,9 +12,12 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 
 const { push, refresh } = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 let pathnameValue = '/dashboard';
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, refresh }),
   usePathname: () => pathnameValue,
+  // MOTIR-4730 — the palette's planning door reads the address.
+  useSearchParams: () => navSearchParams,
 }));
 
 const { setActiveProjectAction, switchWorkspaceAction } = vi.hoisted(() => ({

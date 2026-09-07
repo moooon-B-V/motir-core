@@ -53,6 +53,18 @@ import {
   PLAN_CHANGE_REFINE_JOB_ID,
 } from './_helpers/ai-augment-replan-seed';
 
+// ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
+// workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
+// you are already on. So an address that used to BE the workspace is now a host
+// page plus four namespaced parameters, and a `waitForURL` that matched the old
+// path matches nothing. The assertions about what the workspace DOES are
+// unchanged — only how it is reached and how its arrival is detected.
+//
+// (`/planning?…` still resolves: `app/(authed)/planning/page.tsx` forwards an old
+// link to the host page it belonged to. Its own coverage is in
+// `tests/integration/planning/planChangeSeams.test.ts`; these specs address the
+// overlay directly, which is what a reader would write today.)
+
 test.describe.configure({ timeout: 120_000 });
 
 // ── The proposals a run leaves behind, per turn ──────────────────────────────
@@ -281,7 +293,7 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     // The REAL door: the header's hero launcher, present on every authed screen.
     // Before MOTIR-1729 this href dead-ended on an established project.
     await page.getByRole('link', { name: 'Plan with AI' }).first().click();
-    await page.waitForURL(/\/planning\?/);
+    await page.waitForURL((url) => url.searchParams.has('plan'));
 
     // Two panes: the project's existing plan on the canvas, the conversation on
     // the right. The EMPTY state — a thread with no turns yet — is not a blank
@@ -419,7 +431,7 @@ test('a failed run is recoverable in place — the thread and the retry survive'
   });
 
   await signIn(page, seed.email, seed.password);
-  await page.goto('/planning?mode=replan&from=project');
+  await page.goto('/roadmap?plan=replan&planFrom=project');
   await expect(rail(page)).toBeVisible();
 
   await sendTurn(page, 'Split the settings epic into smaller stories.');

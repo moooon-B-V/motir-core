@@ -50,6 +50,15 @@ improvisation at build time.
 
 ## Placement — resolved from shipped reality, not assumed
 
+> ⚠️ **SUPERSEDED by the MOTIR-4672 amendment below (Story MOTIR-4669),** and kept
+> because the DERIVATION is still the right method while its ANSWER is now false.
+> The connection is ORGANISATION-scoped (MOTIR-4649), so the surface is **Settings
+> → Organisation → Git** — _"the workspace is the wrong tenant for the same reason
+> the project is: it is not where the repository lives."_ The **Workspace**-group
+> rail row described below is gone with it; the door is the `Git` row in the
+> organisation settings nav (MOTIR-4673 panel 7), with the org menu's row (panel 6)
+> beside it. Verbatim:
+
 Same as GitHub: the integration is **workspace-scoped** (the connection binds to
 the workspace; the token store is workspace-keyed via the seam's
 `NormalizedInstallation`), so it lives under **Settings → Workspace**, the shipped
@@ -75,10 +84,17 @@ row. Instead:
 
 ### Access path (the door — drawn, not just named)
 
-- **Settings surfaces (Panels 1–2):** the settings rail shows the **Git** row
-  (git-branch icon) **active** under the **Workspace** group, breadcrumb
-  `Settings › Workspace › Git`; the provider `Segmented` [GitHub | GitLab] is the
-  in-page door to the GitLab variant. The reader SEES the entry affordance.
+- **Settings surfaces (Panels 1–2):** ⚠️ **re-tiered by MOTIR-4672.** The door is
+  the **organisation settings nav** (`Git`, in the `general` group), specified by
+  MOTIR-4673 panel 7 in `design/org-admin/`, with the **org menu**'s `Git` row
+  (panel 6 there) as the fast door beside it. The panels draw that rail with `Git`
+  active — the GitLab arm wears the SAME chrome as the GitHub arm, because it is
+  one page with a provider Segmented and a rail on one but not the other would make
+  it two. Its head reads `moooon · Organisation settings`, and the provider `Segmented`
+  [GitHub | GitLab] is still the in-page door to the GitLab variant. It read: _"the
+  settings rail shows the **Git** row (git-branch icon) active under the
+  **Workspace** group, breadcrumb `Settings › Workspace › Git`"_ — a rail that never
+  existed, at a tier that no longer does.
 - **In-app project picker (Panel 2b):** the door is the quiet **"+ Connect a
   project"** `link-cta` in the Projects card footer, expanding the LinkAddForm
   picker — the GitLab-specific affordance that GitHub delegates to its install
@@ -125,7 +141,9 @@ the in-app _selection_ the single grant enables.
 
 ## Panels & primitives (every panel — the multi-panel rule, mistake #31)
 
-### Panel 1 — Settings → Workspace → Git, GitLab tab, NOT connected
+### Panel 1 — Settings → Organisation → Git, GitLab tab, NOT connected
+
+> ⚠️ Re-tiered by MOTIR-4672. The panel's layout is unchanged; its TIER is not.
 
 - **Settings-area shell** (sidebar rail + content) — the shipped area layout.
   Rail groups Account / Workspace (**Git active**) / Project.
@@ -341,3 +359,181 @@ provider-agnostic base (the shared surface), not a parallel copy:
   provider through the DTO so the same component renders both (Panel 4).
 - **Self-managed GitLab is deferred** (see the honest-differences section) — do
   not add an instance-URL field unless a later design pass adds it.
+
+---
+
+## ⚠️ AMENDMENT — MOTIR-4672 (Story MOTIR-4669), 2026-09-05: the tier moves, and this asset owns the GITLAB removal
+
+**Panels 1–6 above keep their layout and are re-read at a new tier. Nothing in them is
+redrawn.** A repository is connected **ONCE, to the ORGANISATION**; which projects use it is
+visibility configuration — the rule MOTIR-2029 settles for the code graph, applied to the thing
+the graph is built FROM.
+
+**What that supersedes above.** Every _"Settings → Workspace → Git"_ placement reference reads
+**Settings → Organisation → Git**, and the breadcrumb with it. The single-OAuth model, the in-app
+project selection, the MR/pipeline vocabulary and the shared-`GitProvider`-seam argument are
+untouched — the tier moved, the provider story did not.
+
+**The org INVENTORY is drawn ONCE, and not here.** `design/github/github.mock.html` Panel 6 owns the
+inventory table, its four index states and the `Used by N projects` column, because the inventory is
+provider-agnostic and two drawings of one table drift. Panel 7 below repeats two rows of it only as
+the surface the dialog opens FROM.
+
+### ⚠️ CORRECTED ON REVIEW — there is no WORKSPACE tier for git, and these panels drew one
+
+**Caught by Yue, and it is this amendment's own subject rather than a detail.** The
+first pass added Panels 6–7 at the organisation tier and left the surviving panels
+saying **Settings → Workspace**, reading the card's _"does not redraw the panels
+that survive"_ as _"do not touch them"_. That is the wrong reading: the card's
+FIRST item is _"the page is the ORGANISATION's — its heading, its empty state and
+its copy say organisation, not workspace"_. A panel's tier is not its layout.
+
+**The story settles it in one line:** _"The `Git` row leaves the project rail, and
+it does NOT go to Settings → Workspace. The workspace is the wrong tenant for the
+same reason the project is: it is not where the repository lives."_ Three tenants,
+and workspace is not one of them — **ORG** (the connection and the inventory),
+**PROJECT** (which of the org's repositories this project works on), **USER** (your
+own git account).
+
+So every surviving panel is re-tiered: the heading is the shared shell's `Git`, the
+copy is the organisation's, and the revoked panel's caption follows. Two pointers
+that sent a reader to `Settings → Workspace → GitHub` — the Panel-5c no-matches
+hint and its disconnected-error banner — now name the organisation, because the
+destination they pointed at is deleted by this very story.
+
+**And the RAIL went through three states, which is worth recording as three.** (1) A fictional
+_Account / Workspace / Project_ grouping — invented, and caught by Yue. (2) A faithful drawing of
+what `/settings/workspace/github` renders today — true, and still wrong, because it drew the surface
+this story removes. (3) **No rail at all** — also wrong, in the third direction: it left the page
+with no visible door. The rail these panels carry NOW is the organisation settings nav
+**MOTIR-4673 panel 7 specifies**, `Git` active. It is not a drawing of something shipped; it is a
+drawing of something designed, in the asset that designs it, cited here.
+
+For the record, since two passes got this wrong in opposite directions — the
+grouping never existed either: only `settings/project/` and `settings/account/`
+have an area `layout.tsx`, only `projectSettingsNav.ts` and `accountSettingsNav.ts`
+exist, and `SidebarNav` swaps to an area rail on exactly two predicates
+(`isAccountSettingsPath`, `isProjectSettingsPath`), neither of which
+`/settings/workspace/github` matches.
+
+**The tell was in this run's own output.** The sibling amendment (MOTIR-4675) drew
+the ACCOUNT settings rail straight from `accountSettingsNav.ts`, which has no
+_Workspace_ group — so two assets touched in one pass disagreed about whether the
+grouping existed, and nothing looked at them together.
+
+**Three surviving panels were re-tiered, not merely re-labelled**, because the
+four-tenants table sorts every surface and two of them were sorted wrong:
+
+| what it drew                                                                           | why it moved                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel 2's **bound identity card** — avatar, `@login`, _Verified_, Disconnect           | `GithubIdentity` is `userId @unique`; it is the **USER** tenant. Drawing a personal credential on the ORGANISATION's page is this story's own tier confusion, pointed the other way. It is MOTIR-4675's, in `design/settings/`               |
+| Panel 2's **Repositories card** (per-repo sync `Switch` + sync `Pill`)                 | Panel 6 IS the organisation's repository inventory, with each row's index state and `Used by N projects`. Two drawings of one list on one board is exactly the drift these assets exist to prevent — so this panel points at Panel 6 instead |
+| Panel 4b's **identity row** (_"Identity still connected · repository access revoked"_) | Same tenant error. The FACT it existed to make legible — the grants are independent — is kept as a sentence, which is what the organisation's page owes; the ROW belongs to the account surface, where MOTIR-4675 draws exactly that state   |
+
+**GitLab took the same treatment, and it is the harder half.** GitLab authorises
+through ONE OAuth grant whose token is stored on the connection row itself
+(`accessTokenEncrypted`), so the person who connected and the connection are more
+entangled than GitHub's two independent grants. That makes _who authorised it_
+part of the connection's own record — kept as a caption — and it does not make the
+member's ACCOUNT the organisation's to manage.
+
+### ⚠️ CORRECTED — the settings RAIL these panels drew does not exist
+
+**Caught by Yue on review of this amendment, and it is the amendment's own subject.**
+The surviving panels drew a settings sidebar grouped **Account / Workspace /
+Project**, with the git surface active under _Workspace_. **There is no such
+rail**, and the grouping asserted a TIER STRUCTURE the app does not have — which
+matters here more than anywhere, because the tier is exactly what this amendment
+moves.
+
+Read off shipped reality rather than inherited:
+
+| claim                                         | reality                                                                                                                                                                                            |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a _Workspace_ settings area with its own rail | only `settings/project/` and `settings/account/` have an area `layout.tsx`; `settings/workspace/` has none                                                                                         |
+| a workspace settings nav                      | only `projectSettingsNav.ts` and `accountSettingsNav.ts` exist; there is no workspace registry                                                                                                     |
+| the rail swaps for this route                 | `SidebarNav` swaps on exactly two predicates — `isAccountSettingsPath` (`/settings/account*`) and `isProjectSettingsPath` (`/settings/project*`). **`/settings/workspace/github` matches neither** |
+
+**The ROUTE is real; the RAIL was not.** `/settings/workspace/github` genuinely
+exists, and it is under `workspace/` because `GithubInstallation { workspaceId }`
+was workspace-scoped (MOTIR-891 · MOTIR-1931) — the very tier this amendment
+moves. What renders there is the ORDINARY rail: the shell's primary rows, then
+its **bottom section**, where the `Git` row is the door.
+
+So the panels now draw that, and the bottom section is **cited, not
+re-specified** — its design of record is
+`design/shell/rail-bottom-section.mock.html`, and **MOTIR-4640** is the card that
+removes the `Git` row from it once this story completes the tier move.
+
+**How it got through, recorded because the reason is reusable.** The card says
+this amendment _"does not redraw the panels that survive"_, and that was read as
+covering the rail. It should not have: a panel's rail is a claim about the TIER,
+and the tier is this card's subject. The tell was available in this run's own
+output — the sibling amendment (MOTIR-4675) drew the ACCOUNT settings rail
+straight from `accountSettingsNav.ts`, which has no _Workspace_ group, so two
+assets touched in one pass disagreed about whether the grouping existed.
+
+### Panel 7 — the ORG-LEVEL removal, GitLab arm: an in-app destructive confirm
+
+- **GitLab is in-app, so Motir owns the act** — the OAuth token can enumerate and detach projects
+  (the same property that makes Panel 2b's picker honest). The removal is therefore an ordinary
+  **destructive confirm dialog**, shown at the moment of the act.
+- **It names every affected project before it runs** (_Atlas_, _Corridor_), in a labelled
+  `PROJECTS THAT LOSE IT` block — not a count, and not a link to go and find out. The count was
+  already on the row behind it (`Used by 2 projects`), which is what makes this a **confirmation
+  rather than a revelation**.
+- It states the org-wide blast radius in the first sentence — _"removed from **every project in
+  moooon**, not only the one you came from"_ — because the same word (_disconnect_) at the project
+  tier means something an order of magnitude smaller.
+- **⚠️ It is NOT a permanence warning.** The code index is kept **30 days**; re-adding the project
+  before then cancels the removal and nothing re-indexes. `CODE_GRAPH_RETENTION_WINDOW_DAYS` is
+  user-facing and `repo_disconnected` is windowed, so _"this cannot be undone"_ would be false — and
+  false in the direction that teaches people to click through warnings.
+- **⚠️ The number is an INTERPOLATION.** The `30` is the rendered value of `{days}` bound to
+  `CODE_GRAPH_RETENTION_WINDOW_DAYS` (`lib/codeGraph/offboarding.ts`, which states that rule
+  itself). Never retype it.
+
+### Why the two arms look different — the asymmetry is drawn, not smoothed
+
+|                  | **GitLab (here)**                                                                                   | **GitHub (`design/github/` Panel 7)**                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| who performs it  | Motir, in-app                                                                                       | github.com — selection is the App's install screen                                          |
+| shape            | a **confirm dialog**, modal                                                                         | a **disclosure**, then a link-out                                                           |
+| primary action   | `Disconnect` — `bg-(--el-danger)` fill with `--el-danger-text` ink, the ONE place that ink is legal | `Continue on GitHub ↗` — accent fill, external glyph                                        |
+| when it is shown | at the moment of the act                                                                            | **before** leaving, because once the admin is on github.com there is no dialog left to show |
+
+The **project-level** removal is neither — a quiet row action whose copy reassures — and it belongs
+to `design/repository-set/` (**MOTIR-4674**).
+
+**⚠️ The ROW BUTTON is the same word on both arms: `Disconnect` (Yue, 2026-09-05).** The GitHub arm
+briefly said `Remove on GitHub`, which reads as _"delete the repository FROM GitHub"_ — the one act
+Motir cannot perform and must never appear to offer. The act is identical on both providers; only
+the venue differs, so the **label names the act and a second line names the venue**
+(`happens on GitHub` / `happens here`, `--el-text-secondary` 11px). See `design/github/`
+design-notes § _the label names the act_.
+
+That second line belongs to **Panel 6's mixed inventory**, which spans both providers and is where
+the rows genuinely differ. This asset's single-provider `Projects` card is uniformly in-app, so it
+carries no per-row caption — the card's own subtitle is the place for it if it is wanted. **The
+button's word must not drift between the two assets; the caption legitimately may.**
+
+### Per-element `--el-*` roles added by this amendment
+
+| Element                                | Token(s)                                                                                                                |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| modal scrim / board recess             | `--el-canvas`, radius `--radius-card`                                                                                   |
+| dialog panel                           | `--el-card` / `--el-border` / `--radius-modal` / `--shadow-modal`                                                       |
+| dialog alert glyph                     | `--el-danger` (a graphic beside the label, which stays on `--el-text` — graphics need 3:1)                              |
+| dialog body copy · emphasis            | `--el-text-secondary` · `--el-text`                                                                                     |
+| affected-projects block                | `--el-surface-soft` + `--el-border-soft`, label `--el-text-eyebrow`                                                     |
+| project chips                          | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, `--radius-badge`, `--spacing-chip-*`                       |
+| retention sentence                     | `--el-text-secondary`, emphasis `--el-text`                                                                             |
+| dialog foot                            | `--el-surface-soft`, rule `--el-border-soft`                                                                            |
+| **`Disconnect` (destructive primary)** | fill `--el-danger` · ink **`--el-danger-text`** — legal here and ONLY here, because the element carries the danger FILL |
+| inventory row (repeated for context)   | as `design/github/` Panel 6; owner segment `--el-text-secondary`                                                        |
+
+### Primitives composed — no new design-system entry
+
+`Modal` (radius + shadow tokens) · `Card` · `Pill` · `Button` (`ghost` + `danger`) · `Segmented` via
+`GitSettingsShell`'s `ProviderSwitch` · the settings-area shell. Nothing new is invented; the dialog
+is the shipped modal grammar with a named-projects block inside it.

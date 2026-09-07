@@ -157,6 +157,10 @@ const DERIVED_TOOL_NAMES: Record<DerivedToolName, true> = {
   update_plan_item: true,
   update_plan_proposal: true,
   withdraw_plan_proposal: true,
+  // MOTIR-4637 — the plan's own title / summary, deriving through the same
+  // plan shape: it returns the whole plan, heading corrected and proposals
+  // untouched.
+  update_plan: true,
   open_plan_session: true,
   append_plan_turn: true,
   submit_plan_session: true,

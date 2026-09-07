@@ -58,6 +58,7 @@ export function CreateDashboardModal({
 
   return (
     <Modal open={open} onOpenChange={onOpenChange} title={t('title')} size="sm">
+      {/* modal-scroll-container: measured 1280x700, tallest = name + both access cards, panel 384px */}
       <div className="flex flex-col gap-4">
         <Input
           label={t('nameLabel')}

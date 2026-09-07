@@ -5,6 +5,7 @@ import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
+import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
@@ -74,7 +75,7 @@ export const aiGenerationService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       'ai:plan',
     );
-    const { organizationId, isMeta } = await resolveTenantOrg({
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
@@ -112,6 +113,7 @@ export const aiGenerationService = {
     const tenant = {
       organizationId,
       isMeta,
+      internalBilling,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,
@@ -138,6 +140,18 @@ export const aiGenerationService = {
         // the exported constant, not a literal: there is no shared type across
         // the boundary and a typo is not a type error.
         [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+        // Is this the project's FIRST plan (MOTIR-4736)? Read off the marker the
+        // service already holds — `ProjectContext.project` is a `ProjectDTO` and
+        // `onboardingRanAt` rides the base DTO, so this costs no round-trip and
+        // no caller passes it by hand. THIS is the submit the migrate wizard's
+        // GENERATE step reaches (`migrateOnboardingService`), which is the path
+        // motir-ai's empty-tree inference got wrong: the wizard's optional import
+        // has already written a backlog by the time generation runs.
+        //
+        // ALWAYS present, `false` once the marker is stamped — never spread
+        // conditionally: absence means "the producer predates this field" and
+        // sends motir-ai back to inferring it from the tree.
+        [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
       },

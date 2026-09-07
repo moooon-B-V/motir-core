@@ -1649,6 +1649,15 @@
           grid-template-columns: 1fr;
         }
       }
+      mark.superseded {
+        display: block;
+        margin-bottom: 8px;
+        padding: 8px 10px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
     </style>
   </head>
   <body>
@@ -2213,6 +2222,14 @@
       5 ·
       <strong
         >“Not applicable” — stated plainly, and one of the card’s three cases CORRECTED.</strong
+      >
+      <mark class="superseded"
+        >⚠️ SUPERSEDED 2026-09-05 (MOTIR-4337 / MOTIR-4572) for case (a): an INTERNAL org renders
+        the ordinary customer lines, and the CI line RENDERS in whatever state
+        <code>ciAllowanceService</code> returns — <code>bypassed</code> for a meta org. The bypass
+        itself is unchanged and stays keyed on <code>isMeta</code>; only the HIDING goes. Panel (a)
+        below is kept as a record of shipped behaviour until that card merges. See design-notes.md’s
+        amendment.</mark
       >
       (a) the META org renders the shipped “Internal plan” card and <b>no CI line at all</b>; (b)
       self-host doesn’t render this page at all (<code>isCloudBilling()</code> →

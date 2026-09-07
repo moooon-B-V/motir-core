@@ -260,10 +260,17 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
     expect(text).not.toMatch(/from '@prisma\/client'/);
   });
 
-  it('the /planning host page reads through services, never Prisma', () => {
-    // A Server Component may call services (that IS the 4-layer shape); what it
-    // may not do is skip them.
-    const text = read(join(ROOT, 'app/(planning)/planning/page.tsx'));
+  it('the workspace’s own server read goes through a service, never Prisma', () => {
+    // ⚠️ RE-POINTED (MOTIR-4732). This read `app/(planning)/planning/page.tsx`,
+    // the route host, which is deleted — the workspace is an OVERLAY, a client
+    // island, and a client island may not reach a service at all. So the one
+    // server read it makes is an HTTP door (MOTIR-4727), and the 4-layer
+    // invariant lands there instead: a route handler may call services, and what
+    // it may not do is skip them.
+    // Comment-stripped, like every other guard in this file: the handler's own
+    // header states the rule it follows, and prose describing a trap must not
+    // trip the trap's test.
+    const text = codeOf('app/api/work-items/planning-anchor/route.ts');
     expect(text).toMatch(/from '@\/lib\/services\//);
     expect(text).not.toMatch(/from '@\/lib\/db'/);
     expect(text).not.toMatch(/\$transaction/);
@@ -301,25 +308,30 @@ describe('the story’s routes are HTTP-only (4-layer)', () => {
 
 // ────── Guard 2b — the workspace OPENS before its data arrives (MOTIR-2069) ──────
 
-describe('the /planning shell is not hostage to the roadmap read', () => {
-  it('the segment has an instant-loading UI', () => {
-    // Without one, Next.js has no boundary to show and holds the navigation on
-    // the PREVIOUS route until the page's slowest await settles — the whole
-    // "loads first, then opens" defect. At the GROUP, so every planning route
-    // inherits it.
-    expect(existsSync(join(ROOT, 'app/(planning)/loading.tsx'))).toBe(true);
-    expect(read(join(ROOT, 'app/(planning)/loading.tsx'))).toMatch(/PlanningWorkspaceSkeleton/);
+describe('the workspace is not hostage to the roadmap read', () => {
+  it('the overlay shows the workspace SKELETON while it waits', () => {
+    // ⚠️ RE-POINTED (MOTIR-4732). The route had `app/(planning)/loading.tsx` for
+    // exactly one reason: without a boundary, Next held the NAVIGATION on the
+    // previous route until the page's slowest await settled — the whole "loads
+    // first, then opens" defect. An overlay has no navigation to hold, so the
+    // boundary is gone with the group and the SHAPE it showed is not: the
+    // overlay renders the same skeleton inside the dialog while a work-item
+    // launch resolves its anchor.
+    const overlay = read(join(ROOT, 'components/planning/PlanningWorkspaceOverlay.tsx'));
+    expect(overlay).toMatch(/PlanningWorkspaceSkeleton/);
+    expect(existsSync(join(ROOT, 'app/(planning)'))).toBe(false);
   });
 
-  it('the page reads NO roadmap data — the blocking, duplicate read stays gone', () => {
+  it('the overlay reads NO roadmap data — the blocking, duplicate read stays gone', () => {
     // Both files keep a prose RECORD of the defect in their header comments, so
     // these read CODE only — the same comment-stripping the delta guards use.
-    const page = codeOf('app/(planning)/planning/page.tsx');
-    // The exact shape that caused the bug: the root level awaited inline to
-    // pre-compute `hasItems`, on a route with no instant-loading UI. The canvas
-    // reads that same level itself, so the page must not read it at all.
-    expect(page).not.toMatch(/getProjectRoadmap/);
-    expect(page).not.toMatch(/hasItems/);
+    const overlay = codeOf('components/planning/PlanningWorkspaceOverlay.tsx');
+    // The exact shape that caused the bug: the root level read inline to
+    // pre-compute `hasItems`. The canvas reads that same level itself, so
+    // whatever mounts it must not read it at all.
+    expect(overlay).not.toMatch(/getProjectRoadmap/);
+    expect(overlay).not.toMatch(/fetchRoadmapLevel/);
+    expect(overlay).not.toMatch(/hasItems/);
   });
 
   it('the canvas owns the loading and empty states the page used to pre-decide', () => {
@@ -338,30 +350,39 @@ describe('the /planning shell is not hostage to the roadmap read', () => {
     );
   });
 
-  it('the ACCESS gates still resolve BEFORE anything renders', () => {
-    // The other half of the invariant. Session and capabilities must stay
-    // awaited above the gate: a `no-access` actor must never be shown a
-    // workspace frame for a project they cannot browse, and a null-marker
-    // project must still redirect. Pushing either behind the boundary to get
-    // the shell out earlier is the over-correction this guards against.
-    const page = read(join(ROOT, 'app/(planning)/planning/page.tsx'));
-    const gateAt = page.indexOf('resolvePlanningHostGate({');
+  it('the ACCESS gate still resolves BEFORE the workspace renders', () => {
+    // The other half of the invariant, and it SURVIVED the move (MOTIR-4732): a
+    // `no-access` actor must never be shown a workspace frame for a project they
+    // cannot browse, and a null-marker project must still forward. What changed
+    // is where the inputs come from — the shell's session and its permission
+    // provider, both resolved above this component — so the assertion is that
+    // the gate is consulted and its arms are honoured before the host mounts.
+    const overlay = read(join(ROOT, 'components/planning/PlanningWorkspaceOverlay.tsx'));
+    const gateAt = overlay.indexOf('resolvePlanningHostGate({');
     expect(gateAt).toBeGreaterThan(-1);
-    const beforeGate = page.slice(0, gateAt);
-    expect(beforeGate).toMatch(/await getSession\(\)/);
+    // Both arms are honoured, and the host is mounted only past them.
+    expect(overlay).toMatch(/gate === 'no-access'/);
+    expect(overlay).toMatch(/gate === 'onboarding'/);
+    expect(overlay.indexOf('<PlanningWorkspaceHost')).toBeGreaterThan(gateAt);
+    const beforeGate = overlay.slice(0, gateAt);
+    // The provider is read ABOVE the gate — that is the ordering half.
+    expect(beforeGate).toMatch(/useProjectAccess\(\)/);
     // An awaited ACCESS read before the gate — whichever capability reader it is.
     // MOTIR-2250 moved this to `getSettingsCapabilities`, a superset over the SAME
     // `resolveInputs` round-trip, so the audit-coverage banner's `canManage` gate
     // costs no EXTRA read on this page's critical path. The invariant this guards
     // is "the access read resolves before anything renders", not the method name —
-    // but it stays pinned to one of the two readers so a future edit cannot drop
-    // the await entirely.
-    expect(beforeGate).toMatch(
-      /await projectAccessService\.(getCapabilities|getSettingsCapabilities)/,
-    );
-    // ⚠️ And it must remain exactly ONE access round-trip: two awaited reads here
-    // would put a second query back on the path MOTIR-2069 cleared.
-    expect(beforeGate.match(/await projectAccessService\./g) ?? []).toHaveLength(1);
+    // but it stays pinned to the reader so a future edit cannot drop it — and
+    // the gate's browse input is named by the PERMISSION its own server check
+    // asserts, not by a rank.
+    expect(overlay).toMatch(/canBrowse: can\('project:browse'\)/);
+    // ⚠️ And it must remain exactly ONE access read. On the route this meant one
+    // awaited `projectAccessService` round-trip; in the overlay it is stronger
+    // and free — the shell resolved the whole permission set once, for every
+    // affordance on the page, and this component reads it out of context. So
+    // there is no access QUERY on this path at all, which is what it now says.
+    expect(overlay).not.toMatch(/projectAccessService/);
+    expect((overlay.match(/= useProjectAccess\(\)/g) ?? []).length).toBe(1);
     // …and the redirect for a never-onboarded project is still on this path.
     //
     // ⚠️ MATCHED ON THE CONSTANT, NOT ON THE LITERAL (MOTIR-4403). This read
@@ -373,8 +394,16 @@ describe('the /planning shell is not hostage to the roadmap read', () => {
     // forbids — two guards that cannot both be satisfied. The invariant this one
     // is about is unchanged and is what it still checks: the never-onboarded
     // redirect is on this path, above the render.
-    expect(page).toMatch(/redirect\(ONBOARDING_ENTRY_PATH\)/);
-    expect(page).toMatch(/import \{ ONBOARDING_ENTRY_PATH \} from '@\/lib\/navigation\/landing'/);
+    // ⚠️ AND IT IS A `router.push` NOW, NOT A `redirect` (MOTIR-4732). The route
+    // was a Server Component; the overlay is a client island, and a client
+    // forwards by pushing. The invariant is the same one and is what is checked:
+    // a never-onboarded project leaves for onboarding rather than being shown a
+    // workspace, and the destination is the OWNED constant rather than a
+    // re-typed literal.
+    expect(overlay).toMatch(/router\.push\(ONBOARDING_ENTRY_PATH\)/);
+    expect(overlay).toMatch(
+      /import \{ ONBOARDING_ENTRY_PATH \} from '@\/lib\/navigation\/landing'/,
+    );
   });
 
   it('the host takes no roadmap data at all', () => {
@@ -487,10 +516,12 @@ describe('the story’s new copy exists in every locale', () => {
     }
   });
 
-  it('every planningWorkspace key the host page names actually resolves', () => {
-    const page = read(join(ROOT, 'app/(planning)/planning/page.tsx'));
+  it('every planningWorkspace key the OVERLAY names actually resolves', () => {
+    // ⚠️ RE-POINTED (MOTIR-4732): the page that named these keys is deleted, and
+    // the overlay is what names them now.
+    const page = read(join(ROOT, 'components/planning/PlanningWorkspaceOverlay.tsx'));
     const ns = (en as unknown as Record<string, Record<string, string>>)['planningWorkspace']!;
-    const used = [...page.matchAll(/\bt\('([^']+)'\)/g)].map((m) => m[1]!);
+    const used = [...page.matchAll(/\bt\('([^']+)'/g)].map((m) => m[1]!);
     expect(used.length).toBeGreaterThan(0);
     for (const key of used) expect(ns, `planningWorkspace.${key}`).toHaveProperty(key);
   });

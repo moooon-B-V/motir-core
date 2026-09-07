@@ -61,6 +61,18 @@ import {
   CONTEXTUAL_JOB_ID,
 } from './_helpers/contextual-plan-seed';
 
+// ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
+// workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
+// you are already on. So an address that used to BE the workspace is now a host
+// page plus four namespaced parameters, and a `waitForURL` that matched the old
+// path matches nothing. The assertions about what the workspace DOES are
+// unchanged — only how it is reached and how its arrival is detected.
+//
+// (`/planning?…` still resolves: `app/(authed)/planning/page.tsx` forwards an old
+// link to the host page it belonged to. Its own coverage is in
+// `tests/integration/planning/planChangeSeams.test.ts`; these specs address the
+// overlay directly, which is what a reader would write today.)
+
 test.describe.configure({ timeout: 120_000 });
 
 // ── What the runs propose ────────────────────────────────────────────────────
@@ -252,15 +264,38 @@ async function gatePlanRead(page: Page, planId: string): Promise<() => void> {
 
 // ── Locators ─────────────────────────────────────────────────────────────────
 
-const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
+/** The workspace itself — the shipped `Modal`, so a real `role=dialog`.
+ *
+ *  ⚠️ EVERY WORKSPACE-OWNED LOCATOR IN THIS FILE IS SCOPED TO IT (MOTIR-4725).
+ *  The planning workspace was a ROUTE; it is an OVERLAY now, and this whole spec
+ *  runs with it open OVER the item page it was launched from. So the host page is
+ *  still mounted, and anything the two surfaces render alike resolves twice —
+ *  which Playwright's strict mode refuses. It bit here the moment a proposal was
+ *  CONFIRMED: the approve refreshes the page underneath, the item's Children
+ *  panel gains a row for the new subtask, and `getByText('Email digest')` then
+ *  matched both that row's link and the canvas node.
+ *
+ *  This is the locator hazard `motir-core/CLAUDE.md` records for a route-group
+ *  boundary — "a boundary makes every unscoped locator a race", 30 assertions
+ *  across 17 files — in the shape an overlay gives it, and the remedy is the
+ *  same: `getByRole` is what disambiguates, so the scope is the DIALOG rather
+ *  than a new testid. */
+const workspace = (page: Page) => page.getByRole('dialog', { name: /plan/i });
+
+const rail = (page: Page) => workspace(page).getByRole('complementary', { name: 'Motir AI' });
 /** The composer's message field. Its accessible name TRACKS the placeholder
  *  (MOTIR-910: a re-plan asks for the reason), so it is addressed by ROLE — the
  *  way the shipped composer documents its only textbox. */
 const composer = (page: Page) => rail(page).getByRole('textbox');
-const confirmBar = (page: Page) => page.getByTestId('plan-change-confirm-bar');
-const railReview = (page: Page) => page.getByTestId('plan-change-review');
+const confirmBar = (page: Page) => workspace(page).getByTestId('plan-change-confirm-bar');
+const railReview = (page: Page) => workspace(page).getByTestId('plan-change-review');
+/** NOT scoped: the door lives on the ITEM PAGE, which is what opens the overlay
+ *  — and the last chapter reads it with the workspace closed. */
 const entrance = (page: Page) => page.getByTestId('work-item-plan-entrance');
-const addFrames = (page: Page) => page.locator('[data-diff-state="add"]');
+const addFrames = (page: Page) => workspace(page).locator('[data-diff-state="add"]');
+/** A committed or proposed CARD on the canvas, by its title. */
+const canvasTitle = (page: Page, title: string) =>
+  workspace(page).getByText(title, { exact: true });
 
 /** A roadmap LEVEL fetch for one parent — the canvas's authoritative "this
  *  level's committed children" read (armed BEFORE the drill that triggers it). */
@@ -279,7 +314,7 @@ async function openWorkspaceFromItem(page: Page, itemKey: string, mode: 'plan' |
   await expect(entrance(page)).toBeVisible();
   await expect(entrance(page)).toHaveAttribute('data-mode', mode);
   await entrance(page).click();
-  await page.waitForURL(/\/planning\?/);
+  await page.waitForURL((url) => url.searchParams.has('plan'));
   // ⚠️ THE FIRST LANDMARK AFTER LANDING ON `/planning` CARRIES THE FIRST-PAINT
   // BUDGET (MOTIR-2506) — see the constant's own note. Every test in this file
   // reaches the workspace through this helper, so the budget belongs here rather
@@ -306,8 +341,8 @@ async function sendTurn(page: Page, text: string): Promise<void> {
 
 /** Select a node on the canvas and drill into it, awaiting its level fetch. */
 async function drillInto(page: Page, title: string, parentId: string): Promise<void> {
-  await page.locator('[data-node-id]').filter({ hasText: title }).first().click();
-  const openButton = page.getByTestId('drill-button');
+  await workspace(page).locator('[data-node-id]').filter({ hasText: title }).first().click();
+  const openButton = workspace(page).getByTestId('drill-button');
   await expect(openButton).toBeVisible();
   const loaded = levelLoad(page, parentId);
   await openButton.click();
@@ -407,7 +442,7 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     await expect(entrance(page)).toHaveAccessibleName(`Plan ${seed.notifKey}`);
 
     await entrance(page).click();
-    await page.waitForURL(/\/planning\?.*item=/);
+    await page.waitForURL((url) => url.searchParams.get('planItem') !== null);
 
     // The workspace opens ANCHORED at the item: the rail names it, and the mode
     // chip is the contextual one (not the project-wide plan change).
@@ -452,8 +487,8 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     // under it.
     await drillInto(page, 'Notifications', seed.notifId);
     await expect(addFrames(page)).toHaveCount(2);
-    await expect(page.getByText(DIGEST, { exact: true })).toBeVisible();
-    await expect(page.getByText(TOASTS, { exact: true })).toBeVisible();
+    await expect(canvasTitle(page, DIGEST)).toBeVisible();
+    await expect(canvasTitle(page, TOASTS)).toBeVisible();
 
     // THE GATE. Re-read the anchor authoritatively — through the shipped
     // per-level endpoint, from the signed-in browser — and nothing has been
@@ -499,8 +534,8 @@ test('planning in context — the item’s own door, reviewed, confirmed, landed
     await expect(confirmBar(page)).toHaveCount(0);
     await expect(addFrames(page)).toHaveCount(2);
     await expect(addFrames(page).first()).toHaveAttribute('data-outcome', 'accepted');
-    await expect(page.getByTestId('plan-change-outcome').first()).toHaveText('accepted');
-    await expect(page.getByText(DIGEST, { exact: true })).toBeVisible();
+    await expect(workspace(page).getByTestId('plan-change-outcome').first()).toHaveText('accepted');
+    await expect(canvasTitle(page, DIGEST)).toBeVisible();
 
     // The real substrate: both landed UNDER the anchor, as subtasks, and the Plan
     // is decided — nothing left orphaned at `planned`.

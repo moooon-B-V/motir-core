@@ -91,6 +91,16 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * `onboarding-migrate.spec.ts` (43.5 s) is by far the heaviest of the twelve and
  * is the one to watch when the bin-packer redistributes.
  *
+ * ⚠️ `modal-scroll-container.spec.ts` (MOTIR-2491) carries the LOCAL provenance
+ * too — a brand-new spec, three tests, each a sign-up + first project (one of
+ * them a seeded sprint tree) and one short-viewport dialog. Measured on
+ * 2026-09-05 against a production build on its own port and database, JSON
+ * reporter, per-test `durationMs` summed: **5.6 s** (2.0 + 2.0 + 1.6) on a warm
+ * server; the same three ran in 38–39 s of wall clock including harness
+ * startup. Recorded as 6.0 — rounded UP, because under-estimating is the
+ * direction that unbalances a bin-packer. Re-measure from the first green CI
+ * run that includes it.
+ *
  * ⚠️ `plan-decision-permission.spec.ts` (MOTIR-3188) carries the LOCAL provenance
  * too, for the same reason the twelve above do: it is a brand-new spec, and a
  * spec with no entry here is assigned to no leg and never runs — which is what
@@ -400,6 +410,44 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * because `playwright.config.ts` IS that arm). It is cheap because five of its
  * assertions are bare HTTP reads with no page load; what it pays for is the one
  * sign-up. Re-measure from the first green CI run that includes it.
+ *
+ * ⚠️ `hero-ai-control-styles.spec.ts` (MOTIR-4743) carries the LOCAL provenance
+ * too, and the guard caught it with no entry on its FIRST CI run — the failure
+ * this file exists to make loud, working exactly as designed. Worth stating
+ * plainly, because of what the spec IS: it is the only evidence for two of its
+ * card's acceptance criteria (every registered style's hero treatment, measured
+ * in a browser against the base style). It passed locally, forty-seven other
+ * checks went green, and it would have been assigned to no leg and never run.
+ * A green bulk leg is not evidence that a new spec ran.
+ *
+ * Measured on 2026-09-06 against a production build, on its own port (3743) and
+ * its own database, THREE times: **5.3 s** on a cold server, then **7.5 s** and
+ * **7.9 s** warm. Recorded as **8.0** — the highest reading, rounded up.
+ *
+ * ⚠️ THE COLD READING IS THE LOWEST ONE HERE, WHICH INVERTS THE PATTERN EVERY
+ * ENTRY ABOVE DESCRIBES, and the reason matters for whoever measures the next
+ * spec. Those entries record the cold reading BECAUSE a first navigation
+ * compiles a route; against a production build it compiles nothing, which
+ * `cloud-follow-the-build-flow.spec.ts` already observed ("this spec has no
+ * warm/cold gap to speak of"). So there is no cold penalty to pay here, and the
+ * 5.3 → 7.9 spread is BOX LOAD, not warmth: the readings were taken on a machine
+ * running several parallel sessions at load average 5.0. Follow the file's rule
+ * rather than its examples — record the HIGHEST reading, because
+ * under-estimating is the direction that unbalances a bin-packer.
+ *
+ * It is cheap for a spec that drives eleven style switches twice over because it
+ * runs on `/tokens`, which is public: no sign-up, no seeding, no
+ * `resetDatabase()` hook. The four test bodies are 0.6 / 1.7 / 1.5 / 1.5 s and
+ * the ~100 s wall clock is the build, which the legs pay once.
+ *
+ * ⚠️ RE-MEASURED FROM CI, which is what every entry above asks for and almost
+ * none of them has had done. Run **34065849062** (2026-09-06, PR #2669, green)
+ * ran it on `bulk-6` at **1.2 / 3.8 / 3.4 / 3.3 s = 11.7 s**, and the entry is
+ * now **12.0**. The local readings were 5.3 / 7.5 / 7.9 — so CI costs about 1.5x
+ * the best local one, and the calibration note above holds exactly as written: a
+ * local reading runs at or below the CI cost, never above it. Recorded from the
+ * CI figure rather than the local one, because that is the number the
+ * bin-packer is actually packing.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // MOTIR-4094 — promoted receipt specs, ESTIMATED for their first main-lane
@@ -409,6 +457,22 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // replace them from the first green bulk artifacts, as for every new entry.
   'agent-authored-plan.spec.ts': 18.0,
   'activity.spec.ts': 13.8,
+  // Story MOTIR-4337 · Subtask MOTIR-4566 — the operator's org lookup and org
+  // page, plus the 404 a tenant user gets on both. MEASURED locally on
+  // 2026-09-06 against a production build in this lane: **1.7 s** of test body,
+  // `1 passed`. ONE reading, said plainly — recorded as **3.0**, the reading
+  // plus headroom and in line with its nearest neighbour by shape
+  // (`billing-selfhost.spec.ts` at 2.7: one sign-up, then assertions that are
+  // mostly bare HTTP reads). RE-MEASURE from the first green bulk artifact that
+  // includes it, as for every new entry.
+  //
+  // ⚠️ AND ITS ABSENCE FROM THIS TABLE WAS NOT FREE. The spec shipped without an
+  // entry, so it was assigned to no leg and never ran — and it was RED: an
+  // unscoped `getByRole('button', { name: 'Search' })` also matched the admin
+  // shell's disabled global-search button, a strict-mode violation nothing could
+  // report while the spec was unreachable. This guard is what found it, which is
+  // the case it exists for.
+  'admin-org-lookup.spec.ts': 3.0,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,
@@ -462,6 +526,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'github.spec.ts': 8.3,
   'general-attachment.spec.ts': 8.0,
   'gitlab.spec.ts': 6.1,
+  'hero-ai-control-styles.spec.ts': 12.0,
   'home.spec.ts': 10.9,
   'import.spec.ts': 9.1,
   'implemented-lifecycle.spec.ts': 16.0,
@@ -478,8 +543,14 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'link-search-flow.spec.ts': 14.6,
   'member-facing-permissions.spec.ts': 7.7,
   'migrate-index-fleet.spec.ts': 26.7,
+  'modal-scroll-container.spec.ts': 6.0,
   'multi-tenant-isolation.spec.ts': 2.5,
   'navigation-instant.spec.ts': 8.0,
+  // MOTIR-4708 — one sign-up + project, then four theme x OS passes over the
+  // 404 route. Estimated from `appearance-sync.spec.ts` (7.0 s: the same sign-up
+  // and the same PATCH-awaited toggle) plus three extra navigations; re-measure
+  // it from a green run's `e2e-harness/*.jsonl` when this table is next refreshed.
+  'not-found-theme.spec.ts': 9.0,
   'notifications.spec.ts': 14.3,
   'onboarding-discovery.spec.ts': 2.6,
   'onboarding-entrance.spec.ts': 6.8,

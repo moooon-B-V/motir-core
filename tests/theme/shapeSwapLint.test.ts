@@ -188,6 +188,13 @@ describe('shape-swap lint — no surface shapes its radius past the token layer'
       // with would frame the whole display. `border-0` beside it is that same
       // override in the other axis, exactly as the lightbox's is.
       'app/(authed)/runs/_components/RunModal.tsx → rounded-none',
+      // And the same case once more (MOTIR-4729): the planning workspace is a
+      // `size="full"` dialog too, and for the same reason — an OVERLAY covers the
+      // screen it opens over, so the panel IS the viewport and its corner is the
+      // display's own. The design measured it edge to edge (0px radius, 0px
+      // border) precisely so nothing draws a frame around the page underneath;
+      // `border-0 p-0` beside it are that decision in the other axes.
+      'components/planning/PlanningWorkspaceOverlay.tsx → rounded-none',
       // A value DERIVED from a semantic token: the inner pill of a segmented
       // control fits its shell only at `--radius-btn` minus the shell's 2px
       // border, and `calc()` over the role token is how that stays true under

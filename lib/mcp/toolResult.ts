@@ -82,6 +82,7 @@ import { MotirAiError } from '@/lib/ai/errors';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import { DesignEvidenceError } from '@/lib/designEvidence/errors';
+import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
 import {
   GithubNotConnectedError,
   GithubPullRequestNotFoundError,
@@ -309,6 +310,19 @@ export function toToolError(err: unknown): CallToolResult {
   // moment the card's whole deliverable is at stake and the agent has the bytes
   // in hand to retry.
   if (err instanceof DesignEvidenceError) {
+    return toolError(err.code, err.message);
+  }
+  // The ACCEPTANCE publish door's typed refusals (MOTIR-4704) — mapped on the
+  // ABSTRACT BASE for the same reason as the two arms above, and the one that
+  // matters most is reachable on an ordinary first attempt: a key that resolves
+  // to a container with no story parent (`ACCEPTANCE_EVIDENCE_NOT_A_STORY`,
+  // 422). A blob the caller never actually PUT to its grant, a pathname outside
+  // the story's own prefix, and a receipt already APPROVED and therefore frozen
+  // are the others, and each is something the agent can act on in one hop —
+  // upload it, use the pathname you were given, stop. Unmapped they would reach
+  // the agent as an opaque JSON-RPC internal error at the last step of a run,
+  // holding a recording it cannot re-make.
+  if (err instanceof AcceptanceEvidenceError) {
     return toolError(err.code, err.message);
   }
   // The organization's storage cap. Not an AttachmentError (it is a billing

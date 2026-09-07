@@ -1,7 +1,9 @@
-import type { PlatformAuditLog, User } from '@/generated/prisma/client';
+import type { Organization, PlatformAuditLog, User } from '@/generated/prisma/client';
 import type {
   PlatformAuditLogDTO,
   PlatformOperatorDTO,
+  PlatformOrganizationDetailDTO,
+  PlatformOrganizationSummaryDTO,
   PlatformUserDetailDTO,
   PlatformUserSummaryDTO,
 } from '@/lib/dto/platform';
@@ -65,5 +67,39 @@ export function toPlatformUserDetailDTO(
     suspendedReason: row.suspendedReason,
     activeSessionCount,
     platformRole: row.platformRole,
+  };
+}
+
+/**
+ * An `organization` row → the operator LOOKUP's row (MOTIR-4565).
+ *
+ * ⚠️ AN ALLOW-LIST, NOT A SPREAD-AND-DELETE — the same rule
+ * `toPlatformUserSummaryDTO` states and for a sharper reason: `organization`
+ * carries BILLING state (`scaledTrackerSubscription`, the tier mirror), so a
+ * mapper that forwarded whatever it was handed would put a future billing column
+ * on a cross-tenant operator surface the moment somebody added one.
+ */
+export function toPlatformOrganizationSummaryDTO(
+  row: Organization,
+): PlatformOrganizationSummaryDTO {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    createdAt: row.createdAt.toISOString(),
+    isMeta: row.isMeta,
+    internalBilling: row.internalBilling,
+  };
+}
+
+/** An `organization` row → the operator ORG PAGE's organization. */
+export function toPlatformOrganizationDetailDTO(row: Organization): PlatformOrganizationDetailDTO {
+  return {
+    ...toPlatformOrganizationSummaryDTO(row),
+    aiIncludedSeat: row.aiIncludedSeat,
+    // The COLUMN is a Json blob of Stripe-propagated state; the page needs only
+    // whether one is on record, and forwarding the blob would put a payment
+    // provider's payload on an operator screen for no rendered benefit.
+    hasScaledTrackerSubscription: row.scaledTrackerSubscription !== null,
   };
 }

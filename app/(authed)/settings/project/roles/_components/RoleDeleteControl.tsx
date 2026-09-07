@@ -154,6 +154,7 @@ export function RoleDeleteControl({
             if (!next) setPrompt(null);
           }}
         >
+          {/* modal-scroll-container: measured 1280x700, tallest = a role nobody holds (heading, count, lede, footer); a held role adds the one destination select, ~70px, panel 229px */}
           <h2 className="text-(--el-text) font-serif text-xl font-semibold">
             {t('deleteDialog.title', { name: label(role) })}
           </h2>

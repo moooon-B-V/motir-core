@@ -1,9 +1,19 @@
 // E2E: Work-item PROVENANCE on the detail (Story MOTIR-1685 · Subtask MOTIR-1695)
-// — the story's end-to-end user flow, recorded as the acceptance video (the
-// provenance display is user-observable, so this Story rides the acceptance gate,
-// the MOTIR-1627 mechanism). Runs under playwright.acceptance.config.ts
-// (cloud-on + video:'on'); the recorded happy path publishes to MOTIR-1685's own
-// acceptance panel.
+// — the story's end-to-end user flow.
+//
+// ⚠️ IT RUNS IN THE MAIN LANE, and this header said otherwise for as long as the
+// file has existed (corrected by MOTIR-4751). It claimed to run under
+// `playwright.acceptance.config.ts`, whose `testMatch` is
+// `**/acceptance*.spec.ts` — a glob this filename has never matched — while
+// importing `_helpers/acceptance-video`. So it ran in the BULK lane WITH the
+// recording apparatus: four `CHAPTER_HOLD_MS` holds (~10 s of its recorded
+// 15.2 s in `shard-plan.ts`, worth re-measuring from the first green artifact
+// after this change), three sidecars nothing reads, and an
+// `acceptanceStory('MOTIR-1685')` declaring a story it could not publish to.
+// The import is now the promoted shim, which is what a spec outside the lane
+// takes; every assertion below is unchanged, and no receipt is lost because
+// none was ever produced here. `tests/e2e-acceptance-lane-imports.test.ts` is
+// the guard that now fails this mistake in either direction.
 //
 // The flow proves the four planning/implementation states render on the collapsed
 // Provenance disclosure (MOTIR-1693):
@@ -26,7 +36,7 @@
 // label alone (the glyph is aria-hidden); "Planning" / "Implementation" are the
 // FieldCard labels — all matched within the expanded section.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';

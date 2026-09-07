@@ -1,9 +1,23 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ConventionPanel } from '@/app/(authed)/code-health/_components/ConventionPanel';
 import type { CodingConventionDTO, ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
+
+// ⚠️ THE PLANNING DOORS READ THE ADDRESS (MOTIR-4730). Every surface that mounts
+// one — and this tree mounts one — now calls `usePathname` / `useSearchParams`,
+// because the workspace opens OVER the page you are on rather than navigating to
+// `/planning`. Outside a router context the real hooks return `null` and the
+// door throws on its first render, so the mock is no longer optional here.
+const nav = vi.hoisted(() => ({
+  pathname: '/dashboard',
+  searchParams: new URLSearchParams(),
+}));
+vi.mock('next/navigation', () => ({
+  usePathname: () => nav.pathname,
+  useSearchParams: () => nav.searchParams,
+}));
 
 // The Convention tab of /code-health (MOTIR-1663), under happy-dom. This is the
 // OBSERVABLE INVERSE of MOTIR-2127: a project whose motir-ai store holds a derived

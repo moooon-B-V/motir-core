@@ -815,3 +815,216 @@ GitHub ships a grace period or a countdown, so nothing here says "by" or
    reasonable next question for an admin who has just switched this on, and this
    story does not answer it. Not a gap in 8.13 — a candidate for a later card,
    named so it is not smuggled into 8.13.5.
+
+---
+
+# The org menu gains a `Git` row (Story MOTIR-4669 · subtask MOTIR-4673)
+
+**2026-09-05.** The git connect surface moves to the ORGANISATION tier, and **a surface with no
+drawn entrance gets its entrance improvised at build time.** This amendment draws the entrance. It
+is `org-admin.mock.html` **Panel 6**, and it decides one thing: where the row goes and what gates it.
+
+**It does not describe the page behind it.** That is **MOTIR-4672**, `design/github/` Panel 6 —
+the organisation's repository inventory, its index states, its `Used by N projects` column and its
+disconnect disclosure. Cited here, described nowhere.
+
+---
+
+## ⚠️ AMENDMENT (2026-09-05, same day) — THE DOOR WAS STILL NOT VISIBLE. PANEL 7.
+
+Panel 6 answers _"where does the row go"_ and it answers it correctly, but it answers a smaller
+question than the card is for. Yue, on reading it:
+
+> now organization → setting goes to a single page with left nav setting highlighted, the same
+> setting nav as the project setting. you didn't make it clear in the design where the door is
+
+Verified, and true. The rail's bottom `Settings` row points at `/settings/organization` whenever
+there is no active project (`SidebarNav.tsx`, the area door). You arrive at a single page of cards,
+the bottom `Settings` row is lit, and there is **nothing on the page that names `Git`** — or
+`Members`, or `Security`, or `Usage`. The org menu is a pop-over you must already know to open, it
+closes behind you, and it highlights nothing. So the menu row is a real door and it is not a
+findable one.
+
+**The decision (Yue): organisation settings gains a real settings nav** — the registry-driven rail
+`settings/project/` and `settings/account/` each already have. That is **Panel 7**, and it changes
+what this card's two superseded sections below concluded. Panel 6's row is kept: it is the FAST
+door, and it is how `Members` and `Billing` have always been reached.
+
+### Panel 7, arm by arm
+
+| arm    | draws                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------------- |
+| **7a** | the area shell with `Git` active — the chrome around MOTIR-4672's pane, which is what was missing |
+| **7b** | `Organisation` active: today's index page, card for card, inside the same chrome — nothing moves  |
+| **7c** | the two filtered arms — a plain org member, and an org admin on a self-host build                 |
+| **7d** | the registry, row by row: group · id · route · glyph · who sees the row                           |
+
+### The registry
+
+A sibling of `lib/settings/projectSettingsNav.ts` and `lib/settings/accountSettingsNav.ts`, with the
+same `{ id, group, href, icon, labelKey, exact? }` entry shape and the same
+`SETTINGS_NAV_GROUP_ORDER` discipline.
+
+| group     | id             | route                             | glyph         | who sees the row                           |
+| --------- | -------------- | --------------------------------- | ------------- | ------------------------------------------ |
+| `general` | `organization` | `/settings/organization` (exact)  | `Building2`   | any org member — §6d gates it per SECTION  |
+| `general` | `git`          | `/settings/organization/git`      | `GitBranch`   | any org member; WRITE controls owner/admin |
+| `access`  | `members`      | `/settings/organization/members`  | `Users`       | org owner/admin                            |
+| `access`  | `security`     | `/settings/organization/security` | `ShieldCheck` | org owner/admin                            |
+| `billing` | `usage`        | `/settings/organization/usage`    | `Coins`       | org owner/admin                            |
+| `billing` | `billing`      | `/settings/organization/billing`  | `CreditCard`  | org owner/admin, **cloud builds only**     |
+
+**Groups mirror the two existing rails' shape** (`general / access / work / automation`;
+`general / preferences / security / data`) and land on `general / access / billing`. `Git` sits in
+`general` for the same reason the project rail puts `repositories` there: it is the tenant's own
+resources, not a permission and not money.
+
+**Two filter axes, both already precedented** by `visibleSettingsNav(held, NAV, availability)`:
+what the actor HOLDS (org owner/admin vs plain member) and what this BUILD has (`billing` is
+cloud-only, exactly as the org menu already gates it). A group with no surviving rows is not
+rendered — no empty heading, no disabled row.
+
+### The index row is called `Organisation`, not `Settings`
+
+The word the org menu uses for the same route is `Settings`. Inside a settings area a row named
+"Settings" names its own container; the project rail has the same row and calls it `Details`. The
+MENU keeps its word — it is outside the area, where "Settings" is what the destination is. **Every
+other label is the menu's, in full**: `Usage & cost`, `Billing & plans`, not truncated to fit a
+rail. Two doors onto one room that disagree about its name are two rooms to the person using them.
+
+### ⚠️ NOTHING MOVES — and `WorkspaceFoldInSection` in particular
+
+The four existing sub-routes become rows; the index becomes the `Organisation` row; `Git` is the one
+NEW row. No page's content changes. In particular **`WorkspaceFoldInSection` stays on the index
+page**: below the workspace-tier reveal that page hosts two tiers' sections (`organization-tier.md`
+§6d), and relocating them is a §6 decision this card has no business re-taking. The row filter
+decides which ROWS exist; the index page keeps its own per-SECTION gating, unchanged.
+
+### ⚠️ THE PREREQUISITE NOTHING IN THE PLAN BUILDS
+
+`/settings/organization/*` has no area layout, no nav registry, and no `SidebarNav` branch. Panel 7
+specifies all three, and **no subtask under MOTIR-4669 builds them** — MOTIR-4680 assumes the page
+exists inside an area. This is surfaced as a planning proposal rather than absorbed here; a design
+card may specify a prerequisite, it may not quietly grow one.
+
+---
+
+## ⚠️ SUPERSEDED BY THE AMENDMENT ABOVE — kept as the reading that produced Panel 6
+
+### There is no org settings RAIL — this menu IS the navigation
+
+`/settings/organization/*` has **no area layout and no settings rail**. `settings/project/` and
+`settings/account/` each have one; the organisation does not. Its navigation is the **org menu**
+behind the organisation name (`app/(authed)/_components/OrgControl.tsx`), plus the command palette.
+
+So the row lands in the menu, and this asset already owns that menu (Panel 1, arm C). It is also why
+**MOTIR-4672's Panel 6 draws its page with no rail beside it** — the two halves agree about what the
+navigation is, which is the whole point of splitting the door from the room.
+
+> **Every FACT above is still true of the shipped tree; the inference was not.** A tier that is the
+> only one of three without a settings nav is a **gap**, and answering "where does the Git row go"
+> with "the pop-over, because that is all there is" designs the gap in permanently. Panel 7 builds
+> the rail. MOTIR-4672's Panel 6 gains it too.
+
+## The convention that was read, and where the row goes
+
+**Read from the SHIPPED menu, not from this asset's own Panel 1.** The shipped rows are
+`Settings` · `Security` · `Members` · `Usage & cost` · `Billing & plans` (cloud-only), a separator,
+then `New workspace` / `Switch organization`. Each is a lucide glyph at `--el-icon-muted` plus a
+label.
+
+**`Git` sits third — after `Security`, above `Members`.** The shipped menu's own reasoning for
+`Security` is that it sits directly under `Settings` because it is _a settings-shaped destination_
+and keeping it above `Members` _holds the two account-level concerns together_. `Git` is the third
+such concern — the organisation's own resources — so it joins that block rather than landing among
+the people and money rows. The menu then reads **configuration → people → money**, which is the
+order it already had.
+
+**The glyph and the word are the ones the row already had.** `git-branch`, labelled `Git` — the same
+pair it carried in the shell rail's bottom section. It is the SAME row arriving, and drawing it with
+a new glyph would hide that.
+
+**One width.** The menu is a popover of a single fixed width (288px shipped, drawn at 300px as
+Panel 1 draws it), so "every width the asset draws" is one — unlike a rail, which this is not.
+
+## ⚠️ CORRECTED — the gate is ORG MEMBERSHIP on the ROW, owner/admin on the WRITES
+
+This section first read _"the gate: ORG ADMIN, and the row is ABSENT when it is not held"_, and both
+arms were drawn that way. **That was wrong**, and wrong in a way §6 of
+`docs/decisions/organization-tier.md` names outright:
+
+> a hidden tier may not remove a capability … relocating a surface preserves its gate. If the
+> destination admits fewer actors than the source, the destination's gate is what must change — not
+> the set of people who can act.
+
+The surface this row relocates FROM is `/settings/workspace/github`. Read at `HEAD`: it checks a
+session and a workspace context and **no role at all** — every workspace member reads it today. And
+every workspace member is an org member, by §5's upward invariant. Admin-gating the row would have
+taken a shipped capability away silently, which is the exact failure §6 was written to prevent.
+
+**So: the row is org-membership-gated, and the owner/admin gate belongs on the page's WRITE controls
+— Connect · Disconnect · Remove.** Panel 6 arm B and Panel 7c both draw it that way now.
+
+**What survives from the first drawing is the DISPOSITION**, unchanged and still right for the rows
+it applies to: **absent, not disabled**, because an entry point is a promise about a room and a
+disabled row is a promise the product then refuses (MOTIR-2468). It is what `Billing & plans` does
+off cloud and `Security` does below the workspace-tier reveal.
+
+**⚠️ A consequence for MOTIR-4672, recorded not designed here.** If any org member can read the
+inventory, the `Used by N projects` column can name a project the viewer may not browse. The count
+and the expansion must read the SAME access-filtered set — never a count that reveals a project the
+viewer cannot name. Noted on that asset; the column is drawn there.
+
+## ⚠️ Panel 1's menu is a POINT-IN-TIME RECORD and stays as drawn
+
+Panel 1 arm C draws the org menu as it stood when this asset was written —
+`Settings · Members · Billing & usage (Coming soon) · New workspace`. The product has since added
+`Security` and `Usage & cost` and made `Billing` active and cloud-conditional. **Panel 1 is not
+amended**: bringing it up to date is a change to what that panel records and is not this card's
+work. **But the new row is not drawn into it either** — a row placed by a convention read from a
+stale list would be placed by nothing. Hence a second panel, drawn from the shipped menu, saying so
+in its own label.
+
+## The departure half — MOTIR-4640, and the two agree
+
+The row LEAVES the shell rail's bottom section: **MOTIR-4640**, in `design/shell/`, which removes it
+from `rail-bottom-section.mock.html` and narrows that section's floor to `Job runs` alone. **The two
+are halves of one move and they agree about the destinations**, which MOTIR-4640 states as three:
+
+| what leaves the rail row          | where it arrives                                                            |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| the host connection's lifecycle   | **Settings → Organisation → Git** — the surface this row opens (MOTIR-4672) |
+| the member's own git account      | Settings → Account → Git accounts (MOTIR-4675)                              |
+| which repositories a project uses | Settings → Project → Repositories, which already exists (MOTIR-4674)        |
+
+This asset's row is the first of those three. **Cited, not restated:** what any of those surfaces
+contains belongs to the card that draws it.
+
+## Primitives and token roles
+
+| Element          | Primitive                                | Colour role                                                                    |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
+| The menu         | the shipped `Popover` + `ul role="list"` | `--el-page-bg` / `--el-border` / `--shadow-elevated`, `--radius-card`          |
+| The row          | `MenuLink`                               | `--el-text`, `--radius-control`, `--spacing-control-x/y`                       |
+| The row's glyph  | lucide `GitBranch`                       | `--el-icon-muted`                                                              |
+| The menu heading | the existing `menu-head`                 | `--el-text-muted` on the white popover (4.54:1 — AA-safe there and only there) |
+
+**Nothing new is introduced.** No new primitive, no new token, no new affordance — one row, in a
+menu that already renders five.
+
+**⚠️ The row is drawn AT REST, with no `.active`.** That class paints `--el-surface`, on which the
+row glyph's `--el-text-muted` measures 4.17:1 and fails AA (`tests/design-ink-contrast.test.ts`
+rules on it) — and a menu row is only active while the pointer is on it, which is not what this
+panel is about.
+
+## Explicitly OUT of scope here
+
+- **What the org Git page contains** — MOTIR-4672, `design/github/` + `design/gitlab/` Panels 6–7.
+- **The rail row's removal** — MOTIR-4640, `design/shell/`. Cited as the departure; not performed here.
+- **The project's `Add repository` picker** — MOTIR-4674, `design/repository-set/`.
+- **The member's own git credential and its account-nav row** — MOTIR-4675, `design/settings/`.
+- **Bringing Panel 1's menu up to date** — a change to what that panel records, and not this card's.
+- **BUILDING the org settings nav** — Panel 7 specifies it; no subtask under MOTIR-4669 builds it,
+  and it is surfaced as a planning proposal rather than absorbed here.
+- **Moving `WorkspaceFoldInSection`, or anything else off the index page** — a §6d decision, and
+  Panel 7's whole claim is that nothing moves.

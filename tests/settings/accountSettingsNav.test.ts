@@ -96,9 +96,15 @@ describe('accountSettingsNav registry — grouping', () => {
     // asserted, not just the membership: the registry renders in declaration
     // order and a second factor is the more consequential of the two things the
     // Security group holds, so a re-order would be a visible product change.
+    //
+    // MOTIR-4682 added `gitAccounts` THIRD, by EXTENDING that same rule rather
+    // than appending to the list: a second factor PROTECTS the account, an API
+    // token ACTS AS YOU inside Motir, and a git identity grants Motir nothing
+    // about your account at all. Least consequential, last.
     expect(groups.find((g) => g.group === 'security')?.entries.map((e) => e.id)).toEqual([
       'twoFactor',
       'apiTokens',
+      'gitAccounts',
     ]);
   });
 

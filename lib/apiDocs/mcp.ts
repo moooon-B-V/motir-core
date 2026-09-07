@@ -443,6 +443,22 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Regenerated from a live `tools/list` handshake, never from the source.
     descriptionFingerprint: '8742db646e68',
   },
+  create_acceptance_upload: {
+    summary:
+      'Mint a short-lived presigned PUT for a story\u2019s acceptance recording \u2014 step 1 of 2, ' +
+      'because a video is far larger than a tool argument can carry. Upload the bytes straight to ' +
+      'the store, then register the pathname.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '0c2e41f16865',
+  },
+  publish_acceptance_result: {
+    summary:
+      'Register the uploaded recording as the story\u2019s acceptance receipt \u2014 the thing a ' +
+      'reviewer watches and the gate rests on. Nothing else publishes it, and a missing publish ' +
+      'looks exactly like a successful run.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '8fd1253a91cf',
+  },
   link_pull_request: {
     summary:
       'Declare which work item a pull request delivers — call it right after opening one, once ' +
@@ -607,9 +623,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'ab983b5ea9ac',
   },
   get_plan: {
+    // Re-pinned for MOTIR-4619, summary UNCHANGED and deliberately so — the
+    // `get_plan_status` reasoning above, applied here. The description's edit
+    // added ONE marker to the one-line render (`· N steps`, the count of a
+    // `manual` proposal's proposed to-do rows) and said that the rows themselves
+    // ride `structuredContent`. That is a new thing the tool REPORTS, not a
+    // different question it answers: this line already says the tool returns what
+    // the planner actually proposed rather than how much, and the steps are part
+    // of what was proposed.
     summary:
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much.',
-    descriptionFingerprint: 'c23f12cfee90',
+    descriptionFingerprint: '95d3e64618dd',
   },
   create_plan: {
     summary:
@@ -658,6 +682,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'Take one proposal off a plan, instead of asking a reviewer to decline the whole thing.',
     descriptionFingerprint: 'dc5421fc3039',
+  },
+  update_plan: {
+    // The line has to say WHAT this one is about, because its three neighbours
+    // are all about a PROPOSAL and this one is not — that is the whole reason a
+    // reader picks between them.
+    summary:
+      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal.",
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '3c8e94ce5a31',
   },
   open_plan_session: {
     summary: "Open — or resume — a project's planning conversation, and read its thread.",

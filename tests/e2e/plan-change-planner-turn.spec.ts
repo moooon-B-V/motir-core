@@ -40,6 +40,18 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
+// ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
+// workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
+// you are already on. So an address that used to BE the workspace is now a host
+// page plus four namespaced parameters, and a `waitForURL` that matched the old
+// path matches nothing. The assertions about what the workspace DOES are
+// unchanged — only how it is reached and how its arrival is detected.
+//
+// (`/planning?…` still resolves: `app/(authed)/planning/page.tsx` forwards an old
+// link to the host page it belonged to. Its own coverage is in
+// `tests/integration/planning/planChangeSeams.test.ts`; these specs address the
+// overlay directly, which is what a reader would write today.)
+
 test.describe.configure({ timeout: 120_000 });
 
 const QUESTION = 'Taking money in from customers, or paying suppliers out?';
@@ -242,7 +254,7 @@ test('a question shows in the rail, the composer asks for the answer, and the re
   await stubStream(page, 'job-ask-1');
   await stubPlannerTurn(page, ctx, { message: REPORT, question: QUESTION });
 
-  await page.goto('/planning?mode=project&from=project');
+  await page.goto('/roadmap?plan=project&planFrom=project');
   await expect(rail(page)).toBeVisible();
 
   // 1. An underdetermined request goes out.
@@ -312,7 +324,7 @@ test('a question the user ignores is SUPERSEDED — marked, never dropped and ne
   await stubStream(page, 'job-ask-1');
   await stubPlannerTurn(page, ctx, { message: REPORT, question: QUESTION });
 
-  await page.goto('/planning?mode=project&from=project');
+  await page.goto('/roadmap?plan=project&planFrom=project');
   const asked = recorded(page);
   await send(page, 'add payments', 'Send');
   expect((await asked).status()).toBe(200);

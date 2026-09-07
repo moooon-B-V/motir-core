@@ -187,6 +187,18 @@ export const projectRepository = {
    * graph still exists, so the archive filter would silently skip it and leave
    * that graph an unreachable orphan — the exact failure the decision is about.
    */
+  /** MANY projects by id, in one read — the `Used by N projects` fan-in (Story
+   *  MOTIR-4669 · MOTIR-4679). The rows a repository's `project_repository` links
+   *  name span the ORGANISATION's workspaces, so this is deliberately NOT
+   *  workspace-narrowed: the caller supplies the ids it already resolved and the
+   *  RLS context it reads them under. `accessLevel` is included because the
+   *  answer must then be access-FILTERED per workspace — a count that reveals a
+   *  project the viewer may not name is the leak this read exists to avoid. */
+  async findManyByIds(ids: readonly string[], tx: Prisma.TransactionClient): Promise<Project[]> {
+    if (ids.length === 0) return [];
+    return tx.project.findMany({ where: { id: { in: [...ids] } }, orderBy: { name: 'asc' } });
+  },
+
   async findAllIdsByWorkspace(
     workspaceId: string,
     tx?: Prisma.TransactionClient,

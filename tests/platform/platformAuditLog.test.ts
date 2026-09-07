@@ -169,6 +169,14 @@ describe('the reason rule', () => {
     'user.password_reset_sent': 'required',
     'user.suspend': 'required',
     'user.unsuspend': 'required',
+    // MOTIR-4565's org classification — the first members from outside Epic 10
+    // and Story 8.5, and the first at the `superadmin` degree. Both `required`:
+    // they change what an organization is BILLED, and ADR §7's table puts every
+    // billing-affecting write there with a reason. The unset carries one for the
+    // reason `user.unsuspend` does — the trail has to answer "why is this org
+    // being billed again?" as readably as it answers why it stopped.
+    'org.internal_billing_set': 'required',
+    'org.internal_billing_unset': 'required',
   } as const;
 
   it('every action carries the policy the ADR allocates it', () => {

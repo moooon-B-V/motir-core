@@ -43,8 +43,14 @@ const APP = join(ROOT, 'app');
  * The route groups whose pages are SIGNED-IN surfaces. `(auth)` and `(public)`
  * are anonymous by design; `(admin)` is excluded on purpose and is asserted
  * separately below.
+ *
+ * ⚠️ `(planning)` WAS A THIRD until MOTIR-4732 retired it — the planning
+ * workspace is an overlay mounted inside `(authed)` now, and the one path left at
+ * `/planning` is a forward that lives in that group. Its matcher entry STAYS
+ * (`proxy.ts` says why): the entry is what gives a cookie-less request to a
+ * bookmarked `/planning?…` the sign-in bounce instead of the segment's own gate.
  */
-const SIGNED_IN_GROUPS = ['(authed)', '(onboarding)', '(planning)'] as const;
+const SIGNED_IN_GROUPS = ['(authed)', '(onboarding)'] as const;
 
 /**
  * ⚠️ THE SWEEPS LIVE IN `tests/helpers/twoFactorGuardSweeps.ts`, taking the app
@@ -121,7 +127,7 @@ describe('proxy config.matcher', () => {
     expect(source).toContain('404-not-403');
   });
 
-  it('the seventeen (authed) segments are the ones measured, not a copied list', async () => {
+  it('the eighteen (authed) segments are the ones measured, not a copied list', async () => {
     // A regression guard on the ENUMERATION, not on the matcher: if this number
     // moves, a segment was added or removed and the first test above is the one
     // that should have failed. Kept because the card's own measurement is the
@@ -136,11 +142,15 @@ describe('proxy config.matcher', () => {
       'home',
       'invite',
       'items',
+      // MOTIR-4732 — the FORWARD for old `/planning` links, and the eighteenth
+      // segment. The route GROUP that served this path is gone; what is here is
+      // a page inside `(authed)`, which is why the sweep now finds it.
+      'planning',
       'plans',
       'ready',
       'reports',
       'roadmap',
-      // MOTIR-3923 — the runs index, and the seventeenth segment.
+      // MOTIR-3923 — the runs index, the segment that made this list seventeen.
       'runs',
       'settings',
       'sprints',
@@ -194,6 +204,31 @@ describe('proxy()', () => {
     const location = new URL(res.headers.get('location')!);
     expect(location.pathname).toBe('/sign-in');
     expect(location.searchParams.get('next')).toBe('/items');
+  });
+
+  it('⚠️ carries the SEARCH STRING into `next=`, not the pathname alone', async () => {
+    // MOTIR-4725. The planning workspace is an OVERLAY: `plan` / `planFrom` in
+    // the query ARE the open state, so a bounce that kept only `/backlog` sent a
+    // signed-out reader to a bare backlog — the link they were given, minus the
+    // thing it was a link TO. The same drop quietly cost every filtered list its
+    // filter. `sanitizeNextPath` admits a query (see its header), so the value
+    // survives the round trip whole.
+    cookiePresent.value = false;
+    const { NextRequest } = await import('next/server');
+    const { proxy } = await import('@/proxy');
+
+    const res = await proxy(
+      new NextRequest('https://app.motir.co/backlog?kind=story&plan=project&planFrom=project'),
+    );
+
+    const next = new URL(res.headers.get('location')!).searchParams.get('next');
+    expect(next).toBe('/backlog?kind=story&plan=project&planFrom=project');
+    // …and it is still a value `sanitizeNextPath` admits: a single leading
+    // slash, nothing protocol-relative. (Asserted as the SHAPE rather than by
+    // calling the sanitizer — this lane may not import from `lib/`, and
+    // `tests/navigation/landing.test.ts` is where that function is exercised.)
+    expect(next!.startsWith('/')).toBe(true);
+    expect(next!.startsWith('//') || next!.startsWith('/\\')).toBe(false);
   });
 
   it('forwards x-current-path with the path AND the search string', async () => {

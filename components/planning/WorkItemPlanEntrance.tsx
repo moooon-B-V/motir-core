@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
-import { planningWorkspaceHref } from '@/lib/planning/launcher';
+import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
 import { planEntranceFace } from '@/lib/planning/planEntranceVisibility';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
@@ -18,8 +18,16 @@ import type { WorkItemKindDto } from '@/lib/dto/workItems';
 // It is deliberately NOT a second `PlanWithAILauncher`: the launcher is the
 // GLOBAL hero pill in `TopNav` ("plan something"), while this is a quiet,
 // per-item affordance sitting among the item's own controls. Both resolve their
-// href through the same `planningWorkspaceHref`, so there is exactly one entry
-// path into the workspace and one place that decides the mode.
+// href through the same `useOpenPlanningWorkspace`, so there is exactly one
+// entry path into the workspace and one place that decides the mode.
+//
+// ⚠️ IT OPENS AN OVERLAY IN PLACE NOW (MOTIR-4730), which changes what the peek
+// does. See `onActivate` below: the quick view used to close as this pill was
+// clicked, because the workspace was a ROUTE and the peek was about to be
+// unmounted anyway. The design settled the dialog-over-dialog case the other
+// way — the workspace opens ABOVE the peek and `?peek=` stays in the address, so
+// closing the workspace returns the reader to the open quick view they launched
+// from, which is the literal reading of "back to exactly where you were".
 //
 // TWO FACES (design "Modes"), and WHICH one it wears is decided by the shared
 // Plan / Re-plan rule (`planEntranceFace`, MOTIR-2097) — for a CONTAINER by
@@ -93,9 +101,19 @@ export interface WorkItemPlanEntranceProps {
    */
   statusCategory: StatusCategoryDto | null;
   /**
-   * Fired just before navigating — the quick-view passes its close so the modal
-   * is dismissed as the workspace opens (design panel 3: "clicking it closes the
-   * modal — a handoff to the planning surface"). The detail page passes nothing.
+   * Fired just before the workspace opens.
+   *
+   * ⚠️ NO LONGER THE QUICK VIEW'S CLOSE (MOTIR-4730). It used to be exactly
+   * that — *"clicking it closes the modal — a handoff to the planning surface"*
+   * — and it was right while the workspace was a ROUTE that unmounted the peek
+   * regardless. The workspace is an overlay now and the design decided the
+   * dialog-over-dialog case: it opens ABOVE the peek and `?peek=` is KEPT, so
+   * dismissing the peek here would be a second, silent close the reader did not
+   * ask for, and it would make this one door behave unlike the other six.
+   *
+   * The prop stays for a host that genuinely has something to do at the moment
+   * of opening (a menu that must collapse, a palette that must close so focus
+   * return lands on its trigger). Nothing passes it today.
    */
   onActivate?: () => void;
   className?: string;
@@ -123,9 +141,17 @@ export function WorkItemPlanEntrance({
     hasChildren,
     hasDescription,
   });
+  const isReplan = face === 'replan';
+  // ⚠️ BEFORE the early return, because it is a HOOK. `planEntranceFace` is a
+  // pure function, so it can run first and decide `hasPlan` — but the hook that
+  // reads it may not sit behind a conditional return.
+  const { href, open } = useOpenPlanningWorkspace({
+    kind: 'work-item',
+    itemKey,
+    hasPlan: isReplan,
+  });
   if (face === null) return null;
 
-  const isReplan = face === 'replan';
   const label = isReplan ? t('replan') : t('plan');
   // The accessible name NAMES THE ITEM, so the door is unambiguous when several
   // planning affordances share a screen (the global "Plan with AI" pill is
@@ -136,7 +162,7 @@ export function WorkItemPlanEntrance({
 
   return (
     <Link
-      href={planningWorkspaceHref({ kind: 'work-item', itemKey, hasPlan: isReplan })}
+      href={href}
       aria-label={ariaLabel}
       data-testid="work-item-plan-entrance"
       // A hero ACTION on the badge radius, not a status chip (MOTIR-3522) —
@@ -144,7 +170,10 @@ export function WorkItemPlanEntrance({
       // plane is declared rather than inferred.
       data-depth="key"
       data-mode={face}
-      onClick={onActivate}
+      onClick={(event) => {
+        onActivate?.();
+        open(event);
+      }}
       className={cn(
         'inline-flex h-(--height-btn-sm) shrink-0 items-center gap-1.5 rounded-(--radius-badge) border px-(--spacing-btn-x-sm)',
         'font-sans text-xs font-semibold whitespace-nowrap transition-colors',

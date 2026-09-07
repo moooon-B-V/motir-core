@@ -169,6 +169,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       // The consent flag rides every planning submit (MOTIR-4343), generation
       // included — ON here because this fixture never touches the setting.
       recordPlanningMistakes: true,
+      // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
+      // project has never had a plan approved (`onboardingRanAt` is null).
+      onboarding: true,
       code: {
         repos: [
           { provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'main' },
@@ -195,6 +198,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       prompt: 'start fresh',
       generateExplanations: false,
       recordPlanningMistakes: true,
+      // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
+      // project has never had a plan approved (`onboardingRanAt` is null).
+      onboarding: true,
     });
     expect(Object.keys(context as object)).not.toContain('code');
   });

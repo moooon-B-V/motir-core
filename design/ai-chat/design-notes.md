@@ -435,14 +435,14 @@ it supersedes the separate per-story designs `7.11.1`/`MOTIR-898` +
 > pattern for the rest came from. The `.png` re-exported at byte-identical
 > dimensions (`EXACT 1200x900@2x`, 2400×10856).
 
-| Sheet | What it shows                                                                                                                                   |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                               |
-| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                             |
-| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                  |
-| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating Motir callout; context → mode adapts              |
-| **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)       |
-| **6** | Opening & exiting — a full-screen overlay ON TOP of the app; Close (✕ / Esc / "Back to …") + the confirm-to-persist guard on close-with-pending |
+| Sheet | What it shows                                                                                                                                                                                                                                                                                 |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | The shell — full-screen two-pane workspace (canvas left · chat right), no app nav                                                                                                                                                                                                             |
+| **2** | Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until Confirm (confirm-to-persist)                                                                                                                                                                           |
+| **3** | The four MODES (generation / re-plan / contextual / roadmap-read) as STATES of the one surface, each tied to its entrance door                                                                                                                                                                |
+| **4** | The universal entrance — BOTH hero affordances: the header "Plan with AI" pill + the floating Motir callout; context → mode adapts                                                                                                                                                            |
+| **5** | Style-aware — the "Plan with AI" control rendered special in each `data-style` (Editorial / Soft / Swiss / Brutalism / Glass / Cybercore)                                                                                                                                                     |
+| **6** | Opening & exiting — the workspace as the shipped `Modal size="full"`, EDGE TO EDGE over the page you are on: the four exits, the NAMESPACED query contract, the cold deep link + signed-out hop, the close-with-pending guard, every state, and the doors before/after (AMENDED — MOTIR-4726) |
 
 ### ⚠️ SCOPE — this designs the SHELL + ENTRANCE, NOT the canvas pane
 
@@ -709,35 +709,809 @@ affordance opens the workspace in the mode for the **current context**:
   — only the public roadmap exists today; that door reuses this launcher when
   1011 lands.)
 
+### ⭐ The STYLE MATRIX — all eleven registered styles, drawn (MOTIR-4742, 2026-09-06)
+
+The paragraph above promises a per-style treatment and names six styles. **The
+registry holds eleven.** This section draws the other five, re-draws the six in
+the mechanism the stylesheet actually uses, and states the hook the app has to
+emit — because none of that existed in a form an implementation could copy
+(MOTIR-4743 is the bug it unblocks).
+
+#### The set is DERIVED, not enumerated
+
+**The eleven rows below ARE the eleven `[data-style]` token blocks in
+`packages/design-system/theme.css`, and that is the definition — not a list
+somebody kept in step.** Re-derive it with:
+
+```sh
+grep -c "^\[data-style=" packages/design-system/theme.css   # 12 matches
+grep    "^\[data-style=" packages/design-system/theme.css   # 11 distinct styles
+```
+
+The count is **12 and the answer is 11**: `[data-style='neumorphism'][data-theme='dark']`
+is a THEME variant of a style already in the set, not a twelfth style. Counting the
+grep is how this section would acquire a phantom row, so the number is written down
+beside the command that produces it. `lib/theme/styles.ts` is the registry the app
+reads; a style present there and absent here is a **defect in this section**, on the
+same closure rule `docs/styles/3d-immersive.md` §4b states for the plane ladder.
+
+#### ⚠️ What already reaches these controls — measured, not assumed
+
+Rendered headlessly from the real `theme.css` against the SHIPPED
+`PlanWithAILauncher` and `PlanWithAIFab` (design-against-shipped-reality), the
+current state is **not** "the style axis does not reach the hero". It is narrower
+and more useful than that:
+
+| axis                            | reaches the hero today? | evidence                                                                                                                                                                            |
+| ------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Radius**                      | ✅ **yes**              | `--radius-badge` resolves to `9999px` · `2px` (Swiss) · `0` (Brutalism) · `2px` (Cybercore) · the wonky `9px 26px 11px 22px / 22px 11px 24px 9px` (Hand-Drawn)                      |
+| **Padding**                     | ✅ **yes**              | `--spacing-btn-x` resolves to `16px` · `18px` · `20px` · `22px` across the eleven                                                                                                   |
+| **Height**                      | ✅ yes (uniform)        | `--height-btn-md` is `40px` in all eleven — the token flows; the styles simply agree                                                                                                |
+| **Shadow**                      | ⚠️ **one style only**   | `--plan-hero-shadow` / `--plan-orb-shadow` are set by `3d-immersive` alone (`theme.css:1688-1701`, MOTIR-3522). Every other style falls through to the component's literal fallback |
+| **Fill · border · glow · type** | ❌ **no**               | byte-identical in all eleven — the inline `background-image` beats every rule, and there is no hook to write one against                                                            |
+
+So the rows below change **fill, border, shadow/glow, type and ink**. They do
+**not** re-declare radius, padding or height: those already flow, and a rule that
+re-stated them would freeze the one axis that is working.
+
+#### ⚠️ The HOOK — and why ONE attribute is not enough
+
+The prescription above is `[data-style='id'] [data-surface='ai-cta']`. **No element
+in `app/` or `components/` emits `data-surface="ai-cta"`** — the string occurs
+nowhere outside `design/`. Emitting it is MOTIR-4743's first job, and it emits
+**two** attributes, not one:
+
+```html
+<!-- components/planning/PlanWithAILauncher.tsx — the header pill -->
+<a data-surface="ai-cta" data-ai-cta="pill" data-depth="key" …>
+  <!-- components/planning/PlanWithAIFab.tsx — the floating M orb -->
+  <button data-surface="ai-cta" data-ai-cta="orb" data-depth="key" …></button
+></a>
+```
+
+**The second attribute is load-bearing and is a finding, not a convenience.** The
+two controls do not share a fill RECIPE: the pill is a 135° linear gradient, and the
+orb is a _lit sphere_ — `radial-gradient(circle at 33% 27%, …)` whose first stop is
+`--orb-lit-mix`, a **guarded contrast knob** (MOTIR-3207; `tests/theme/orb-glyph-contrast.test.ts`
+re-derives all twenty palette × theme contexts against a 3:1 floor). A per-style rule
+written against `[data-surface='ai-cta']` alone would set one `background-image` over
+both and **silently overwrite the orb's measured recipe** — turning a guarded 3.78:1
+into whatever the style's pill gradient happens to give. So every fill below is
+written under `[data-ai-cta='pill']` or `[data-ai-cta='orb']`, and only the
+shape-agnostic properties (border, outer glow, type, ink) are written on the shared
+`[data-surface='ai-cta']`.
+
+`data-depth="key"` already ships on both (MOTIR-3522 / §4a) and is **not** replaced by
+this hook: it declares the 3D plane, `data-ai-cta` declares which hero control this is.
+
+#### ⚠️ How the ORB takes each style (AC 5 — "the same way" is not self-evident)
+
+The orb is a circle, the pill a pill, so "the orb adopts each style's material the
+same way" needs a rule rather than a promise. It is this:
+
+1. **The lit-sphere fill is NEVER replaced — it is COMPOSED OVER.** Each style adds
+   its material as an extra `background-image` layer _above_ the shipped radial
+   gradient (a sheen, a grid, a bevel), or changes nothing at all. The shipped
+   radial stays the last layer, so `--orb-lit-mix` keeps deciding the glyph's
+   contrast under every style.
+   **⚠️ AND THE ADDED LAYER IS CONFINED TO THE CROWN** — `background-size: 100% 20–26%`,
+   above the centred 26/56 glyph box. Composing a LIGHT layer over the sphere breaks the
+   guarded floor just as surely as replacing the fill does: measured across the whole
+   circle, glassmorphism's sheen and retrofuturism's crown put the glyph box at 3.17:1 /
+   2.67:1 and 3.34:1 / 2.78:1, under the 3:1 bar
+   `tests/theme/orb-glyph-contrast.test.ts` enforces. Confined, both measure the shipped
+   3.78:1 / 3.10:1 — the sheen is a rim treatment, not a wash (finding C below).
+2. **Radius is not a style axis for the orb.** It is `rounded-full` by definition;
+   a style that squares the pill (Swiss, Brutalism, Cybercore) leaves the orb round.
+   The orb carries that style's _border, shadow/glow and material_ instead — which
+   is precisely what makes the two read as one family at two shapes.
+3. **Anything the pill expresses as TYPE, the orb expresses as GLYPH WEIGHT** — the
+   orb has no label. Uppercase/mono/letter-spacing rows below therefore say
+   "n/a (glyph)" for the orb.
+
+#### The eleven rows
+
+Colour is `color-mix()` over `--el-accent` / `--el-highlight` / `--el-accent-text`
+throughout; **no row names a raw hex**. Cybercore and Retrofuturism additionally mix
+toward the achromatic `white` / `black` KEYWORDS — sanctioned by those styles' own
+material layers, which use them to read as _lightness_ rather than as a hue, so the
+palette axis stays disjoint (`theme.css`, the retrofuturism block's header). Shape is `--radius-badge` /
+`--height-btn-md` / `--spacing-btn-x`, already flowing (table above). Ink is
+`--el-accent-text` in every row — the styles change the GROUND, never the ink, which
+is what keeps the AA argument one-dimensional.
+
+**AA is measured, not asserted.** Every ratio below was computed by resolving the
+tokens through a real CSS engine and reading the PAINTED pixel, then applying WCAG
+2.x — never from the token names. Default `motir` palette; the label is
+`--el-accent-text` (`#ffffff`) over the **accent-dominant** region of that style's own
+fill. The method reproduces the shipped orb figures exactly (3.78:1 light / 3.10:1
+dark against `design-notes.md` § B's recorded 3.77 / 3.09), which is what makes the
+new numbers trustworthy.
+
+| #   | Style                     | Fill (pill)                                                                                                              | Border                                                                                            | Shadow / glow                                                                                                    | Type                                    | Label AA — light / dark |
+| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------------------- |
+| 1   | **Warm Editorial** (base) | 135° `--el-accent` → `color-mix(--el-accent 86%, --el-highlight)` — **accent-dominant, see the base-fill finding below** | none                                                                                              | inner sheen + violet drop + pink aura (the component's own `var()` fallback)                                     | sans, 600, sentence case                | **5.97** / **4.64**     |
+| 2   | **Soft / Playful**        | as base                                                                                                                  | none                                                                                              | **pillowy stack**: a hard `0 7px 0 -1px` ledge in `color-mix(--el-accent 22%, --el-page-bg)` + a wide soft bloom | sans, **800**, sentence case            | **5.97** / **4.64**     |
+| 3   | **Swiss / Minimal-Flat**  | **flat solid `--el-accent`** — no gradient                                                                               | none                                                                                              | **none** (the style removes every shadow; depth is hairline + whitespace)                                        | sans, 700, **UPPERCASE**, `0.07em`      | **6.57** / **4.99**     |
+| 4   | **Glassmorphism**         | **frosted**: `color-mix(--el-accent 86%, transparent)` + `backdrop-filter: blur(var(--glass-blur))`                      | `1px` `var(--glass-rim)`                                                                          | inner rim sheen + diffuse lift                                                                                   | sans, 600, sentence case                | **4.87** / **5.73**     |
+| 5   | **Neo-Brutalism**         | **flat solid `--el-accent`**                                                                                             | **2px solid `--el-text`**                                                                         | **hard offset, zero blur** — `4px 4px 0 var(--el-text)`                                                          | sans, 800, **UPPERCASE**                | **6.57** / **4.99**     |
+| 6   | **Cybercore / Y2K**       | dark HUD ground: `color-mix(--el-accent 88%, black)` → the highlight mix taken 78% to black                              | `1px` `color-mix(--el-highlight 70%, transparent)`                                                | **neon halo, no drop shadow**: `0 0 10px` / `0 0 26px -4px` over `--el-highlight` / `--el-accent`                | **mono** (`--font-mono`), 600, `0.04em` | **7.42** / **6.10**     |
+| 7   | **Aurora**                | base + a lit-from-within crown sheen at `--aurora-sheen`                                                                 | none                                                                                              | **colour halo** at `--aurora-glow`, no hard shadow                                                               | sans, 600, sentence case                | **5.97** / **4.64**     |
+| 8   | **3D / Immersive**        | as base — **unchanged**                                                                                                  | none                                                                                              | ⚠️ **NOT SET HERE** — the shipped `--plan-hero-shadow` / `--plan-orb-shadow` own it (see below)                  | sans, 600, sentence case                | **5.97** / **4.64**     |
+| 9   | **Hand-Drawn / Indie**    | as base                                                                                                                  | **2px `--el-border-strong`**, warped by the shared `#hd-rough` filter on a content-safe `::after` | soft hand-placed offset, `3px 4px 0 -1px color-mix(--el-border-strong 55%, transparent)`                         | sans, 700, sentence case                | **5.97** / **4.64**     |
+| 10  | **Neumorphism**           | **flat solid `--el-accent` — no gradient, no glow**                                                                      | hairline `1px color-mix(--el-accent 70%, var(--el-text))` (KEPT, never removed)                   | **paired extrusion**: `--neu-distance` / `--neu-blur` with `--neu-light` up-left and `--neu-shadow` down-right   | sans, 600, sentence case                | **6.57** / **4.99**     |
+| 11  | **Retrofuturism**         | **chrome bevel** (vertical `+18% white` → `--el-accent` at 20% → `+16% black`) + a **crown-confined** specular streak    | `1px color-mix(--el-accent-text 30%, transparent)`                                                | colour glow at `--retro-glow` + the bevel's inner top highlight                                                  | sans, 600, sentence case                | **6.76** / **5.16**     |
+
+**Every row clears WCAG AA for normal text (4.5:1) in both themes**, and every orb glyph clears the
+3:1 non-text floor `--orb-lit-mix` was tuned to hold. The tightest label is **Glassmorphism at
+4.87:1 (light)**; the tightest orb is **3.10:1 (dark)**, which is the shipped orb's own figure —
+no style moves it, by construction.
+
+|                                                          | pill light | pill dark | orb light | orb dark |
+| -------------------------------------------------------- | ---------- | --------- | --------- | -------- |
+| Warm Editorial · Soft/Playful · Aurora · 3D · Hand-Drawn | 5.97       | 4.64      | 3.79      | 3.10     |
+| Swiss · Neo-Brutalism                                    | 6.57       | 4.99      | 3.79      | 3.10     |
+| Glassmorphism                                            | 4.87       | 5.73      | 3.78      | 3.10     |
+| Cybercore / Y2K                                          | 7.42       | 6.10      | 3.72      | 3.11     |
+| Neumorphism                                              | 6.57       | 4.99      | 6.57      | 4.99     |
+| Retrofuturism                                            | 6.76       | 5.16      | 3.78      | 3.10     |
+
+#### ⚠️ FOUR places the measurement changed the design
+
+This is why AC 6 asks for numbers rather than a claim. Every one of these was invisible to reading
+the CSS and to looking at the render; each was found by sampling the painted pixel.
+
+**A · The BASE fill fails AA in dark today — and it is a shipped defect, not a new one.**
+`PlanWithAILauncher.HERO_STYLE` paints
+`linear-gradient(135deg, var(--el-accent), color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight)))`.
+The label spans the whole pill, so it also sits on the FAR stop — which is 45% brand pink. Measured
+over the worst pixel under the glyphs: **4.64:1 light and 3.98:1 dark**. The dark figure is below
+the 4.5:1 bar, on the product's headline control, today, on `main`.
+It also contradicts this very file, which says _"the brand pink lives only in the glow/aura, never
+under text"_ — true of the aura, false of the fill's second stop.
+**The remedy is one number and it restores the sentence rather than rewriting it**: the far stop
+becomes `color-mix(--el-accent 86%, --el-highlight)` — **5.97:1 / 4.64:1** — so the fill is
+accent-dominant and the pink stays in the glow, exactly as promised. Sweeping the mix shows 80% is
+the first passing value (4.55:1 dark); **86% is specified rather than 80% so the bar is cleared with
+margin rather than met**. This is picked up by [MOTIR-4743](motir:cmtplxqtd0078hvn8s6fzv4wa), which
+rewrites that declaration anyway to move the fill off the inline `style` prop — the two are one edit,
+which is why this is recorded here and on that card rather than filed as a third.
+
+**B · Retrofuturism's SPECULAR STREAK was the failure, not the bevel.** The first draft of this
+section blamed the bevel highlight and bounded it; the render then measured **2.55:1 light / 2.22:1
+dark**, because the diagonal streak at `--retro-spec` (44% white) crosses the label across the full
+box. **Thinning it does not rescue it** — at 18% it still measures 3.67:1 in dark, and by then the
+chrome has stopped reading. So the streak becomes a **crown** highlight: its own background layer at
+`background-size: 100% 28%`, above the cap height. The label sits on the bevel body at **6.76:1 /
+5.16:1**, and the chrome still reads, because a machined bevel IS a vertical light-to-dark ramp with
+a highlight on the crown. _(The bevel was never the problem; a plausible diagnosis measured wrong.)_
+
+**C · A style sheen over the ORB silently breaks the guarded contrast knob.** The rule above says a
+style composes OVER the lit-sphere fill rather than replacing it — and composing a LIGHT layer over
+it is the same failure by another route. Glassmorphism's `--glass-sheen` and Retrofuturism's crown,
+applied across the whole circle, measured **3.17:1 / 2.67:1** and **3.34:1 / 2.78:1** inside the
+26/56 glyph box: under the 3:1 floor `tests/theme/orb-glyph-contrast.test.ts` enforces, from a
+design that had just written down the rule it was breaking. **So the rule has a second clause: an orb
+material layer is confined to the CROWN** (`background-size: 100% 20–26%`), above the glyph box,
+which is why both now measure the shipped 3.78:1 / 3.10:1 — identical to no sheen at all, because
+the glyph box never sees it.
+
+**D · Glassmorphism cannot be as frosted as this sheet used to draw it.** The retired `.hc-glass`
+painted `rgba(255,255,255,0.18)` — a _white_ veil — over a vibrant stage. Measured against the light
+page that is **2.31:1** at a 50% accent share and **4.49:1** at 82%: below the bar, and the second
+only just, which is exactly the value a designer would accept by eye. The frost is specified as
+**`color-mix(in srgb, var(--el-accent) 86%, transparent)`** — still genuinely translucent, with the
+glass read carried by the blur + `--glass-rim` + the inner sheen rather than by thinning the fill.
+**86% is a floor, not a preference**: white is the lightest backdrop the light theme can put behind
+it (`--el-page-bg` is `#ffffff`), so 86% accent composited over anything is **≥ 4.87:1**.
+
+#### ⚠️ Row 8 reconciled — `3d-immersive` ADDS NOTHING to the shadow (AC 4)
+
+`3d-immersive` is the one style that already treats this control, and the rule below
+is written to **compose with** that rather than replace it.
+
+`PlanWithAILauncher.HERO_STYLE` and `PlanWithAIFab.ORB_STYLE` paint `box-shadow`
+**inline**, which beats every stylesheet rule — so MOTIR-3522 made each read
+`var(--plan-hero-shadow, <the base look>)` / `var(--plan-orb-shadow, …)`, and
+`theme.css:1688-1701` sets those two variables for this style **on `body` inside the
+`@scope`**, adding the physical key's base edge (`0 4px 0 0 var(--el-accent-pressed)`,
+`0 5px 0 0` for the orb).
+
+**Therefore the `3d-immersive` rule in this section sets NO `box-shadow` and NO
+`background-image`.** Two reasons, and both are rules rather than taste:
+
+1. A `box-shadow` here would lose to the inline declaration anyway — that is the
+   whole reason the variable seam exists. The correct place to change this style's
+   hero depth is the existing `--plan-hero-shadow` / `--plan-orb-shadow` block.
+2. `docs/styles/3d-immersive.md` §4 classifies a hero CTA as a **physical key**
+   (_"An interactive pill that is an ACTION rather than a status … is a key and says
+   so with `data-depth='key'`"_), and §4b's CLOSURE RULE makes an unclassified
+   surface a spec defect. Both controls already carry `data-depth="key"`. Replacing
+   the key's base edge with a decorative fill would take the control OFF the plane
+   ladder while leaving it declared on it — a contradiction, not a restyle.
+
+So row 8 is deliberately the base fill: under `3d-immersive` the hero's _identity_
+is its depth, and the depth already ships.
+
+#### The CSS, verbatim — copyable into `theme.css` (AC 3)
+
+> **⚠️ AMENDED 2026-09-06 (MOTIR-4743) — TWO DECLARATIONS BELOW DO NOT WORK AS
+> WRITTEN, and the shipped section transcribes them onto the seam.** The two
+> components declare exactly two things in an inline `style` prop —
+> `background-image` and `box-shadow` — and an inline declaration beats every
+> stylesheet rule. So a `background-image` OR a `box-shadow` written in a
+> `[data-style]` rule for these controls is **inert**, which is the defect this
+> whole section exists to close. Both are read through a `var()` seam instead:
+> `--plan-hero-fill` / `--plan-orb-fill` (MOTIR-4743) and
+> `--plan-hero-shadow` / `--plan-orb-shadow` (MOTIR-3522, and the mechanism row 8
+> below already relies on). A rule on the shared `[data-surface='ai-cta']`
+> selector sets BOTH shadow names, since each control reads only its own.
+>
+> **The values below are unchanged and are still the specification** — every AA
+> ratio in the table above was measured on exactly these declarations, and
+> `tests/theme/aiCtaStyleSeam.test.ts` compares this block against the shipped
+> stylesheet declaration for declaration, applying that one translation. What
+> changed is only which PROPERTY NAME carries each value.
+>
+> **The shadow half was found by a RENDER, not by a reading.** Transcribed
+> literally, `tests/e2e/hero-ai-control-styles.spec.ts` reported exactly one
+> control identical to the base — the **aurora orb**, the only row that sets
+> nothing but a shadow. Every other style also moves a fill, a border or the
+> type, so its rule "worked" while its shadow silently did not.
+
+Paste with that translation. It follows the file's own `@scope` house form (the same one the
+glassmorphism, aurora, neumorphism and retrofuturism material layers use), reads
+only `--el-*` and the styles' own palette-agnostic scalars, and names no raw hex.
+It belongs **after** each style's token block, with the other material-layer rules —
+**never inside a bare `[data-style]` token block**, which `tests/theme/styleRegistry.test.ts`
+holds colour-free and `tests/theme/shapeSwapLint.test.ts` requires to override every
+shape role.
+
+```css
+/* ── The hero AI control, per style (MOTIR-4742) ──────────────────────────
+   The two controls that summon the planning workspace — the header pill
+   (`PlanWithAILauncher`) and the floating M orb (`PlanWithAIFab`) — are the
+   product's headline affordance and the sanctioned exception to the flat-button
+   norm. Each style gives them its own material.
+
+   `data-ai-cta` distinguishes the two because they do not share a fill recipe:
+   the orb's `radial-gradient` first stop is `--orb-lit-mix`, a guarded contrast
+   knob (MOTIR-3207), and a shared `background-image` would overwrite it. Radius,
+   padding and height are NOT set here — they already flow through
+   `--radius-badge` / `--spacing-btn-x` / `--height-btn-md`. Palette-derived
+   throughout; the colour axis stays disjoint. */
+
+/* 2 · Soft / Playful — pillowy stacked shadow, no border. */
+@scope ([data-style='soft-playful']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    font-weight: 800;
+    box-shadow:
+      0 7px 0 -1px color-mix(in srgb, var(--el-accent) 22%, var(--el-page-bg)),
+      0 14px 22px -6px color-mix(in srgb, var(--el-accent) 55%, transparent);
+  }
+}
+
+/* 3 · Swiss / Minimal-Flat — flat solid, sharp, uppercase, NO shadow. */
+@scope ([data-style='swiss-minimal-flat']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    box-shadow: none;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-image: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 4 · Glassmorphism — frosted translucency over the rim. 86% is a FLOOR. */
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid var(--glass-rim);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    box-shadow:
+      inset 0 1px 0 var(--glass-rim),
+      0 8px 22px -6px color-mix(in srgb, var(--el-accent) 45%, transparent);
+  }
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-image: none;
+    background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+  }
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    /* Crown-confined: across the whole circle this sheen lightens the
+       26/56 glyph box to 3.17:1 light / 2.67:1 dark and breaks the
+       `--orb-lit-mix` floor the style layer may not touch. */
+    background-size:
+      100% 20%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+    background-image:
+      linear-gradient(160deg, var(--glass-sheen), transparent 90%),
+      radial-gradient(
+        circle at 33% 27%,
+        color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+        var(--el-accent) 56%,
+        color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+      );
+  }
+}
+
+/* 5 · Neo-Brutalism — hard 2px border + zero-blur offset shadow. */
+@scope ([data-style='neo-brutalism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 2px solid var(--el-text);
+    box-shadow: 4px 4px 0 0 var(--el-text);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-image: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 6 · Cybercore / Y2K — dark HUD ground, neon halo, mono label. */
+@scope ([data-style='cybercore-y2k']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-highlight) 70%, transparent);
+    box-shadow:
+      0 0 10px color-mix(in srgb, var(--el-highlight) 60%, transparent),
+      0 0 26px -4px color-mix(in srgb, var(--el-accent) 70%, transparent);
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-image: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--el-accent) 88%, black),
+      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%, black)
+    );
+  }
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    background-image:
+      linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--el-highlight) 22%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at 33% 27%,
+        color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+        var(--el-accent) 56%,
+        color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+      );
+  }
+}
+
+/* 7 · Aurora — lit from within, colour halo, no hard shadow. */
+@scope ([data-style='aurora']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+      0 0 26px -2px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+      0 0 40px -6px color-mix(in srgb, var(--el-highlight) var(--aurora-glow), transparent);
+  }
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-size:
+      100% 28%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+    background-image:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+        transparent 90%
+      ),
+      linear-gradient(
+        135deg,
+        var(--el-accent),
+        color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight))
+      );
+  }
+}
+
+/* 8 · 3D / Immersive — NOTHING. `--plan-hero-shadow` / `--plan-orb-shadow`
+   own this control's depth and the components read them through a `var()`
+   seam an inline `box-shadow` would otherwise beat (MOTIR-3522). A rule
+   here would either lose to that inline declaration or take a
+   `data-depth="key"` control off the plane ladder it is declared on
+   (docs/styles/3d-immersive.md §4 / §4b). Deliberately empty — recorded so
+   the absence reads as a decision, not an omission. */
+
+/* 9 · Hand-Drawn / Indie — a drawn ink outline + a hand-placed offset. */
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    position: relative;
+    font-weight: 700;
+    box-shadow: 3px 4px 0 -1px color-mix(in srgb, var(--el-border-strong) 55%, transparent);
+  }
+  [data-surface='ai-cta']::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    border: 2px solid var(--el-border-strong);
+    border-radius: inherit;
+    filter: url(#hd-rough);
+  }
+}
+
+/* 10 · Neumorphism — moulded, NOT raised-and-glowing: no gradient, no
+   glow, and the hairline is KEPT (structure never relies on shadow alone). */
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-accent) 70%, var(--el-text));
+    box-shadow:
+      var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+      calc(var(--neu-distance) * -1) calc(var(--neu-distance) * -1) var(--neu-blur) var(--neu-light);
+  }
+  [data-surface='ai-cta'][data-ai-cta='pill'],
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    background-image: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 11 · Retrofuturism — a chrome bevel + a CROWN-CONFINED specular streak.
+   ⚠️ THE STREAK IS THE THING THAT HAD TO MOVE, not the bevel. Across the
+   full box the diagonal at `--retro-spec` washes the label to 2.55:1 light
+   / 2.22:1 dark, and thinning it does not rescue it (18% still measures
+   3.67:1 dark, by which point the chrome has stopped reading). Sized to
+   the top band it sits above the cap height, the label sits on the bevel
+   BODY at 6.76:1 / 5.16:1, and the chrome still reads — a machined bevel
+   IS a vertical light-to-dark ramp with a highlight on the crown. */
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-accent-text) 30%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+      0 0 24px -4px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+  }
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-image:
+      linear-gradient(
+        104deg,
+        transparent 30%,
+        color-mix(in srgb, var(--el-accent-text) var(--retro-spec), transparent) 46%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent) 82%, white) 0%,
+        var(--el-accent) 20%,
+        color-mix(in srgb, var(--el-accent) 84%, black) 100%
+      );
+    /* The specular streak is a CROWN highlight, sized to the top band alone.
+       Across the whole box it washes the label to 2.55:1 light / 2.22:1 dark —
+       and thinning it does not rescue it (18% still measures 3.67:1 in dark).
+       Confined above the cap height the label sits on the bevel BODY, and the
+       chrome still reads, because a machined bevel IS a vertical light-to-dark
+       ramp with a highlight on the crown. */
+    background-size:
+      100% 28%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+  }
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    /* Crown-confined, for the same reason as glass: unbounded it measures
+       3.34:1 light / 2.78:1 dark inside the glyph box. */
+    background-size:
+      100% 26%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+    background-image:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+        transparent 90%
+      ),
+      radial-gradient(
+        circle at 33% 27%,
+        color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+        var(--el-accent) 56%,
+        color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+      );
+  }
+}
+```
+
+**Warm Editorial (row 1) has no block by design** — it is the Tier-0 base, and the
+components' own `var()` fallbacks ARE its treatment. A block repeating them would be
+a second copy to drift. **Its FILL still changes, and not here:** finding A moves the
+base gradient's far stop to `86%`, which is an edit to
+`PlanWithAILauncher.HERO_STYLE` itself, not a `[data-style]` rule. Ten styles inherit
+that stop, so it is the one value in this section that is not optional for any of
+them.
+
+#### What this section does NOT decide
+
+- **It does not emit the hook.** `data-surface` / `data-ai-cta` on the two
+  components, and moving the fill off the inline `style` prop so a rule can reach it,
+  are MOTIR-4743's work. This section is the specification that card copies.
+- **It does not change `--orb-lit-mix`, `--plan-hero-shadow` or `--plan-orb-shadow`.**
+  All three ship and all three are read, not rewritten.
+- **It DOES change the base gradient's far stop** (finding A), because leaving it would
+  ship ten of the eleven rows below the AA bar in dark. That edit is a component change
+  and belongs to [MOTIR-4743](motir:cmtplxqtd0078hvn8s6fzv4wa) with the rest of the fill
+  work — recorded here, and on that card, so the card that rewrites the declaration
+  cannot rewrite it back to `55%`.
+- **It does not touch the shimmer or the pulse.** Both are `globals.css` animations
+  already gated behind `prefers-reduced-motion`, and neither is style-axis work.
+
 ### ⚠️ Opening & exiting — a full-screen overlay ON TOP of the app (sheet 6)
+
+> **⚠️ AMENDED 2026-09-06 — MOTIR-4726, under story [MOTIR-4725](motir:cmtpk3r2z0096hvn8v7lav9wi).**
+> This section said the right thing and drew nothing a code card could build to. What ships today
+> is a **route** — `app/(planning)/layout.tsx` + `planning/page.tsx`, the host MOTIR-1729 built,
+> whose own header says why: _"The design's overlay keeps the origin screen mounted behind it;
+> this host is a ROUTE (the card's deliverable), so 'returns you to where you launched from' is a
+> navigation back to that route."_ The amendment does not change the sentence below; it draws it
+> as the parts the product NOW HAS — the shipped `Modal size="full"`, its scrim, `shallowPush`,
+> and the run modal (`design/runs/` § _The run MODAL_) that already answered the two-`Esc`
+> question — and it settles the three things no code card can settle for itself: the overlay's
+> **address**, the Close control's **copy**, and what happens on **close-with-pending**.
+> **What is superseded, explicitly: the "slight inset + drop shadow" clause. The dialog is EDGE
+> TO EDGE.** Everything else here stands.
 
 The workspace **covers the screen** (the canvas + chat need the room) but it is a
 **full-screen overlay LAYERED ON TOP of the PM app — not a route change**. The app
-stays mounted, dimmed + inert, behind it; the overlay sits with a slight inset +
-drop shadow so the reader SEES it is a layer on top. **Closing returns you to the
+stays mounted, dimmed + inert, behind it. **Closing returns you to the
 exact screen you launched from** (same route, scroll, filters) with **no reload or
 lost state** — so it is "full-screen" for working AND "on top" for context.
 
-**The shell carries its OWN exit chrome** (it has no app nav to leave through):
+#### The FRAME — the shipped `Modal size="full"`, edge to edge
 
-- **Close** — a `✕ Close` control **top-left** of the workspace (it can name the
-  origin, e.g. "↩ Back to board"), drawn on the shell in every sheet.
-- **`Esc`** — closes from anywhere in the workspace (keyboard).
-- **Close-with-pending guard** — because **confirm-to-persist** means nothing is
-  saved until Confirm, dismissing with proposed (pending) cards opens a guard:
-  **Discard N proposed · Keep planning · Confirm & add** — never a silent loss.
+The dialog is `components/ui/Modal.tsx` (the i18n shim) over
+`packages/design-system/src/components/ui/Modal.tsx`, at `size="full"`, with the panel chrome
+removed exactly as `RunModal.tsx` removes it: `className="flex flex-col rounded-none border-0 p-0"`.
+Inside it is the shipped `PlanningWorkspaceHost` — its frame, its exit-chrome row, its audit-banner
+slot, its canvas box and its footer slot are **COMPOSED, never redrawn**.
 
-**No browser / window chrome** — it is an in-app overlay, not a browser mock; the
-only chrome is the workspace's own top-left controls.
+**MEASURED, on those components rendered headless** (chromium, light, `deviceScaleFactor: 1`,
+`Modal size="full"` wrapping the real `PlanningWorkspaceSkeleton`) — not computed from the
+class strings:
 
-**The canvas title is a drill-down breadcrumb (Yue, 2026-06-24).** The button-
-shaped chip top-left is the project **root** (`PayFlow`); drilling into a node
-grows it to **`PayFlow › Epic 1 › Story 1`** and walks back up — the **canvas's
-own drill-down breadcrumb** (reused from the canvas design, `MOTIR-1009` sheet 6),
-not a "plan" action.
+|                                             | 1440×780                                                   | 1024×648                   |
+| ------------------------------------------- | ---------------------------------------------------------- | -------------------------- |
+| dialog box (radius **0px**, border **0px**) | 1440×780                                                   | 1024×648                   |
+| scrim                                       | full viewport, `--el-overlay-scrim` = `rgba(0, 0, 0, 0.4)` | same                       |
+| `grid-cols-[1fr_22rem]` — canvas · rail     | **1088** · 352                                             | **672** · 352              |
+| the host's own exit-chrome bar              | 49                                                         | 49                         |
+| **canvas pane, EDGE TO EDGE**               | **1088×780**                                               | **672×648**                |
+| canvas pane with a 24px inset + shadow      | 1040×732                                                   | 624×600                    |
+| what the inset costs                        | −48 × −48                                                  | −48 × −48 (−7.4% of width) |
 
-**Onboarding is the one exception** — a genuine full-page first-run _route_ (a
-dedicated journey), not this dismissable overlay.
+**THE DECISION IS EDGE TO EDGE**, for three reasons in the order that decided it:
+
+1. **An inset is a REGRESSION against what ships.** The route host is already `h-dvh w-full` with
+   no shell chrome, so the edge-to-edge overlay hands the canvas the _identical_ box and an inset
+   takes 48px in each axis off it. A migration that makes the surface smaller is not a migration.
+2. **`design/roadmap/`'s fit-floor work (MOTIR-3837) fought for +120px** of canvas height at
+   1440×900 on the surface with the most canvas need. Giving 48 of that back to a margin is that
+   argument running backwards.
+3. **The "it is a layer on top" reading is carried by the SCRIM over a still-visible host page**
+   and by the open animation — not by a 24px margin. `RunModal` made this call in this same
+   primitive for this same reason: _"at full size the dialog IS the surface."_
+
+> **The sheet draws the dialog inset by 22px anyway, and says so on the panel.** The shipped
+> dialog covers the viewport exactly, which would hide the host page the sheet exists to show is
+> still mounted — so every pane offsets it and marks the real edge with a dashed accent box
+> labelled _"the dialog's REAL edge — 0px inset, 0px radius"_. **The inset is a drawing device;
+> the spec is 0.**
+
+**`hideClose` — the dialog's corner ✕ is SUPPRESSED.** Measured at 1440: it renders at
+`(1404, 12)`, 24×24, top-RIGHT, while `PlanningWorkspaceHost` renders its own Close top-LEFT.
+Two Closes in one dialog is a question the reader should never be asked, and the host's is the
+one sheet 6 has always specified. (`RunModal` keeps the corner ✕ because it has no other.)
+
+#### The way OUT — four exits, one path
+
+**The shell carries its OWN exit chrome** (it has no app nav to leave through), and all four
+exits run the same code:
+
+| exit             | what it is                                                 | note                                                                                                                          |
+| ---------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Close**        | the control **top-LEFT** of the workspace                  | a plain **Close** — see the copy decision below                                                                               |
+| **`Esc`**        | the **DIALOG's** handler (Radix)                           | the host's own `keydown` listener is DELETED                                                                                  |
+| **the scrim**    | a click on the dimmed page outside the dialog              |                                                                                                                               |
+| **browser Back** | a `popstate` that no longer carries the overlay parameters | works because the address was a `shallowPush`, so it left a history entry; closing from it writes **no second** history entry |
+
+One path: `requestClose()` → `withoutPlanningOverlay(currentHref)` → `shallowPush`. **The host page
+underneath is never unmounted**, so its filter, its scroll, its selection and its client islands
+survive the round trip. Focus returns to the element that was active at open (Radix's own
+behaviour, and the reason the doors do not have to manage it).
+
+**THE CLOSE CONTROL'S COPY — a plain `Close`, and the message key is `planningWorkspace.close`.**
+Today's label is `Back to roadmap` / `Back to {item}` / `Back to code health`
+(`messages/en.json` `planningWorkspace.backTo*`) because a ROUTE had to name a destination. **An
+overlay has no destination — it returns you to where you already are**, and naming a page you are
+not going to is worse than saying nothing. So: `Close`, with the `Esc` chip beside it, unchanged
+in placement. **The three `backTo*` keys are DELETED** in both `messages/en.json` and
+`messages/zh.json` by the overlay card, which also adds `planningWorkspace.close`; the launcher
+card retires `planningLaunchBackHref`, which is their only producer.
+
+**THE `Esc` ARBITRATION IS A DECISION, not a default.** `ProjectRoadmapCanvas` ships an opt-in
+`fullScreenable` control (a Fullscreen-API escalation), and it is **OFF inside the overlay** —
+the run modal's decision verbatim, for the same reason: _"escalating to the Fullscreen API from
+inside a dialog that already fills the screen is two overlays and two `ESC` handlers."_ And the
+host's own `Esc` listener — which yielded to a focused text field, to `document.fullscreenElement`
+and to a `defaultPrevented` event — is **removed**: Radix owns the key, and a text field inside a
+dialog still keeps it, because Radix's own handler is the one that yields.
+
+#### The ADDRESS — a NAMESPACED query, settled here because three cards read it
+
+The workspace opens on ANY authed route, so its query rides beside the host page's own. Measured
+collisions at `origin/main` `71896757c`: **`?item=`** on `/roadmap` is the drilled LEVEL
+(MOTIR-3836, `resolveArrivalTrail`); **`?peek=`** is the quick view on `/items`, `/ready`,
+`/boards`; **`?run=`** is the run modal; and today's launcher writes the four generic names
+`mode`, `from`, `item`, `repo` (`lib/planning/launcher.ts` `planningWorkspaceHref`), two of which
+collide outright. So the overlay's parameters are **NAMESPACED**, and they are recorded here once —
+the way `design/runs/design-notes.md` records `/runs?run=<id>` — rather than in whichever of the
+three files is written first.
+
+| parameter      | carries                                                                                                                                                                                                                   | values                                                         | read by                               |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| **`plan`**     | **the presence switch AND the mode.** Its presence is what opens the overlay — one `has('plan')` test, the way `?run=` and `?peek=` each own one word. Total: an unrecognised value degrades to `project`, never an error | `project` · `generation` · `replan` · `contextual` · `roadmap` | the overlay                           |
+| **`planFrom`** | the ORIGIN kind. It is what decides which of the two below may be READ, so a hand-edited `?planFrom=roadmap&planItem=X` cannot smuggle a target                                                                           | `project` · `work-item` · `roadmap` · `convention-refine`      | the overlay · the rail's opening line |
+| **`planItem`** | the ANCHOR's work-item key. Written **only** when `planFrom=work-item`; the overlay hands it to `GET /api/work-items/planning-anchor` (MOTIR-4727)                                                                        | `MOTIR-<n>`                                                    | the overlay                           |
+| **`planRepo`** | the repository key. Written **only** when `planFrom=convention-refine`                                                                                                                                                    | a repo key                                                     | the overlay                           |
+
+**Why the mode rides on `plan` rather than on a fifth name.** The overlay needs ONE parameter
+whose mere presence means _open_, exactly as `?run=` and `?peek=` do; the mode is already total
+(anything unrecognised falls back to `project`), so it can ride that key without a second
+degradation path. It makes "is the overlay open?" one call and `withoutPlanningOverlay` a strip of
+exactly four names. The camelCase of the other three matches `?parentId=`, the tree's existing
+multi-word query parameter.
+
+**Three files agree on these four names, and none of them should be the one that picks them:**
+the launcher module WRITES and PARSES them, the overlay READS them off `useSearchParams`, and the
+retiring `/planning` forward REWRITES the old `mode` / `from` / `item` / `repo` onto them.
+Renaming one is a change to this section first.
+
+**Close strips exactly these four and leaves every other parameter byte-identical** — that is what
+makes "back to exactly where you were" true of a filtered, scrolled list rather than only of a
+bare route. `withPlanningOverlay('/roadmap?item=MOTIR-12', …)` keeps `item=MOTIR-12`;
+`withoutPlanningOverlay` of the result returns it unchanged, with no dangling `?`.
+
+**Arriving COLD.** An address carrying the overlay query, pasted into a new tab: the **host page
+renders first and the overlay opens over it** — the same order `?run=` produces, and the reason
+the address is worth pasting at all. Nothing is server-rendered for the overlay; it reads the
+query on the client and fetches its own anchor.
+
+**Arriving SIGNED OUT.** The sign-in hop carries the **whole address** — host path AND overlay
+query — in `next=`, so signing in lands on the backlog with the workspace already open over it,
+not on the backlog with the workspace lost. Same rule as every other authed deep link; it is
+stated here because the overlay is the first surface whose STATE is in the query rather than in
+the path.
+
+**LAUNCHED FROM INSIDE THE QUICK VIEW — the dialog-over-dialog case, DECIDED: the workspace opens
+ABOVE the peek and the peek STAYS in the URL.** The per-item Plan / Re-plan pill (MOTIR-910,
+design MOTIR-1489) renders inside the `?peek=` quick view, which is itself a URL-driven modal, so
+`/items?peek=MOTIR-12` gains the overlay's four parameters and keeps its own. Closing the
+workspace therefore returns the reader to the **open peek** they launched from, which is the
+literal reading of "back to exactly where you were" — the peek IS where they were. Dismissing the
+peek first would be a second, silent close the reader did not ask for, and it would make this one
+door behave unlike the other six. **The doors card builds one behaviour, not two.**
+
+#### The CLOSE-WITH-PENDING guard
+
+Because **confirm-to-persist** means nothing is saved until Confirm, dismissing with proposed
+(pending) cards opens a guard: **Discard N proposed · Keep planning · Confirm & add** — never a
+silent loss. It was specified here from the start and never built (`grep -n 'Discard\|Keep planning'
+components/planning lib/hooks` returns nothing at `6cb6d0eef`).
+
+**What it is:** the shipped `Modal` with **`role="alertdialog"`** — the destructive-confirm
+precedent, Subtask 2.8.4 — over the workspace, over the host page. Three shipped `Button`
+variants: **Confirm & add** primary, **Keep planning** secondary, **Discard N proposed** the
+danger action (`bg-(--el-danger) text-(--el-danger-text)`, the one legal use of that ink).
+**The count is IN the copy**, because "discard the proposals" and "discard 5 work items you just
+watched appear" are different sentences.
+
+**The pending predicate is the HOST's own, not a second one:**
+`state.review && !state.decided && !index.isEmpty` — the exact expression
+`PlanningWorkspaceHost` already uses to decide whether `PlanChangeConfirmBar` is showing. **If the
+bar is up, the guard fires; if it is not, closing is instant.** The reader can see the rule, which
+is what makes it feel like a rule rather than a surprise.
+
+**The VECTORS, and what each can do:**
+
+| vector                 |                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Close ✕**            | INTERCEPTED — nothing closes until an action is chosen                                                                                                                                                                                                                                                                                   |
+| **`Esc`**              | INTERCEPTED. The guard's OWN `Esc` then dismisses the **guard**, never the workspace                                                                                                                                                                                                                                                     |
+| **the scrim**          | INTERCEPTED, same as Close                                                                                                                                                                                                                                                                                                               |
+| **browser Back**       | **ALREADY HAPPENED.** A history pop cannot be prevented — by the time the overlay notices, the address no longer carries the query. So the guard opens over a workspace whose address has already changed, and **_Keep planning_ RE-PUSHES the overlay address** with one `shallowPush`; _Discard_ and _Confirm & add_ let the pop stand |
+| **a streaming turn**   | **NOT guarded.** A turn still streaming has produced no proposal to lose — the predicate needs a `review`, and a stream has none yet. Closing calls the conversation's `stop` and the turn is abandoned, which is exactly what navigating away did                                                                                       |
+| **reload / tab close** | **NOT guarded — no `beforeunload`.** A browser's own "leave site?" dialog cannot carry these three actions, so it would be a strictly worse version of this one, and it fires on every reload whether or not there is anything to lose                                                                                                   |
+
+**_Keep planning_ leaves the proposal intact and returns focus to the workspace. _Discard_ calls
+the host's `discard` and then closes. _Confirm & add_ calls `approve`, shows the deciding state,
+closes on success and STAYS OPEN on failure** — a failed approve is the one case where closing
+would lose the thing the reader was trying to save.
+
+#### Every state — not the happy path
+
+| state                    | what it draws                                                                                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Opening**              | `PlanningWorkspaceSkeleton` INSIDE the dialog. It is the frame `app/(planning)/loading.tsx` used to be; as an overlay there is no navigation to hold, so the frame is up on the first frame and the canvas fills in |
+| **Empty canvas**         | the canvas's own empty statement, unchanged (`emptyCanvasTitle` / `emptyCanvasDescription`)                                                                                                                         |
+| **No access**            | the host's `NoAccessState` statement, then the overlay **closes** and the page underneath reports — the run modal's `missing` shape                                                                                 |
+| **Never onboarded**      | a real navigation to `ONBOARDING_ENTRY_PATH`, with the overlay query **stripped**. Onboarding is this design's one stated exception — a dedicated first-run journey, not a dismissable overlay                      |
+| **Anchor won't resolve** | the project conversation, at the root, **with no error surface**. A `404` from the anchor read is the no-existence-leak answer for stale, deleted, foreign and forbidden alike (MOTIR-4727)                         |
+| **Audit banner**         | admin: `AuditCoverageBanner` full-bleed in the seam between the top bar and the panes — CITED from MOTIR-2246 / `design/audit-coverage`, never redrawn. Member: nothing, and no reserved gap                        |
+| **Proposal pending**     | the footer SLOT swaps CONTENT, never height — the canvas box must not resize under the zoom / fit / LOCATE clusters anchored to its bottom (MOTIR-1815 panel 3)                                                     |
+| **Streaming**            | the rail's own streaming state, unchanged; the composer's `stop` is what a close calls                                                                                                                              |
+| **Host page behind**     | filter · scroll · selection all preserved, because nothing unmounted. **This is the state the whole story is for, and it is a state of the page UNDER the overlay**                                                 |
+
+#### The ACCESS PATH — the doors are cited, not redrawn
+
+The doors are all designed and shipped: the header pill and the orb (sheet 4 of this asset), the
+callout menu (MOTIR-1811, `ai-callout-menu.mock.html`), the per-item Plan / Re-plan pill
+(MOTIR-1489), ⌘K, the roadmap's empty state, and Code health's _Refine with Motir_ (MOTIR-1663).
+**What changes is what they OPEN.**
+
+> **Every door opens the overlay on the page it sits on; none navigates.**
+
+Sheet 6 draws ONE before/after — the header pill on a filtered backlog, then the overlay over that
+same backlog — and the addresses under each. **A modified click (⌘ / ctrl / middle) is never
+intercepted**, so each door's `href` stays a real, full address that opens the overlay in a new
+tab.
+
+#### The ALLOCATION SWEEP — GIVES / TAKES
+
+Every work item this asset names, and what the asset hands it or takes from it. **A TAKES is an
+amendment owed on that card in this same pass** (`plan-rules/type-design.md`'s sweep-the-referrers
+corollary).
+
+| work item                                                                                                                                                | GIVES / TAKES                   | what                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-4728](motir:cmtpk3ra80099hvn8woe5fkvg) — the launcher writes an overlay address                                                                   | **GIVES · STRUCTURE**           | the four parameter names and their write/read rules, including the origin-gated `planItem` / `planRepo`. Its criteria already say _"emits exactly the parameter names `design-notes.md` records"_, so this section is the thing that test reads |
+| MOTIR-4728                                                                                                                                               | **TAKES · PREMISE**             | nothing. `planningLaunchBackHref` was already scheduled for `@deprecated` there and its retirement is unchanged                                                                                                                                 |
+| [MOTIR-4729](motir:cmtpk3rcp009ahvn8v0fmz7uf) — the overlay host                                                                                         | **GIVES · ELEMENT**             | `hideClose`, the edge-to-edge className, the Close COPY and its key name (`planningWorkspace.close`), the deletion of the three `backTo*` keys, the removal of the host's own `Esc` listener, and `fullScreenable` off with its reason          |
+| MOTIR-4729                                                                                                                                               | **GIVES · STRUCTURE**           | the eight states above, and the ANCHOR degradation (a `404` is the project conversation at the root, no error surface)                                                                                                                          |
+| [MOTIR-4730](motir:cmtpk3rew009bhvn8vflvtftd) — every door opens in place                                                                                | **GIVES · PREMISE**             | the quick-view decision: the workspace opens ABOVE the peek and `peek` is KEPT. Its criterion reads _"keeps or strips `peek` exactly as the design decided, and a test names that decision"_ — the decision is KEEP                             |
+| [MOTIR-4731](motir:cmtpk3rgm009chvn84bn99ahq) — the pending guard                                                                                        | **GIVES · ELEMENT + STRUCTURE** | the alertdialog composition, the three button variants and the count in the copy; the six vectors; the browser-Back re-push; streaming and `beforeunload` both explicitly NOT guarded; the predicate is the host's own expression               |
+| [MOTIR-4732](motir:cmtpk3rix009dhvn8o9fikxzb) — the `(planning)` route group retires                                                                     | **GIVES · STRUCTURE**           | the old→new parameter mapping the forward rewrites                                                                                                                                                                                              |
+| [MOTIR-4727](motir:cmtpk3r810098hvn8pm51j2j1) — the anchor read                                                                                          | **GIVES · PREMISE**             | nothing this asset decided; the read's own 404 contract is cited, not set, here                                                                                                                                                                 |
+| [MOTIR-1193](motir:cmqmsx1rm000004l2rgt8ll9z) — this asset's own `done` card                                                                             | **TAKES · PREMISE**             | the "slight inset + drop shadow" clause is superseded. **The card is `done` and is NOT re-opened** — the asset is amended and the card cited, the disposition MOTIR-3893 recorded when it reworked MOTIR-1795's asset                           |
+| [MOTIR-1729](motir:cms35ia0n000w04i9411n73kf) — the route host                                                                                           | **TAKES · PREMISE**             | the ROUTE itself. Its deliverable is retired by MOTIR-4732; the card is `done` and stays so, and its own header already names this as the gap                                                                                                   |
+| [MOTIR-1299](motir:cmqqeh065000004jmkc1dmtj5) · [MOTIR-1342](motir:cmqsudezn000s04k1rjwulr0l) · [MOTIR-910](motir:cmqgmjqq7000004jo4ap0vwdp) — the doors | **TAKES · nothing**             | their visual design is untouched; only what they open changes, which is MOTIR-4730's work                                                                                                                                                       |
+| [MOTIR-3893](motir:cmteb0te7001mhvn8qbialic7) · [MOTIR-3895](motir:cmteb0tj2001ohvn82ijisqz7) — the run modal                                            | **GIVES to THIS asset**         | the shape, the `?run=` recording precedent, the `fullScreenable`-off decision, and _"at full size the dialog IS the surface"_                                                                                                                   |
+
+**No card's SIZE is changed by this asset** (the estimation half of the sweep,
+`plan-rules/type-design.md`). Every GIVES above lands inside a criterion that card already
+carries — the four cards' own criteria each defer to "as the design records / decided" — so the
+asset ANSWERS questions they were already sized to ask, rather than adding deliverables. The one
+card that gains a named obligation is MOTIR-4729 (the `backTo*` deletion and the `close` key),
+and its criteria already carry it verbatim.
+
+#### The terminology sweep — `grep -oic 'card'`
+
+**72 hits, and every one is accounted for.** 40 are `--el-card` / the `.card` class / `--radius-card`
+— the design system's own surface primitive, which is what the token is called. 10 `modecard` and 6
+`optcard` are this asset's own class names. 3 are `StationCard`, a shipped component quoted by name.
+7 `Discard` + 1 `discards` are the guard's action verb, which is the right English word for what it
+does. **The remaining 4 are in HTML / JS COMMENTS** (the file header, the MOTIR-4318 provenance note,
+and one render comment) and render nowhere.
+
+**7 RENDERED uses of the product noun were corrected in this pass**, five of them pre-existing in
+sheets 1–3: _"proposed cards appear on the canvas"_, _"proposed cards land on the canvas"_, _"each
+card appears as I propose it"_, _"Reply, or refine a card…"_, _"new card proposed after Invoices"_,
+plus two in this amendment's own first draft. **The product noun is _work item_.**
 
 ### Primitives composed (no hand-rolling)
 
@@ -2111,3 +2885,222 @@ The three-file set under `design/ai-chat/` for this surface: `design-notes.md`
 `PlanChangeRail` / `PlanChangeComposer`; grounded in the consumer half already
 merged in `motir-ai` (**MOTIR-4060**'s boundary mailbox); gates **MOTIR-4067**,
 **MOTIR-4068** and **MOTIR-4069**.
+
+---
+
+## ⭐ The plan surface READING the project, and the two hand-offs out of it (MOTIR-4766, 2026-09-06)
+
+**Asset:** `reading-and-handoff.mock.html` + `reading-and-handoff.png`, six panels.
+**Story:** MOTIR-4753 — _the DEPTH of onboarding is a judgement about the project's SUBSTRATE_.
+
+### Why this is a NEW surface in this area rather than a panel on `planning-workspace`
+
+`planning-workspace.mock.html` draws the workspace AT WORK — its canvas, its rail, its overlay
+frame, its exits. This asset draws the ~15 seconds **before any of that exists** for a project that
+has never been planned, and the two doors out of it. Different moment, different reader question,
+its own three-file set. The overlay CHROME is composed from that asset's sheet 6, never redrawn.
+
+### The change this asset is the visual half of
+
+MOTIR-4765 removes the gate. Until it lands, `resolvePlanningHostGate` returns `'onboarding'`
+whenever `Project.onboardingRanAt` is null and `PlanningWorkspaceOverlay` `router.push()`es to
+`/onboarding` — so pressing **Plan with AI** on a project with a connected, indexed repository ejects
+the user to a wizard. After it, the window OPENS, a session READS the project, and **the planner**
+decides one of three things (MOTIR-4767): `continue`, `onboard_new_project`,
+`onboard_existing_project`. Panels 1–2 exist because the window now opens; panels 3–4 are the two
+onboarding outcomes; panel 6's last cell is `continue`.
+
+### Where each depicted behaviour comes from (grounding, not invention)
+
+| Panel                           | Grounded in                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1–2 · the READING state         | **MOTIR-4768** — it NAMES the connected repository and the committed work items, from `readOnboardingSubstrate`; "a statement of activity, not a progress bar" is that card's own wording. |
+| the four values named on screen | **MOTIR-4756** — `itemCount`, `itemCountTruncated`, `repositoryConnected`, `repositoryIndexed`, and `ONBOARDING_SUBSTRATE_ITEM_CAP = 200`.                                                 |
+| 3–4 · the two hand-offs         | **MOTIR-4767** — the three outcomes, and on `onboard_existing_project` the KEPT STEPS and WHAT IS MISSING.                                                                                 |
+| the move is SHOWN, not silent   | **MOTIR-4769** — "the hand-off is SHOWN before it happens… the move is not a silent redirect out from under them."                                                                         |
+| 5 · the RETURN, and abandonment | **MOTIR-4770** — the launch context travels with the move, onboarding returns the user to the window they opened, and a user who walks away lands on an ordinary page.                     |
+| the kept-step chips             | **MOTIR-4759** renders the set; **`design/onboarding-migrate/` Panel 6** is the rail it renders into. Same `satisfied` vocabulary, said once here and once there.                          |
+
+### Panel 1–2 · THE READING STATE
+
+**It names the things, and that is the whole design.** A spinner says _something is happening_; this
+says _I am reading acme/widgets, acme/widgets-api and 214 work items_ — the product demonstrating in
+one sentence the thing the story argues for, before any plan exists to judge. Three `.src` rows, one
+per named source: repository rows come from `repositoryConnected`, and `repositoryIndexed` decides
+whether the sub-line can say _Code graph ready_; the third row is `itemCount`.
+
+**NOT a progress bar**, and the constraint is MOTIR-4768's own: nothing on this path knows a
+duration. A bar has a track, a fill and therefore a claim about how far along it is, and it would
+have to keep that claim while a model call sits in the middle of it. Three quiet dots and _usually
+takes a few seconds_ promise only what is true.
+
+**The cap is drawn.** At `itemCountTruncated: true` the row reads **200+ work items · Reading the
+most recent 200**, never an exact _200_. The read explicitly reports the count as a FLOOR, and the
+surface may not upgrade it into a total — it is the same number the planner's judgement is about to
+be based on.
+
+**The THIN substrate is a SENTENCE, never an empty list.** Three rows with _none_ beside each is a
+report card, handed to the user in the four seconds before they are moved somewhere — which turns
+the move into a verdict on them. The sentence states the same fact and carries a clause the list
+cannot: _that's normal for a new project, and it's the next thing we'll fix together_. The heading
+changes with it — _Having a look at your project_, not _Reading_, because there is nothing to read.
+It commits to nothing about the destination: the routing is the planner's and it has not answered
+yet.
+
+### Panel 3–4 · THE TWO HAND-OFFS
+
+**They are told apart by STRUCTURE, not by a colour** — which is what makes them distinguishable at
+a glance and in a screen reader alike.
+
+|              | A · `onboard_new_project`                       | B · `onboard_existing_project`                              |
+| ------------ | ----------------------------------------------- | ----------------------------------------------------------- |
+| heading      | _Let's set your project up first_               | _Two things I still need_ (it COUNTS)                       |
+| found block  | — (there is nothing to have found)              | `.found` — _I read **acme/widgets** and **214 work items**_ |
+| missing list | —                                               | `.missing` — the planner's own words, rendered              |
+| kept steps   | —                                               | `.kept` — one `run` chip, three `satisfied` chips           |
+| actions      | _Set up my project_ · _Not now_                 | _Fill in the gaps_ · _Not now_                              |
+| closing line | _you'll land back in this window ready to plan_ | _straight back here and we can get planning_                |
+
+**Every word of the missing list is the planner's** (MOTIR-4767 returns it); the surface renders it
+and writes none of it. It is drawn as a list of gaps — a dashed open circle per row — and NOT as an
+error list: no red, no warning triangle. The thing is incomplete, not wrong.
+
+**The kept-step strip is the apology this route owes.** MOTIR-4767's own argument: sending someone to
+re-connect a repository they connected last week is the same insult as the interview, one surface
+along. So the strip shows, BEFORE the user commits, what they will be asked (_A few questions_) and
+what is already there (_Connect_, _Index_, _Import work items_). The satisfied chips reuse
+`design/onboarding-migrate/`'s sky tint and read glyph (Panel 5, MOTIR-4755) rather than inventing a
+second way to say the same thing.
+
+**_Not now_ is deliberately present on both.** A user who opened the plan window to look around is
+allowed to close it again, and a hand-off with one button is a wall with a door painted on it.
+
+### Panel 5 · THE RETURN — a fourth moment, not a mirror of the third
+
+The hand-off says _we need something first_; the return says _we have it — what do you want to plan?_
+So it is **not another full-card interstitial**: the workspace is simply there, ready to do what the
+user pressed the button for, and the acknowledgement is one line in the conversation —
+
+> ✓ You answered the two questions. Picking up where we left off.
+
+#### ⚠️ THE PLANNER ASKS — it does NOT hand over a plan (Yue, 2026-09-06)
+
+The first revision of this panel drew the canvas full of dashed proposals and a footer reading _42
+proposed work items · nothing is added until you say so_, with the planner opening on _"here's a plan
+across acme/widgets and all 214 of your items — 42 work items, in six pieces"_. **That is not what a
+planning session is.** A regular session **arrives with the context and WAITS to be told what to
+plan**; it asks, it does not propose a tree unprompted. It is also exactly what `continue` means one
+repository over (**MOTIR-4767**: _the session asks and plans exactly as a regular session does_).
+
+So the panel draws: the canvas showing the project **as it stands** — the items that are already
+there, no proposals; a footer saying what the session can **see** (`214 work items` ·
+_acme/widgets · code graph ready_) rather than what it has produced; the planner's turn ending in a
+**question**; and a live, empty composer reading _Tell Motir what to plan…_. The two hand-off panels'
+closing lines were corrected in the same pass for the same reason — they promised _a plan waiting_
+and now promise _ready to plan_.
+
+**The same correction removed `design/onboarding-migrate/`'s Panel 0**, which drew the identical
+mistake at the end of the migrate wizard (finished-step done-cards, a _"here's a plan grounded in your
+code"_ lead, a canvas of proposed subtasks, a confirm bar). Nothing about the end of that wizard is
+migrate-specific: it opens the universal plan window and the regular session begins. See
+`design/onboarding-migrate/design-notes.md` §Panel 0.
+
+**The line sits in the RAIL because the rail is where the session speaks.** A toast would fade; a
+banner over the canvas would put chrome between the user and the thing they came back for.
+
+**The earlier turns are still above it**, and that is the design claim MOTIR-4770 AC5 makes
+checkable: the conversation is a persisted server thread (`usePlanChangeConversation`'s resume
+payload, re-read on mount), so the user comes back to the session they left rather than a new one
+that looks similar.
+
+**Nothing in this asset warns about losing a draft.** An earlier draft of the card treated the
+route-group unmount as a data hazard; it is not. The thread is a server row, the proposals are
+addressed by `planId`, and at the moment of the move the only client-only state — the composer draft
+and the local target queue — cannot hold anything, because the verdict is decided in the reader
+before any pass runs. MOTIR-4731's confirm-before-close exists for a user CHOOSING to close over a
+decision they can see; being routed away seconds after opening is not that situation.
+
+**The ABANDONED path is drawn beside it**: an ordinary authed page, no scrim, no dialog, no re-opened
+workspace. Re-opening a window somebody walked away from is the opposite failure to stranding them,
+and it is the easier one to write by accident — the return path already knows where to go, so the
+temptation is to take it unconditionally. The launch context is a RETURN ADDRESS and it expires.
+
+### Panel 6 · WHAT IT MUST NOT LOOK LIKE
+
+Three surfaces this must never become, drawn so a builder can recognise the pull toward each:
+
+- **Not an error** — _"We couldn't plan your project."_ Nothing failed; the read worked and produced
+  a finding.
+- **Not a refusal** — _"This project isn't ready for AI planning."_ A judgement about the project
+  reads as a judgement about the person who made it. The finding is about what Motir can SEE.
+- **Not a dead end** — a card whose only control is Close. The user pressed _Plan with AI_; every
+  surface here carries a way onward and says where it leads.
+
+**And the third outcome draws nothing.** `continue` means the reading state resolves straight into an
+ordinary planning session — the regular framing, the regular questions, the planner waiting to be
+told what to plan — and the user never learns a decision was made about them. That is stated
+explicitly in the asset because an asset full of interstitials invites a fourth one saying _Good
+news, we can plan this!_ — and nobody needs to be told that the thing they asked for is happening.
+
+### Vocabulary — no string names a direction tier
+
+**No panel, label, chip or annotation in this asset uses "Pre-plan" or names a tier.** MOTIR-4757
+retires the term from `messages/` and guards it there; MOTIR-4755 revision 2 collapsed the migrate
+rail's four tier-named rows to ONE after Yue's note that a user does not know what Discovery and
+Vision are. `discovery` / `vision` / `feasibility` / `validation` are identifiers a kept-step set
+travels as; the copy says what the user is doing — _a few short questions about what you're building
+and who it's for_.
+
+### Primitives composed (no hand-rolling)
+
+`Modal size="full"` (`rounded-none border-0 p-0`, `hideClose`) as `PlanningWorkspaceOverlay` mounts
+it · `PlanningWorkspaceHost`'s top bar with its top-LEFT Close chip and `Esc` `<kbd>` · the
+conversation rail (`.rhead` / turns / bubbles / composer) · `Card` for the reading and hand-off
+surfaces · `Button` primary + ghost · `Pill` (sky / mint / lavender / neutral) · the
+`design/roadmap/` node language for the returned canvas · the shipped `AppLayout` nav + top bar for
+the abandoned path. The overlay's two-pane geometry and its 49px top bar are the numbers MOTIR-4726
+MEASURED on the real components at 1440×780 and recorded in `planning-workspace.mock.html` § sheet 6;
+this asset inherits them and draws the frame taller because the reading card, not the canvas, is its
+subject.
+
+### Per-element token roles
+
+| Element                            | colour                                                                                    | shape                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| dialog frame                       | `--el-page-bg`, `--el-border`, `--shadow-card`                                            | `--radius-modal`                                     |
+| host top bar                       | `--el-surface`, `--el-border-soft`                                                        | —                                                    |
+| Close chip                         | `--el-card` / `--el-border` / `--el-text-strong`; `<kbd>` `--el-text-secondary`           | `--radius-btn`, `<kbd>` `--radius-control`           |
+| canvas ground                      | `--el-canvas` + a dot texture in `--el-border`                                            | —                                                    |
+| reading / hand-off card            | `--el-card`, `--el-border`, `--shadow-subtle`                                             | `--radius-card`, `--spacing-card-padding`            |
+| eyebrow                            | `--el-text-eyebrow`                                                                       | —                                                    |
+| card heading · lede                | `--el-text` · `--el-text-secondary`                                                       | —                                                    |
+| `.src` row · its icon tile         | `--el-surface-soft` / `--el-border`; tile `--el-tint-sky` + `--el-text-strong`            | `--radius-control`, `--spacing-control-x/y`          |
+| _Reading_ chip                     | `--el-tint-sky` + `--el-text-strong`                                                      | `--radius-badge`, `--spacing-chip-x/y`               |
+| activity dots                      | `--el-accent` (decorative, `aria-hidden`)                                                 | `--radius-badge`                                     |
+| `.found` block                     | `--el-surface-soft` / `--el-border` / `--el-text-secondary`, `<b>` `--el-text-strong`     | `--radius-card`                                      |
+| `.missing` row · its gap glyph     | `--el-text`; glyph dashed `--el-border-strong` (`aria-hidden`)                            | `--radius-badge`                                     |
+| kept chip · run / satisfied        | `--el-accent` + `--el-accent-text` / `--el-tint-sky` + `--el-text-strong` + `--el-border` | `--radius-badge`, `--spacing-chip-x/y`               |
+| buttons — primary / ghost          | `--el-accent` + `--el-accent-text` / `--el-text`                                          | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x` |
+| rail                               | `--el-card`, `--el-border`, `--el-border-soft`                                            | —                                                    |
+| AI bubble · user bubble            | `--el-surface-soft` + `--el-text` / `--el-accent` + `--el-accent-text`                    | `--radius-card`                                      |
+| the return's system line           | `--el-tint-mint` + `--el-text-strong`                                                     | `--radius-control`                                   |
+| composer input · its disabled form | `--el-input-border` + `--el-text-secondary` / `--el-muted` + `--el-text-faint`            | `--radius-input`, `--height-control`                 |
+| proposal node                      | dashed `--el-accent` on `--el-callout-bg` + `--el-callout-text`                           | `--radius-control`                                   |
+| "must not look like" card          | dashed `--el-danger` border; caption `--el-danger-on-surface`; body `--el-text-secondary` | `--radius-card`                                      |
+
+**`--el-danger-text` appears nowhere.** Per `CLAUDE.md` it is the ink FOR a danger FILL and measures
+1.00–1.04:1 on a light page in all ten palettes; the three _must not look like_ cards carry the hue
+in the BORDER (graphics contrast) and the caption in `--el-danger-on-surface`, with the body copy on
+`--el-text-secondary`. Every annotation in the board chrome is `--el-text-secondary` — never
+`--el-text-muted`, which fails AA on `--el-surface` / `--el-surface-soft` / `--el-muted`, and never
+`--el-text-faint`, which clears AA on nothing. `--el-text-faint` appears once, on the DISABLED
+composer, which 1.4.3 exempts. The asset declares `--el-canvas` and `--el-danger-on-surface`
+alongside the token block copied from `packages/design-system/theme.css`, because that copy omitted
+them; both definitions are theme.css's own, verbatim.
+
+### Deliverable
+
+`design/ai-chat/reading-and-handoff.mock.html` · `design/ai-chat/reading-and-handoff.png` (1200
+viewport, `deviceScaleFactor: 2`) · this section. The migrate half — the rail that renders the kept
+set — is `design/onboarding-migrate/design-notes.md` § _AMENDMENT (2026-09-06 · MOTIR-4766)_ and
+Panel 6 of that area's mock, published under the same card.

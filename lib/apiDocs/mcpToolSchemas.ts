@@ -201,6 +201,41 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   type: 'string',
                   description: 'The PORTABLE repo pin — a role of the project’s repository set.',
                 },
+                todos: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      text: {
+                        type: 'string',
+                        description:
+                          'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                      },
+                      notesMd: {
+                        type: ['string', 'null'],
+                        description:
+                          'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                      },
+                      commandText: {
+                        type: ['string', 'null'],
+                        description:
+                          'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                      },
+                      executor: {
+                        anyOf: [
+                          { type: 'string', enum: ['coding_agent', 'human'] },
+                          { type: 'null' },
+                        ],
+                        description:
+                          'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                      },
+                    },
+                    required: ['text'],
+                    additionalProperties: false,
+                  },
+                  description:
+                    'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children.',
+                },
               },
               required: ['title'],
               additionalProperties: false,
@@ -499,6 +534,25 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  create_acceptance_upload: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      hasTrace: {
+        type: 'boolean',
+        description:
+          'True to ALSO mint a grant for the Playwright trace (a dev diagnostic beside the video). Defaults to false — mint it only if you actually captured one.',
+      },
+    },
+    required: ['key'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   create_plan: {
     type: 'object',
     properties: {
@@ -517,7 +571,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'Optional longer summary (Markdown) of what this plan proposes and why, shown to the reviewer above the tree.',
+          'Optional longer summary (Markdown) of what this plan proposes and why, shown to the reviewer above the tree. Not write-once: `update_plan` corrects it — and the title — after the fact, on a `generating` or `planned` plan, without touching a proposal.',
       },
       plannedWithHarness: {
         type: 'string',
@@ -1095,6 +1149,62 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  publish_acceptance_result: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      videoPathname: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `pathname` of the video grant you uploaded to, exactly as it was returned.',
+      },
+      tracePathname: {
+        type: 'string',
+        description: 'The trace grant’s `pathname`, when one was minted and uploaded to.',
+      },
+      chapters: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            label: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The step this marker jumps to, in the reviewer’s words (e.g. "Open the item").',
+            },
+            tSeconds: {
+              type: 'number',
+              minimum: 0,
+              description: 'Offset into the recording, in seconds, where that step begins.',
+            },
+          },
+          required: ['label', 'tSeconds'],
+          additionalProperties: false,
+        },
+        description:
+          'The chapter markers, from the run’s `chapters.json` — what the reviewer scrubs by. A receipt with none is watchable but not navigable, so send them when the spec wrote them.',
+      },
+      commitSha: {
+        type: 'string',
+        description:
+          'The commit the run recorded at. ALSO THE IDEMPOTENCY KEY: re-publishing the same commit + producedByKey returns the existing receipt instead of superseding it.',
+      },
+      producedByKey: {
+        type: 'string',
+        description: 'The E2E work item that produced the recording, e.g. "ACME-7".',
+      },
+    },
+    required: ['key', 'videoPathname'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   publish_design_result: {
     type: 'object',
     properties: {
@@ -1568,6 +1678,25 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  update_plan: {
+    type: 'object',
+    properties: {
+      planId: { type: 'string', minLength: 1, description: 'The plan id `create_plan` returned.' },
+      title: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          "The plan's own short label — what it is proposing, in a line. `null` clears it. Omit it to leave it exactly as it is.",
+      },
+      summary: {
+        anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
+        description:
+          'The longer summary (Markdown) shown to the reviewer above the tree — the sentence they read before any card. `null` clears it. Omit it to leave it exactly as it is.',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   update_plan_item: {
     type: 'object',
     properties: {
@@ -1644,6 +1773,43 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       estimateMinutes: {
         anyOf: [{ type: 'integer' }, { type: 'null' }],
         description: 'Estimated minutes of work; `null` clears it.',
+      },
+      todos: {
+        anyOf: [
+          {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                text: {
+                  type: 'string',
+                  description:
+                    'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                },
+                notesMd: {
+                  type: ['string', 'null'],
+                  description:
+                    'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                },
+                commandText: {
+                  type: ['string', 'null'],
+                  description:
+                    'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                },
+                executor: {
+                  anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
+                  description:
+                    'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                },
+              },
+              required: ['text'],
+              additionalProperties: false,
+            },
+          },
+          { type: 'null' },
+        ],
+        description:
+          'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children. REPLACES the list whole — a list has no sparse edit — so send the set you want; `[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
       },
     },
     required: ['planId', 'planItemId'],
@@ -1726,6 +1892,43 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       estimateMinutes: {
         anyOf: [{ type: 'integer' }, { type: 'null' }],
         description: 'Estimated minutes of work; `null` clears it.',
+      },
+      todos: {
+        anyOf: [
+          {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                text: {
+                  type: 'string',
+                  description:
+                    'WHAT to do — ONE operation, at most 200 characters. "Change this one setting", "run this one command". Navigation is NOT an operation: "go to the dashboard and find the panel" belongs in `notesMd` of the row that then changes something.',
+                },
+                notesMd: {
+                  type: ['string', 'null'],
+                  description:
+                    'The INSTRUCTIONS for this one operation — Markdown, at most 2000 characters. The HOW, where `text` is the WHAT.',
+                },
+                commandText: {
+                  type: ['string', 'null'],
+                  description:
+                    'The command this step runs, if it runs one — at most 500 characters, and in this field rather than inside `text`, because this is what the reader copies.',
+                },
+                executor: {
+                  anyOf: [{ type: 'string', enum: ['coding_agent', 'human'] }, { type: 'null' }],
+                  description:
+                    'Who this STEP is for, when it differs from the card’s. Omit it and the row inherits the proposal’s own `executor` at approve, falling back to `human`.',
+                },
+              },
+              required: ['text'],
+              additionalProperties: false,
+            },
+          },
+          { type: 'null' },
+        ],
+        description:
+          'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children. REPLACES the list whole — a list has no sparse edit — so send the set you want; `[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
       },
       parentRef: {
         type: ['string', 'null'],

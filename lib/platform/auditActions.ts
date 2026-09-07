@@ -71,6 +71,28 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * reason is the half of the pair somebody would be tempted to leave blank.
    */
   'user.unsuspend': { reason: 'required' },
+  /**
+   * An organization was classified INTERNAL BILLING (MOTIR-4565) — from now on
+   * every debit it incurs is paired, in the same transaction, with an
+   * offsetting credit, so it is charged exactly like a customer and made whole
+   * (`docs/decisions/internal-billing-classification.md` §2).
+   *
+   * `required`, and joining ADR §7's allocation table at the `superadmin`
+   * degree. The domain is `org` rather than `billing` because the SUBJECT of
+   * the action is the organization, not the screen it was performed from —
+   * this file's own naming rule.
+   */
+  'org.internal_billing_set': { reason: 'required' },
+  /**
+   * The classification was removed. `required` like its twin, and for the
+   * reason `user.unsuspend` gives: the trail has to answer "why is this org
+   * being billed again?" as readably as it answers why it stopped, and the
+   * unset is the half of the pair somebody would be tempted to leave blank.
+   *
+   * Removing it leaves every ledger row exactly where it is — the debits and
+   * their offsets are history, not state.
+   */
+  'org.internal_billing_unset': { reason: 'required' },
 } as const satisfies Record<string, { reason: PlatformAuditReasonPolicy }>;
 
 /**

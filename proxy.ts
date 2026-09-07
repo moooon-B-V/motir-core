@@ -157,7 +157,17 @@ export async function proxy(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
     const signInUrl = new URL('/sign-in', request.url);
-    signInUrl.searchParams.set('next', request.nextUrl.pathname);
+    // ⚠️ THE SEARCH STRING IS PART OF THE DESTINATION (MOTIR-4725). This used to
+    // set the PATHNAME alone, which cost a filtered list its filter and — since
+    // the planning workspace became an OVERLAY whose whole open state lives in
+    // the query — costs a shared planner link the planner itself: a signed-out
+    // reader following `/backlog?plan=project&planFrom=project` arrived at a bare
+    // backlog with nothing to say what they had been sent to see. The value is
+    // the same one the `x-current-path` header below carries for the signed-in
+    // half of this function, and it stays a same-origin PATH, which is what
+    // `sanitizeNextPath` (`lib/navigation/nextDestination.ts`) admits — a query
+    // has always been legal in it (`/device?user_code=…` is the older instance).
+    signInUrl.searchParams.set('next', `${request.nextUrl.pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(signInUrl);
   }
 
@@ -187,8 +197,15 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Every URL that maps to a page under `app/(authed)/`, plus the two other
-  // signed-in route groups (`(onboarding)`, `(planning)`).
+  // Every URL that maps to a page under `app/(authed)/`, plus the one other
+  // signed-in route group, `(onboarding)`.
+  //
+  // ⚠️ `/planning` STAYS ON THIS LIST although its route group is gone
+  // (MOTIR-4732). The workspace is an overlay now and `app/(authed)/planning`
+  // holds only a FORWARD for old links — and that forward is exactly why the
+  // entry matters: without it a cookie-less request to a bookmarked
+  // `/planning?…` gets the segment's own gate instead of the
+  // `/sign-in?next=/planning…` bounce this matcher exists to give it.
   //
   // ⚠️ THIS LIST IS GUARDED, NOT REMEMBERED (MOTIR-3652). It used to carry a
   // comment asking future authors to append each new authed route, and thirteen

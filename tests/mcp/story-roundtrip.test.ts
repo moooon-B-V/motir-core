@@ -276,6 +276,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         update_plan_item: { planId: plan.id, planItemId: 'pi_leak', title: 'leak?' },
         update_plan_proposal: { planId: plan.id, planItemId: 'pi_leak', title: 'leak?' },
         withdraw_plan_proposal: { planId: plan.id, planItemId: 'pi_leak' },
+        // The plan's OWN heading (MOTIR-4637) — plan-id-keyed and needing no
+        // proposal at all, so a non-member must be refused on the PLAN.
+        update_plan: { planId: plan.id, summary: 'leak?' },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'leak?' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -343,6 +346,16 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
               contentBase64: 'eA==',
             },
           ],
+        },
+        // MOTIR-4704 — the same argument one artifact over. A cross-tenant
+        // acceptance publish would put a stranger's RECORDING on A's story, and
+        // the mint half is worse than the register half: it hands back a
+        // presigned PUT into A's object store. Both must read not-found before
+        // a grant is minted or a pathname is registered.
+        create_acceptance_upload: { key: item1 },
+        publish_acceptance_result: {
+          key: item1,
+          videoPathname: 'acceptance/rogue/rogue.webm',
         },
         // MOTIR-3526. Aimed at tenant A's item like its neighbours: the ITEM key
         // must read as not-found BEFORE the repository is looked at, so a
@@ -737,6 +750,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
           title: 'scoped correction',
         },
         withdraw_plan_proposal: { planId: plan.id, planItemId: 'pi_scoped' },
+        update_plan: { planId: plan.id, summary: 'scoped brief correction' },
         open_plan_session: { projectKey: 'PROD' },
         append_plan_turn: { projectKey: 'PROD', body: 'scoped turn' },
         submit_plan_session: { projectKey: 'PROD' },
@@ -804,6 +818,13 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
               contentBase64: 'eA==',
             },
           ],
+        },
+        // MOTIR-4704 — the caller's OWN story. Write-scoped tools, so the
+        // read-only-token loop asserts both are REFUSED at the scope gate.
+        create_acceptance_upload: { key: item1 },
+        publish_acceptance_result: {
+          key: item1,
+          videoPathname: 'acceptance/scoped/scoped.webm',
         },
         // MOTIR-3526 — the caller's OWN item. A write-scoped tool, so the
         // read-only-token loop asserts it is REFUSED at the scope gate; the

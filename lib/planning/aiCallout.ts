@@ -10,9 +10,13 @@
 // component and in unit tests.
 //
 // ⭐ EVERY ROW OPENS THE SAME SURFACE (Yue, 2026-08-01). Motir has exactly one
-// AI conversation surface — the `PlanningWorkspace` at `/planning`
-// (MOTIR-1729) — and every action here resolves to the SAME context-derived
-// href via the shipped `planningWorkspaceHref()`. The callout is not a mode
+// AI conversation surface — the `PlanningWorkspace`, an OVERLAY on the page you
+// are already on since MOTIR-4725 — and every action here carries the SAME href.
+// ⚠️ THE HREF IS NOW PASSED IN rather than resolved here (MOTIR-4730): it
+// depends on the CURRENT address, which only a component can read
+// (`useOpenPlanningWorkspace`), and this module is deliberately framework-free.
+// The property that mattered is untouched — one href, shared by every row — it
+// is simply computed one level up. The callout is not a mode
 // picker and not a router: it is a CAPABILITY LIST, an answer to "what can I
 // ask this thing?". The row the user picks does not narrow what the
 // conversation can be about, because the topic is chosen — and re-chosen —
@@ -27,8 +31,6 @@
 // "Ask about this project" (MOTIR-1343) / "Help with a task" (MOTIR-1344) each
 // arrive as a SINGLE ENTRY below plus their two `shell.aiCallout.*` message
 // keys — no change to `AiCalloutMenu` or to the orb.
-
-import { planningWorkspaceHref, type PlanningLaunchContext } from './launcher';
 
 /**
  * The icon a row's tile carries. A NAME, not a component, so this module stays
@@ -62,14 +64,15 @@ export interface AiCalloutAction {
 export const AI_CALLOUT_NAME_KEY = 'aiCallout.name';
 
 /**
- * The ordered actions the callout offers from `context`. Order is the design's:
- * the first action is the PRIMARY one (the menu marks it by its filled icon
- * tile AND its position), the rest follow as their capabilities land.
+ * The ordered actions the callout offers. Order is the design's: the first
+ * action is the PRIMARY one (the menu marks it by its filled icon tile AND its
+ * position), the rest follow as their capabilities land.
+ *
+ * `href` is the one destination every row shares — the overlay address for the
+ * page the callout is open on, resolved by the caller
+ * (`useOpenPlanningWorkspace`) because it depends on the current URL.
  */
-export function aiCalloutActions(context: PlanningLaunchContext): AiCalloutAction[] {
-  // One destination, resolved once: every row is a door to the one workspace.
-  const href = planningWorkspaceHref(context);
-
+export function aiCalloutActions(href: string): AiCalloutAction[] {
   return [
     {
       id: 'plan',

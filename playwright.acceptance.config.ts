@@ -33,9 +33,19 @@ import {
 // ⚠️ WHO PUBLISHES — CHANGED 2026-09-01 (MOTIR-4096). This lane's `outputDir`
 // used to be read by a CI uploader (`scripts/upload-acceptance-video.mjs`),
 // which POSTed the video + trace + chapters to the publish endpoint
-// (MOTIR-1631). That uploader is RETIRED: the receipt is published by the AGENT,
-// through the Motir MCP surface, and the lane's job now ends at the Playwright
-// report artifact the clips and sidecars land in.
+// (MOTIR-1631). That uploader is RETIRED: the receipt is published by the AGENT
+// that recorded it, and the lane's job now ends at the Playwright report
+// artifact the clips and sidecars land in.
+//
+// ⚠️ AND THE DOOR IT PUBLISHES THROUGH DID NOT EXIST UNTIL MOTIR-4704. This
+// paragraph said "through the Motir MCP surface" for four days while the MCP
+// surface had no acceptance publisher on it at all — so an agent that read this
+// file, searched its tool palette and found nothing had been told, accurately,
+// to use a door that was not there. The door is now `create_acceptance_upload`
+// + `publish_acceptance_result` (two calls: a recording is far larger than a
+// tool argument can carry), and the runner's own dispatch prompt asks for them
+// on a card that records one — which is the half that makes this work without
+// anybody reading this comment.
 // What is unchanged is the PRODUCTION side, and it is what this config still
 // owes: each spec declares its target story via the `acceptanceStory()` helper →
 // `acceptance-story.json` sidecar, and `chapter()` writes `chapters.json`

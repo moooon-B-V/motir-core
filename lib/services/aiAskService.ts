@@ -86,10 +86,16 @@ export type AskSettleResult =
   | { outcome: 'redirected'; jobId: string; planId: string; session: PlanChangeSessionDto }
   | { outcome: 'silent'; session: PlanChangeSessionDto };
 
-function tenantFor(ctx: ProjectContext, organizationId: string, isMeta: boolean) {
+function tenantFor(
+  ctx: ProjectContext,
+  organizationId: string,
+  isMeta: boolean,
+  internalBilling: boolean,
+) {
   return {
     organizationId,
     isMeta,
+    internalBilling,
     workspaceId: ctx.workspaceId,
     projectId: ctx.projectId,
     projectKey: ctx.project.identifier,
@@ -100,13 +106,13 @@ function tenantFor(ctx: ProjectContext, organizationId: string, isMeta: boolean)
  *  the shipped ones (`aiChatService.submitDiscoveryTurn`'s shape); nothing about
  *  metering or availability is re-implemented here. */
 async function submitAsk(prompt: string, ctx: ProjectContext): Promise<{ jobId: string }> {
-  const { organizationId, isMeta } = await resolveTenantOrg({
+  const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
   return submitJob(
     'ask_project',
-    tenantFor(ctx, organizationId, isMeta),
+    tenantFor(ctx, organizationId, isMeta, internalBilling),
     { prompt },
     {
       userId: ctx.userId,

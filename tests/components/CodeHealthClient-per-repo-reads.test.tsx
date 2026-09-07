@@ -5,6 +5,20 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { CodeHealthClient } from '@/app/(authed)/code-health/_components/CodeHealthClient';
 import type { ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
 
+// ⚠️ THE PLANNING DOORS READ THE ADDRESS (MOTIR-4730). Every surface that mounts
+// one — and this tree mounts one — now calls `usePathname` / `useSearchParams`,
+// because the workspace opens OVER the page you are on rather than navigating to
+// `/planning`. Outside a router context the real hooks return `null` and the
+// door throws on its first render.
+const nav = vi.hoisted(() => ({
+  pathname: '/dashboard',
+  searchParams: new URLSearchParams(),
+}));
+vi.mock('next/navigation', () => ({
+  usePathname: () => nav.pathname,
+  useSearchParams: () => nav.searchParams,
+}));
+
 // The /code-health island's READS, per repo (MOTIR-2123). Two things this pins:
 //
 //  1. Every read is repo-SCOPED. Both boundary endpoints `requireQuery` a

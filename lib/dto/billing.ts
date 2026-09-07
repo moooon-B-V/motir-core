@@ -1,6 +1,7 @@
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 import type { BillingCatalog } from '@/lib/billing/catalog';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
+import type { SearchSpendDTO } from '@/lib/dto/aiUsage';
 
 // DTOs for the billing surfaces (Story 8.1). Defines EXACTLY what crosses the
 // HTTP boundary — no Prisma model leaks. The inbound propagation route returns
@@ -83,6 +84,18 @@ export interface BillingStatusDTO {
    *  page renders the "Internal plan" state instead of the storefront (no upgrade
    *  / checkout CTAs); the two billed lines below are not meaningful for it. */
   isMeta: boolean;
+  /** Whether the org is charged exactly like a CUSTOMER and then made whole —
+   *  every debit lands and is paired, in the same transaction, with an
+   *  offsetting credit (`Organization.internalBilling`, MOTIR-4565;
+   *  `docs/decisions/internal-billing-classification.md` §2).
+   *
+   *  ⚠️ IT CHANGES NO FIGURE ON THIS DTO, and that is the whole point. Every
+   *  line, every state and every number above and below is computed exactly as
+   *  it is for a paying org — this field says only WHICH KIND of org the reader
+   *  is looking at, so the surface can draw a chip. It is a second field beside
+   *  `isMeta` rather than a widening of it because the two mean opposite things:
+   *  that one suppresses, this one charges and credits. */
+  internalBilling: boolean;
   /** ① Motir (seats): the scaled-tracker subscription, or `null` = free/unscaled. */
   motir: {
     scaledTrackerSubscription: ScaledTrackerSubscription | null;
@@ -105,6 +118,23 @@ export interface BillingStatusDTO {
    * stays green.
    */
   ci: CiEntitlementStateDTO;
+  /**
+   * ④ Motir Search (MOTIR-4334, `motir-gateway` `docs/decisions/motir-search-channel.md`
+   * §4.4 · motir-ai `docs/credit-model.md` §4b): the FOURTH billed line — what the
+   * org has spent on web search, DISTINCT from AI's spend and from CI's.
+   *
+   * It comes off the `getOrgUsage` call this service ALREADY makes, so there is no
+   * second request; `usage.balance` and `usage.tier` above come from the same read.
+   *
+   * ⚠️ NULLABLE, and for the OPPOSITE reason `ci` is not. `ci` is not nullable
+   * because `ciAllowanceState` models "no CI here" as a real value. Search has no
+   * such state to model — §5 of the ADR decides an out-of-credit org goes into
+   * overdraft and search refuses nothing, so there is no paused, bypassed or
+   * not-applicable arm to carry. What CAN happen is the boundary not reporting the
+   * block at all (a rolling deploy), and `null` is exactly that: FIGURES
+   * UNAVAILABLE, never zero spend. The panel must render the two differently.
+   */
+  search: SearchSpendDTO | null;
   /** The purchasable prices the storefront renders + checkout routes through. */
   catalog: BillingCatalog;
 }

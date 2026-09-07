@@ -191,6 +191,18 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // therefore adds no credential and no trust; it only stops requiring a script
   // to be present in the repository. `CLI_TOKEN_GRANT` is NOT widened here.
   publish_design_result: 'work_item:edit',
+  // The ACCEPTANCE publish pair (MOTIR-4704) — the SAME key again, and not by
+  // analogy: `ACCEPTANCE_PUBLISH_PERMISSION` in `lib/tokens/grant.ts` IS
+  // `work_item:edit`, and the service's own `resolveStory` asserts it on the
+  // story's project (MOTIR-2365 put it there after `createUploadTokens` was
+  // found reachable with a session and a story id alone). §3's rule is
+  // satisfied by construction: what is declared here is what the gate applies.
+  // ⚠️ `create_acceptance_upload` MINTS a presigned write against the
+  // workspace's object store, so it is a WRITE key even though it persists no
+  // row — declaring it a read would hand out object-store grants on a browse
+  // permission.
+  create_acceptance_upload: 'work_item:edit',
+  publish_acceptance_result: 'work_item:edit',
   // `link_pull_request` (Story MOTIR-3525 · MOTIR-3526) — declaring which work
   // item a pull request delivers is EDITING that work item, so it takes the same
   // key the picker's own write path sits behind, and the SERVICE asserts it too
@@ -284,6 +296,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // silently changing what a sandboxed agent may do to a plan.
   update_plan_proposal: 'ai:view_plan',
   withdraw_plan_proposal: 'ai:view_plan',
+  // The PLAN'S OWN title / summary (MOTIR-4637). Same key, and again by the rule
+  // rather than by family resemblance: `plansService.correctPlanBrief` asserts
+  // `ai:view_plan` itself, as its FIRST act, exactly as its three siblings do.
+  // `CLI_TOKEN_GRANT` is deliberately NOT widened for it either — a sandboxed run
+  // that may not reshape the plan it was handed may not rewrite what that plan
+  // says about itself, and `tests/mcp/update-plan.test.ts` asserts that refusal
+  // off the constant.
+  update_plan: 'ai:view_plan',
 
   // ── removal — the RECOVERABLE and the IRREVERSIBLE, now two keys ─────────
   // ⚠️ CORRECTED (MOTIR-3629). This block used to read: "`archiveWorkItem` /

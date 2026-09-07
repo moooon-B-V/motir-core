@@ -12,6 +12,7 @@ import {
   type AiCalloutIcon,
 } from '@/lib/planning/aiCallout';
 import type { PlanningLaunchContext } from '@/lib/planning/launcher';
+import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
 
 /**
  * AiCalloutMenu — the "M" callout's PANEL (MOTIR-1812 / Story 7.24; design @
@@ -73,7 +74,11 @@ const TILE_STYLE: CSSProperties = {
 
 export function AiCalloutMenu({ context, onSelect }: AiCalloutMenuProps) {
   const t = useTranslations('shell');
-  const actions = aiCalloutActions(context);
+  // The rows' ONE href, and the click that opens the workspace in place
+  // (MOTIR-4730). The registry stays framework-free; this is where the current
+  // address enters.
+  const { href, open } = useOpenPlanningWorkspace(context);
+  const actions = aiCalloutActions(href);
 
   return (
     <Popover.Content
@@ -113,7 +118,12 @@ export function AiCalloutMenu({ context, onSelect }: AiCalloutMenuProps) {
               key={action.id}
               href={action.href}
               data-action={action.id}
-              onClick={onSelect}
+              onClick={(event) => {
+                // The popover closes first, so focus return lands on the orb
+                // rather than on a row that is being unmounted.
+                onSelect?.();
+                open(event);
+              }}
               className={cn(
                 'flex items-start gap-2 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)',
                 'text-left hover:bg-(--el-surface) active:bg-(--el-muted)',

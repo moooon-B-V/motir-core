@@ -55,7 +55,12 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
       identifier: null,
       changedFields: [],
       settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+      // No proposed STEPS by default (MOTIR-4622), which is what every case
+      // written before this field meant and still means: the peek renders no
+      // To-do list section at all.
+      todos: null,
     },
+    todos: null,
     // MOVED in the plan's latest revision (MOTIR-3601) — false by default, so
     // every existing case keeps describing a plan nobody has revised.
     revised: false,

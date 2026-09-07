@@ -17,10 +17,11 @@ this card), and for the state-machine scaffolding **7.15.2a / MOTIR-1499**.
 > sub-surface's shipped asset and say so — or it gets built twice) and **#31** (the multi-panel /
 > design-reference rule), this doc **cites** each embedded surface's owner and reproduces its language;
 > it does **not** re-design connect / import / the plan screen. The genuinely new pixels here are (a) the
-> **set-up wizard chrome + rail** (Connect · Index required · Import optional), (b) the **index-progress
-> step** (§Panel 2), and (c) **THE LANDING** (§Panel 0) — the **full-screen plan screen (NO left nav)** the
-> user reaches after import, with the finished set-up steps shown as **done-cards** + the reconcile framing
-> (the plan screen itself is the shipped `PlanningWorkspace`, composed). Product truths this revision bakes
+> **set-up wizard chrome + rail** (Connect · Index required · Import optional) and (b) the **index-progress
+> step** (§Panel 2). ~~(c) **THE LANDING** (§Panel 0)~~ — **REMOVED 2026-09-06 (MOTIR-4766, Yue):** what
+> the wizard opens at the end is the **regular planning session**, which arrives with the context and
+> **waits to be told what to plan**. Nothing about it is migrate-specific, so this asset draws none of it;
+> see §Panel 0. Product truths this revision bakes
 > in (Yue, 2026-07): the **required core is just Connect + Index**;
 > **conventions + code-health are derived SILENTLY, auto-used, with NO approval and NOT surfaced in
 > onboarding** — they live on the Code-health page (§The spine, and the removed-Panel-3 §); conventions
@@ -231,23 +232,34 @@ CodeRabbit `code-guidelines`, the ETH-Zurich auto-gen caveat that justifies the 
 
 ## Panels (inspect EVERY panel — the multi-panel rule, mistake #31)
 
-### Panel 0 — THE LANDING: the full-screen universal plan screen (NO left nav) — **composes the EXISTING `PlanningWorkspace` (MOTIR-1193 / 1299)**
+### Panel 0 — REMOVED: the wizard's ending is a REGULAR PLANNING SESSION, and it is not drawn here
 
-**Where the user lands after the (optional) import step.** This is NOT the set-up wizard — it is the
-**existing** universal plan screen, **full-screen with NO left nav**. The migrate-NEW pixels are only the
-**finished-step done-cards** + the **reconcile framing**; the canvas + chat below them are the shipped
-`PlanningWorkspace` (composed, cited — not re-designed). Structure: the **brand bar** (Motir · "acme —
-planning your project" · Save & exit · avatar), then a full-width `.plan-screen` (no rail): a **`.done-cards`
-row** — three `.done-card`s (mint-check tile + name + meta): **Connected · 3 repositories**, **Indexed ·
-5,412 files · 31,208 symbols**, **Imported · 142 work items · Jira** — so the finished set-up steps are
-visible as cards, not a rail. Below, a `.plan-lead` ("**Your codebase is in Motir.** Here's a plan grounded
-in your code — reconciled with the 142 imported items…"), then the `.plan-body` grid **`[canvas | chat]`**:
-the `.canvas` (dot-grid) with a firm Story node + dashed-accent **proposed** `Subtask · add` nodes, **each
-carrying a `.n-repo` repo tag** (`acme/api` / `acme/web` / `acme/shared`) over the **confirm-to-persist**
-bar ("6 proposed · nothing saved yet" · Discard · **"Add 6 items to your backlog"**); and the `.chat`
-(AI/user `.bubble`s + `.composer`) — the AI opens with what it read across the 3 repos + 142 imported items
-and what it **skipped** as already-tracked. This panel answers "you're set up — here's your code-aware
-plan, reconciled with what you imported."
+**Superseded 2026-09-06 (MOTIR-4766), at Yue's direction.** The panel drew a bespoke landing —
+finished-step done-cards, a `.plan-lead` reading _"**Your codebase is in Motir.** Here's a plan grounded
+in your code…"_, a `.canvas` already full of dashed **proposed** subtask nodes, and a confirm bar reading
+_"6 proposed · nothing saved yet"_. That depicts **a planner that had read the repository and handed over a
+plan nobody asked for**, and that is not what a planning session is.
+
+**A REGULAR session arrives with the context and WAITS to be told what to plan.** The code graph, the
+imported backlog and the direction are what it has; the user's ask is what it acts on. It asks; it does not
+propose a tree unprompted. That is the same behaviour `motir-ai`'s routing verdict names for its
+`continue` outcome (**MOTIR-4767**: _the session asks and plans exactly as a regular session does_), and it
+is what a person doing a planning pass by hand actually experiences.
+
+**So there is nothing migrate-specific to draw at the end of this wizard.** Set-up finishes, the universal
+plan window opens, and the session begins the way every session begins — on this project, on any project,
+on any day. The design of record is `design/ai-chat/planning-workspace.mock.html` (MOTIR-1193 / MOTIR-1299)
+and, for a project arriving with never-approved onboarding, `design/ai-chat/reading-and-handoff.mock.html`
+(MOTIR-4766). The panel's slot in the mock is now a NOTE saying this, rather than an absence: a panel
+removed with no reason attached is one the next card re-draws.
+
+**This document's own model said so before the panel contradicted it** — §The spine already reads _"Planning
+is NOT designed here — it is the EXISTING universal plan screen"_. Where earlier sections below still speak
+of _"the landing"_, _"the done-cards"_ or _"§Panel 0"_ as drawn surfaces, they are describing this removed
+panel; the mechanism they describe (set-up finishes → the plan window opens) is unchanged, the **pixels are
+not this asset's**. The `.plan-screen` / `.done-card*` / `.plan-lead` / `.plan-body` / `.canvas` / `.node` /
+`.confirm-bar` / `.chat` / `.bubble` / `.composer` rules went with the markup rather than being left as a
+set a later panel could quietly re-adopt.
 
 ### Panel 1 — Connect repos (step 1) — MULTI-PROVIDER (GitHub + GitLab) — **composes 7.7.1 (`design/github/`) via the `GitProvider` seam**
 
@@ -503,3 +515,260 @@ if one were needed, that is a NEW `design/` subtask, not a code workaround.
 - **AA holds** — every coloured chip/tile carries the hue in the tint background with `--el-text-strong`
   ink; dark parity verified by toggling `data-theme="dark"` (every `--el-*` re-skins through the
   `[data-theme='dark']` `--color-*` overrides).
+
+---
+
+## AMENDMENT (2026-09-06 · MOTIR-4755) — a step SATISFIED BY THE SUBSTRATE, not by the user
+
+**Story:** [MOTIR-4753] _The DEPTH of onboarding is a judgement about the project's SUBSTRATE._
+**Panel added:** **Panel 5**. Everything above is unchanged.
+
+### The premise this card was written on, AMENDED ON THE RECORD
+
+The card opens: _"The migrate wizard's asset draws its step rail with `Discovery (step 4, 7.2.1)` as
+an unconditional row, and it draws exactly one way for a step not to run: import's SKIP."_ **Both
+halves are false, and both were checkable in one read at plan time.** Verified (rung 2) before
+drawing:
+
+- **The asset draws NO discovery row at all.** `grep -n 'Discovery' onboarding-migrate.mock.html`
+  returns exactly one line — `/* ---- Discovery (step 4, 7.2.1) ---- */`, a **CSS section comment**,
+  left from an earlier revision. All three rails in the asset draw Connect · Index · Import work
+  items and stop.
+- **And that is FAITHFUL to the shipped wizard**, which is why nobody noticed. `MigrateWizard.tsx`'s
+  `Rail` renders exactly those three `RailStep`s and pushes to `/onboarding/discovery` from the
+  discovery step onward — the direction tiers are a different route, drawn nowhere in this rail.
+- **The rail draws no SKIPPED state either.** `RailStep`'s state union is
+  `'done' | 'current' | 'upcoming' | 'optional'`, and a skipped import takes **`done`** (`rank > 2`),
+  so today it is drawn identically to one the user completed. Import's skip is real as **copy** — an
+  `onboardingMigrate.import.skip` button and _"Skip this if you have no backlog to bring in"_ — and
+  the card quotes that correctly; what it does not have is a rail treatment to contrast against.
+
+**The deliverable is unchanged and is if anything clearer**: this panel does not amend a row, it
+ADDS one, in three states, and it has to DESIGN the user-skipped treatment rather than reproduce it.
+The card's own _"draw the import row's skipped state beside it"_ already asked for exactly that.
+
+### What Panel 5 depicts, and where each behaviour came from
+
+**GROUNDED, NOT INVENTED.** Every behaviour below is read off a sibling card's `descriptionMd`; this
+asset decides how it LOOKS and nothing about what it DOES.
+
+| depicted                                                           | grounded in                                                                                                        |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| A direction row that does not run because the substrate answers it | **MOTIR-4759** — _`discovery` becomes a SATISFIABLE migrate step, not a mandatory one_                             |
+| That the wizard ADVANCES past it rather than the user skipping it  | MOTIR-4759's _"the wizard advances past it when the substrate read says the repository and the backlog answer it"_ |
+| The FLOOR — no repository and no backlog ⇒ the questions asked     | MOTIR-4759's _"the floor case still walks the tiers"_, and **MOTIR-4758**'s guaranteed floor (motir-ai)            |
+| That the run RECORDS which way it went, so the surface can say so  | MOTIR-4759's _"the run records which way it went"_ — the provenance line is that record, rendered                  |
+| That the entrance routes a repo-carrying project here by DEFAULT   | **MOTIR-4756** — the substrate read + `shouldRouteToMigrateWizard` deciding on both inputs                         |
+| The two questions the satisfied row claims are answered            | **MOTIR-4758** — the test is the floor tiers' own questions (What/Who · In-v1/Out)                                 |
+
+### The three states, and why none of them is the `done` tick
+
+A step can fail to run for two opposite reasons. **SKIPPED is the user's** — they were offered a
+thing and declined it. **SATISFIED is Motir's** — it read their repository and their backlog and did
+not need to ask. Dressing the second in the first's clothes tells a user they passed on something
+they were never shown; dressing either in the **done** tick says they did the step.
+
+| row state                                      | marker fill                                                         | glyph             | name                           | meta line                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------- | ----------------- | ------------------------------ | ------------------------------------------ |
+| `pending` (`.step.current`)                    | `--el-accent` on `--el-surface-soft`, ring `--el-accent-on-surface` | **question mark** | _"A few questions"_            | _"What you're building, and who for"_      |
+| `user-skipped` (`.step.skipped`, NEW)          | `--el-muted`, border `--el-border`                                  | **dash**          | the step's own name            | _"You skipped this"_ — whose choice it was |
+| `substrate-satisfied` (`.step.satisfied`, NEW) | `--el-tint-sky`, border `--el-border`                               | **book / read**   | _"Answered from your project"_ | _"Your code and your backlog said it"_     |
+| `done` (unchanged)                             | `--el-success-surface`                                              | check             | the step's own name            | —                                          |
+
+**Not colour-alone** (the standing rule): each of the three pairs a distinct GLYPH and a distinct
+NAME-or-META with its tint, so the states are separable in greyscale and to a screen reader.
+
+**And the pending marker is a QUESTION MARK, not a numeral.** Revision 1 numbered it `3`, which
+invents a global sequence: the rail numbers Connect `1` and Index `2`, and Import carries a glyph, so
+a `3` on the fourth row implies a step count that skips one. It also asserts a position this row does
+not have — the direction stage is not the third of four steps, it is a stage that may not run at all.
+A question mark says what the row is in the one character the marker has. (The SHIPPED `RailStep`
+renders no glyph at all for `current` — an empty accent dot — so the numerals are this mock's own
+flourish and were free to drop.)
+
+### ⚠️ ONE ROW, AND IT NEVER NAMES A TIER (Yue, 2026-09-06)
+
+**An earlier revision of this panel drew the direction stage as FOUR rows — Discovery, Vision,
+Feasibility, Validation — and that was wrong for the same reason "Pre-plan" was wrong.** Those are
+the planner's identifiers (`DirectionDocKind`, `producibleTiers`) for questions the user is simply
+being asked. A rail that lists them by name teaches a stranger four words before it tells them
+anything, and it does it on the first surface they ever see. **This is MOTIR-4757's rule one surface
+over** — internal vocabulary travelling out of the rule corpus into user-facing text, written in
+good faith by somebody who had just been reading the corpus — and a design asset is exactly where
+that gets laundered into looking decided.
+
+So the rail carries **one row** for the whole direction stage:
+
+- **pending** — named _"A few questions"_, meta _"What you're building, and who for"_. The user is
+  told what the step IS and what it is about; which four documents it produces is the planner's
+  business.
+- **satisfied** — the NAME carries the outcome, _"Answered from your project"_, because a row the
+  user never saw has to explain itself in the one place they meet it. The meta line says which part
+  of the project answered.
+
+**And the FLOOR rail collapses with it.** It used to draw all four tiers to make the point that they
+are all walked; it now draws the one row in its pending state, which makes the same point without
+the vocabulary. Nothing about the floor's BEHAVIOUR changed — every question is still asked, and no
+state above is reachable from there.
+
+**⚠️ AND THE FLOOR'S SET-UP ROWS ARE `upcoming` / `optional`, NOT `skipped`.** A first draft drew
+Connect with a dash and the meta line _"No repository"_, which reads as _the user skipped connect_ —
+and **connect and index have no skip control**, so that is a state the machine cannot produce. A
+design asset that draws one is worse than useless: the next person builds it. `skipped` is a thing
+the user PRESSED, and the only step that offers it is import.
+
+**What the consuming card owes is therefore SMALLER than the first revision implied:** one rail row,
+not a four-row group. MOTIR-4759's sizing is amended accordingly.
+
+**The board CHROME still says "discovery"** — the panel label, the state captions, this note. That is
+deliberate and is the distinction the whole section is about: chrome is addressed to whoever builds
+the surface, and the rail is addressed to whoever uses it. Only one of the two is a place the
+planner's own nouns may appear.
+
+### The PROVENANCE line — a statement, never a gate
+
+Drawn in the hand-off panel, on the surface the user lands on:
+
+> _Motir planned from **acme/widgets** and **214 imported work items**, so it did not ask you the
+> direction questions. Everything below is a proposal — change anything before you add it._
+
+- **It is not a question and not a confirmation**, and the flow does not wait on it. The depth
+  decision is the planner's (MOTIR-4758) and what the user reviews is the PLAN it produced, so this
+  is provenance, not an approval.
+- **The escape beside it is a button, not a gate**: _"Answer the questions anyway"_. A plan that came
+  out thin from a run that never asked anything needs the user able to see why and to reach the
+  interview; it does not need the interview made mandatory again.
+- Ink is **`--el-text-secondary`** on **`--el-surface-soft`** (6.51:1). `--el-text-muted` there is
+  4.34:1 and would fail AA — the standing pair-not-ink rule, which is why the annotation ink in this
+  panel is `--el-text-secondary` throughout.
+
+### The ACCESS PATH
+
+The existing-project tile on `/onboarding` (composes `design/onboarding-entrance/`), drawn at board
+scale so a reader sees the door and not only the room. **It is no longer the only way in** — per
+MOTIR-4756 the entrance now routes a project with a connected repository here by DEFAULT.
+
+**Its copy is the SHIPPED copy, verbatim** — `onboarding.entrance.importTitle` / `importDesc` — and
+**this card amends no entrance string**. An earlier draft of this panel rewrote the tile's body to
+promise that Motir reads first; that promise is already in the shipped copy (_"Connect your
+repository and Motir reads your code, then plans on top of what's already there"_), and inventing a
+second wording would have left an unowned deliverable in a design asset with no card to build it —
+the deferral-is-a-card shape, one layer over. Drawn as it ships, the door already makes the promise
+the rail below keeps.
+
+### Vocabulary
+
+**No panel, label or annotation in this asset uses "Pre-plan"** — it is corpus vocabulary, not the
+product's, and the sibling **MOTIR-4757** is retiring it from the two onboarding topbar strings. The
+product's own noun is used throughout: **your direction**.
+
+### Tokens this amendment adds to the asset (no new colours)
+
+`.step.satisfied` · `.step.skipped` · `.provenance` · `.door` · `.rail-mini` · `.triptych` — composed
+entirely from tokens the asset already declares: `--el-tint-sky`, `--el-muted`, `--el-surface`,
+`--el-surface-soft`, `--el-card`, `--el-card-icon-bg` / `--el-card-icon-fg`, `--el-border`,
+`--el-text-strong`, `--el-text-secondary`, and the shape tokens `--radius-card` / `--radius-control` /
+`--radius-badge`. **No raw hex, no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*` on a
+surface's own box.**
+
+---
+
+## AMENDMENT (2026-09-06 · MOTIR-4766) — the PLANNER-DECIDED step set: a rail SHORTER than the full one
+
+**Panel 6 of `onboarding-migrate.mock.html`.** MOTIR-4755 (the amendment above) gave ONE step that
+did not run its own state. This amendment is what happens when SEVERAL of them do not run, because
+the planner now returns which steps to KEEP.
+
+### Where each depicted behaviour comes from (grounding, not invention)
+
+| Behaviour drawn                                                  | Grounded in                                                                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| The kept-step set exists at all, and is the PLANNER's answer     | **MOTIR-4767** — the routing verdict. On `onboard_existing_project` it carries THE KEPT STEPS and WHAT IS MISSING.       |
+| The set travels to the wizard with the move                      | **MOTIR-4769** — "carrying the KEPT STEPS and the missing-list… `motir-core` does not second-guess the verdict."         |
+| The wizard renders exactly that set                              | **MOTIR-4759** — `discovery` becomes a SATISFIABLE step; the run records which way it went.                              |
+| A step may be satisfied by the substrate rather than by the user | **MOTIR-4755** (the amendment above) — the `satisfied` state, its sky tint and its read glyph. Reused here, not redrawn. |
+| A kept step naming something the wizard does not have is refused | **MOTIR-4767 AC6** — validated upstream, so the rail never has to draw one.                                              |
+
+### The decision — COLLAPSE, do not delete
+
+The failure this panel is avoiding is MOTIR-4755's, at scale. That amendment established that a step
+which silently vanishes reads as something taken from the user. With one step, the remedy was to
+give the row its own state. **With three, giving each of them a `satisfied` row produces the
+opposite problem**: a rail whose subject is the list of things the user did not do, sitting beside
+the one thing they did.
+
+So the steps that are not kept **collapse into ONE row, in the `satisfied` treatment, and that row
+names them**:
+
+```
+YOUR DIRECTION                         →  ALREADY ANSWERED BY YOUR PROJECT
+                                          [read] Connect, Index and Import
+                                                 Read from acme/widgets and your 214 work items
+```
+
+The rail gets shorter; nothing vanishes. The group heading carries the sentence (_Already answered by
+your project_) and the meta line says WHAT answered it — the same claim the provenance line makes at
+the end of the flow, so the two cannot drift.
+
+### Three states drawn, and why each is needed
+
+1. **The FULL set** — no repository and no backlog, so the planner keeps everything and there is
+   nothing to collapse. The rail is exactly the one that shipped. This is the floor, unchanged from
+   MOTIR-4755's Panel 5, and it is here so the shortened rails have something to be shorter THAN.
+2. **Planner kept ONE** — three steps collapse into a single row; `A few questions` is the only live
+   step.
+3. **Planner kept TWO** — a repository that is real but thin. **Connect and Index are satisfied and
+   Import is not**, so the collapsed row sits ABOVE a live step it does not precede in the shipped
+   step order. This case is drawn deliberately: it is the proof that the kept set is **not a prefix,
+   a suffix or a count**, so the rail must render whatever the planner returns rather than "the last
+   N steps".
+
+### What the user is told at the end
+
+The provenance line from MOTIR-4755 gains **one clause and no new mechanism**:
+
+> Motir planned from **acme/widgets** and **214 imported work items**, and from the two answers you
+> gave. **Connect, Index and Import** were already answered by your project, so it did not ask you
+> about them. Everything below is a proposal — change anything before you add it.
+
+It stays a STATEMENT, not a gate: the escape back to the interview is the same
+_Answer the questions anyway_ button, and the flow does not wait on it.
+
+### The four rules this panel holds itself to
+
+1. **A step that is not kept is COLLAPSED, never deleted.**
+2. **One collapsed row, not N satisfied rows** — the single-row treatment is right for one step and
+   wrong for four.
+3. **No row names a tier.** `discovery` / `vision` / `feasibility` / `validation` are the identifiers
+   a kept-step set travels as (MOTIR-4767 validates against them) and they stay identifiers; the
+   rail says _A few questions_ and _Your direction_, exactly as MOTIR-4755 revision 2 settled after
+   Yue's note. **No string in this panel contains "Pre-plan".**
+4. **The rail renders the verdict; it does not audit it.** No count, no threshold and no
+   re-derivation from the substrate decides what is drawn (MOTIR-4769's own boundary).
+
+### Primitives and tokens (nothing new)
+
+`Rail` / `RailStep` as shipped in `app/(onboarding)/onboarding/migrate/_components/MigrateWizard.tsx`
+— the `.step` / `.marker` / `.s-name` / `.s-meta` structure, the `.rail-group` heading with its
+`.opt` chip, and the `.step.satisfied` / `.step.current` / `.step.upcoming` / `.step.optional`
+states. Panel 6 adds **no class, no colour and no shape token**: it is `--el-tint-sky` +
+`--el-text-strong` + `--el-border` on the collapsed marker (the `satisfied` recipe verbatim),
+`--el-surface` / `--el-surface-soft` / `--el-card` grounds, `--el-text-secondary` for every meta and
+annotation line, and `--radius-card` / `--radius-control` / `--radius-badge` for shape. No raw hex,
+no Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*` on a surface's own box.
+
+### Also in this pass — Panel 0 was REMOVED (Yue, 2026-09-06)
+
+Not part of the kept-step work, but landed under the same card because the same mistake was in both
+assets: Panel 0 drew a bespoke landing in which the planner had read the repository and handed over a
+plan nobody asked for. **A regular planning session arrives with the context and WAITS to be told what
+to plan.** Nothing about the end of this wizard is migrate-specific, so there is nothing here to draw;
+the panel's slot is now a note saying why, and `design/ai-chat/`'s Panel 5 (the RETURN) was corrected
+in the same pass for the same reason. Full record in §Panel 0 above.
+
+### The other half of this design lives in `design/ai-chat/`
+
+The hand-off that SENDS a user here — and shows them the kept set before they commit to it — is
+`design/ai-chat/reading-and-handoff.mock.html` Panel 4, published under the same card. The two
+assets share the `satisfied` vocabulary on purpose: the chip strip in the hand-off and the collapsed
+row in the rail are the same fact, said once before the journey and once during it.

@@ -3,14 +3,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import type { AiCalloutAction } from '@/lib/planning/aiCallout';
-import type { PlanningLaunchContext } from '@/lib/planning/launcher';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
+
+// The doors resolve their href from the CURRENT address now (MOTIR-4730), so
+// these need a router. `usePathname` / `useSearchParams` are all the hook reads.
+const pathname = '/backlog';
+const searchParams = new URLSearchParams();
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname,
+  useSearchParams: () => searchParams,
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
 
 // The "M" universal AI callout (MOTIR-1812) — the orb is now the TRIGGER for an
 // anchored menu, and "Plan with AI" is the first ROW inside it. Driven under
 // happy-dom: the orb + menu are pure client UI over the launcher's href, so no
 // DB / network is involved.
 
+// ⚠️ THE LITERAL ADDRESSES BELOW ARE RE-POINTED (MOTIR-4730). Every row used to
+// carry `/planning?mode=…&from=…` — a destination. The workspace is an overlay
+// now, so a row carries the CURRENT page (`/backlog` under the router mock
+// above) plus the overlay's four namespaced parameters. The property the
+// assertions are for is unchanged: one href, and the context is in it.
+//
 // The registry is the menu's only input, so a future action can be simulated by
 // overriding it — which is exactly the extension contract this card owes
 // (MOTIR-1343 / MOTIR-1344 add ONE entry, and nothing else changes). Left null,
@@ -23,8 +38,9 @@ vi.mock('@/lib/planning/aiCallout', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/planning/aiCallout')>();
   return {
     ...actual,
-    aiCalloutActions: (context: PlanningLaunchContext) =>
-      registryOverride.current ?? actual.aiCalloutActions(context),
+    // ⚠️ `aiCalloutActions` takes the resolved OVERLAY href now (MOTIR-4730),
+    // not a context — the workspace is a layer on the current page.
+    aiCalloutActions: (href: string) => registryOverride.current ?? actual.aiCalloutActions(href),
   };
 });
 
@@ -71,7 +87,7 @@ describe('the callout menu', () => {
     expect(panel).toBeTruthy();
 
     const row = screen.getByRole('link', { name: /Plan with AI/ });
-    expect(row.getAttribute('href')).toBe('/planning?mode=project&from=project');
+    expect(row.getAttribute('href')).toBe('/backlog?plan=project&planFrom=project');
     expect(screen.getByText('Generate, expand or re-plan the project')).toBeTruthy();
   });
 
@@ -103,7 +119,7 @@ describe('the callout menu', () => {
     expect(new Set(hrefs).size).toBe(1);
     // …and no row carries a mode or intent of its own.
     for (const href of hrefs) {
-      expect(href).toBe('/planning?mode=roadmap&from=roadmap');
+      expect(href).toBe('/backlog?plan=roadmap&planFrom=roadmap');
       expect(href).not.toContain('intent=');
       expect(href).not.toContain('mode=ask');
     }
@@ -126,7 +142,7 @@ describe('the callout menu', () => {
     fireEvent.click(orb());
 
     expect(screen.getByRole('link', { name: /Plan with AI/ }).getAttribute('href')).toBe(
-      '/planning?mode=roadmap&from=roadmap',
+      '/backlog?plan=roadmap&planFrom=roadmap',
     );
   });
 
@@ -151,14 +167,14 @@ describe('the callout menu', () => {
         icon: 'sparkles',
         titleKey: 'aiCallout.actions.plan.title',
         descriptionKey: 'aiCallout.actions.plan.description',
-        href: '/planning?mode=project&from=project',
+        href: '/backlog?plan=project&planFrom=project',
       },
       {
         id: 'ask',
         icon: 'message-circle-question',
         titleKey: 'aiCallout.name',
         descriptionKey: 'aiCallout.actions.plan.description',
-        href: '/planning?mode=project&from=project',
+        href: '/backlog?plan=project&planFrom=project',
       },
     ];
 

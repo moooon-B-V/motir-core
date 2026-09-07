@@ -17,6 +17,7 @@ import {
   Layers,
   Lock,
   Pause,
+  Search,
   Sparkles,
   Users,
   X,
@@ -32,6 +33,7 @@ import { useToast } from '@/components/ui/Toast';
 import type { BillingStatusDTO } from '@/lib/dto/billing';
 import type { AiPlanCatalogEntry, BillingCadence } from '@/lib/billing/catalog';
 import { ciLineFigures, type CiLineVariant } from './ciFigures';
+import { searchLineFigures } from './searchFigures';
 
 // The §4 free-tier scale caps the Motir (free) line draws — mirrors
 // `lib/billing/entitlements.ts` PM_ENTITLEMENTS.free (the locked ADR §4 numbers).
@@ -204,17 +206,18 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
     );
   }
 
-  // The META org (moooon B.V.) is internal + unlimited + never billed — there is
-  // no plan to upgrade and no seat/AI checkout to start, so the storefront (and
-  // every CTA) is replaced by a single read-only "Internal plan" card.
-  if (data.isMeta) {
-    return (
-      <div className="flex flex-col gap-5">
-        {live}
-        <InternalPlanCard t={t} orgName={orgName} />
-      </div>
-    );
-  }
+  // ⚠️ AN `if (data.isMeta)` EARLY RETURN STOOD HERE AND IS DELETED (Story
+  // MOTIR-4337 · MOTIR-4572). It replaced the entire storefront — the home view,
+  // the plans, the seats, all four billed lines and the CI line — with one
+  // read-only card, on the single organization that uses the product every day.
+  // The states most worth exercising were the states it switched off.
+  //
+  // An org classified `internalBilling` is charged exactly like a customer and
+  // made whole by a paired ledger credit (MOTIR-4570), so every view below is
+  // TRUE for it: the figures are real, the balance nets to zero, and nothing
+  // here is a fiction that has to be hidden. What survives is a LABEL — a chip
+  // beside the tier, rendered from `data.internalBilling` — which says what kind
+  // of org this is and changes no number.
 
   const canManage = data.access.canManageBilling;
   const shared = {
@@ -231,6 +234,20 @@ export function BillingClient({ orgId, orgName, memberCount }: BillingClientProp
   return (
     <div className="flex flex-col gap-5" aria-busy={state === 'loading'}>
       {live}
+
+      {/* THE LABEL THAT REPLACED THE BRANCH (MOTIR-4572). A chip, above the
+          ordinary storefront rather than instead of it: it says what kind of
+          organization this is and changes no line, no state and no figure
+          below. `internalBilling` — never `isMeta`, which means something else
+          and is not what makes these screens honest. */}
+      {data.internalBilling ? (
+        <p className="flex flex-wrap items-center gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding) font-sans text-xs text-(--el-text-strong)">
+          <Pill className="border-transparent bg-(--el-page-bg) text-(--el-text-strong)">
+            {t('internalBilling.badge')}
+          </Pill>
+          <span>{t('internalBilling.note')}</span>
+        </p>
+      ) : null}
 
       {returnBanner ? (
         <ReturnBanner kind={returnBanner} onClose={() => setReturnBanner(null)} t={t} />
@@ -382,43 +399,11 @@ function AvatarCluster({ count }: { count: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The META org (moooon B.V.) state — internal, unlimited, never billed. No CTAs:
-// there is no plan to change and no checkout to start.
-function InternalPlanCard({ t, orgName }: { t: T; orgName: string }) {
-  return (
-    <Card
-      header={
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-lavender) text-(--el-text-strong)">
-              <Sparkles className="h-4 w-4" aria-hidden />
-            </span>
-            <div>
-              <h2 className="font-sans text-base font-semibold text-(--el-text)">
-                {t('internal.title')}
-              </h2>
-              <p className="font-sans text-xs text-(--el-text-muted)">{t('internal.tagline')}</p>
-            </div>
-          </div>
-          <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
-            {t('internal.badge')}
-          </Pill>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <p className="font-sans text-sm text-(--el-text)">
-          {t('internal.subtitle', { org: orgName })}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Pill tone="neutral">{t('internal.motirLine')}</Pill>
-          <Pill tone="neutral">{t('internal.aiLine')}</Pill>
-        </div>
-        <p className="font-sans text-xs text-(--el-text-muted)">{t('internal.usageNote')}</p>
-      </div>
-    </Card>
-  );
-}
+// ⚠️ `InternalPlanCard` STOOD HERE AND IS DELETED (MOTIR-4572), with its five
+// `internal.*` i18n keys. It was the whole of what a meta org's billing page
+// rendered. Leaving a component nothing renders would leave the next reader to
+// work out whether it is dead or merely unreached — and its copy ("unlimited,
+// never billed") is now the opposite of what the product does.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Panel 2 — the billing home (the two billed lines + payment)
@@ -473,6 +458,7 @@ function HomeView({
         redirecting={redirecting}
       />
       {ciPaused ? null : ciLine}
+      <MotirSearchLine data={data} t={t} />
       <PaymentCard t={t} canManage={canManage} portal={portal} redirecting={redirecting} />
     </>
   );
@@ -1039,6 +1025,160 @@ function CiPausedDecision({ t, goPlans }: { t: T; goPlans: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ④ Motir Search line — the fourth billed line (MOTIR-4557; the asset is
+// `design/billing/search-line.mock.html`, `design-notes.md` "Amendment
+// 2026-09-05"). The customer sees a search charge as its own kind alongside AI
+// turns and Motir CI, and NOT merged into the AI line — decided in the same words
+// by `motir-search-channel.md` §4.4 and `credit-model.md` §4b.
+//
+// ⚠️ It looks like ③ and behaves differently, and building it as a copy of ③
+// would invent two things the product does not have: a METER (search has no pool
+// to divide by) and a PAUSED state (§5 — an out-of-credit org goes into overdraft
+// and search refuses nothing). Neither is an omission; both are in the asset as
+// drawn absences.
+//
+// It takes no `canManage`: the line is figures, not a control. There is no
+// button, no checkout and no owner-only affordance on it, so the shipped
+// permission split reaches it unchanged and it needs no member variant of its own.
+function MotirSearchLine({ data, t }: { data: BillingStatusDTO; t: T }) {
+  const search = searchLineFigures({
+    search: data.search,
+    balance: data.motirAi.balance,
+  });
+  // `null` no longer has a META arm to mean (MOTIR-4572) — every org renders the
+  // ordinary billed lines. The helper keeps its nullable return for the cases
+  // that are genuinely about figures rather than about which org is looking.
+  if (!search) return null;
+
+  return (
+    <Card
+      header={
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {/* The FOURTH product hue. mint = Motir, lavender = Motir AI, peach =
+                Motir CI, so search takes the unused SKY tint slot rather than
+                inventing one — and sky is the only remaining slot not already
+                spent on a STATE (rose is danger, yellow warning; either would
+                read as an alarm on a line that never alarms). */}
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-tint-sky) text-(--el-text-strong)">
+              <Search className="h-4 w-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="font-sans text-base font-semibold text-(--el-text)">
+                {t('search.name')}
+              </h2>
+              <p className="font-sans text-xs text-(--el-text-muted)">{t('search.tagline')}</p>
+            </div>
+          </div>
+          <Pill tone="neutral">{t('search.perUse')}</Pill>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {search.variant === 'nothing_to_bill' ? (
+          // Deliberately NOT a "0 credits" figure with a zero meter beside it: an
+          // org whose runs never search has nothing wrong with it. Same shape ③
+          // uses for its own zero-consumption case.
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-secondary)" aria-hidden />
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              <strong className="text-(--el-text-strong)">{t('search.zeroTitle')}</strong>{' '}
+              {t('search.zeroBody')}
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-end gap-7">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-sans text-xs text-(--el-text-secondary)">
+                {t('search.monthLabel')}
+              </span>
+              {/* ⚠️ AN EM-DASH, NEVER A ZERO. `null` means the boundary did not
+                  report the block — a rolling deploy where the motir-ai half has
+                  not landed — and a `0` here tells a customer they were not
+                  charged. The label carries the meaning for a reader who cannot
+                  see the dash. */}
+              {search.figuresUnavailable ? (
+                <span
+                  className="font-sans text-xl font-medium tracking-wide text-(--el-text-secondary)"
+                  aria-label={t('search.unavailableValue')}
+                >
+                  &mdash;
+                </span>
+              ) : (
+                <span className="font-sans text-xl font-semibold text-(--el-text) tabular-nums">
+                  {fmt(search.monthSpend ?? 0)}
+                  <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
+                    {t('search.creditsUnit')}
+                  </span>
+                </span>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="font-sans text-xs text-(--el-text-secondary)">
+                {t('search.totalLabel')}
+              </span>
+              {search.figuresUnavailable ? (
+                <span
+                  className="font-sans text-xl font-medium tracking-wide text-(--el-text-secondary)"
+                  aria-label={t('search.unavailableValue')}
+                >
+                  &mdash;
+                </span>
+              ) : (
+                <span className="font-sans text-xl font-medium text-(--el-text-secondary) tabular-nums">
+                  {fmt(search.totalSpend ?? 0)}
+                  <span className="ml-1 font-sans text-sm font-medium text-(--el-text-secondary)">
+                    {t('search.creditsUnit')}
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* §5 — the one place a reader of ①②③ expects a refusal and must be told
+            there is none. INFO, never the warning family: nothing is blocked. */}
+        {search.overdraft ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding)">
+            <Coins
+              className="mt-0.5 h-4 w-4 shrink-0"
+              style={{ color: 'var(--el-info)' }}
+              aria-hidden
+            />
+            <p className="font-sans text-xs text-(--el-text-strong)">
+              <strong>{t('search.overdraftTitle')}</strong> {t('search.overdraftBody')}
+            </p>
+          </div>
+        ) : null}
+
+        {search.figuresUnavailable ? (
+          <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              {t('search.unavailable')}
+            </p>
+          </div>
+        ) : (
+          <p className="font-sans text-xs text-(--el-text-muted)">{t('search.rate')}</p>
+        )}
+
+        {/* "What am I charged for" is this panel; "where did it go" is the usage
+            dashboard's, and this line links across rather than re-drawing it —
+            the same cross-link ② and ③ already use. */}
+        <div>
+          <Link
+            href="/settings/organization/usage"
+            className="inline-flex items-center gap-1 font-sans text-xs font-medium text-(--el-link) hover:underline"
+          >
+            <Coins className="h-3.5 w-3.5" aria-hidden />
+            {t('search.viewRuns')}
+          </Link>
+        </div>
+      </div>
+    </Card>
   );
 }
 

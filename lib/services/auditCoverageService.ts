@@ -10,7 +10,7 @@ import type {
 
 // Audit COVERAGE (MOTIR-2248) — which of a project's connected repos have no
 // derived code-health audit. One question, one request, no rendering: this is the
-// read the /planning nudge (MOTIR-2250) fetches for itself, in the shape the
+// read the planning workspace's nudge (MOTIR-2250) fetches for itself, in the shape the
 // shipped `app/api/ready/nudge` route established (a banner polls its own state
 // rather than blocking a page render on it).
 //

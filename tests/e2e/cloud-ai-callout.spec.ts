@@ -8,8 +8,15 @@
 //
 //   With AI configured and a project active: click the floating Motir orb
 //   bottom-right → the callout menu opens anchored to it → click "Plan with AI"
-//   → the planning workspace opens at /planning. Re-open the menu and dismiss it
-//   with Esc and with an outside click; focus returns to the orb.
+//   → the planning workspace opens. Re-open the menu and dismiss it with Esc and
+//   with an outside click; focus returns to the orb.
+//
+// ⚠️ ONE MORE CLAUSE MOVED UNDER IT (MOTIR-4730, story MOTIR-4725). The recipe
+// said the workspace "opens at /planning"; it is an OVERLAY now, so it opens
+// OVER the page the reader is already on and the address gains four namespaced
+// parameters instead of changing. The receipt's OWN claim — the orb opens the
+// callout, the row reaches the workspace, the menu dismisses — is unchanged, so
+// this is a re-point of two assertions rather than a rewrite of the story.
 //
 // ⚠️ ONE CLAUSE OF THAT RECIPE IS NARROWER IN THE SHIPPED COMPONENT, and this
 // spec asserts what ships rather than what the sentence reads like. Focus
@@ -190,15 +197,35 @@ test('the Motir orb opens the AI callout, and Plan with AI reaches the workspace
     // matches the pill alone: opening the menu cannot hijack their `.first()`.
     await expect(planLinks(page)).toHaveCount(2);
     await expect(pillLinks(page)).toHaveCount(1);
-    await expect(planRow(page)).toHaveAttribute('href', '/planning?mode=project&from=project');
+    // ⚠️ RE-POINTED (MOTIR-4730). The row used to carry
+    // `/planning?mode=project&from=project` — a destination. The workspace is an
+    // OVERLAY now, so a row carries the CURRENT page plus the overlay's four
+    // namespaced parameters. Asserted as an invariant rather than as a literal,
+    // because the address is relative to wherever the reader happens to be.
+    const rowHref = await planRow(page).getAttribute('href');
+    expect(rowHref).toContain('plan=project');
+    expect(rowHref).toContain('planFrom=project');
+    expect(rowHref).not.toContain('/planning');
+    // Still a real link, so ⌘-click and *Open in new tab* keep working — and a
+    // full load of that address renders this page with the workspace over it.
+    expect(rowHref?.startsWith(new URL(page.url()).pathname)).toBe(true);
     await beat();
   });
 
-  await chapter('"Plan with AI" reaches the planning workspace', async () => {
-    await planRow(page).click();
-    await page.waitForURL(/\/planning\?/);
+  await chapter('"Plan with AI" opens the workspace OVER the page', async () => {
+    // ⚠️ RE-POINTED (MOTIR-4730): this used to `waitForURL(/\/planning\?/)`.
+    // The click no longer navigates — it writes four query parameters onto the
+    // address the reader is already at, and the workspace opens as a layer.
+    const before = new URL(page.url()).pathname;
 
-    // The destination RENDERS — its two panes, by their own landmarks: the
+    await planRow(page).click();
+    await page.waitForURL((url) => url.searchParams.get('plan') === 'project');
+
+    // The SAME page, still. That is the whole point of the story: planning is a
+    // tool you pick up, not a place you go.
+    expect(new URL(page.url()).pathname).toBe(before);
+
+    // The workspace RENDERS — its two panes, by their own landmarks: the
     // project's plan on the canvas, the conversation on the right.
     await expect(canvas(page)).toBeVisible();
     await expect(rail(page)).toBeVisible();
@@ -206,8 +233,9 @@ test('the Motir orb opens the AI callout, and Plan with AI reaches the workspace
   });
 
   await chapter('The callout dismisses — Esc and an outside click', async () => {
-    // Back on an authed screen (the workspace lives outside the authed shell, so
-    // the orb is deliberately not there).
+    // Back on an authed screen with no workspace open. `goto` rather than a
+    // close, because this chapter is about the CALLOUT and wants a clean shell —
+    // the workspace's own exits are MOTIR-4734's.
     await page.goto('/dashboard');
     await expect(dashboardHeading(page)).toBeVisible();
 

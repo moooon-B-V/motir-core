@@ -43,9 +43,12 @@ vi.mock('next-intl/server', () => ({
 // The bar's islands reach for the router (UserMenu's sign-out, useGoPublic's
 // post-mutation refresh, the bell's per-navigation poll). None of that is under
 // test here; the class strings are.
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   usePathname: () => '/dashboard',
+  // MOTIR-4730 — the header's Plan-with-AI pill reads the address.
+  useSearchParams: () => navSearchParams,
 }));
 // The tenancy-tier nav is the left cluster's elastic element and owns none of
 // the budget; stubbing it keeps this file about the right cluster.

@@ -1,6 +1,7 @@
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { pageRefresh } from './_helpers/authoritative-signal';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -54,6 +55,8 @@ import { projectsService } from '@/lib/services/projectsService';
 const EMAIL = 'address-acceptance@motir.test';
 const PASSWORD = 'Sup3rSecret!Pass';
 const BASE = 'motir.e2e';
+/** The pane under test — also the pathname its `router.refresh()` re-reads. */
+const PANE = '/settings/project/public-address';
 
 /**
  * ⚠️ READ BACK FROM THE CREATED PROJECT, NEVER THE STRING WE PASSED.
@@ -122,7 +125,7 @@ test('a project admin gives their public project an address of its own', async (
 
   await chapter('The room, reached from the settings rail', async () => {
     await signIn(page, EMAIL, PASSWORD);
-    await page.goto('/settings/project/public-address');
+    await page.goto(PANE);
 
     await expect(page.getByRole('heading', { name: 'Public address' })).toBeVisible();
     // ⚠️ THE MOUNTING CHECK. The claim field renders only when a base domain is
@@ -157,7 +160,14 @@ test('a project admin gives their public project an address of its own', async (
     // The dialog is LABELLED 'Add a domain' and contains a field labelled
     // 'Domain', so a bare `getByLabel` matches both — scoped to the textbox.
     await page.getByRole('textbox', { name: 'Domain' }).fill('roadmap.acme.test');
+    // The pane is SERVER-RENDERED and repaints on `router.refresh()` — the
+    // domain's own status is the platform's to report, so `CustomDomainsSection`
+    // cannot patch the row in place (MOTIR-4399, disposition (c)). Arm the
+    // refresh BEFORE the click; the assertion's 5 s budget would otherwise have
+    // to cover the write AND the RSC round trip that follows it.
+    const domainAdded = pageRefresh(page, PANE);
     await page.getByRole('button', { name: 'Add domain' }).click();
+    await domainAdded;
 
     await expect(page.getByText('roadmap.acme.test')).toBeVisible();
     await expect(page.getByText('Not verified')).toBeVisible();
@@ -194,7 +204,13 @@ test('a project admin gives their public project an address of its own', async (
     await beat();
 
     await page.getByRole('textbox', { name: 'Subdomain' }).last().fill('acme-inc');
+    // Same shape as the domain add above: `PublicSubdomainCard` refreshes rather
+    // than patching, and says why in as many words — `renamesLeft` and the alias
+    // rows are derived server-side, so optimism would mean re-deriving the cap in
+    // the browser. The spec waits on the refresh (MOTIR-4399, disposition (c)).
+    const renamed = pageRefresh(page, PANE);
     await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
+    await renamed;
 
     await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
     // ⚠️ THE PROMISE THE WHOLE §8 DECISION TURNS ON, on screen: the old address

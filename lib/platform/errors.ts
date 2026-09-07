@@ -89,3 +89,50 @@ export class PlatformSuspensionStateError extends Error {
     this.name = 'PlatformSuspensionStateError';
   }
 }
+
+/**
+ * The organization an operator asked for does not exist (MOTIR-4565).
+ *
+ * The org twin of `PlatformUserNotFoundError`, and it carries the id for the
+ * same reason: it is only ever raised for a principal who has already passed the
+ * gate, so there is nothing left to leak.
+ *
+ * ⚠️ AND IT IS NOT THE SAME ANSWER AS AN UNARMED READ. Before
+ * `20260905120000_organization_internal_billing`, a cross-tenant read of
+ * `organization` returned zero rows because no policy admitted it — which
+ * produces this error while meaning something entirely different. The arms are
+ * what make "no rows" mean "no such organization"; if this ever starts firing
+ * for an org that plainly exists, read the policy set before reading the id.
+ */
+export class PlatformOrganizationNotFoundError extends Error {
+  readonly code = 'PLATFORM_ORGANIZATION_NOT_FOUND';
+
+  constructor(readonly organizationId: string) {
+    super(`No organization with id "${organizationId}"`);
+    this.name = 'PlatformOrganizationNotFoundError';
+  }
+}
+
+/**
+ * A classify was asked for on an already-internal org, or an unclassify on one
+ * that is not classified (MOTIR-4565).
+ *
+ * The org twin of `PlatformSuspensionStateError`, and the same genuine race
+ * rather than a stale-page nuisance: the state is read and re-checked INSIDE the
+ * write transaction under a row lock, so this fires when two operators acted on
+ * one org at once. Without the lock both would read "not classified", both would
+ * write, and the audit log would carry two classifications of one org while only
+ * one of them describes a change that happened.
+ */
+export class PlatformClassificationStateError extends Error {
+  readonly code = 'PLATFORM_CLASSIFICATION_STATE';
+
+  constructor(readonly internalBilling: boolean) {
+    super(
+      internalBilling
+        ? 'That organization is already classified as internal billing'
+        : 'That organization is not currently classified as internal billing',
+    );
+    this.name = 'PlatformClassificationStateError';
+  }
+}

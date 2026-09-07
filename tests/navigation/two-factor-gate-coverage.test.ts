@@ -3,9 +3,15 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { declaringFiles, stripComments, ungatedRouteGroups } from '../helpers/twoFactorGuardSweeps';
 
-// Story MOTIR-1215 · Subtask MOTIR-3648 — the gate is ONE helper with FOUR call
-// sites, and four copies of the same three lines is how one route group quietly
-// stays open.
+// Story MOTIR-1215 · Subtask MOTIR-3648 — the gate is ONE helper with a call
+// site per signed-in route group, and copies of the same three lines are how one
+// route group quietly stays open.
+//
+// ⚠️ THERE WERE FOUR UNTIL MOTIR-4732; there are THREE. `app/(planning)` was
+// retired when the planning workspace became an overlay mounted inside
+// `app/(authed)`, so it inherits that group's gate instead of running its own —
+// which is why the enumeration below is measured from the filesystem and only
+// the named list had to move.
 //
 // So the set is MEASURED rather than remembered: enumerate the route-group
 // layouts under `app/` from the filesystem and fail when one neither calls
@@ -64,12 +70,24 @@ describe('the 2FA enforcement gate covers every signed-in route group', () => {
     expect(ungated).toEqual([]);
   });
 
-  it('the four signed-in groups call it, named individually', () => {
-    // The enumeration above cannot tell "all four gate" from "there are no
+  it('the three signed-in groups call it, named individually', () => {
+    // The enumeration above cannot tell "all three gate" from "there are no
     // groups"; this is the positive statement of the same fact.
-    for (const group of ['(authed)', '(onboarding)', '(planning)', '(admin)']) {
+    for (const group of ['(authed)', '(onboarding)', '(admin)']) {
       expect(code(`app/${group}/layout.tsx`), group).toContain(HELPER);
     }
+  });
+
+  it('⚠️ the PLANNING surface did not lose its gate when its group did (MOTIR-4732)', () => {
+    // Dropping `(planning)` from the list above would be a quiet loss of
+    // coverage if the surface had simply gone ungated. It did not: the workspace
+    // is an overlay mounted by `app/(authed)/layout.tsx`, and the one path left
+    // at `/planning` is a forward that lives INSIDE that group. Both halves are
+    // asserted, because either one alone is satisfiable by a mistake — a deleted
+    // group with no replacement page, or a page that reappears outside the gate.
+    expect(layoutSource('(planning)')).toBeNull();
+    expect(statSync(join(ROOT, 'app/(authed)/planning/page.tsx')).isFile()).toBe(true);
+    expect(code('app/(authed)/layout.tsx')).toContain(HELPER);
   });
 
   it('an EXEMPT entry that has started gating is a stale exemption, and fails', () => {
@@ -121,8 +139,8 @@ describe('⚠️ the gate runs AFTER the session read and never as a fifth seque
     expect(src).not.toMatch(new RegExp(`await ${HELPER}\\(`));
   });
 
-  it('(onboarding) and (planning) — after the session read, before children render', () => {
-    for (const group of ['(onboarding)', '(planning)']) {
+  it('(onboarding) — after the session read, before children render', () => {
+    for (const group of ['(onboarding)']) {
       const src = code(`app/${group}/layout.tsx`);
       const session = src.indexOf('await getSession()');
       const call = src.indexOf(`await ${HELPER}(`);

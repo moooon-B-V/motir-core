@@ -38,6 +38,16 @@ import { test as base, expect } from '@playwright/test';
 // means a regression — which is the whole point of the promotion.
 // See docs/decisions/acceptance-receipt-lifecycle.md §3 and
 // docs/acceptance-lane-triage.md.
+//
+// ⚠️ WHICH OF THE TWO MODULES A SPEC MAY IMPORT IS ENFORCED, both ways
+// (MOTIR-4751): `tests/e2e-acceptance-lane-imports.test.ts` reads this lane's
+// `testMatch` out of `playwright.acceptance.config.ts` and fails a spec IN the
+// lane that imports THIS module — it would record no chapters, no story and no
+// receipt while passing — and a spec OUTSIDE it that imports
+// `./acceptance-video`, which holds `CHAPTER_HOLD_MS` on every PR for a clip
+// nobody publishes. The identical fixture names above are what make the
+// promotion one line, and are also what make the mistake invisible to every
+// other check; that guard is the one thing that sees it.
 
 interface PromotedFixtures {
   /** Group a phase as a reported step. No hold — nothing is being watched. */

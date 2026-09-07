@@ -10,6 +10,18 @@ import {
   PLAN_CHANGE_JOB_ID,
 } from './_helpers/ai-augment-replan-seed';
 
+// ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
+// workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
+// you are already on. So an address that used to BE the workspace is now a host
+// page plus four namespaced parameters, and a `waitForURL` that matched the old
+// path matches nothing. The assertions about what the workspace DOES are
+// unchanged — only how it is reached and how its arrival is detected.
+//
+// (`/planning?…` still resolves: `app/(authed)/planning/page.tsx` forwards an old
+// link to the host page it belonged to. Its own coverage is in
+// `tests/integration/planning/planChangeSeams.test.ts`; these specs address the
+// overlay directly, which is what a reader would write today.)
+
 // ACCEPTANCE — ask about this project, then act on it, in ONE conversation
 // (Story MOTIR-1343 · Subtask MOTIR-1823).
 //
@@ -180,7 +192,7 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
     await calloutPanel(page)
       .getByRole('link', { name: /Ask about this project/ })
       .click();
-    await page.waitForURL(/\/planning\?/);
+    await page.waitForURL((url) => url.searchParams.has('plan'));
 
     await expect(canvas(page)).toBeVisible({ timeout: 30_000 });
     await expect(rail(page)).toBeVisible();
@@ -228,7 +240,7 @@ test('ask about this project — a cited answer, then a plan change in the SAME 
 
   await chapter('Come back and reload — the answer is still on the thread', async () => {
     await page.goBack();
-    await page.waitForURL(/\/planning\?/);
+    await page.waitForURL((url) => url.searchParams.has('plan'));
     await page.reload();
 
     // The persistence claim, which only an E2E can really make: the answer is a

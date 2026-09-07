@@ -27,6 +27,7 @@ import {
   DELETE as itemDELETE,
 } from '@/app/api/internal/ai/plan-proposals/[itemId]/route';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../../fixtures';
+import { TODO_TEXT_MAX_LENGTH } from '@/lib/workItemTodos/limits';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -133,6 +134,102 @@ async function generatingPlan(fx: WorkItemFixture, jobId: string) {
   await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: jobId } });
   return { planId: plan.id, itemId: appended.items[0]!.id };
 }
+
+// ── MOTIR-4619 ─────────────────────────────────────────────────────────────────
+// The card's ORDERED STEPS through the INTERNAL routes — the door Motir's own
+// planner writes through. Every parser here picks its keys by NAME, so the
+// question is not whether the call succeeds (it always did) but whether the
+// field ARRIVES.
+describe('the internal routes carry `todos` (MOTIR-4619)', () => {
+  it('the APPEND route passes `proposedFields.todos` through to the proposal', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Appended with steps', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: 'job-todos' } });
+
+    const res = await append(fx, {
+      jobId: 'job-todos',
+      proposals: [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Provision the account',
+            kind: 'task',
+            type: 'manual',
+            todos: [{ text: 'Create the account' }, { text: 'Invite the team', executor: 'human' }],
+          },
+        },
+      ],
+    });
+
+    expect(res.status).toBe(200);
+    const stored = await adminDb.planItem.findFirstOrThrow({ where: { planId: plan.id } });
+    const pf = stored.proposedFields as { todos?: Array<{ text: string }> };
+    expect(pf.todos?.map((t) => t.text)).toEqual(['Create the account', 'Invite the team']);
+  });
+
+  it('the DEEPEN mode carries `todos`, and `null` clears it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await generatingPlan(fx, 'job-deepen-todos');
+
+    const set = await patch(fx, itemId, {
+      jobId: 'job-deepen-todos',
+      patch: { type: 'manual', todos: [{ text: 'The one operation' }] },
+    });
+    expect(set.status).toBe(200);
+    const afterSet = await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } });
+    expect((afterSet.proposedFields as { todos?: unknown[] }).todos).toHaveLength(1);
+
+    const cleared = await patch(fx, itemId, {
+      jobId: 'job-deepen-todos',
+      patch: { todos: null },
+    });
+    expect(cleared.status).toBe(200);
+    const afterClear = await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } });
+    expect((afterClear.proposedFields as { todos?: unknown }).todos).toBeNull();
+  });
+
+  it('the CORRECT mode carries `todos` on a plan that has already closed', async () => {
+    const fx = await makeWorkItemFixture();
+    const { secondId } = await plannedPlan(fx, 'job-correct-todos');
+
+    const res = await patch(fx, secondId, {
+      jobId: 'job-correct-todos',
+      mode: 'correct',
+      patch: { todos: [{ text: 'The corrected step', executor: 'coding_agent' }] },
+    });
+
+    expect(res.status).toBe(200);
+    const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: secondId } });
+    expect((row.proposedFields as { todos?: Array<{ text: string }> }).todos).toEqual([
+      { text: 'The corrected step', executor: 'coding_agent' },
+    ]);
+  });
+
+  it('answers 422 PROPOSALS_INVALID for a step past the bar, on BOTH modes', async () => {
+    const fx = await makeWorkItemFixture();
+    const over = 'x'.repeat(TODO_TEXT_MAX_LENGTH + 1);
+
+    const { itemId } = await generatingPlan(fx, 'job-bad-deepen');
+    const deepen = await patch(fx, itemId, {
+      jobId: 'job-bad-deepen',
+      patch: { todos: [{ text: over }] },
+    });
+    expect(deepen.status).toBe(422);
+    expect((await deepen.json()).code).toBe('INVALID_PROPOSAL');
+
+    const { secondId } = await plannedPlan(fx, 'job-bad-correct');
+    const correct = await patch(fx, secondId, {
+      jobId: 'job-bad-correct',
+      mode: 'correct',
+      patch: { todos: [{ text: over }] },
+    });
+    expect(correct.status).toBe(422);
+  });
+});
 
 describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   it('carries the STRUCTURAL fields the deepen turn may not touch', async () => {
@@ -261,6 +358,13 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     estimateMinutes: 45,
     explanationMd: 'The corrected WHY — the key this route never read.',
     executor: 'human',
+    // The card's proposed STEPS (MOTIR-4616). Present here because the
+    // compile-time half of the guard REQUIRES it — `UPDATE_PROPOSAL_KEYS` gained
+    // `todos` with the interface, and this object `satisfies` that key set — and
+    // because the runtime half is exactly the assertion this story owes: the
+    // internal correction route's parser has to carry the key through into
+    // `proposedFields`, which is the door MOTIR-4619 opens.
+    todos: [{ text: 'Create the restricted API key', executor: 'human' }],
   } satisfies Record<UpdateProposalKey, unknown>;
 
   /** Each STRUCTURAL key → where the correction lands it, or `null` for a key

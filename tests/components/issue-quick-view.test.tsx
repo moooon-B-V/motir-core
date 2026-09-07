@@ -440,11 +440,17 @@ describe('IssueQuickViewPanel — the ARCHIVED state (bug MOTIR-2050)', () => {
 
 describe('IssueQuickViewPanel — the Plan / Re-plan entrance (MOTIR-910)', () => {
   it('carries the SAME per-item door the detail page does, scoped to this item', () => {
+    // ⚠️ RE-POINTED (MOTIR-4730). This asserted `/planning` — a destination. The
+    // workspace is an overlay: the door's href is THIS page plus the workspace's
+    // namespaced query, and `?peek=` rides along, which is what lets the reader
+    // come back to the peek they launched from.
+    searchParamsString = 'peek=PROD-7';
     render(<IssueQuickViewPanel state="ready" data={DATA} />);
     const door = screen.getByTestId('work-item-plan-entrance');
     const url = new URL(door.getAttribute('href')!, 'https://motir.test');
-    expect(url.pathname).toBe('/planning');
-    expect(url.searchParams.get('item')).toBe('PROD-7');
+    expect(url.pathname).toBe('/items');
+    expect(url.searchParams.get('planItem')).toBe('PROD-7');
+    expect(url.searchParams.get('peek')).toBe('PROD-7');
   });
 
   it('reads "Plan" for a childless item and "Re-plan" once it has children', () => {
@@ -463,11 +469,18 @@ describe('IssueQuickViewPanel — the Plan / Re-plan entrance (MOTIR-910)', () =
     expect(screen.queryByTestId('work-item-plan-entrance')).toBeNull();
   });
 
-  it('hands the peek OFF: a local-state host is told to close as the workspace opens', () => {
+  it('⚠️ does NOT hand the peek off any more — the workspace opens ABOVE it', () => {
+    // INVERTED, deliberately (MOTIR-4730, the design's own decision in
+    // `design/ai-chat/design-notes.md`). This used to pass `props.onClose` as the
+    // door's `onActivate`, dismissing the peek as the workspace opened — right
+    // when opening meant NAVIGATING away. An overlay is a layer: it opens above
+    // the quick view, `?peek=` stays in the address, and closing it returns the
+    // reader to the peek they launched from. Closing the peek on the way in
+    // would throw away the thing they are planning about.
     const onClose = vi.fn();
     render(<IssueQuickViewPanel state="ready" data={DATA} onClose={onClose} />);
     fireEvent.click(screen.getByTestId('work-item-plan-entrance'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   // bug MOTIR-2084 — the door offered planning on work the engine refuses to

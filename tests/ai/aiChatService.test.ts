@@ -34,7 +34,11 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('aiChatService.submitDiscoveryTurn', () => {
   it('resolves the workspace org and submits a discovery job with the tenant + prompt + actor', async () => {
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: false });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: false,
+      internalBilling: false,
+    });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
 
     const out = await aiChatService.submitDiscoveryTurn('build me a tracker', ctx);
@@ -52,6 +56,7 @@ describe('aiChatService.submitDiscoveryTurn', () => {
       {
         organizationId: 'org_1',
         isMeta: false,
+        internalBilling: false,
         workspaceId: 'ws_1',
         projectId: 'pj_1',
         projectKey: 'MOTIR',
@@ -62,7 +67,11 @@ describe('aiChatService.submitDiscoveryTurn', () => {
   });
 
   it('threads the META flag onto the tenant', async () => {
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: true });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: true,
+      internalBilling: false,
+    });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
 
     await aiChatService.submitDiscoveryTurn('build me a tracker', ctx);

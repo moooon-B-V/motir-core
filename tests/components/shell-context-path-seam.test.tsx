@@ -37,9 +37,13 @@ vi.mock('next-intl/server', () => ({
     };
   }),
 }));
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+  // MOTIR-4730 — the planning door in this tree reads the address, so a
+  // partial navigation mock is a crash rather than a gap.
+  useSearchParams: () => navSearchParams,
 }));
 // Only the modals and the right cluster's own controls are stubbed — the LEFT
 // cluster is the subject and renders for real.

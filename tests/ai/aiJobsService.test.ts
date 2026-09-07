@@ -25,7 +25,11 @@ describe('aiJobsService.submitNoopJob', () => {
       identifier: 'MOTIR',
       name: 'Motir',
     } as Awaited<ReturnType<typeof projectsService.getByKey>>);
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: false });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: false,
+      internalBilling: false,
+    });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
 
     const out = await aiJobsService.submitNoopJob('MOTIR', ctx);
@@ -38,6 +42,7 @@ describe('aiJobsService.submitNoopJob', () => {
       {
         organizationId: 'org_1',
         isMeta: false,
+        internalBilling: false,
         workspaceId: 'ws_1',
         projectId: 'pj_1',
         projectKey: 'MOTIR',
@@ -53,14 +58,18 @@ describe('aiJobsService.submitNoopJob', () => {
       identifier: 'MOTIR',
       name: 'Motir',
     } as Awaited<ReturnType<typeof projectsService.getByKey>>);
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: true });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: true,
+      internalBilling: false,
+    });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
 
     await aiJobsService.submitNoopJob('MOTIR', ctx);
 
     expect(submitJob).toHaveBeenCalledWith(
       'noop',
-      expect.objectContaining({ organizationId: 'org_1', isMeta: true }),
+      expect.objectContaining({ organizationId: 'org_1', isMeta: true, internalBilling: false }),
       {},
       { userId: 'user_1' },
     );

@@ -5,6 +5,7 @@ import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
   resolveRecordPlanningMistakesForJob,
 } from '@/lib/ai/lessonCapture';
+import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboardingContext';
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
 import type { JobContextBag, JobStreamEvent, SubmittedRequirement } from '@/lib/ai/types';
@@ -40,10 +41,16 @@ export class InvalidTargetError extends Error {
   }
 }
 
-function buildTenant(ctx: ProjectContext, organizationId: string, isMeta: boolean) {
+function buildTenant(
+  ctx: ProjectContext,
+  organizationId: string,
+  isMeta: boolean,
+  internalBilling: boolean,
+) {
   return {
     organizationId,
     isMeta,
+    internalBilling,
     workspaceId: ctx.workspaceId,
     projectId: ctx.projectId,
     projectKey: ctx.project.identifier,
@@ -144,7 +151,7 @@ async function submitPlanEditJob(
   ctx: ProjectContext,
   opts: PlanEditSubmitOptions = {},
 ): Promise<PlanEditSubmitResult> {
-  const { organizationId, isMeta } = await resolveTenantOrg({
+  const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
@@ -173,7 +180,7 @@ async function submitPlanEditJob(
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  const tenant = buildTenant(ctx, organizationId, isMeta);
+  const tenant = buildTenant(ctx, organizationId, isMeta, internalBilling);
   const { jobId } = await submitJob(
     // ONE planning kind (ADR `session-model.md` §6 step 2). Every planning submit
     // in the product sends this; motir-ai reads WHAT the run is about off the
@@ -207,6 +214,17 @@ async function submitPlanEditJob(
       // silently keep capturing. The key is the constant, not a literal: there is
       // no shared type across the boundary and a typo is not a type error.
       [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+      // Is this the project's FIRST plan (MOTIR-4736)? On THIS shared submit for
+      // exactly the reason the three lines above are: the anchor set makes the
+      // submitted kind only a FALLBACK, so a per-kind site would drop the field
+      // on the contextual path. One site covers `augment`, `expand_item`,
+      // `replan` and every contextual turn.
+      //
+      // ALWAYS present, `false` once `onboardingRanAt` is stamped — never spread
+      // conditionally: absence means "the producer predates this field" and sends
+      // motir-ai back to inferring onboarding from an empty tree (MOTIR-4178),
+      // which is the guess this field exists to replace.
+      [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
       ...(code ? { code } : {}),
       ...(repositories ? { repositories } : {}),
     },
@@ -504,7 +522,7 @@ export const aiPlanEditsService = {
 
     let jobId: string;
     try {
-      const { organizationId, isMeta } = await resolveTenantOrg({
+      const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
@@ -534,7 +552,7 @@ export const aiPlanEditsService = {
         // the only thing distinguishing it on the wire now, and its silent loss
         // would route every revision to the project arm.
         'plan',
-        buildTenant(ctx, organizationId, isMeta),
+        buildTenant(ctx, organizationId, isMeta, internalBilling),
         {
           // The PLAN is the target. `planId` is the only address a revision has —
           // its proposals have no `MOTIR-<n>` until somebody approves them, which
@@ -545,6 +563,11 @@ export const aiPlanEditsService = {
           // ALWAYS present, `false` when off — the same discipline as the shared
           // submit above, and for the same reason: absence reads as ON.
           [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
+          // The onboarding marker (MOTIR-4736). `submitRevise` is the OTHER
+          // submit that bypasses `submitPlanEditJob`, so like the consent flag it
+          // has to be set here or it is never set at all. Same discipline again:
+          // ALWAYS present, never spread conditionally.
+          [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
           ...(code ? { code } : {}),
           ...(repositories ? { repositories } : {}),
         },

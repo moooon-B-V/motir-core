@@ -249,6 +249,52 @@ describe('the happy path — one attributed, persisted intent', () => {
     expect(intents[0]?.queuedAt).toEqual(new Date(QUEUED_AT));
   });
 
+  it('⚠️ a repository used by TWO projects still provisions — for the ORG, with no project', async () => {
+    // Story MOTIR-4669 · MOTIR-4648 dropped `ProjectRepo.githubRepoId @unique`,
+    // so this lookup can return N rows. The disposition, and it is deliberate on
+    // both halves:
+    //
+    //   * PROVISIONING IS NOT REFUSED. A repository the organisation owns and two
+    //     projects work on is the ordinary shape after this story; refusing its
+    //     jobs would turn a supported model into an outage.
+    //   * THE PROJECT IS NULL, not whichever row came back first. The organisation
+    //     owns the fleet cost and is charged either way; the project is genuinely
+    //     unknown, and `project_id` is nullable on the intent precisely for this.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fx = await seedTenant();
+    const second = await projectsService.createProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: (await adminDb.user.findFirstOrThrow()).id,
+      name: 'Beacon',
+      identifier: `B${randomInt(100, 1000)}`,
+    });
+    await adminDb.projectRepo.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: second.id,
+        role: 'web',
+        name: 'acme-web',
+        seedSource: SEED_SOURCE_PLATFORM_STARTER,
+        position: 'a0',
+        githubRepoId: fx.githubRepoId,
+      },
+    });
+
+    expect(await handle(delivery())).toEqual({ event: 'workflow_job', outcome: 'recorded' });
+
+    const intents = await adminDb.ciRunnerProvisioningIntent.findMany();
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toMatchObject({
+      organizationId: fx.organizationId,
+      workspaceId: fx.workspaceId,
+      projectId: null,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('used by several projects'),
+      expect.objectContaining({ projectCount: 2 }),
+    );
+  });
+
   it('gives EVERY job of one run its own intent — a runner is per job', async () => {
     // The idempotency key is `(run_id, run_attempt, job_id)`, not the meter's
     // `(run_id, run_attempt)`. A run-level key would collapse a matrix into a

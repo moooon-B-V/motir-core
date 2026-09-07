@@ -125,6 +125,20 @@ const eslintConfig = defineConfig([
     },
   },
 
+  // The E2E mutation→assert scanner (MOTIR-4399) is a REPORTING command, and the
+  // same reasoning as `scripts/worker.ts` above applies for the same reason: its
+  // stdout IS its interface. It prints a site list, a drop ladder or a JSON
+  // payload — that output is the whole of what it does, and `docs/e2e/
+  // mutation-assert-sweep.md` quotes it verbatim. `--max-warnings=0` in the
+  // lint-staged hook means the alternative is ten `eslint-disable` comments over
+  // lines that are doing their job.
+  {
+    files: ['scripts/scan-e2e-mutation-assert.mjs'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
+
   // Experiment harnesses (`scripts/experiments/**`) MAY reach past the app's
   // seams. They exist to MEASURE substrate behaviour — building a standalone
   // client on a throwaway port precisely so it is not the app's job substrate —

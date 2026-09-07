@@ -122,6 +122,33 @@ export const SEED_SOURCE_PLATFORM_STARTER = 'nextjs-prisma-vercel-starter';
 export const SEED_SOURCE_INITIALISED = 'initialised';
 
 /**
+ * A row that seeds from NOTHING because the repository already exists — one the
+ * organisation is already connected to, PICKED into this project (Story
+ * MOTIR-4669 · MOTIR-4678).
+ *
+ * ⚠️ IT IS NOT A SEED, AND THAT IS WHY IT NEEDS ITS OWN VALUE. Every other value
+ * in this column answers *"what will Motir put in the repository it is about to
+ * create?"*. This one answers *"nothing — the repository is the organisation's
+ * and it has its own history."* Reusing {@link defaultSeedSourceForRole} here (as
+ * the link path first did) makes a picked row indistinguishable from a row Motir
+ * planned to scaffold, which is not a cosmetic confusion: the Repositories room
+ * splits its two sections on exactly that question, so the row would render under
+ * *"Motir hosts…"* offering **Take it over** for a repository the organisation
+ * already owns.
+ *
+ * The column is a free-form string by design — ADR §2 says so, so that the
+ * multi-stack starter registry can add keys without a migration — which is what
+ * makes this an addition rather than an enum change.
+ */
+export const SEED_SOURCE_ORGANIZATION = 'organization';
+
+/** Whether a row's repository came from the ORGANISATION rather than from Motir.
+ *  The room's section split, and the only place the distinction is decided. */
+export function isOrganizationSeedSource(seedSource: string): boolean {
+  return seedSource === SEED_SOURCE_ORGANIZATION;
+}
+
+/**
  * ADR §2's seeding table, encoded once: the default seed source for a role.
  *
  * When the multi-stack starter registry lands (MOTIR-709 / 9.3.5) a row's

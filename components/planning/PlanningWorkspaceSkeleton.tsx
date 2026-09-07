@@ -1,11 +1,18 @@
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 
-// The planning workspace's LOADING shape (Bug MOTIR-2069). `/planning` used to
-// paint NOTHING until the roadmap read resolved: the segment had no
+// The planning workspace's LOADING shape (Bug MOTIR-2069). The `/planning` ROUTE
+// used to paint NOTHING until the roadmap read resolved: the segment had no
 // `loading.tsx` and no `<Suspense>`, so Next.js held the navigation on the
 // PREVIOUS route until the page's slowest await settled — the workspace loaded
 // first and opened second, which is the inverse of what the flagship "Plan with
 // AI" entrance should feel like.
+//
+// ⚠️ THAT ROUTE IS RETIRED (MOTIR-4732) AND BOTH SHAPES ARE KEPT. The workspace
+// is an OVERLAY now, so there is no navigation to hold: the dialog frame is up
+// on the first frame either way. What the two skeletons are FOR is unchanged —
+// the canvas pane's body while its level is in flight, and the WHOLE frame while
+// a work-item launch resolves its anchor over HTTP (MOTIR-4727), which is the
+// window `app/(planning)/loading.tsx` used to cover for the navigation.
 //
 // These are the pieces that let it open FIRST:
 //
@@ -13,8 +20,9 @@ import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 //     `<Suspense>` fallback the host shows while its level read is pending. It
 //     fills the same `min-h-0 flex-1 overflow-hidden` box the real canvas gets,
 //     so filling it costs no layout shift.
-//   · `PlanningWorkspaceSkeleton` — the WHOLE frame, `app/(planning)/loading.tsx`'s
-//     instant-loading UI, shown from the first frame after the click.
+//   · `PlanningWorkspaceSkeleton` — the WHOLE frame. It was
+//     `app/(planning)/loading.tsx`'s instant-loading UI; it is now what the
+//     overlay renders INSIDE the dialog while the anchor read is in flight.
 //
 // Both are built from the REAL shipped frame rather than a stylized stand-in
 // (`design/ai-chat/plan-change-conversation.mock.html` panel 2 over
@@ -97,7 +105,8 @@ function PlanningRailSkeleton() {
 }
 
 /**
- * The whole workspace frame — `app/(planning)/loading.tsx`'s instant-loading UI.
+ * The whole workspace frame — the overlay's own pending shape, and formerly
+ * `app/(planning)/loading.tsx`'s instant-loading UI.
  * The back bar repeats the host's own container and control classes so the two
  * bars are the same height, and the panes are the same `PlanningWorkspace` grid
  * the host renders.

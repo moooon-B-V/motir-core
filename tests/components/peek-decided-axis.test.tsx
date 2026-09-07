@@ -73,6 +73,7 @@ const MODIFY: PlanReviewItemDto = planReviewItem({
     identifier: 'MOTIR-7',
     changedFields: ['priority'],
     settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+    todos: null,
   },
 });
 
@@ -88,6 +89,7 @@ const REMOVE: PlanReviewItemDto = planReviewItem({
     identifier: 'MOTIR-7',
     changedFields: [],
     settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+    todos: null,
   },
 });
 
@@ -104,6 +106,7 @@ const DECLINED_ADD: PlanReviewItemDto = planReviewItem({
     identifier: null,
     changedFields: [],
     settableRailFields: PLAN_ITEM_SETTABLE_RAIL_FIELDS,
+    todos: null,
   },
 });
 

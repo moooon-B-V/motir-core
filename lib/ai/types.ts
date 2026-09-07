@@ -89,6 +89,31 @@ export interface Tenant {
   // Propagated so motir-ai's credit gate (out-of-credits) bypasses it — the meta
   // org is never billed. Defaults to false for any non-meta / self-host caller.
   isMeta: boolean;
+  // Whether the org is charged exactly like a CUSTOMER and then made whole
+  // (`Organization.internalBilling`, MOTIR-4565). motir-ai pairs every debit
+  // such an org incurs with an offsetting `internal_offset` credit in the SAME
+  // transaction, so the balance nets to zero while both entries stay visible
+  // (`docs/decisions/internal-billing-classification.md` §2–§3).
+  //
+  // ⚠️ IT IS NOT `isMeta` ABOVE, AND IT IS ALMOST THE OPPOSITE OF IT. `isMeta`
+  // makes the far side SKIP a charge; this makes it charge in full and then
+  // credit. The two are true together on exactly one org today and that
+  // coincidence is not identity — §9.1 of `code-graph-index-fleet.md` warns in
+  // writing against overloading the first flag, which is why this is a second.
+  //
+  // ⚠️ OPTIONAL, AND THAT IS THE WIRE CONTRACT RATHER THAN A CONVENIENCE.
+  // Absent means `false`, and the consumer (motir-ai MOTIR-4569) parses it that
+  // way — which is what makes merge order between the two repositories FREE in
+  // both directions: an older motir-ai reading a newer envelope ignores the
+  // field, and a newer motir-ai reading an older one reads `false`. Typing it
+  // REQUIRED here would assert something stronger than the wire does, and would
+  // make an envelope built without it (an older caller, a fixture, a replayed
+  // payload) unrepresentable while it is in fact legal and correctly read.
+  //
+  // Every SHIPPED construction site sets it — `resolveTenantOrg` returns it
+  // non-optionally, so a site that has the org has the flag. The optionality is
+  // about what a RECEIVER must tolerate, not about what a producer may skip.
+  internalBilling?: boolean;
   workspaceId: string;
   projectId: string;
   projectKey: string;
@@ -248,6 +273,30 @@ export interface JobContextBag {
   // (`lib/ai/lessonCapture.ts`); the call sites use it as a computed key so this
   // string has exactly one home on this side of the boundary.
   recordPlanningMistakes?: boolean;
+  // Is this the project's FIRST plan? Mirrors `Project.onboardingRanAt == null`
+  // (the immutable onboarding marker of Subtask 7.4 / MOTIR-1264, stamped by
+  // `plansService.approvePlan`) — MOTIR-4736 producer ↔ MOTIR-4737 consumer.
+  //
+  // ⚠️ ONBOARDING IS A FACT ABOUT HISTORY, NOT ABOUT THE TREE. motir-ai used to
+  // infer it from an EMPTY committed tree (`mayPlanTheFirstTree`, MOTIR-4178),
+  // which is correct for the start-fresh path and wrong for the migrate wizard —
+  // the one onboarding journey that DELIBERATELY has work items before its first
+  // plan, because its optional import step (MOTIR-934 / MOTIR-1643) writes a
+  // Jira / Linear / GitHub / Plane / CSV backlog first and only then generates.
+  // Such a run was read as continued planning, so it got the anchored arm and the
+  // continued-planning lesson bucket instead of the onboarding framing.
+  //
+  // ⚠️ ABSENT IS NOT `false`. `false` means *this project has already had a plan
+  // approved*; ABSENT means *the producer predates this field* and the consumer
+  // falls back to its own inference — so every planning submit sends it
+  // UNCONDITIONALLY, never spread-conditionally like `code` and `repositories`,
+  // whose absence means "this workspace/project has none".
+  //
+  // The KEY is spelled once, in `ONBOARDING_CONTEXT_FIELD`
+  // (`lib/ai/onboardingContext.ts`), and the answer once in
+  // `onboardingContextFor`; the call sites use the constant as a computed key so
+  // this string has exactly one home on this side of the boundary.
+  onboarding?: boolean;
   // The project's existing work-item tree summary (MOTIR-1259) — the items the
   // user already has in the project, passed to motir-ai's discovery handler so
   // tier drafting is grounded in what already exists, not a blank slate. Each
@@ -486,6 +535,56 @@ export interface RawUsageRun {
   startedAt: string; // ISO
 }
 
+/**
+ * `GET /v1/usage` — the ORG-LEVEL web-search spend block (motir-ai
+ * `docs/contract.md`, `docs/credit-model.md` §4b).
+ *
+ * Scope-INDEPENDENT: it counts every search the org made, attributed or not, and
+ * does NOT narrow when the drill moves to a workspace or a project. The AI spend
+ * figures beside it all join `PlanningTurn` and therefore exclude these rows by
+ * construction, which is what lets the billing panel render Motir Search as its
+ * own line rather than folding it into the AI number.
+ */
+export interface RawUsageSearch {
+  totalSpend: number;
+  monthSpend: number;
+}
+
+/** One run's search spend. `jobId` is the SAME key `RawUsageRun` carries. */
+export interface RawUsageSearchRun {
+  jobId: string;
+  credits: number;
+  lastSearchAt: string; // ISO
+}
+
+/**
+ * `GET /v1/usage` — the PER-RUN half of search spend (motir-ai MOTIR-4552,
+ * `docs/credit-model.md` §4b.1). Reported ALONGSIDE `search`, never inside it.
+ *
+ * ⚠️ THE TWO HALVES ARE SCOPED DIFFERENTLY, and a consumer that cannot tell will
+ * render an org number under a project heading:
+ *
+ * - `runs` / `total` FOLLOW THE DRILL SCOPE. A search carries its run and a run
+ *   carries a project, so attributed spend narrows the way the AI figures do.
+ * - `attributedSpend` / `unattributedSpend` are ORG-LEVEL, all-time, measured
+ *   over the same population as `search.totalSpend` — so
+ *   `attributedSpend + unattributedSpend === search.totalSpend`, always, however
+ *   the reader has drilled.
+ *
+ * `unattributedSpend` is NOT an error figure. `MOTIR-2778` §4 makes a search
+ * outside any run, and a search from an untrusted token, both legitimate and both
+ * fully charged, so the remainder is a real quantity to render — showing it is
+ * what stops the gap between a total and its rows reading as a bug in the number.
+ */
+export interface RawUsageSearchRuns {
+  runs: RawUsageSearchRun[];
+  page: number;
+  pageSize: number;
+  total: number;
+  attributedSpend: number;
+  unattributedSpend: number;
+}
+
 export interface RawUsageResponse {
   scope: UsageScope;
   coreOrganizationId: string;
@@ -498,6 +597,21 @@ export interface RawUsageResponse {
   monthlyHistory: { yearMonth: string; credits: number }[];
   perModel: { model: string; inputTokens: number; outputTokens: number; credits: number }[];
   recentRuns: { runs: RawUsageRun[]; page: number; pageSize: number; total: number };
+  /**
+   * Web-search spend. motir-ai sends BOTH blocks on every response
+   * (`usageService.UsageResponseDto`), so the wire shape is not optional —
+   * they are OPTIONAL HERE for one reason only: a ROLLING DEPLOY, where
+   * motir-core has shipped and the motir-ai half has not (or has rolled back).
+   *
+   * ⚠️ `undefined` therefore means UNAVAILABLE, never zero, and the two must not
+   * collapse: a customer told they spent nothing on search when the figure could
+   * not be fetched is worse off than one told nothing at all. The DTO layer
+   * carries that distinction as `null` vs a populated object; see
+   * `lib/dto/aiUsage.ts`, and `ciFigures.ts`'s `balanceUnavailable` for the
+   * shipped precedent one billed line over.
+   */
+  search?: RawUsageSearch;
+  searchRuns?: RawUsageSearchRuns;
 }
 
 // POST /v1/credits/ci-overage (MOTIR-1899 · motir-ai `docs/contract.md` §2.4) —

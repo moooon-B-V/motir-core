@@ -69,7 +69,6 @@ export interface AdminShellLabels {
    * time, and this is the handover.
    */
   soonUsage: string;
-  soonTenants: string;
   soonGovernance: string;
 }
 
@@ -113,12 +112,22 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           disabled: true,
           badge: <Pill tone="neutral">{labels.soonUsage}</Pill>,
         },
+        // The TENANT hierarchy, LIVE at its org level since MOTIR-4566. The row
+        // has pointed at `/admin/tenants` since this shell was written and was
+        // badged `10.1` because nothing served it; the org lookup and the org
+        // page now do, so the badge goes and the route is real.
+        //
+        // ⚠️ THE ROW IS THE ORG LEVEL ONLY. The workspace and project levels
+        // BELOW an org are MOTIR-733's, and the org page draws them as reserved
+        // regions rather than as content — the allocation the merged design
+        // asset carries. A row that is live for one level and silent about the
+        // rest is the honest shape: the alternative is a disabled row beside a
+        // page that already exists.
         {
           icon: <Building2 />,
           label: labels.navTenants,
           href: '/admin/tenants',
-          disabled: true,
-          badge: <Pill tone="neutral">{labels.soonTenants}</Pill>,
+          active: pathname.startsWith('/admin/tenants'),
         },
         // The USER lookup (MOTIR-1167) — Panel 9's door, and a LIVE row.
         //

@@ -16,9 +16,13 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 // see it because the primitive is behaving exactly as documented. So the
 // assertion has to live at the APP composition, and it has to name the string.
 
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => '/dashboard',
+  // MOTIR-4730 — the planning door in this tree reads the address, so a
+  // partial navigation mock is a crash rather than a gap.
+  useSearchParams: () => navSearchParams,
 }));
 vi.mock('@/app/(authed)/_project-actions', () => ({
   setActiveProjectAction: vi.fn(async () => undefined),

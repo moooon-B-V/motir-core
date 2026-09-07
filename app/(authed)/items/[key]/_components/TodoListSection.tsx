@@ -432,59 +432,12 @@ function TodoRow({
             </Button>
           </div>
         ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              {/* `text` is PLAIN and stays a text node — never the Markdown pipeline. */}
-              <span
-                data-testid="todo-text"
-                className={
-                  row.done
-                    ? 'text-[13.5px] text-(--el-text-secondary) line-through'
-                    : 'text-[13.5px] text-(--el-text)'
-                }
-              >
-                {row.text}
-              </span>
-              <ExecutorMark executor={row.executor} />
-            </div>
-
-            {/* The INSTRUCTIONS disclosure — rendered ONLY when the row has
-                notes, collapsed by default, and a real button controlling the
-                region so the chevron is the tell rather than the only cue. */}
-            {row.notesMd ? (
-              <>
-                <button
-                  type="button"
-                  onClick={onToggleExpanded}
-                  aria-expanded={isExpanded}
-                  aria-controls={notesId}
-                  className="mt-1 inline-flex items-center gap-1 rounded-(--radius-control) font-sans text-[11.5px] text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-                >
-                  <span aria-hidden>{isExpanded ? '▾' : '▸'}</span>
-                  {isExpanded ? t('notesHide') : t('notesShow')}
-                </button>
-                {isExpanded ? (
-                  <div
-                    id={notesId}
-                    className="mt-1.5 border-l-2 border-(--el-border-strong) pl-3 text-[12.5px] text-(--el-text-secondary)"
-                  >
-                    <MarkdownView value={row.notesMd} />
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-
-            {/* The COMMAND. `min-w-0` on the cell above + `overflow-x-auto` here
-                + `shrink-0` on the button is the containment rule: without all
-                three the PAGE scrolls sideways instead of the command. */}
-            {row.commandText ? <CommandRow command={row.commandText} /> : null}
-
-            {row.done && row.doneBy ? (
-              <p className="mt-1 text-[11px] text-(--el-text-secondary)">
-                {t('doneBy', { name: row.doneBy.name })}
-              </p>
-            ) : null}
-          </>
+          <TodoRowBody
+            row={row}
+            isExpanded={isExpanded}
+            onToggleExpanded={onToggleExpanded}
+            notesId={notesId}
+          />
         )}
       </div>
 
@@ -514,6 +467,145 @@ function TodoRow({
           </>
         ) : null}
       </span>
+    </li>
+  );
+}
+
+/**
+ * ONE STEP's CONTENT — the text, its executor mark, the instructions disclosure,
+ * the command, and the done-by line. Everything inside a row's middle cell.
+ *
+ * ⚠️ EXTRACTED SO THERE IS ONE ROW MARKUP, NOT TWO (Story MOTIR-3810 ·
+ * MOTIR-4622). It is rendered by the editable {@link TodoRow} on the work-item
+ * page AND by {@link TodoRowReadOnly} in the plan peek's proposal mode. A second
+ * rendering of a step would be a second thing to keep in step with the first,
+ * on a surface that has just had that exact defect class — two peeks for one
+ * proposal — removed at some cost (MOTIR-4181). The reviewer's preview and the
+ * card's list cannot drift, because they ARE the same markup.
+ *
+ * Typed on the FIELDS it reads rather than on `WorkItemTodoDto`, because the
+ * proposal side has no `id`, no `position` and no `doneAt` — a proposal never
+ * ticks — and widening the DTO to fake them would be the drift by another route.
+ */
+interface TodoRowContent {
+  text: string;
+  notesMd: string | null;
+  commandText: string | null;
+  executor: ExecutorDto | null;
+  done?: boolean;
+  doneBy?: { id: string; name: string } | null;
+}
+
+function TodoRowBody({
+  row,
+  isExpanded,
+  onToggleExpanded,
+  notesId,
+}: {
+  row: TodoRowContent;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
+  notesId: string;
+}) {
+  const t = useTranslations('workItemTodos');
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        {/* `text` is PLAIN and stays a text node — never the Markdown pipeline. */}
+        <span
+          data-testid="todo-text"
+          className={
+            row.done
+              ? 'text-[13.5px] text-(--el-text-secondary) line-through'
+              : 'text-[13.5px] text-(--el-text)'
+          }
+        >
+          {row.text}
+        </span>
+        <ExecutorMark executor={row.executor} />
+      </div>
+
+      {/* The INSTRUCTIONS disclosure — rendered ONLY when the row has
+          notes, collapsed by default, and a real button controlling the
+          region so the chevron is the tell rather than the only cue.
+          It stays INTERACTIVE in the read face: expanding notes is a read. */}
+      {row.notesMd ? (
+        <>
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            aria-expanded={isExpanded}
+            aria-controls={notesId}
+            className="mt-1 inline-flex items-center gap-1 rounded-(--radius-control) font-sans text-[11.5px] text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            <span aria-hidden>{isExpanded ? '▾' : '▸'}</span>
+            {isExpanded ? t('notesHide') : t('notesShow')}
+          </button>
+          {isExpanded ? (
+            <div
+              id={notesId}
+              className="mt-1.5 border-l-2 border-(--el-border-strong) pl-3 text-[12.5px] text-(--el-text-secondary)"
+            >
+              <MarkdownView value={row.notesMd} />
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* The COMMAND. `min-w-0` on the cell above + `overflow-x-auto` here
+          + `shrink-0` on the button is the containment rule: without all
+          three the PAGE scrolls sideways instead of the command.
+          It stays in the read face too — copying a command is a READ. */}
+      {row.commandText ? <CommandRow command={row.commandText} /> : null}
+
+      {row.done && row.doneBy ? (
+        <p className="mt-1 text-[11px] text-(--el-text-secondary)">
+          {t('doneBy', { name: row.doneBy.name })}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A step in its READ FACE — the row a PROPOSAL shows (MOTIR-4622,
+ * `design/ai-planning/design-notes.md` Part XV §15.1).
+ *
+ * The shipped row's three-track grid drops to TWO, because the actions column
+ * has nothing to hold: no reorder handle, no edit, no delete, and the section
+ * around it renders no add row.
+ *
+ * ⚠️ THE CHECKBOX STAYS, INERT, AND IS NOT SIMPLY REMOVED. It is what makes the
+ * section recognisable as *the list you will tick* — without it this is a
+ * bulleted paragraph that happens to sit in a card, which is what the whole
+ * story exists to stop being the answer. It is drawn as a plain `<span>` with
+ * no role and no tab stop rather than a `disabled` `Checkbox`: a disabled
+ * control announces itself as a control that is unavailable, and this is not a
+ * control at all. `--el-input-readonly-bg` dims it, because a control that looks
+ * tickable and is not is worse than no control.
+ */
+export function TodoRowReadOnly({ row }: { row: TodoRowContent }) {
+  const [isExpanded, setExpanded] = useState(false);
+  const notesId = useId();
+
+  return (
+    <li
+      data-testid="todo-row-readonly"
+      className="grid grid-cols-[auto_1fr] items-start gap-2.5 border-t border-(--el-border) py-2.5 first:border-t-0"
+    >
+      <span
+        aria-hidden
+        data-testid="todo-checkbox-inert"
+        className="mt-0.5 size-4 rounded-(--radius-control) border border-(--el-border-strong) bg-(--el-input-readonly-bg)"
+      />
+      <div className="min-w-0">
+        <TodoRowBody
+          row={row}
+          isExpanded={isExpanded}
+          onToggleExpanded={() => setExpanded((prev) => !prev)}
+          notesId={notesId}
+        />
+      </div>
     </li>
   );
 }

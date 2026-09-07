@@ -47,11 +47,18 @@ async function makeWorkspace(email: string) {
 /** Seed a GitLab connection row (system context) with a still-valid token, so the
  *  provider's token mint is a no-op read (no refresh fetch). Returns the row. */
 async function seedConnection(workspaceId: string) {
-  return withSystemContext((tx) =>
-    githubInstallationRepository.upsertGitlabConnection(
+  return withSystemContext(async (tx) => {
+    // The owning organisation (MOTIR-4649), resolved from the workspace rather
+    // than passed in, so every call site stays a single id.
+    const { organizationId } = await tx.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    return githubInstallationRepository.upsertGitlabConnection(
       {
         installationId: `gitlab-ws-${workspaceId}`,
         workspaceId,
+        organizationId,
         accountLogin: 'octocat',
         accountType: 'User',
         accessTokenEncrypted: encryptToken('good-token'),
@@ -59,8 +66,8 @@ async function seedConnection(workspaceId: string) {
         tokenExpiresAt: new Date(Date.now() + 3_600_000),
       },
       tx,
-    ),
-  );
+    );
+  });
 }
 
 /** Stub GitLab's `GET /api/v4/projects` with two memberships. */
@@ -186,6 +193,7 @@ describe('githubRepoRepository.deleteByInstallationAndRepoId', () => {
         {
           installationId: conn.id,
           workspaceId: workspace.id,
+          organizationId: workspace.organizationId,
           repoId: '77',
           owner: 'o',
           name: 'n',

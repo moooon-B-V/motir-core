@@ -42,13 +42,14 @@ export const aiChatService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       'ai:plan',
     );
-    const { organizationId, isMeta } = await resolveTenantOrg({
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
     const tenant = {
       organizationId,
       isMeta,
+      internalBilling,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
       projectKey: ctx.project.identifier,

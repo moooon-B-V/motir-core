@@ -8,10 +8,13 @@ import { FolderGit2, TriangleAlert } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { buttonVariants } from '@/components/ui/Button';
-import { connectedNotInSet } from '@/lib/projectRepos/roomSections';
+import { connectedNotInSet, splitSetRowsByOrigin } from '@/lib/projectRepos/roomSections';
 import { TakeoverRow } from './TakeoverRow';
 import { TakeoverModal } from './TakeoverModal';
 import { ConnectedRepositories } from './ConnectedRepositories';
+import { OrganizationRepositories } from './OrganizationRepositories';
+import { AddRepositoryButton, AddRepositoryPicker } from './AddRepositoryPicker';
+import type { OrgRepoOptionDto } from '@/lib/dto/organizationRepos';
 import type {
   ProjectRepoConnectCandidateDto,
   ProjectRepoConnectedDto,
@@ -77,11 +80,31 @@ export interface RepositoriesRoomProps {
   view: ProjectRepoRoomViewDto;
   /** Where the connect prompt hands off — the shipped 7.10 Git-settings pane. */
   connectHref: string;
+  /**
+   * Whether the actor administers the ORGANISATION (Story MOTIR-4669 ·
+   * MOTIR-4681). Decides whether the room draws its add door or the sentence
+   * that says who can — NOT whether an add succeeds, which
+   * `organizationRepoService` asserts inside the transaction that performs it.
+   * A gate on a button is a gate one caller away from being missing.
+   */
+  canAddRepositories: boolean;
+  /** The organisation's display name, for the section heading and the picker. */
+  organizationName: string;
+  /** `See every repository in <org>` — the org's own inventory. */
+  organizationInventoryHref: string;
   /** The request's `now`, stamped once on the server (see `TakeoverRow`). */
   nowIso: string;
 }
 
-export function RepositoriesRoom({ projectKey, view, connectHref, nowIso }: RepositoriesRoomProps) {
+export function RepositoriesRoom({
+  projectKey,
+  view,
+  connectHref,
+  canAddRepositories,
+  organizationName,
+  organizationInventoryHref,
+  nowIso,
+}: RepositoriesRoomProps) {
   const t = useTranslations('repositoryTakeover');
   const router = useRouter();
 
@@ -97,6 +120,13 @@ export function RepositoriesRoom({ projectKey, view, connectHref, nowIso }: Repo
   const rowsRef = useRef(view.rows);
   const [failed, setFailed] = useState(false);
   const [modalRow, setModalRow] = useState<ProjectRepoDto | null>(null);
+  // The PICKER's own state. Its list is fetched when the modal opens rather than
+  // on every room render: it is an ORG-scoped read across workspaces, and a room
+  // that never opens the picker should not pay for it.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [options, setOptions] = useState<OrgRepoOptionDto[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [optionsFailed, setOptionsFailed] = useState(false);
 
   const takeoverUrl = (rowId: string) =>
     `/api/projects/${encodeURIComponent(projectKey)}/repositories/${encodeURIComponent(rowId)}/takeover`;
@@ -113,6 +143,80 @@ export function RepositoriesRoom({ projectKey, view, connectHref, nowIso }: Repo
       putRows(rowsRef.current.map((r) => (r.id === row.id ? row : r)));
     },
     [putRows],
+  );
+
+  /** The picker's list — the ORGANISATION's repositories this project does not
+   *  hold. Fetched on OPEN, so a room nobody adds from pays nothing for it. */
+  const loadOptions = useCallback(async () => {
+    setOptionsLoading(true);
+    setOptionsFailed(false);
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectKey)}/repositories/available`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) {
+        setOptionsFailed(true);
+        return;
+      }
+      setOptions((await res.json()) as OrgRepoOptionDto[]);
+    } catch {
+      setOptionsFailed(true);
+    } finally {
+      setOptionsLoading(false);
+    }
+  }, [projectKey]);
+
+  const openPicker = useCallback(() => {
+    setPickerOpen(true);
+    void loadOptions();
+  }, [loadOptions]);
+
+  /**
+   * PICK — link an organisation repository into this project.
+   *
+   * ⚠️ BOTH SURFACES OF THE PAGE-STATE CONTRACT, and the room's own comment says
+   * getting this split wrong is the recurring bug. The new row is inserted into
+   * THIS ISLAND optimistically (surface 3 — `router.refresh()` provably cannot
+   * reach a `useState`-seeded list), and `router.refresh()` is called for the
+   * server-rendered HEADER SUMMARY (surface 2), which counts over both registries
+   * and would otherwise keep reporting the pre-add total beside a list that grew.
+   */
+  const onPick = useCallback(
+    async (option: OrgRepoOptionDto) => {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectKey)}/repositories/add`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ githubRepoId: option.id, role: 'other' }),
+      });
+      if (!res.ok) {
+        setFailed(true);
+        return;
+      }
+      const row = (await res.json()) as ProjectRepoDto;
+      putRows([...rowsRef.current, row]);
+      setOptions((prev) => prev.filter((o) => o.id !== option.id));
+      setPickerOpen(false);
+      router.refresh();
+    },
+    [projectKey, putRows, router],
+  );
+
+  /** REMOVE FROM THIS PROJECT — one row, and nothing else. Same two surfaces. */
+  const onRemoveFromProject = useCallback(
+    async (row: ProjectRepoDto) => {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectKey)}/repositories/${encodeURIComponent(row.id)}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) {
+        setFailed(true);
+        return;
+      }
+      putRows(rowsRef.current.filter((r) => r.id !== row.id));
+      router.refresh();
+    },
+    [projectKey, putRows, router],
   );
 
   /** Surface 3 — the island's own refetch. Silent: a background re-read must not
@@ -228,13 +332,37 @@ export function RepositoriesRoom({ projectKey, view, connectHref, nowIso }: Repo
   }, [inFlight, refetch]);
 
   const showConnected = view.connectedInDomain && connected.length > 0;
+  // ⚠️ ONE SPLIT, ONE PLACE (MOTIR-4681). A repository PICKED from the
+  // organisation gets a `project_repository` row, so it enters `rows` — and
+  // `rows` was rendered wholesale as Motir-hosted takeover rows. The discriminator
+  // is the row's own `seedSource`, a FACT the write records rather than a
+  // heuristic the reader infers, and it lives in `roomSections` beside the other
+  // split so the server and this island cannot disagree.
+  const { fromOrganization, motirHosted } = splitSetRowsByOrigin(rows);
 
   // ⚠️ THE EMPTY STATE IS FOR A PROJECT WITH NEITHER REGISTRY — nothing else.
-  // Reading it off `rows.length` alone is the defect this card fixes: it told a
+  // Reading it off `rows.length` alone is the defect MOTIR-3126 fixed: it told a
   // project holding five connected repositories that it had none. A project whose
   // repositories are workspace-connected has a complete, correct page; only a
   // project with no set AND nothing connected has nothing to show.
-  if (rows.length === 0 && !showConnected) {
+  //
+  // ⚠️ AND IT DOES NOT APPLY TO SOMEBODY WHO CAN ADD (MOTIR-4669 · MOTIR-4685).
+  // This empty state is a SIGNPOST — a panel whose one action is a link to another
+  // page — and `design/repository-set/design-notes.md` §17.4 forbids exactly that
+  // shape for exactly this moment: *"'Nothing to pick' must never render as a
+  // message whose job is to send somebody to another page: that turns one intent
+  // into two errands."*
+  //
+  // It survived MOTIR-4681 because that card added the org section BELOW this
+  // early return, so a project with nothing never reached it — the room offered a
+  // link to `/settings/account/git`, a page that cannot connect an organisation's
+  // repository at all. THE ACCEPTANCE WALK IS WHAT FOUND IT (MOTIR-4685, chapter
+  // 1), which is the whole argument for walking a story in a browser.
+  //
+  // So the early return now applies only when there is genuinely nothing to
+  // offer. An actor who may add falls through to the section below, whose own
+  // zero case is the PICKER.
+  if (rows.length === 0 && !showConnected && !canAddRepositories) {
     return (
       <EmptyState
         icon={<FolderGit2 className="h-12 w-12" aria-hidden />}
@@ -261,17 +389,36 @@ export function RepositoriesRoom({ projectKey, view, connectHref, nowIso }: Repo
         </p>
       ) : null}
 
+      {/* FROM YOUR ORGANISATION (MOTIR-4681) — the repositories this project uses
+          because somebody added them, and the room's ONE add door.
+          ⚠️ It renders when the project HOLDS one OR when the actor may add:
+          without the second arm a project with nothing yet would have no way to
+          get its first repository, which is the two-errands shape §17.4 forbids. */}
+      {fromOrganization.length > 0 || canAddRepositories ? (
+        <OrganizationRepositories
+          rows={fromOrganization}
+          organizationName={organizationName}
+          inventoryHref={organizationInventoryHref}
+          canAdd={canAddRepositories}
+          onRemove={onRemoveFromProject}
+          addButton={<AddRepositoryButton onClick={openPicker} />}
+        />
+      ) : null}
+
       {/* THE MOTIR-HOSTED SET. Absent — not empty-stated — when the project has
           no rows: an empty section asserts an absence, and for a project whose
-          repositories are all its own there is no such absence to assert. */}
-      {rows.length > 0 ? (
+          repositories are all its own there is no such absence to assert.
+          ⚠️ `motirHosted`, not `rows` (MOTIR-4681): a repository PICKED from the
+          organisation has a set row too, and rendering it here would offer
+          **Take it over** for something the organisation already owns. */}
+      {motirHosted.length > 0 ? (
         <section aria-labelledby={HOSTED_HEADING_ID} className="flex flex-col gap-2">
           <SectionLabel id={HOSTED_HEADING_ID}>{t('hostedHeading')}</SectionLabel>
           <p className="max-w-prose font-sans text-sm text-(--el-text-secondary)">
             {t('hostedHint')}
           </p>
           <div className="flex flex-col gap-3">
-            {rows.map((row) => (
+            {motirHosted.map((row) => (
               <TakeoverRow
                 key={row.id}
                 row={row}
@@ -292,6 +439,18 @@ export function RepositoriesRoom({ projectKey, view, connectHref, nowIso }: Repo
           user already owns these, so there is nothing to move and a control would
           be a promise this room cannot keep. */}
       {showConnected ? <ConnectedRepositories repos={connected} manageHref={connectHref} /> : null}
+
+      <AddRepositoryPicker
+        options={options}
+        alreadyHeld={[]}
+        organizationName={organizationName}
+        installHref={view.installHref}
+        loading={optionsLoading}
+        error={optionsFailed}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={onPick}
+      />
 
       {modalRow ? (
         <TakeoverModal

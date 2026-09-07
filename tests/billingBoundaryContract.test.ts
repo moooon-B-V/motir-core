@@ -97,6 +97,25 @@ const USAGE_CONTRACT: RawUsageResponse = {
     pageSize: 10,
     total: 1,
   },
+  // ⚠️ The two SEARCH blocks (MOTIR-4552 producer / MOTIR-4555 consumer).
+  // motir-ai sends both on EVERY response — `usageService.UsageResponseDto`
+  // declares them non-optional — so they belong in this mirror like every other
+  // field. They are optional on `RawUsageResponse` for one reason: a ROLLING
+  // DEPLOY, where motir-core has shipped and the motir-ai half has not.
+  //
+  // ⚠️ SO LAYER (1) — the compile-time bite — DOES NOT COVER THESE TWO. An
+  // optional field cannot make an omission a tsc error. Layer (2) still does:
+  // the round-trip test below reads them through the real mapping, so a
+  // producer-side rename turns the assertion red rather than silent.
+  search: { totalSpend: 40, monthSpend: 12 },
+  searchRuns: {
+    runs: [{ jobId: 'job_1', credits: 9, lastSearchAt: '2026-06-20T00:05:00.000Z' }],
+    page: 1,
+    pageSize: 10,
+    total: 1,
+    attributedSpend: 31,
+    unattributedSpend: 9,
+  },
 };
 
 const SUBSCRIPTION_CONTRACT: RawSubscriptionResponse = {
@@ -117,6 +136,17 @@ const USAGE_FREE_CONTRACT: RawUsageResponse = {
   monthlyHistory: [],
   perModel: [],
   recentRuns: { runs: [], page: 1, pageSize: 10, total: 0 },
+  // Zero SPEND, blocks PRESENT — the never-transacted org. Distinct from the
+  // absent-block case below, which is a rolling deploy rather than a customer.
+  search: { totalSpend: 0, monthSpend: 0 },
+  searchRuns: {
+    runs: [],
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    attributedSpend: 0,
+    unattributedSpend: 0,
+  },
 };
 const SUBSCRIPTION_EMPTY_CONTRACT: RawSubscriptionResponse = {
   status: null,
@@ -189,6 +219,35 @@ describe('billing boundary contract — getBillingStatus consumes motir-ai usage
     // field, which is exactly what the contract pin + the round-trip above catch.
     expect(res.motirAi.balance).toBeUndefined();
     expect(res.motirAi.balance).not.toBe(1420);
+  });
+
+  it('maps the SEARCH block off the same wire response (MOTIR-4555)', async () => {
+    const { organizationId, owner } = await makeOrg();
+
+    const res = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    // The fourth billed line rides the getOrgUsage call `motirAi` above already
+    // makes — one read, four lines.
+    expect(res.search).toEqual(USAGE_CONTRACT.search);
+  });
+
+  it('the guard bites — a motir-ai `search` rename reads as UNAVAILABLE, never as zero', async () => {
+    const { organizationId, owner } = await makeOrg();
+    getOrgUsageMock.mockResolvedValue({
+      ...USAGE_CONTRACT,
+      search: undefined,
+      searchSpend: { totalSpend: 40, monthSpend: 12 },
+    } as unknown as RawUsageResponse);
+
+    const res = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    // ⚠️ THE DIRECTION OF THE FALLBACK IS THE WHOLE POINT. A renamed or absent
+    // block must degrade to `null` — figures UNAVAILABLE — and never to a
+    // populated zero, which would tell a customer they spent nothing on search
+    // on a boundary that never answered. Same shape as the `balance` bite above:
+    // no silent fallback, and here the absence is legible rather than plausible.
+    expect(res.search).toBeNull();
+    expect(res.search).not.toEqual({ totalSpend: 0, monthSpend: 0 });
   });
 });
 

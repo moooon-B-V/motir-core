@@ -1,6 +1,7 @@
 import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { pageRefresh } from './_helpers/authoritative-signal';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -49,6 +50,8 @@ import { projectsService } from '@/lib/services/projectsService';
 const EMAIL = 'address-release@motir.test';
 const PASSWORD = 'Sup3rSecret!Pass';
 const BASE = 'motir.e2e';
+/** The pane under test — also the pathname its `router.refresh()` re-reads. */
+const PANE = '/settings/project/public-address';
 
 /**
  * ⚠️ READ BACK FROM THE CREATED PROJECT, NEVER THE STRING WE PASSED —
@@ -105,7 +108,7 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
 }) => {
   await chapter('The room, and a claim', async () => {
     await signIn(page, EMAIL, PASSWORD);
-    await page.goto('/settings/project/public-address');
+    await page.goto(PANE);
 
     await expect(page.getByRole('heading', { name: 'Public address' })).toBeVisible();
     // ⚠️ THE MOUNTING CHECK — see the header. No base domain, no claim field.
@@ -122,7 +125,14 @@ test('an owner releases the workspace subdomain, and the names stay held for eve
     async () => {
       await page.getByRole('button', { name: 'Rename' }).click();
       await page.getByRole('textbox', { name: 'Subdomain' }).last().fill('acme-inc');
+      // `PublicSubdomainCard` repaints on `router.refresh()` and cannot patch in
+      // place — `renamesLeft` is server-derived (ADR §8 Amendment 2 counts names
+      // BURNT, so a browser cannot re-derive it even in principle). Wait on the
+      // refresh rather than spend the assertion's budget on it (MOTIR-4399,
+      // disposition (c)).
+      const renamed = pageRefresh(page, PANE);
       await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
+      await renamed;
 
       await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
       await expect(page.getByText(`acme.${BASE}`, { exact: true })).toBeVisible();

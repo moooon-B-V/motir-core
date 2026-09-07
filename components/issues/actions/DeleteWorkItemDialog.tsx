@@ -154,6 +154,7 @@ export function DeleteWorkItemDialog({
       role="alertdialog"
       size="md"
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = a cascade delete: three consequence rows plus the archive alternative (an archived parent with live children swaps the archive callout for the live-descendant warning, 541px), panel 549px */}
       <div className="flex flex-col gap-4" aria-busy={deleting || undefined}>
         <p className="text-sm text-(--el-text-secondary)">
           {cascade

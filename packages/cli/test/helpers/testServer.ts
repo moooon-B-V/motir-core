@@ -561,6 +561,9 @@ export function v1Proposal(id: string, over: Record<string, unknown> = {}) {
       estimateMinutes: null,
       descriptionMd: null,
       targetRepo: null,
+      // The wire shape is TOTAL (MOTIR-4620): a proposal with no
+      // steps says so with an explicit null, never an absent key.
+      todos: null,
     },
     patch: null,
     parentRef: null,

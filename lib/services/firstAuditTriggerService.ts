@@ -41,7 +41,7 @@ import { readRepoAuditState } from '@/lib/services/auditCoverageService';
 //     what tells the enqueue gate and the onboarding wizard the repo has a graph.
 //     So every path is best-effort + logged, mirroring `migrateOnboardingService`'s
 //     `audit_convention` kick (`:205`), and a repo left un-audited is precisely the
-//     state MOTIR-2244's `/planning` nudge already exists to report. The exception
+//     state MOTIR-2244's planning-workspace nudge already exists to report. The exception
 //     path is built; this only makes it the exception.
 //
 // THE ACTOR IS THE WORKSPACE OWNER — the `autoPlanCadenceService.runForProject`
@@ -114,7 +114,7 @@ export const firstAuditTriggerService = {
       // ⚠️ THIS USED TO BE `withSystemContext` (MOTIR-2880). `workspace_membership`
       // carries no arm reading `app.system_admin`, so under `motir_app` the owner
       // read returned null and EVERY repo was reported `no_owner` — un-audited,
-      // silently, with the `/planning` nudge as the only trace.
+      // silently, with the planning workspace's nudge as the only trace.
       owner = await withWorkspaceServiceContext(workspaceId, (tx) =>
         workspaceMembershipRepository.findOwnerByWorkspace(workspaceId, tx),
       );

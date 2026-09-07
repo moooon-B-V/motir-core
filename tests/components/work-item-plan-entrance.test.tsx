@@ -1,8 +1,22 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
+
+// ⚠️ THE ENTRANCE READS THE ADDRESS NOW (MOTIR-4730). It used to compose a fixed
+// `/planning?…` href out of nothing, so this file needed no router; the overlay
+// made its destination *the page you are already on* plus the workspace's query,
+// which means `usePathname` / `useSearchParams`. Without a mock the real hooks
+// return `null` outside a router context and the component throws on the first
+// render — 19 tests, every one of them.
+let pathname = '/items/MOTIR-42';
+let searchParams = new URLSearchParams();
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname,
+  useSearchParams: () => searchParams,
+}));
+
+const { WorkItemPlanEntrance } = await import('@/components/planning/WorkItemPlanEntrance');
 
 // The PER-ITEM Plan / Re-plan entrance (Subtask MOTIR-910; design
 // `design/work-items/plan-replan-entrance.mock.html` panels 1–4). It is a pure
@@ -10,6 +24,10 @@ import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance
 // contract the design states: WHICH face it wears, WHERE it goes, and that the
 // item's own key travels with it.
 
+beforeEach(() => {
+  pathname = '/items/MOTIR-42';
+  searchParams = new URLSearchParams();
+});
 afterEach(cleanup);
 
 // A live, plannable item — the state every "what the door looks like" case
@@ -54,26 +72,43 @@ describe('WorkItemPlanEntrance — the two faces', () => {
 });
 
 describe('WorkItemPlanEntrance — where it goes', () => {
-  it('opens the universal planning workspace SCOPED to the item', () => {
+  it('opens the workspace OVER the page you are on, scoped to the item', () => {
+    // ⚠️ RE-POINTED (MOTIR-4730). This asserted `/planning` — a DESTINATION.
+    // The workspace is an overlay: the href is the page the reader is already
+    // on, plus the workspace's own namespaced query. A door that navigated
+    // would throw away the item page underneath, which is the whole point of
+    // the story.
     renderWithIntl(<WorkItemPlanEntrance itemKey="MOTIR-42" hasChildren={false} {...LIVE} />);
     const url = href(screen.getByTestId('work-item-plan-entrance'));
-    // Not a bespoke panel and not a per-item route: the ONE shipped workspace,
-    // carrying this item as its anchor.
-    expect(url.pathname).toBe('/planning');
-    expect(url.searchParams.get('from')).toBe('work-item');
-    expect(url.searchParams.get('item')).toBe('MOTIR-42');
+    expect(url.pathname).toBe('/items/MOTIR-42');
+    expect(url.searchParams.get('planFrom')).toBe('work-item');
+    expect(url.searchParams.get('planItem')).toBe('MOTIR-42');
+  });
+
+  it('keeps the host page\u2019s OWN query — it is a layer over that page, not a new address', () => {
+    // The peek is the case that makes this load-bearing: `?peek=` must survive,
+    // so closing the workspace returns the reader to the quick view they
+    // launched from.
+    pathname = '/items';
+    searchParams = new URLSearchParams('peek=MOTIR-42&status=open');
+    renderWithIntl(<WorkItemPlanEntrance itemKey="MOTIR-42" hasChildren={false} {...LIVE} />);
+    const url = href(screen.getByTestId('work-item-plan-entrance'));
+    expect(url.pathname).toBe('/items');
+    expect(url.searchParams.get('peek')).toBe('MOTIR-42');
+    expect(url.searchParams.get('status')).toBe('open');
+    expect(url.searchParams.get('planItem')).toBe('MOTIR-42');
   });
 
   it('carries the re-plan MODE when the item already has children', () => {
     renderWithIntl(<WorkItemPlanEntrance itemKey="MOTIR-5" hasChildren {...LIVE} />);
-    expect(href(screen.getByTestId('work-item-plan-entrance')).searchParams.get('mode')).toBe(
+    expect(href(screen.getByTestId('work-item-plan-entrance')).searchParams.get('plan')).toBe(
       'replan',
     );
   });
 
   it('opens plain contextual planning when it does not', () => {
     renderWithIntl(<WorkItemPlanEntrance itemKey="MOTIR-42" hasChildren={false} {...LIVE} />);
-    expect(href(screen.getByTestId('work-item-plan-entrance')).searchParams.get('mode')).toBe(
+    expect(href(screen.getByTestId('work-item-plan-entrance')).searchParams.get('plan')).toBe(
       'contextual',
     );
   });
@@ -243,7 +278,7 @@ describe('WorkItemPlanEntrance — which face it wears', () => {
         statusCategory="todo"
       />,
     );
-    expect(href(screen.getByTestId('work-item-plan-entrance')).searchParams.get('mode')).toBe(
+    expect(href(screen.getByTestId('work-item-plan-entrance')).searchParams.get('plan')).toBe(
       'replan',
     );
   });

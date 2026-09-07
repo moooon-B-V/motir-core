@@ -786,6 +786,24 @@ suspect an inherited `main` flake before blaming the diff (reproduce in
 isolation first). This rule was adopted after five specs flaked from the same
 shape (`bug-e2e-suite-flaky-specs`; the lesson is `notes.html` mistake #37).
 
+**⚠️ BEFORE YOU DECIDE A `click → expect` PAIR IS RACING, LOOK IT UP —
+`docs/e2e/mutation-assert-sweep.md` (MOTIR-4399).** The whole suite has been
+swept for this shape and every site dispositioned, so a red check's _"is this my
+diff, or is it this?"_ is a table lookup rather than a re-derivation. It also
+carries the finding a sweep needs before it starts arming waits: **most
+`click → expect` pairs in this suite are NOT racing**, because the asserted node
+is rendered from the write's own response — a toast, a returned DTO applied in
+place, a `revalidatePath` payload — so the assertion IS the wait and arming one
+in front of it buys nothing. The helpers are
+`tests/e2e/_helpers/authoritative-signal.ts`.
+
+**And when the surface repaints only on a whole-page `router.refresh()`, ask
+which remedy before writing either one:** if the asserted value could have been
+computed in the browser from the write's own result, the SURFACE owes an
+in-place update (the page-state contract's case 3 below) and amending the spec
+retires the only detector that defect has — MOTIR-4496. If the value is
+server-derived, the SPEC owes a wait on the refresh — MOTIR-3694.
+
 ### The discipline, by operation
 
 - **After a mutation** (a `POST`/`PATCH` write), `await page.waitForResponse(…)`
@@ -909,6 +927,26 @@ of a story working, which a human then approves. The full rule is
   watchable (the ≤ ~60s scope, the chaptering, the pacing). A clip under the 15s
   floor is reported as _unpublishable_, which is a different verdict from a
   failure.
+- **⚠️ YOU PUBLISH THE RECEIPT, and until MOTIR-4704 this section did not say so
+  — which is the whole of why that bug exists.** No CI lane uploads the
+  recording; MOTIR-4096 retired the one that did, because a publisher that must
+  be PRESENT in a repository is one no customer repository can meet. Two calls,
+  because a video is far larger than a tool argument can carry:
+  **`create_acceptance_upload`** with the card's key mints a short-lived
+  presigned PUT; **PUT the clip's bytes to that URL** with
+  `Content-Type: video/webm`; then **`publish_acceptance_result`** with the
+  `pathname` it returned, the chapters from `chapters.json`, the `commitSha` and
+  the card's key as `producedByKey`. Pass the E2E card's own key to both — a
+  receipt belongs to the STORY, and the server resolves up to it.
+- **⚠️ NOTHING ELSE MAKES THAT CALL, AND A MISSING PUBLISH LOOKS EXACTLY LIKE A
+  SUCCESSFUL RUN.** This is the design-result warning above, transposed, and it
+  is if anything sharper here: the acceptance GATE rests entirely on the receipt
+  existing, so a spec that goes green, a check that passes and a pull request
+  that merges leave behind a story nobody can watch working — and nothing
+  anywhere goes red. **The confirmation is the receipt `id` the call returns**,
+  and its `status` is `pending`: publishing is not accepting, a person still
+  watches it. A RED run publishes nothing, and that is correct — the receipt
+  records a green run or it records nothing.
 
 ---
 

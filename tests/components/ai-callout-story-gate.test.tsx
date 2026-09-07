@@ -1,10 +1,27 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
 import { aiCalloutActions } from '@/lib/planning/aiCallout';
-import { planningWorkspaceHref, type PlanningLaunchContext } from '@/lib/planning/launcher';
+import { planningOverlaySearch, type PlanningLaunchContext } from '@/lib/planning/launcher';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
+
+// The doors resolve their href from the CURRENT address now (MOTIR-4730), so
+// these need a router. `usePathname` / `useSearchParams` are all the hook reads.
+const pathname = '/backlog';
+const searchParams = new URLSearchParams();
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname,
+  useSearchParams: () => searchParams,
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+// ⚠️ RE-POINTED (MOTIR-4730). The registry takes the resolved OVERLAY address
+// now, not a context. These seams are about registry → menu → catalog, so they
+// hand it the address a door on this page would actually write.
+function overlayHref(context: PlanningLaunchContext, page = '/backlog'): string {
+  return `${page}?${planningOverlaySearch(context).toString()}`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Story 7.24 · MOTIR-1813 — the ASSEMBLED SEAMS half of the story gate: the
@@ -77,7 +94,7 @@ afterEach(cleanup);
 describe('the menu renders the REAL registry, row for row', () => {
   it('gives every registered action exactly one row, in registry order', () => {
     const context: PlanningLaunchContext = { kind: 'project' };
-    const actions = aiCalloutActions(context);
+    const actions = aiCalloutActions(overlayHref(context));
 
     renderWithIntl(<PlanWithAIFab context={context} />);
     const panel = openCallout();
@@ -95,7 +112,7 @@ describe('the menu renders the REAL registry, row for row', () => {
   });
 
   it('resolves each row’s title AND description through the shipped catalog', () => {
-    const actions = aiCalloutActions({ kind: 'project' });
+    const actions = aiCalloutActions(overlayHref({ kind: 'project' }));
 
     renderWithIntl(<PlanWithAIFab />);
     const panel = openCallout();
@@ -123,13 +140,15 @@ describe('the menu renders the REAL registry, row for row', () => {
     // Every link inside the panel is a registry row: a hand-added footer link
     // ("Learn more", "Coming soon") would be a destination the registry never
     // authorised, and the design forbids exactly that.
-    expect(panel.querySelectorAll('a')).toHaveLength(aiCalloutActions({ kind: 'project' }).length);
+    expect(panel.querySelectorAll('a')).toHaveLength(
+      aiCalloutActions(overlayHref({ kind: 'project' })).length,
+    );
   });
 });
 
 // ─────────── Seam 2 — registry → launcher ───────────
 
-describe('every row’s href is the launcher’s own output', () => {
+describe('every row’s href is the launcher’s own OVERLAY address', () => {
   const CONTEXTS: PlanningLaunchContext[] = [
     { kind: 'project' },
     { kind: 'project', hasPlan: true },
@@ -138,13 +157,17 @@ describe('every row’s href is the launcher’s own output', () => {
     { kind: 'convention-refine', repoKey: 'motir-core' },
   ];
 
-  it.each(CONTEXTS)('renders %j through planningWorkspaceHref, not a copy of it', (context) => {
+  it.each(CONTEXTS)('renders %j through the launcher, not a copy of it', (context) => {
     // Computed from the SHIPPED launcher module and compared against what the
-    // DOM actually carries — so the day `planningWorkspaceHref` changes its
-    // query shape (or the registry stops calling it), this fails instead of
-    // silently rendering a stale path that literal-string assertions would
-    // happily keep confirming.
-    const expected = planningWorkspaceHref(context);
+    // DOM actually carries — so the day the overlay's query shape changes (or a
+    // door stops resolving through the launcher), this fails instead of silently
+    // rendering a stale address that literal-string assertions would happily
+    // keep confirming.
+    //
+    // ⚠️ RE-POINTED (MOTIR-4730): the expected value is now the CURRENT PAGE
+    // plus the overlay's parameters, not `/planning?…`. Every row still shares
+    // exactly one of them, which is the invariant this test is really for.
+    const expected = overlayHref(context);
 
     renderWithIntl(<PlanWithAIFab context={context} />);
     const panel = openCallout();
@@ -160,7 +183,7 @@ describe('every row’s href is the launcher’s own output', () => {
     renderWithIntl(<PlanWithAIFab />);
     const panel = openCallout();
 
-    expect(rows(panel)[0]?.getAttribute('href')).toBe(planningWorkspaceHref({ kind: 'project' }));
+    expect(rows(panel)[0]?.getAttribute('href')).toBe(overlayHref({ kind: 'project' }));
   });
 });
 

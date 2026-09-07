@@ -32,9 +32,13 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // is immune. The suite pins the property, not just the arithmetic.
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
   usePathname: () => '/dashboard',
+  // MOTIR-4730 — the planning door in this tree reads the address, so a
+  // partial navigation mock is a crash rather than a gap.
+  useSearchParams: () => navSearchParams,
 }));
 
 const { PlanWithAIFab } = await import('@/components/planning/PlanWithAIFab');

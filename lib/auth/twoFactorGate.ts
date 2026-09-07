@@ -7,7 +7,10 @@ import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 // The 2FA ENFORCEMENT GATE (Story MOTIR-1215 · Subtask MOTIR-3648).
 //
 // One helper, four call sites — `app/(authed)`, `app/(onboarding)`,
-// `app/(planning)` and `app/(admin)`. Four copies of the same three lines is how
+// and `app/(admin)`. (`app/(planning)` was a fourth until MOTIR-4732 retired the
+// route group — the planning workspace is an overlay inside `(authed)` now, so it
+// inherits that group's gate rather than running its own.) Copies of the same
+// three lines are how
 // one route group quietly stays open, so
 // `tests/navigation/two-factor-gate-coverage.test.ts` enumerates the route-group
 // layouts from the filesystem and fails when one neither calls this nor appears

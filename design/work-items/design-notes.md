@@ -5692,6 +5692,59 @@ it that way produces a surface a screen reader can announce and cannot operate.
   No card in MOTIR-3808 ships one and this asset takes no position on a later
   one.
 
+### ⚠️ Amendment 2026-09-05 (MOTIR-4633) — a CSS escape belongs in the SELECTOR, never in the `class` attribute
+
+**THE RULE, in one sentence: write an arbitrary-value utility in a mock's
+`class` attribute exactly as the browser will read the class NAME —
+`class="text-[13.5px] text-(--el-text)"` — and put the backslashes only in the
+`<style>` block's SELECTOR, where CSS syntax requires them
+(`.text-\[13\.5px\]`, `.text-\(--el-text\)`).** The selector
+`.text-\(--el-text\)` matches the class named `text-(--el-text)`; an attribute
+written `text-\(--el-text\)` declares a class named `text-\(--el-text\)`, and
+the two never meet. This asset shipped with the escapes in the attribute:
+**138 class attributes, 252 utility tokens, every one of them inert.**
+
+**Why it survived review, and why the dark column is where it surfaced.** In the
+light scope the inherited `body { color: var(--el-text) }` _is_ `--el-text`, so
+every inert `text-(--el-text)` rendered the right colour by accident. Panel
+"dark" inherits that same light-computed ink, so the steps, the section heading
+and the count all rendered **`#1a1a1a` on `#0f0f0f` — 1.10:1**, measured in
+Chromium over the committed file. After the fix the same three read **17.42:1**
+(`--el-text`) and **7.35:1** (`--el-text-secondary`), both clear of AA. The
+sizes were wrong too and in the same silent way: the `<h3>` fell back to the
+UA's `1.17em` (**18.72px** against the 15px the class asked for) and each step
+row to the inherited **16px** against 13.5px.
+
+**A SECOND, independent way the same utility goes inert — the shim block has to
+DECLARE it.** These mocks are static HTML with a hand-written "utility shims"
+block, not Tailwind output, so a utility only exists if this file spells it out.
+`text-[15px]` (16 uses) and `text-[14px]` (1 use) were never declared, so
+un-escaping them alone would have left them just as dead; both rules are now in
+the shim block beside `.text-\[13\.5px\]`. **So a mock author owes two checks,
+not one: the attribute carries no backslash, AND every arbitrary-value utility
+it names has a rule in this file.**
+
+**The check, which needs no test to run:**
+
+```
+# 1 — no escape may appear inside a class attribute, tree-wide
+git grep -c 'class="[^"]*\\[^"]*"' $(git ls-files 'design/**/*.mock.html')
+# 2 — every arbitrary-value utility a mock USES is DECLARED in that same mock
+#     (compare the class attributes' tokens against the file's own selectors)
+```
+
+Neither `tests/design-ink-contrast.test.ts` nor
+`tests/design-state-ink-contrast.test.ts` can see this class: both read the
+SOURCE and rule on the ink a rule _names_, and the defect is that the rule never
+applies. The nearest asset that has neither problem is
+`design/ai-planning/peek-proposed-todos.mock.html`; §15.5 of
+`design/ai-planning/design-notes.md` is the companion write-up, and it carries
+the other half of the dark-panel problem — a Tier-3 token declared on `:root`
+computes there, so a nested dark panel must re-declare the `--el-*: var(--color-*)`
+mapping inside its own scope. **This asset already does that**, via
+`data-appearance-scope` on the dark stage, which is why removing the escapes was
+sufficient here.
+
 ---
 
 ## ⭐ The PENDING-PLAN indicator on the item page (MOTIR-4256 — `pending-plan-indicator.mock.html`)

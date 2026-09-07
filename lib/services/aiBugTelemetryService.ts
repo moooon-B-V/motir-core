@@ -115,13 +115,14 @@ export const aiBugTelemetryService = {
       implicatedPlanningPhase: null,
     };
 
-    const { organizationId, isMeta } = await resolveTenantOrg({
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: trigger.actorId,
       workspaceId: trigger.workspaceId,
     });
     const tenant = {
       organizationId,
       isMeta,
+      internalBilling,
       workspaceId: trigger.workspaceId,
       projectId: bug.projectId,
       projectKey,

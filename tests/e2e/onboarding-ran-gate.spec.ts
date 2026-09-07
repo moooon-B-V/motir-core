@@ -143,7 +143,9 @@ test('never-onboarded project mid-hand-off: an active migrate run past set-up le
   await setStep('discovery');
 
   // …now BOTH onboarding routes must let the user through to plan. `/onboarding`
-  // matters as much as `/onboarding/discovery`: it is PLANNING_WORKSPACE_PATH,
+  // matters as much as `/onboarding/discovery`: it was the planning workspace's
+  // own entry path until MOTIR-1729 gave it a route of its own (retired in turn
+  // by MOTIR-4732, which made the workspace an overlay),
   // the universal "Plan with AI" target.
   await page.goto('/onboarding/discovery');
   await expect(page).toHaveURL(/\/onboarding\/discovery/);

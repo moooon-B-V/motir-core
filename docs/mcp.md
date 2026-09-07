@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **55 tools**.
+`initialize` handshake and registers **58 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1468,6 +1468,78 @@ actually call it. Moving the publish from CI to the agent therefore added no
 credential and no trust; it only stopped requiring a script to be present in the
 repository.
 
+#### `create_acceptance_upload` · `publish_acceptance_result`
+
+Put the **acceptance receipt on a story** — the recording of ONE watchable run of
+the story working, which a person then watches and approves. It is the artifact
+the acceptance gate rests on, and the pair is the receipt half of the same idea
+`publish_design_result` is the design half of.
+
+**TWO calls, and the reason is the artifact.** A design asset arrives inline as
+base64; a recording cannot. The MCP route is a serverless function whose request
+body is capped well below a video (base64 is 1.37× the file, so an inline receipt
+would fail at roughly 3 MB — against a per-file entitlement of 10 MB baseline and
+100 MB on cloud `scaled`), and the bytes would have to be EMITTED by the agent as
+a tool argument: a 5 MB clip is 6.7 M characters. So this is the mint-then-PUT
+shape — the same one `docs/decisions/design-result.md` deliberately kept its
+routes for — expressed as two tools.
+
+1. **`create_acceptance_upload`** `{ key, hasTrace? }` → a short-lived (~5 min)
+   presigned PUT URL bound to one exact object and one content type.
+2. **PUT the bytes yourself** to `video.uploadUrl` with
+   `Content-Type: video/webm`. Nothing about this step goes through Motir.
+3. **`publish_acceptance_result`** `{ key, videoPathname, tracePathname?,
+chapters?, commitSha?, producedByKey? }` → the receipt.
+
+⚠️ **Nothing else publishes it**, exactly as with the design result. A story whose
+receipt never arrives looks identical to one that succeeded — spec green, checks
+green, pull request merged, and nobody able to watch the story work. **The
+confirmation is the `id` this call returns**, and its `status` is `pending`: the
+publish is not the acceptance, a person is.
+
+⚠️ **It replaced a CI publisher, and for the reason that generalises the design
+one.** MOTIR-4096 retired `scripts/upload-acceptance-video.mjs` and the Action
+beside it. A CI publisher can guarantee THIS repository's receipts and no
+customer's: it has to be present in whatever repository the work lands in, which
+is a requirement no repository Motir does not own can meet. What replaces it is
+the planner/runner pair — the planner writes the acceptance E2E subtask onto every
+user-facing story, and the runner's dispatch prompt tells it to publish what it
+recorded — and that pair needs a door that travels. This is that door. (Between
+4096 and MOTIR-4704 there was none, and three documents said there was.)
+
+| Input           | Type    | Required | Notes                                                                                                    |
+| --------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `key`           | string  | yes      | The E2E card's key or the story's — a receipt belongs to the STORY, so a leaf resolves UP to its parent. |
+| `hasTrace`      | boolean | no       | Mint a second grant for the Playwright trace. `create_acceptance_upload` only.                           |
+| `videoPathname` | string  | yes      | The video grant's `pathname`, exactly as returned. `publish_acceptance_result` only.                     |
+| `tracePathname` | string  | no       | The trace grant's `pathname`, when one was minted and uploaded to.                                       |
+| `chapters`      | array   | no       | `{ label, tSeconds }` markers from the run's `chapters.json` — what a reviewer scrubs by.                |
+| `commitSha`     | string  | no       | The commit the run recorded at. Also the **idempotency key**, with `producedByKey`.                      |
+| `producedByKey` | string  | no       | The E2E work item that produced the recording.                                                           |
+
+**Output** — `create_acceptance_upload`: `workItemKey`, `video`
+(`pathname`, `uploadUrl`, `contentType`, `maxBytes`) and `trace` (the same, or
+null). `publish_acceptance_result`: `id`, `workItemKey`, `status`,
+`chapterCount`, `sizeBytes`, `createdAt`.
+
+**Refusals** — every one comes from the shipped acceptance-evidence service, so
+these tools and the HTTP publish routes answer one rule:
+
+| Refusal                           | When                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCEPTANCE_EVIDENCE_NOT_A_STORY` | `key` resolves to a container that is not a story and has no story parent. A receipt is a story-level artifact (Principle #18). |
+| `ACCEPTANCE_VIDEO_INELIGIBLE`     | The org has no paid AI plan, or the acceptance-video toggle is off. Checked BEFORE any object-store spend.                      |
+| blob missing                      | The `pathname` names no object — the PUT never happened, or went somewhere else. The register step HEADs every artifact.        |
+| pathname outside the prefix       | A key that is not under this story's own acceptance prefix. A lying or cross-tenant pathname can never be recorded.             |
+| oversize file                     | The object's AUTHORITATIVE size exceeds the org's per-file cap. Read from the store, never from what the caller reports.        |
+| disallowed media type             | Anything but `video/webm` / `video/mp4`. `text/html` is refused here exactly as video is refused by the design publisher.       |
+| unknown / cross-workspace `key`   | A 404, indistinguishable from a work item the token cannot reach.                                                               |
+
+**Permission** — `work_item:edit`. `ACCEPTANCE_PUBLISH_PERMISSION` _is_ that key,
+the same one `publish_design_result` asserts and one `CLI_TOKEN_GRANT` already
+carries — so a dispatched run can call these the day they ship, with no new
+credential and no widened grant.
+
 #### `link_work_items`
 
 Create a relationship between two work items — the primitive for the **dependency
@@ -2120,7 +2192,7 @@ it fill.
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak). Requires `project:browse`.
 
-#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal`
+#### Authoring a plan YOURSELF — `create_plan` · `add_plan_items` · `update_plan_item` · `update_plan_proposal` · `withdraw_plan_proposal` · `update_plan`
 
 The three tools above hand a **prompt** to Motir's planner and let it decide the
 tree. These two are the other door: **you decide the tree, and Motir reviews it
@@ -2181,7 +2253,33 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
 - **`op`** — `add` · `modify` · `remove`.
 - **`proposedFields`** (`add`, required) — `title` (required), `kind`,
   `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`,
-  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepoRole`.
+  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepoRole`, `todos`.
+- **`proposedFields.todos`** (`add` only, leaf kinds only) — the card's **ORDERED
+  STEPS**, written as its to-do list. **Array order is list order**, and
+  approving the plan writes one real to-do row per element, none ticked. A
+  `manual` card's steps belong here rather than only in the description: the
+  reviewer reads the list they will tick before approving it, and the created
+  card carries it from birth. Each row is
+  `{ text, notesMd?, commandText?, executor? }` — one OPERATION per `text`
+  (≤ 200 chars), the how in `notesMd` (≤ 2000), the command to copy in its own
+  `commandText` (≤ 500) rather than inside the text, and `executor` only where
+  the step differs from the card's (it inherits the proposal's, then `human`).
+  A non-empty `todos` on a container kind is refused.
+
+  ```jsonc
+  proposedFields: {
+    title: 'Provision the Stripe restricted key',
+    kind: 'task', type: 'manual', executor: 'human',
+    todos: [
+      { text: 'Create a restricted API key' },
+      { text: 'Scope it to charges:write', notesMd: 'Dashboard → Developers → API keys.' },
+      { text: 'Set the deployment secret', commandText: 'fly secrets set STRIPE_KEY=… -a motir',
+        executor: 'coding_agent' },
+      { text: 'Confirm a test charge succeeds' },
+    ],
+  }
+  ```
+
 - **`workItemId`** / **`patch`** / **`baseRevision`** — for a `modify` / `remove`.
 - **`parentRef`** / **`blockedByRefs`** — a real `work_item.id`, **or** an
   intra-plan temp-ref `planItem:<id>`.
@@ -2292,15 +2390,24 @@ applies each `modify` in sequence. Three things upstream do:
 forbids the strategy Motir's own generator uses, so this tool is the other half —
 **write the tree's SHAPE first, then fill each card in.**
 
-| Input                                                                                                               | Type   | Required | Notes                                                       |
-| ------------------------------------------------------------------------------------------------------------------- | ------ | -------- | ----------------------------------------------------------- |
-| `planId`                                                                                                            | string | yes      | The id `create_plan` returned.                              |
-| `planItemId`                                                                                                        | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
-| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
+| Input                                                                                                                        | Type   | Required | Notes                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------ | -------- | ----------------------------------------------------------- |
+| `planId`                                                                                                                     | string | yes      | The id `create_plan` returned.                              |
+| `planItemId`                                                                                                                 | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
+| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes`, `todos` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
 
 **The patch is SPARSE, and absent is not the same as `null`.** A field you omit is
 left exactly as it was; an explicit `null` clears it. So a deepen turn sends only
 what it is deciding, and nothing it has not thought about yet is destroyed.
+
+**`todos` is the one member that is sparse at the KEY and whole at the VALUE.**
+It is the card's ordered steps (the shape and the caps are under
+`add_plan_items` above), and a list has no meaningful partial edit — so omitting
+it leaves the proposal's list alone, sending an array REPLACES the set, and `[]`
+or `null` clears it. It is deepenable because a step list is what a card SAYS;
+it is refused on a container kind here exactly as at the append, and the check
+runs on the MERGED result, so a deepen that turns a leaf carrying steps into a
+`story` is refused even though the patch names only `kind`.
 
 ```jsonc
 // 1 — the SKELETON: titles, kinds and the edge graph. No `final`.
@@ -2453,6 +2560,54 @@ plan to propose again. On a `generating` plan the last withdrawal does **not** e
 it — that pass has not finished writing.
 
 Same statuses, same key, same freeze as `update_plan_proposal` above.
+
+##### `update_plan` — correct the PLAN'S OWN title and summary
+
+The three tools above all address a PROPOSAL. This one addresses the **plan** — the
+two lines a reviewer reads _above_ the tree, before any card. `create_plan` wrote
+them once and nothing could reach them afterwards, so the cheapest possible mistake
+had the most expensive remedy in this surface: withdraw every proposal (which ENDS a
+`planned` plan as `declined` / `discarded`), re-create the plan, re-append every
+proposal with every `planItem:` ref rebuilt, re-close it. One wrong sentence cost the
+whole plan.
+
+| Input     | Type           | Required | Notes                                                        |
+| --------- | -------------- | -------- | ------------------------------------------------------------ |
+| `planId`  | string         | yes      | The id `create_plan` returned.                               |
+| `title`   | string \| null | no       | The plan's own short label. `null` clears it.                |
+| `summary` | string \| null | no       | The Markdown summary shown above the tree. `null` clears it. |
+
+**Sparse, and a call that sends neither is refused.** An omitted field is left
+exactly as it was; an explicit `null` clears it. `INVALID_PROPOSAL` for a call that
+changes nothing — the same refusal `update_plan_proposal` gives an empty correction.
+
+**It touches NOTHING else, and that is asserted rather than assumed.** The plan keeps
+every proposal it had, its `status`, its `plannedAt` and the staleness flags derived
+from it. A brief edit corrects what the plan SAYS about itself; it does not re-open a
+closed plan, re-date it, or make a reviewer's read of the tree stale.
+
+**Legal on `generating` AND `planned`; `approved` and `declined` are FROZEN** — the
+same boundary the two correction doors draw, because it is the same question: a plan
+being written or awaiting a decision is editable, a decided plan is a record. The
+refusal is `PLAN_NOT_EDITABLE` and it names the status.
+
+**The edit is on the plan's TIMELINE**, as a `brief_edited` event carrying the harness
+and model that made it. That is a decision rather than a side effect: a `planned` plan
+is a thing a person is deciding about, and silently rewriting the sentence they are
+reading would trade one honesty problem for another. It is deliberately not the
+`edited` verb, which means _a proposal changed_ and renders as a proposal count.
+
+```jsonc
+// The summary said the org was the billing unit for code indexing. It is not.
+update_plan({ planId, summary: "…the org is the ATTRIBUTION unit; indexing is absorbed." })
+// → the same plan id, the same three proposals, still `planned`.
+```
+
+Requires **`ai:view_plan`** — the key `plansService.correctPlanBrief` asserts, the
+same one every other authoring write names. A CLI-minted token does not carry it.
+
+Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an `approved` or `declined` plan;
+`INVALID_PROPOSAL` for a call that sends neither field.
 
 ##### `validate_plan` — CHECK the plan BEFORE `final: true`
 

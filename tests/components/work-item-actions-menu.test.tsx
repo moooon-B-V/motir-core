@@ -294,7 +294,7 @@ describe('WorkItemActionsMenu — Add to active sprint (Subtask 2.4.14)', () => 
   });
 });
 // MOTIR-2097 filed the /items row ⋯ menu as the THIRD planning affordance: it
-// went through `PlanEditsTrigger` rather than `planningWorkspaceHref`, so
+// went through `PlanEditsTrigger` rather than the planning launcher, so
 // MOTIR-2084's blast-radius grep never saw it, and it offered Re-plan on a DONE
 // epic and on a CHILDLESS one. The fix put it on the shared `planEntranceFace`
 // rule; MOTIR-4258 removed the affordance instead.

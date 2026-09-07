@@ -7,6 +7,20 @@ import { OnboardingCanvas } from '@/components/onboarding/OnboardingCanvas';
 import { type DiscoveryState, initialDiscoveryState } from '@/lib/onboarding/discoveryLoop';
 import type { DirectionDocView } from '@/lib/onboarding/directionDoc';
 
+// ⚠️ THE PLANNING DOORS READ THE ADDRESS (MOTIR-4730). Every surface that mounts
+// one — and this tree mounts one — now calls `usePathname` / `useSearchParams`,
+// because the workspace opens OVER the page you are on rather than navigating to
+// `/planning`. Outside a router context the real hooks return `null` and the
+// door throws on its first render, so the mock is no longer optional here.
+const nav = vi.hoisted(() => ({
+  pathname: '/dashboard',
+  searchParams: new URLSearchParams(),
+}));
+vi.mock('next/navigation', () => ({
+  usePathname: () => nav.pathname,
+  useSearchParams: () => nav.searchParams,
+}));
+
 // A condensed peek payload the /api/work-items/peek read returns for MOTIR-1.
 const PEEK = {
   identifier: 'MOTIR-1',

@@ -191,6 +191,7 @@ describe('billingService.getBillingStatus', () => {
     expect(dto.catalog.seatPlan.name).toBe('Motir');
     expect(dto.catalog.aiPlans.map((p) => p.key)).toContain('pro');
     expect(dto.isMeta).toBe(false);
+    expect(dto.internalBilling).toBe(false);
   });
 
   it('flags the META org (moooon B.V.) so the page renders the Internal plan state', async () => {
@@ -198,6 +199,29 @@ describe('billingService.getBillingStatus', () => {
     await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
     const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
     expect(dto.isMeta).toBe(true);
+    // A DIFFERENT flag, and it did not move (MOTIR-4567).
+    expect(dto.internalBilling).toBe(false);
+  });
+
+  it('carries `internalBilling` for a classified org — and changes no figure with it (MOTIR-4567)', async () => {
+    const { organizationId, owner } = await makeOrgWithRoles();
+    const before = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    await adminDb.organization.update({
+      where: { id: organizationId },
+      data: { internalBilling: true },
+    });
+    const after = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
+
+    expect(before.internalBilling).toBe(false);
+    expect(after.internalBilling).toBe(true);
+    // `isMeta` is untouched by the classification — two flags, two meanings.
+    expect(after.isMeta).toBe(false);
+    // ⚠️ THE POINT OF THE CARD, ASSERTED RATHER THAN DESCRIBED: classifying an
+    // org changes WHICH KIND of org the DTO says it is, and NOTHING ELSE. Every
+    // line, every state and every figure is byte-identical to the unclassified
+    // read — an internal org is billed exactly like a customer.
+    expect({ ...after, internalBilling: false }).toEqual(before);
   });
 
   it('folds the Stripe subscription lifecycle (status + renewal) from the subscription read', async () => {

@@ -35,11 +35,13 @@ import { PlanWithAILauncher } from '@/components/planning/PlanWithAILauncher';
 // THE ARRIVAL LEVEL (MOTIR-3836). `?item=MOTIR-1234` means "the canvas is showing
 // MOTIR-1234's CHILDREN" — you are INSIDE it, which is where a drill leaves you —
 // so the trail is `ancestors ++ [the item itself]` and its LAST crumb is the level
-// the canvas loads. (Deliberately one crumb deeper than `/planning?item=`, which
+// the canvas loads. (Deliberately one crumb deeper than the planning overlay's
+// own `planItem=` anchor, which
 // opens on the anchor's OWN level so the anchor is visible; the two surfaces want
 // different things and keep the same param name.)
 //
-// Resolved through the same view-gated read `/planning` uses, with the same SILENT
+// Resolved through the same view-gated read the planning overlay's anchor route
+// uses (`GET /api/work-items/planning-anchor`), with the same SILENT
 // catch: an unknown key, another project's item, an archived one, or one this actor
 // cannot browse all yield an empty trail and the roadmap opens at its root. A stale
 // link is not a failure — it is a level that no longer exists — so there is no error

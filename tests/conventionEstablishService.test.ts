@@ -70,7 +70,11 @@ describe('conventionEstablishService.establishForFreshProject — FRESH submit',
   beforeEach(() => {
     // No connected repo → fresh establish-only path.
     vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: false });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: false,
+      internalBilling: false,
+    });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
   });
 
@@ -89,6 +93,7 @@ describe('conventionEstablishService.establishForFreshProject — FRESH submit',
       {
         organizationId: 'org_1',
         isMeta: false,
+        internalBilling: false,
         workspaceId: 'ws_1',
         projectId: 'pj_1',
         projectKey: 'MOTIR',
@@ -100,7 +105,11 @@ describe('conventionEstablishService.establishForFreshProject — FRESH submit',
   });
 
   it('threads the META flag onto the tenant so motir-ai bypasses the credit gate', async () => {
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: true });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: true,
+      internalBilling: false,
+    });
     vi.mocked(getPreplanState).mockResolvedValue(preplanWith('web'));
 
     await conventionEstablishService.establishForFreshProject(input);

@@ -63,7 +63,23 @@
         5 USAGE & COST · By model & consumers — per-model + top consumers; segmented switcher (the
           3↔4 jump). 6 DRILL-DOWN — one tenant's usage / SEATS & members / jobs / status, the audited
           read-only "View as tenant" affordance. 7 GATING / EMPTY / LOADING / ERROR.
+        8 DAY-1 SYSTEM HEALTH (8.5.10) · 9 DAY-1 SUPPORT ACTION (8.5.10) — the USER drill-down.
+        10 ORG LOOKUP + 10b its three states · 11 ORG PAGE (header, the two classification chips,
+          MOTIR-733's regions RESERVED, the allocation table) · 12 THE CLASSIFICATION CONTROL in six
+          states + the audit row — AMENDMENT 2026-09-05 (Story MOTIR-4337, card MOTIR-4564).
       Toggle dark mode to confirm token parity. See design-notes.md for the per-surface spec.
+
+      —— AMENDMENT 2026-09-05 (MOTIR-4564) ——
+      Panels 10–12 add the ORG level of the Tenants row, which this asset previously reserved: the
+      org lookup, the org page SHELL, and the ONE write Story MOTIR-4337 adds — a per-org
+      `internalBilling` classification, set and unset by platform staff with a required reason and
+      one `PlatformAuditLog` row. The record it draws to is
+      `docs/decisions/internal-billing-classification.md` (MOTIR-4563). This asset's own line that
+      "this design draws no destructive control" still holds for 10.1: the control drawn here is
+      neither destructive nor 10.1's — it is Story MOTIR-4337's, and it is the only one.
+      Panel 11 carries an ALLOCATION table so MOTIR-733's usage / recent-jobs / members panels and
+      the workspace + project levels stay that card's, drawn as reserved regions rather than as
+      content. Story 10.3 (MOTIR-745) keeps every governance action.
     -->
     <style>
       /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
@@ -1843,6 +1859,143 @@
         display: flex;
         gap: 8px;
       }
+
+      /* ── MOTIR-4564: org lookup · org page · the classification control ──── */
+      .pill-internal {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .lookup-form {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .lookup-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+      .lf-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .lf-input {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+      }
+      .lf-input svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .lf-value {
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .card.reserved {
+        background: var(--el-surface-soft);
+      }
+      .card.reserved .hsub {
+        color: var(--el-text-secondary);
+      }
+      .card.reserved .reserved-note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .btn.is-disabled {
+        opacity: 0.45;
+      }
+      .field .input.is-empty {
+        color: var(--el-text-secondary);
+      }
+      .ctrl-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .ctrl-cell {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .ctrl-cell.wide {
+        grid-column: span 2;
+      }
+      .ctrl-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .ctrl-key {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .ctrl-body {
+        padding: 14px;
+      }
+      .ctrl-note {
+        margin: 10px 0 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .toast {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-strong);
+      }
+      .toast svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .toast-warn {
+        background: var(--el-tint-yellow);
+      }
+      .toast-warn svg {
+        color: var(--el-warning);
+      }
+      .toast-err {
+        background: var(--el-tint-rose);
+      }
+      .toast-err svg {
+        color: var(--el-danger);
+      }
     </style>
   </head>
   <body>
@@ -1861,6 +2014,9 @@
           <strong>read-only “View as tenant”</strong> inspect affordance for debugging (write
           impersonation stays in Story 10.3). Read-mostly. Source of truth = this HTML; see
           design-notes.md. Gates 10.1.4 / 10.1.5 / 10.1.6.
+          <strong>Amended 2026-09-05 (MOTIR-4564)</strong> with Panels 10–12 — the org lookup, the
+          org page shell with the two classification chips and an allocation table, and the
+          internal-billing classification control in six states. Gates MOTIR-4566 and MOTIR-4568.
         </p>
       </div>
       <button
@@ -4044,6 +4200,863 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 10 — ACCESS PATH to the ORG level + the ORG LOOKUP (MOTIR-4564) ══════ -->
+    <div class="panel-label">
+      10 · Org lookup (MOTIR-4337 · MOTIR-4566) — the DOOR to the org level, and the surface the
+      classification control hangs on. The left-nav <strong>Tenants</strong> row loses its “10.1”
+      pill and goes LIVE at <code>/admin/tenants</code>; the top bar’s ⌘K box stays inert beside it,
+      exactly as it does on the shipped user lookup, because three of Panel 3’s four groups still
+      read tables with no <code>platform_staff</code> arm. A GET form, not a type-ahead — every
+      search is an audited cross-tenant read, so one request per SUBMIT, and the query lives in the
+      URL. Its three states are drawn underneath.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <!-- The path, end to end: menu → console → Tenants → one org. Panel 1 draws step 1. -->
+        <div class="scope" style="margin-bottom: 14px">
+          <span class="seg">Account menu › “Platform admin”</span>
+          <span class="sep" aria-hidden="true">›</span>
+          <span class="seg"><code>/admin</code> · Overview</span>
+          <span class="sep" aria-hidden="true">›</span>
+          <span class="seg">Left nav › <strong>Tenants</strong> (live)</span>
+          <span class="sep" aria-hidden="true">›</span>
+          <span class="seg active"><code>/admin/tenants</code> · org lookup</span>
+        </div>
+
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span
+                class="soon"
+                >10.1</span
+              >
+            </div>
+            <!-- LIVE, and no “soon” pill: this story builds the org level of this row. -->
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="scope">
+                <span class="seg">Platform</span>
+                <span class="sep" aria-hidden="true">›</span>
+                <span class="seg active">Tenants</span>
+              </div>
+
+              <div style="margin-top: 16px">
+                <h2 style="margin: 0; font-size: 19px">Organizations</h2>
+                <p
+                  style="
+                    margin: 6px 0 0;
+                    font-size: 12.5px;
+                    color: var(--el-text-secondary);
+                    max-width: 62ch;
+                  "
+                >
+                  Find an organization by name or slug. Opening one is an audited cross-tenant read.
+                </p>
+              </div>
+
+              <!-- The GET form, the shipped lookup grammar one entity over. -->
+              <div class="lookup-form">
+                <label class="lookup-field">
+                  <span class="lf-label">Name or slug</span>
+                  <span class="lf-input">
+                    <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>
+                    <span class="lf-value">moooon</span>
+                  </span>
+                </label>
+                <span class="btn btn-primary">Search</span>
+              </div>
+
+              <div class="card" style="margin-top: 16px">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="ico ent-org" style="width: 30px; height: 30px"
+                      ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+                    ></span>
+                    <div>
+                      <h3>Results</h3>
+                      <p class="hsub">Matching organizations, newest first.</p>
+                    </div>
+                  </div>
+                  <span class="pill pill-neutral">3 organizations</span>
+                </div>
+                <div class="card-body flush">
+                  <table class="tbl">
+                    <thead>
+                      <tr>
+                        <th>Organization</th>
+                        <th>Slug</th>
+                        <th>Plan</th>
+                        <th>Classification</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span class="tenant"><span class="ava ent-org">M</span>moooon B.V.</span>
+                        </td>
+                        <td><span class="pill pill-code">moooon</span></td>
+                        <td><span class="pill pill-tier">Meta</span></td>
+                        <td>
+                          <span class="pill pill-platform"
+                            ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>isMeta</span
+                          >
+                          <span class="pill pill-internal"
+                            ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                            >internalBilling</span
+                          >
+                        </td>
+                        <td>
+                          <span class="drill-chev"
+                            ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                          ></span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="tenant"
+                            ><span class="ava ent-org">N</span>Northwind Labs</span
+                          >
+                        </td>
+                        <td><span class="pill pill-code">northwind</span></td>
+                        <td><span class="pill pill-tier">Team</span></td>
+                        <td><span class="muted">—</span></td>
+                        <td>
+                          <span class="drill-chev"
+                            ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                          ></span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="tenant"><span class="ava ent-org">A</span>Acme Corp</span>
+                        </td>
+                        <td><span class="pill pill-code">acme</span></td>
+                        <td><span class="pill pill-tier">Pro</span></td>
+                        <td><span class="muted">—</span></td>
+                        <td>
+                          <span class="drill-chev"
+                            ><svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                          ></span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="card-foot">
+                  <span class="fnote"
+                    ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 3 of 3
+                    matches</span
+                  >
+                </div>
+              </div>
+
+              <div class="note" style="margin-top: 16px">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                <span
+                  ><strong>Two classification chips, never one.</strong> The row above carries
+                  <code>isMeta</code> and <code>internalBilling</code> as SEPARATE, separately
+                  labelled chips, because they mean different things — <code>isMeta</code> is
+                  “Motir’s own COGS: caps lifted, paywall off, out of revenue”,
+                  <code>internalBilling</code> is “charged exactly like a customer, then made
+                  whole”. A single “Internal” chip would draw the very conflation
+                  <code>docs/decisions/internal-billing-classification.md</code> §1 refuses. They
+                  are true together on <code>moooon</code> today and that coincidence is not
+                  identity.</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 10b — the ORG LOOKUP’s three states ══════ -->
+    <div class="panel-label">
+      10b · Org lookup — idle · query too short · no results. The idle state is what the operator
+      sees on arrival: the lookup answers a QUESTION, so it shows nothing until asked, rather than
+      listing every tenant. There is no “forbidden” arm here — a non-staff user never reaches this
+      route at all (Panel 7a’s 404).
+    </div>
+    <div class="panel">
+      <div class="states-grid">
+        <div class="state">
+          <span class="ico"
+            ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+          ></span>
+          <h4>Search for an organization</h4>
+          <p>
+            Type a name or slug above. Results are limited to 20; every match you open is recorded
+            in the audit log.
+          </p>
+        </div>
+
+        <div class="state">
+          <span class="ico"
+            ><svg viewBox="0 0 24 24"><use href="#i-search" /></svg
+          ></span>
+          <h4>Keep typing</h4>
+          <p>
+            Enter at least 2 characters. A one-character search matches most of the estate and
+            writes an audit row for a read nobody meant to make.
+          </p>
+        </div>
+
+        <div class="state">
+          <span class="ico"
+            ><svg viewBox="0 0 24 24"><use href="#i-building" /></svg
+          ></span>
+          <h4>No organizations match “nrthwnd”</h4>
+          <p>
+            Check the spelling, or search by slug. An org that exists but is not shown is a bug —
+            this lookup reads every tenant, not only the ones you belong to.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 11 — the ORG PAGE (header, chips, control, RESERVED regions) ══════ -->
+    <div class="panel-label">
+      11 · Org page (MOTIR-4337 · MOTIR-4566) — the SHELL this story builds, and the allocation that
+      keeps it from annexing
+      <a href="#alloc"><strong>MOTIR-733</strong></a
+      >’s work. Identity, plan tier, credit balance and the two classification chips are this
+      story’s; the usage rollup, recent jobs and members list are drawn as RESERVED regions, not as
+      content. The workspace and project drill-down levels below an org are MOTIR-733’s entirely and
+      are not drawn at all.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost<span
+                class="soon"
+                >10.1</span
+              >
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-users" /></svg>Users
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <div class="scope">
+                <span class="seg">Platform</span>
+                <span class="sep" aria-hidden="true">›</span>
+                <span class="seg">Tenants</span>
+                <span class="sep" aria-hidden="true">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-org">M</span>moooon B.V.</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                <span
+                  >You are viewing <strong>moooon B.V.</strong> as platform staff. This cross-tenant
+                  read is recorded in the audit log (operator <strong>OP · ops@moooon.net</strong>,
+                  just now).</span
+                >
+              </div>
+
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-org" style="width: 36px; height: 36px; font-size: 14px"
+                    >M</span
+                  >
+                  <div>
+                    <h2 style="margin: 0; font-size: 19px">moooon B.V.</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap">
+                      <span class="pill pill-active">● Active</span>
+                      <span class="pill pill-code">moooon</span>
+                      <span class="pill pill-tier">Meta plan</span>
+                      <span class="pill pill-neutral">
+                        <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>0 credits</span
+                      >
+                      <span class="pill pill-platform"
+                        ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>isMeta</span
+                      >
+                      <span class="pill pill-internal"
+                        ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>internalBilling</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <!-- The ONE write this story adds. Everything else here is read-only. -->
+                <div class="act-col">
+                  <span class="btn btn-secondary"
+                    ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Remove internal
+                    classification</span
+                  >
+                </div>
+              </div>
+
+              <div class="stack">
+                <div class="note">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  <span
+                    ><strong>The balance reads 0 and that is the point.</strong> An internal org
+                    incurs every debit a customer incurs and each one is paired, in the same
+                    transaction, with an <code>internal_offset</code> credit — so the balance nets
+                    to zero while both entries stay visible in the ledger (<code
+                      >internal-billing-classification.md</code
+                    >
+                    §2–§3). It is not a suppressed figure; it is a real one that has been made
+                    whole.</span
+                  >
+                </div>
+
+                <!-- RESERVED: MOTIR-733's panels. Drawn as regions, never as content. -->
+                <div class="grid-2">
+                  <div class="card reserved">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg
+                        ></span>
+                        <div>
+                          <h3>Usage &amp; cost rollup</h3>
+                          <p class="hsub">This org’s spend, by workspace and by model.</p>
+                        </div>
+                      </div>
+                      <span class="pill pill-neutral">MOTIR-733</span>
+                    </div>
+                    <div class="card-body">
+                      <p class="reserved-note">
+                        Reserved region — <strong>not built by this story</strong>. MOTIR-733 draws
+                        and builds it on top of MOTIR-730’s cross-tenant read layer.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="card reserved">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                        ></span>
+                        <div>
+                          <h3>Members</h3>
+                          <p class="hsub">Seats used against the tier limit, and who holds them.</p>
+                        </div>
+                      </div>
+                      <span class="pill pill-neutral">MOTIR-733</span>
+                    </div>
+                    <div class="card-body">
+                      <p class="reserved-note">
+                        Reserved region — <strong>not built by this story</strong>. Panel 6 already
+                        draws this content for the 10.1.6 drill-down.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card reserved">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-activity" /></svg
+                      ></span>
+                      <div>
+                        <h3>Recent jobs</h3>
+                        <p class="hsub">The org’s recent planning and agent runs.</p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">MOTIR-733</span>
+                  </div>
+                  <div class="card-body">
+                    <p class="reserved-note">
+                      Reserved region — <strong>not built by this story</strong>. The workspace and
+                      project levels BELOW this org are MOTIR-733’s entirely and are not drawn here
+                      at all.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- THE ALLOCATION, on the asset, so three cards can read one answer. -->
+                <div class="card" id="alloc">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-org" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                      ></span>
+                      <div>
+                        <h3>Who builds what on this page</h3>
+                        <p class="hsub">
+                          The allocation, per element. Two work items may not own the same write.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">Allocation</span>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Element</th>
+                          <th>Built by</th>
+                          <th>Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>Org lookup (<code>/admin/tenants</code>) + its three states</td>
+                          <td><span class="pill pill-platform">MOTIR-4566</span></td>
+                          <td>
+                            <span class="muted"
+                              >This story. The Tenants nav row goes live with it.</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Org page SHELL, breadcrumb, audited-read banner</td>
+                          <td><span class="pill pill-platform">MOTIR-4566</span></td>
+                          <td><span class="muted">This story. The frame, not the panels.</span></td>
+                        </tr>
+                        <tr>
+                          <td>Header: identity, plan tier, balance, the two chips</td>
+                          <td><span class="pill pill-platform">MOTIR-4566</span></td>
+                          <td>
+                            <span class="muted"
+                              >Two separately-labelled chips — never one “Internal”.</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>The classification CONTROL, its confirm and its audit row</td>
+                          <td><span class="pill pill-platform">MOTIR-4568</span></td>
+                          <td><span class="muted">This story. Panel 12.</span></td>
+                        </tr>
+                        <tr>
+                          <td><code>organization</code> platform-staff SELECT / UPDATE arms</td>
+                          <td><span class="pill pill-platform">MOTIR-4565</span></td>
+                          <td>
+                            <span class="muted"
+                              >Carved from MOTIR-730, which keeps every other table’s arms.</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Usage &amp; cost rollup panel</td>
+                          <td><span class="pill pill-ws">MOTIR-733</span></td>
+                          <td><span class="muted">Reserved region above.</span></td>
+                        </tr>
+                        <tr>
+                          <td>Recent-jobs panel</td>
+                          <td><span class="pill pill-ws">MOTIR-733</span></td>
+                          <td><span class="muted">Reserved region above.</span></td>
+                        </tr>
+                        <tr>
+                          <td>Members / seats panel</td>
+                          <td><span class="pill pill-ws">MOTIR-733</span></td>
+                          <td><span class="muted">Reserved region above.</span></td>
+                        </tr>
+                        <tr>
+                          <td>Workspace and project drill-down levels</td>
+                          <td><span class="pill pill-ws">MOTIR-733</span></td>
+                          <td><span class="muted">Not drawn here at all.</span></td>
+                        </tr>
+                        <tr>
+                          <td>
+                            Suspend / reactivate, credit grants, tier change, impersonation, the
+                            general per-org flag surface
+                          </td>
+                          <td><span class="pill pill-proj">MOTIR-745</span></td>
+                          <td>
+                            <span class="muted"
+                              >Story 10.3’s governance toolkit. Not drawn here.</span
+                            >
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ PANEL 12 — the CLASSIFICATION CONTROL, six states + the record ══════ -->
+    <div class="panel-label">
+      12 · The classification control (MOTIR-4568) — set and unset, in all six states. It is the
+      shipped <code>SupportActionsBar</code> pattern one entity over: a button, a confirm dialog
+      whose primary is DISABLED until a reason is typed, and the audit row rendered straight back
+      onto the same surface — the console’s standing line that “an operator can never perform an
+      action and wonder whether it was recorded”. One <code>PlatformAuditLog</code> row per write,
+      with a required reason; no second audit log (<code>internal-billing-classification.md</code>
+      §6).
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="ctrl-grid">
+          <!-- a — NOT CLASSIFIED -->
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">a</span>Not classified</div>
+            <div class="ctrl-body">
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px">
+                <span class="pill pill-tier">Pro plan</span>
+                <span class="pill pill-neutral">12 400 credits</span>
+              </div>
+              <span class="btn btn-secondary"
+                ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Classify as internal
+                billing</span
+              >
+              <p class="ctrl-note">
+                No chip is drawn when the flag is off — an absent classification is absence, not a
+                state with a badge of its own.
+              </p>
+            </div>
+          </div>
+
+          <!-- b — CLASSIFIED -->
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">b</span>Classified internal</div>
+            <div class="ctrl-body">
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px">
+                <span class="pill pill-tier">Meta plan</span>
+                <span class="pill pill-neutral">0 credits</span>
+                <span class="pill pill-platform"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>isMeta</span
+                >
+                <span class="pill pill-internal"
+                  ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>internalBilling</span
+                >
+              </div>
+              <span class="btn btn-secondary"
+                ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Remove internal
+                classification</span
+              >
+              <p class="ctrl-note">
+                The unset is the same control inverted — same confirm, same required reason, same
+                audit row. Removing it leaves every ledger row exactly where it is.
+              </p>
+            </div>
+          </div>
+
+          <!-- c — THE CONFIRM, reason typed -->
+          <div class="ctrl-cell wide">
+            <div class="ctrl-head">
+              <span class="ctrl-key">c</span>Confirm — reason typed, primary enabled
+            </div>
+            <div class="ctrl-body">
+              <div class="confirm" style="width: auto">
+                <h4>Classify moooon B.V. as internal billing?</h4>
+                <p>
+                  Every AI debit this org incurs will be paired, in the same transaction, with an
+                  offsetting credit — so it is charged exactly like a customer and its balance nets
+                  to zero. Both entries stay visible in the ledger. This changes no rate, lifts no
+                  cap and touches no Stripe object, and another operator can remove it.
+                </p>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input">
+                    Dogfood org — bills like a customer so we can see the paid billing and usage
+                    screens (MOTIR-4337)
+                  </div>
+                  <div class="hint">
+                    Shown to any operator reading this organization later. “Internal” on its own
+                    answers nothing.
+                  </div>
+                </div>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary"
+                    ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Classify as
+                    internal</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- d — REASON MISSING -->
+          <div class="ctrl-cell wide">
+            <div class="ctrl-head">
+              <span class="ctrl-key">d</span>Reason missing — the primary is DISABLED, not a
+              post-submit error
+            </div>
+            <div class="ctrl-body">
+              <div class="confirm" style="width: auto">
+                <h4>Classify moooon B.V. as internal billing?</h4>
+                <p>
+                  Every AI debit this org incurs will be paired, in the same transaction, with an
+                  offsetting credit — so it is charged exactly like a customer and its balance nets
+                  to zero.
+                </p>
+                <div class="field">
+                  <label
+                    >Reason <span class="req">— required, written to the audit log</span></label
+                  >
+                  <div class="input is-empty">Why is this organization internal?</div>
+                  <div class="hint">
+                    The button below stays disabled until a reason is typed — the same gate the
+                    server applies inside the transaction, so a client that ignored it would still
+                    be refused.
+                  </div>
+                </div>
+                <div class="confirm-actions">
+                  <span class="btn btn-secondary">Cancel</span>
+                  <span class="btn btn-primary is-disabled"
+                    ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Classify as
+                    internal</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- e — ALREADY IN THAT STATE -->
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">e</span>Already in that state</div>
+            <div class="ctrl-body">
+              <div class="toast toast-warn">
+                <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                <span
+                  ><strong>No change made</strong><br />moooon B.V. is already classified as
+                  internal billing. Another operator classified it 4 minutes ago — reload to see the
+                  current state.</span
+                >
+              </div>
+              <p class="ctrl-note">
+                A refusal, not a failure: nothing was written, and no audit row was created. Two
+                operators on the same org is the ordinary case this arm exists for.
+              </p>
+            </div>
+          </div>
+
+          <!-- f — GENERIC FAILURE -->
+          <div class="ctrl-cell">
+            <div class="ctrl-head"><span class="ctrl-key">f</span>Generic failure</div>
+            <div class="ctrl-body">
+              <div class="toast toast-err">
+                <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                <span
+                  ><strong>Couldn’t update the classification</strong><br />The change was not
+                  applied and nothing was recorded. Try again; if it keeps failing, the
+                  organization’s state is unchanged.</span
+                >
+              </div>
+              <p class="ctrl-note">
+                The write and its audit row share one transaction, so a failure leaves neither — the
+                honest message is “nothing happened”, never “it may have worked”.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- THE RECORD, on the same surface as the action. -->
+        <div class="card" style="margin-top: 16px">
+          <div class="card-head">
+            <div class="ttl">
+              <span class="ico ent-org" style="width: 30px; height: 30px"
+                ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+              ></span>
+              <div>
+                <h3>Platform actions on this organization</h3>
+                <p class="hsub">
+                  Every operator write on this org, newest first. Append-only, and the same
+                  <code>PlatformAuditLog</code> the console already writes.
+                </p>
+              </div>
+            </div>
+            <span class="pill pill-neutral">This organization</span>
+          </div>
+          <div class="card-body flush">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Action</th>
+                  <th>Operator</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="when">just now</span></td>
+                  <td>
+                    <span class="pill pill-platform"
+                      ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Classified
+                      internal</span
+                    >
+                  </td>
+                  <td><span class="muted">ops@moooon.net</span></td>
+                  <td>
+                    <span class="muted"
+                      >Dogfood org — bills like a customer so we can see the paid billing and usage
+                      screens (MOTIR-4337)</span
+                    >
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="when">2h ago</span></td>
+                  <td>
+                    <span class="pill pill-readonly"
+                      ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>Organization read</span
+                    >
+                  </td>
+                  <td><span class="muted">ops@moooon.net</span></td>
+                  <td><span class="muted">—</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-foot">
+            <span class="fnote"
+              ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–2 of 2 actions</span
+            >
+            <div class="pager">
+              <span class="pbtn is-disabled"
+                ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+              >
+              <span>Page 1 of 1</span>
+              <span class="pbtn is-disabled"
+                >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+              ></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="note" style="margin-top: 16px">
+          <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+          <span
+            ><strong>What this control is NOT.</strong> It is one flag on one entity, and it joins
+            <code>platform-staff-auth.md</code> §7’s allocation table as a
+            <code>superadmin</code>-level, reason-required, audited write. Credit grants and
+            adjustments, plan and tier management, suspend / reactivate, impersonation, the GENERAL
+            per-org feature-flag mechanism and the tamper-evident hash-chained audit log are all
+            Story 10.3 (MOTIR-745) and are not drawn here. When that hash chain lands it extends
+            this same table; this control becomes one of its sources.</span
+          >
         </div>
       </div>
     </div>

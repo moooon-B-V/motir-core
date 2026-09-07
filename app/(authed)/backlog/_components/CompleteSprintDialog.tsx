@@ -232,6 +232,7 @@ export function CompleteSprintDialog({
       description={t('completeSprintFlow.subtitle', { sprint: sprint.name, project: projectName })}
       size="md"
     >
+      {/* modal-scroll-container: measured 1280x700, tallest = 1 done / 2 incomplete with a future-sprint carry-over target selected (the two carry radios + the sprint combobox), panel 481px */}
       <form
         onSubmit={(e) => {
           e.preventDefault();

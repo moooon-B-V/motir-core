@@ -33,7 +33,11 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('aiExplanationService.submitExplanationDraft', () => {
   beforeEach(() => {
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: false });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: false,
+      internalBilling: false,
+    });
     vi.mocked(submitJob).mockResolvedValue({ jobId: 'job_1' });
   });
 
@@ -62,6 +66,7 @@ describe('aiExplanationService.submitExplanationDraft', () => {
       {
         organizationId: 'org_1',
         isMeta: false,
+        internalBilling: false,
         workspaceId: 'ws_1',
         projectId: 'pj_1',
         projectKey: 'MOTIR',

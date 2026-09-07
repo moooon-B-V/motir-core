@@ -120,6 +120,30 @@ export const SETTINGS_REDIRECTS = [
     destination: '/settings/account/tokens',
     permanent: true,
   },
+  // ⚠️ THE GIT SURFACE MOVED A TIER (Story MOTIR-4669 · MOTIR-4680). A repository
+  // is connected ONCE, to the ORGANISATION — the workspace was never where it
+  // lived — so both provider routes now answer at `/settings/organization/git`,
+  // which renders the same shared shell with the same provider Segmented plus the
+  // organisation's whole repository inventory.
+  //
+  // PERMANENT, and both spellings, because both were linked: the rail's `Git`
+  // row, the project Repositories room's footer, the code-access connect prompt,
+  // and every OAuth / App-install round trip that returned to one of them. A
+  // temporary redirect on a surface people bookmark is a promise to move it back.
+  //
+  // The GitLab arm keeps its provider through the search param rather than a
+  // second route — the inventory spans both providers, so the Segmented switches
+  // the connection card rather than the page.
+  {
+    source: '/settings/workspace/github',
+    destination: '/settings/organization/git',
+    permanent: true,
+  },
+  {
+    source: '/settings/workspace/gitlab',
+    destination: '/settings/organization/git?provider=gitlab',
+    permanent: true,
+  },
 ] as const;
 
 const nextConfig: NextConfig = {

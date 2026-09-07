@@ -3,8 +3,12 @@
  *
  * The credential surfaces carry an explicit destination for the flows that
  * cannot re-derive theirs — `/device` packs the CLI's user code into
- * `?next=/device?user_code=…` because `proxy.ts`'s bounce drops a query string,
- * and every deep link that bounced through auth carries the page it wanted.
+ * `?next=/device?user_code=…` (it builds that bounce itself, client-side), and
+ * every deep link that bounced through auth carries the page it wanted. So a
+ * QUERY STRING has always been part of a legal value here, and since MOTIR-4725
+ * `proxy.ts`'s own bounce carries one too — the planning workspace is an overlay
+ * whose open state lives entirely in the query, so a destination without it is a
+ * different page.
  * Until MOTIR-3372 that value was only ever read CLIENT-side, as the
  * `callbackURL` Better-Auth navigates to after a successful sign-in. Now the
  * server shells follow it too, for a reader who is ALREADY signed in and needs

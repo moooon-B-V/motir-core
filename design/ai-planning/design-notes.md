@@ -2,26 +2,28 @@
 
 This area holds the surfaces where a person reviews what Motir's planner PROPOSES.
 
-| Surface                                      | Files                                                     | Card                 | Section   |
-| -------------------------------------------- | --------------------------------------------------------- | -------------------- | --------- |
-| The Plans surface                            | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I    |
-| AI **sprint** planning                       | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II   |
-| **Who authored a plan**                      | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III  |
-| **The status tag's place**                   | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV   |
-| A proposal on its parent's **roadmap level** | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V    |
-| A proposal **READ view**                     | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V    |
-| A **decided** plan's node treatments         | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI   |
-| What the pane holds **after approve**        | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI   |
-| The Plans list **tabbed by status**          | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII  |
-| The plan detail's **List ↔ Canvas** switcher | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII |
-| What a **generating** plan offers            | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII |
-| The plan canvas **at arrival**               | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
-| **Show changes** on the plan canvas          | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
-| The timeline's **CONTENT events**            | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
-| The **FIFTH plan status** on every surface   | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
-| **Revising a plan under review**             | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
-| **The plan detail, refined**                 | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
-| **The shipped peek in PROPOSAL mode**        | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
+| Surface                                         | Files                                                     | Card                 | Section   |
+| ----------------------------------------------- | --------------------------------------------------------- | -------------------- | --------- |
+| The Plans surface                               | `plans-surface.mock.html` + `.png`                        | MOTIR-843 (7.4.1)    | Part I    |
+| AI **sprint** planning                          | `sprint-planning.mock.html` + `.png`                      | MOTIR-1749 (7.13.11) | Part II   |
+| **Who authored a plan**                         | `plans-surface.mock.html` (panel A2) + `.png`             | MOTIR-2985           | Part III  |
+| **The status tag's place**                      | `plans-surface.mock.html` (the header gallery) + `.png`   | MOTIR-3074           | Part IV   |
+| A proposal on its parent's **roadmap level**    | `plans-surface.mock.html` (panel E) + `.png`              | MOTIR-3082           | Part V    |
+| A proposal **READ view**                        | `plans-surface.mock.html` (panel F) + `.png`              | MOTIR-3082           | Part V    |
+| A **decided** plan's node treatments            | `plans-surface.mock.html` (panel G) + `.png`              | MOTIR-3159           | Part VI   |
+| What the pane holds **after approve**           | `plans-surface.mock.html` (panel H) + `.png`              | MOTIR-3159           | Part VI   |
+| The Plans list **tabbed by status**             | **`plans-tabbed-list.mock.html`** + `.png`                | MOTIR-3233           | Part VII  |
+| The plan detail's **List ↔ Canvas** switcher    | **`plan-detail-list-view.mock.html`** + `.png`            | MOTIR-3234           | Part VIII |
+| What a **generating** plan offers               | **`plan-detail-list-view.mock.html`** (panel 4) + `.png`  | MOTIR-3234           | Part VIII |
+| The plan canvas **at arrival**                  | **`plan-canvas-arrival.mock.html`** + `.png`              | MOTIR-3259           | Part IX   |
+| **Show changes** on the plan canvas             | **`plan-canvas-arrival.mock.html`** (panels 3–4) + `.png` | MOTIR-3259           | Part IX   |
+| The timeline's **CONTENT events**               | **`plan-timeline-content-events.mock.html`** + `.png`     | MOTIR-3534           | Part X    |
+| The **FIFTH plan status** on every surface      | **`plans-tabbed-list.mock.html`** (panels 4–6) + `.png`   | MOTIR-3577           | Part XI   |
+| **Revising a plan under review**                | **`plan-revision.mock.html`** + `.png`                    | MOTIR-3597           | Part XII  |
+| **The plan detail, refined**                    | **`plan-detail-refined.mock.html`** + `.png`              | MOTIR-4017           | Part XIII |
+| **The shipped peek in PROPOSAL mode**           | **`peek-proposal-mode.mock.html`** + `.png`               | MOTIR-4182           | Part XIV  |
+| **The PROPOSED to-do list in the peek**         | **`peek-proposed-todos.mock.html`** + `.png`              | MOTIR-4615           | Part XV   |
+| **The grouped non-epic roots on a plan canvas** | **`plan-canvas-grouped-roots.mock.html`** + `.png`        | MOTIR-4773           | Part XVI  |
 
 Both review the same way — nothing is real until approve, and the approve CTA names what it
 will create. Part II mirrors Part I's grammar deliberately; it does not invent a second one.
@@ -4498,3 +4500,310 @@ peek looks the same"_ into the 11,676-byte identity in §16.0. §15's Playwright
 harness would have measured the same thing more expensively: this section decides no geometry — every
 panel below is a string and a chip inside a layout §3 and §4 already measured at 1440×900 — so the
 render it needed was of the MARKUP, not of the pixels.
+
+---
+
+# Part XV — The PROPOSED to-do list in the peek's PROPOSAL MODE: the read-only steps on an un-materialized `add`, their executor marks and commands, the empty / at-scale / long-command states, and why a `modify` shows none (MOTIR-4615 / Story MOTIR-3810)
+
+**Asset:** `peek-proposed-todos.mock.html` + `peek-proposed-todos.png`, rendered at viewport 1200,
+`deviceScaleFactor: 2` (export 2400×11500).
+
+When a plan proposes a `manual` work item, the proposal already carries that card's ORDERED STEPS
+(`docs/decisions/agent-authored-plans.md` AMENDMENT 14, MOTIR-4614). Until now the reviewer read
+those operations as a paragraph — the one thing they are actually approving on a `manual` card was
+the one thing the surface could not show. This Part draws where they read them instead: a
+**read-only To-do list** in the peek's main column, one click before Approve.
+
+**A NEW asset, not an edit of Part XIV's.** § _A design result is a MOMENT_ (Yue, 2026-08-20):
+a new element on an existing surface gets its own file. `peek-proposal-mode.mock.html` stays frozen
+at what MOTIR-4182 decided.
+
+## 15.1 Composition — what comes from where, and what is DROPPED
+
+Nothing here is drawn twice. Both halves are shipped assets and this Part cites rather than redraws
+them.
+
+| element                            | comes from                                                 | kept / dropped                                                                 |
+| ---------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| the section shell + header grammar | `ContentSectionCard`, as `todo-list.mock.html` composes it | KEPT whole — the created card shows the same section, so it must look the same |
+| `To-do list` + the muted gloss     | `todo-list.mock.html` § the section header                 | KEPT; the gloss reads _"the steps this card proposes"_ rather than the card's  |
+| the `0 of N` count, mono           | same                                                       | KEPT — `0 of 5`, because a proposal has no ticked row                          |
+| the three-track row grid           | `todo-list.mock.html` `.todoRow`                           | **DROPPED to two.** The actions track has nothing to hold                      |
+| the checkbox                       | same, `.cbox`                                              | KEPT, **inert**: unchecked, `aria-disabled`, `--el-input-readonly-bg`          |
+| the 13.5px plain-text step         | same                                                       | KEPT verbatim                                                                  |
+| the executor pill `You` / `Agent`  | same, `.execMark`                                          | KEPT verbatim                                                                  |
+| the mono command box + copy button | same, `.cmdBox` / `.cmdVal`                                | **KEPT, including copy** — copying a command is a READ                         |
+| the `Instructions` disclosure      | same, `.notesToggle` / `.notesBody`                        | KEPT and still interactive — expanding notes is a read                         |
+| the reorder grip / edit / delete   | same, `.rowActions`                                        | **DROPPED**                                                                    |
+| the `Add a step` row               | same, `.addRow`                                            | **DROPPED**                                                                    |
+| the peek chrome                    | `components/workItems/QuickViewSurface.tsx` (Part XIV)     | KEPT; re-declared as `.peek*` shims against the same tokens                    |
+
+**Why the checkbox stays and is not simply removed.** It is what makes the section recognisable as
+_the list you will tick_. Removing it would leave a bulleted paragraph that happens to sit in a card,
+which is what this whole story exists to stop being the answer. It is dimmed rather than left at full
+contrast because a control that looks tickable and is not is worse than no control at all.
+
+## 15.2 Placement, measured
+
+- **Viewport 1440×900**, peek **980×680** (Part XIV's `h-[680px]`), main column **626×613**, rail
+  **300px** — Part XIV's own numbers, inherited rather than re-measured.
+- The section is **the last thing in the main column**, after the explanation. The peek defers
+  children and comments to a page a proposal does not have (Part XIV §2), so there is nothing below
+  it, and the reader reaches it by scrolling the body they were already reading.
+- **At 5 rows the column does not scroll.** At **12 rows it does** — and that is the answer to _does
+  the section get its own scroller?_ **No.** It grows, and `QuickViewMain`'s existing
+  `overflow-y-auto` is the one scroll surface. A second scroller inside the first gives the reader
+  two things to move and no way to tell which one they are in. The 300px rail is a sibling grid cell
+  and does not move.
+
+## 15.3 The states, panel by panel
+
+| panel | state                  | what the reader sees                                                                  |
+| ----- | ---------------------- | ------------------------------------------------------------------------------------- |
+| 1     | 5 steps, 1440×900      | the section at the foot of the main column, no scroll                                 |
+| 2     | the row's read face    | the shipped write face beside it, so what is dropped is visible rather than described |
+| 3a    | **absent**             | **no section at all** — see below                                                     |
+| 3b    | 1 step                 | the header still carries `0 of 1`                                                     |
+| 3c    | instructions expanded  | the disclosure opens in place; the section grows and the column scrolls               |
+| 4     | 12 steps               | the column scrolls, the rail stays put                                                |
+| 5     | the long command, 1440 | only the inside of the mono box moves                                                 |
+| 5     | the long command, 390  | the body is one column; same containment, more of the command visible per line        |
+| 6     | `modify` / `remove`    | **no list**, drawn deliberately                                                       |
+| 7     | dark                   | the same markup under `data-theme="dark"`                                             |
+
+**The ABSENT state is the one with an argument behind it.** An `add` with no `todos`, or with `[]`,
+renders **nothing** — not an empty section reading `To-do list · 0 of 0`. That is Part XIV §1's rule
+applied to a new row: _a row's absence is a statement about the SUBJECT_. An empty section asserts
+that a planner considered this card's steps and proposed none, which is a claim the data cannot
+support — the same proposal is produced by a planner that never reached the question.
+
+## 15.4 `modify` and `remove` — drawn as NOT drawn
+
+Panel 6 exists so that nobody adds a list there later by accident, and so the absence reads as a
+decision rather than as an omission. Three facts, none of them about this design:
+
+1. a `modify`'s target is a **committed** card, whose list is a **person's progress** — ticked rows,
+   with `doneAt` and `doneById`;
+2. `QuickViewData` carries **no to-do field** (`lib/dto/quickView.ts`, checked at `d2a0c964b`), so
+   the peek has nothing to render even if it wanted to;
+3. AMENDMENT 14 **D2** refuses a `todos` on a `modify` patch, so a plan could not change one either.
+
+The steps are shown on an `add` — which has no live card to fetch them from, and whose steps
+therefore exist nowhere else — and on nothing else.
+
+## 15.5 ⚠️ Two things this asset had to fix in the technique, and one of them is a filed defect
+
+Both were found by rendering the dark panel and reading it, which is the only way either surfaces.
+
+**(a) A Tier-3 token does not re-derive in a NESTED dark scope.** A custom property's `var()` is
+substituted at computed-value time on the element that DECLARES it, so `--el-text:
+var(--color-foreground)` declared on `:root` computes to the LIGHT foreground and it is that value
+which inherits. A descendant carrying `data-theme="dark"` flips Tier 0 for its subtree and cannot
+retroactively re-substitute Tier 3. **In the real app this never arises** — `data-theme` sits on
+`<html>`, the same element `:root` matches — and it arises only in a MOCK drawing a dark panel beside
+a light one. This asset therefore repeats the identical `--el-*: var(--color-*)` declarations inside
+`[data-theme='dark']`. **It declares no new token and no new value.**
+
+**(b) A CSS ESCAPE BELONGS IN THE SELECTOR AND NEVER IN THE `class` ATTRIBUTE.** `todo-list.mock.html`
+writes its Tailwind arbitrary-value utilities as `class="text-\[13.5px\] text-\(--el-text\)"` — with
+literal backslashes in the HTML. The selector `.text-\(--el-text\)` matches the class
+`text-(--el-text)`; the attribute above declares the class `text-\(--el-text\)`. **They never meet**,
+so every one of those utilities is inert, and the element falls back to whatever it inherits.
+
+In LIGHT that is `body { color: var(--el-text) }` — the right colour by accident. In a scoped dark
+panel the inherited value is still the light one, so **the steps render near-black on near-black**.
+It is visible in that asset's own committed PNG.
+
+**138 such class attributes, in exactly one file, tree-wide** (`git ls-tree origin/main -- design`,
+every `*.mock.html`). **Filed as a bug on story MOTIR-3810, `relates_to` MOTIR-4615.** This asset
+does not inherit it: its class attributes carry no escapes, which is also what the shipped app emits
+and what `peek-proposal-mode.mock.html`'s real Tailwind output already looks like.
+
+## 15.6 Access path
+
+**No new door.** The peek is opened from the **plan list row** (its title button, Part XIII §7) and
+from the **canvas node's `View` pill** (Part V §3) — both shipped by MOTIR-4185, both drawn in Part
+XIV panel 0. This Part draws neither and adds none: the steps are inside a surface the reader has
+already opened.
+
+## 15.7 GIVES / TAKES
+
+Every `MOTIR-<n>` in the asset and in this Part, dispositioned.
+
+| key            | GIVES / TAKES                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-4622** | **GIVES** — the review surface builds this. It owns `PlanReviewItemDto.todos` and the peek's read-only section, to this asset. |
+| **MOTIR-4625** | **GIVES** — the acceptance E2E films this surface; the panels are what it should show.                                         |
+| MOTIR-3810     | the story. GIVES its verification recipe the surface it names.                                                                 |
+| MOTIR-4614     | the ADR amendment. **TAKES** — D1, D2 and D5 are what this asset draws; it decides none of them.                               |
+| MOTIR-4182     | Part XIV. **TAKES** the peek chrome, the per-op header and §1's absence rule.                                                  |
+| MOTIR-4185     | **TAKES** the two doors, unchanged.                                                                                            |
+| MOTIR-3812     | the to-do design. **TAKES** the row grammar, the executor pills and the overflow rule.                                         |
+| MOTIR-4181     | the peek story. **TAKES** the surface.                                                                                         |
+
+**Nothing is TAKEN from MOTIR-4622.** This asset removes no element it was going to build and moves
+no boundary: it is strictly the surface that card was already `blocked_by` this one for.
+
+## 15.8 ⚠️ Planning flags
+
+- **`design/work-items/todo-list.mock.html`'s class escapes (15.5b) are a DEFECT with a card**, not a
+  note here. It is filed on story MOTIR-3810 and `relates_to` MOTIR-4615. It blocks nothing in this
+  story: this asset is already free of it, and MOTIR-4622 builds from THIS asset. The 138 attributes
+  in that one file are what the fix has to sweep.
+- **No other flag.** The states this Part draws are all reachable from the shipped surface, and the
+  one number it does not own — the peek's own geometry — is Part XIV's and is cited rather than
+  re-measured.
+
+---
+
+# Part XVI — the plan-change canvases meet the "Not in an epic" group (MOTIR-4773 · `plan-canvas-grouped-roots.mock.html`)
+
+The card this unblocks is **MOTIR-4771**, and its first five acceptance criteria are settled here.
+
+`design/roadmap/design-notes.md` § _The ROOT level's NON-EPIC rows_ (decisions 1–7) drew a grouped
+node for a canvas whose level **is** the tree. The planning workspace overlay draws the tree **with a
+pending change laid over it** — that is the whole reason the surface exists — and MOTIR-4771 asks for
+the grouping on that surface. Grouping is a rule about which rows LEAVE a level; the diff frame is a
+rule about which rows must be SEEN. Nobody had drawn the meeting.
+
+**Everything the roadmap decided is CITED, not re-decided**: the node's face, its name, its drill,
+its `decorative` status and the truncation tile are that section's, unchanged. This Part rules only
+on the composition, and on which surface gets which cap affordance.
+
+## 16.1 Drawn against SHIPPED reality — what was RENDERED, and how
+
+Every card on the board is the **shipped component**, rendered through the **shipped pipeline** and
+lifted into the asset: a throwaway RTL dump ran `buildWorkItemLevel` and then
+`decoratePlanChangeLevel` over a fabricated root level, and each node's `content` was written out as
+markup. Nothing is redrawn, and the boards are positioned by the real layout constants —
+`NODE_W` 280, `NODE_H` 124, `GAP_X` 80, `GAP_Y` 72, `BAND_GAP` 96, origin 40
+(`lib/planning/projectCanvasModel.ts`).
+
+That is also what makes sheet 4 EVIDENCE rather than an illustration: the duplicate card it shows was
+produced by the pipeline, not drawn to make a point.
+
+## 16.2 DECISION 1 — with NO pending proposal, the overlay groups, identically to `/roadmap`
+
+`PlanChangeCanvas` short-circuits on an empty diff (`decoratePlanChangeLevel` returns the level
+untouched when `index.isEmpty`), so in the state a reader is in every time they open the workspace
+before saying anything, there is **no composition at all**. Same node, same
+`roadmap.canvas.group.title` copy, same drill, same tile.
+
+Stated and drawn (sheet 2) rather than inherited by silence, because it is the state MOTIR-4771 was
+reported from and the one a reader will check first.
+
+## 16.3 DECISION 2 — a row the pending proposal TOUCHES stays on the road
+
+**The predicate gains a third conjunct on the plan-change canvases:**
+
+```
+parentId === null && kind !== 'epic' && !touchedByThisProposal(id)
+```
+
+The roadmap's decision 1 justifies its two conjuncts with _"the road IS the epics. This is the
+level's whole subject."_ On a canvas whose subject is a PROPOSED CHANGE, the level's subject is the
+epics **and what the change is about** — so this is the same rule applied to a different subject, not
+a departure from it. Decision 6 of that section already added a conjunct for a surface whose meaning
+differs (sprint scope); this is the third, for the same reason.
+
+**⚠️ TOUCHED means MEMBERSHIP IN THE PROPOSAL, never `diffStateForItem`'s verdict.** A code card will
+reach for `diffStateForItem` because it is the function that answers "what state is this row in", and
+it would be wrong: that function returns `'locked'` for **every** terminal-status row on the level
+whenever the index is non-empty, regardless of whether the plan touches it. Most parentless defects
+on a mature tree are `done`, so keying on it would drag nearly the whole group back onto the road the
+moment any plan is pending. The set is:
+
+```
+index.changesById.has(id) || index.removalsById.has(id) || <a materialized add whose nodeId is id>
+```
+
+`locked` is a property of the row's own status, not of the proposal, and it does not qualify.
+
+### What the alternatives MEASURE — both were rendered, and both fail
+
+| disposition                                                | verdict    | what the render shows                                                              |
+| ---------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------- |
+| **(a)** a touched row stays on the road                    | **CHOSEN** | sheet 3 — both frames on the level the reviewer is on; the group's count falls 3→1 |
+| **(b)** group everything, mark the group                   | rejected   | sheet 4's failures, plus new pixels in slots the roadmap left deliberately empty   |
+| **(c)** group everything, frames only on the drilled level | rejected   | sheet 4                                                                            |
+
+**Sheet 4 is the measurement, and it has two independent failures:**
+
+1. **The `modify` disappears from the level.** MOTIR-4771's `change` frame is not on the board at
+   all — the reviewer's own subject, filed behind a drawer, on the surface that exists to review it.
+2. **⚠️ AN ACCEPTED CARD IS DRAWN TWICE — this is bug MOTIR-3206, re-created by passing one
+   boolean.** A materialized `add` carries the committed work item's **own id** as its `nodeId`
+   (`lib/planning/planChangeDiff.ts`, `isMaterializedAdd`); `decoratePlanChangeLevel` merges the add
+   frame ONTO that node and deletes the entry, and appends whatever is left as a keyless
+   `ProposedAddNode`. Group the committed row away and the merge cannot land, so the entry survives
+   and the card appears a second time — once inside the group, once beside it. That function's own
+   comment names the defect: _"a second, keyless copy of every accepted card on the canvas"_.
+
+**So the constraint on this decision is not a preference and is recorded as a constraint:** a
+disposition that removes a proposal's target from `base.nodes` before the decoration runs re-opens
+MOTIR-3206. **(a) satisfies it by construction** — the touched row never leaves the level, so the
+merge fires exactly as it does today, which is what sheet 3's live `To Do` pill inside the add frame
+shows.
+
+## 16.4 DECISION 3 — the grouped node says NOTHING about its contents beyond the count
+
+`design/roadmap`'s decision 3 leaves the status pill and the progress meter deliberately empty,
+because each would be a claim about work the node does not own. **Both stay empty here, and no third
+slot is added.**
+
+Under decision 2 there is nothing for a change signal to signal: a row the proposal touches is not in
+the group. A "something in here changed" badge is an affordance disposition (b) would have needed and
+(a) does not — recorded so that the absence reads as a decision rather than as an oversight, which is
+the same reason the roadmap section recorded its two empty slots.
+
+## 16.5 DECISION 4 — the cap: one ceiling, two shipped answers, and the overlay inherits neither
+
+`TREE_LEVEL_MAX_TAKE` is 200 rows under a key-ASCENDING sort, so overflow discards the **newest**
+cards. Two surfaces already answer that, differently and correctly:
+
+| surface                            | affordance                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| `/roadmap`                         | the `+ N more` / _Showing N of M_ / **Show all** tile, at every level (roadmap §7)    |
+| the plan DETAIL (`/plans/[id]`)    | opens in the **LIST** when the arrival level's untruncated total exceeds the cap (§6) |
+| **the planning workspace OVERLAY** | **the tile** — decided here                                                           |
+
+**The overlay has no list view**, so §6's arm cannot reach it: that arm chooses which VIEW a reader
+lands in, and the overlay has one. The tile is the only affordance that can exist there, and the
+roadmap's reasoning for it holds unchanged — the cap is per-level, so a drilled level is as silent as
+the root.
+
+**The DETAIL keeps §6 and gains the tile too.** They answer different questions and are not
+alternatives: §6 decides the ARRIVAL VIEW for the ARRIVAL LEVEL; the tile says a LEVEL is truncated
+once the reader is standing on the canvas — after switching views, or after drilling. §6 says in as
+many words that it _"changes nothing about what a level contains"_, which is exactly the gap the tile
+fills.
+
+## 16.6 DECISION 5 — `PlanReviewCanvas` takes the SAME ruling, for a sharper reason
+
+The plan detail's canvas is the fourth `buildWorkItemLevel` consumer and composes the same way —
+`buildWorkItemLevel(wi)` then `mergePlanLevel(committed, items, …)`. It gets decisions 1–3 unchanged.
+
+**And its failure mode under (b)/(c) is worse than the overlay's, which is why the ruling is not
+merely consistent but forced.** `mergePlanLevel` pushes any proposal it could not merge onto a
+committed node as a standalone node, and its own comment says what that means: _"a `modify` /
+`remove` whose target is not at this level (**a drifted plan**)"_. So grouping a proposal's target
+does not just hide a frame there — it makes the plan **read as drifted**, which is a false statement
+about the plan, on the surface the plan is approved from.
+
+## 16.7 What this settles, for the cards that consume it
+
+| card           | what it takes                                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4771** | criteria 1–2 from decision 1; criterion 3 from decision 2 (with its predicate and its constraint); criterion 4 from decision 4; criterion 5 from decision 5 |
+
+**Nothing is TAKEN from `design/roadmap`.** No element it drew is removed and no boundary it set is
+moved: this Part adds a conjunct that is inert on the roadmap (which never has a proposal) and rules
+on two surfaces that section never addressed.
+
+## 16.8 ⚠️ Planning flags
+
+- **The predicate in decision 2 is the one thing a code card must not re-derive.** The
+  `diffStateForItem` trap is a correct-looking wrong answer, and it fails quietly — on a young tree
+  with few `done` roots it behaves indistinguishably from the right one.
+- **No other flag.** Every element drawn is shipped, and the one number this Part does not own —
+  the cap — is cited from `lib/planning/levelCaps.ts` rather than restated.

@@ -759,6 +759,23 @@ export interface PlanProposalFields {
   storyPoints?: number | null;
   estimateMinutes?: number | null;
   descriptionMd?: string | null;
+  /**
+   * The card's ORDERED STEPS (MOTIR-4620) — a `manual` card's to-do list,
+   * proposed with the card. `null` on a proposal that carries none.
+   *
+   * The CLI renders only the COUNT (`· N steps`): the terminal is where the
+   * SHAPE of a plan is confirmed, and the rows themselves are read in Motir,
+   * where the reviewer can act on them.
+   */
+  todos?: PlanProposalTodo[] | null;
+}
+
+/** ONE proposed step of a card's to-do list, as `/api/v1` presents it. */
+export interface PlanProposalTodo {
+  text: string;
+  notesMd: string | null;
+  commandText: string | null;
+  executor: 'coding_agent' | 'human' | null;
 }
 
 /**

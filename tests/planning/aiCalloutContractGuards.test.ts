@@ -4,7 +4,16 @@ import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { AI_CALLOUT_NAME_KEY, aiCalloutActions } from '@/lib/planning/aiCallout';
-import type { PlanningLaunchContext } from '@/lib/planning/launcher';
+import { planningOverlaySearch, type PlanningLaunchContext } from '@/lib/planning/launcher';
+
+// ⚠️ RE-POINTED (MOTIR-4730). `aiCalloutActions` takes the resolved OVERLAY
+// address now instead of a context — the workspace is a layer on the current
+// page and only a component can read that address. These guards are about the
+// registry's INVARIANTS, not about who computes the href, so they pass the
+// address a door would actually produce.
+function overlayHref(context: PlanningLaunchContext, page = '/backlog'): string {
+  return `${page}?${planningOverlaySearch(context).toString()}`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Story 7.24 · MOTIR-1813 — the ARCHITECTURE / CONTRACT half of the story gate:
@@ -67,7 +76,10 @@ const CONTEXTS: PlanningLaunchContext[] = [
 const REGISTRY_KEYS: string[] = [
   ...new Set([
     AI_CALLOUT_NAME_KEY,
-    ...CONTEXTS.flatMap((c) => aiCalloutActions(c)).flatMap((a) => [a.titleKey, a.descriptionKey]),
+    ...CONTEXTS.flatMap((c) => aiCalloutActions(overlayHref(c))).flatMap((a) => [
+      a.titleKey,
+      a.descriptionKey,
+    ]),
   ]),
 ];
 
@@ -141,7 +153,8 @@ describe('every key the registry names resolves to real copy', () => {
     // `it.each` above would silently run over the name key alone and pass.
     expect(REGISTRY_KEYS.length).toBeGreaterThanOrEqual(3);
     expect(REGISTRY_KEYS).toContain(AI_CALLOUT_NAME_KEY);
-    for (const context of CONTEXTS) expect(aiCalloutActions(context).length).toBeGreaterThan(0);
+    for (const context of CONTEXTS)
+      expect(aiCalloutActions(overlayHref(context)).length).toBeGreaterThan(0);
   });
 
   it('the whole shell.aiCallout subtree matches key-for-key across locales', () => {
@@ -193,13 +206,31 @@ describe('the callout registry holds the launcher’s purity contract', () => {
   it('the scan is reading real source, not an empty string', () => {
     // Every assertion above is a NEGATIVE match, so an unreadable or emptied
     // file would pass all of them. Pin one positive fact per module.
-    expect(codeOf(REGISTRY_MODULE)).toMatch(/from '\.\/launcher'/);
-    expect(codeOf(REGISTRY_MODULE)).toMatch(/export function aiCalloutActions/);
-    expect(codeOf(LAUNCHER_MODULE)).toMatch(/export function planningWorkspaceHref/);
-    // The route-literal guard's positive control: the launcher is the ONE module
-    // that may name the path, and it does — so a `not.toMatch` on the components
-    // below is a real constraint, not a pattern that matches nothing anywhere.
-    expect(codeOf(LAUNCHER_MODULE)).toMatch(ROUTE_LITERAL);
+    // ⚠️ RE-POINTED (MOTIR-4730). This used to pin `from './launcher'` on the
+    // registry. The registry no longer imports it at all — it RECEIVES the
+    // resolved overlay address rather than building one — so the positive
+    // control moves to the export itself and to the field the row carries. The
+    // module got MORE pure, not less, which is why this is a re-point and not a
+    // relaxation.
+    expect(codeOf(REGISTRY_MODULE)).toMatch(/export function aiCalloutActions\(href: string\)/);
+    expect(codeOf(REGISTRY_MODULE)).toMatch(/id: 'plan'/);
+    // ⚠️ RE-POINTED AGAIN (MOTIR-4732): `planningWorkspaceHref` is DELETED with
+    // the route. The launcher's positive control is now the pair that replaced
+    // it — the address composer and the mount predicate.
+    expect(codeOf(LAUNCHER_MODULE)).toMatch(/export function withPlanningOverlay/);
+    expect(codeOf(LAUNCHER_MODULE)).toMatch(/export function parsePlanningOverlay/);
+    // ⚠️ THE ROUTE-LITERAL GUARD'S POSITIVE CONTROL MOVED (MOTIR-4732), and where
+    // it moved TO is the finding. The launcher was "the ONE module that may name
+    // the path", and it named it in code. It does not any more: the trio that
+    // built `/planning` is deleted, and every mention left in that file is in the
+    // retirement note — which `codeOf` strips, correctly.
+    //
+    // So the control moves to the one place that still names the path in CODE:
+    // `proxy.ts`'s matcher entry, kept on purpose so a cookie-less request to a
+    // bookmarked `/planning?…` gets the `/sign-in?next=…` bounce instead of the
+    // segment's own gate. That keeps the `not.toMatch` assertions below real
+    // constraints rather than a pattern matching nothing anywhere.
+    expect(codeOf('proxy.ts')).toMatch(ROUTE_LITERAL);
     // …and it does not fire on the module specifier every one of these files
     // imports through, which is what made the first draft of it vacuous.
     expect("import x from '@/lib/planning/launcher';").not.toMatch(ROUTE_LITERAL);
@@ -219,7 +250,7 @@ describe('a new action is ONE registry entry — the components hardcode nothing
     expect(code, 'the menu must not build a destination').not.toMatch(ROUTE_LITERAL);
     expect(code, 'the menu must not name an action id').not.toMatch(/['"]plan['"]/);
     expect(code, 'the menu must not import the launcher’s href builder').not.toMatch(
-      /planningWorkspaceHref/,
+      /planningOverlaySearch|withPlanningOverlay/,
     );
   });
 
@@ -231,7 +262,9 @@ describe('a new action is ONE registry entry — the components hardcode nothing
     const code = codeOf(ORB_COMPONENT);
     expect(code).toMatch(/<AiCalloutMenu/);
     expect(code, 'the orb must not build a destination').not.toMatch(ROUTE_LITERAL);
-    expect(code, 'the orb must not build an href').not.toMatch(/planningWorkspaceHref/);
+    expect(code, 'the orb must not build an href').not.toMatch(
+      /planningOverlaySearch|withPlanningOverlay/,
+    );
     expect(code, 'the orb must not enumerate actions').not.toMatch(/aiCalloutActions/);
     // Trigger and panel take their shared name from the ONE exported key, so
     // they cannot drift apart.

@@ -237,6 +237,15 @@ export default defineConfig({
         'lib/legal/links.ts',
         'lib/legal/reconsentGate.ts',
         'lib/repositories/legalAcceptanceRepository.ts',
+        // Story MOTIR-4669 · MOTIR-4684 — the repository-tenancy surface. Each
+        // MEASURED on this branch before being pinned below, per the note above:
+        // statements 96.61 / branches 85.56 / functions 100 / lines 98.35 across
+        // the five together, with every remaining arm dispositioned on the card.
+        'lib/services/organizationRepoService.ts',
+        'lib/services/organizationAccessService.ts',
+        'lib/settings/organizationSettingsNav.ts',
+        'lib/mappers/organizationRepoMappers.ts',
+        'lib/projectRepos/roomSections.ts',
         'lib/services/legalAcceptanceService.ts',
         // Story 8.4 · Subtask MOTIR-3698 — the data-subject-request SUBSTRATE
         // (account erasure + personal-data export). All three MEASURED at
@@ -1892,6 +1901,59 @@ export default defineConfig({
         // GATED at the 90 floor rather than at the measured 100, so a later
         // refactor has room without anyone loosening a gate to make a build pass.
         'lib/ai/containerAiAddress.ts',
+        // ── Story MOTIR-4337 (an INTERNAL org bills like a customer) · the
+        //    story's Vitest gate, MOTIR-4573. Every file below was MEASURED on
+        //    this branch before being pinned, with:
+        //
+        //      pnpm vitest run --coverage tests/internalBillingStoryGate.test.tsx \
+        //        tests/platform/ tests/ai/tenantOrg.test.ts \
+        //        tests/components/classification-bar.test.tsx \
+        //        tests/components/searchFigures.test.ts \
+        //        tests/components/org-usage-search-spend.test.tsx \
+        //        tests/components/org-usage-internal-billing.test.tsx
+        //
+        //    Statements 99.31 · Branches 96.10 · Functions 100 · Lines 100
+        //    across the ten, with every file at 100 on all four axes except
+        //    `ClassificationBar.tsx` (95.83 / 85.71 / 100 / 100) and
+        //    `searchUsage.ts` (100 / 93.75 / 100 / 100).
+        //
+        // ⚠️ THE STORY'S TWO `page.tsx` FILES ARE NOT HERE, and that is the same
+        //    stated gap the MOTIR-3449 note above records rather than a new one:
+        //    `admin/tenants/page.tsx` and `admin/tenants/[orgId]/page.tsx` are
+        //    async Server Components, and covering one means awaiting it through
+        //    `serverPageHarness`. They are asserted structurally by the gate's
+        //    own guards and end to end by `tests/e2e/admin-org-lookup.spec.ts`.
+        //    They stay out until somebody measures them, which is this list's
+        //    own rule.
+        'lib/repositories/platformOrganizationRepository.ts',
+        'lib/services/platformBillingClassificationService.ts',
+        'lib/mappers/platformMappers.ts',
+        'lib/platform/auditActions.ts',
+        'lib/platform/errors.ts',
+        'lib/ai/tenantOrg.ts',
+        'app/**/admin/tenants/[orgId]/actions.ts',
+        'app/**/admin/tenants/[orgId]/_components/ClassificationBar.tsx',
+        'app/**/organization/usage/_components/searchUsage.ts',
+        'app/**/organization/billing/_components/searchFigures.ts',
+
+        // ── Story MOTIR-4725 · the planning workspace as an OVERLAY ──────────
+        // Its story gate (MOTIR-4733). Every file here was MEASURED on this
+        // branch before being pinned below, over `tests/planning/`,
+        // `tests/integration/planning/`, `tests/api/planning-anchor-route.test.ts`
+        // and the four component suites the story ships.
+        //
+        // ⚠️ `lib/planning/launcher.ts` is NOT repeated — it has been gated since
+        // MOTIR-1299 and its entry is above.
+        'lib/planning/planPending.ts',
+        'lib/planning/planningAnchorClient.ts',
+        'lib/hooks/useOpenPlanningWorkspace.ts',
+        'components/planning/PlanningWorkspaceOverlay.tsx',
+        'components/planning/PlanCloseGuard.tsx',
+        'components/planning/PlanningWorkspaceHost.tsx',
+        'app/api/work-items/planning-anchor/route.ts',
+        // The `/planning` FORWARD. A route-group path is entered as `app/**/…`
+        // (the note above) — `app/(authed)/planning/page.tsx` resolves to nothing.
+        'app/**/planning/page.tsx',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1902,9 +1964,120 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // ── Story MOTIR-4725 · the planning workspace as an OVERLAY ──────────
+        // Pinned at the project floor after measuring each on this branch
+        // (MOTIR-4733). Statements/lines/functions came out at 100 across the
+        // set; branches at 92.85–100 except the one file noted below.
+        'lib/planning/planPending.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/planning/planningAnchorClient.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/hooks/useOpenPlanningWorkspace.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/PlanningWorkspaceOverlay.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/PlanCloseGuard.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/planning/PlanningWorkspaceHost.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/planning/page.tsx': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        // ⚠️ BRANCHES PINNED AT 83, WITH A REASON, AND THE OTHER THREE AT 100.
+        // The anchor route's two remaining branches are the SAME unreachable
+        // case counted twice: `ProjectNotFoundError` cannot arrive here (the
+        // service rejects a foreign tenant with `WorkItemNotFoundError` before
+        // the access read that raises it), and the re-throw behind it is
+        // therefore unreachable too. Both carry a `v8 ignore` naming the test
+        // that asserts the ordering they rest on — but v8 counts an implicit
+        // `else` on the LINE OF THE `if`, which no comment on the branch below
+        // can suppress. Reaching either would mean mocking `workItemsService`,
+        // which is exactly what stops proving this route's 404 contract. So the
+        // number is pinned at what is real, with the reason, rather than the
+        // guard being weakened for the file as a whole: statements, lines and
+        // functions all gate at 100 here.
+        // MEASURED: 100 statements / 83.33 branches / 100 functions / 100 lines.
+        'app/api/work-items/planning-anchor/route.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 83,
+          statements: 100,
+        },
         // Story MOTIR-3440 · Subtask MOTIR-3449 — the two arrival primitives,
         // MEASURED at 100/100/100/100 each before being pinned (see `include`).
         'components/ui/PageSkeleton.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-4669 · MOTIR-4684 — the repository-tenancy surface ────
+        // Pinned at the project floor after MEASURING each on this branch. The
+        // branch axis is 75 on the two services rather than 90, and that is a
+        // DISPOSITION rather than a discount — every arm below the line is
+        // DEFENSIVE, and each was read off its PRODUCER:
+        //
+        //   organizationRepoService 125/129 — `translateLinkViolation`'s
+        //     non-array `meta.target` and its non-P2002 rethrow. The producer is
+        //     Prisma: `target` is an array for a composite index (which both of
+        //     this file's unique indexes are), and the rethrow is reached only by
+        //     an error class the `catch` does not claim. Its P2002 arms ARE
+        //     covered, by two real concurrency races in
+        //     `tests/projectRepos/organizationRepoService.test.ts`.
+        //   organizationRepoService 563 — the same helper's second call site, on
+        //     the CONNECT path. Reaching it needs a name collision created
+        //     between that path's pre-check and its insert, by a caller that has
+        //     just performed a provider install. A fixture for it would be a
+        //     fixture nobody can build.
+        //   organizationAccessService 88 — the `?? null` on a membership row that
+        //     is `undefined` rather than absent. The producer is
+        //     `findByOrgAndUserInTx`, which returns `null`, so the branch is
+        //     unreachable through it and exists to keep the coalesce total.
+        //   organizationSettingsNav 234 — `if (!entry.href) return false`. Every
+        //     entry in the registry has an href BY CONSTRUCTION, and the
+        //     route↔registry totality test is what holds that: an entry without
+        //     one would fail there before it could reach this line.
+        //
+        // ⚠️ NONE of these is rule-bearing, and none is silenced with an ignore
+        // directive: a defensive arm that is genuinely unreachable is better left
+        // measurable than annotated, so a future change that MAKES it reachable
+        // shows up as a coverage move rather than passing under a comment.
+        'lib/services/organizationRepoService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 75,
+          statements: 90,
+        },
+        'lib/services/organizationAccessService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 75,
+          statements: 90,
+        },
+        'lib/settings/organizationSettingsNav.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/organizationRepoMappers.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -3125,7 +3298,17 @@ export default defineConfig({
           lines: 90,
         },
         'lib/projectRepos/effectiveDomain.ts': { branches: 90, functions: 90, lines: 90 },
-        'lib/projectRepos/roomSections.ts': { branches: 90, functions: 90, lines: 90 },
+        // ⚠️ `statements` added by MOTIR-4681, which gave this module
+        // `splitSetRowsByOrigin`. The module was ALREADY pinned here, so the
+        // story strengthens the existing row rather than adding a second one —
+        // two entries for one path is a duplicate key, and the later wins
+        // silently.
+        'lib/projectRepos/roomSections.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+          statements: 90,
+        },
         'lib/planning/repositorySetClient.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/repositories/RepositorySetStep.tsx': {
           branches: 90,
@@ -3600,6 +3783,86 @@ export default defineConfig({
         // floor rather than at the measured 100, so a later refactor has room
         // without anyone loosening a gate to make a build pass.
         'lib/ai/containerAiAddress.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ── Story MOTIR-4337 · MOTIR-4573. Measured first (see `include`), then
+        //    pinned at the 90 floor rather than at the measured number, so a
+        //    later refactor has room without anyone loosening a gate.
+        'lib/repositories/platformOrganizationRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/platformBillingClassificationService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/mappers/platformMappers.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/platform/auditActions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/platform/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ai/tenantOrg.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/admin/tenants/[orgId]/actions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // ⚠️ THIS ONE'S BRANCH FLOOR IS 85, NOT 90, and the reason is stated
+        // rather than rounded away — the same shape as
+        // `publicFollowDigestService` above. Its two uncovered arms are
+        // DEFENSIVE and unreachable through the component's own surface:
+        //
+        //   · `submit()`'s `if (!trimmed) return` — the primary is `disabled`
+        //     until a non-blank reason is typed, so a blank one cannot reach the
+        //     handler. It is the belt to that button's braces, and the file's
+        //     own header says why a client-side check is never the enforcement.
+        //   · `onOpenChange`'s `next === true` arm — `open` is driven by this
+        //     component's own Button, not by a `Dialog.Trigger`, so Radix never
+        //     asks it to OPEN.
+        //
+        // The alternative was deleting the arms to buy the number, which trades
+        // real safety for a metric. 85 is a RATCHET just under the measured
+        // 85.71: it still fails on a regression, and it lowers nothing on the
+        // three axes that hold at 95.83 / 100 / 100.
+        'app/**/admin/tenants/[orgId]/_components/ClassificationBar.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 85,
+          statements: 90,
+        },
+        'app/**/organization/usage/_components/searchUsage.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/organization/billing/_components/searchFigures.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

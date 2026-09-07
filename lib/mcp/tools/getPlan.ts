@@ -79,6 +79,19 @@ function repoPin(targetRepo: string | null | undefined): string {
   return targetRepo ? ` · repo: ${targetRepo}` : '';
 }
 
+/**
+ * ` · N steps` — how many to-do rows this `add` proposes (MOTIR-4619).
+ *
+ * A COUNT and not the rows: this line is one proposal in a list a reviewer
+ * scans, and a four-step card printed in full would push the next proposal off
+ * the screen. The steps themselves ride `structuredContent.proposedFields.todos`
+ * verbatim, so a client that wants them already has them without a second call.
+ */
+function steps(todos: readonly unknown[] | null | undefined): string {
+  const n = todos?.length ?? 0;
+  return n > 0 ? ` · ${n} step${n === 1 ? '' : 's'}` : '';
+}
+
 /** ` · blocked_by: <ref>, <ref>` — the proposed dependency edges, verbatim (a
  *  real work-item id or an intra-plan `planItem:` temp-ref). */
 function blockers(refs: string[]): string {
@@ -115,6 +128,7 @@ function describeItem(item: PlanItemDto, placement?: ProposalPlacement): string 
       `${marker} [${kind}${type}] ${title}` +
       sizing(fields?.storyPoints, fields?.estimateMinutes) +
       repoPin(fields?.targetRepo) +
+      steps(fields?.todos) +
       blockers(item.blockedByRefs)
     );
   }
@@ -322,8 +336,10 @@ export function registerGetPlan(server: McpServer, resolveContext: McpContextRes
         'Read a plan WITH the proposals it bundles — what an AI planning pass actually ' +
         'proposed, not just how many items it produced. Returns the plan plus `items[]`: each ' +
         "proposal's `op` (add / modify / remove), the `proposedFields` of an `add` (title, " +
-        'kind, type, priority, executor, storyPoints, estimateMinutes, description, and ' +
-        "targetRepo — which repo of the project's set the item ships in), the " +
+        'kind, type, priority, executor, storyPoints, estimateMinutes, description, ' +
+        "targetRepo — which repo of the project's set the item ships in — and `todos`, the " +
+        'card’s ORDERED STEPS, which the one-line render summarises as `· N steps` and ' +
+        '`structuredContent` carries in full), the ' +
         '`patch` of a `modify`, and the `parentRef` / `blockedByRefs` that let you rebuild the ' +
         `proposed tree and its dependency edges. Reach for \`${GET_PLAN_STATUS_TOOL_NAME}\` ` +
         'instead when you only need the status of a submitted job (and whether that job died); ' +

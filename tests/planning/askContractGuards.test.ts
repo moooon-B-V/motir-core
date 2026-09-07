@@ -4,6 +4,16 @@ import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import { aiCalloutActions } from '@/lib/planning/aiCallout';
+import { planningOverlaySearch, type PlanningLaunchContext } from '@/lib/planning/launcher';
+
+// ⚠️ RE-POINTED (MOTIR-4730). `aiCalloutActions` takes the resolved OVERLAY
+// address now instead of a context — the workspace is a layer on the current
+// page and only a component can read that address. These guards are about the
+// registry's INVARIANTS, not about who computes the href, so they pass the
+// address a door would actually produce.
+function overlayHref(context: PlanningLaunchContext, page = '/backlog'): string {
+  return `${page}?${planningOverlaySearch(context).toString()}`;
+}
 
 // The story's CONTRACT guards (MOTIR-1343 · MOTIR-1822) — the half of the gate a
 // coverage number cannot see. Coverage says every line ran; it says nothing
@@ -36,14 +46,14 @@ describe('one surface, no mode', () => {
       { kind: 'work-item', itemKey: 'PAY-7' },
       { kind: 'convention-refine', repoKey: 'motir-core' },
     ] as const) {
-      const hrefs = aiCalloutActions(context).map((a) => a.href);
+      const hrefs = aiCalloutActions(overlayHref(context)).map((a) => a.href);
       expect(hrefs.length).toBeGreaterThan(1);
       expect(new Set(hrefs).size).toBe(1);
     }
   });
 
   it('⭐ no row carries a mode, an intent, or a query of its own', () => {
-    for (const action of aiCalloutActions({ kind: 'project' })) {
+    for (const action of aiCalloutActions(overlayHref({ kind: 'project' }))) {
       expect(action.href).not.toContain('intent=');
       expect(action.href).not.toContain('mode=ask');
       // The registry entry is a LABEL plus the shared href — no third field

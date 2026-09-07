@@ -73,7 +73,7 @@
       invented brand hex enters the mock.
 
       PANELS (multi-panel board — review EACH, mistake #31):
-        (1) Settings → Workspace → Git, GitLab tab, NOT connected — the provider
+        (1) Settings → Organisation → Git, GitLab tab, NOT connected — the provider
             Segmented picker [GitHub | GitLab] + the single-OAuth explainer +
             primary "Connect GitLab" CTA (access path: the rail shows the "Git"
             row active — the door is drawn).
@@ -757,12 +757,105 @@
             .pr-opt .pill { flex: none; }
             .combo-empty { padding: 14px 10px; text-align: center; font-size: 12.5px; color: var(--el-text-secondary); }
             .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+            /* ══ AMENDMENT MOTIR-4672 — the ORGANISATION tier (Panel 7) ══
+               The GitLab half of the two asymmetric removals. GitHub's arm is a
+               DISCLOSURE on the way out to github.com (design/github/, Panel 7);
+               GitLab's is in-app, so it is an ordinary destructive confirm — and
+               the two must not look alike. */
+            .inv { display: flex; flex-direction: column; }
+            .inv-row {
+              display: flex; align-items: center; gap: 12px;
+              padding: var(--spacing-control-y) var(--spacing-card-padding);
+              border-bottom: 1px solid var(--el-border-soft);
+            }
+            .inv-row:last-of-type { border-bottom: 0; }
+            .inv-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; font-size: 13.5px; }
+            .inv-name svg { width: 17px; height: 17px; flex: none; color: var(--el-icon-muted); }
+            .inv-name .i-owner { color: var(--el-text-muted); }
+            .inv-name .i-repo { font-weight: 500; color: var(--el-text); }
+            .col-index { width: 128px; flex: none; }
+            .col-uses { width: 160px; flex: none; }
+            .col-act { width: 108px; flex: none; display: flex; justify-content: flex-end; }
+            .uses {
+              display: inline-flex; align-items: center; gap: 5px;
+              border: 0; background: transparent; cursor: pointer; font-family: inherit;
+              padding: 0; font-size: 12.5px; color: var(--el-text-secondary);
+            }
+            .uses svg { width: 13px; height: 13px; color: var(--el-icon-muted); }
+
+            /* the in-app confirm — Modal primitive: --radius-modal + --shadow-modal */
+            .scrim {
+              position: relative; width: 640px; padding: 34px 0;
+              background: var(--el-canvas); border-radius: var(--radius-card);
+              display: flex; justify-content: center;
+            }
+            .dialog {
+              width: 500px; background: var(--el-card);
+              border: 1px solid var(--el-border);
+              border-radius: var(--radius-modal); box-shadow: var(--shadow-modal);
+              overflow: hidden;
+            }
+            .dialog-head {
+              display: flex; align-items: flex-start; gap: 11px;
+              padding: var(--spacing-card-padding);
+            }
+            .dialog-head > svg { width: 19px; height: 19px; flex: none; margin-top: 1px; color: var(--el-danger); }
+            .dialog-head h3 { font-size: 15px; }
+            .dialog-head p { margin-top: 5px; font-size: 12.5px; line-height: 1.6; color: var(--el-text-secondary); }
+            .dialog-head p b { color: var(--el-text); font-weight: 600; }
+            .dialog-body { padding: 0 var(--spacing-card-padding) var(--spacing-card-padding); display: flex; flex-direction: column; gap: 10px; }
+            .affected {
+              background: var(--el-surface-soft); border: 1px solid var(--el-border-soft);
+              border-radius: var(--radius-card); padding: 11px 13px;
+            }
+            .affected .a-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--el-text-eyebrow); }
+            .proj-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+            .proj-chip {
+              display: inline-flex; align-items: center; gap: 5px;
+              background: var(--el-chip-bg); border: 1px solid var(--el-chip-border);
+              border-radius: var(--radius-badge);
+              padding: var(--spacing-chip-y) var(--spacing-chip-x);
+              font-size: 12px; color: var(--el-text-secondary);
+            }
+            .proj-chip svg { width: 12px; height: 12px; color: var(--el-icon-muted); }
+            .retain { font-size: 12.5px; line-height: 1.6; color: var(--el-text-secondary); }
+            .retain b { color: var(--el-text); font-weight: 600; }
+            .dialog-foot {
+              display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+              padding: 12px var(--spacing-card-padding);
+              border-top: 1px solid var(--el-border-soft); background: var(--el-surface-soft);
+            }
+            .panel-note {
+              max-width: 640px; margin-top: 10px;
+              font-size: 12px; line-height: 1.6; color: var(--el-text-secondary);
+            }
+            .panel-note b { color: var(--el-text); font-weight: 600; }
+            .panel-note code {
+              font-family: var(--font-mono, monospace); font-size: 11px;
+              background: var(--el-code-bg); color: var(--el-code-text);
+              border-radius: var(--radius-control); padding: 1px 5px;
+            }
     </style>
   </head>
   <body>
     <!-- ═══ shared SVG symbol defs (stroke/fill=currentColor — inherits the element's --el-* colour) ═══ -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-inbox"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+          <path
+            d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+          />
+        </symbol>
         <symbol
           viewBox="0 0 24 24"
           id="i-arrow-left"
@@ -947,6 +1040,46 @@
           <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
           <circle cx="12" cy="7" r="4" />
         </symbol>
+        <!-- ══ AMENDMENT MOTIR-4672 — glyphs the ORGANISATION tier needs ══ -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-layers"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+          />
+          <path
+            d="m6.08 10.37-3.5 1.6a1 1 0 0 0 0 1.81l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9a1 1 0 0 0 0-1.83l-3.5-1.59"
+          />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </symbol>
         <symbol
           viewBox="0 0 24 24"
           id="i-alert"
@@ -1003,6 +1136,64 @@
           <line x1="10" x2="14" y1="8" y2="8" />
           <line x1="18" x2="22" y1="16" y2="16" />
         </symbol>
+        <!-- ══ ADDED with the area rail (MOTIR-4673 panel 7's nav) ══ -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-building"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+          <path d="M10 6h4" />
+          <path d="M10 10h4" />
+          <path d="M10 14h4" />
+          <path d="M10 18h4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-shield-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-coins"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="8" cy="8" r="6" />
+          <path d="M18.09 10.37A6 6 0 1 1 10.34 18" />
+          <path d="M7 6h1v4" />
+          <path d="m16.71 13.88.7.71-2.82 2.82" />
+        </symbol>
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-card"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="20" height="14" x="2" y="5" rx="2" />
+          <line x1="2" x2="22" y1="10" y2="10" />
+        </symbol>
         <symbol
           viewBox="0 0 24 24"
           id="i-git-branch"
@@ -1047,10 +1238,26 @@
         grants); <b>project selection is in-app</b> (the OAuth token can enumerate + webhook your
         projects — the honest inverse of GitHub's external install screen); terminology is
         <b>Merge Request (<span class="mono">!123</span>)</b> and <b>Pipeline</b>. Placement is the
-        same <b>Settings → Workspace → Git</b> shell. Composed only from shipped primitives — Card,
-        Pill, Button, EmptyState, Switch, Segmented, the settings-area shell — colour via
-        <span class="mono">--el-*</span>, shape via element-semantic tokens; the GitLab mark is
-        monochrome <span class="mono">currentColor</span> (no invented brand hex).
+        same shared <b>Git</b> shell, now at <b>Settings → Organisation</b> (see the amendment
+        below). Composed only from shipped primitives — Card, Pill, Button, EmptyState, Switch,
+        Segmented, the settings-area shell — colour via <span class="mono">--el-*</span>, shape via
+        element-semantic tokens; the GitLab mark is monochrome
+        <span class="mono">currentColor</span> (no invented brand hex).
+      </p>
+      <p>
+        <b>AMENDED — MOTIR-4672 (Story MOTIR-4669), 2026-09-05: the tier moves.</b> A repository is
+        connected <b>once, to the ORGANISATION</b>; which projects use it is visibility
+        configuration. Panels 1&ndash;6 keep their layout and are re-read at the new tier (<span
+          class="mono"
+          >Settings &rsaquo; Organisation &rsaquo; Git</span
+        >) &mdash; the surface was right, the tier was not. <b>Panel 7</b> is added and is this
+        asset&rsquo;s share of the amendment: the <b>GitLab arm of the org-level removal</b>, an
+        in-app destructive confirm that names every affected project and states the retention
+        truthfully. GitHub cannot have one &mdash; selection is the App&rsquo;s install screen
+        &mdash; so its arm is a disclosure <i>before</i> the link-out, in
+        <span class="mono">design/github/github.mock.html</span>, which also owns the org INVENTORY
+        and its <span class="mono">Used by N projects</span>
+        column.
       </p>
     </div>
 
@@ -1058,48 +1265,51 @@
       <!-- ══════════════════════ PANEL 1 — NOT CONNECTED (GitLab tab) ══════════════════════ -->
       <div>
         <div class="panel-label">
-          Panel 1 · <b>Settings → Workspace → Git</b> — GitLab tab, NOT connected (the provider
+          Panel 1 · <b>Settings → Organisation → Git</b> — GitLab tab, NOT connected (the provider
           Segmented picker + the single-OAuth explainer + CTA; the rail shows the door)
         </div>
         <div class="panel">
-          <div class="settings-shell">
+          <!-- The AREA rail, `Git` active — MOTIR-4673 panel 7's organisation
+               settings nav. These panels drew no rail after the re-tier, on the
+               reading that `/settings/organization/*` has none; design/github
+               panel 6's ⚠️ comment records why that reading is reversed. The GitLab
+               arm wears the SAME chrome as the GitHub arm — it is one page with a
+               provider Segmented, so a rail on one and not the other would make it
+               two. Shell is 952px: the 232px rail plus the 720px content column. -->
+          <div class="settings-shell" style="width: 952px">
             <aside class="sidebar">
               <div class="side-back">
                 <svg><use href="#i-arrow-left" /></svg>Back to Motir
               </div>
-              <div class="breadcrumb">Settings › Workspace › Git</div>
+              <div class="breadcrumb">moooon · Organisation settings</div>
               <div class="nav-grp">
-                <div class="grp-label">Account</div>
+                <div class="grp-label">General</div>
                 <div class="nav-row">
-                  <svg><use href="#i-user" /></svg>Profile
+                  <svg><use href="#i-building" /></svg>Organisation
                 </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Appearance
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Workspace</div>
-                <div class="nav-row">
-                  <svg><use href="#i-users" /></svg>Members
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-briefcase" /></svg>Jobs
-                </div>
-                <div class="nav-row active" aria-current="page">
+                <div class="nav-row active">
                   <svg><use href="#i-git-branch" /></svg>Git
                 </div>
               </div>
               <div class="nav-grp">
-                <div class="grp-label">Project</div>
+                <div class="grp-label">Access</div>
                 <div class="nav-row">
-                  <svg><use href="#i-cog" /></svg>Details
+                  <svg><use href="#i-users" /></svg>Members
                 </div>
                 <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Workflow
+                  <svg><use href="#i-shield-check" /></svg>Security
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Billing</div>
+                <div class="nav-row">
+                  <svg><use href="#i-coins" /></svg>Usage &amp; cost
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-card" /></svg>Billing &amp; plans
                 </div>
               </div>
             </aside>
-
             <div class="content">
               <div class="page-head">
                 <h2>Git</h2>
@@ -1180,48 +1390,53 @@
       <!-- ══════════════════════ PANEL 2 — CONNECTED + PROJECTS ══════════════════════ -->
       <div>
         <div class="panel-label">
-          Panel 2 · connected — the bound GitLab identity + the connected-projects list (per-project
-          sync Switch), with the in-app “+ Connect a project” affordance
+          Panel 2 · <b>Settings → Organisation → Git</b>, connected — the ORGANISATION&rsquo;s
+          connection + the connected-projects list.
+          <b>The member&rsquo;s own identity is NOT here</b>
+          (MOTIR-4675). (per-project sync Switch), with the in-app “+ Connect a project” affordance
         </div>
         <div class="panel">
-          <div class="settings-shell">
+          <!-- The AREA rail, `Git` active — MOTIR-4673 panel 7's organisation
+               settings nav. These panels drew no rail after the re-tier, on the
+               reading that `/settings/organization/*` has none; design/github
+               panel 6's ⚠️ comment records why that reading is reversed. The GitLab
+               arm wears the SAME chrome as the GitHub arm — it is one page with a
+               provider Segmented, so a rail on one and not the other would make it
+               two. Shell is 952px: the 232px rail plus the 720px content column. -->
+          <div class="settings-shell" style="width: 952px">
             <aside class="sidebar">
               <div class="side-back">
                 <svg><use href="#i-arrow-left" /></svg>Back to Motir
               </div>
-              <div class="breadcrumb">Settings › Workspace › Git</div>
+              <div class="breadcrumb">moooon · Organisation settings</div>
               <div class="nav-grp">
-                <div class="grp-label">Account</div>
+                <div class="grp-label">General</div>
                 <div class="nav-row">
-                  <svg><use href="#i-user" /></svg>Profile
+                  <svg><use href="#i-building" /></svg>Organisation
                 </div>
-                <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Appearance
-                </div>
-              </div>
-              <div class="nav-grp">
-                <div class="grp-label">Workspace</div>
-                <div class="nav-row">
-                  <svg><use href="#i-users" /></svg>Members
-                </div>
-                <div class="nav-row">
-                  <svg><use href="#i-briefcase" /></svg>Jobs
-                </div>
-                <div class="nav-row active" aria-current="page">
+                <div class="nav-row active">
                   <svg><use href="#i-git-branch" /></svg>Git
                 </div>
               </div>
               <div class="nav-grp">
-                <div class="grp-label">Project</div>
+                <div class="grp-label">Access</div>
                 <div class="nav-row">
-                  <svg><use href="#i-cog" /></svg>Details
+                  <svg><use href="#i-users" /></svg>Members
                 </div>
                 <div class="nav-row">
-                  <svg><use href="#i-sliders" /></svg>Workflow
+                  <svg><use href="#i-shield-check" /></svg>Security
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Billing</div>
+                <div class="nav-row">
+                  <svg><use href="#i-coins" /></svg>Usage &amp; cost
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-card" /></svg>Billing &amp; plans
                 </div>
               </div>
             </aside>
-
             <div class="content">
               <div class="page-head">
                 <h2>Git</h2>
@@ -1243,24 +1458,38 @@
               </div>
 
               <div class="stack">
-                <!-- identity card -->
+                <!-- THE ORGANISATION'S CONNECTION.
+                     ⚠️ RE-TIERED (MOTIR-4672). This card led with the member's own
+                     bound GitLab identity — avatar, @login, "Verified", Disconnect.
+                     A personal credential is the USER's tenant and lives at
+                     Settings → Account → Git accounts (MOTIR-4675,
+                     design/settings/); drawing it on the ORGANISATION's page is the
+                     tier confusion this story removes, pointed the other way.
+
+                     ⚠️ GitLab is the harder half and it is worth saying why the
+                     answer is the same. GitLab authorises through ONE OAuth grant
+                     whose token is stored on the connection row itself
+                     (`accessTokenEncrypted`), so the person who connected and the
+                     connection are more entangled than GitHub's two independent
+                     grants. That makes WHO CONNECTED IT part of the connection's
+                     own record — kept below as a caption — and it does not make the
+                     member's ACCOUNT the organisation's to manage. -->
                 <div class="card">
                   <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                    <span class="grant-ic"
+                      ><svg><use href="#i-gitlab" /></svg
+                    ></span>
                     <div class="identity-row" style="flex: 1">
-                      <!-- GitLab identity avatar: real avatar_url image (GitlabIdentity.avatarUrl) -->
-                      <img
-                        class="gl-avatar"
-                        alt="zhuyue on GitLab"
-                        src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
-                      />
                       <div class="who">
                         <span class="login"
-                          >@zhuyue
+                          >GitLab connected to <b>moooon</b>
                           <span class="pill pill-mint" style="margin-left: 4px"
-                            ><svg><use href="#i-badge-check" /></svg>Verified</span
+                            ><svg><use href="#i-badge-check" /></svg>Connected</span
                           ></span
                         >
-                        <span class="cap">GitLab identity · connected as Zhu Yue</span>
+                        <span class="cap"
+                          >Organisation connection · authorised by @zhuyue on 12 August 2026</span
+                        >
                       </div>
                     </div>
                     <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
@@ -1612,7 +1841,7 @@
             <div class="card-head">
               <div>
                 <h3>GitLab</h3>
-                <p class="hsub">Settings → Workspace → Git · connection needs attention</p>
+                <p class="hsub">Settings → Organisation → Git · connection needs attention</p>
               </div>
               <span class="pill pill-rose"
                 ><svg><use href="#i-alert" /></svg>Disconnected</span
@@ -1662,25 +1891,29 @@
                 </button>
               </div>
             </div>
+            <!-- ⚠️ RE-TIERED (MOTIR-4672), like every other identity card in these
+                 two assets: the member's own account is the USER tenant and is
+                 drawn at Settings → Account → Git accounts (MOTIR-4675). What the
+                 shared shell shows under the GitHub tab is the ORGANISATION's
+                 connection. -->
             <div class="card">
               <div class="card-body" style="display: flex; align-items: center; gap: 14px">
+                <span class="grant-ic"
+                  ><svg><use href="#i-github" /></svg
+                ></span>
                 <div class="identity-row" style="flex: 1">
-                  <img
-                    class="gl-avatar"
-                    alt="zhuyue on GitHub"
-                    src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Crect width='40' height='40' fill='%235645d4'/%3E%3Ctext x='20' y='26' font-family='sans-serif' font-size='17' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E"
-                  />
                   <div class="who">
                     <span class="login"
-                      >@zhuyue
+                      >Motir GitHub App on <b>moooon</b>
                       <span class="pill pill-mint" style="margin-left: 4px"
-                        ><svg><use href="#i-badge-check" /></svg>Verified</span
+                        ><svg><use href="#i-badge-check" /></svg>Connected</span
                       ></span
                     >
-                    <span class="cap">GitHub identity · connected as Zhu Yue</span>
+                    <span class="cap"
+                      >Organisation connection · installed by @zhuyue on 12 August 2026</span
+                    >
                   </div>
                 </div>
-                <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
               </div>
               <div class="card-foot">
                 <span>Motir App installed on <b>moooon</b> · organization</span>
@@ -1696,6 +1929,169 @@
             </p>
           </div>
         </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           AMENDMENT — MOTIR-4672 (Story MOTIR-4669). THE TIER MOVES, and this
+           asset owns the GITLAB half of the two asymmetric removals.
+           Panels 1–6 above draw this surface at the WORKSPACE tier
+           (MOTIR-1472). The layout survives; the tier does not — a repository
+           is connected ONCE, to the ORGANISATION (MOTIR-2029's rule for the
+           code graph, applied to the thing the graph is built FROM), so the
+           breadcrumb reads Settings › Organisation › Git.
+           THE ORG INVENTORY, its four index states and `Used by N projects` in
+           both forms are drawn ONCE, in design/github/github.mock.html Panel 6
+           — this is the SAME shell with the GitLab tab pressed, and the
+           inventory is repeated here only as the surface the dialog opens FROM.
+           ══════════════════════════════════════════════════════════════════ -->
+
+      <!-- ═══════ PANEL 7 — THE ORG-LEVEL REMOVAL, GITLAB ARM (in-app) ═══════ -->
+      <div>
+        <div class="panel-label">
+          Panel 7 · <b>Settings → Organisation → Git</b> — GitLab tab.
+          <b>Disconnect from organisation</b> is IN-APP, so it is an ordinary destructive confirm:
+          it names every affected project before it runs. GitHub&rsquo;s arm is a pre-link-out
+          disclosure (design/github, Panel 7) — the two are deliberately different affordances.
+        </div>
+        <div class="panel" style="width: 720px">
+          <div class="content" style="padding: 22px 24px 26px">
+            <div class="page-head">
+              <h2>Git</h2>
+              <p class="sub">
+                Connected to <b>moooon</b>. Every project in the organisation can work on a
+                connected project — picking one never indexes it again.
+              </p>
+            </div>
+
+            <div class="provider-bar">
+              <div class="seg" role="group" aria-label="Git provider">
+                <button class="seg-opt">
+                  <svg><use href="#i-github" /></svg>GitHub
+                </button>
+                <button class="seg-opt active" aria-pressed="true">
+                  <svg><use href="#i-gitlab" /></svg>GitLab
+                </button>
+              </div>
+              <span class="provider-hint">Same surface — pick a provider.</span>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Projects</h3>
+                  <p class="hsub">
+                    Connected to this organisation. Removing one here removes it everywhere.
+                  </p>
+                </div>
+              </div>
+              <div class="inv">
+                <div class="inv-row">
+                  <span class="inv-name">
+                    <svg><use href="#i-repo" /></svg>
+                    <span
+                      ><span class="i-owner">moooon/</span
+                      ><span class="i-repo">motir-gateway</span></span
+                    >
+                  </span>
+                  <span class="col-index"
+                    ><span class="pill pill-mint"
+                      ><svg><use href="#i-check" /></svg>Current</span
+                    ></span
+                  >
+                  <span class="col-uses">
+                    <button class="uses" aria-expanded="false">
+                      <svg><use href="#i-chevron-right" /></svg>Used by 2 projects
+                    </button>
+                  </span>
+                  <span class="col-act">
+                    <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
+                  </span>
+                </div>
+                <div class="inv-row">
+                  <span class="inv-name">
+                    <svg><use href="#i-repo" /></svg>
+                    <span
+                      ><span class="i-owner">moooon/</span
+                      ><span class="i-repo">runner-images</span></span
+                    >
+                  </span>
+                  <span class="col-index"
+                    ><span class="pill pill-neutral">Never indexed</span></span
+                  >
+                  <span class="col-uses">
+                    <span class="uses">Used by no project yet</span>
+                  </span>
+                  <span class="col-act">
+                    <button class="btn btn-sm btn-danger-ghost">Disconnect</button>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="scrim" style="margin-top: 18px">
+              <div
+                class="dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Disconnect from organisation"
+              >
+                <div class="dialog-head">
+                  <svg><use href="#i-alert" /></svg>
+                  <div>
+                    <h3>Disconnect moooon/motir-gateway from the organisation?</h3>
+                    <p>
+                      It is removed from <b>every project in moooon</b>, not only the one you came
+                      from. Motir stops reading it, and its merge requests and pipelines stop
+                      syncing onto work items.
+                    </p>
+                  </div>
+                </div>
+                <div class="dialog-body">
+                  <div class="affected">
+                    <div class="a-label">Projects that lose it</div>
+                    <div class="proj-chips">
+                      <span class="proj-chip"
+                        ><svg><use href="#i-layers" /></svg>Atlas</span
+                      >
+                      <span class="proj-chip"
+                        ><svg><use href="#i-layers" /></svg>Corridor</span
+                      >
+                    </div>
+                  </div>
+                  <p class="retain">
+                    The code index Motir built from it is kept for <b>30 days</b>. Re-adding the
+                    project before then cancels the removal and nothing re-indexes; after that,
+                    re-adding it means a full index.
+                  </p>
+                </div>
+                <div class="dialog-foot">
+                  <button class="btn btn-sm btn-ghost">Cancel</button>
+                  <button class="btn btn-sm btn-danger">Disconnect</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <b>Named projects, not a count, and no permanence claim.</b> The dialog names
+          <i>Atlas</i> and <i>Corridor</i> because the
+          <span class="mono">Used by N projects</span> column on the row behind it already said
+          <i>2</i> — so the dialog is a confirmation rather than a revelation. And it does NOT say
+          <i>&ldquo;this cannot be undone&rdquo;</i>:
+          <code>CODE_GRAPH_RETENTION_WINDOW_DAYS</code> is user-facing,
+          <code>repo_disconnected</code> is windowed, and the shipped copy already promises that
+          re-selecting cancels the removal. The <b>30</b> is the rendered value of
+          <code>{days}</code> bound to that constant (<code>lib/codeGraph/offboarding.ts</code>) —
+          never a typed number.
+        </p>
+        <p class="panel-note">
+          <b>Why the two removals look different.</b> GitLab is in-app, so Motir owns the act and
+          can confirm it destructively here. GitHub cannot: selection is the App&rsquo;s install
+          screen, so the org-wide consequence is disclosed <i>before</i> the link-out
+          (design/github, Panel 7) and the primary button leaves for github.com. The PROJECT-level
+          removal is neither — it is a quiet row action whose copy reassures, and it belongs to
+          <code>design/repository-set/</code> (MOTIR-4674).
+        </p>
       </div>
     </div>
   </body>

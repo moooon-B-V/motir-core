@@ -20,7 +20,7 @@ import {
   SunMoon,
   Users,
 } from 'lucide-react';
-import { planningWorkspaceHref } from '@/lib/planning/launcher';
+import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
 import { PLAN_SPRINTS_HREF } from '../backlog/_components/aiSprintPlanShared';
 import { ONBOARDING_RESUME_PATH } from '@/lib/onboarding/resumeVisibility';
 import { CommandPalette, type CommandGroup } from '@/components/ui/CommandPalette';
@@ -48,6 +48,10 @@ import { useCommandPalette } from './CommandPaletteProvider';
 import { useCreateIssue } from './CreateIssueProvider';
 import { useOnboardingResume } from './OnboardingResumeProvider';
 import { isWorkspaceTierRevealed } from '@/lib/workspaces/tierDisclosure';
+import type { PlanningLaunchContext } from '@/lib/planning/launcher';
+
+/** ⌘K plans the PROJECT — the palette is global and knows no item. */
+const PLANNING_CONTEXT: PlanningLaunchContext = { kind: 'project' };
 
 /**
  * AppCommandPalette — the application composition over the generic
@@ -122,6 +126,10 @@ export function AppCommandPalette({
   function go(href: string) {
     router.push(href);
   }
+
+  // The planning workspace is an OVERLAY on the current page (MOTIR-4730), not a
+  // destination — so it does not go through `go()`.
+  const { open: openPlanningWorkspace } = useOpenPlanningWorkspace(PLANNING_CONTEXT);
 
   function createIssue() {
     setOpen(false); // close the palette before the modal takes focus
@@ -202,7 +210,16 @@ export function AppCommandPalette({
         id: 'plan-with-ai',
         label: t('planWithAI.label'),
         icon: <Sparkles />,
-        onSelect: () => go(planningWorkspaceHref({ kind: 'project' })),
+        // ⚠️ NOT `go()` (MOTIR-4730). The workspace is an overlay on the page
+        // the reader is already on, so this closes the palette and writes the
+        // address shallowly — a `router.push` would re-render the page the
+        // overlay is about to sit on top of. Closing FIRST is what makes the
+        // overlay's focus return land on the palette's trigger rather than on a
+        // row that is being unmounted.
+        onSelect: () => {
+          setOpen(false);
+          openPlanningWorkspace();
+        },
       });
     }
     // A heading with nothing under it reads as a loading failure — the same rule

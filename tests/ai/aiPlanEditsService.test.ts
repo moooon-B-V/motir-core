@@ -56,7 +56,17 @@ const ctx = {
   // `aiGenerateExplanations` is a non-null boolean column defaulting to false —
   // the OFF project, so the submits assert the flag is SENT as `false` rather
   // than omitted (MOTIR-2110).
-  project: { id: 'pj_1', identifier: 'MOTIR', name: 'Motir', aiGenerateExplanations: false },
+  // `onboardingRanAt` is STATED rather than omitted: `onboardingContextFor` reads
+  // `== null`, so leaving it off would make the `onboarding: true` assertions
+  // below rest on an accidental `undefined` instead of on the marker's real
+  // "this project has never had a plan approved" value (MOTIR-4736).
+  project: {
+    id: 'pj_1',
+    identifier: 'MOTIR',
+    name: 'Motir',
+    aiGenerateExplanations: false,
+    onboardingRanAt: null,
+  },
 } as ProjectContext;
 
 /** The same actor on a project that has opted INTO AI-drafted explanations. */
@@ -65,7 +75,7 @@ const ctxWithExplanations = {
   project: { ...ctx.project, aiGenerateExplanations: true },
 } as ProjectContext;
 
-const mockOrg = { organizationId: 'org_1', isMeta: false };
+const mockOrg = { organizationId: 'org_1', isMeta: false, internalBilling: false };
 
 function mockWorkItem(overrides: {
   id?: string;
@@ -141,6 +151,7 @@ describe('aiPlanEditsService.submitAugment', () => {
       {
         organizationId: 'org_1',
         isMeta: false,
+        internalBilling: false,
         workspaceId: 'ws_1',
         projectId: 'pj_1',
         projectKey: 'MOTIR',
@@ -162,7 +173,11 @@ describe('aiPlanEditsService.submitAugment', () => {
   });
 
   it('passes the META flag', async () => {
-    vi.mocked(resolveTenantOrg).mockResolvedValue({ organizationId: 'org_1', isMeta: true });
+    vi.mocked(resolveTenantOrg).mockResolvedValue({
+      organizationId: 'org_1',
+      isMeta: true,
+      internalBilling: false,
+    });
     mockSubmitJob();
 
     await aiPlanEditsService.submitAugment('prompt', ctx);
@@ -781,10 +796,21 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
     // The pre-switch shape, recorded verbatim. `toEqual` and not
     // `toMatchObject`: a field ADDED here crosses the boundary as much as one
     // removed, and ADR §9 forbids a new wire field in this sequence.
+    //
+    // ⚠️ AMENDED, TWICE, AND THE PROPERTY IS UNCHANGED — read the describe
+    // block's own words: what is pinned is that THE KIND SWITCH (MOTIR-4304)
+    // changed no field "in passing". A field added later, deliberately, by a card
+    // that says so is not what this guard forbids; a field that vanishes from a
+    // refactor still is. `recordPlanningMistakes` was the first such amendment
+    // (MOTIR-4343) and `onboarding` is the second (MOTIR-4736). Amending the pin
+    // and silently loosening it to `toMatchObject` look similar and are opposite
+    // in kind: the exact equality is the whole instrument, and it stays.
     expect(context).toEqual({
       rootItemKey: 'MOTIR-100',
       generateExplanations: true,
       recordPlanningMistakes: false,
+      // `true`: the mocked project carries a null `onboardingRanAt` (above).
+      onboarding: true,
       code: { repos: ['owner/repo'] },
       repositories: { repositories: [] },
     });
@@ -803,11 +829,15 @@ describe('aiPlanEditsService — the CONTEXT is unchanged by the kind switch (MO
     // workspace has none" — so their absence here is the shipped behaviour, not
     // a loss. `generateExplanations` and `recordPlanningMistakes` are never
     // conditional, for the opposite reason: absence would read as a default.
+    // `onboarding` joins that second group: absence would send motir-ai back to
+    // inferring the answer from an empty tree (MOTIR-4736), so it is sent
+    // unconditionally on this shared submit and reaches the contextual path too.
     expect(context).toEqual({
       prompt: 'split this',
       targetKeys: ['MOTIR-100', 'MOTIR-101'],
       generateExplanations: false,
       recordPlanningMistakes: true,
+      onboarding: true,
     });
   });
 });

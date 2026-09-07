@@ -7,7 +7,7 @@ import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 // connected repos have no derived code-health audit (MOTIR-2248).
 //
 // A small state endpoint a nudge fetches for ITSELF, following the shipped
-// `app/api/ready/nudge` shape: the /planning render never blocks on N boundary
+// `app/api/ready/nudge` shape: the planning overlay never blocks on N boundary
 // reads to decide whether to draw a banner. Project-manage gated in the service,
 // so the capability lives on the server and not only in the component.
 //

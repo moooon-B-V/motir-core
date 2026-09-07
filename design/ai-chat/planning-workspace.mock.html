@@ -83,7 +83,7 @@
         --el-text-faint: #a4a097;
 
         /* ── Surfaces ─────────────────────────────────────────────────── */
-        --el-page-bg: #ffffff;
+        --el-page-bg: var(--color-background);
         --el-card: #ffffff;
         --el-surface: #f6f5f4;
         --el-surface-soft: #fafaf9;
@@ -92,6 +92,31 @@
         /* ── Borders ──────────────────────────────────────────────────── */
         --el-border: #e5e3df;
         --el-border-soft: #ede9e4;
+        --el-border-strong: #c8c4be;
+
+        /* ── The OVERLAY layer (MOTIR-4726) ───────────────────────────────
+           Read off `packages/design-system/theme.css`, not invented. The scrim
+           is that file's lone concrete-value token (`#00000066`), and the
+           headless render of the shipped `Modal` measured it back as
+           `rgba(0,0,0,0.4)` — the same value, which is why sheet 6 can draw the
+           real dimming rather than a guess at it. `--el-canvas` is the recessed
+           board the canvas pane sits on; `--el-danger-on-surface` is the danger
+           hue pulled toward the body ink until it is readable ON a surface
+           (CLAUDE.md's danger rule — `--el-danger-text` is ink for a danger
+           FILL and is legal only on one, which in this sheet is the guard's
+           Discard button). */
+        --el-overlay-scrim: #00000066;
+        --el-canvas: #ecebe7;
+        --el-danger-text: #ffffff;
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+
+        /* ── Shape (element-semantic, so a `data-style` swap reshapes) ───── */
+        --radius-card: 12px;
+        --radius-modal: 12px;
+        --radius-input: 8px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
 
         /* ── Status ───────────────────────────────────────────────────── */
         --el-success: #1aae39;
@@ -140,16 +165,31 @@
          `:root`'s already-resolved value. ── */
       :root {
         /* Tier 0 — the default `motir` palette */
+        --color-background: #ffffff;
         --color-primary-fill: #5645d4;
         --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
         --color-accent: #ff64c8;
+        --color-link: #0070d2;
       }
       :root,
       [data-palette] {
         /* Tier 3 — the element layer */
         --el-accent: var(--color-primary-fill);
         --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
         --el-highlight: var(--color-accent);
+        --el-link: var(--color-link);
+        /* The mono stack, as `theme.css` declares it — Cybercore's label reads it. */
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        /* The accent AS TEXT / icon on a page surface (MOTIR-4726) — theme.css's
+           `--el-accent-on-surface: var(--color-primary)`, which is the same
+           value this block already carries as `--color-primary-fill`, so it
+           re-tints with `data-palette` alongside the accent. Declared here
+           because sheet 6 uses it for every inline `--el-*` / symbol reference
+           and for the address bars' own segment; without it those resolve to
+           nothing and read as body ink. */
+        --el-accent-on-surface: var(--color-primary-fill);
         /* The accent WASH, palette-DERIVED rather than invented (MOTIR-4428).
            The old private `--accent-soft: #ece9fb` was `bg-black`-style dead
            weight: a frozen tint of ONE palette's accent. No `--el-*` token
@@ -1443,6 +1483,15 @@
       }
 
       /* ── style-aware showcase (sheet 5): one button, six design styles ── */
+      /* ══ SHEET 5 — the eleven registered styles ═══════════════════════════
+         REDRAWN (MOTIR-4742). This grid used to carry six tiles painted by
+         private `.hc-editorial` / `.hc-soft` / … classes in raw hex, which
+         showed the intended LOOK and not the intended MECHANISM — nothing in it
+         was copyable into the style layer. It now renders the ELEVEN registered
+         styles through the same `@scope ([data-style='X']) to ([data-style])`
+         rules `design-notes.md` § *The STYLE MATRIX* carries verbatim, over the
+         `--el-*` token layer this file already declares. So what you see here is
+         what `theme.css` will paint, not an impression of it. */
       .stylegrid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -1479,140 +1528,503 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 18px;
         min-height: 104px;
         padding: 26px 16px;
+        background: var(--el-page-bg);
       }
-      /* shared button layout; each style overrides the visual */
+
+      .st-cap {
+        padding: 8px 12px 10px;
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
+        font-size: 10.5px;
+        line-height: 1.45;
+      }
+
+      /* ── The nested DARK register ───────────────────────────────────────────
+         A custom property's `var()` is substituted where the property is
+         DECLARED, not where it is used — so re-declaring only the Tier-0 half
+         under `[data-theme='dark']` would leave `--el-*` frozen at the LIGHT
+         values computed on `:root`, and a "dark" tile would render light
+         (MOTIR-3592). Both layers are therefore re-emitted here. Used by the
+         Cybercore tile, whose style is dark-FIRST: drawing it in the light
+         register would be drawing it in a register the style does not live in. */
+      /* ⚠️ PLACED BEFORE the [data-theme='dark'] block. A custom property's
+         `var()` is substituted where the property is DECLARED, so re-emitting
+         the Tier-3 binding on `[data-theme]` is what lets a nested dark scope
+         recompute `--el-page-bg` against the Tier-0 background IT declares —
+         rather than inheriting the literal `:root` already resolved
+         (`tests/design-dark-parity.test.ts`, MOTIR-3592). */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-foreground: #ffffff;
+        --color-accent: #ff64c8;
+        --el-text: #f3f4f6;
+        --el-text-strong: #e5e5e5;
+        --el-text-secondary: #a4a097;
+        --el-page-bg: var(--color-background);
+        --el-card: #0f0f0f;
+        --el-surface: #1a1a1a;
+        --el-surface-soft: #161616;
+        --el-border: #2a2a2a;
+        --el-border-soft: #1f1f1f;
+        --el-border-strong: #3a3a3a;
+        --el-accent: #6c5cdd;
+        --el-accent-text: #ffffff;
+        --el-accent-pressed: #5645d4;
+        --el-highlight: #ff64c8;
+        --el-accent-wash: color-mix(in srgb, var(--el-accent) 11%, var(--el-page-bg));
+      }
+      /* Cybercore's own canvas: the faint tech grid, built from `currentColor`
+         exactly as `theme.css`'s `[data-style='cybercore-y2k']` body rule does,
+         so it picks up whatever hue the palette provides and pins none. */
+      [data-style='cybercore-y2k'] .st-stage {
+        background-image:
+          linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
+          linear-gradient(
+            90deg,
+            color-mix(in srgb, currentColor 6%, transparent) 1px,
+            transparent 1px
+          );
+        background-size: 32px 32px;
+        background-position: center top;
+        color: var(--el-text);
+      }
+
+      /* ── The SHAPE/MATERIAL token layer, per style ──────────────────────────
+         This asset is standalone HTML and does not load `theme.css`, so the
+         tokens sheet 5 reads are declared here — the same way the `--el-*` block
+         at the top of this file mirrors the element layer. Values are the ones
+         `packages/design-system/theme.css` resolves for each `[data-style]`
+         block; only the tokens this sheet actually paints with are mirrored, so
+         there is no second copy of the shape scale to drift. */
+      [data-style] {
+        --radius-badge: 999px;
+        --height-btn-md: 40px;
+        --spacing-btn-x: 18px;
+      }
+      [data-style='soft-playful'],
+      [data-style='glassmorphism'],
+      [data-style='aurora'],
+      [data-style='hand-drawn-indie'],
+      [data-style='neumorphism'] {
+        --spacing-btn-x: 20px;
+      }
+      [data-style='swiss-minimal-flat'] {
+        --radius-badge: 2px;
+        --spacing-btn-x: 16px;
+      }
+      [data-style='neo-brutalism'] {
+        --radius-badge: 0;
+        --spacing-btn-x: 16px;
+      }
+      [data-style='cybercore-y2k'] {
+        --radius-badge: 2px;
+      }
+      [data-style='3d-immersive'],
+      [data-style='retrofuturism'] {
+        --spacing-btn-x: 22px;
+      }
+      [data-style='hand-drawn-indie'] {
+        --radius-badge: 9px 26px 11px 22px / 22px 11px 24px 9px;
+      }
+      [data-style='glassmorphism'] {
+        --glass-wash: 42%;
+        --glass-blur: 18px;
+        --glass-saturate: 180%;
+        --glass-sheen: rgba(255, 255, 255, 0.22);
+        --glass-rim: rgba(255, 255, 255, 0.55);
+      }
+      [data-style='aurora'] {
+        --aurora-sheen: 7%;
+        --aurora-glow: 22%;
+      }
+      [data-style='neumorphism'] {
+        --neu-distance: 6px;
+        --neu-blur: 16px;
+        --neu-light: rgba(255, 255, 255, 0.6);
+        --neu-shadow: rgba(20, 20, 30, 0.16);
+      }
+      [data-style='retrofuturism'] {
+        --retro-spec: 44%;
+        --retro-bevel-light: 44%;
+        --retro-glow: 32%;
+      }
+      /* Glassmorphism's own canvas: the vibrant wash the frost is frosting.
+         Mirrors `theme.css`'s `[data-style='glassmorphism']` body rule — without
+         something behind it a `backdrop-filter` has nothing to blur, and the
+         tile would show a flat pill under a caption claiming translucency. */
+      [data-style='glassmorphism'] .st-stage {
+        background-image:
+          radial-gradient(
+            85% 80% at 6% -12%,
+            color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
+            transparent 62%
+          ),
+          radial-gradient(
+            80% 75% at 110% 4%,
+            color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
+            transparent 60%
+          ),
+          radial-gradient(
+            95% 90% at 50% 120%,
+            color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
+            transparent 62%
+          );
+      }
+
+      /* The one style that already treats this control: the physical key's base
+         edge, read by the components through a `var()` seam because their inline
+         `box-shadow` beats every rule (MOTIR-3522). Mirrored here so tile 8 shows
+         the depth that actually ships. */
+      [data-style='3d-immersive'] {
+        --plan-hero-shadow:
+          0 4px 0 0 var(--el-accent-pressed),
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+          inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+          0 9px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+        --plan-orb-shadow:
+          0 5px 0 0 var(--el-accent-pressed),
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+          0 12px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+          0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent);
+      }
+
+      /* ── The two hero controls, as the app renders them ─────────────────────
+         Layout + the BASE (warm-editorial) look, which is the components' own
+         `var()` fallback — the pill's `HERO_STYLE` and the orb's `ORB_STYLE`.
+         Shape comes from the tokens above, never from a number typed here. */
       .hc {
         position: relative;
         display: inline-flex;
         align-items: center;
-        gap: 7px;
-        padding: 9px 17px 9px 14px;
+        justify-content: center;
+        gap: 8px;
+        overflow: hidden;
+        height: var(--height-btn-md);
+        border-radius: var(--radius-badge);
+        padding-inline: var(--spacing-btn-x);
         font-size: 12.5px;
-        font-weight: 650;
+        font-weight: 600;
         white-space: nowrap;
         cursor: default;
+        color: var(--el-accent-text);
+        background-image: linear-gradient(
+          135deg,
+          var(--el-accent),
+          color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight))
+        );
+        box-shadow: var(
+          --plan-hero-shadow,
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+          inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+          0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+          0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent)
+        );
       }
       .hc .spark {
         font-size: 14px;
         line-height: 1;
       }
-      /* 1 · Warm Editorial (default) — gradient + glow + shimmer */
-      .st-editorial .st-stage {
-        background: radial-gradient(120% 150% at 80% -20%, #efeafd, #faf9fb 60%, #fff);
+      /* The floating M orb. The first stop's mix is `--orb-lit-mix`, read from
+         the token layer — NOT a percentage typed here. It is the gradient's
+         lightest point, it sits under the centred mark, and it is therefore the
+         orb's contrast knob (MOTIR-3207). Named `.hc-orb` rather than `.orb`
+         because sheet 4's `.orb` is a different, guarded rule. */
+      .hc-orb {
+        position: relative;
+        flex: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        color: var(--el-accent-text);
+        background-image: radial-gradient(
+          circle at 33% 27%,
+          color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+          var(--el-accent) 56%,
+          color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+        );
+        box-shadow: var(
+          --plan-orb-shadow,
+          inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 40%, transparent),
+          0 8px 24px -6px color-mix(in srgb, var(--el-accent) 80%, transparent),
+          0 0 28px -2px color-mix(in srgb, var(--el-highlight) 55%, transparent)
+        );
       }
-      .hc-editorial {
-        border-radius: 999px;
-        color: #fff;
-        background: linear-gradient(135deg, #6a4ef2, #5645d4 46%, #9450ef);
-        box-shadow:
-          inset 0 1px 0 #ffffff5e,
-          0 6px 18px -5px #5645d4cc,
-          0 0 22px -3px #ff64c885;
-        overflow: hidden;
+      .hc-orb .mlogo {
+        width: 19px;
+        height: 19px;
       }
-      .hc-editorial .spark {
-        filter: drop-shadow(0 0 5px #ffffffd6);
+
+      /* ══ THE SETTLED PER-STYLE RULES — verbatim from `design-notes.md`
+         § *The STYLE MATRIX* › *The CSS, verbatim*. Nothing below is authored
+         for this sheet: it is the block MOTIR-4743 pastes into `theme.css`,
+         rendered here so the drawing and the specification cannot disagree.
+         `data-ai-cta` separates the two controls because they do not share a
+         fill recipe — the orb's radial first stop is the guarded
+         `--orb-lit-mix`, and one shared `background-image` would overwrite it.
+         Radius / padding / height are NOT set here: they already flow. ══ */
+
+      /* 2 · Soft / Playful — pillowy stacked shadow, no border. */
+      @scope ([data-style='soft-playful']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          font-weight: 800;
+          box-shadow:
+            0 7px 0 -1px color-mix(in srgb, var(--el-accent) 22%, var(--el-page-bg)),
+            0 14px 22px -6px color-mix(in srgb, var(--el-accent) 55%, transparent);
+        }
       }
-      .hc-editorial::after {
-        content: '';
-        position: absolute;
-        top: -12%;
-        left: -45%;
-        width: 38%;
-        height: 130%;
-        background: linear-gradient(100deg, transparent, #ffffff9c, transparent);
-        transform: skewX(-18deg);
+
+      /* 3 · Swiss / Minimal-Flat — flat solid, sharp, uppercase, NO shadow. */
+      @scope ([data-style='swiss-minimal-flat']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          box-shadow: none;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.07em;
+        }
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-image: none;
+          background-color: var(--el-accent);
+        }
       }
-      /* 2 · Soft / Playful — rounded, pillowy stacked shadow */
-      .st-soft .st-stage {
-        background: linear-gradient(160deg, #f3effe, #fdeef7);
+
+      /* 4 · Glassmorphism — frosted translucency over the rim. 86% is a FLOOR. */
+      @scope ([data-style='glassmorphism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid var(--glass-rim);
+          -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+          backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+          box-shadow:
+            inset 0 1px 0 var(--glass-rim),
+            0 8px 22px -6px color-mix(in srgb, var(--el-accent) 45%, transparent);
+        }
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-image: none;
+          background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+        }
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          /* Crown-confined: across the whole circle this sheen lightens the
+             26/56 glyph box to 3.17:1 light / 2.67:1 dark and breaks the
+             `--orb-lit-mix` floor the style layer may not touch. */
+          background-size:
+            100% 20%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+          background-image:
+            linear-gradient(160deg, var(--glass-sheen), transparent 90%),
+            radial-gradient(
+              circle at 33% 27%,
+              color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+              var(--el-accent) 56%,
+              color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+            );
+        }
       }
-      .hc-soft {
-        border-radius: 17px;
-        color: #fff;
-        font-weight: 800;
-        background: linear-gradient(135deg, #6d54e6, #a05cf0);
-        box-shadow:
-          0 7px 0 -1px #d8c7ff,
-          0 14px 22px -6px #b794f6cc;
+
+      /* 5 · Neo-Brutalism — hard 2px border + zero-blur offset shadow. */
+      @scope ([data-style='neo-brutalism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 2px solid var(--el-text);
+          box-shadow: 4px 4px 0 0 var(--el-text);
+          font-weight: 800;
+          text-transform: uppercase;
+        }
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-image: none;
+          background-color: var(--el-accent);
+        }
       }
-      .hc-soft .spark {
-        filter: drop-shadow(0 0 4px #fff);
+
+      /* 6 · Cybercore / Y2K — dark HUD ground, neon halo, mono label. */
+      @scope ([data-style='cybercore-y2k']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid color-mix(in srgb, var(--el-highlight) 70%, transparent);
+          box-shadow:
+            0 0 10px color-mix(in srgb, var(--el-highlight) 60%, transparent),
+            0 0 26px -4px color-mix(in srgb, var(--el-accent) 70%, transparent);
+          font-family: var(--font-mono);
+          letter-spacing: 0.04em;
+        }
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-image: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--el-accent) 88%, black),
+            color-mix(
+              in srgb,
+              color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%,
+              black
+            )
+          );
+        }
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          background-image:
+            linear-gradient(
+              160deg,
+              color-mix(in srgb, var(--el-highlight) 22%, transparent),
+              transparent 55%
+            ),
+            radial-gradient(
+              circle at 33% 27%,
+              color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+              var(--el-accent) 56%,
+              color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+            );
+        }
       }
-      /* 3 · Swiss / Minimal-Flat — flat solid, sharp, uppercase */
-      .st-swiss .st-stage {
-        background: #ffffff;
+
+      /* 7 · Aurora — lit from within, colour halo, no hard shadow. */
+      @scope ([data-style='aurora']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          box-shadow:
+            inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+            0 0 26px -2px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+            0 0 40px -6px color-mix(in srgb, var(--el-highlight) var(--aurora-glow), transparent);
+        }
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-size:
+            100% 28%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+          background-image:
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+              transparent 90%
+            ),
+            linear-gradient(
+              135deg,
+              var(--el-accent),
+              color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight))
+            );
+        }
       }
-      .hc-swiss {
-        border-radius: 3px;
-        color: #fff;
-        background: #5645d4;
-        box-shadow: none;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
+
+      /* 8 · 3D / Immersive — NOTHING. `--plan-hero-shadow` / `--plan-orb-shadow`
+         own this control's depth and the components read them through a `var()`
+         seam an inline `box-shadow` would otherwise beat (MOTIR-3522). A rule
+         here would either lose to that inline declaration or take a
+         `data-depth="key"` control off the plane ladder it is declared on
+         (docs/styles/3d-immersive.md §4 / §4b). Deliberately empty — recorded so
+         the absence reads as a decision, not an omission. */
+
+      /* 9 · Hand-Drawn / Indie — a drawn ink outline + a hand-placed offset. */
+      @scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          position: relative;
+          font-weight: 700;
+          box-shadow: 3px 4px 0 -1px color-mix(in srgb, var(--el-border-strong) 55%, transparent);
+        }
+        [data-surface='ai-cta']::after {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          pointer-events: none;
+          border: 2px solid var(--el-border-strong);
+          border-radius: inherit;
+          filter: url(#hd-rough);
+        }
       }
-      /* 4 · Neo-Brutalism — hard border + offset hard shadow */
-      .st-brutal .st-stage {
-        background: #fdf7e3;
+
+      /* 10 · Neumorphism — moulded, NOT raised-and-glowing: no gradient, no
+         glow, and the hairline is KEPT (structure never relies on shadow alone). */
+      @scope ([data-style='neumorphism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid color-mix(in srgb, var(--el-accent) 70%, var(--el-text));
+          box-shadow:
+            var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+            calc(var(--neu-distance) * -1) calc(var(--neu-distance) * -1) var(--neu-blur)
+              var(--neu-light);
+        }
+        [data-surface='ai-cta'][data-ai-cta='pill'],
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          background-image: none;
+          background-color: var(--el-accent);
+        }
       }
-      .hc-brutal {
-        border-radius: 5px;
-        color: #1a1a1a;
-        background: #b9a6ff;
-        border: 2px solid #000;
-        box-shadow: 5px 5px 0 #000;
-        font-weight: 800;
-        text-transform: uppercase;
-        font-size: 11.5px;
-      }
-      /* 5 · Glassmorphism — frosted translucent over a colourful surface */
-      .st-glass .st-stage {
-        background: linear-gradient(135deg, #6a4ef2, #c084fc 52%, #f0abfc);
-      }
-      .hc-glass {
-        border-radius: 999px;
-        color: #fff;
-        background: rgba(255, 255, 255, 0.18);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.6);
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.6),
-          0 8px 22px rgba(40, 20, 90, 0.3);
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
-      }
-      /* 6 · Cybercore / Y2K — dark surface + neon glow + mono */
-      .st-cyber .st-h {
-        background: #14111f;
-        color: #c4a6ff;
-        border-bottom-color: #2a2540;
-      }
-      .st-cyber .st-h .def {
-        background: #2a2150;
-        color: #e7b3ff;
-      }
-      .st-cyber .st-stage {
-        background:
-          linear-gradient(#181430 1px, transparent 1px) 0 0 / 18px 18px,
-          linear-gradient(90deg, #181430 1px, transparent 1px) 0 0 / 18px 18px,
-          #0b0a16;
-      }
-      .hc-cyber {
-        border-radius: 4px;
-        color: #fff;
-        font-family: ui-monospace, monospace;
-        font-size: 11.5px;
-        letter-spacing: 0.04em;
-        background: linear-gradient(135deg, #7c3aed, #db2777);
-        border: 1px solid #f0abfc;
-        box-shadow:
-          0 0 10px #d946ef,
-          0 0 26px -4px #7c3aed;
-        text-shadow: 0 0 6px #ffffffb0;
+
+      /* 11 · Retrofuturism — a chrome bevel + a CROWN-CONFINED specular streak.
+         ⚠️ THE STREAK IS THE THING THAT HAD TO MOVE, not the bevel. Across the
+         full box the diagonal at `--retro-spec` washes the label to 2.55:1 light
+         / 2.22:1 dark, and thinning it does not rescue it (18% still measures
+         3.67:1 dark, by which point the chrome has stopped reading). Sized to
+         the top band it sits above the cap height, the label sits on the bevel
+         BODY at 6.76:1 / 5.16:1, and the chrome still reads — a machined bevel
+         IS a vertical light-to-dark ramp with a highlight on the crown. */
+      @scope ([data-style='retrofuturism']) to ([data-style]) {
+        [data-surface='ai-cta'] {
+          border: 1px solid color-mix(in srgb, var(--el-accent-text) 30%, transparent);
+          box-shadow:
+            inset 0 1px 0
+              color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+            0 0 24px -4px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+        }
+        [data-surface='ai-cta'][data-ai-cta='pill'] {
+          background-image:
+            linear-gradient(
+              104deg,
+              transparent 30%,
+              color-mix(in srgb, var(--el-accent-text) var(--retro-spec), transparent) 46%,
+              transparent 62%
+            ),
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--el-accent) 82%, white) 0%,
+              var(--el-accent) 20%,
+              color-mix(in srgb, var(--el-accent) 84%, black) 100%
+            );
+          /* The specular streak is a CROWN highlight, sized to the top band alone.
+             Across the whole box it washes the label to 2.55:1 light / 2.22:1 dark —
+             and thinning it does not rescue it (18% still measures 3.67:1 in dark).
+             Confined above the cap height the label sits on the bevel BODY, and the
+             chrome still reads, because a machined bevel IS a vertical light-to-dark
+             ramp with a highlight on the crown. */
+          background-size:
+            100% 28%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+        }
+        [data-surface='ai-cta'][data-ai-cta='orb'] {
+          /* Crown-confined, for the same reason as glass: unbounded it measures
+             3.34:1 light / 2.78:1 dark inside the glyph box. */
+          background-size:
+            100% 26%,
+            100% 100%;
+          background-position:
+            top left,
+            top left;
+          background-repeat: no-repeat;
+          background-image:
+            linear-gradient(
+              180deg,
+              color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+              transparent 90%
+            ),
+            radial-gradient(
+              circle at 33% 27%,
+              color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+              var(--el-accent) 56%,
+              color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+            );
+        }
       }
 
       /* ── workspace exit chrome (the close affordance on the shell) ── */
@@ -1644,92 +2056,204 @@
         color: var(--el-text-secondary);
       }
 
-      /* ── sheet 6: opening on top of the app + exiting ── */
-      .exitrow {
+      /* ── sheet 6: the overlay frame, its exits, its address, its guard ──
+         REDRAWN (MOTIR-4726) as the SHIPPED `Modal size="full"` composition.
+         Every number in `.ovnum` was MEASURED on the real components rendered
+         headless — `Modal` from `packages/design-system/src/components/ui/Modal.tsx`
+         wrapping the real `PlanningWorkspaceSkeleton` — at 1440x780 and
+         1024x648, light, deviceScaleFactor 1. The panes below are drawn at
+         0.44x and 0.31x of those, so the proportions are the shipped ones. */
+      .ovwrap {
         display: grid;
-        grid-template-columns: 1.45fr 1fr;
+        grid-template-columns: 1fr 300px;
         gap: 16px;
         align-items: start;
       }
+      /* the HOST page + the scrim + the dialog, one stack */
       .ontop {
         position: relative;
-        height: 318px;
+        height: 344px;
         border: 1px solid var(--el-border);
         border-radius: 12px;
         overflow: hidden;
-        background: var(--el-surface);
+        background: var(--el-page-bg);
       }
-      /* the PM app, sitting BEHIND the workspace */
+      .ontop.sm {
+        height: 246px;
+      }
+      /* the HOST page — a filtered, scrolled backlog, still mounted */
       .appback {
         position: absolute;
         inset: 0;
-        padding: 12px;
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 9px;
-        filter: saturate(0.9);
-      }
-      .appback .col {
-        background: var(--el-surface-soft);
-        border: 1px solid var(--el-border-soft);
-        border-radius: 9px;
-        padding: 8px;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
         display: flex;
         flex-direction: column;
         gap: 7px;
       }
-      .appback .col b {
+      .appback .bh {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .appback .bf {
+        display: flex;
+        gap: 5px;
+        align-items: center;
         font-size: 9px;
         color: var(--el-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
       }
-      .appback .card {
-        height: 26px;
-        background: var(--el-card);
+      .appback .fchip {
         border: 1px solid var(--el-border);
-        border-radius: 7px;
+        border-radius: var(--radius-badge, 999px);
+        padding: 2px 7px;
+        background: var(--el-surface-soft);
+        color: var(--el-text-secondary);
       }
-      .scrim {
-        position: absolute;
-        inset: 0;
-        background: #1b1733cc;
-        backdrop-filter: blur(1.5px);
-      }
-      /* the workspace overlay ON TOP (inset so the app shows it's beneath) */
-      .wsoverlay {
-        position: absolute;
-        inset: 16px;
-        border-radius: 14px;
-        overflow: hidden;
-        border: 1px solid var(--el-border);
-        background: var(--el-card);
-        box-shadow: 0 30px 70px -18px #00000073;
-        display: grid;
-        grid-template-columns: 1fr 150px;
-      }
-      .wsoverlay .wcanvas {
-        position: relative;
-        background:
-          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 20px 20px,
-          var(--el-surface);
-      }
-      .wsoverlay .wtop {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        right: 10px;
+      .appback .row {
+        height: 22px;
         display: flex;
         align-items: center;
         gap: 8px;
+        padding: 0 9px;
+        background: var(--el-card);
+        border: 1px solid var(--el-border);
+        border-radius: 7px;
+        font-size: 8.5px;
+        color: var(--el-text-secondary);
+      }
+      .appback .row .kk {
+        font-family: ui-monospace, monospace;
+        color: var(--el-text-secondary);
+      }
+      /* the SHIPPED scrim — `fixed inset-0 z-40 bg-(--el-overlay-scrim)`,
+         measured rgba(0,0,0,0.4) */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: var(--el-overlay-scrim);
+      }
+      /* the DIALOG — `size="full"` resolves to `h-dvh max-h-dvh w-screen
+         max-w-none`, and the consumer's `rounded-none border-0 p-0` takes the
+         panel chrome off. MEASURED radius 0px, border 0px, box == viewport.
+         ⚠️ DRAWING DEVICE, stated so it cannot be misread as the spec: the
+         shipped dialog covers the viewport EXACTLY, which would hide the host
+         page this sheet exists to show is still there. So `.ontop.peel` slides
+         the dialog down-right by 22px and marks its REAL edge with the dashed
+         `.trueedge` box. The inset in the drawing is 22px; the inset in the
+         product is ZERO, and the measurement table below is what settles it. */
+      .wsoverlay {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        background: var(--el-card);
+        display: grid;
+        grid-template-columns: 1fr 106px;
+      }
+      .ontop.peel .wsoverlay {
+        inset: 22px 0 0 22px;
+        box-shadow: -10px -10px 26px -8px color-mix(in srgb, var(--el-text) 30%, transparent);
+      }
+      .ontop .trueedge {
+        display: none;
+      }
+      .ontop.peel .trueedge {
+        display: block;
+        position: absolute;
+        inset: 0;
+        border: 1.5px dashed var(--el-accent);
+        pointer-events: none;
+        z-index: 3;
+      }
+      .ontop.peel .edgetag {
+        position: absolute;
+        z-index: 4;
+        left: 6px;
+        bottom: 6px;
+        font:
+          700 8.5px ui-monospace,
+          monospace;
+        color: var(--el-accent-on-surface);
+        background: var(--el-card);
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-badge, 999px);
+        padding: 1px 6px;
+      }
+      /* a few nodes so the canvas pane reads as the workspace, in the
+         `design/roadmap/` node language — COMPOSED, never redrawn */
+      .wbody .wn {
+        position: absolute;
+        border: 1px solid var(--el-border);
+        border-radius: 6px;
+        background: var(--el-card);
+        padding: 4px 6px;
+        font-size: 7.5px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        box-shadow: 0 1px 2px color-mix(in srgb, var(--el-text) 8%, transparent);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .wbody .wn .dt {
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        flex: none;
+      }
+      .wbody .wn.prop {
+        border: 1px dashed var(--el-accent);
+        background: var(--el-accent-wash);
+        color: var(--el-accent-on-surface);
+      }
+      .ontop.sm .wsoverlay {
+        grid-template-columns: 1fr 82px;
+      }
+      .wsoverlay .wcanvas {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: var(--el-canvas);
+      }
+      /* the host's OWN exit chrome — `PlanningWorkspaceHost`'s top bar,
+         `border-b border-(--el-border-soft) bg-(--el-surface) px-4 py-2`.
+         MEASURED 49px tall. */
+      .wsoverlay .wtop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 9px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        flex: none;
+      }
+      .wsoverlay .wbody {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        background:
+          radial-gradient(circle at 1px 1px, #e3e0db 1px, transparent 0) 0 0 / 20px 20px,
+          var(--el-canvas);
+      }
+      /* the footer SLOT — one box, two contents; `border-t px-4 py-2.5` */
+      .wsoverlay .wfoot {
+        flex: none;
+        padding: 6px 9px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-size: 8px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
       }
       .wsoverlay .wrail {
         border-left: 1px solid var(--el-border);
         background: var(--el-card);
-        padding: 10px;
+        padding: 9px 8px;
         display: flex;
         flex-direction: column;
-        gap: 7px;
+        gap: 6px;
+        min-width: 0;
       }
       .wsoverlay .wrail .rl {
         font:
@@ -1738,6 +2262,73 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
         color: var(--el-text-secondary);
+      }
+      /* the CLOSE control is the SHIPPED chip already defined above; inside a
+         scaled pane it only shrinks. Top-LEFT, and its label is now a plain
+         `Close` — never "Back to …", because an overlay has no destination. */
+      .ontop .wclose {
+        gap: 5px;
+        font-size: 9.5px;
+        padding: 3px 6px;
+        border-radius: 6px;
+      }
+      .ontop .wclose .x {
+        font-size: 10px;
+      }
+      .ontop .wclose kbd {
+        font-size: 8px;
+      }
+      /* the corner ✕ the dialog would draw, struck through: `hideClose` */
+      .cornerx {
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        width: 15px;
+        height: 15px;
+        border-radius: var(--radius-control, 6px);
+        border: 1px dashed var(--el-danger);
+        color: var(--el-danger-on-surface);
+        font-size: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .ovnum {
+        margin-top: 9px;
+        border: 1px solid var(--el-border);
+        border-radius: 10px;
+        overflow: hidden;
+        font-size: 10.5px;
+      }
+      .ovnum table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .ovnum th,
+      .ovnum td {
+        text-align: left;
+        padding: 5px 9px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+      }
+      .ovnum th {
+        background: var(--el-surface-soft);
+        color: var(--el-text-strong);
+        font-weight: 700;
+      }
+      .ovnum tr:last-child td {
+        border-bottom: 0;
+      }
+      .ovnum td b {
+        color: var(--el-text-strong);
+      }
+      .ovnum .win {
+        color: var(--el-success);
+        font-weight: 700;
+      }
+      .ovnum .lose {
+        color: var(--el-danger-on-surface);
+        font-weight: 700;
       }
       .exitcol {
         display: flex;
@@ -1763,24 +2354,86 @@
       }
       .exitopt {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 9px;
-        font-size: 12px;
+        font-size: 11.5px;
         color: var(--el-text-secondary);
-        padding: 6px 0;
+        padding: 7px 0;
+        line-height: 1.45;
       }
       .exitopt + .exitopt {
         border-top: 1px solid var(--el-border-soft);
       }
       .exitopt .k {
         flex: none;
+        min-width: 46px;
       }
-      /* the unsaved-proposals guard dialog */
+      /* the ADDRESS bars — one per host route */
+      .addr {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 9px);
+        background: var(--el-surface-soft);
+        padding: 6px 9px;
+        font:
+          500 10.5px ui-monospace,
+          monospace;
+        color: var(--el-text-secondary);
+        overflow-wrap: anywhere;
+      }
+      .addr + .addr {
+        margin-top: 7px;
+      }
+      .addr .host {
+        color: var(--el-text-strong);
+      }
+      .addr .own {
+        color: var(--el-info);
+      }
+      .addr .ours {
+        color: var(--el-accent-on-surface);
+        font-weight: 700;
+      }
+      .qtab {
+        margin-top: 11px;
+        border: 1px solid var(--el-border);
+        border-radius: 10px;
+        overflow: hidden;
+        font-size: 10.5px;
+      }
+      .qtab table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .qtab th,
+      .qtab td {
+        text-align: left;
+        padding: 6px 9px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      .qtab th {
+        background: var(--el-surface-soft);
+        color: var(--el-text-strong);
+        font-weight: 700;
+      }
+      .qtab tr:last-child td {
+        border-bottom: 0;
+      }
+      .qtab code {
+        font-family: ui-monospace, monospace;
+        color: var(--el-accent-on-surface);
+        font-weight: 600;
+      }
+      /* the close-with-pending GUARD — the shipped Modal at role=alertdialog */
       .guard {
-        border: 1px solid var(--el-accent);
-        border-radius: 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal, 12px);
         background: var(--el-card);
-        box-shadow: 0 12px 30px -10px #5645d440;
+        box-shadow: 0 12px 30px -10px color-mix(in srgb, var(--el-text) 26%, transparent);
         overflow: hidden;
       }
       .guard .gt {
@@ -1803,7 +2456,116 @@
         background: var(--el-surface-soft);
         flex-wrap: wrap;
       }
+      /* the guard SITTING over the workspace, over the host page */
+      .guardstack {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-overlay-scrim);
+      }
+      .guardstack .guard {
+        width: 74%;
+        max-width: 320px;
+      }
+      /* the STATE grid */
+      .stategrid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-top: 4px;
+      }
+      .statecell {
+        border: 1px solid var(--el-border);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--el-card);
+      }
+      .statecell .sh {
+        font-size: 9.5px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .statecell .sb {
+        padding: 8px;
+        height: 92px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        justify-content: center;
+        font-size: 9px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+        background: var(--el-surface);
+      }
+      .statecell .sk {
+        height: 8px;
+        border-radius: 4px;
+        background: var(--el-muted);
+      }
+      .statecell .sb b {
+        color: var(--el-text-strong);
+      }
+      /* the DOORS before / after */
+      .beforeafter {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-top: 4px;
+      }
+      .balabel {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        margin-bottom: 6px;
+      }
+      .doorpill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge, 999px);
+        padding: 3px 9px;
+        font-size: 9.5px;
+        font-weight: 600;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
 
+      /* ── shared bits this sheet needs and the asset had only scoped ── */
+      .sheetbody .ref {
+        font:
+          600 0.95em ui-monospace,
+          monospace;
+        color: var(--el-accent-on-surface);
+      }
+      .sheetbody h3 {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+        letter-spacing: -0.01em;
+      }
+      .sheetbody kbd {
+        font:
+          600 9.5px ui-monospace,
+          monospace;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd, 4px);
+        padding: 0 4px;
+        color: var(--el-text-secondary);
+      }
+      /* the DANGER action — the one legal use of `--el-danger-text`: ink ON a
+         danger FILL (CLAUDE.md's danger rule). */
+      .btn.danger {
+        background: var(--el-danger);
+        border-color: transparent;
+        color: var(--el-danger-text);
+      }
       svg.edge {
         position: absolute;
         inset: 0;
@@ -1906,7 +2668,7 @@
         bubble + avatar language, the composer). The <b>only</b> thing each mode changes is the
         canvas content + the chat driver — the structure is identical everywhere.
         <b>No “Plan with AI” button INSIDE</b> — you just chat, and the conversation turns into a
-        plan (proposed cards appear on the canvas, sheet 2). “Plan with AI” names only the
+        plan (proposed work items appear on the canvas, sheet 2). “Plan with AI” names only the
         <b>entrance</b>
         (how you open this from the app); inside, the canvas is the project roadmap and the chat is
         the sole input. The top-left chip is the canvas’s <b>drill-down breadcrumb</b> — the project
@@ -1922,8 +2684,8 @@
       <div class="sheethead">
         <span class="n">2</span>
         <h2>
-          Chat-to-plan — proposed cards land on the canvas one-by-one, with edges, pending until you
-          confirm
+          Chat-to-plan — proposed work items land on the canvas one-by-one, with edges, pending
+          until you confirm
         </h2>
         <span class="cap">confirm-to-persist</span>
       </div>
@@ -1962,8 +2724,8 @@
                 <div class="turn">
                   <span class="avatar ai">M</span>
                   <div class="bubble ai">
-                    I’ll draft a Billing epic. Watch the canvas — each card appears as I propose it,
-                    with its dependency edges.
+                    I’ll draft a Billing epic. Watch the canvas — each work item appears as I
+                    propose it, with its dependency edges.
                   </div>
                 </div>
                 <div class="turn">
@@ -1976,7 +2738,7 @@
                 <div class="drafting"><span class="spin"></span> Drafting the next story…</div>
               </div>
               <div class="composer">
-                <span class="inp">Reply, or refine a card…</span>
+                <span class="inp">Reply, or refine a work item…</span>
                 <span class="send">➤</span>
               </div>
             </aside>
@@ -2069,7 +2831,7 @@
                 <span class="mlbl">Motir AI · re-plan</span>
                 <div class="minibub user">Add a reminders story.</div>
                 <div class="minibub ai">
-                  Existing tree stays; new card proposed after “Invoices”.
+                  Existing tree stays; new work item proposed after “Invoices”.
                 </div>
               </div>
             </div>
@@ -2461,79 +3223,248 @@
       </div>
     </section>
 
-    <!-- ════════════════ SHEET 5 — the hero control is STYLE-AWARE ═══════════════ -->
+    <!-- The rough-edge filter the Hand-Drawn / Indie style references as
+         `filter: url(#hd-rough)`. In the app it is mounted once in the root
+         layout by `<HandDrawnFilter />` (@motir/design-system); a mock is a
+         standalone document, so it carries the same def — an unresolvable
+         filter reference makes the element not render at all, which is silent.
+         Values are the shipped ones, not re-tuned here. -->
+    <svg aria-hidden="true" focusable="false" width="0" height="0" style="position: absolute">
+      <defs>
+        <filter id="hd-rough" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.014 0.016"
+            numOctaves="2"
+            seed="7"
+            result="noise"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="noise"
+            scale="3.5"
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+      </defs>
+    </svg>
+
+    <!-- ════════════ SHEET 5 — the hero control is STYLE-AWARE, in ALL ELEVEN ═══════════ -->
     <section class="sheet">
       <div class="sheethead">
         <span class="n">5</span>
-        <h2>Style-aware — the “Plan with AI” control looks special in every design style</h2>
-        <span class="cap">restyles with <code>data-style</code></span>
+        <h2>
+          Style-aware &mdash; the &ldquo;Plan with AI&rdquo; pill and the M orb in every registered
+          style
+        </h2>
+        <span class="cap">11 of 11, from the settled CSS</span>
       </div>
       <div class="sheetbody">
         <p class="lead" style="margin-bottom: 16px">
-          Motir dogfoods its own swappable <b>style axis</b> (<code>data-style</code>). The hero
-          control is a <b>style-aware surface</b>: it doesn’t just inherit a token — each style
-          gives it a <b>distinct, special treatment</b> (gradient + glow, frosted glass, hard-shadow
-          brutalist, neon, flat-Swiss, soft-playful), with colour <b>palette-derived</b> so a
-          <code>data-palette</code> swap re-tints it and a <code>data-style</code> swap re-shapes
-          it. The same logic themes the floating <b>M</b> orb.
+          Motir dogfoods its own swappable <b>style axis</b> (<code>data-style</code>), and the hero
+          control is the <b>sanctioned feature-surface exception</b> &mdash; the one control allowed
+          to break the flat-button norm. Each style gives it a <b>distinct material</b>, with colour
+          <b>palette-derived</b> so a <code>data-palette</code> swap re-tints it and a
+          <code>data-style</code> swap re-shapes it.
+          <b
+            >The eleven tiles below are the eleven <code>[data-style]</code> blocks in
+            <code>packages/design-system/theme.css</code></b
+          >
+          &mdash; the set is derived from the registry, not kept in step by hand.
         </p>
         <div class="stylegrid">
-          <div class="styletile st-editorial">
+          <div class="styletile" data-style="warm-editorial">
             <div class="st-h">Warm Editorial <span class="def">default</span></div>
             <div class="st-stage">
-              <span class="hc hc-editorial"><span class="spark">✦</span> Plan with AI</span>
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">
+              gradient + glow + shimmer — the Tier-0 base, and the components&rsquo; own
+              <code>var()</code> fallback
             </div>
           </div>
-          <div class="styletile st-soft">
+          <div class="styletile" data-style="soft-playful">
             <div class="st-h">Soft / Playful</div>
             <div class="st-stage">
-              <span class="hc hc-soft"><span class="spark">✦</span> Plan with AI</span>
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
             </div>
+            <div class="st-cap">pillowy stacked shadow; heavier label</div>
           </div>
-          <div class="styletile st-swiss">
+          <div class="styletile" data-style="swiss-minimal-flat">
             <div class="st-h">Swiss / Minimal-Flat</div>
             <div class="st-stage">
-              <span class="hc hc-swiss"><span class="spark">✦</span> Plan with AI</span>
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">
+              flat solid, sharp, uppercase &mdash; and the one style that gives up the glow
             </div>
           </div>
-          <div class="styletile st-brutal">
-            <div class="st-h">Neo-Brutalism</div>
-            <div class="st-stage">
-              <span class="hc hc-brutal"><span class="spark">✦</span> Plan with AI</span>
-            </div>
-          </div>
-          <div class="styletile st-glass">
+          <div class="styletile" data-style="glassmorphism">
             <div class="st-h">Glassmorphism</div>
             <div class="st-stage">
-              <span class="hc hc-glass"><span class="spark">✦</span> Plan with AI</span>
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
             </div>
+            <div class="st-cap">frosted at an 86% accent FLOOR, over the rim</div>
           </div>
-          <div class="styletile st-cyber">
+          <div class="styletile" data-style="neo-brutalism">
+            <div class="st-h">Neo-Brutalism</div>
+            <div class="st-stage">
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">2px ink border + a zero-blur offset shadow</div>
+          </div>
+          <div class="styletile" data-style="cybercore-y2k" data-theme="dark">
             <div class="st-h">Cybercore / Y2K</div>
             <div class="st-stage">
-              <span class="hc hc-cyber"><span class="spark">✦</span> Plan with AI</span>
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">dark HUD ground, neon halo instead of a drop shadow, mono</div>
+          </div>
+          <div class="styletile" data-style="aurora">
+            <div class="st-h">Aurora</div>
+            <div class="st-stage">
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">lit from within &mdash; a colour halo, no hard shadow</div>
+          </div>
+          <div class="styletile" data-style="3d-immersive">
+            <div class="st-h">3D / Immersive <span class="def">ships</span></div>
+            <div class="st-stage">
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">
+              the physical key&rsquo;s base edge, already shipped &mdash; this style adds NOTHING
+              here
+            </div>
+          </div>
+          <div class="styletile" data-style="hand-drawn-indie">
+            <div class="st-h">Hand-Drawn / Indie</div>
+            <div class="st-stage">
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">a drawn ink outline on the wonky badge radius</div>
+          </div>
+          <div class="styletile" data-style="neumorphism">
+            <div class="st-h">Neumorphism</div>
+            <div class="st-stage">
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">moulded: no gradient, no glow, hairline KEPT</div>
+          </div>
+          <div class="styletile" data-style="retrofuturism">
+            <div class="st-h">Retrofuturism</div>
+            <div class="st-stage">
+              <span class="hc" data-surface="ai-cta" data-ai-cta="pill" data-depth="key"
+                ><span class="spark">&#10022;</span> Plan with AI</span
+              >
+              <span class="hc-orb" data-surface="ai-cta" data-ai-cta="orb" data-depth="key"
+                ><svg class="mlogo" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 18V7l7 6 7-6v11" /></svg
+              ></span>
+            </div>
+            <div class="st-cap">
+              chrome bevel + specular streak, highlight bounded above the label
             </div>
           </div>
         </div>
       </div>
       <div class="note">
-        <b>How it stays token-disciplined.</b> Like the sanctioned surface-material styles
-        (glassmorphism &amp; co.), the hero control gets a per-style <b>material</b> treatment —
-        <code>[data-style='id'] [data-surface='ai-cta'] {…}</code> — whose colour is
-        <b>palette-derived</b> (<code>color-mix()</code> /
-        <code>var(--el-accent | --el-highlight)</code>, no raw hex), and whose radius / padding /
-        shadow flow through the element-semantic <b>shape</b> tokens. So the two axes stay disjoint:
-        a palette swap re-tints every style’s treatment; a style swap re-shapes it.
-        <b>AA holds in each</b> — label text sits over the accent-dominant region (and Cybercore
-        renders its native dark register).
+        <b>Drawn from the SPECIFICATION, not beside it.</b> Every tile above is painted by the
+        <code>@scope ([data-style='X']) to ([data-style])</code> rules
+        <code>design-notes.md</code> &sect; <i>The STYLE MATRIX</i> carries verbatim, over this
+        file&rsquo;s own <code>--el-*</code> layer &mdash; so the drawing and the block MOTIR-4743
+        pastes into <code>theme.css</code> cannot disagree. The six tiles this sheet used to draw
+        were private <code>.hc-*</code> classes in raw hex: they showed the LOOK and not the
+        MECHANISM, and nothing in them was copyable. <br /><br />
+        <b>Two attributes, not one.</b> The pill emits <code>data-ai-cta="pill"</code> and the orb
+        <code>data-ai-cta="orb"</code> alongside the shared <code>data-surface="ai-cta"</code>,
+        because they do not share a fill recipe: the orb&rsquo;s radial first stop is
+        <code>--orb-lit-mix</code>, a guarded contrast knob, and one shared
+        <code>background-image</code> would overwrite it.
+        <b>Radius, padding and height are not set by any rule above</b> &mdash;
+        <code>--radius-badge</code> / <code>--spacing-btn-x</code> / <code>--height-btn-md</code>
+        already reach these controls today, which is why Swiss, Brutalism and Cybercore are square
+        here and Hand-Drawn is wonky.
+        <br /><br />
+        <b>AA holds in all eleven, measured rather than claimed</b> &mdash; the label
+        (<code>--el-accent-text</code>) over its own accent-dominant region, resolved through a CSS
+        engine and read off the painted pixel. Tightest: <b>Glassmorphism 4.87:1</b> light and the
+        base group <b>4.99:1</b> dark; every row clears 4.5:1 in both themes, and the orb glyph is
+        unchanged at 3.78:1 / 3.10:1. The per-row table, and the two rows where the measurement
+        changed the design, are in <code>design-notes.md</code>. This sheet renders the
+        <b>light</b> register, as the rest of this asset does; Cybercore is drawn on its own dark
+        HUD ground because that is its native register.
       </div>
     </section>
-
     <!-- ════════════════ SHEET 6 — opening on top of the app + exiting ═══════════════ -->
     <section class="sheet">
       <div class="sheethead">
         <span class="n">6</span>
-        <h2>Opening &amp; exiting — a full-screen overlay ON TOP of the app, with a clear close</h2>
+        <h2>
+          Opening &amp; exiting — the workspace as the shipped <code>Modal size="full"</code>, over
+          the page you are on
+        </h2>
         <span class="cap">layer, not a route change</span>
       </div>
       <div class="sheetbody">
@@ -2542,29 +3473,40 @@
           <b>full-screen overlay LAYERED ON TOP of the PM app</b> — not a navigation away. The app
           stays mounted, dimmed, behind it;
           <b>closing returns you to the exact screen you launched from</b> (same scroll, same
-          filters), with no reload. So it is &ldquo;full-screen&rdquo; for working
-          <b>and</b> &ldquo;on top&rdquo; for context.
+          filters), with no reload. <b>This sheet is the AMENDMENT (MOTIR-4726)</b> that draws that
+          sentence as the parts the product now HAS: the shipped <span class="ref">Modal</span> at
+          <span class="ref">size="full"</span> around the shipped
+          <span class="ref">PlanningWorkspaceHost</span>, driven by a namespaced query written with
+          <span class="ref">shallowPush</span> — the run modal's shape (<span class="ref"
+            >design/runs/</span
+          >
+          § The run MODAL), one surface over.
         </p>
-        <div class="exitrow">
-          <!-- it opens on top of the app -->
+
+        <!-- ═══ 6a — THE FRAME, edge to edge, over a filtered backlog ═══ -->
+        <div class="ovwrap">
           <div>
-            <div class="ontop">
+            <div class="ontop peel">
               <div class="appback">
-                <div class="col">
-                  <b>To do</b>
-                  <span class="card"></span><span class="card"></span>
+                <div class="bh">Backlog</div>
+                <div class="bf">
+                  <span class="fchip">type = code</span><span class="fchip">sprint = none</span>
+                  <span>41 work items · scrolled to row 18</span>
                 </div>
-                <div class="col">
-                  <b>In progress</b>
-                  <span class="card"></span>
+                <div class="row">
+                  <span class="kk">MOTIR-4712</span><span>Retire the route group</span>
                 </div>
-                <div class="col">
-                  <b>In review</b>
-                  <span class="card"></span><span class="card"></span>
+                <div class="row">
+                  <span class="kk">MOTIR-4713</span><span>Every door opens in place</span>
                 </div>
-                <div class="col">
-                  <b>Done</b>
-                  <span class="card"></span>
+                <div class="row">
+                  <span class="kk">MOTIR-4714</span><span>The pending guard</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4715</span><span>The anchor read</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4716</span><span>The story vitest gate</span>
                 </div>
               </div>
               <div class="scrim"></div>
@@ -2572,70 +3514,640 @@
                 <div class="wcanvas">
                   <div class="wtop">
                     <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
-                    <span class="crumb" style="font-size: 11px; padding: 4px 8px"
-                      >PayFlow <span class="muted">· roadmap</span></span
+                    <span style="font-size: 9.5px; font-weight: 700; color: var(--el-text)"
+                      >PayFlow</span
                     >
+                  </div>
+                  <div class="wbody">
+                    <div class="wn" style="left: 12%; top: 26%">
+                      <span class="dt" style="background: var(--el-type-epic)"></span>Billing
+                    </div>
+                    <div class="wn" style="left: 44%; top: 12%">
+                      <span class="dt" style="background: var(--el-type-subtask)"></span>Invoice
+                      model
+                    </div>
+                    <div class="wn" style="left: 44%; top: 46%">
+                      <span class="dt" style="background: var(--el-type-subtask)"></span>Create
+                      invoice
+                    </div>
+                    <div class="wn prop" style="left: 46%; top: 72%">＋ Recurring invoices</div>
+                  </div>
+                  <div class="wfoot">
+                    <b style="color: var(--el-text-secondary)">Nothing to confirm yet</b><br />Ask
+                    for a change and the proposal lands here.
                   </div>
                 </div>
                 <div class="wrail">
                   <span class="rl">✦ Motir AI</span>
                   <div class="minibub ai" style="font-size: 9px">How can I help plan?</div>
                 </div>
+                <div class="cornerx" title="hideClose — the dialog's own ✕ is suppressed">✕</div>
               </div>
+              <div class="trueedge"></div>
+              <span class="edgetag">the dialog's REAL edge — 0px inset, 0px radius</span>
             </div>
             <p class="desc" style="margin-top: 10px">
-              Launched from the header pill or the floating <b>M</b>, the workspace
-              <b>animates in over the app</b> (the board here, dimmed + inert behind). The slight
-              inset + drop shadow show it&rsquo;s a <b>layer on top</b>, not a new page — so
-              dismissing it is instant and lossless.
+              <b>⚠️ Read the dashed line first.</b> The shipped dialog covers the viewport EXACTLY,
+              which would hide the very thing this sheet exists to show — so every pane on this
+              sheet slides the dialog down-right by 22px and marks its real edge with the dashed
+              accent box. <b>The inset is a DRAWING DEVICE and the spec is 0px</b>; the table below
+              is what settles it.<br /><br />
+              The backlog is <b>still there</b> — filtered, scrolled, mounted — under the shipped
+              scrim (<span class="ref">--el-overlay-scrim</span>, measured
+              <span class="ref">rgba(0,0,0,0.4)</span>). The dialog is <b>EDGE TO EDGE</b>:
+              <span class="ref">size="full"</span> resolves to
+              <span class="ref">h-dvh max-h-dvh w-screen max-w-none</span> and the consumer adds
+              <span class="ref">rounded-none border-0 p-0</span>, exactly as
+              <span class="ref">RunModal</span> does — measured radius <b>0px</b>, border
+              <b>0px</b>. The dashed ✕ top-right is the dialog's OWN close, drawn struck because
+              this consumer passes <b><span class="ref">hideClose</span></b
+              >: the host already renders a Close top-left, and two Closes in one dialog is a
+              question the reader should never be asked. (The run modal keeps it — it has no other.)
+            </p>
+            <div class="ovnum">
+              <table>
+                <tr>
+                  <th>MEASURED on the shipped components</th>
+                  <th>1440×780</th>
+                  <th>1024×648</th>
+                </tr>
+                <tr>
+                  <td>dialog box (radius 0, border 0)</td>
+                  <td><b>1440×780</b></td>
+                  <td><b>1024×648</b></td>
+                </tr>
+                <tr>
+                  <td><span class="ref">grid-cols-[1fr_22rem]</span> — canvas · rail</td>
+                  <td><b>1088</b> · 352</td>
+                  <td><b>672</b> · 352</td>
+                </tr>
+                <tr>
+                  <td>exit-chrome bar (host's own)</td>
+                  <td>49</td>
+                  <td>49</td>
+                </tr>
+                <tr>
+                  <td>EDGE-TO-EDGE canvas pane <span class="win">← chosen</span></td>
+                  <td class="win">1088×780</td>
+                  <td class="win">672×648</td>
+                </tr>
+                <tr>
+                  <td>with a 24px inset + shadow <span class="lose">← rejected</span></td>
+                  <td class="lose">1040×732</td>
+                  <td class="lose">624×600</td>
+                </tr>
+                <tr>
+                  <td>what the inset costs the canvas</td>
+                  <td class="lose">−48 × −48</td>
+                  <td class="lose">−48 × −48 (−7.4% of width)</td>
+                </tr>
+              </table>
+            </div>
+            <p class="desc" style="margin-top: 9px">
+              <b
+                >THE DECISION — edge to edge, and sheet 6's own “slight inset + drop shadow” prose
+                is superseded.</b
+              >
+              Three reasons, in the order they decided it. (1)
+              <b>An inset is a REGRESSION against what ships today</b>: the route host is already
+              <span class="ref">h-dvh w-full</span> with no shell chrome, so the edge-to-edge
+              overlay gives the canvas the <em>identical</em> box and an inset takes 48px in each
+              axis away from it. (2) <span class="ref">design/roadmap/</span>'s fit-floor work
+              (MOTIR-3837) fought for <b>+120px</b> of canvas height at 1440×900 on the surface with
+              the most canvas need; handing 48 of that back to a margin is the same argument running
+              backwards. (3) The “it is a layer on top” reading is carried by the
+              <b>scrim over a still-visible host page</b> and by the open animation — both drawn
+              above — not by a 24px margin, and the run modal already made this call in this same
+              primitive for this same reason (<em>“at full size the dialog IS the surface”</em>).
             </p>
           </div>
 
-          <!-- how to exit + the guard -->
+          <!-- ═══ 6b — the FOUR exits ═══ -->
           <div class="exitcol">
             <div class="panel">
-              <div class="ph">How to exit</div>
+              <div class="ph">The four ways out — all four do the same thing</div>
               <div class="pb">
                 <div class="exitopt">
-                  <span class="wclose k"><span class="x">✕</span> Close</span>
-                  <span>the close control, top-left of the workspace</span>
-                </div>
-                <div class="exitopt">
-                  <span class="k"><kbd class="">Esc</kbd></span>
-                  <span>keyboard — closes from anywhere in the workspace</span>
-                </div>
-                <div class="exitopt">
-                  <span class="k" style="font-size: 12px; color: var(--el-accent); font-weight: 600"
-                    >↩ Back to board</span
+                  <span class="k"><span class="wclose">✕ Close</span></span>
+                  <span
+                    >the control top-LEFT of the workspace. A plain <b>Close</b> — never “Back to
+                    …”, because an overlay has no destination to name</span
                   >
-                  <span>the close is labelled with where you came from</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k"><kbd>Esc</kbd></span>
+                  <span
+                    >the DIALOG's handler (Radix), not the host's. The host's own
+                    <span class="ref">keydown</span> listener is deleted</span
+                  >
+                </div>
+                <div class="exitopt">
+                  <span class="k">scrim</span>
+                  <span>a click on the dimmed page outside the dialog</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k">Back</span>
+                  <span
+                    >the address was a <span class="ref">shallowPush</span>, so it left a history
+                    entry; a <span class="ref">popstate</span> that no longer carries the overlay
+                    parameters closes it with <b>no second history write</b></span
+                  >
+                </div>
+                <div class="exitopt">
+                  <span class="k">all four</span>
+                  <span
+                    ><b>one path</b>: <span class="ref">requestClose()</span> →
+                    <span class="ref">withoutPlanningOverlay(here)</span> →
+                    <span class="ref">shallowPush</span>. The host page underneath is never
+                    unmounted, so its filter, its scroll and its client islands survive</span
+                  >
                 </div>
               </div>
             </div>
-            <div class="guard">
-              <div class="gt">Closing with proposed work items?</div>
-              <div class="gd">
-                Nothing is saved until <b>Confirm</b> (confirm-to-persist), so closing with pending
-                cards asks first — never a silent loss.
-              </div>
-              <div class="ga">
-                <span class="btn ghost sm">Discard 5 proposed</span>
-                <span class="btn sm">Keep planning</span>
-                <span class="btn primary sm">Confirm &amp; add</span>
+            <div class="panel">
+              <div class="ph">Two Esc handlers, arbitrated</div>
+              <div class="pb">
+                <p class="desc" style="margin: 0">
+                  The canvas's opt-in <span class="ref">fullScreenable</span> control is
+                  <b>OFF inside the overlay</b>. Escalating to the Fullscreen API from inside a
+                  dialog that already fills the screen is two overlays and two
+                  <kbd>Esc</kbd> handlers — the run modal's decision, verbatim, for the same reason.
+                  The host's own <span class="ref">Esc</span> listener (which yielded to a focused
+                  field, to <span class="ref">document.fullscreenElement</span> and to a
+                  <span class="ref">defaultPrevented</span> event) is <b>removed</b>: Radix owns the
+                  key, and a text field inside a dialog still keeps it, because Radix's own handler
+                  is the one that yields.
+                </p>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- ═══ 6c — THE QUERY CONTRACT ═══ -->
+        <h3 style="margin: 22px 0 8px">
+          The ADDRESS — a namespaced query, settled here because three files read it
+        </h3>
+        <p class="desc" style="margin-bottom: 10px">
+          The workspace opens on ANY authed route, so its query rides beside the host page's own.
+          Measured collisions at <span class="ref">origin/main</span>:
+          <span class="ref">?item=</span> is the roadmap's drilled LEVEL (MOTIR-3836),
+          <span class="ref">?peek=</span> is the quick view, and <span class="ref">?mode=</span> /
+          <span class="ref">?from=</span> are generic enough to collide with anything. So the
+          overlay's parameters are <b>NAMESPACED</b> and named here once — the way
+          <span class="ref">design/runs/</span> settled <span class="ref">?run=</span> for its three
+          readers.
+        </p>
+        <div class="addr">
+          <span class="host">/backlog?filter=type%3Acode</span
+          ><span class="ours">&amp;plan=project&amp;planFrom=project</span>
+        </div>
+        <div class="addr">
+          <span class="host">/roadmap</span><span class="own">?item=MOTIR-12</span
+          ><span class="ours">&amp;plan=replan&amp;planFrom=roadmap</span>
+          <span style="color: var(--el-text-secondary); font-family: inherit"
+            >← the roadmap's own drilled level is UNTOUCHED</span
+          >
+        </div>
+        <div class="addr">
+          <span class="host">/items</span><span class="own">?peek=MOTIR-12</span
+          ><span class="ours"
+            >&amp;plan=contextual&amp;planFrom=work-item&amp;planItem=MOTIR-12</span
+          >
+          <span style="color: var(--el-text-secondary); font-family: inherit"
+            >← launched from INSIDE the quick view; the peek stays</span
+          >
+        </div>
+        <div class="qtab">
+          <table>
+            <tr>
+              <th>parameter</th>
+              <th>carries</th>
+              <th>values</th>
+              <th>read by</th>
+            </tr>
+            <tr>
+              <td><code>plan</code></td>
+              <td>
+                <b>the presence switch AND the mode.</b> Its presence is what opens the overlay —
+                one <span class="ref">has('plan')</span> test, the way
+                <span class="ref">?run=</span> and <span class="ref">?peek=</span> each own one
+                word. Total: an unrecognised value degrades to <code>project</code>, never an error
+              </td>
+              <td>
+                <code>project</code> · <code>generation</code> · <code>replan</code> ·
+                <code>contextual</code> · <code>roadmap</code>
+              </td>
+              <td>the overlay</td>
+            </tr>
+            <tr>
+              <td><code>planFrom</code></td>
+              <td>
+                the ORIGIN kind. It is what decides which of the two below may be READ, so a
+                hand-edited <code>?planFrom=roadmap&amp;planItem=X</code> cannot smuggle a target
+              </td>
+              <td>
+                <code>project</code> · <code>work-item</code> · <code>roadmap</code> ·
+                <code>convention-refine</code>
+              </td>
+              <td>the overlay · the rail's opening line</td>
+            </tr>
+            <tr>
+              <td><code>planItem</code></td>
+              <td>
+                the ANCHOR's work-item key. Written <b>only</b> when
+                <code>planFrom=work-item</code>; the overlay hands it to
+                <span class="ref">GET /api/work-items/planning-anchor</span>
+              </td>
+              <td><code>MOTIR-&lt;n&gt;</code></td>
+              <td>the overlay</td>
+            </tr>
+            <tr>
+              <td><code>planRepo</code></td>
+              <td>
+                the repository key. Written <b>only</b> when
+                <code>planFrom=convention-refine</code>
+              </td>
+              <td>a repo key</td>
+              <td>the overlay</td>
+            </tr>
+          </table>
+        </div>
+        <p class="desc" style="margin-top: 9px">
+          <b
+            >Three files agree on these four names, and none of them should be the one that picks
+            them</b
+          >
+          — the launcher module WRITES and PARSES them, the overlay READS them off
+          <span class="ref">useSearchParams</span>, and the retiring
+          <span class="ref">/planning</span> forward REWRITES the old
+          <span class="ref">mode/from/item/repo</span> onto them. Renaming one is a change to this
+          section first. <b>Close strips exactly these four</b> and leaves every other parameter
+          byte-identical — that is what makes “back to exactly where you were” true of a filtered
+          list rather than only of a bare route.
+        </p>
+
+        <!-- ═══ 6d — the COLD DEEP LINK and the SIGNED-OUT hop ═══ -->
+        <h3 style="margin: 22px 0 8px">Arriving cold, and arriving signed out</h3>
+        <div class="beforeafter">
+          <div>
+            <div class="balabel">Pasted into a new tab, signed in</div>
+            <div class="ontop sm peel">
+              <div class="appback">
+                <div class="bh">Backlog</div>
+                <div class="bf"><span class="fchip">type = code</span></div>
+                <div class="row">
+                  <span class="kk">MOTIR-4712</span><span>Retire the route group</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4713</span><span>Every door opens in place</span>
+                </div>
+              </div>
+              <div class="scrim"></div>
+              <div class="wsoverlay">
+                <div class="wcanvas">
+                  <div class="wtop">
+                    <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                  </div>
+                  <div class="wbody"></div>
+                </div>
+                <div class="wrail"><span class="rl">✦ Motir AI</span></div>
+              </div>
+            </div>
+            <p class="desc" style="margin-top: 8px">
+              The HOST page renders first and the overlay opens over it — the same order
+              <span class="ref">?run=</span> produces, and the reason the address is worth pasting
+              at all. Nothing is server-rendered for the overlay: it reads the query on the client
+              and fetches its own anchor.
+            </p>
+          </div>
+          <div>
+            <div class="balabel">The same address, signed OUT</div>
+            <div class="panel">
+              <div class="ph">The whole address survives the hop</div>
+              <div class="pb">
+                <div class="addr" style="margin: 0">
+                  <span class="host">/sign-in?next=</span
+                  ><span class="own">%2Fbacklog%3Ffilter%3Dtype%253Acode</span
+                  ><span class="ours">%26plan%3Dproject%26planFrom%3Dproject</span>
+                </div>
+                <p class="desc" style="margin: 10px 0 0">
+                  <b>The host path AND the overlay query</b> both ride in
+                  <span class="ref">next=</span>. Signing in lands on the backlog with the workspace
+                  already open over it — not on the backlog with the workspace lost, which is what
+                  happens when only the pathname is preserved. Same rule as every other authed deep
+                  link; it is stated here because the overlay is the first surface whose STATE is in
+                  the query rather than in the path.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ 6e — the CLOSE-WITH-PENDING guard ═══ -->
+        <h3 style="margin: 22px 0 8px">
+          Closing with unconfirmed proposals — the guard sheet 6 specified and nothing built
+        </h3>
+        <div class="ovwrap">
+          <div>
+            <div class="ontop sm peel">
+              <div class="appback">
+                <div class="bh">Backlog</div>
+                <div class="row">
+                  <span class="kk">MOTIR-4712</span><span>Retire the route group</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4713</span><span>Every door opens in place</span>
+                </div>
+              </div>
+              <div class="scrim"></div>
+              <div class="wsoverlay">
+                <div class="wcanvas">
+                  <div class="wtop">
+                    <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                  </div>
+                  <div class="wbody"></div>
+                </div>
+                <div class="wrail"><span class="rl">✦ Motir AI</span></div>
+              </div>
+              <div class="guardstack">
+                <div class="guard" role="alertdialog">
+                  <div class="gt">Add the 5 proposed work items before closing?</div>
+                  <div class="gd">
+                    Nothing is saved until <b>Confirm</b>. Closing now discards them.
+                  </div>
+                  <div class="ga">
+                    <span class="btn danger sm">Discard 5 proposed</span>
+                    <span class="btn sm">Keep planning</span>
+                    <span class="btn primary sm">Confirm &amp; add</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="desc" style="margin-top: 9px">
+              A second dialog, over the workspace, over the host page — the shipped
+              <span class="ref">Modal</span> with <span class="ref">role="alertdialog"</span> (the
+              destructive-confirm precedent, Subtask 2.8.4), so assistive tech interrupts rather
+              than announces politely. Three shipped <span class="ref">Button</span> variants:
+              <b>Confirm &amp; add</b> primary, <b>Keep planning</b> secondary,
+              <b>Discard N proposed</b> the danger action —
+              <span class="ref">bg-(--el-danger) text-(--el-danger-text)</span>, the one legal use
+              of that ink. <b>The count is in the copy</b>, because “discard the proposals” and
+              “discard 5 work items you just watched appear” are different sentences.
+            </p>
+          </div>
+          <div class="exitcol">
+            <div class="panel">
+              <div class="ph">Which vectors raise it, and what each can do</div>
+              <div class="pb">
+                <div class="exitopt">
+                  <span class="k">Close ✕</span>
+                  <span>INTERCEPTED — nothing closes until an action is chosen</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k"><kbd>Esc</kbd></span>
+                  <span
+                    >INTERCEPTED. The guard's OWN <kbd>Esc</kbd> then dismisses the <b>guard</b>,
+                    never the workspace</span
+                  >
+                </div>
+                <div class="exitopt">
+                  <span class="k">scrim</span><span>INTERCEPTED, same as Close</span>
+                </div>
+                <div class="exitopt">
+                  <span class="k">Back</span>
+                  <span
+                    ><b>ALREADY HAPPENED.</b> A history pop cannot be prevented — by the time the
+                    overlay notices, the address no longer carries the query. So the guard opens
+                    over a workspace whose address has already changed, and
+                    <b>Keep planning RE-PUSHES the overlay address</b> with one
+                    <span class="ref">shallowPush</span>; Discard and Confirm let the pop
+                    stand</span
+                  >
+                </div>
+                <div class="exitopt">
+                  <span class="k">streaming</span>
+                  <span
+                    ><b>NOT guarded.</b> A turn still streaming has produced no proposal to lose —
+                    the predicate is
+                    <span class="ref"
+                      >state.review &amp;&amp; !state.decided &amp;&amp; !index.isEmpty</span
+                    >, and a stream has no <span class="ref">review</span> yet. Closing calls the
+                    conversation's <span class="ref">stop</span> and the turn is abandoned, which is
+                    the same thing navigating away did</span
+                  >
+                </div>
+                <div class="exitopt">
+                  <span class="k">reload</span>
+                  <span
+                    >NOT guarded — no <span class="ref">beforeunload</span>. A browser's own “leave
+                    site?” dialog cannot carry these three actions, so it would be a worse version
+                    of this one, and it fires on every reload whether or not there is anything to
+                    lose</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="ph">The pending predicate is the HOST's, not a second one</div>
+              <div class="pb">
+                <p class="desc" style="margin: 0">
+                  <span class="ref"
+                    >state.review &amp;&amp; !state.decided &amp;&amp; !index.isEmpty</span
+                  >
+                  — the exact expression <span class="ref">PlanningWorkspaceHost</span> already uses
+                  to decide whether <span class="ref">PlanChangeConfirmBar</span> is showing.
+                  <b>If the bar is up, the guard fires; if it is not, closing is instant.</b> The
+                  reader can see the rule, which is what makes it feel like a rule rather than a
+                  surprise.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ 6f — EVERY state ═══ -->
+        <h3 style="margin: 22px 0 8px">Every state — not the happy path</h3>
+        <div class="stategrid">
+          <div class="statecell">
+            <div class="sh">Opening</div>
+            <div class="sb">
+              <div class="sk" style="width: 40%"></div>
+              <div class="sk" style="width: 80%"></div>
+              <div class="sk" style="width: 65%"></div>
+              <span
+                ><span class="ref">PlanningWorkspaceSkeleton</span> INSIDE the dialog — the frame is
+                up on the first frame</span
+              >
+            </div>
+          </div>
+          <div class="statecell">
+            <div class="sh">Empty canvas</div>
+            <div class="sb">
+              <b>No work items yet</b>
+              <span
+                >the canvas's own empty statement, unchanged (<span class="ref"
+                  >emptyCanvasTitle</span
+                >)</span
+              >
+            </div>
+          </div>
+          <div class="statecell">
+            <div class="sh">No access</div>
+            <div class="sb">
+              <b>You can't see this project</b>
+              <span
+                >the host's <span class="ref">NoAccessState</span> statement, then the overlay
+                CLOSES and the page underneath reports — the run modal's
+                <span class="ref">missing</span> shape</span
+              >
+            </div>
+          </div>
+          <div class="statecell">
+            <div class="sh">Never onboarded</div>
+            <div class="sb">
+              <b>→ /onboarding</b>
+              <span
+                >a real navigation, with the overlay query STRIPPED. Onboarding is the design's one
+                stated exception — a journey, not a dismissable overlay</span
+              >
+            </div>
+          </div>
+          <div class="statecell">
+            <div class="sh">Anchor won't resolve</div>
+            <div class="sb">
+              <b>The project conversation, at the root</b>
+              <span
+                >a <span class="ref">404</span> from the anchor read is the no-existence-leak answer
+                for stale, deleted, foreign and forbidden alike — <b>no error surface</b></span
+              >
+            </div>
+          </div>
+          <div class="statecell">
+            <div class="sh">Audit banner</div>
+            <div class="sb">
+              <span
+                ><b>admin:</b> <span class="ref">AuditCoverageBanner</span> full-bleed in the seam —
+                CITED from <span class="ref">design/audit-coverage</span>, not redrawn</span
+              >
+              <span><b>member:</b> nothing, and no reserved gap</span>
+            </div>
+          </div>
+          <div class="statecell">
+            <div class="sh">Proposal pending</div>
+            <div class="sb">
+              <b>Confirm &amp; add · Discard</b>
+              <span
+                >the footer SLOT swaps content, never height — the canvas box must not resize under
+                the zoom / locate / fit clusters anchored to its bottom</span
+              >
+            </div>
+          </div>
+          <div class="statecell">
+            <div class="sh">Host page behind</div>
+            <div class="sb">
+              <b>filter · scroll · selection</b>
+              <span
+                >all preserved, because nothing unmounted. This is the state the whole story is for,
+                and it is a state of the page UNDER the overlay</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ 6g — the DOORS ═══ -->
+        <h3 style="margin: 22px 0 8px">The doors are unchanged — what changes is what they OPEN</h3>
+        <div class="beforeafter">
+          <div>
+            <div class="balabel">Before — a navigation</div>
+            <div class="ontop sm peel" style="height: 150px">
+              <div class="appback">
+                <div class="bh" style="display: flex; align-items: center; gap: 8px">
+                  Backlog <span class="doorpill">✦ Plan with AI</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4712</span><span>Retire the route group</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4713</span><span>Every door opens in place</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4714</span><span>The pending guard</span>
+                </div>
+              </div>
+            </div>
+            <div class="addr" style="margin-top: 8px">
+              <span
+                style="font-family: inherit; font-weight: 700; color: var(--el-danger-on-surface)"
+                >→</span
+              ><span class="host">/planning</span
+              ><span style="color: var(--el-text-secondary)">?mode=project&amp;from=project</span>
+            </div>
+            <p class="desc" style="margin-top: 8px">
+              The backlog UNMOUNTS. Close then resolves the origin to
+              <span class="ref">/roadmap</span>, <span class="ref">/items/&lt;key&gt;</span> or
+              <span class="ref">/code-health</span> — so from <span class="ref">/backlog</span>,
+              <span class="ref">/boards</span>, <span class="ref">/ready</span> or
+              <span class="ref">/home</span> you come back <b>somewhere else</b>, with the filter
+              and the scroll gone.
+            </p>
+          </div>
+          <div>
+            <div class="balabel">After — the same door, in place</div>
+            <div class="ontop sm peel" style="height: 150px">
+              <div class="appback">
+                <div class="bh" style="display: flex; align-items: center; gap: 8px">
+                  Backlog <span class="doorpill">✦ Plan with AI</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4712</span><span>Retire the route group</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4713</span><span>Every door opens in place</span>
+                </div>
+                <div class="row">
+                  <span class="kk">MOTIR-4714</span><span>The pending guard</span>
+                </div>
+              </div>
+              <div class="scrim"></div>
+              <div class="wsoverlay">
+                <div class="wcanvas">
+                  <div class="wtop">
+                    <span class="wclose"><span class="x">✕</span> Close <kbd>Esc</kbd></span>
+                  </div>
+                  <div class="wbody"></div>
+                </div>
+                <div class="wrail"><span class="rl">✦ Motir AI</span></div>
+              </div>
+            </div>
+            <div class="addr" style="margin-top: 8px">
+              <span class="host">/backlog?filter=type%3Acode</span
+              ><span class="ours">&amp;plan=project&amp;planFrom=project</span>
+            </div>
+            <p class="desc" style="margin-top: 8px">
+              <b>EVERY door opens the overlay on the page it sits on; none navigates.</b> The header
+              pill, the orb's callout rows, ⌘K's <em>Plan with AI</em>, a work item's Plan / Re-plan
+              pill (on the detail page AND inside the quick view), the roadmap's empty state and
+              Code health's <em>Refine with Motir</em> — all seven keep their visual design (sheet 4
+              · <span class="ref">ai-callout-menu.mock.html</span> · MOTIR-1489). A
+              <b>modified click</b> (⌘ / ctrl / middle) is never intercepted, so the door's
+              <span class="ref">href</span> stays a real full address that opens in a new tab.
+            </p>
+          </div>
+        </div>
       </div>
       <div class="note">
-        <b>Why an overlay, not a route.</b> The summoned planner is a
-        <b>session on top of your work</b>, not a place you navigate to — so it mounts as a
-        full-screen layer above the current route (the app inert behind), and closing restores that
-        route instantly with no reload or lost state. The close lives in the workspace&rsquo;s own
-        top-left chrome (✕ + <kbd>Esc</kbd>, labelled with the origin); a dismissal with unconfirmed
-        proposals hits the confirm-to-persist guard (Discard / Keep planning / Confirm &amp; add).
-        Onboarding is the one case that is a genuine full-page route (a dedicated first-run
-        journey), not this dismissable overlay.
+        <b>Why an overlay, not a route — and why THIS overlay.</b> The summoned planner is a
+        <b>session on top of your work</b>, not a place you navigate to; so it mounts as the shipped
+        <span class="ref">Modal size="full"</span> above the current route, and closing restores
+        that route instantly because the route never left. The parts are all already in the product
+        — the dialog primitive, its scrim, <span class="ref">shallowPush</span>, the run modal that
+        answered the two-<kbd>Esc</kbd> question, the quick view that is itself a URL-driven dialog
+        — so this amendment is a COMPOSITION, not an invention. What it decides that no
+        implementation could decide for itself is three things: the overlay's four
+        <b>namespaced parameter names</b>, the Close control's <b>copy</b> now that there is no
+        destination to name, and what happens when somebody dismisses it with a proposal they have
+        not confirmed. Onboarding stays a genuine full-page route (a dedicated first-run journey),
+        and the plan detail stays a page inside the shell.
       </div>
     </section>
 

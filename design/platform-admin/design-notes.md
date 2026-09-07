@@ -17,6 +17,8 @@ closest existing usage surface.
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Platform admin console (access · search · nav shell · overview · usage/cost · seats · read-only drill-down · states)** | **`console.mock.html`** (HTML mockup) | The whole operator surface. Seven panels: **access path** · **estate overview** (in the left-nav shell + search top bar) · **global search** · **usage/cost · by tenancy** (rollup + members) · **usage/cost · by model & consumers** · **drill-down** (seats + read-only inspect) · **gating / empty / loading / error**. **Gates 10.1.4 / 10.1.5 / 10.1.6.** A `console.png` full-page export sits beside it. |
 
+| **ORG lookup · ORG page · the internal-billing CLASSIFICATION control** (AMENDMENT 2026-09-05) | **`console.mock.html`** (HTML mockup, Panels 10 · 10b · 11 · 12) | The ORG level of the reserved **Tenants** row. Four panels: the **org lookup** (a GET form, the shipped user-lookup grammar one entity over) · its **three states** (idle · query too short · no results) · the **org page** (identity, plan tier, balance, the `isMeta` and `internalBilling` chips drawn SEPARATELY, MOTIR-733's panels as RESERVED regions, and the allocation table) · the **classification control** in six states (not-classified · classified · confirm with a mandatory reason · reason-missing · already-in-that-state · generic failure) with the `PlatformAuditLog` row rendered back on the same surface. **Gates MOTIR-4566 and MOTIR-4568** (Story MOTIR-4337). Draws to `docs/decisions/internal-billing-classification.md`. |
+
 ## What this area is
 
 The **home base for Motir's own operators**. It is **NOT a customer surface** — a
@@ -695,4 +697,178 @@ ONLY-IN-MOCK exception to name here.
 
 Whenever the block is corrected, re-export `console.png` after `prettier --write`:
 Playwright chromium, light theme, `deviceScaleFactor: 2`, viewport width 1200,
-`fullPage` — which reproduces the committed 2400×16180 export.
+`fullPage` — which reproduces the committed **2400×24962** export. (It was 2400×16180 until
+the MOTIR-4564 amendment added Panels 10–12; `node scripts/render-design-mock.mjs
+design/platform-admin/console.mock.html` recovers the viewport from the committed PNG and
+reports `EXACT 1200x900@2x`, so the height is the only thing that moved.)
+
+---
+
+# AMENDMENT 2026-09-05 — the ORG level: lookup, page, and the internal-billing classification control
+
+**Story MOTIR-4337 · card MOTIR-4564.** Panels **10 · 10b · 11 · 12** of
+`console.mock.html`. This is an **amendment to this asset, not a new area** — it composes the
+shell Panels 2–9 already draw and introduces no primitive and no bespoke admin CSS.
+
+## What this amendment is, and the sentence in this file it corrects
+
+The story's own body says the platform-admin console _"has no design area of its own today"_ and
+calls that the NONE-exists case. **It is false on `origin/main`** — this area ships
+`console.mock.html`, `console.png` and these notes, authored by MOTIR-728. What is genuinely
+undrawn is narrower, and this file already said so: _"Story 10.1 draws READ views"_ and _"this
+design draws no destructive control."_ Both of those statements survive. The control drawn in
+Panel 12 is neither destructive nor 10.1's — it is a reversible per-org classification owned by
+Story MOTIR-4337, and it is the only write this amendment adds.
+
+**A reserved nav row is evidence the room is required, not evidence it is designed.** The rail
+draws **Tenants** behind a `10.1` pill (`AdminShell.tsx`, `soonTenants`, `href="/admin/tenants"`,
+`disabled: true`). Panels 10–12 draw that row **live and unbadged**, because this story builds its
+ORG level.
+
+## The ROUTE — `/admin/tenants`, not `/admin/orgs` (decision-authority rung 2)
+
+The story's amendment block observes that `/admin/orgs` does not exist. So does `/admin/tenants` —
+but the shipped rail already **points at `/admin/tenants`**, and this asset already reserves that
+row for the tenant hierarchy. Inventing a second, sibling route would leave the reserved row
+pointing at nothing while an unreserved one carried the surface. So:
+
+| route                                   | owner          | what it is                                                      |
+| --------------------------------------- | -------------- | --------------------------------------------------------------- |
+| `/admin/tenants`                        | **MOTIR-4566** | the ORG lookup (Panel 10)                                       |
+| `/admin/tenants/[orgId]`                | **MOTIR-4566** | the org page SHELL (Panel 11) + MOTIR-4568's control (Panel 12) |
+| the workspace + project levels below it | **MOTIR-733**  | not drawn here at all                                           |
+
+This is rung 2 — shipped reality — outranking the card's prose, the same call
+`platform-staff-auth.md` recorded when it filed itself under `docs/decisions/` rather than the
+path its own card named.
+
+## Panel 10 — the ORG LOOKUP (review EACH panel — mistake #31)
+
+- **The access path, end to end, drawn as a strip above the shell**: account menu → `/admin` →
+  the left-nav **Tenants** row (live) → `/admin/tenants`. Panel 1 already draws step 1 in full;
+  the strip is what makes the _whole_ path visible on one screen rather than inferred across two.
+- **A GET form, not a type-ahead.** The shipped user lookup
+  (`app/(admin)/admin/users/page.tsx`) settles this and the reasoning transfers unchanged: every
+  search is an **audited cross-tenant read**, so a keystroke-per-request lookup would write an
+  audit row per keystroke and bury the reads that mattered; and the query in the URL makes a
+  result set linkable, reloadable and findable in history an hour later.
+- **The ⌘K box in the top bar stays inert**, exactly as it does beside the user lookup. Panel 3's
+  estate search groups four entity kinds and three of them still read tables with no
+  `platform_staff` policy arm — this story ships the arms for `organization` **and only**
+  `organization` (MOTIR-4565, carved from MOTIR-730). A palette that answered one group and
+  silently returned nothing for the rest would be a search that lies about the estate.
+- **The result row carries TWO classification chips**, `isMeta` and `internalBilling`, separately
+  labelled. A single "Internal" chip would draw the conflation
+  `docs/decisions/internal-billing-classification.md` §1 refuses; the two flags are true together
+  on `moooon` today and that coincidence is not identity.
+
+## Panel 10b — the lookup's three states
+
+**Idle · query too short · no results.** There is deliberately no "forbidden" arm: a non-staff
+user never reaches this route (Panel 7a's 404 is the whole answer, and it is the console's
+standing rule). The idle state shows nothing until asked rather than listing the estate, because
+the lookup answers a question and every answer is an audited read.
+
+## Panel 11 — the ORG PAGE, and the ALLOCATION that keeps it honest
+
+- **Header:** identity (name, slug), **plan tier**, **credit balance**, and the two chips. The
+  balance reads `0` for a classified org and the panel says why in a `note`: the debits are real
+  and each is paired with an `internal_offset` credit in the same transaction, so the balance nets
+  to zero **while both entries stay visible** (ADR §2–§3). A reader who sees `0` and thinks
+  _suppressed_ is the exact misreading this story exists to end.
+- **One action:** _Classify as internal billing_ / _Remove internal classification_. Everything
+  else on the page is read-only.
+- **MOTIR-733's panels are drawn as RESERVED REGIONS** — a `card.reserved` with the owning card's
+  key as a neutral `Pill` and one line saying what it will hold. Not content, not a skeleton (a
+  skeleton claims the data is loading), not empty states (an empty state claims there is nothing
+  to show).
+- **The ALLOCATION TABLE is on the asset**, not in a card body, because it is the artifact three
+  cards in two epics have to read the same way. It names, per element, whether MOTIR-4566,
+  MOTIR-4568, MOTIR-4565, MOTIR-733 or MOTIR-745 builds it.
+
+## Panel 12 — the CLASSIFICATION CONTROL, six states
+
+The shipped `SupportActionsBar` pattern one entity over (`app/(admin)/admin/users/[userId]/`):
+`Button` → `Modal` → `FormField` reason → confirm, with the audit row rendered back underneath.
+
+| state                       | what it draws                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------- |
+| **a** not classified        | no chip at all (absence is absence, not a badge) + the set button                              |
+| **b** classified            | both chips + the unset button — the same control inverted                                      |
+| **c** confirm, reason typed | the dialog, the required-reason field, the primary ENABLED                                     |
+| **d** reason missing        | the same dialog with the primary **`disabled`** — a gate, never a post-submit error            |
+| **e** already in that state | a warning toast: _no change made_, nothing written, **no audit row created**                   |
+| **f** generic failure       | an error toast: the write and its audit row share one transaction, so a failure leaves neither |
+
+- **The reason is mandatory and it is enforced twice** — `disabled` on the client, and the audit
+  vocabulary's own reason policy inside the transaction. The client gate is convenience; the
+  server gate is the rule.
+- **The record is on the same surface as the action**, per this file's standing line that an
+  operator can never perform an action and wonder whether it was recorded.
+- **One `PlatformAuditLog` row, and no second audit log.** It is the shipped table from
+  MOTIR-2896 and it joins `platform-staff-auth.md` §7's allocation as a `superadmin`-level,
+  reason-required, audited write. When MOTIR-751's hash chain lands it extends this same table.
+
+## Primitives composed (no hand-rolling)
+
+`Sidebar` (the rail, with Tenants live), the `.adminbar` operator top bar, the `.scope` breadcrumb
+grammar, `Card` (+ `card-head` / `card-body flush` / `card-foot`), the at-scale `table` + `pager`,
+`Pill` (neutral / tier / platform / the new `internal` tone), `Button` (primary · secondary ·
+disabled), `Modal` (the `.confirm` dialog) with `FormField` + its required-reason hint,
+`EmptyState` (`.state`, three of them), and the `.note` / `.toast` annotation family. **No new
+primitive is introduced.**
+
+## Colour roles added by this amendment (`--el-*` only)
+
+| Element                                       | Token                                                         | Why                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **`internalBilling` chip** (`.pill-internal`) | `--el-tint-sky` + `--el-text-strong`                          | The INFO family — a marker the platform set, the same family as the operator bar. Distinct from `isMeta`. |
+| **`isMeta` chip** (`.pill-platform`)          | `--el-tint-lavender` + `--el-text-strong` (existing)          | The platform/tenancy family this asset already uses; keeps the two flags visually apart.                  |
+| **Reserved region** (`.card.reserved`)        | `--el-surface-soft` + `--el-text-secondary` note              | Quieter than a live card, still a card. **No dashed border** — border style never carries state.          |
+| **State-key badge** (`.ctrl-key`)             | `--el-tint-lavender` + `--el-text-strong`                     | A board-chrome index letter, the tint-plus-strong-ink rule (finding #35).                                 |
+| **Already-in-state toast** (`.toast-warn`)    | `--el-tint-yellow` + `--el-text-strong`, glyph `--el-warning` | A refusal, not a failure — the cautionary hue, never danger.                                              |
+| **Failure toast** (`.toast-err`)              | `--el-tint-rose` + `--el-text-strong`, glyph `--el-danger`    | Hue in the tint BACKGROUND with strong ink on top; the glyph carries the danger hue.                      |
+
+Every caption in the new panels is `--el-text-secondary`, never `--el-text-muted` — muted clears
+AA on the white page only, and these captions sit on `--el-surface`, `--el-surface-soft` and the
+tints. `--el-danger-text` appears nowhere: it is the ink FOR a danger fill and there is no danger
+fill in these panels.
+
+## Copy strings (en — the `platformAdmin` namespace these panels add)
+
+| Key                                        | String                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `orgs.breadcrumb`                          | Platform · Tenants                                                                                                                                                                                                                                                                                                       |
+| `orgs.title`                               | Organizations                                                                                                                                                                                                                                                                                                            |
+| `orgs.subtitle`                            | Find an organization by name or slug. Opening one is an audited cross-tenant read.                                                                                                                                                                                                                                       |
+| `orgs.searchLabel` / `orgs.searchSubmit`   | Name or slug / Search                                                                                                                                                                                                                                                                                                    |
+| `orgs.idleTitle` / `orgs.idleDescription`  | Search for an organization / Type a name or slug above. Results are limited to 20; every match you open is recorded in the audit log.                                                                                                                                                                                    |
+| `orgs.tooShort`                            | Enter at least {n} characters.                                                                                                                                                                                                                                                                                           |
+| `orgs.noneTitle` / `orgs.noneDescription`  | No organizations match "{query}" / Check the spelling, or search by slug.                                                                                                                                                                                                                                                |
+| `orgs.chip.isMeta` / `orgs.chip.internal`  | isMeta / internalBilling                                                                                                                                                                                                                                                                                                 |
+| `orgs.action.classify`                     | Classify as internal billing                                                                                                                                                                                                                                                                                             |
+| `orgs.action.unclassify`                   | Remove internal classification                                                                                                                                                                                                                                                                                           |
+| `orgs.confirm.classify.title`              | Classify {name} as internal billing?                                                                                                                                                                                                                                                                                     |
+| `orgs.confirm.classify.body`               | Every AI debit this org incurs will be paired, in the same transaction, with an offsetting credit — so it is charged exactly like a customer and its balance nets to zero. Both entries stay visible in the ledger. This changes no rate, lifts no cap and touches no Stripe object, and another operator can remove it. |
+| `orgs.confirm.reasonLabel` / `…reasonHint` | Reason — required, written to the audit log / Shown to any operator reading this organization later. "Internal" on its own answers nothing.                                                                                                                                                                              |
+| `orgs.action.error.alreadyInState`         | {name} is already classified as internal billing.                                                                                                                                                                                                                                                                        |
+| `orgs.action.failedTitle`                  | Couldn't update the classification                                                                                                                                                                                                                                                                                       |
+| `orgs.audit.title` / `orgs.audit.subtitle` | Platform actions on this organization / Every operator write on this org, newest first. Append-only.                                                                                                                                                                                                                     |
+
+## The `meta` sweep of the customer areas (card criterion 7)
+
+`grep -rin 'meta' design/billing/ design/ai-usage/` returns 37 hits. They fall into three groups,
+and every one is disposed of:
+
+1. **The `.meta` CSS class and its markup** (`.line .meta`, `<div class="meta">`) — 20 hits across
+   `billing.mock.html`, `ci-line.mock.html`, `search-line.mock.html`. **UNRELATED**: it is a
+   billed line's own metadata row, nothing to do with the META org.
+2. **`Motir-state` / `metadata` prose** — 2 hits (`design/billing/design-notes.md:547`,
+   `design/ai-usage/design-notes.md:329`). **UNRELATED**: the word inside "metadata".
+3. **The META-org VARIANT** — the rest. **CORRECTED** in `design/billing/design-notes.md` and
+   `design/ai-usage/design-notes.md` by an amendment section in each, which records that after
+   MOTIR-4572 an internal org renders the ordinary customer panels and the CI line RENDERS in
+   whatever state `ciAllowanceService` returns. The drawn META panels in `ci-line.mock.html`,
+   `search-line.mock.html` and `search-spend.mock.html` are **annotated as superseded** in place
+   rather than redrawn: they remain a true record of shipped behaviour until MOTIR-4572 merges,
+   and redrawing customer pixels is out of this card's scope.

@@ -2686,6 +2686,378 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
+
+   The two controls that summon the planning workspace — the header pill
+   (`components/planning/PlanWithAILauncher.tsx`) and the floating M orb
+   (`components/planning/PlanWithAIFab.tsx`) — are the product's headline
+   affordance and the sanctioned exception to the flat-button norm
+   (`design/ai-chat/design-notes.md` § *The hero control is STYLE-AWARE*). Each
+   style gives them its own material. Before this section they rendered
+   byte-identically under all eleven: the hook the design prescribed was emitted
+   nowhere and the fill was painted inline, where no rule can reach it.
+
+   ── TWO ATTRIBUTES, AND THE SECOND IS LOAD-BEARING ─────────────────────────
+   `data-ai-cta` distinguishes the two because they do not share a fill recipe:
+   the orb's `radial-gradient` first stop is `--orb-lit-mix`, a guarded contrast
+   knob (MOTIR-3207, `tests/theme/orb-glyph-contrast.test.ts`), and a shared
+   `background-image` would silently overwrite it. So the shape-agnostic
+   properties — border, outer glow, type, ink — are written on
+   `[data-surface='ai-cta']`, and every FILL under `[data-ai-cta='pill']` or
+   `[data-ai-cta='orb']`.
+
+   ── THE TWO INLINE-DECLARED PROPERTIES TRAVEL ON CUSTOM PROPERTIES ─────────
+   The components declare exactly two things in an inline `style` prop —
+   `background-image` and `box-shadow` — and an inline declaration beats every
+   stylesheet rule. So BOTH are read through a `var()` seam:
+   `background-image: var(--plan-hero-fill, <the base recipe>)` (MOTIR-4743) and
+   `box-shadow: var(--plan-hero-shadow, <the base look>)` (MOTIR-3522), with the
+   orb's twins beside them.
+
+   `design/ai-chat/design-notes.md` § *The CSS, verbatim* writes each treatment
+   as plain `background-image` / `box-shadow` declarations. Both are transcribed
+   here onto those four variables, because written literally they would be
+   **INERT** — which is the very defect this section exists to close, one
+   property over. It is the same mechanism the design's own row 8 relies on and
+   the only one consistent with its "Warm Editorial has no block by design"
+   decision: painting the base in a `warm-editorial` block instead would give the
+   Tier-0 base a second copy of its own recipe to drift from.
+
+   ⚠️ THE SHADOW HALF WAS MEASURED, NOT REASONED. `tests/e2e/hero-ai-control-styles.spec.ts`
+   compares every style against the base in a real browser, and with the shadows
+   written literally exactly ONE control came back byte-identical to the base:
+   the AURORA ORB — the only one whose row sets nothing but a shadow. Every other
+   style also moves a fill, a border or the type, so its rule "worked" while its
+   shadow silently did not. A source-reading review passes that; the render does
+   not.
+
+   A shared `[data-surface='ai-cta']` rule sets BOTH shadow variables, since the
+   design gives the pill and the orb the same shadow and each control reads only
+   its own name. Everything the components do NOT declare inline —
+   `background-color`, `background-size`, `background-position`,
+   `background-repeat`, `border`, `backdrop-filter`, the type properties — is
+   written exactly as the design states it.
+
+   Radius, padding and height are NOT set here: they already flow through
+   `--radius-badge` / `--spacing-btn-x` / `--height-btn-md`, and re-stating them
+   would freeze the one axis that was already working. Palette-derived
+   throughout — `color-mix()` over `--el-*`, no raw hex — so a `data-palette`
+   swap re-tints all eleven treatments. Every label ratio in the design's table
+   was measured on the painted pixel; the tightest is glassmorphism at 4.87:1.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* 1 · Warm Editorial — NO BLOCK, by design. It is the Tier-0 base, and the
+   components' own `var()` fallbacks ARE its treatment; a block repeating them
+   would be a second copy to drift. */
+
+/* 2 · Soft / Playful — pillowy stacked shadow, no border. */
+@scope ([data-style='soft-playful']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    font-weight: 800;
+    --plan-hero-shadow:
+      0 7px 0 -1px color-mix(in srgb, var(--el-accent) 22%, var(--el-page-bg)),
+      0 14px 22px -6px color-mix(in srgb, var(--el-accent) 55%, transparent);
+    --plan-orb-shadow:
+      0 7px 0 -1px color-mix(in srgb, var(--el-accent) 22%, var(--el-page-bg)),
+      0 14px 22px -6px color-mix(in srgb, var(--el-accent) 55%, transparent);
+  }
+}
+
+/* 3 · Swiss / Minimal-Flat — flat solid, sharp, uppercase, NO shadow. */
+@scope ([data-style='swiss-minimal-flat']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow: none;
+    --plan-orb-shadow: none;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+}
+@scope ([data-style='swiss-minimal-flat']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 4 · Glassmorphism — frosted translucency over the rim. 86% is a FLOOR, not a
+   preference: white is the lightest backdrop the light theme can put behind it,
+   so 86% accent composited over anything measures >= 4.87:1. */
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid var(--glass-rim);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    --plan-hero-shadow:
+      inset 0 1px 0 var(--glass-rim),
+      0 8px 22px -6px color-mix(in srgb, var(--el-accent) 45%, transparent);
+    --plan-orb-shadow:
+      inset 0 1px 0 var(--glass-rim),
+      0 8px 22px -6px color-mix(in srgb, var(--el-accent) 45%, transparent);
+  }
+}
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+  }
+}
+@scope ([data-style='glassmorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    /* Crown-confined: across the whole circle this sheen lightens the 26/56
+       glyph box to 3.17:1 light / 2.67:1 dark and breaks the `--orb-lit-mix`
+       floor the style layer may not touch. Confined, it measures the shipped
+       3.78:1 / 3.10:1 — identical to no sheen at all. */
+    background-size:
+      100% 20%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+    --plan-orb-fill:
+      linear-gradient(160deg, var(--glass-sheen), transparent 90%),
+      radial-gradient(
+        circle at 33% 27%,
+        color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+        var(--el-accent) 56%,
+        color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+      );
+  }
+}
+
+/* 5 · Neo-Brutalism — hard 2px border + zero-blur offset shadow. */
+@scope ([data-style='neo-brutalism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 2px solid var(--el-text);
+    --plan-hero-shadow: 4px 4px 0 0 var(--el-text);
+    --plan-orb-shadow: 4px 4px 0 0 var(--el-text);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+}
+@scope ([data-style='neo-brutalism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 6 · Cybercore / Y2K — dark HUD ground, neon halo, mono label. The mixes toward
+   the achromatic `black` KEYWORD are sanctioned by this style's own material
+   layer, which uses them to read as lightness rather than as a hue, so the
+   palette axis stays disjoint. */
+@scope ([data-style='cybercore-y2k']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-highlight) 70%, transparent);
+    --plan-hero-shadow:
+      0 0 10px color-mix(in srgb, var(--el-highlight) 60%, transparent),
+      0 0 26px -4px color-mix(in srgb, var(--el-accent) 70%, transparent);
+    --plan-orb-shadow:
+      0 0 10px color-mix(in srgb, var(--el-highlight) 60%, transparent),
+      0 0 26px -4px color-mix(in srgb, var(--el-accent) 70%, transparent);
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+}
+@scope ([data-style='cybercore-y2k']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--el-accent) 88%, black),
+      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%, black)
+    );
+  }
+}
+@scope ([data-style='cybercore-y2k']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill:
+      linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--el-highlight) 22%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at 33% 27%,
+        color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+        var(--el-accent) 56%,
+        color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+      );
+  }
+}
+
+/* 7 · Aurora — lit from within, colour halo, no hard shadow. */
+@scope ([data-style='aurora']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+      0 0 26px -2px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+      0 0 40px -6px color-mix(in srgb, var(--el-highlight) var(--aurora-glow), transparent);
+    --plan-orb-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+      0 0 26px -2px color-mix(in srgb, var(--el-accent) var(--aurora-glow), transparent),
+      0 0 40px -6px color-mix(in srgb, var(--el-highlight) var(--aurora-glow), transparent);
+  }
+}
+@scope ([data-style='aurora']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-size:
+      100% 28%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+    --plan-hero-fill:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent-text) var(--aurora-sheen), transparent),
+        transparent 90%
+      ),
+      linear-gradient(
+        135deg,
+        var(--el-accent),
+        color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight))
+      );
+  }
+}
+
+/* 8 · 3D / Immersive — NOTHING. `--plan-hero-shadow` / `--plan-orb-shadow` own
+   this control's depth and the components read them through a `var()` seam an
+   inline `box-shadow` would otherwise beat (MOTIR-3522). A rule here would
+   either lose to that inline declaration or take a `data-depth="key"` control
+   off the plane ladder it is declared on (docs/styles/3d-immersive.md §4 / §4b).
+   Deliberately empty — recorded so the absence reads as a decision, not an
+   omission. */
+
+/* 9 · Hand-Drawn / Indie — a drawn ink outline + a hand-placed offset.
+   ⚠️ THE `position: relative` IS GUARDED, where the design's transcription
+   states it bare. The orb is `.fixed`, and a fixed element is already a
+   containing block for its own `::after`; re-declaring it `relative` would drop
+   the orb out of fixed positioning entirely. Same `:not(.fixed):not(.absolute)
+   :not(.sticky)` guard this style's own `.border` rule carries, for the same
+   reason it carries it. */
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface='ai-cta']:not(.fixed):not(.absolute):not(.sticky) {
+    position: relative;
+  }
+}
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    font-weight: 700;
+    --plan-hero-shadow: 3px 4px 0 -1px color-mix(in srgb, var(--el-border-strong) 55%, transparent);
+    --plan-orb-shadow: 3px 4px 0 -1px color-mix(in srgb, var(--el-border-strong) 55%, transparent);
+  }
+}
+@scope ([data-style='hand-drawn-indie']) to ([data-style]) {
+  [data-surface='ai-cta']::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    border: 2px solid var(--el-border-strong);
+    border-radius: inherit;
+    filter: url(#hd-rough);
+  }
+}
+
+/* 10 · Neumorphism — moulded, NOT raised-and-glowing: no gradient, no glow, and
+   the hairline is KEPT (structure never relies on shadow alone). */
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-accent) 70%, var(--el-text));
+    --plan-hero-shadow:
+      var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+      calc(var(--neu-distance) * -1) calc(var(--neu-distance) * -1) var(--neu-blur) var(--neu-light);
+    --plan-orb-shadow:
+      var(--neu-distance) var(--neu-distance) var(--neu-blur) var(--neu-shadow),
+      calc(var(--neu-distance) * -1) calc(var(--neu-distance) * -1) var(--neu-blur) var(--neu-light);
+  }
+}
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+@scope ([data-style='neumorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 11 · Retrofuturism — a chrome bevel + a CROWN-CONFINED specular streak.
+   ⚠️ THE STREAK IS THE THING THAT HAD TO MOVE, not the bevel. Across the full
+   box the diagonal at `--retro-spec` washes the label to 2.55:1 light / 2.22:1
+   dark, and thinning it does not rescue it (18% still measures 3.67:1 dark, by
+   which point the chrome has stopped reading). Sized to the top band it sits
+   above the cap height, the label sits on the bevel BODY at 6.76:1 / 5.16:1, and
+   the chrome still reads — a machined bevel IS a vertical light-to-dark ramp
+   with a highlight on the crown. The `white` / `black` keywords are this style's
+   own sanctioned lightness mixes, not a hue. */
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-accent-text) 30%, transparent);
+    --plan-hero-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+      0 0 24px -4px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+    --plan-orb-shadow:
+      inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+      0 0 24px -4px color-mix(in srgb, var(--el-accent) var(--retro-glow), transparent);
+  }
+}
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-size:
+      100% 28%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+    --plan-hero-fill:
+      linear-gradient(
+        104deg,
+        transparent 30%,
+        color-mix(in srgb, var(--el-accent-text) var(--retro-spec), transparent) 46%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent) 82%, white) 0%,
+        var(--el-accent) 20%,
+        color-mix(in srgb, var(--el-accent) 84%, black) 100%
+      );
+  }
+}
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    /* Crown-confined, for the same reason as glass: unbounded it measures
+       3.34:1 light / 2.78:1 dark inside the glyph box. */
+    background-size:
+      100% 26%,
+      100% 100%;
+    background-position:
+      top left,
+      top left;
+    background-repeat: no-repeat;
+    --plan-orb-fill:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent-text) var(--retro-bevel-light), transparent),
+        transparent 90%
+      ),
+      radial-gradient(
+        circle at 33% 27%,
+        color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+        var(--el-accent) 56%,
+        color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
+      );
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Style-preview vignette material canvas (7.3.37 / MOTIR-1050).
    The StyleVignette preview specimen carries its OWN axis attribute on a
    nested wrapper (`.style-vignette[data-style='…']`), so it cannot lean on the

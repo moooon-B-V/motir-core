@@ -1627,3 +1627,101 @@ describe('parseFindingsPolicy — the auto-approve lane rides its own parameter'
     expect(parsed.unknown).toBe('no-log-bug');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE ACCEPTANCE-RECEIPT STEPS (bug MOTIR-4704)
+//
+// Both directions are asserted, and the NEGATIVE one is the reason this block
+// exists. The bug being fixed is that the runner was never told to publish; the
+// bug this could introduce is telling every `type: test` card to publish a
+// recording it never made, which sends an agent hunting for a video that does
+// not exist. A suite that only checks the positive direction leaves the
+// condition itself untested.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the acceptance-receipt steps are conditional on the card recording one', () => {
+  const acceptanceCard = (over: Partial<DispatchPromptSource> = {}) =>
+    source({
+      key: 'PROD-40',
+      type: 'test',
+      title: 'Story E2E (Playwright) + ACCEPTANCE VIDEO — walk both surfaces',
+      descriptionMd: [
+        'Record the story working, paced for a human.',
+        '',
+        '## Acceptance criteria',
+        '',
+        '- The spec declares its story and stays under 60s.',
+      ].join('\n'),
+      ...over,
+    });
+
+  it('names BOTH calls on a card that records an acceptance video', () => {
+    const { prompt } = assembleDispatchPrompt(acceptanceCard());
+
+    expect(prompt).toContain('create_acceptance_upload');
+    expect(prompt).toContain('publish_acceptance_result');
+    // The mint-then-PUT shape has to be stated, or an agent reads two tool names
+    // and looks for the argument that takes the bytes.
+    expect(prompt).toContain('Content-Type: video/webm');
+    // The silence is the hazard, so the prompt says so where the agent is
+    // standing when it decides whether the run is over.
+    expect(prompt).toContain('NOTHING ELSE MAKES THAT CALL');
+  });
+
+  it('keeps the ordinary test steps and APPENDS to them', () => {
+    // Appended, never substituted: an acceptance card still writes and greens
+    // its spec, and the publish is the step after that.
+    const { prompt } = assembleDispatchPrompt(acceptanceCard());
+    expect(prompt).toContain('4. Run the test files you added or changed and leave them green.');
+    expect(prompt).toContain('5. PUBLISH the receipt');
+  });
+
+  it('finds the signal in the DESCRIPTION when the title does not carry it', () => {
+    const { prompt } = assembleDispatchPrompt(
+      acceptanceCard({
+        title: 'Story E2E — an admin and a member walk the spend surfaces',
+        descriptionMd: "Declare the story with `acceptanceStory('PROD-39')` and pace it.",
+      }),
+    );
+    expect(prompt).toContain('publish_acceptance_result');
+  });
+
+  it('says NOTHING about publishing on an ordinary regression test card', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({
+        type: 'test',
+        title: 'Cover the ready-filter reducer',
+        descriptionMd: 'Write unit tests for the reducer’s three branches.',
+      }),
+    );
+
+    expect(prompt).not.toContain('create_acceptance_upload');
+    expect(prompt).not.toContain('publish_acceptance_result');
+    expect(prompt).toContain('4. Run the test files you added or changed and leave them green.');
+  });
+
+  it('says nothing about publishing on a `code` card that merely mentions the video', () => {
+    // The gate is the TYPE and the text together. A code card describing the
+    // acceptance lane is not a card that records a receipt.
+    const { prompt } = assembleDispatchPrompt(
+      source({
+        type: 'code',
+        title: 'Rename the acceptance video lane',
+        descriptionMd: 'The lane is called `Acceptance video` and publishes nothing.',
+      }),
+    );
+    expect(prompt).not.toContain('publish_acceptance_result');
+  });
+
+  it('says nothing on a MANUAL item, which has no run to record in', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({
+        type: 'manual',
+        executor: 'human',
+        title: 'Watch the acceptance video and approve it',
+        descriptionMd: 'A person watches the receipt and decides.',
+      }),
+    );
+    expect(prompt).not.toContain('create_acceptance_upload');
+  });
+});

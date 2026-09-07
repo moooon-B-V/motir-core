@@ -422,21 +422,38 @@ writes to **MOTIR-1167**, before Epic 10 runs at all. The card's fourth acceptan
 criterion was amended on the record on 2026-08-17 to match; this table is the allocation
 every consumer builds to.
 
-| Action                                                           | Story / card              | Minimum role | Reason required | Audited |
-| ---------------------------------------------------------------- | ------------------------- | ------------ | --------------- | ------- |
-| Read the estate; drill into a tenant; the health glance          | 8.5 MOTIR-1167 · 10.1.4–6 | `support`    | no              | yes     |
-| Send a password reset                                            | **8.5 MOTIR-1167**        | `operator`   | **yes**         | yes     |
-| Suspend / unsuspend an **account**                               | **8.5 MOTIR-1167**        | `operator`   | **yes**         | yes     |
-| Credit grants, plan / tier assignment                            | 10.3 MOTIR-747            | `superadmin` | yes             | yes     |
-| Suspend / reactivate an **organization**                         | 10.3 MOTIR-748            | `superadmin` | yes             | yes     |
-| Write-level impersonation (time-boxed)                           | 10.3 MOTIR-749            | `superadmin` | yes             | yes     |
-| Per-org feature flags / kill-switches                            | 10.3 MOTIR-750            | `superadmin` | yes             | yes     |
-| The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751            | `superadmin` | n/a             | n/a     |
-| Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)   | `superadmin` | yes             | yes     |
+| Action                                                           | Story / card                      | Minimum role | Reason required | Audited |
+| ---------------------------------------------------------------- | --------------------------------- | ------------ | --------------- | ------- |
+| Read the estate; drill into a tenant; the health glance          | 8.5 MOTIR-1167 · 10.1.4–6         | `support`    | no              | yes     |
+| Send a password reset                                            | **8.5 MOTIR-1167**                | `operator`   | **yes**         | yes     |
+| Suspend / unsuspend an **account**                               | **8.5 MOTIR-1167**                | `operator`   | **yes**         | yes     |
+| Credit grants, plan / tier assignment                            | 10.3 MOTIR-747                    | `superadmin` | yes             | yes     |
+| Suspend / reactivate an **organization**                         | 10.3 MOTIR-748                    | `superadmin` | yes             | yes     |
+| Write-level impersonation (time-boxed)                           | 10.3 MOTIR-749                    | `superadmin` | yes             | yes     |
+| Per-org feature flags / kill-switches                            | 10.3 MOTIR-750                    | `superadmin` | yes             | yes     |
+| Classify an **organization** internal-billing / remove it        | **MOTIR-4565** (Story MOTIR-4337) | `superadmin` | **yes**         | yes     |
+| The audit-log **VIEW**, searchable + tamper-evident (hash chain) | 10.3 MOTIR-751                    | `superadmin` | n/a             | n/a     |
+| Grant / revoke `platformRole`                                    | 10.3 (no card yet — §6)           | `superadmin` | yes             | yes     |
 
 Every one of those writes reuses **this** gate and **this** `PlatformAuditLog`. The day-1
 rows are the plain append-only shape above; 10.3's hash chaining extends the same table
 rather than introducing a second one.
+
+> **⚠️ AMENDED 2026-09-05 (Story MOTIR-4337 · MOTIR-4565).** The row above the last one is the
+> first member of this table from OUTSIDE Epic 10 and Story 8.5, and it is placed at
+> `superadmin` deliberately rather than at the `operator` degree MOTIR-1167's two writes take:
+> it changes what an organization is BILLED, which is the class every other `superadmin` row here
+> already covers (credit grants, tier assignment, per-org flags). Its two actions —
+> `org.internal_billing_set` and `org.internal_billing_unset` — join
+> `PLATFORM_AUDIT_ACTIONS` in the same pull request, both `reason: 'required'`.
+>
+> It also ships the FIRST `platform_staff` policy arms on a tenant table —
+> a SELECT arm and an UPDATE arm on `organization`, and on `organization` only.
+> Those are carved from **MOTIR-730** on the record, which keeps
+> `platformReadService` and every other table's arms; the boundary is written up in
+> `docs/decisions/internal-billing-classification.md` §5. Until they landed, the
+> _"deliberately does NOT decide"_ table's allocation meant a cross-tenant read of any
+> tenant table from this tier returned zero rows and raised nothing.
 
 ---
 

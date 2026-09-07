@@ -397,6 +397,66 @@ describe('GET /api/v1/plans/{planId}', () => {
     expect(modify?.proposedFields).toBeNull();
   });
 
+  // MOTIR-4620 — a versioned contract STRIPS what it does not declare, so the
+  // question this case asks is not "did the call succeed" but "did the steps
+  // survive the presenter". `null` on the proposal that carries none is the
+  // other half: a client can then tell "no steps" from "an older server".
+  it('presents `todos` on an add that carries steps, and `null` on one that does not', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const story = await makeStory(caller);
+    acceptJob('job_todos');
+    const handle = (await (await expand(caller, story.identifier)).json()) as V1PlanJobHandle;
+    await plansService.addProposals(
+      handle.planId,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Provision the account',
+            kind: 'subtask',
+            type: 'manual',
+            todos: [
+              { text: 'Create the account' },
+              { text: 'Invite the team', notesMd: 'Settings → Members.' },
+              {
+                text: 'Set the deployment secret',
+                commandText: 'fly secrets set X=… -a motir',
+                executor: 'coding_agent',
+              },
+            ],
+          },
+        },
+        { op: 'add', proposedFields: { title: 'A card with no steps', kind: 'subtask' } },
+      ],
+      caller.ctx,
+    );
+
+    const body = (await (await readPlan(caller, handle.planId)).json()) as V1Plan;
+    expect(() => planSchema.parse(body)).not.toThrow();
+
+    const withSteps = body.proposals.find(
+      (p) => p.proposedFields?.title === 'Provision the account',
+    );
+    expect(withSteps?.proposedFields?.todos).toEqual([
+      { text: 'Create the account', notesMd: null, commandText: null, executor: null },
+      {
+        text: 'Invite the team',
+        notesMd: 'Settings → Members.',
+        commandText: null,
+        executor: null,
+      },
+      {
+        text: 'Set the deployment secret',
+        notesMd: null,
+        commandText: 'fly secrets set X=… -a motir',
+        executor: 'coding_agent',
+      },
+    ]);
+
+    const without = body.proposals.find((p) => p.proposedFields?.title === 'A card with no steps');
+    expect(without?.proposedFields?.todos).toBeNull();
+  });
+
   it('never puts a work-item cuid on the wire', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
     const story = await makeStory(caller);

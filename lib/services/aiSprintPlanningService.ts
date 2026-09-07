@@ -153,7 +153,7 @@ export const aiSprintPlanningService = {
       throw new SprintPlanningDisabledError(ctx.project.identifier);
     }
 
-    const { organizationId, isMeta } = await resolveTenantOrg({
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
@@ -167,6 +167,7 @@ export const aiSprintPlanningService = {
       {
         organizationId,
         isMeta,
+        internalBilling,
         workspaceId: ctx.workspaceId,
         projectId: ctx.projectId,
         projectKey: ctx.project.identifier,

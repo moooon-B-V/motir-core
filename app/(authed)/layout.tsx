@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode } from 'react';
+import { Suspense, type CSSProperties, type ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
@@ -8,6 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { platformStaffRepository } from '@/lib/repositories/platformStaffRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
+import { isOrgAdminRole } from '@/lib/organizations/roles';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
@@ -39,6 +40,7 @@ import { ThemeToggle } from './_components/ThemeToggle';
 import { BuildInPublicButton } from './_components/build-in-public/BuildInPublicButton';
 import { BuildingInPublicHeaderLink } from './_components/build-in-public/BuildingInPublicHeaderLink';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
+import { PlanningWorkspaceOverlay } from '@/components/planning/PlanningWorkspaceOverlay';
 import { AccountDeletionBanner } from './_components/AccountDeletionBanner';
 import {
   isWorkspaceTierRevealed,
@@ -396,6 +398,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       variant="rail"
                       settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
+                      organization={
+                        activeOrg
+                          ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                          : null
+                      }
+                      billingAvailable={cloudBilling}
                       workspaceTierRevealed={workspaceTierRevealed}
                       publicProjectsAvailable={publicProjectsAvailable}
                       helpMenu={
@@ -492,6 +500,12 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     variant="drawer"
                     settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
+                    organization={
+                      activeOrg
+                        ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
+                        : null
+                    }
+                    billingAvailable={cloudBilling}
                     workspaceTierRevealed={workspaceTierRevealed}
                     publicProjectsAvailable={publicProjectsAvailable}
                   />
@@ -516,6 +530,62 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   header pill). A fixed bottom-right orb, mounted once at the
                   layout root, under the same gate as the pill. */}
                 {showPlanWithAi ? <PlanWithAIFab /> : null}
+
+                {/* THE PLANNING WORKSPACE, as an OVERLAY (MOTIR-4729 · story
+                  MOTIR-4725). Mounted ONCE here, beside the orb — but NOT behind
+                  the orb's gate; see the note below — and open only when the
+                  address carries the overlay's namespaced query, so on every page
+                  that does not, this renders `null` and costs a `useSearchParams`
+                  read.
+
+                  It sits INSIDE `ProjectAccessProvider` deliberately: the
+                  `(planning)` route group lived outside it and had to pass
+                  `canManage` down by prop, which is the coupling this mount
+                  removes. It is also inside `CreateIssueProvider`, so a later
+                  card can bump the issues tick when an approve commits work
+                  items behind an open board (CLAUDE.md § page state after a
+                  mutation).
+
+                  ⚠️ THE MOUNT IS `activeProject`, NOT `showPlanWithAi`, and
+                  the difference is load-bearing (found by
+                  `plan-change-planner-turn.spec.ts` in the AI-OFF main lane).
+                  The DOOR is gated — no pill, no orb, no palette row where AI
+                  planning is unconfigured, exactly as before — but the ADDRESS
+                  still opens the workspace, because that is what the retired
+                  `app/(planning)/planning/page.tsx` did: it gated on session,
+                  active project and `canBrowse`, and never on
+                  `isMotirAiConfigured()`. Mounting behind the door's own gate
+                  narrowed it, and a `/planning` forward that lands on a page
+                  where nothing mounts is not a forward. What a reader sees when
+                  they arrive is `resolvePlanningHostGate`'s business, here as it
+                  was there.
+
+                  `activeProject` is what the gate's `no-project` arm would
+                  answer, so it is checked here rather than rendered. */}
+                {activeProject ? (
+                  // ⚠️ THE `<Suspense>` IS NOT DECORATION. This is the first
+                  // component mounted at LAYOUT level that reads
+                  // `useSearchParams()`, and Next refuses to build a route where
+                  // that read is not inside a boundary
+                  // (`missing-suspense-with-csr-bailout`). This layout is dynamic
+                  // today — it awaits `getSession()` and `cookies()` — so the
+                  // error does not fire; the boundary is here so that a later
+                  // change to what this layout awaits cannot break every authed
+                  // route's build at once. `null` is the right fallback: an
+                  // overlay that has not resolved its address yet is a closed
+                  // overlay, which is what the reader should see.
+                  <Suspense fallback={null}>
+                    <PlanningWorkspaceOverlay
+                      projectKey={activeProject.identifier}
+                      projectName={activeProject.name}
+                      onboardingRanAt={
+                        activeProject.onboardingRanAt
+                          ? new Date(activeProject.onboardingRanAt).toISOString()
+                          : null
+                      }
+                    />
+                  </Suspense>
+                ) : null}
               </OnboardingResumeProvider>
             </ReportProvider>
           </ProjectAccessProvider>

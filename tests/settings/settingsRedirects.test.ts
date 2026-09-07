@@ -24,12 +24,30 @@ import { DOCS_REDIRECTS, SETTINGS_REDIRECTS } from '../../next.config';
 // `withNextIntl` and seeds placeholder OAuth environment variables at module
 // load, machinery this assertion does not need and should not depend on.
 
-describe('the account-settings area keeps every address it ever served', () => {
-  it('sends the old tokens-pane address to the new one, permanently', () => {
+describe('the settings areas keep every address they ever served', () => {
+  it('sends every moved pane to its new address, permanently', () => {
+    // ⚠️ AN EXACT LIST, deliberately: a redirect quietly ADDED is a URL somebody
+    // decided to stop serving, and this is where that decision is reviewed.
+    // MOTIR-4680 added the two git rows when the connect surface moved a TIER —
+    // a repository is connected once, to the ORGANISATION, so the workspace
+    // routes stop existing rather than being duplicated.
     expect([...SETTINGS_REDIRECTS]).toEqual([
       {
         source: '/settings/account/api-tokens',
         destination: '/settings/account/tokens',
+        permanent: true,
+      },
+      {
+        source: '/settings/workspace/github',
+        destination: '/settings/organization/git',
+        permanent: true,
+      },
+      {
+        // The GitLab arm keeps its provider through the search param rather than
+        // a second route: the organisation's inventory spans BOTH providers, so
+        // the Segmented switches the connection card, not the page.
+        source: '/settings/workspace/gitlab',
+        destination: '/settings/organization/git?provider=gitlab',
         permanent: true,
       },
     ]);

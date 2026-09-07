@@ -1,0 +1,2963 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The PROPOSED to-do list in the peek (MOTIR-3810 · MOTIR-4615)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE PROPOSED TO-DO LIST IN THE PEEK'S
+      PROPOSAL MODE. Story MOTIR-3810, subtask MOTIR-4615 (design).
+      Gates MOTIR-4622 (the review surface), and through it MOTIR-4624 /
+      MOTIR-4625 (the two test gates).
+
+      WHY A NEW ASSET AND NOT AN EDIT. `design/ai-planning/design-notes.md`
+      § "A design result is a MOMENT" (Yue, 2026-08-20): a new element on an
+      existing surface gets its OWN file. `peek-proposal-mode.mock.html`
+      (MOTIR-4182, Part XIV) is left frozen; this composes into it and cites it.
+
+      COMPOSES, DOES NOT REDRAW. Two shipped assets meet here and neither is
+      re-drawn:
+        · the ROW grammar — `design/work-items/todo-list.mock.html`
+          (MOTIR-3812), whose token block and utility shims are copied into this
+          file 1:1 so the two are diffable;
+        · the PEEK chrome — `components/workItems/QuickViewSurface.tsx`, whose
+          three pieces' utilities are re-declared as `.peek*` shims against the
+          same tokens (see the second style block).
+
+      EVERY COLOUR IS AN `--el-*` TOKEN. The hex values in the first style block
+      are the TOKEN DEFINITIONS, copied from `todo-list.mock.html`; nothing below
+      that block names a hex.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-canvas: #0e0e0e;
+        --color-ink: #f3f4f6;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+
+        --color-primary: #7b6ce5;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #5645d4;
+        --color-primary-fill: #6c5cdd;
+
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+      }
+      :root,
+      [data-appearance-scope] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      [data-theme='dark'] {
+        --el-sidebar-item-bg-hover: #222222;
+        --el-overlay-scrim: #000000a6;
+      }
+    </style>
+    <style>
+      /* Utility shims — the mock is static HTML, so the handful of Tailwind
+         utilities the shipped components emit are declared here against the SAME
+         tokens. Nothing invents a value. */
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        margin: 0;
+        background: var(--el-page-bg, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      svg {
+        width: 1em;
+        height: 1em;
+      }
+      .list-none {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .flex {
+        display: flex;
+      }
+      .grid {
+        display: grid;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .items-start {
+        align-items: flex-start;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-1 {
+        flex: 1 1 0%;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      .min-w-0 {
+        min-width: 0;
+      }
+      .max-w-md {
+        max-width: 28rem;
+      }
+      .truncate {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .text-center {
+        text-align: center;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .font-sans {
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      .font-mono {
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+      }
+      .font-serif {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+      }
+      .font-medium {
+        font-weight: 500;
+      }
+      .font-semibold {
+        font-weight: 600;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .rotate-180 {
+        transform: rotate(180deg);
+      }
+      .opacity-40 {
+        opacity: 0.4;
+      }
+      .relative {
+        position: relative;
+      }
+      .w-6 {
+        width: 1.5rem;
+      }
+      .h-3 {
+        height: 0.75rem;
+      }
+      .w-3 {
+        width: 0.75rem;
+      }
+      .h-4 {
+        height: 1rem;
+      }
+      .w-4 {
+        width: 1rem;
+      }
+      .h-12 {
+        height: 3rem;
+      }
+      .w-12 {
+        width: 3rem;
+      }
+      .dsCard {
+        background: var(--el-surface-raised, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+      }
+      .dsPill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .dsPillNeutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .dsPillDone {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillProgress {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .dsPillSuccess {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .dsPillWarning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      .dsPillDanger {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      /* mock chrome — not part of the spec */
+      .sheet {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 32px 64px;
+      }
+      .sheetHead {
+        border-bottom: 1px solid var(--el-border);
+        padding-bottom: 20px;
+        margin-bottom: 8px;
+      }
+      .sheetHead h1 {
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 26px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .sheetHead p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        padding: 28px 0;
+        border-bottom: 1px dashed var(--el-border);
+      }
+      .panelTitle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-serif, ui-serif, Georgia, serif);
+        font-size: 17px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .panelNum {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-badge);
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans, sans-serif);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .panelNote {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+        max-width: 92ch;
+      }
+      .panelNote code,
+      .panelNote .font-mono {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.94em;
+      }
+      .panelBody {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        gap: 28px;
+        align-items: start;
+      }
+      .rail {
+        width: 18rem;
+      }
+      .main {
+        min-width: 0;
+      }
+      /* padding + margin utilities used by the shipped markup */
+      .px-3\.5 {
+        padding-left: 0.875rem;
+        padding-right: 0.875rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-10 {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+      }
+      .p-0\.5 {
+        padding: 0.125rem;
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-1\.5 {
+        margin-top: 0.375rem;
+      }
+      .mt-2 {
+        margin-top: 0.5rem;
+      }
+      .mt-3 {
+        margin-top: 0.75rem;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .-mt-0\.5 {
+        margin-top: -0.125rem;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-2\.5 {
+        gap: 0.625rem;
+      }
+      .gap-x-2 {
+        column-gap: 0.5rem;
+      }
+      /* the shipped arbitrary-value utilities, spelled out */
+      .text-\[11px\] {
+        font-size: 11px;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[13px\] {
+        font-size: 13px;
+      }
+      .text-\[13\.5px\] {
+        font-size: 13.5px;
+      }
+      .h-\[15px\] {
+        height: 15px;
+      }
+      .w-\[15px\] {
+        width: 15px;
+      }
+      .h-\[17px\] {
+        height: 17px;
+      }
+      .w-\[17px\] {
+        width: 17px;
+      }
+      .border {
+        border-width: 1px;
+        border-style: solid;
+      }
+      .border-dashed {
+        border-style: dashed;
+      }
+      .border-\[5px\] {
+        border-width: 5px;
+        border-style: solid;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .grid-cols-\[auto_1fr_auto\] {
+        grid-template-columns: auto 1fr auto;
+      }
+      .shadow-\(--shadow-card\) {
+        box-shadow: var(--shadow-card);
+      }
+      .rounded-\(--radius-control\) {
+        border-radius: var(--radius-control);
+      }
+      .rounded-\(--radius-card\) {
+        border-radius: var(--radius-card);
+      }
+      .px-\(--spacing-control-x\) {
+        padding-left: var(--spacing-control-x);
+        padding-right: var(--spacing-control-x);
+      }
+      .py-\(--spacing-control-y\) {
+        padding-top: var(--spacing-control-y);
+        padding-bottom: var(--spacing-control-y);
+      }
+      .border-\(--el-border\) {
+        border-color: var(--el-border);
+      }
+      .border-\(--el-border-strong\) {
+        border-color: var(--el-border-strong);
+      }
+      .border-\(--el-accent\) {
+        border-color: var(--el-accent);
+      }
+      .bg-\(--el-surface\) {
+        background-color: var(--el-surface);
+      }
+      .bg-\(--el-surface-soft\) {
+        background-color: var(--el-surface-soft);
+      }
+      .bg-\(--el-accent\) {
+        background-color: var(--el-accent);
+      }
+      .text-\(--el-text\) {
+        color: var(--el-text);
+      }
+      .text-\(--el-text-muted\) {
+        color: var(--el-text-muted);
+      }
+      .text-\(--el-text-secondary\) {
+        color: var(--el-text-secondary);
+      }
+      .text-\(--el-text-identifier\) {
+        color: var(--el-text-identifier);
+      }
+      .text-\(--el-icon-muted\) {
+        color: var(--el-icon-muted);
+      }
+      .text-\(--el-success\) {
+        color: var(--el-success);
+      }
+      .text-\(--el-warning\) {
+        color: var(--el-warning);
+      }
+      .text-\(--el-accent-text\) {
+        color: var(--el-accent-text);
+      }
+      /* ⚠️ THE PANEL BODY IS ONE COLUMN HERE. The scaffold this asset inherits
+         its chrome from draws a rail BESIDE a main column (`18rem 1fr`); this
+         surface is a left-column section card and has no rail, so a single
+         child would otherwise land in the 18rem track and render at a width the
+         product never uses. */
+      .panelBody {
+        display: block;
+      }
+      /* The left column's real width: the item page is a `1fr 18rem` grid with a
+         24px gap inside a 1180px sheet, so `1fr` is ~800px at 1280. Every
+         section card below is drawn at that width, which is what makes the
+         overflow panels (13–14) measurements rather than illustrations. */
+      .secCard,
+      .panelBody > .grid {
+        max-width: 800px;
+      }
+      .twoUp {
+        max-width: 100%;
+      }
+
+      /* ── Extra utility shims this asset needs, same tokens ─────────────── */
+      .w-full {
+        width: 100%;
+      }
+      .gap-3 {
+        gap: 12px;
+      }
+      .gap-0\.5 {
+        gap: 2px;
+      }
+      .mt-4 {
+        margin-top: 16px;
+      }
+      .mb-2 {
+        margin-bottom: 8px;
+      }
+      .ml-auto {
+        margin-left: auto;
+      }
+      .line-through {
+        text-decoration: line-through;
+      }
+      .overflow-x-auto {
+        overflow-x: auto;
+      }
+      .cursor-grab {
+        cursor: grab;
+      }
+      .select-none {
+        user-select: none;
+      }
+      .whitespace-pre {
+        white-space: pre;
+      }
+      .opacity-60 {
+        opacity: 0.6;
+      }
+      .h-5 {
+        height: 20px;
+      }
+      .w-5 {
+        width: 20px;
+      }
+      .h-\[18px\] {
+        height: 18px;
+      }
+      .w-\[18px\] {
+        width: 18px;
+      }
+      .py-2 {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .px-2 {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .pl-7 {
+        padding-left: 28px;
+      }
+      .text-\[12px\] {
+        font-size: 12px;
+      }
+      .text-\[12\.5px\] {
+        font-size: 12.5px;
+      }
+
+      /* ── The asset's OWN elements ─────────────────────────────────────── */
+      /* A section card, `ContentSectionCard` markup-for-markup. */
+      .secCard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-card, var(--color-background));
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .secHead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .secBody {
+        padding: 8px var(--spacing-card-padding) 16px;
+      }
+      /* ONE to-do row. A grid so the checkbox, the body and the row actions
+         each get their own track — and so the body track can be `min-w-0`,
+         which is what lets a long command scroll inside itself instead of
+         widening the row. */
+      .todoRow {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: start;
+        gap: 10px;
+        padding: 9px 4px;
+        border-radius: var(--radius-control, 8px);
+      }
+      .todoRow + .todoRow {
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+      }
+      .todoRow.isHover {
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      /* The shipped `Checkbox` primitive's box. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border: 1px solid var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 6px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--el-card, var(--color-background));
+        color: transparent;
+        flex: none;
+      }
+      .cbox.isOn {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .cbox.isInert {
+        border-color: var(--el-border);
+        background: var(--el-muted, var(--color-muted));
+      }
+      /* The command value — mono, scrolling inside ITS OWN box. */
+      /* The INSTRUCTIONS disclosure. Collapsed by default so a list of ten rows
+         reads as ten lines whether or not any of them carries notes; the tell
+         is the chevron, which only renders on a row that HAS notes. */
+      .notesToggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        border: 0;
+        background: none;
+        padding: 0;
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+      }
+      .notesToggle svg {
+        transition: transform 120ms;
+      }
+      .notesToggle.isOpen svg {
+        transform: rotate(90deg);
+      }
+      .notesBody {
+        margin-top: 6px;
+        padding: 8px 12px;
+        border-left: 2px solid var(--el-border-strong, var(--el-border));
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .notesBody ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .notesBody code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        padding: 1px 4px;
+        border-radius: var(--radius-control, 4px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .notesBody a {
+        color: var(--el-link);
+      }
+      /* The MARKDOWN EDITOR, mirrored from `comments.mock.html`'s composer —
+         the shipped `MarkdownEditor` at `size="compact"`, whose button set is
+         bold · italic · strike · inline code · link · bulleted · numbered
+         (`components/ui/MarkdownEditor.tsx`). Not an approximation: the same
+         chrome the comment composer already renders on this page. */
+      .mdEditor {
+        margin-top: 6px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        background: var(--el-card, var(--color-background));
+        overflow: hidden;
+      }
+      .mdEditor.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .editorToolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 4px 6px;
+      }
+      .tbIcon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-icon-btn);
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--el-text-secondary);
+      }
+      .tbIcon svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .editorArea {
+        padding: 8px 12px;
+        min-height: 72px;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text);
+      }
+      .editorArea ol {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .fieldLabel {
+        display: block;
+        margin-top: 10px;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .cmdBox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .cmdVal {
+        /* A `<pre>`, not a `<code>`: `white-space: pre` is only honoured if the
+           markup preserves the line, and a formatter will reflow the contents of
+           an inline element. This is also what the shipped `CodeBlock` renders
+           (`ScrollableRegion as="pre"`). */
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        white-space: pre;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.7;
+        padding: 4px 8px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 6px);
+        background: var(--el-code-bg, var(--color-surface-soft));
+        color: var(--el-code-text, var(--el-text));
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-btn, 8px);
+        background: var(--el-card, var(--color-background));
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        padding: 5px 10px;
+        line-height: 1.2;
+      }
+      .btnIcon {
+        padding: 5px;
+      }
+      .btnPrimary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btnDanger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .rowActions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        color: var(--el-text-secondary);
+      }
+      .execMark {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.4;
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border);
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .execMark.isAgent {
+        background: var(--el-tint-lavender);
+        border-color: transparent;
+        color: var(--el-text-strong);
+      }
+      .addRow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 8px 4px 2px;
+        border-top: 1px solid var(--el-border-soft, var(--el-border));
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .inputBox {
+        flex: 1 1 auto;
+        min-width: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input, 8px);
+        padding: 6px 10px;
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-card, var(--color-background));
+      }
+      .inputBox.isFocused {
+        border-color: var(--focus-ring-color);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .dropGap {
+        height: 2px;
+        margin: 2px 4px;
+        border-radius: 2px;
+        background: var(--el-accent);
+      }
+      .ghostRow {
+        opacity: 0.5;
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-control, 8px);
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        background: var(--el-page-bg, var(--color-background));
+      }
+      .colLabel {
+        display: block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .twoUp {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      .foldRule {
+        position: relative;
+        border-top: 2px dashed var(--el-accent);
+        margin: 4px 0;
+      }
+      .foldRule span {
+        position: absolute;
+        top: -9px;
+        right: 0;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--el-page-bg, var(--color-background));
+        padding: 0 6px;
+        color: var(--el-accent-on-surface, var(--el-text-secondary));
+      }
+      .regionBox {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control, 8px);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .regionBox.isThis {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .narrow {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 12px;
+        background: var(--el-card, var(--color-background));
+      }
+    </style>
+    <style>
+      /* ── The Tier-3 RE-DERIVATION for a SCOPED dark panel ──────────────────
+         ⚠️ THIS DECLARES NO NEW TOKEN AND NO NEW VALUE. Every line below is the
+         identical `--el-*: var(--color-*)` declaration this file already makes
+         on `:root`, repeated inside the dark scope — and it is REQUIRED, because
+         of how CSS custom properties resolve.
+
+         A custom property's `var()` is substituted at COMPUTED-VALUE time on the
+         element that DECLARES it. `--el-text: var(--color-foreground)` is
+         declared on `:root`, so its computed value is the LIGHT foreground, and
+         THAT is what inherits. A descendant carrying `data-theme="dark"` flips
+         the Tier-0 `--color-*` values for itself and its subtree, but it cannot
+         retroactively re-substitute a Tier-3 value `:root` already computed.
+
+         In the REAL APP this never arises: `data-theme` sits on `<html>`, which
+         is the same element `:root` matches, so both tiers flip together. It
+         arises only in a MOCK that draws a dark panel BESIDE a light one — and
+         when it is not handled, the panel renders dark chrome under light ink
+         and the step text disappears.
+
+         ⚠️ IT IS A DEFECT IN A SHIPPED ASSET, NOT A QUIRK OF THIS ONE.
+         `design/work-items/todo-list.mock.html`'s own dark column has it: its
+         steps are near-invisible in the committed PNG. Filed as a bug against
+         story MOTIR-3810; this asset does not inherit it. */
+      [data-theme='dark'] {
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-planning: var(--color-accent-teal);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-role-custom: var(--color-tint-peach);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-executor-agent: var(--color-primary-fill);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-input-disabled-bg: var(--color-muted);
+        --el-input-disabled-border: var(--color-hairline);
+        --el-input-disabled-text: var(--color-slate);
+        --el-input-readonly-bg: var(--color-surface);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-type-copy: var(--color-accent-teal);
+        --el-type-translate: var(--color-accent-teal);
+        --el-type-verification: var(--color-accent-orange);
+        --el-type-legal: var(--color-charcoal);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+
+      /* ── The PEEK's chrome, as utility shims ────────────────────────────────
+         The shipped surface is `components/workItems/QuickViewSurface.tsx`, whose
+         three pieces emit exactly these declarations as Tailwind utilities:
+
+           QuickViewHeader  flex flex-none items-center gap-2.5
+                            border-b border-(--el-border) py-3.5 pr-4 pl-5
+           QuickViewBody    grid min-h-0 flex-1 grid-cols-1
+                            md:grid-cols-[minmax(0,1fr)_300px]
+           QuickViewMain    min-w-0 overflow-y-auto px-7 pt-6 pb-7
+
+         They are re-declared here for the same reason `todo-list.mock.html`
+         re-declares its utility shims: this is static HTML with no Tailwind
+         build, and the alternative — a compiled stylesheet — makes the asset a
+         snapshot of a build rather than of a design. NOTHING here invents a
+         value: every colour is an `--el-*` token defined in the block above, and
+         every length is the one the shipped class computes to. */
+      .peek {
+        width: 980px;
+        height: 680px;
+        display: flex;
+        flex-direction: column;
+        background: var(--el-card, var(--color-background));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal, 12px);
+        overflow: hidden;
+      }
+      .peekHead {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--el-border);
+        padding: 14px 16px 14px 20px;
+      }
+      .peekBody {
+        display: grid;
+        min-height: 0;
+        flex: 1;
+        grid-template-columns: minmax(0, 1fr) 300px;
+      }
+      .peekMain {
+        min-width: 0;
+        overflow-y: auto;
+        padding: 24px 28px 28px;
+      }
+      .peekRail {
+        border-left: 1px solid var(--el-border);
+        padding: 24px 20px;
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+      .peekFoot {
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-top: 1px solid var(--el-border);
+        padding: 12px 16px 12px 20px;
+      }
+      /* The op chip and the "no page to defer to" foot line — Part XIV §3. */
+      .opChip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 2px 9px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .opChip.isModify {
+        background: var(--el-tint-sky);
+      }
+      .opChip.isRemove {
+        background: var(--el-tint-rose);
+      }
+      .railRow {
+        display: grid;
+        grid-template-columns: 5.5rem 1fr;
+        gap: 8px;
+        align-items: baseline;
+        padding: 5px 0;
+        font-size: 12px;
+      }
+      .railKey {
+        color: var(--el-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        font-size: 10.5px;
+        font-weight: 500;
+      }
+      /* The READ face of a to-do row: the shipped `.todoRow` grammar with the
+         write affordances gone. A separate class rather than a modifier, so a
+         reader can see at a glance which tracks survive. */
+      .todoRow.isRead {
+        grid-template-columns: auto 1fr;
+      }
+      .cbox.isInert {
+        opacity: 0.75;
+        background: var(--el-input-readonly-bg, var(--el-surface));
+      }
+      /* A measurement callout drawn ON the panel, so a number and the thing it
+         measures are never in two places. */
+      .measure {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-badge);
+        padding: 2px 8px;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .sideBySide {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      .cap {
+        margin: 0 0 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .capNote {
+        margin: 8px 0 0;
+        font-size: 11.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 62ch;
+      }
+      .absentSlot {
+        border: 1px dashed var(--el-border-strong, var(--el-border));
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        background: var(--el-surface-soft, var(--color-surface-soft));
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position: absolute">
+      <symbol
+        id="i-check"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol
+        id="i-copy"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </symbol>
+      <symbol id="i-grip" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+        <circle cx="9" cy="5" r="1" />
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="9" cy="19" r="1" />
+        <circle cx="15" cy="5" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="15" cy="19" r="1" />
+      </symbol>
+      <symbol
+        id="i-trash"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      </symbol>
+      <symbol
+        id="i-pencil"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path
+          d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+        />
+        <path d="m15 5 4 4" />
+      </symbol>
+      <symbol
+        id="i-plus"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M5 12h14" />
+        <path d="M12 5v14" />
+      </symbol>
+      <symbol
+        id="i-bot"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2" />
+        <path d="M20 14h2" />
+        <path d="M15 13v2" />
+        <path d="M9 13v2" />
+      </symbol>
+      <symbol
+        id="i-chevron"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m9 18 6-6-6-6" />
+      </symbol>
+      <symbol
+        id="i-bold"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8" />
+      </symbol>
+      <symbol
+        id="i-italic"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="19" x2="10" y1="4" y2="4" />
+        <line x1="14" x2="5" y1="20" y2="20" />
+        <line x1="15" x2="9" y1="4" y2="20" />
+      </symbol>
+      <symbol
+        id="i-strike"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M16 4H9a3 3 0 0 0-2.83 4" />
+        <path d="M14 12a4 4 0 0 1 0 8H6" />
+        <line x1="4" x2="20" y1="12" y2="12" />
+      </symbol>
+      <symbol
+        id="i-code"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m16 18 6-6-6-6" />
+        <path d="m8 6-6 6 6 6" />
+      </symbol>
+      <symbol
+        id="i-link"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </symbol>
+      <symbol
+        id="i-list"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M3 5h.01" />
+        <path d="M3 12h.01" />
+        <path d="M3 19h.01" />
+        <path d="M8 5h13" />
+        <path d="M8 12h13" />
+        <path d="M8 19h13" />
+      </symbol>
+      <symbol
+        id="i-list-ol"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M11 5h10" />
+        <path d="M11 12h10" />
+        <path d="M11 19h10" />
+        <path d="M4 4h1v5" />
+        <path d="M4 9h2" />
+        <path d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02" />
+      </symbol>
+      <symbol
+        id="i-user"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </symbol>
+    </svg>
+    <div class="sheet">
+      <p class="sheetHead">design/ai-planning · MOTIR-4615 · story MOTIR-3810 · Part XV</p>
+      <h1 class="panelTitle" style="font-size: 24px">
+        The PROPOSED to-do list in the peek’s PROPOSAL MODE
+      </h1>
+      <p class="panelNote">
+        When a plan proposes a <code>manual</code> work item, the proposal already carries that
+        card’s ORDERED STEPS (<code>docs/decisions/agent-authored-plans.md</code> AMENDMENT 13).
+        This asset draws where the reviewer READS them, one click before approving: a
+        <b>read-only To-do list</b> in the peek’s main column, composed from the row grammar
+        <code>design/work-items/todo-list.mock.html</code> settled and the peek chrome
+        <code>peek-proposal-mode.mock.html</code> settled — <b>neither is redrawn</b>. Full
+        reasoning: <code>design-notes.md</code> Part XV.
+      </p>
+      <section class="panel">
+        <p class="sheetHead">Panel 1 · §1 · the placement, measured</p>
+        <h2 class="panelTitle">
+          <span class="panelNum">1</span> The section in the peek’s main column — five steps,
+          1440×900
+        </h2>
+        <p class="panelNote">
+          The peek is <code>IssueQuickViewPanel</code> in PROPOSAL MODE (Part XIV), opened on an
+          un-materialized <code>add</code> that carries <code>todos</code>. The list is a section in
+          the MAIN column, <b>after the explanation and before nothing</b>: the peek defers children
+          and comments to a page a proposal does not have (Part XIV §2), so the steps are the last
+          thing in the column and the reader reaches them by scrolling the body they were already
+          reading. It is the shipped <code>ContentSectionCard</code> header grammar, so it reads as
+          the same section the created card will carry — which is the whole point: what is approved
+          and what arrives must not differ.
+        </p>
+        <div class="stack">
+          <div class="peek">
+            <div class="peekHead">
+              <span class="opChip">add</span>
+              <span class="font-mono text-[11.5px] text-(--el-text-secondary)"
+                >no key until approve</span
+              >
+              <span class="flex-1"></span>
+              <span class="text-[11.5px] text-(--el-text-secondary)"
+                >Plan · Billing, provisioned</span
+              >
+            </div>
+            <div class="peekBody">
+              <div class="peekMain">
+                <h2 class="text-[19px] font-semibold text-(--el-text)" style="margin: 0 0 10px">
+                  Provision the Stripe restricted key
+                </h2>
+                <p
+                  class="text-[13px] text-(--el-text-secondary)"
+                  style="margin: 0 0 14px; line-height: 1.65"
+                >
+                  The billing epic needs a live Stripe key before the charge path can be built. This
+                  card is the out-of-band half: an account holder does it, there is no pull request,
+                  and it closes on their confirmation.
+                </p>
+                <div class="secCard dsCard" style="padding: 14px 16px">
+                  <div class="flex items-center justify-between" style="margin-bottom: 6px">
+                    <div class="flex items-center gap-2">
+                      <h3 class="text-[13px] font-semibold text-(--el-text)" style="margin: 0">
+                        To-do list
+                      </h3>
+                      <span class="text-[11.5px] text-(--el-text-secondary)"
+                        >the steps this card proposes</span
+                      >
+                    </div>
+                    <span class="font-mono text-[11.5px] text-(--el-text-secondary)">0 of 5</span>
+                  </div>
+                  <ul class="list-none">
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Create a restricted Stripe API key</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Scope it to charges:write</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                        <button type="button" class="notesToggle" aria-expanded="false">
+                          <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                          >Instructions
+                        </button>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Add the key to Fly secrets</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                            >Agent</span
+                          >
+                        </div>
+                        <div class="cmdBox">
+                          <pre class="cmdVal" tabindex="0">
+fly secrets set STRIPE_RESTRICTED_KEY=rk_live_… --app motir-core</pre
+                          >
+                          <button
+                            type="button"
+                            class="btn btnIcon shrink-0"
+                            aria-label="Copy command"
+                          >
+                            <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Confirm the deploy picked it up</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Record the key id on the billing runbook</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="peekRail">
+                <div class="railRow">
+                  <span class="railKey">Kind</span><span class="text-(--el-text)">subtask</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Type</span><span class="text-(--el-text)">manual</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Executor</span><span class="text-(--el-text)">human</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Points</span><span class="text-(--el-text)">2</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Estimate</span><span class="text-(--el-text)">30m</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Repo</span><span class="text-(--el-text)">motir-core</span>
+                </div>
+              </div>
+            </div>
+            <div class="peekFoot">
+              <span class="text-[11.5px] text-(--el-text-secondary)"
+                >Nothing exists yet. Approving the plan is what creates this card.</span
+              >
+            </div>
+          </div>
+          <p class="measure">
+            1440×900 · peek 980×680 · main column 626×613 (Part XIV) · the section starts below the
+            explanation · 5 rows, no scroll
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="sheetHead">Panel 2 · §2 · the row, in its READ face</p>
+        <h2 class="panelTitle">
+          <span class="panelNum">2</span> What is composed, and what is DROPPED
+        </h2>
+        <p class="panelNote">
+          The row is <code>todo-list.mock.html</code>’s grammar with the write track removed. The
+          three-track grid becomes TWO — checkbox, body — because the actions column has nothing to
+          hold. <b>The checkbox stays and is inert</b> rather than being removed: it is what makes
+          the section recognisable as the list the reader will later tick, and a proposal has no
+          <code>doneAt</code> to draw. <b>Copy stays</b>, because copying a command is a READ.
+        </p>
+        <div class="sideBySide">
+          <div>
+            <p class="cap">the SHIPPED write face (todo-list.mock.html)</p>
+            <div class="secCard dsCard" style="padding: 14px 16px">
+              <ul class="list-none">
+                <li class="todoRow">
+                  <span class="cbox" role="checkbox" aria-checked="false"></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-[13.5px] text-(--el-text)">Add the key to Fly secrets</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                    <button type="button" class="notesToggle" aria-expanded="false">
+                      <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                      >Instructions
+                    </button>
+                  </div>
+                  <span class="rowActions"
+                    ><button type="button" class="btn btnIcon" aria-label="Reorder step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-grip" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Edit step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-pencil" /></svg></button
+                    ><button type="button" class="btn btnIcon" aria-label="Delete step">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-trash" /></svg></button
+                  ></span>
+                </li>
+              </ul>
+              <button type="button" class="addRow">
+                <svg class="w-4 h-4" aria-hidden="true"><use href="#i-plus" /></svg>Add a step
+              </button>
+            </div>
+            <p class="capNote">
+              Four write affordances: the reorder grip, edit, delete, and the add row — plus a
+              checkbox that ticks.
+            </p>
+          </div>
+          <div>
+            <p class="cap">the READ face this asset specifies</p>
+            <div class="secCard dsCard" style="padding: 14px 16px">
+              <ul class="list-none">
+                <li class="todoRow isRead">
+                  <span
+                    class="cbox isInert"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-disabled="true"
+                  ></span>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-[13.5px] text-(--el-text)">Add the key to Fly secrets</span>
+                      <span class="execMark"
+                        ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                        >You</span
+                      >
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            <p class="capNote">
+              All four are gone. The checkbox is drawn, unchecked, <code>aria-disabled</code>, and
+              does not respond — a control that looks tickable and is not is worse than no control,
+              so it is dimmed to <code>--el-input-readonly-bg</code> rather than left at full
+              contrast.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="sheetHead">Panel 3 · §3 · the states</p>
+        <h2 class="panelTitle">
+          <span class="panelNum">3</span> Absent · one step · instructions expanded
+        </h2>
+        <p class="panelNote">
+          An <code>add</code> with no <code>todos</code>, or with <code>[]</code>, renders
+          <b>no section at all</b>. That is Part XIV §1’s rule applied to a new row: a row’s absence
+          is a statement about the SUBJECT, and an empty <em>To-do list · 0 of 0</em> would assert
+          that a planner considered the steps and proposed none — a claim the data cannot support.
+        </p>
+        <div class="stack">
+          <div>
+            <p class="cap">absent — an <code>add</code> with no steps</p>
+            <div class="peek" style="height: 460px">
+              <div class="peekHead">
+                <span class="opChip">add</span>
+                <span class="font-mono text-[11.5px] text-(--el-text-secondary)"
+                  >no key until approve</span
+                >
+                <span class="flex-1"></span>
+                <span class="text-[11.5px] text-(--el-text-secondary)"
+                  >Plan · Billing, provisioned</span
+                >
+              </div>
+              <div class="peekBody">
+                <div class="peekMain">
+                  <h2 class="text-[19px] font-semibold text-(--el-text)" style="margin: 0 0 10px">
+                    Wire the charge path
+                  </h2>
+                  <p
+                    class="text-[13px] text-(--el-text-secondary)"
+                    style="margin: 0 0 14px; line-height: 1.65"
+                  >
+                    The billing epic needs a live Stripe key before the charge path can be built.
+                    This card is the out-of-band half: an account holder does it, there is no pull
+                    request, and it closes on their confirmation.
+                  </p>
+                  <div class="absentSlot">
+                    No To-do list section is rendered. This <code>add</code> carries no
+                    <code>todos</code>, and a row&rsquo;s absence is a statement about the SUBJECT
+                    (Part XIV &sect;1) &mdash; an empty section would say &ldquo;zero steps were
+                    proposed&rdquo;, which is a different claim.
+                  </div>
+                </div>
+                <div class="peekRail">
+                  <div class="railRow">
+                    <span class="railKey">Kind</span><span class="text-(--el-text)">subtask</span>
+                  </div>
+                  <div class="railRow">
+                    <span class="railKey">Type</span><span class="text-(--el-text)">manual</span>
+                  </div>
+                  <div class="railRow">
+                    <span class="railKey">Executor</span><span class="text-(--el-text)">human</span>
+                  </div>
+                  <div class="railRow">
+                    <span class="railKey">Points</span><span class="text-(--el-text)">2</span>
+                  </div>
+                  <div class="railRow">
+                    <span class="railKey">Estimate</span><span class="text-(--el-text)">30m</span>
+                  </div>
+                  <div class="railRow">
+                    <span class="railKey">Repo</span
+                    ><span class="text-(--el-text)">motir-core</span>
+                  </div>
+                </div>
+              </div>
+              <div class="peekFoot">
+                <span class="text-[11.5px] text-(--el-text-secondary)"
+                  >Nothing exists yet. Approving the plan is what creates this card.</span
+                >
+              </div>
+            </div>
+          </div>
+          <div class="sideBySide">
+            <div>
+              <p class="cap">one step</p>
+              <div class="secCard dsCard" style="padding: 14px 16px">
+                <div class="flex items-center justify-between" style="margin-bottom: 6px">
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-[13px] font-semibold text-(--el-text)" style="margin: 0">
+                      To-do list
+                    </h3>
+                    <span class="text-[11.5px] text-(--el-text-secondary)"
+                      >the steps this card proposes</span
+                    >
+                  </div>
+                  <span class="font-mono text-[11.5px] text-(--el-text-secondary)">0 of 1</span>
+                </div>
+                <ul class="list-none">
+                  <li class="todoRow isRead">
+                    <span
+                      class="cbox isInert"
+                      role="checkbox"
+                      aria-checked="false"
+                      aria-disabled="true"
+                    ></span>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[13.5px] text-(--el-text)">Create the account</span>
+                        <span class="execMark"
+                          ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                          >You</span
+                        >
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+              <p class="capNote">
+                The header still carries the count. <code>0 of 1</code> is not noise: it is the same
+                header the created card shows, and a reader who has seen it here recognises it
+                there.
+              </p>
+            </div>
+            <div>
+              <p class="cap">instructions expanded</p>
+              <div class="secCard dsCard" style="padding: 14px 16px">
+                <div class="flex items-center justify-between" style="margin-bottom: 6px">
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-[13px] font-semibold text-(--el-text)" style="margin: 0">
+                      To-do list
+                    </h3>
+                    <span class="text-[11.5px] text-(--el-text-secondary)"
+                      >the steps this card proposes</span
+                    >
+                  </div>
+                  <span class="font-mono text-[11.5px] text-(--el-text-secondary)">0 of 1</span>
+                </div>
+                <ul class="list-none">
+                  <li class="todoRow isRead">
+                    <span
+                      class="cbox isInert"
+                      role="checkbox"
+                      aria-checked="false"
+                      aria-disabled="true"
+                    ></span>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[13.5px] text-(--el-text)"
+                          >Scope it to charges:write</span
+                        >
+                        <span class="execMark"
+                          ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                          >You</span
+                        >
+                      </div>
+                      <button type="button" class="notesToggle isOpen" aria-expanded="true">
+                        <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                        >Instructions
+                      </button>
+                      <div class="notesBody">
+                        <ol>
+                          <li>Open the <a href="#">Stripe dashboard</a>.</li>
+                          <li>Developers &rarr; <strong>API keys</strong>.</li>
+                          <li>Restrict the key to <code>charges:write</code> and nothing else.</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+              <p class="capNote">
+                The disclosure is interactive in the read face — expanding notes is a read. It opens
+                in place; the section grows and the main column scrolls, which is the behaviour the
+                peek already has for a long description.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="sheetHead">Panel 4 · §4 · at scale</p>
+        <h2 class="panelTitle">
+          <span class="panelNum">4</span> Twelve steps — the main column scrolls, the rail does not
+        </h2>
+        <p class="panelNote">
+          Twelve rows is past the granularity bar’s comfortable range and well inside what a real
+          provisioning card carries. The section is NOT capped and does NOT get its own scroller: it
+          grows, and the MAIN COLUMN scrolls, which is the one scroll surface the peek already has
+          (<code>QuickViewMain</code> is <code>overflow-y-auto</code>). A second scroller inside it
+          would give the reader two things to move and no way to tell which one they are in.
+        </p>
+        <div class="stack">
+          <div class="peek">
+            <div class="peekHead">
+              <span class="opChip">add</span>
+              <span class="font-mono text-[11.5px] text-(--el-text-secondary)"
+                >no key until approve</span
+              >
+              <span class="flex-1"></span>
+              <span class="text-[11.5px] text-(--el-text-secondary)"
+                >Plan · Billing, provisioned</span
+              >
+            </div>
+            <div class="peekBody">
+              <div class="peekMain">
+                <h2 class="text-[19px] font-semibold text-(--el-text)" style="margin: 0 0 10px">
+                  Provision the Stripe restricted key
+                </h2>
+                <p
+                  class="text-[13px] text-(--el-text-secondary)"
+                  style="margin: 0 0 14px; line-height: 1.65"
+                >
+                  The billing epic needs a live Stripe key before the charge path can be built. This
+                  card is the out-of-band half: an account holder does it, there is no pull request,
+                  and it closes on their confirmation.
+                </p>
+                <div class="secCard dsCard" style="padding: 14px 16px">
+                  <div class="flex items-center justify-between" style="margin-bottom: 6px">
+                    <div class="flex items-center gap-2">
+                      <h3 class="text-[13px] font-semibold text-(--el-text)" style="margin: 0">
+                        To-do list
+                      </h3>
+                      <span class="text-[11.5px] text-(--el-text-secondary)"
+                        >the steps this card proposes</span
+                      >
+                    </div>
+                    <span class="font-mono text-[11.5px] text-(--el-text-secondary)">0 of 12</span>
+                  </div>
+                  <ul class="list-none">
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 1 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 2 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 3 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 4 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 5 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 6 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 7 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 8 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 9 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Step 10 of the provisioning run</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Rotate the temporary credential</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                            >Agent</span
+                          >
+                        </div>
+                        <div class="cmdBox">
+                          <pre class="cmdVal" tabindex="0">
+fly secrets unset STRIPE_TEMP_KEY --app motir-core</pre
+                          >
+                          <button
+                            type="button"
+                            class="btn btnIcon shrink-0"
+                            aria-label="Copy command"
+                          >
+                            <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                    <li class="todoRow isRead">
+                      <span
+                        class="cbox isInert"
+                        role="checkbox"
+                        aria-checked="false"
+                        aria-disabled="true"
+                      ></span>
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-[13.5px] text-(--el-text)"
+                            >Confirm a test charge succeeds</span
+                          >
+                          <span class="execMark"
+                            ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg
+                            >You</span
+                          >
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="peekRail">
+                <div class="railRow">
+                  <span class="railKey">Kind</span><span class="text-(--el-text)">subtask</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Type</span><span class="text-(--el-text)">manual</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Executor</span><span class="text-(--el-text)">human</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Points</span><span class="text-(--el-text)">2</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Estimate</span><span class="text-(--el-text)">30m</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Repo</span><span class="text-(--el-text)">motir-core</span>
+                </div>
+              </div>
+            </div>
+            <div class="peekFoot">
+              <span class="text-[11.5px] text-(--el-text-secondary)"
+                >Nothing exists yet. Approving the plan is what creates this card.</span
+              >
+            </div>
+          </div>
+          <p class="measure">
+            12 rows · the main content exceeds the 613px column ⇒ the column scrolls · the 300px
+            rail is a sibling grid cell and stays put
+          </p>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="sheetHead">Panel 5 · §5 · the long command</p>
+        <h2 class="panelTitle">
+          <span class="panelNum">5</span> Overflow is contained by the row, at 1440 and at 390
+        </h2>
+        <p class="panelNote">
+          The rule is <code>todo-list.mock.html</code>’s and is inherited unchanged: the row’s body
+          cell carries <code>min-w-0</code>, the command is a <code>&lt;pre&gt;</code> with
+          <code>overflow-x: auto</code>, and the copy button is <code>shrink-0</code>.
+          <b>Nothing but the inside of the mono box moves</b> — the peek does not gain a horizontal
+          scrollbar, and the rail does not narrow.
+        </p>
+        <div class="sideBySide">
+          <div>
+            <p class="cap">1440 — in the peek’s 626px main column</p>
+            <div style="width: 570px">
+              <div class="secCard dsCard" style="padding: 14px 16px">
+                <div class="flex items-center justify-between" style="margin-bottom: 6px">
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-[13px] font-semibold text-(--el-text)" style="margin: 0">
+                      To-do list
+                    </h3>
+                    <span class="text-[11.5px] text-(--el-text-secondary)"
+                      >the steps this card proposes</span
+                    >
+                  </div>
+                  <span class="font-mono text-[11.5px] text-(--el-text-secondary)">0 of 1</span>
+                </div>
+                <ul class="list-none">
+                  <li class="todoRow isRead">
+                    <span
+                      class="cbox isInert"
+                      role="checkbox"
+                      aria-checked="false"
+                      aria-disabled="true"
+                    ></span>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[13.5px] text-(--el-text)"
+                          >Set every deployment secret in one call</span
+                        >
+                        <span class="execMark"
+                          ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                          >Agent</span
+                        >
+                      </div>
+                      <div class="cmdBox">
+                        <pre class="cmdVal" tabindex="0">
+fly secrets set STRIPE_RESTRICTED_KEY=PASTE_THE_RESTRICTED_KEY_FROM_THE_STRIPE_DASHBOARD_HERE STRIPE_WEBHOOK_SECRET=PASTE_THE_SIGNING_SECRET_FROM_THE_WEBHOOK_ENDPOINT_HERE --app motir-core --stage</pre
+                        >
+                        <button
+                          type="button"
+                          class="btn btnIcon shrink-0"
+                          aria-label="Copy command"
+                        >
+                          <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="cap">390 — the narrow viewport, where the rail has already collapsed</p>
+            <div class="narrow">
+              <div class="secCard dsCard" style="padding: 14px 16px">
+                <div class="flex items-center justify-between" style="margin-bottom: 6px">
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-[13px] font-semibold text-(--el-text)" style="margin: 0">
+                      To-do list
+                    </h3>
+                    <span class="text-[11.5px] text-(--el-text-secondary)"
+                      >the steps this card proposes</span
+                    >
+                  </div>
+                  <span class="font-mono text-[11.5px] text-(--el-text-secondary)">0 of 1</span>
+                </div>
+                <ul class="list-none">
+                  <li class="todoRow isRead">
+                    <span
+                      class="cbox isInert"
+                      role="checkbox"
+                      aria-checked="false"
+                      aria-disabled="true"
+                    ></span>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[13.5px] text-(--el-text)"
+                          >Set every deployment secret in one call</span
+                        >
+                        <span class="execMark"
+                          ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                          >Agent</span
+                        >
+                      </div>
+                      <div class="cmdBox">
+                        <pre class="cmdVal" tabindex="0">
+fly secrets set STRIPE_RESTRICTED_KEY=PASTE_THE_RESTRICTED_KEY_FROM_THE_STRIPE_DASHBOARD_HERE STRIPE_WEBHOOK_SECRET=PASTE_THE_SIGNING_SECRET_FROM_THE_WEBHOOK_ENDPOINT_HERE --app motir-core --stage</pre
+                        >
+                        <button
+                          type="button"
+                          class="btn btnIcon shrink-0"
+                          aria-label="Copy command"
+                        >
+                          <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="capNote">
+          At 390 the peek body is one column (<code>grid-cols-1</code> until <code>md</code>), so
+          the section has the full width and the same containment holds with more of the command
+          visible per line, not less.
+        </p>
+      </section>
+      <section class="panel">
+        <p class="sheetHead">Panel 6 · §6 · drawn as NOT drawn</p>
+        <h2 class="panelTitle">
+          <span class="panelNum">6</span> A <code>modify</code> and a <code>remove</code> show no
+          list
+        </h2>
+        <p class="panelNote">
+          This panel exists so nobody adds one later by accident. It is not an oversight and it is
+          not a gap to fill: a <code>modify</code>’s target is a COMMITTED card, its list is a
+          person’s PROGRESS, <code>QuickViewData</code> carries no to-do field (<code
+            >lib/dto/quickView.ts</code
+          >
+          at <code>d2a0c964b</code>), and AMENDMENT 13 D2 refuses a <code>todos</code> on a patch.
+          The steps are shown on an <code>add</code>, which has no live card to fetch them from, and
+          on nothing else.
+        </p>
+        <div class="stack">
+          <div class="peek">
+            <div class="peekHead">
+              <span class="opChip isModify">modify</span>
+              <span class="font-mono text-[11.5px] text-(--el-text-secondary)">MOTIR-4102</span>
+              <span class="flex-1"></span>
+              <span class="text-[11.5px] text-(--el-text-secondary)"
+                >Plan · Billing, provisioned</span
+              >
+            </div>
+            <div class="peekBody">
+              <div class="peekMain">
+                <h2 class="text-[19px] font-semibold text-(--el-text)" style="margin: 0 0 10px">
+                  Provision the Stripe restricted key
+                </h2>
+                <p
+                  class="text-[13px] text-(--el-text-secondary)"
+                  style="margin: 0 0 14px; line-height: 1.65"
+                >
+                  The billing epic needs a live Stripe key before the charge path can be built. This
+                  card is the out-of-band half: an account holder does it, there is no pull request,
+                  and it closes on their confirmation.
+                </p>
+                <div class="absentSlot">
+                  No To-do list section, and not because the target has none. A
+                  <code>modify</code>&rsquo;s target is a COMMITTED card whose list is a
+                  person&rsquo;s progress; <code>QuickViewData</code> carries no to-do field, and a
+                  <code>modify</code> patch carries no <code>todos</code> (AMENDMENT 13 D2). There
+                  is nothing to show and nothing this plan could change.
+                </div>
+              </div>
+              <div class="peekRail">
+                <div class="railRow">
+                  <span class="railKey">Kind</span><span class="text-(--el-text)">subtask</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Type</span><span class="text-(--el-text)">manual</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Executor</span><span class="text-(--el-text)">human</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Points</span><span class="text-(--el-text)">2</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Estimate</span><span class="text-(--el-text)">30m</span>
+                </div>
+                <div class="railRow">
+                  <span class="railKey">Repo</span><span class="text-(--el-text)">motir-core</span>
+                </div>
+              </div>
+            </div>
+            <div class="peekFoot">
+              <span class="text-[11.5px] text-(--el-text-secondary)"
+                >Nothing exists yet. Approving the plan is what creates this card.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="sheetHead">Panel 7 · §7 · dark</p>
+        <h2 class="panelTitle"><span class="panelNum">7</span> The same section in dark</h2>
+        <p class="panelNote">
+          No token is redefined for dark: the section is the same markup under
+          <code>data-theme="dark"</code>, so the executor pill, the mono command box and the inert
+          checkbox all take the dark values the palette already defines. The inert checkbox is the
+          one to check — <code>--el-input-readonly-bg</code> against <code>--el-card</code> must
+          stay distinguishable from the interactive one on the created card.
+        </p>
+        <div class="stage" data-theme="dark" data-appearance-scope>
+          <div class="secCard dsCard" style="padding: 14px 16px">
+            <div class="flex items-center justify-between" style="margin-bottom: 6px">
+              <div class="flex items-center gap-2">
+                <h3 class="text-[13px] font-semibold text-(--el-text)" style="margin: 0">
+                  To-do list
+                </h3>
+                <span class="text-[11.5px] text-(--el-text-secondary)"
+                  >the steps this card proposes</span
+                >
+              </div>
+              <span class="font-mono text-[11.5px] text-(--el-text-secondary)">0 of 5</span>
+            </div>
+            <ul class="list-none">
+              <li class="todoRow isRead">
+                <span
+                  class="cbox isInert"
+                  role="checkbox"
+                  aria-checked="false"
+                  aria-disabled="true"
+                ></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[13.5px] text-(--el-text)"
+                      >Create a restricted Stripe API key</span
+                    >
+                    <span class="execMark"
+                      ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg>You</span
+                    >
+                  </div>
+                </div>
+              </li>
+              <li class="todoRow isRead">
+                <span
+                  class="cbox isInert"
+                  role="checkbox"
+                  aria-checked="false"
+                  aria-disabled="true"
+                ></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[13.5px] text-(--el-text)">Scope it to charges:write</span>
+                    <span class="execMark"
+                      ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg>You</span
+                    >
+                  </div>
+                  <button type="button" class="notesToggle" aria-expanded="false">
+                    <svg class="w-3 h-3" aria-hidden="true"><use href="#i-chevron" /></svg
+                    >Instructions
+                  </button>
+                </div>
+              </li>
+              <li class="todoRow isRead">
+                <span
+                  class="cbox isInert"
+                  role="checkbox"
+                  aria-checked="false"
+                  aria-disabled="true"
+                ></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[13.5px] text-(--el-text)">Add the key to Fly secrets</span>
+                    <span class="execMark"
+                      ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-bot" /></svg
+                      >Agent</span
+                    >
+                  </div>
+                  <div class="cmdBox">
+                    <pre class="cmdVal" tabindex="0">
+fly secrets set STRIPE_RESTRICTED_KEY=rk_live_… --app motir-core</pre
+                    >
+                    <button type="button" class="btn btnIcon shrink-0" aria-label="Copy command">
+                      <svg class="w-4 h-4" aria-hidden="true"><use href="#i-copy" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </li>
+              <li class="todoRow isRead">
+                <span
+                  class="cbox isInert"
+                  role="checkbox"
+                  aria-checked="false"
+                  aria-disabled="true"
+                ></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[13.5px] text-(--el-text)"
+                      >Confirm the deploy picked it up</span
+                    >
+                    <span class="execMark"
+                      ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg>You</span
+                    >
+                  </div>
+                </div>
+              </li>
+              <li class="todoRow isRead">
+                <span
+                  class="cbox isInert"
+                  role="checkbox"
+                  aria-checked="false"
+                  aria-disabled="true"
+                ></span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-[13.5px] text-(--el-text)"
+                      >Record the key id on the billing runbook</span
+                    >
+                    <span class="execMark"
+                      ><svg class="w-3 h-3" aria-hidden="true"><use href="#i-user" /></svg>You</span
+                    >
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

@@ -144,7 +144,7 @@ export interface RepoAuditSurfaceDTO {
 
 // ── Audit COVERAGE (MOTIR-2248) ──────────────────────────────────────────────
 // "Which of this project's connected repos have never been assessed?" — the one
-// question the /planning nudge asks, answered in one request.
+// question the planning workspace's nudge asks, answered in one request.
 //
 // The vocabulary is BORROWED from the shipped row states, not invented: this is
 // `RepoAuditRowState` minus `deriving`, which is a CLIENT-side fact (the set the

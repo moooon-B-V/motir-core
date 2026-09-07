@@ -437,6 +437,73 @@ const WHAT_TO_DO: Record<WorkItemTypeDto, string[]> = {
   ],
 };
 
+/**
+ * THE ACCEPTANCE-RECEIPT STEPS (bug MOTIR-4704) — appended to a `type: test`
+ * card's steps when, and only when, the card is the one that records a story's
+ * acceptance video.
+ *
+ * ⚠️ WHY THIS IS CONDITIONAL WHERE THE DESIGN PUBLISH IS NOT. `type: design` IS
+ * the design card, so `WHAT_TO_DO.design`'s publish step is unconditional and
+ * correct. `type: test` is every test card there is, and the overwhelming
+ * majority are ordinary regression work that must NOT be told to publish a
+ * receipt — an instruction to publish something the run never recorded is worse
+ * than silence, because the agent will go looking for a recording to satisfy it.
+ * So the steps live here and are appended by {@link recordsAcceptanceReceipt},
+ * following the conditional-advisory shape the design-gate and subsumption
+ * blocks already use, rather than widening the unconditional list.
+ *
+ * WHAT THIS FIXES. MOTIR-4096 retired the CI uploader and said "the agent
+ * publishes it" — but nothing in the product ever asked the agent to. The
+ * instruction reached the run only as prose the planner had written into the
+ * card body, so the runner's own dispatch prompt, which is the one thing it
+ * cannot skip reading, said nothing about the deliverable the card exists to
+ * produce. A design run is told by Motir; an acceptance run was told by
+ * whoever wrote the card.
+ */
+const ACCEPTANCE_PUBLISH_STEPS = [
+  '5. PUBLISH the receipt, from THIS run, while the recording is in front of you.',
+  '   Two calls, because a video is far larger than a tool argument can carry:',
+  '   `create_acceptance_upload` with this card’s key mints a short-lived',
+  '   presigned PUT; upload the clip’s bytes straight to that URL with',
+  '   `Content-Type: video/webm`; then `publish_acceptance_result` with the',
+  '   `pathname` it gave you, the chapters from `chapters.json`, the `commitSha`',
+  '   you recorded at, and this card’s key as `producedByKey`. Pass this card’s',
+  '   key to both — a receipt belongs to the STORY, and the server resolves up.',
+  '6. Confirm it landed. The call returns the receipt’s `id` and a `pending`',
+  '   status; report the id, because that is what makes the publish checkable by',
+  '   somebody else.',
+  '',
+  '   NOTHING ELSE MAKES THAT CALL. A story whose receipt never arrives looks',
+  '   exactly like one that succeeded — spec green, checks green, pull request',
+  '   merged, and a story nobody can watch working. A red run publishes nothing,',
+  '   and that is correct: the receipt records a GREEN run or it records nothing.',
+];
+
+/**
+ * Whether this card is the one that records a story's acceptance video.
+ *
+ * Read off the card's own text rather than a field, because there is no field:
+ * what makes a test card an acceptance card is that its spec calls
+ * `acceptanceStory()` and lands in the acceptance lane, and the planner states
+ * that in the body it writes (motir-meta `plan-rules/kind-story.md` — every
+ * user-facing story carries an E2E subtask that "records + publishes a short
+ * acceptance VIDEO"). Both halves of the card are searched, since some cards
+ * carry the intent only in the title.
+ *
+ * Deliberately NARROW. A false negative costs the run a prompt it can still get
+ * from the card body it was handed; a false positive tells an ordinary
+ * regression card to publish a recording that does not exist.
+ */
+export function recordsAcceptanceReceipt(src: {
+  type: WorkItemTypeDto | null;
+  title: string;
+  descriptionMd: string | null;
+}): boolean {
+  if (src.type !== 'test') return false;
+  const text = `${src.title}\n${src.descriptionMd ?? ''}`;
+  return /acceptanceStory\s*\(|acceptance\s+(video|receipt)/i.test(text);
+}
+
 /** WHAT TO DO for an item with no `type` set — the card body is all we have. */
 const UNTYPED_WHAT_TO_DO = [
   '1. Read the card description above; it is the specification for this work.',
@@ -1647,6 +1714,13 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   let whatToDo = UNTYPED_WHAT_TO_DO;
   if (manual) whatToDo = MANUAL_WHAT_TO_DO;
   else if (src.type) whatToDo = WHAT_TO_DO[src.type];
+  // The acceptance-receipt steps (MOTIR-4704) — appended, never substituted: an
+  // acceptance card still writes and greens its spec, and the publish is the
+  // step AFTER that. A manual item is excluded by construction (it took
+  // MANUAL_WHAT_TO_DO above and has no run to record anything in).
+  if (!manual && recordsAcceptanceReceipt(src)) {
+    whatToDo = [...whatToDo, ...ACCEPTANCE_PUBLISH_STEPS];
+  }
 
   // A MANUAL item gets neither the git workflow nor the outcome protocol: it is
   // human work with no branch, no commit and no MCP session, and `motir auto`
