@@ -51,16 +51,30 @@ export default async function AccountGitAccountsPage() {
   // A workspace context is not required to render this pane — an account is
   // configured with no workspace selected — so the second read is skipped rather
   // than made a precondition.
+  //
+  // ⚠️ AND IT NOW ASKS THE TIER THE SENTENCE ABOVE ALREADY CLAIMED (MOTIR-4836).
+  // This read said "the ORGANISATION's" and went through the WORKSPACE-tier
+  // lookup (`githubInstallationRepository.findByWorkspaceId`), which compares
+  // `workspace_id`. From a SIBLING workspace of the installing one that answers
+  // null, and state C ("connect the App") is offered to a member of an
+  // organisation that has the App installed. The comment was right and the call
+  // was the only installation lookup that existed when this page was written;
+  // `listOrganizationInstallations` is the one it describes.
+  //
+  // Only PRESENCE is read here — this pane asks "does the organisation have the
+  // App at all?", never which account — so the set collapses to a boolean and no
+  // choice is made between N connections.
   const ctx = await getWorkspaceContext();
-  const [identity, installation] = await Promise.all([
+  const [identity, installations] = await Promise.all([
     githubIdentityService.getIdentityForUser(session.user.id),
     ctx
-      ? githubInstallationService.getWorkspaceInstallation({
+      ? githubInstallationService.listOrganizationInstallations({
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         })
-      : Promise.resolve(null),
+      : Promise.resolve([]),
   ]);
+  const hasInstallation = installations.length > 0;
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -72,7 +86,7 @@ export default async function AccountGitAccountsPage() {
       {identity ? (
         <ConnectedAccount
           identity={identity}
-          hasInstallation={Boolean(installation)}
+          hasInstallation={hasInstallation}
           copy={{
             host: t('host.github'),
             connected: t('state.connected'),

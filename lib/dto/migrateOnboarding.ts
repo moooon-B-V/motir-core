@@ -20,6 +20,32 @@ export type MigrateOnboardingStepDto =
   | 'review'
   | 'done';
 
+/**
+ * Every step, as a runtime list — the enum's own membership, in the machine's
+ * order (MOTIR-4759).
+ *
+ * ⚠️ `done` IS IN IT because it is a member of the enum, and this list exists to
+ * VALIDATE a wire value against the enum. Whether a step is one anybody RUNS is a
+ * different question, answered where a kept set is built rather than here.
+ */
+export const MIGRATE_ONBOARDING_STEPS: readonly MigrateOnboardingStepDto[] = [
+  'connect',
+  'index',
+  'import',
+  'audit_convention',
+  'discovery',
+  'generate',
+  'review',
+  'done',
+];
+
+/** Is `value` a step this product has? Total, and narrows. */
+export function isMigrateOnboardingStep(value: unknown): value is MigrateOnboardingStepDto {
+  return (
+    typeof value === 'string' && (MIGRATE_ONBOARDING_STEPS as readonly string[]).includes(value)
+  );
+}
+
 /** Wire form of the Prisma `MigrateOnboardingStatus` enum. */
 export type MigrateOnboardingStatusDto = 'active' | 'completed' | 'failed';
 
@@ -44,6 +70,16 @@ export interface MigrateOnboardingDto {
   generateJobId: string | null;
   importSkipped: boolean;
   importCompleted: boolean;
+  /**
+   * WHICH STEPS THIS RUN ACTUALLY RUNS — the planner's answer, carried here by
+   * the routing verdict that sent the user to this wizard (MOTIR-4759).
+   *
+   * ⚠️ EMPTY MEANS *EVERY STEP*, which is what a run reached by any other door
+   * has. It is also the RECORD of how a step was satisfied: one absent from a
+   * non-empty set was answered by the project's own substrate rather than by the
+   * user, which is what the rail's collapsed row and the provenance line say.
+   */
+  keptSteps: MigrateOnboardingStepDto[];
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +89,15 @@ export interface MigrateOnboardingDto {
  *  or left null and set as the connect step completes. */
 export interface StartMigrateOnboardingInput {
   connectedRepoRef?: string | null;
+  /**
+   * The planner's KEPT SET (MOTIR-4759), when the routing verdict sent this user
+   * here. Omitted → `[]` → every step runs, exactly as before this existed.
+   *
+   * ⚠️ IT IS ONLY READ AT CREATE. The set describes the verdict that OPENED this
+   * run; letting a later write re-scope a journey in flight would mean a stale
+   * address could change which questions a user is asked half-way through one.
+   */
+  keptSteps?: MigrateOnboardingStepDto[];
 }
 
 /** One connected repository's index status, as the wizard's Index step renders

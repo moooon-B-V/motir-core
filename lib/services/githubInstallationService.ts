@@ -1,6 +1,8 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
+import { bindOrganizationContext } from '@/lib/organizations/context';
+import { assertOrgMember } from '@/lib/services/organizationAccessService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
@@ -303,6 +305,60 @@ export const githubInstallationService = {
         if (!installation) return null;
         const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
         return toGithubInstallationDTO(installation, repos);
+      },
+    );
+  },
+
+  /**
+   * THE ORGANISATION'S GitHub connections — the org-tier sibling of
+   * {@link getWorkspaceInstallation}, and the read every ORGANISATION surface
+   * owes (MOTIR-4836).
+   *
+   * ⚠️ IT IS NOT A WIDER `getWorkspaceInstallation`, IT IS A DIFFERENT
+   * QUESTION. That method is honestly named and does what it says; it was
+   * simply the only installation lookup that existed when the organisation tier
+   * did not. `findByWorkspaceId` filters on `workspace_id` in the SQL, so a
+   * sibling workspace of the same organisation matches nothing no matter what
+   * is bound — which is why the fix needed BOTH this read and the
+   * `github_installation_org_read` policy arm, and why neither alone changes
+   * what a reader sees.
+   *
+   * ⚠️ IT RETURNS THE SET, and the caller renders it. An organisation with two
+   * workspaces can hold two installations on two different GitHub accounts;
+   * collapsing that to one row here would be a guess made in the layer with the
+   * least standing to make it. Callers that only need "is anything connected?"
+   * read `.length`; the organisation's Git page renders one row per connection,
+   * which for the overwhelmingly common N = 1 is byte-identical to the singular
+   * card it replaces. Same disposition as
+   * `organizationRepoService.listRepositoryUsage`.
+   *
+   * The context mirrors that method exactly: ONE workspace-bound transaction
+   * that resolves the organisation from the actor's WORKSPACE row (trusted, not
+   * request input), asserts membership, and only then binds
+   * `app.organization_id` so the FOR SELECT arm answers. An unbound read is
+   * refused rather than wrong — the MOTIR-2956 shape, which is why the binding
+   * and the read are in the same transaction.
+   */
+  async listOrganizationInstallations(ctx: {
+    userId: string;
+    workspaceId: string;
+  }): Promise<GithubInstallationDTO[]> {
+    return withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      async (tx) => {
+        const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+        await assertOrgMember(ctx.userId, organizationId, tx);
+        await bindOrganizationContext(tx, organizationId);
+        const installations = await githubInstallationRepository.listByOrganizationId(
+          organizationId,
+          tx,
+        );
+        const dtos: GithubInstallationDTO[] = [];
+        for (const installation of installations) {
+          const repos = await githubRepoRepository.listByInstallation(installation.id, tx);
+          dtos.push(toGithubInstallationDTO(installation, repos));
+        }
+        return dtos;
       },
     );
   },

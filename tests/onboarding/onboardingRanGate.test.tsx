@@ -2,6 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
+/**
+ * A page called with an EMPTY address (MOTIR-4770).
+ *
+ * ⚠️ THESE PAGES TAKE `searchParams` NOW, and it is load-bearing rather than
+ * ceremonial: a user who reached onboarding from the plan window carries a
+ * RETURN ADDRESS in the query, and every completion path reads it to decide
+ * whether `/roadmap` is really where they belong. An empty bag is the user who
+ * arrived by another door — which is exactly what this suite is about, since it
+ * is testing the marker gate rather than the round trip.
+ */
+const NO_QUERY = {
+  searchParams: Promise.resolve({} as Record<string, string | string[] | undefined>),
+};
+
 import type { MigrateOnboardingDto } from '@/lib/dto/migrateOnboarding';
 
 // The onboarding-ran gate on the `(onboarding)` route group (bug MOTIR-2090).
@@ -85,6 +99,9 @@ function makeRun(overrides: Partial<MigrateOnboardingDto> = {}): MigrateOnboardi
     kind: 'migrate',
     step: 'index',
     status: 'active',
+    // ⚠️ EMPTY MEANS EVERY STEP (MOTIR-4759). A run no routing verdict reached
+    // walks the whole wizard, which is what every case in this file is.
+    keptSteps: [],
     connectedRepoRef: null,
     codeGraphReady: false,
     conventionApprovedAt: null,
@@ -117,7 +134,7 @@ describe('/onboarding/migrate — established projects are redirected away (MOTI
       mockProject(new Date('2026-08-04T16:33:00.000Z'));
       getForProject.mockResolvedValue(makeRun({ step }));
 
-      await expect(MigrateOnboardingPage()).rejects.toThrow(RedirectError);
+      await expect(MigrateOnboardingPage(NO_QUERY)).rejects.toThrow(RedirectError);
       expect(redirect).toHaveBeenCalledWith('/roadmap');
     },
   );
@@ -125,7 +142,7 @@ describe('/onboarding/migrate — established projects are redirected away (MOTI
   it('gates BEFORE reading the run — an established project costs no service call', async () => {
     mockProject(new Date('2026-08-04T16:33:00.000Z'));
 
-    await expect(MigrateOnboardingPage()).rejects.toThrow(RedirectError);
+    await expect(MigrateOnboardingPage(NO_QUERY)).rejects.toThrow(RedirectError);
     expect(redirect).toHaveBeenCalledWith('/roadmap');
     expect(getForProject).not.toHaveBeenCalled();
   });
@@ -139,7 +156,7 @@ describe('/onboarding/migrate — a project mid-journey still resumes (MOTIR-209
       const run = makeRun({ step });
       getForProject.mockResolvedValue(run);
 
-      const result = await MigrateOnboardingPage();
+      const result = await MigrateOnboardingPage(NO_QUERY);
 
       expect(redirect).not.toHaveBeenCalled();
       expect(result).toMatchObject({
@@ -153,7 +170,7 @@ describe('/onboarding/migrate — a project mid-journey still resumes (MOTIR-209
     mockProject(null);
     getForProject.mockResolvedValue(null);
 
-    const result = await MigrateOnboardingPage();
+    const result = await MigrateOnboardingPage(NO_QUERY);
 
     expect(redirect).not.toHaveBeenCalled();
     expect(result).toMatchObject({ type: MigrateWizardStub, props: { initialRun: null } });
@@ -163,7 +180,7 @@ describe('/onboarding/migrate — a project mid-journey still resumes (MOTIR-209
     mockProject(null);
     getForProject.mockResolvedValue(makeRun({ step: 'done', status: 'completed' }));
 
-    await expect(MigrateOnboardingPage()).rejects.toThrow(RedirectError);
+    await expect(MigrateOnboardingPage(NO_QUERY)).rejects.toThrow(RedirectError);
     expect(redirect).toHaveBeenCalledWith('/roadmap');
   });
 });
@@ -172,7 +189,7 @@ describe('/onboarding/migrate — the gates that precede the marker', () => {
   it('bounces a signed-out visitor to sign-in, preserving the return path', async () => {
     getSession.mockResolvedValue(null);
 
-    await expect(MigrateOnboardingPage()).rejects.toThrow(RedirectError);
+    await expect(MigrateOnboardingPage(NO_QUERY)).rejects.toThrow(RedirectError);
     expect(redirect).toHaveBeenCalledWith('/sign-in?next=%2Fonboarding%2Fmigrate');
     expect(getActiveProject).not.toHaveBeenCalled();
   });
@@ -181,7 +198,7 @@ describe('/onboarding/migrate — the gates that precede the marker', () => {
     getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
     getActiveProject.mockResolvedValue(null);
 
-    await expect(MigrateOnboardingPage()).rejects.toThrow(RedirectError);
+    await expect(MigrateOnboardingPage(NO_QUERY)).rejects.toThrow(RedirectError);
     expect(redirect).toHaveBeenCalledWith('/onboarding');
     expect(getForProject).not.toHaveBeenCalled();
   });

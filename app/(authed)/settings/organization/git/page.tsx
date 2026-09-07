@@ -130,10 +130,21 @@ async function OrgGitBody({
   // two halves of this page could therefore disagree: a heading naming one
   // tenant over rows belonging to another, each with a `Disconnect` button.
   // Both arms now read `ctx.workspaceId`, so the page has ONE subject.
-  const [organization, canDisconnect, installation, rows] = await allSettledOrThrow([
+  //
+  // ⚠️ AND THE CONNECTION READS THE ORGANISATION, NOT THE WORKSPACE (MOTIR-4836).
+  // It went through the WORKSPACE-tier lookup
+  // (`githubInstallationRepository.findByWorkspaceId`, whose service wrapper is
+  // honestly named for it) — a `workspace_id` comparison, on an ORGANISATION
+  // surface. So from a SIBLING workspace of the installing one this card found
+  // nothing and offered `Connect GitHub` for an account that is already
+  // installed, while the inventory directly below it listed that same
+  // organisation's seven repositories. One page, one request, two tiers. The
+  // trigger is an organisation with a second workspace, which is why it survived
+  // until one existed.
+  const [organization, canDisconnect, installations, rows] = await allSettledOrThrow([
     organizationsService.resolveWorkspaceOrganization(ctx.userId, ctx.workspaceId),
     isOrgAdminForWorkspace(ctx.userId, ctx.workspaceId),
-    githubInstallationService.getWorkspaceInstallation({
+    githubInstallationService.listOrganizationInstallations({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     }),
@@ -161,37 +172,58 @@ async function OrgGitBody({
     );
   }
 
+  // ⚠️ THE CARD RENDERS THE SET, IT DOES NOT PICK FROM IT (MOTIR-4836). Nothing
+  // forbids two workspaces of one organisation each installing the App on a
+  // DIFFERENT GitHub account, and this card is singular — so the disposition is
+  // to MAP rather than to take `rows[0]`, which would be a guess that reads as a
+  // fact about the account. For N = 1 — every organisation on the deployment
+  // today, and the state Panel 2 of `design/github/design-notes.md` draws — the
+  // output is byte-identical to the single row this replaces; for N > 1 the page
+  // states every connection instead of choosing one. No new element is drawn:
+  // it is the SAME row, repeated, which is what the inventory below it already
+  // does with repositories.
+  //
+  // `manageOnGithubHref` is the one thing that cannot be repeated — it is a
+  // single org-wide affordance on the inventory — so it is supplied only when
+  // there IS exactly one connection to manage, and is otherwise null, which is
+  // the state the GitLab arm above already renders.
+  const soleInstallation = installations.length === 1 ? installations[0]! : null;
+
   return (
     <>
       <Card>
-        {installation ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              aria-hidden
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--el-muted) text-(--el-text-secondary)"
-            >
-              <GithubMark className="h-5 w-5" />
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="truncate font-sans text-sm font-semibold text-(--el-text)">
-                  {t('organization.connectionTitle')}
+        {installations.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {installations.map((installation) => (
+              <div key={installation.installationId} className="flex flex-wrap items-center gap-3">
+                <span
+                  aria-hidden
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--el-muted) text-(--el-text-secondary)"
+                >
+                  <GithubMark className="h-5 w-5" />
                 </span>
-                <Pill severity="success">
-                  {t('installation.installedOn', {
-                    account: installation.accountLogin,
-                    type: installation.accountType.toLowerCase(),
-                  })}
-                </Pill>
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate font-sans text-sm font-semibold text-(--el-text)">
+                      {t('organization.connectionTitle')}
+                    </span>
+                    <Pill severity="success">
+                      {t('installation.installedOn', {
+                        account: installation.accountLogin,
+                        type: installation.accountType.toLowerCase(),
+                      })}
+                    </Pill>
+                  </div>
+                  {/* ⚠️ NOT an identity card. The member's own `GithubIdentity` moved
+                      to Settings → Account → Git accounts (MOTIR-4682); drawing a
+                      personal credential on the ORGANISATION's page is this story's
+                      own tier confusion pointed the other way. */}
+                  <span className="font-sans text-xs text-(--el-text-secondary)">
+                    {canDisconnect ? null : t('organization.adminOnly', { org: organizationName })}
+                  </span>
+                </div>
               </div>
-              {/* ⚠️ NOT an identity card. The member's own `GithubIdentity` moved
-                  to Settings → Account → Git accounts (MOTIR-4682); drawing a
-                  personal credential on the ORGANISATION's page is this story's
-                  own tier confusion pointed the other way. */}
-              <span className="font-sans text-xs text-(--el-text-secondary)">
-                {canDisconnect ? null : t('organization.adminOnly', { org: organizationName })}
-              </span>
-            </div>
+            ))}
           </div>
         ) : (
           <GithubConnectPanel
@@ -208,11 +240,11 @@ async function OrgGitBody({
         organizationName={organizationName}
         canDisconnect={canDisconnect}
         manageOnGithubHref={
-          installation
+          soleInstallation
             ? githubInstallationManageUrl({
-                accountLogin: installation.accountLogin,
-                accountType: installation.accountType,
-                installationId: installation.installationId,
+                accountLogin: soleInstallation.accountLogin,
+                accountType: soleInstallation.accountType,
+                installationId: soleInstallation.installationId,
               })
             : null
         }

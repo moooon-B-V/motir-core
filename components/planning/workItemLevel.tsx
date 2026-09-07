@@ -110,6 +110,29 @@ export interface BuildWorkItemLevelOptions {
    * children and belong exactly where they are. See {@link isNotInEpicRow}.
    */
   groupNonEpicRoots?: boolean;
+  /**
+   * Rows this level must NOT group even though {@link isNotInEpicRow} holds — the
+   * THIRD conjunct of the grouping predicate on the plan-change canvases
+   * (`design/ai-planning/design-notes.md` Part XVI, DECISION 2:
+   * `parentId === null && kind !== 'epic' && !touchedByThisProposal(id)`).
+   *
+   * The roadmap justifies its two conjuncts with *"the road IS the epics. This is
+   * the level's whole subject."* On a canvas whose subject is a PROPOSED CHANGE
+   * the level's subject is the epics AND what the change is about, so this is the
+   * same rule applied to a different subject rather than a departure from it —
+   * the second such conjunct, after decision 6's sprint scope.
+   *
+   * It is a SET rather than a predicate for the same reason `groupCrumbLabel` is a
+   * string: this builder is a pure function that knows nothing about plans, and
+   * WHICH rows are exempt is the consumer's own question. `PlanChangeCanvas` and
+   * `PlanReviewCanvas` answer it with `touchedByProposal`
+   * (`lib/planning/planChangeDiff.ts`), never with `diffStateForItem` — that
+   * function's `'locked'` verdict is a property of the row's own status, and
+   * keying on it would drag every `done` root back onto the road the moment any
+   * plan is pending. Absent / empty ⇒ the two-conjunct roadmap predicate,
+   * unchanged.
+   */
+  groupExcludeIds?: ReadonlySet<string>;
   /** The grouped node's BREADCRUMB label — localized copy the consumer supplies,
    *  for the same reason `originCrumbLabel` is supplied rather than resolved here:
    *  this builder is a pure function with no translator of its own. */
@@ -169,7 +192,21 @@ export function buildWorkItemLevel(
   //    otherwise collapse to one node. The shipped auto-drill suite already
   //    encoded this expectation — its fixtures are parentless non-epic roots that
   //    must still descend normally (MOTIR-1807).
-  const candidates = opts.groupNonEpicRoots === true ? wi.items.filter(isNotInEpicRow) : [];
+  //
+  // THE THIRD CONJUNCT (`groupExcludeIds`, Part XVI decision 2) narrows the
+  // candidate set on the plan-change canvases: a row the pending proposal touches
+  // stays on the road. It is applied HERE, with the other two, so the
+  // "leave something on the road" guard below measures the set that is actually
+  // grouped — and so a consumer can never group a proposal's target, which is
+  // what re-opens MOTIR-3206 (`decoratePlanChangeLevel` merges a materialized
+  // add's frame ONTO the committed node; take that node off the level and the
+  // merge cannot land, so the accepted card is appended a second time as a
+  // keyless ghost).
+  const exclude = opts.groupExcludeIds;
+  const candidates =
+    opts.groupNonEpicRoots === true
+      ? wi.items.filter((i) => isNotInEpicRow(i) && !(exclude?.has(i.id) ?? false))
+      : [];
   const grouped = candidates.length < wi.items.length ? candidates : [];
   const groupedIds = new Set(grouped.map((i) => i.id));
   const onLevel = grouped.length > 0 ? wi.items.filter((i) => !groupedIds.has(i.id)) : wi.items;
