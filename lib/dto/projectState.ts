@@ -1,4 +1,3 @@
-import type { PlanningHostGate } from '@/lib/planning/workspaceHost';
 import type { MigrateIndexStatusDto, MigrateOnboardingDto } from '@/lib/dto/migrateOnboarding';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 
@@ -58,19 +57,41 @@ export interface ProjectCodeStateDto {
   index: MigrateIndexStatusDto;
 }
 
+/**
+ * Whether a project has ever had a plan APPROVED — `onboarding` for one that has
+ * not, `workspace` for one that has.
+ *
+ * ⚠️ THIS IS NO LONGER `resolvePlanningHostGate`'s VERDICT, AND THE CHANGE IS THE
+ * POINT (MOTIR-4765). The two questions shared one function and one type until
+ * that card, and the sharing is what produced the defect the story exists for:
+ *
+ *   | question                          | answered by                    |
+ *   | --------------------------------- | ------------------------------ |
+ *   | *may this actor open the window?* | `resolvePlanningHostGate`      |
+ *   | *has this project a plan yet?*    | THIS — read off the marker     |
+ *
+ * The host gate has no `onboarding` verdict any more: a never-onboarded project
+ * opens the workspace like any other, because whether it can be PLANNED is the
+ * planner's judgement (MOTIR-4767) rather than a marker's. This report keeps
+ * answering the second question — an agent asking `get_project_state` genuinely
+ * wants to know whether a project has been planned — so it now reads
+ * `project.onboardingRanAt` directly instead of borrowing a verdict that no
+ * longer exists. **The field name, both values and every consumer's shape are
+ * unchanged**; what changed is that the answer is derived where it is meant.
+ */
+export type ProjectPlanningGateDto = 'onboarding' | 'workspace';
+
 /** A project's planning preconditions, as `get_project_state` reports them. */
 export interface ProjectStateDto {
   project: ProjectStateProjectDto;
   /**
-   * The established-project verdict, straight from `resolvePlanningHostGate` —
-   * the SAME function every planning door reads, not a re-derivation of it. Only
-   * `onboarding` (never onboarded) and `workspace` (established) are reachable
-   * here: the two gates that precede them are already answered by the time this
-   * runs — the project was resolved by key (so there IS one) and browse access
-   * was asserted (so the caller may see it), and a failure of either surfaces as
-   * a not-found tool error rather than a verdict.
+   * Established? See {@link ProjectPlanningGateDto}. Both values are reachable:
+   * the two access questions that used to precede them are already answered by
+   * the time this runs — the project was resolved by key (so there IS one) and
+   * browse access was asserted (so the caller may see it), and a failure of
+   * either surfaces as a not-found tool error rather than a verdict.
    */
-  planningGate: PlanningHostGate;
+  planningGate: ProjectPlanningGateDto;
   code: ProjectCodeStateDto;
   /**
    * The PROJECT's repository set (MOTIR-1780) — deliberately distinct from

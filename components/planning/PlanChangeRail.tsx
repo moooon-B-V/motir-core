@@ -101,6 +101,18 @@ const STARTERS = ['addWork', 'resequence', 'drop', 'blocked'] as const;
 export interface PlanChangeRailProps {
   launch: PlanningLaunch;
   projectName: string;
+  /**
+   * THE USER HAS JUST COME BACK FROM ONBOARDING (MOTIR-4770).
+   *
+   * ⚠️ IT IS ACKNOWLEDGED IN THE CONVERSATION, NOT AS A TOAST OR A BANNER. The
+   * rail is where the session speaks; a toast fades and a returning user can
+   * miss it entirely, and a banner over the canvas would put chrome between them
+   * and the thing they came back for. It sits ABOVE the opener, because it is
+   * what happened before this session says anything.
+   *
+   * The ABANDONED path never sets it — nothing was completed to acknowledge.
+   */
+  justReturnedFromOnboarding?: boolean;
   state: PlanChangeConversationState;
   /** The indexed proposal — the rail MIRRORS the canvas bar's counts. */
   index: PlanChangeDiffIndex;
@@ -134,6 +146,7 @@ export interface PlanChangeRailProps {
 export function PlanChangeRail({
   launch,
   projectName,
+  justReturnedFromOnboarding,
   state,
   index,
   targets,
@@ -260,6 +273,19 @@ export function PlanChangeRail({
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
         role="log"
       >
+        {/* THE RETURN, acknowledged (MOTIR-4770 · design panel 5). One line,
+            above the opener: the round trip closed, and the session picks up
+            where it left off. */}
+        {justReturnedFromOnboarding ? (
+          <p
+            data-testid="planning-return-ack"
+            className="flex items-start gap-2 rounded-(--radius-control) bg-(--el-tint-mint) px-(--spacing-control-x) py-(--spacing-control-y) text-xs leading-relaxed text-(--el-text-strong)"
+          >
+            <Check className="mt-px size-3.5 flex-none" aria-hidden />
+            <span>{t('returnAck')}</span>
+          </p>
+        ) : null}
+
         {/* The opener — the canvas already shows the plan, so "empty" is never a
             blank screen; only the conversation is empty (design panel 6). */}
         <Bubble role="assistant">

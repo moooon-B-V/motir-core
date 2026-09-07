@@ -1,32 +1,55 @@
-// The ESTABLISHED-project planning-workspace HOST's gate (Subtask MOTIR-1729).
+// The planning-workspace HOST's gate (Subtask MOTIR-1729; narrowed by MOTIR-4765).
 //
 // ⚠️ The route this was written for is GONE (MOTIR-4732) and this function is
-// NOT — `PlanningWorkspaceOverlay` calls it, unchanged, because the gate is a
-// pure decision about an actor and a project rather than about a URL. Read
-// "`/planning`" below as "the planning workspace", wherever it is mounted.
+// NOT — `PlanningWorkspaceOverlay` calls it, unchanged in shape, because the
+// gate is a pure decision about an ACTOR and a PROJECT rather than about a URL.
 //
-// The workspace is where "Plan with AI" lands. It is an ADDITIONAL surface, NOT
-// a relaxation of the onboarding gates: a project
-// that never finished onboarding is forwarded to `/onboarding`, which keeps
-// owning the first-run fork and the MOTIR-1259 existing-item router (and, past
-// MOTIR-1725, the migrate wizard's hand-off). So the two surfaces split cleanly
-// on the SAME immutable marker the `/onboarding` redirect reads
-// (`project.onboardingRanAt`, Subtask 7.4 / MOTIR-1264):
+// ── WHAT THIS FUNCTION STOPPED ANSWERING, AND WHY (MOTIR-4765) ─────────────
+// It used to carry a third verdict:
 //
-//   marker null → onboarding owns you   ·   marker set → the workspace host does
+//     if (!input.onboardingRanAt) return 'onboarding';
+//
+// and the header above it read *"marker null → onboarding owns you · marker set
+// → the workspace host does"*. That sentence describes a marker the product does
+// not have. `onboardingRanAt` is stamped in exactly ONE place —
+// `plansService.approvePlan` → `projectRepository.markOnboardingRan` — set-once
+// on the first plan APPROVED. So `null` does not mean *"has never planned with
+// AI"*; it means **"has never had a plan approved"**, and every project in that
+// state was refused the plan window whatever it actually held: a connected,
+// indexed repository, an imported backlog of two hundred items, both.
+//
+// On MOTIR-4725's overlay the same verdict got worse rather than better. It
+// stopped being a redirect a user meets on the way in and became a NAVIGATION
+// OUT of the window they had just opened — `router.push(ONBOARDING_ENTRY_PATH)`
+// firing from an effect, seconds after *Plan with AI*.
+//
+// **Onboarding is a DESTINATION the session ROUTES to, not a wall in front of
+// the window** (story MOTIR-4753). Whether a project can be planned from what it
+// has is a judgement no predicate can make — the situations are uncountable, and
+// a repository can be a scaffold, or hold a login page and nothing else — so it
+// belongs to the planner (MOTIR-4767), which decides `continue` /
+// `onboard_new_project` / `onboard_existing_project` and hands the answer to the
+// surface that acts on it (MOTIR-4769). None of that can happen behind a gate
+// that ejects the user before a session starts.
+//
+// ⚠️ SO THE MARKER IS NOT AN INPUT HERE ANY MORE. It was removed from
+// `PlanningHostGateInput` rather than left unread, because a parameter nothing
+// consumes is exactly the dead branch this card exists to delete: the next
+// reader would take its presence as evidence that the gate still weighs it. The
+// field itself is untouched and still meaningful — it is how a session knows it
+// is a project's FIRST plan, and `projectStateService` still reports it. What
+// retires is its use as a ROUTING verdict.
 //
 // The decision is a pure function so it is unit-testable without a route, and so
-// the page stays a thin Server Component over it (the `toIssueRows` pattern).
+// every caller stays a thin adapter over it (the `toIssueRows` pattern).
 
-/** What the host route should do for the current actor + project. */
+/** What the host should do for the current actor + project. */
 export type PlanningHostGate =
   /** No active project to plan into — render the pick-a-project hint. */
   | 'no-project'
   /** The active project is no longer browsable by this actor (6.4.6). */
   | 'no-access'
-  /** Never onboarded — `/onboarding` still owns this project's journey. */
-  | 'onboarding'
-  /** An established project — open the workspace. */
+  /** Open the workspace. The ONLY affirmative verdict (MOTIR-4765). */
   | 'workspace';
 
 export interface PlanningHostGateInput {
@@ -34,18 +57,17 @@ export interface PlanningHostGateInput {
   hasActiveProject: boolean;
   /** `projectAccessService.getCapabilities(...).canBrowse`. */
   canBrowse: boolean;
-  /** The project's immutable onboarding-ran marker (null = never onboarded). */
-  onboardingRanAt: Date | string | null | undefined;
 }
 
 /**
- * Resolve the host's gate. Access is checked BEFORE the onboarding marker: an
- * actor who can't browse the project must not be told anything about its
- * planning state, not even by being forwarded into onboarding.
+ * Resolve the host's gate.
+ *
+ * Access is still checked BEFORE anything else: an actor who cannot browse the
+ * project must not be told anything about its planning state. That ordering is
+ * the half of this function MOTIR-4765 does not touch.
  */
 export function resolvePlanningHostGate(input: PlanningHostGateInput): PlanningHostGate {
   if (!input.hasActiveProject) return 'no-project';
   if (!input.canBrowse) return 'no-access';
-  if (!input.onboardingRanAt) return 'onboarding';
   return 'workspace';
 }

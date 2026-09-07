@@ -73,6 +73,13 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // off the pull-request lane. Same steps, same per-leg ephemeral database
       // — the split changed WHEN they run, not what they need.
       'ci.yml:e2e-at-scale',
+      // Story MOTIR-4753's per-file coverage floor (MOTIR-4761). It measures six
+      // files whose specs — the substrate read, the entrance predicate's chain
+      // test, the step machine — all run against a real database, per the
+      // repository's own convention. Same ephemeral Postgres, started by the
+      // shared action rather than declared as a service, exactly like its
+      // neighbours.
+      'ci.yml:story-4753-coverage',
       'ci.yml:test',
     ]);
   });

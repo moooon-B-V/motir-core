@@ -1,7 +1,6 @@
 import type { MigrateIndexRepoDto, MigrateIndexStatusDto } from '@/lib/dto/migrateOnboarding';
-import type { ProjectStateDto } from '@/lib/dto/projectState';
+import type { ProjectPlanningGateDto, ProjectStateDto } from '@/lib/dto/projectState';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
-import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
@@ -114,15 +113,19 @@ export const projectStateService = {
   async getProjectState(projectKey: string, ctx: ServiceContext): Promise<ProjectStateDto> {
     const project = await projectsService.getByKey(projectKey, ctx);
 
-    // The verdict is the shipped gate's, not a marker re-read. `hasActiveProject`
-    // and `canBrowse` are true BY CONSTRUCTION at this point — the key resolved
-    // to a project and `getByKey` asserted browse — so the gate reduces here to
-    // the onboarding question, which is the one this read exists to answer.
-    const planningGate = resolvePlanningHostGate({
-      hasActiveProject: true,
-      canBrowse: true,
-      onboardingRanAt: project.onboardingRanAt,
-    });
+    // ⚠️ READ OFF THE MARKER, NOT OFF `resolvePlanningHostGate` (MOTIR-4765).
+    // This line used to call the host gate, because the gate answered the
+    // ESTABLISHED question as a side effect of answering the routing one, and
+    // deriving it here would have been a re-derivation that could drift. That
+    // gate no longer HAS an `onboarding` verdict — a never-onboarded project
+    // opens the workspace like any other, because whether it can be planned is
+    // the planner's judgement (MOTIR-4767) — so there is nothing left to borrow.
+    // `hasActiveProject` and `canBrowse` were true by construction here anyway
+    // (the key resolved and `getByKey` asserted browse), which is why the call
+    // only ever contributed the marker branch this line now makes directly.
+    const planningGate: ProjectPlanningGateDto = project.onboardingRanAt
+      ? 'workspace'
+      : 'onboarding';
 
     const code = await resolveCodeState(ctx);
     const repoSet = await projectRepoSetService.listByProject(project.id, ctx);

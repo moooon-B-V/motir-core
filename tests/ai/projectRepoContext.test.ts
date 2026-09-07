@@ -278,7 +278,14 @@ describe('the planning-job ENVELOPE', () => {
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
       code: {
-        repos: [{ provider: 'github', repoRef: 'moooon/motir-core', defaultBranch: 'main' }],
+        repos: [
+          {
+            provider: 'github',
+            repoRef: 'moooon/motir-core',
+            defaultBranch: 'main',
+            indexed: false,
+          },
+        ],
       },
       repositories: {
         repos: [{ ref: web, name: 'motir-core', role: 'web', label: null, state: 'proposed' }],
@@ -379,8 +386,24 @@ describe('the planning-job ENVELOPE', () => {
 
     await aiGenerationService.startGeneration(ctx, { prompt: 'go' });
     const [, , context] = vi.mocked(submitJob).mock.calls[0]!;
+    // ⚠️ AMENDED 2026-09-07 (MOTIR-4826), ON THE RECORD RATHER THAN LOOSENED.
+    // `context.code` gained `indexed` — a per-repository FACT read from the
+    // succeeded-index ledger, so the routing verdict can tell a repository with
+    // no graph from one with nothing in it. That is MOTIR-1598's own list
+    // growing a field, which this guard was never about: what it exists to catch
+    // is the PROJECT SET being merged INTO the grant list, and the assertion
+    // below still catches exactly that — `unrelated-service` is seeded above and
+    // must not appear here. Widening this to `toMatchObject` would have made it
+    // stop catching that, which is why the shape is restated in full instead.
     expect((context as { code: unknown }).code).toEqual({
-      repos: [{ provider: 'github', repoRef: 'moooon/motir-ai', defaultBranch: 'trunk' }],
+      repos: [
+        {
+          provider: 'github',
+          repoRef: 'moooon/motir-ai',
+          defaultBranch: 'trunk',
+          indexed: false,
+        },
+      ],
     });
   });
 });
