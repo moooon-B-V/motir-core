@@ -19,7 +19,7 @@ import { db } from '@/lib/db';
 import { submitJob } from '@/lib/ai/motirAiClient';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
-import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { connectAndLinkRepo } from '../../fixtures/codeContextFixtures';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -47,31 +47,18 @@ async function enableAutoPlan(projectId: string): Promise<void> {
   });
 }
 
-async function connectRepo(workspaceId: string): Promise<void> {
-  await githubInstallationService.persistInstallation({
-    workspaceId,
-    installation: {
-      installationId: `inst-${workspaceId}`,
-      accountLogin: 'acme',
-      accountType: 'Organization',
-    },
-    repos: [
-      {
-        providerRepoId: `repo-${workspaceId}`,
-        owner: 'acme',
-        name: 'web',
-        defaultBranch: 'main',
-        archived: false,
-      },
-    ],
-  });
+async function connectRepo(fx: WorkItemFixture): Promise<void> {
+  // ⚠️ CONNECT **AND LINK**. The cadence's code-blindness gate reads the
+  // PROJECT's configured set since MOTIR-1767, so an installation alone leaves
+  // the project code-blind and every case here asserting `fired` reads 0.
+  await connectAndLinkRepo(fx);
 }
 
 /** A drained, opted-in project with one expandable stub. */
 async function drained(connected: boolean): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture();
   await enableAutoPlan(fx.projectId);
-  if (connected) await connectRepo(fx.workspaceId);
+  if (connected) await connectRepo(fx);
   await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'epic', title: 'Unexpanded epic' },
     fx.ctx,
@@ -119,7 +106,7 @@ describe('the cadence holds off when Motir cannot read the code', () => {
     expect((await autoPlanCadenceService.runCadenceSweep()).fired).toBe(0);
 
     // The condition clears by itself; nothing is re-enabled and nothing is reset.
-    await connectRepo(fx.workspaceId);
+    await connectRepo(fx);
 
     expect((await autoPlanCadenceService.runCadenceSweep()).fired).toBe(1);
   });

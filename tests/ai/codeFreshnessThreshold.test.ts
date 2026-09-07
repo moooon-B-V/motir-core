@@ -16,20 +16,21 @@ function ctx(over: Partial<CodeContextDTO> = {}): CodeContextDTO {
     hasCodeContext: true,
     repos: [],
     hasImplementedWork: false,
-    freshnessUnavailable: false,
     ...over,
   };
 }
 
+// ⚠️ THE SHAPE MOVED WITH MOTIR-1767's SECOND REVISION: the DTO no longer carries
+// a `verdict` of its own, nor the two shas and the engine version it compared —
+// `lib/codeGraph/indexState.ts` owns the four states and this context reports
+// them. `commitsBehind` is the field these cases are actually about, and it is
+// the one that survived.
 function repo(commitsBehind: number | null) {
   return {
     repoRef: 'acme/web',
     provider: 'github',
-    verdict: 'stale' as const,
-    indexedCommitSha: 'a'.repeat(40),
+    indexState: 'stale' as const,
     indexedAt: null,
-    codegraphVersion: null,
-    headSha: 'b'.repeat(40),
     commitsBehind,
   };
 }
@@ -89,18 +90,26 @@ describe('codeBlindPauseReason — what makes Motir stop DECIDING', () => {
     expect(codeBlindPauseReason(ctx({ repos: [ancient] }))).toBeNull();
   });
 
-  it('a freshness read that DID NOT ANSWER does not pause', () => {
-    // `freshnessUnavailable` means motir-ai could not be asked, which is not
-    // evidence of drift. Pausing here would convert one service's downtime into
-    // a silent, unexplained stop on every project that has a repository.
-    expect(
-      codeBlindPauseReason(
-        ctx({ freshnessUnavailable: true, repos: [repo(BADLY_STALE_COMMITS_BEHIND * 10)] }),
-      ),
-    ).toBeNull();
+  // ⚠️ AMENDED (MOTIR-1767, second revision) — this case asserted that a
+  // freshness read which DID NOT ANSWER does not pause, via a
+  // `freshnessUnavailable` flag on the context. That flag is gone, and it is
+  // gone because the CONDITION is gone: freshness came from motir-ai across the
+  // 7.1 boundary, and MOTIR-4724 moved every fact the index state is derived
+  // from into motir-core's own columns. There is no longer a read that can fail
+  // to answer.
+  //
+  // The case is REWRITTEN rather than deleted because its reasoning still binds
+  // the successor: a pause must rest on evidence of drift, never on the absence
+  // of evidence. What carries that now is `commitsBehind: null`, which is the
+  // ONLY not-known-yet value left on this path — and the assertion below is the
+  // same guarantee stated over the field that survived.
+  it('MISSING EVIDENCE never pauses — an uncountable drift is not a badly-stale graph', () => {
+    expect(codeBlindPauseReason(ctx({ repos: [repo(null)] }))).toBeNull();
   });
 
-  it('a connected, current project does not pause', () => {
-    expect(codeBlindPauseReason(ctx({ repos: [{ ...repo(0), verdict: 'current' }] }))).toBeNull();
+  it('a connected, up-to-date project does not pause', () => {
+    expect(
+      codeBlindPauseReason(ctx({ repos: [{ ...repo(0), indexState: 'indexed' as const }] })),
+    ).toBeNull();
   });
 });

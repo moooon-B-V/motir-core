@@ -34,6 +34,22 @@ export interface CodeContextRepoDTO {
    * comparison, which is the distinction `indexState.ts` exists to hold.
    */
   indexedAt: Date | null;
+  /**
+   * How far the default branch has moved past the graph, IN COMMITS.
+   *
+   * ⚠️ ALWAYS `null` TODAY, and that is a first-class answer rather than a gap.
+   * Telling `stale` from `indexed` needs only a sha inequality, which
+   * `indexState.ts` does; COUNTING the commits between two shas needs a
+   * commit-graph read neither repository holds. MOTIR-4644 is its producer.
+   *
+   * It is carried rather than dropped because a CONSUMER already depends on the
+   * distinction: `isBadlyStale` pauses the auto-cadence on a THRESHOLD, never on
+   * any drift, and `indexState === 'stale'` cannot stand in for it — an active
+   * repository is a few commits behind between every push, so conflating the two
+   * would pause the cadence permanently for exactly the projects doing the most
+   * work.
+   */
+  commitsBehind: number | null;
 }
 
 /** The project's whole code-context answer. */

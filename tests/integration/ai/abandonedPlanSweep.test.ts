@@ -39,7 +39,7 @@ import { jobDefinitions } from '@/lib/jobs/registry';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
-import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { connectAndLinkRepo } from '../../fixtures/codeContextFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../../helpers/db';
 import type { JobStatus } from '@/lib/ai/types';
@@ -174,23 +174,10 @@ async function makeDrainedProject(
   // here is about the PLAN-abandonment gate, so the fixture has to clear the
   // code-blindness one to reach it; otherwise each case would be asserting a
   // verdict it is not named for.
-  await githubInstallationService.persistInstallation({
-    workspaceId: fx.workspaceId,
-    installation: {
-      installationId: `inst-${fx.workspaceId}`,
-      accountLogin: 'acme',
-      accountType: 'Organization',
-    },
-    repos: [
-      {
-        providerRepoId: `repo-${fx.workspaceId}`,
-        owner: 'acme',
-        name: 'web',
-        defaultBranch: 'main',
-        archived: false,
-      },
-    ],
-  });
+  // ⚠️ CONNECT **AND LINK** — MOTIR-1767 made the code-blindness gate read the
+  // PROJECT's set, so an installation alone no longer gives this project code
+  // context and every cadence assertion below would read `fired: 0`.
+  await connectAndLinkRepo(fx);
   const stub = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'epic', title: 'Unexpanded epic' },
     fx.ctx,

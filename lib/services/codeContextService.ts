@@ -112,6 +112,10 @@ export async function resolveCodeContextState(
           hasRunningIndex: repo.indexingRunId !== null && runningRunIds.has(repo.indexingRunId),
         }),
         indexedAt: repo.indexedAt,
+        // ALWAYS null until MOTIR-4644 ships its producer — a drawn answer, not
+        // a gap. See the DTO's own note for why a THRESHOLD on this count is not
+        // interchangeable with the index state's behind-ness arm.
+        commitsBehind: null,
       },
     ];
   });

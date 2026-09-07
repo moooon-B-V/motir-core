@@ -15,10 +15,10 @@ import type { CodeContextDTO } from '@/lib/dto/codeContext';
 // hundred commits is not. An age-led threshold gets both backwards.
 //
 // ⚠️ AND UNKNOWN IS NEVER "BADLY BEHIND". A repository whose drift cannot be
-// counted answers `null`, and `null` must not pause anything: the same rule that
-// makes a NULL head resolve to `current` rather than `stale` (MOTIR-1767). A
-// pause on missing evidence is a false accusation that the user cannot even see
-// the reason for.
+// counted answers `null`, and `null` must not pause anything — the same rule that
+// makes a NULL head sha resolve to `indexed` rather than `stale`
+// (`lib/codeGraph/indexState.ts`). A pause on missing evidence is a false
+// accusation the user cannot even see the reason for.
 export const BADLY_STALE_COMMITS_BEHIND = 50;
 
 /**
@@ -53,13 +53,16 @@ export type CodeBlindReason =
  * leaving the user's alone is the whole distinction between consent and a block,
  * and nothing here may be reached from a manual path.
  *
- * ⚠️ A FRESHNESS READ THAT DID NOT ANSWER DOES NOT PAUSE. `freshnessUnknown`
- * means motir-ai could not be asked, which is not evidence of drift. Pausing the
- * cadence on an AI-side outage would convert one service's downtime into a
- * silent, unexplained stop on every project that has a repository.
+ * ⚠️ THE "FRESHNESS UNAVAILABLE" GUARD IS GONE, AND ITS REASONING IS WHY.
+ * It existed because freshness came from motir-ai across the 7.1 boundary, and a
+ * read that could not be made is not evidence of drift — pausing on it would
+ * convert one service's downtime into a silent stop on every project with a
+ * repository. MOTIR-4724 moved every fact the state is derived from into
+ * motir-core's own columns, so there is no longer a read that can fail to answer:
+ * the condition is not merely unreachable, it is inexpressible. Deleted rather
+ * than left as a branch nothing can enter.
  */
 export function codeBlindPauseReason(context: CodeContextDTO): CodeBlindReason | null {
   if (!context.hasCodeContext) return 'no_connected_repo';
-  if (context.freshnessUnavailable) return null;
   return context.repos.some(isBadlyStale) ? 'badly_stale_graph' : null;
 }
