@@ -735,8 +735,31 @@ export const workflowsService = {
             status.key,
             tx,
           );
+          // ⚠️ THE COMPLETION STAMP RIDES THIS REASSIGN (Story MOTIR-4777 ·
+          // MOTIR-4780). This is the ONE status write in the product that does
+          // not go through `workItemsService.applyStatusTransition` and CAN move
+          // a row across the done-category boundary: deleting a custom status
+          // and reassigning its items is a workflow-ADMIN operation, not a
+          // lifecycle event, so it deliberately walks no legal edges and runs no
+          // close-out gate. But an item reassigned from a `todo` column onto
+          // `Done` has, as far as every reader is concerned, just finished — and
+          // without this it would sit `done` with a null `completedAt` and never
+          // appear in the Workbench's Recently-finished tab, for ever.
+          //
+          // Both categories are already in hand, so no resolver call is owed:
+          // `status` is the column being deleted and `target` the one its items
+          // land on. A reassign WITHIN the done category (a custom `Shipped` →
+          // `Done`) changes nothing — the item did not finish twice — which is
+          // the same rule `applyStatusTransition` applies to `done → cancelled`.
+          // `tests/rls/status-write-guard.test.ts` adjudicates this call site.
+          const patch: { status: string; completedAt?: Date | null } = { status: target.key };
+          if (target.category === 'done' && status.category !== 'done') {
+            patch.completedAt = new Date();
+          } else if (target.category !== 'done' && status.category === 'done') {
+            patch.completedAt = null;
+          }
           for (const item of items) {
-            await workItemRepository.update(item.id, { status: target.key }, tx);
+            await workItemRepository.update(item.id, patch, tx);
             await workItemRevisionsService.recordRevision(
               {
                 workItemId: item.id,

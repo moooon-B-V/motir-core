@@ -2622,6 +2622,72 @@ export const workItemsService = {
       }
     } else if (branchDirective !== undefined) update.sessionBranch = branchDirective;
 
+    // ── THE COMPLETION STAMP (Story MOTIR-4777 · MOTIR-4780) ──────────────────
+    //
+    // `work_item.completedAt` records WHEN a card finished, and this is the one
+    // place it is ever written. It sits HERE, in the same `update` as the status
+    // and therefore inside the same `$transaction` and under the same
+    // `lockById`, because the stamp is a fact ABOUT the status write: split them
+    // and two racing transitions can produce two stamps, or a stamp with no
+    // transition behind it. It is a database write, not a side effect — the
+    // post-commit rule above governs `sendEvent`, not this.
+    //
+    // ⚠️ CATEGORY, NEVER A STATUS KEY. `done` and `cancelled` are what the
+    // DEFAULT workflow happens to call its terminal statuses; a project defines
+    // its own (`workflow_status` rows, not an enum), so the set is resolved per
+    // project through the same `getTerminalStatusKeysByProjects` that
+    // `isReady` and `homeService` ask. A hardcoded `'done' | 'cancelled'` pair
+    // would be exhaustive over the literal and silent about every status a
+    // customer adds — the shape MOTIR-2758 was filed about on the read side.
+    // The DESTINATION's category is already in hand (`target.category`); the
+    // SOURCE's is not, and that is what the resolver is for.
+    //
+    // ⚠️ THE READ IS CONDITIONAL, and the condition is the whole cost story.
+    // `todo → in_progress` — the overwhelmingly common transition — neither
+    // enters nor leaves the done category and pays NOTHING: no query, no write.
+    // The resolver runs only when this move can actually change the stamp.
+    //
+    // Two directions, and the asymmetry is deliberate:
+    //
+    //   * INTO a done-category status ⇒ stamp, but only when the row has no
+    //     stamp yet OR the status it is leaving was not itself done-category.
+    //     A `done → cancelled` hop is a move WITHIN the category — the card did
+    //     not finish twice, so its completion moment must not move. (The
+    //     `completedAt === null` arm is what still stamps a row that reached a
+    //     done status before this column existed and was missed by the
+    //     migration's backfill.)
+    //   * OUT of one ⇒ clear it. A re-opened card has not finished, and leaving
+    //     a stale stamp behind would put it in "Recently finished" while it sits
+    //     In Progress.
+    //
+    // ⚠️ `opts.system` is NOT exempt, unlike the artifact-evidence and
+    // container-completeness gates above, and unlike the `manual` provenance
+    // stamp below — because those three ask *did a human decide this?* and this
+    // one asks *when did the row enter a done status?*. The downward cascade
+    // (`childStatusCascadeService`) runs `system` and closes children behind a
+    // parent somebody completed: those children genuinely finished at that
+    // moment, and they are precisely the rows the Workbench exists to show, so
+    // exempting `system` would blank the stamp on the commonest completion path
+    // in the product. The importer (MOTIR-941) also runs `system`, and a closed
+    // source issue therefore lands stamped with the moment it entered a done
+    // status IN MOTIR rather than in the source tool — which is what this column
+    // is defined to mean, and is the honest answer available, since the import
+    // carries no completion time to record instead.
+    const entersDone = target.category === 'done';
+    if (entersDone || current.completedAt !== null) {
+      const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
+        [current.projectId],
+        ctx.workspaceId,
+        tx,
+      );
+      const doneKeys = terminalByProject.get(current.projectId) ?? new Set<string>();
+      if (entersDone) {
+        if (current.completedAt === null || !doneKeys.has(fromKey)) update.completedAt = new Date();
+      } else if (current.completedAt !== null) {
+        update.completedAt = null;
+      }
+    }
+
     const row = await workItemRepository.update(workItemId, update, tx);
     const revisionId = await workItemRevisionsService.recordRevision(
       {
