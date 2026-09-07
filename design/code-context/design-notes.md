@@ -5,6 +5,20 @@ Asset set: `design/code-context/design-notes.md` + `code-context.mock.html` + `c
 
 - `code-context.dark.png`.
 
+> ## ⚠️ AMENDED 2026-09-07 (second) — THERE IS NO `Index` TAB; the `Code` row is TWO sections
+>
+> **Yue: _"index tab should not be there."_** The row is **Repositories → Health**.
+>
+> The freshness states are not deleted and nothing about what they SAY changes — they move onto the
+> **repository row**, which is where the shipped `RepositoryInventory` already renders the index pill.
+> **A tab is a room somebody goes to, and nobody goes to look at an index**: they arrive with a
+> question about ONE repository, and the answer belongs on that repository's row. §4 carries the
+> argument and the panel dispositions.
+>
+> It also removes a hazard the three-tab shape carried: a separate Index room is a SECOND surface
+> drawing the same four states, and two surfaces rendering one derivation is precisely what
+> `lib/codeGraph/indexState.ts` is guarded to prevent.
+
 > ## ⚠️ AMENDED 2026-09-07 — the registers adopt the SHIPPED vocabulary, and the row composes
 >
 > The 2026-09-05 rework below stands in full. Two corrections on top of it, both forced by substrate
@@ -55,8 +69,13 @@ Three things were in two places with opposite gating, and one of them had no pla
 | **Git**         | rail BOTTOM section → `/settings/workspace/github` | deliberately **ungated**         |
 | **Code index**  | nowhere                                            | —                                |
 
-They collapse into a single primary **Code** row with three sections, in the order a user meets them:
-**Repositories → Index → Health**. You connect, it indexes, it is audited.
+They collapse into a single primary **Code** row with **TWO** sections, in the order a user meets
+them: **Repositories → Health**. You connect, and it is audited.
+
+**⚠️ THE INDEX IS NOT THE THIRD SECTION — it is a PROPERTY OF A REPOSITORY, and §4 says why.** The
+table's third row is real: the code index had no place at all. Giving it a TAB was the wrong answer
+to that, because a tab is a room you go to and the index is never a thing a person visits — it is a
+fact about each repository, which the repository row already carries.
 
 ---
 
@@ -150,8 +169,8 @@ So a naive collapse fails in one of two directions, and both are unacceptable:
 
 **The resolution: the ROW is browse-reachable and each SECTION keeps its own gate.** This costs
 nothing to build, because `/code-health` **already** renders an admin-only empty state rather than
-refusing — panel H2 composes that state rather than inventing one. Repositories and Index are
-browse-reachable; Health is admin-only _inside the page_.
+refusing — panel H2 composes that state rather than inventing one. Repositories is browse-reachable;
+Health is admin-only _inside the page_.
 
 **The test this has to pass, and panel H2 is drawn to show it passing: nothing a member could do
 before is gone.**
@@ -200,11 +219,32 @@ member's door survives in this design and dies in the build.
 which another project may still be using — and the copy says so, because "remove" over a shared asset
 is exactly the word that invites the wrong assumption.
 
-## 4. INDEX — the freshness section
+## 4. FRESHNESS — a property of the REPOSITORY, not a section of its own
 
-Everything panels C · D · F · G · H draw, now living in a section instead of scattered across two
-hosts. The rules are unchanged from the first revision and are restated here only where the collapse
-touches them:
+> **⚠️ AMENDED 2026-09-07 (Yue): THERE IS NO `Index` TAB.** This section was _"INDEX — the freshness
+> section"_, and the `Code` row carried three tabs. **A tab is a room somebody goes to, and nobody
+> goes to look at an index.** They come to answer one question about ONE repository — _can Motir read
+> this, and is what it read current?_ — which is a question about the row they are already looking at.
+>
+> **What that changes:** nothing about WHAT the states say. Every panel below is unchanged — the four
+> states, drift in commits, `stale` and `indexing` kept apart, the settled line, the D3 unknown-count
+> case. What changes is WHERE they render: **on the repository row in the Repositories section**,
+> which is where `RepositoryInventory` already puts the index pill (§4.2) and where MOTIR-4817 just
+> corrected its label.
+>
+> **And it removes a real hazard rather than only a tab.** A separate Index room is a second place the
+> same four states are drawn, and two surfaces rendering one derivation is exactly what
+> `lib/codeGraph/indexState.ts` exists to prevent — the ONE derivation guarded so _"the organisation
+> inventory, the `Code` page and any future surface must not be able to disagree about what the word
+> means"_. One fewer surface is one fewer way to disagree.
+>
+> **The panels below are therefore drawn as ROW STATES and their in-situ home is the Repositories
+> section.** They are kept as separate panels because a state gallery is how a design shows four
+> states at once; that is a property of the ASSET, not a claim that the product has four screens.
+
+Everything panels C · D · F · G · H draw, rendered on the repository row rather than in a section of
+its own. The rules are unchanged from the first revision and are restated here only where the
+collapse touches them:
 
 - **Drift is stated in COMMITS, never as an age** (§9 below — unchanged, and still the sharpest point
   in this asset).

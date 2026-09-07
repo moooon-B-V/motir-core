@@ -1764,9 +1764,12 @@
           <strong>One room for the three things that were in two places.</strong> Code health was a
           primary project row gated on <code>ai:configure</code>; git was an ungated row in the
           rail&rsquo;s bottom section; the code index had no surface at all. They collapse into a
-          single primary <strong>Code</strong> row with three sections &mdash;
-          <em>Repositories</em>, <em>Index</em>, <em>Health</em> &mdash; in the order the user meets
-          them: you connect, it indexes, it is audited.
+          single primary <strong>Code</strong> row with <strong>two</strong> sections &mdash;
+          <em>Repositories</em>, <em>Health</em> &mdash; in the order the user meets them: you
+          connect, and it is audited. <strong>The index is NOT the third tab.</strong> A tab is a
+          room somebody goes to, and nobody goes to look at an index &mdash; they arrive with a
+          question about ONE repository, so its freshness renders on that repository&rsquo;s ROW,
+          where the shipped inventory already puts the pill.
         </p>
         <p>
           <strong>⚠️ Visibility is per PROJECT; the graph is shared per ORGANISATION.</strong> A
@@ -1869,7 +1872,6 @@
               </div>
               <div class="tabs">
                 <div class="tab on">Repositories<span class="cnt">2</span></div>
-                <div class="tab">Index</div>
                 <div class="tab">Health</div>
               </div>
               <div class="repoList">
@@ -2053,7 +2055,6 @@
                 </div>
                 <div class="tabs">
                   <div class="tab on">Repositories<span class="cnt">3</span></div>
-                  <div class="tab">Index</div>
                   <div class="tab">Health</div>
                 </div>
                 <div class="repoList">
@@ -2115,7 +2116,6 @@
                 </div>
                 <div class="tabs">
                   <div class="tab on">Repositories<span class="cnt">3</span></div>
-                  <div class="tab">Index</div>
                   <div class="tab">Health</div>
                 </div>
                 <div class="repoList">
@@ -2629,7 +2629,6 @@
                 <div class="frameBody">
                   <div class="tabs">
                     <div class="tab">Repositories</div>
-                    <div class="tab">Index</div>
                     <div class="tab on">Health</div>
                   </div>
                   <div class="ghostCard">
@@ -2650,7 +2649,6 @@
                 <div class="frameBody">
                   <div class="tabs">
                     <div class="tab">Repositories</div>
-                    <div class="tab">Index</div>
                     <div class="tab on">Health</div>
                   </div>
                   <div
@@ -2677,11 +2675,11 @@
                       Only project admins can see the code audit
                     </div>
                     <div style="font-size: 13px; color: var(--el-text-secondary)">
-                      Repositories and Index are here for everyone.
+                      Repositories is here for everyone.
                     </div>
                   </div>
                   <p class="outNote">
-                    The two tabs beside it still work.
+                    The Repositories tab beside it still works.
                     <strong>Nothing a member could do before is gone</strong>
                     &mdash; that is the whole test this panel exists to pass.
                   </p>
