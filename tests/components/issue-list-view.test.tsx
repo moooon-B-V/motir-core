@@ -371,7 +371,7 @@ describe("the /items pager INHERITS the shared control's translation (MOTIR-4853
       <IssueListTable
         rows={ROWS}
         sort={{ column: 'key', direction: 'asc' }}
-        filter={{}}
+        filter={EMPTY_FILTER}
         pagination={{ total: 1234, page: 13, pageSize: 50 }}
       />,
     );
@@ -388,7 +388,7 @@ describe("the /items pager INHERITS the shared control's translation (MOTIR-4853
       <IssueListTable
         rows={ROWS}
         sort={{ column: 'key', direction: 'asc' }}
-        filter={{}}
+        filter={EMPTY_FILTER}
         pagination={{ total: 1234, page: 13, pageSize: 50 }}
       />,
       { locale: 'zh', messages: zhMessages },

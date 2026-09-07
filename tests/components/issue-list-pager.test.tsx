@@ -103,6 +103,17 @@ describe('the pager states `design/workbench/` draws', () => {
     expect(screen.queryByRole('navigation', { name: 'Pagination' })).toBeNull();
   });
 
+  it('an EMPTY set reads `0–0 of 0` rather than `1–0`', () => {
+    // The `total === 0` arm. The Workbench never reaches it — an empty tab
+    // renders its empty state and no pager at all (`design/workbench/` Panel
+    // 10) — but `/items` DOES: a filter that matches nothing still renders the
+    // list frame and its footer. Without the arm the range would open at 1 and
+    // end at 0, which is a sentence about no rows that counts from one.
+    en({ total: 0, page: 1, pageSize: 50 });
+    expect(rangeLine()).toBe('Showing 0–0 of 0');
+    expect(screen.queryByRole('navigation', { name: 'Pagination' })).toBeNull();
+  });
+
   it('disables prev on the first page and next on the last', () => {
     en({ total: 1234, page: 1, pageSize: 50 });
     expect(screen.getByRole('button', { name: 'Previous page' }).hasAttribute('disabled')).toBe(

@@ -743,6 +743,14 @@ export default defineConfig({
         'components/planning/ProposalPeek.tsx',
         'components/workItems/ProposalPeekMarks.tsx',
         'app/**/items/_components/IssueQuickViewController.tsx',
+        // The SHARED pager (Story MOTIR-4850 · MOTIR-4853). It is mounted by
+        // three surfaces now — `/items`, `/items/archived` and the Workbench —
+        // and MOTIR-4853 translated it IN PLACE, so a regression in it reaches
+        // all three. It was not gated before that card; measured on this branch
+        // with `tests/components/issue-list-pager.test.ts` and its two
+        // consumers' suites: 100 statements / 100 branches / 100 functions /
+        // 100 lines.
+        'app/**/items/_components/IssueListPager.tsx',
         // …and the SEAM the payload widening landed in. `workItemsService.ts`
         // (the other half) is already included + gated above.
         'lib/mappers/quickViewMappers.ts',
@@ -3590,6 +3598,11 @@ export default defineConfig({
         // Keyed `app/**/…`, never the literal `app/(authed)/…`: picomatch reads
         // the parentheses as a group, so the literal form matches NO file and
         // the threshold would pass vacuously (MOTIR-2449).
+        'app/**/items/_components/IssueListPager.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/**/items/_components/QuickViewRailEdit.tsx': {
           branches: 90,
           functions: 90,
@@ -3660,7 +3673,6 @@ export default defineConfig({
         // the measured number, so a later refactor has room without the gate
         // being loosened to make a build pass. (MOTIR-4782 renamed
         // `lib/home/` → `lib/workbench/`; the floors are unchanged.)
-        'lib/workbench/cursor.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workbench/tab.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/homeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/homeMappers.ts': { branches: 90, functions: 90, lines: 90 },

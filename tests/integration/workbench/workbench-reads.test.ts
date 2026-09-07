@@ -562,3 +562,139 @@ describe('access is enforced server-side on every read', () => {
     expect((await homeService.tabCounts(outsider)).toDo).toBe(0);
   });
 });
+
+describe('the story GATE — the seams the two code cards meet at (MOTIR-4854)', () => {
+  it('a row leaving the slice BETWEEN the count and the list degrades to a short page, not an error', async () => {
+    // ⚠️ THE COUNT AND THE LIST ARE TWO STATEMENTS ABOUT ONE SET, TAKEN AT TWO
+    // MOMENTS. `homeService` counts first — that is what lets an out-of-range
+    // page clamp to the last one instead of fetching an empty offset — and then
+    // reads the window. Between them a row can leave the slice, which is the
+    // drift the offset accepts and the keyset did not.
+    //
+    // What must NOT happen is an error, or a page that reports a length it does
+    // not have. This drives the race deliberately rather than waiting to meet
+    // it: move a row out of the `todo` slice after the total is known, and read
+    // the same page again.
+    for (let i = 0; i < 6; i += 1) await card(`Row ${i}`);
+
+    const before = await homeService.listToDo(ctx(), { limit: 4 });
+    expect(before.total).toBe(6);
+    expect(before.items).toHaveLength(4);
+
+    // The row leaves the slice — a real transition, the way the product moves it.
+    const [first] = before.items;
+    await move(first!.id, 'in_progress');
+
+    // Page 2 now holds ONE row where the earlier total implied two. A short page
+    // is the correct degradation; the read re-counts, so its own `total` is
+    // honest about the set as it now stands.
+    const after = await homeService.listToDo(ctx(), { limit: 4, page: 2 });
+    expect(after.total).toBe(5);
+    expect(after.items).toHaveLength(1);
+    // And nothing threw, which is the half of this that a green run could hide
+    // if the assertion were only about the count.
+    expect(after.page).toBe(2);
+  });
+
+  it("Watching's MOVING group alone overflows a page — page 1 is entirely `in_progress`", async () => {
+    // The arrangement the keyset could never produce, at the size that produces
+    // it: the first group is longer than one page, so page 1 cannot reach the
+    // boundary at all and page 2 is where the two bands meet.
+    const moving: string[] = [];
+    const waiting: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const m = await card(`Moving ${i}`);
+      await move(m.id, 'in_progress');
+      await adminDb.$transaction((tx) => watcherRepository.add(m.id, fx.ownerId, tx));
+      moving.push(m.identifier);
+      const w = await card(`Waiting ${i}`);
+      await adminDb.$transaction((tx) => watcherRepository.add(w.id, fx.ownerId, tx));
+      waiting.push(w.identifier);
+    }
+
+    const p1 = await homeService.listWatching(ctx(), { limit: 3, page: 1 });
+    const p2 = await homeService.listWatching(ctx(), { limit: 3, page: 2 });
+    const p3 = await homeService.listWatching(ctx(), { limit: 3, page: 3 });
+    const p4 = await homeService.listWatching(ctx(), { limit: 3, page: 4 });
+
+    expect(p1.total).toBe(10);
+    // (a) page 1 is WHOLLY inside the moving group — it does not reach the boundary.
+    expect(
+      ids(p1).every((id) => moving.includes(id)),
+      'page 1 leaked a waiting row',
+    ).toBe(true);
+    // (b) page 2 is where the boundary falls: the tail of moving, then the head
+    //     of waiting, IN THAT ORDER — the group is the outer key across a page.
+    const straddle = ids(p2);
+    const boundary = straddle.findIndex((id) => waiting.includes(id));
+    expect(boundary, 'page 2 does not straddle the boundary').toBeGreaterThan(0);
+    expect(straddle.slice(0, boundary).every((id) => moving.includes(id))).toBe(true);
+    expect(straddle.slice(boundary).every((id) => waiting.includes(id))).toBe(true);
+    // (c) a later page is WHOLLY inside the waiting group.
+    expect(
+      ids(p4).every((id) => waiting.includes(id)),
+      'page 4 leaked a moving row',
+    ).toBe(true);
+
+    // And the walk as a whole repeats nothing and drops nothing.
+    const walked = [...ids(p1), ...ids(p2), ...ids(p3), ...ids(p4)];
+    expect(new Set(walked).size).toBe(walked.length);
+    expect([...walked].sort()).toEqual([...moving, ...waiting].sort());
+  });
+
+  it('tenant isolation holds on all four reads AND on their TOTALS', async () => {
+    // ⚠️ THE FIXTURE IS ASYMMETRIC ON PURPOSE, which is the whole point of
+    // asserting the totals separately. If the actor's visible set and the true
+    // population were the same size, a SCOPED count and an UNSCOPED one would
+    // return the same number and this test would pass against a read that had
+    // lost its scope entirely. So the sibling project holds rows the actor is
+    // the assignee of — membership alone would return them — and only the
+    // project scope keeps them out.
+    const mine = await card('Mine, here');
+    await adminDb.$transaction((tx) => watcherRepository.add(mine.id, fx.ownerId, tx));
+    const finished = await card('Mine, finished here');
+    await finishedDaysAgo(finished.id, 1);
+    const moving = await card('Mine, moving here');
+    await move(moving.id, 'in_progress');
+
+    const elsewhere = await makeWorkItemFixture({ identifier: 'OTHR' });
+    for (let i = 0; i < 4; i += 1) {
+      const strangerRow = await workItemsService.createWorkItem(
+        { projectId: elsewhere.projectId, kind: 'task', title: `Not mine ${i}` },
+        elsewhere.ctx,
+      );
+      // The actor is the ASSIGNEE, so the membership predicate alone matches it.
+      await adminDb.workItem.update({
+        where: { id: strangerRow.id },
+        data: { assigneeId: fx.ownerId },
+      });
+      await adminDb.$transaction((tx) => watcherRepository.add(strangerRow.id, fx.ownerId, tx));
+    }
+
+    const counts = await homeService.tabCounts(ctx());
+    const reads = [
+      ['toDo', homeService.listToDo, counts.toDo],
+      ['inProgress', homeService.listInProgress, counts.inProgress],
+      ['recentlyFinished', homeService.listRecentlyFinished, counts.recentlyFinished],
+      ['watching', homeService.listWatching, counts.watching],
+    ] as const;
+
+    for (const [name, read, count] of reads) {
+      const window = await read(ctx(), { limit: 100 });
+      // No row from the sibling project, on the LIST…
+      expect(
+        ids(window).some((id) => id.startsWith('OTHR-')),
+        `${name} leaked a row`,
+      ).toBe(false);
+      // …and the TOTAL agrees with the list AND with the tab strip's own count.
+      expect(window.total, `${name}: total disagrees with its list`).toBe(window.items.length);
+      expect(count, `${name}: the strip disagrees with the read`).toBe(window.total);
+    }
+
+    // SENSITIVITY: the rows really are there and really do match the membership
+    // predicate, so the four assertions above ran against a population that a
+    // lost scope would have returned.
+    const reachable = await adminDb.workItem.count({ where: { assigneeId: fx.ownerId } });
+    expect(reachable).toBeGreaterThan(counts.toDo + counts.inProgress + counts.recentlyFinished);
+  });
+});
