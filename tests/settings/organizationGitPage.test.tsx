@@ -122,7 +122,7 @@ describe('the inventory — one row per connected repository', () => {
 describe('the INDEX column — all four states (MOTIR-4724)', () => {
   it('renders the fixture`s own states', () => {
     renderInventory();
-    expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Indexed').length).toBeGreaterThan(0);
     expect(screen.getByText('Never indexed')).toBeTruthy();
   });
 
@@ -140,10 +140,29 @@ describe('the INDEX column — all four states (MOTIR-4724)', () => {
         ROW('r4', 'd', [], 'never'),
       ],
     });
-    expect(screen.getByText('Current')).toBeTruthy();
+    expect(screen.getByText('Indexed')).toBeTruthy();
     expect(screen.getByText('Stale')).toBeTruthy();
     expect(screen.getByText('Indexing…')).toBeTruthy();
     expect(screen.getByText('Never indexed')).toBeTruthy();
+  });
+
+  it('⚠️ the mint chip NEVER claims currency — `Indexed`, not `Current` (MOTIR-4817)', () => {
+    // The regression this bug was filed for, asserted on the one repository that
+    // exposes it: a graph exists, and NOBODY HAS PUSHED, so there is no head to
+    // compare against. `deriveCodeGraphIndexState` answers `indexed` — correctly,
+    // because a missing comparand is "not known yet" and must never manufacture a
+    // `stale` — and the row therefore says only that a graph exists.
+    //
+    // ⚠️ AND THE NULL IS PERMANENT, WHICH IS WHY THIS IS A BUG AND NOT A WORDING
+    // PREFERENCE. `defaultBranchHeadSha` is written by a push webhook and by
+    // NOTHING else — not connect, not the index run, which only reads it — so a
+    // quiet repository never acquires one. It would have read "Current" for ever,
+    // and it is exactly the repository whose graph is most likely an old
+    // snapshot. The busy one gets a real sha within minutes and reports honestly.
+    renderInventory({ rows: [ROW('r1', 'quiet-repo', ['Atlas'], 'indexed')] });
+    expect(screen.getByText('Indexed')).toBeTruthy();
+    expect(screen.queryByText('Current')).toBeNull();
+    expect(screen.queryByText('Up to date')).toBeNull();
   });
 });
 

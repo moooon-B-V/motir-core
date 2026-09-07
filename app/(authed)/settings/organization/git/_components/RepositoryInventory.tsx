@@ -122,16 +122,27 @@ export function RepositoryInventory({
                     {t(`provider.${row.repo.provider}`)}
                   </span>
 
-                  {/* The design's tones: Current mint · Stale peach · Indexing
-                      sky · Never indexed the neutral chip. `indexed` renders as
-                      `Current` because that is what it now MEANS — the graph
-                      matches the head, as last observed. */}
+                  {/* The design's tones: Indexed mint · Stale peach · Indexing
+                      sky · Never indexed the neutral chip.
+                      ⚠️ THE MINT CHIP READS `Indexed`, NOT `Current` (MOTIR-4817),
+                      and this comment used to argue the opposite — that once
+                      `stale` existed, `indexed` MEANT "matches the head, as last
+                      observed". That holds only when BOTH shas are known, and the
+                      population where they are not is neither small nor
+                      shrinking: `defaultBranchHeadSha` is written by a push
+                      webhook and by NOTHING else, so a connected, indexed
+                      repository that receives no push never acquires one and
+                      would have read `Current` for ever. It fails in the worst
+                      direction too — the busy repository gets a real sha within
+                      minutes and reports honestly, while the quiet one, whose
+                      graph is most likely an old snapshot, is the one making the
+                      claim. `Indexed` asserts only what the state carries. */}
                   {row.indexState === 'indexing' ? (
                     <Pill severity="info">{t('index.indexing')}</Pill>
                   ) : row.indexState === 'stale' ? (
                     <Pill severity="warning">{t('index.stale')}</Pill>
                   ) : row.indexState === 'indexed' ? (
-                    <Pill severity="success">{t('index.current')}</Pill>
+                    <Pill severity="success">{t('index.indexed')}</Pill>
                   ) : (
                     <Pill tone="neutral">{t('index.never')}</Pill>
                   )}

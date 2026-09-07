@@ -6211,7 +6211,7 @@
         "gitlab": "GitLab"
       },
       "index": {
-        "current": "Current",
+        "indexed": "Indexed",
         "stale": "Stale",
         "indexing": "Indexing…",
         "never": "Never indexed"
