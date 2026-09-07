@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DOCS_REDIRECTS, SETTINGS_REDIRECTS } from '../../next.config';
+import { DOCS_REDIRECTS, LANDING_REDIRECTS, SETTINGS_REDIRECTS } from '../../next.config';
 import { ACCOUNT_SETTINGS_NAV, ACCOUNT_SETTINGS_ROUTES } from '@/lib/settings/accountSettingsNav';
 import {
   V1_SECURITY_SCHEME_NAME,
@@ -52,25 +52,51 @@ describe('the tokens rename — the seams between its cards', () => {
     expect(rule!.permanent).toBe(true);
 
     // THE SEAM. `tests/design-asset-addresses.test.ts` builds REDIRECT_SOURCES
-    // by spreading BOTH maps; if a future map is added to `redirects()` and not
+    // by spreading the redirect maps; if a map is added to `redirects()` and not
     // to that spread, every asset quoting its addresses is reported as
-    // resolving to nothing — a guard failing on addresses that are live. This
-    // asserts the two lists are derived from the same place by reading the
-    // guard's own source for the spread.
-    const guard = readFileSync(join(process.cwd(), 'tests/design-asset-addresses.test.ts'), 'utf8');
-    expect(guard).toContain('SETTINGS_REDIRECTS');
-    expect(guard).toMatch(/\[\.\.\.DOCS_REDIRECTS,\s*\.\.\.SETTINGS_REDIRECTS\]/);
-
-    // And the two maps cannot both claim a source — they are concatenated, so
-    // the first spread would silently win.
+    // resolving to nothing — a guard failing on addresses that are live.
     //
-    // `Set<string>` explicitly: both maps are `as const`, so an inferred Set
-    // narrows to the DOCS sources' literal union and `.has()` then rejects a
-    // settings source at compile time — the collision this line exists to test
-    // becomes a type error instead of an assertion. (`settingsRedirects.test.ts`
+    // ⚠️ IT IS DERIVED FROM `redirects()`, NOT PINNED TO TWO NAMES (MOTIR-4783).
+    // This used to match `/\[\.\.\.DOCS_REDIRECTS,\s*\.\.\.SETTINGS_REDIRECTS\]/` — the
+    // exact two-map expression — and MOTIR-4782 added `LANDING_REDIRECTS` as a
+    // third, which is precisely the event the paragraph above describes. The
+    // guard's spread WAS updated; this assertion went red anyway, because a
+    // regex pinned to today's list cannot tell "a map was added and forgotten"
+    // from "a map was added and handled". So it now reads the map NAMES out of
+    // `redirects()` and requires each to appear in the spread: the same claim,
+    // and it survives the fourth map.
+    const config = readFileSync(join(process.cwd(), 'next.config.ts'), 'utf8');
+    const composed = /async redirects\(\)\s*\{[^}]*return\s*\[([^\]]*)\]/.exec(config);
+    expect(composed, 'redirects() must still compose its maps by spreading them').not.toBeNull();
+    const maps = [...composed![1]!.matchAll(/\.\.\.([A-Z_]+)/g)].map((m) => m[1]!);
+    expect(maps.length, 'the parse found no maps — the regex has rotted').toBeGreaterThanOrEqual(3);
+
+    const guard = readFileSync(join(process.cwd(), 'tests/design-asset-addresses.test.ts'), 'utf8');
+    const spread = /const REDIRECT_SOURCES = \[([^\]]*)\]/.exec(guard);
+    expect(
+      spread,
+      'the address guard must still build REDIRECT_SOURCES from a spread',
+    ).not.toBeNull();
+    for (const name of maps) {
+      expect(
+        spread![1],
+        `${name} is composed into redirects() and missing from the guard`,
+      ).toContain(name);
+    }
+
+    // And no two maps may claim the same source — they are concatenated, so the
+    // first spread would silently win.
+    //
+    // `Set<string>` explicitly: every map is `as const`, so an inferred Set
+    // narrows to one map's literal union and `.has()` then rejects another's
+    // source at compile time — the collision this line exists to test becomes a
+    // type error instead of an assertion. (`settingsRedirects.test.ts`
     // annotates it for the same reason; this file did not, and CI caught it.)
-    const docsSources = new Set<string>(DOCS_REDIRECTS.map((r) => r.source));
-    for (const r of SETTINGS_REDIRECTS) expect(docsSources.has(r.source)).toBe(false);
+    const seen = new Set<string>();
+    for (const r of [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS, ...LANDING_REDIRECTS]) {
+      expect(seen.has(r.source), `${r.source} is claimed by two redirect maps`).toBe(false);
+      seen.add(r.source);
+    }
   });
 
   // ── SEAM 3 · the security-scheme constant → the EMITTED document ──────────

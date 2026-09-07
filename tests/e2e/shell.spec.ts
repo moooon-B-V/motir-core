@@ -35,17 +35,17 @@ async function signUp(page: Page, email: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
     await createButton.click();
     const landed = await page
-      .waitForURL('**/home', { timeout: 9_000 })
+      .waitForURL('**/workbench', { timeout: 9_000 })
       .then(() => true)
       .catch(() => false);
-    if (landed || page.url().includes('/home')) return;
+    if (landed || page.url().includes('/workbench')) return;
     await page.waitForTimeout(11_000);
   }
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 async function createFirstProject(page: Page, name: string): Promise<void> {
-  // The projects-empty-state CTA (on /home, where sign-up lands) opens the
+  // The projects-empty-state CTA (on /workbench, where sign-up lands) opens the
   // create-project modal.
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();

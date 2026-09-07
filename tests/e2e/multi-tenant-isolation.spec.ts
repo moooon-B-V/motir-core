@@ -50,7 +50,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 test('@smoke multi-tenant isolation: cross-tenant invite is 404 + forged workspace cookie is re-validated', async ({

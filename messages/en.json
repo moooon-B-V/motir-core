@@ -959,7 +959,7 @@
   },
   "shell": {
     "nav": {
-      "home": "Home",
+      "workbench": "Workbench",
       "dashboard": "Dashboard",
       "issues": "Work Items",
       "ready": "Ready",
@@ -5718,6 +5718,11 @@
         "askOwner": "Ask an owner to upgrade"
       }
     },
+    "exempt": {
+      "pill": "Not billed",
+      "motir": "This organization isn’t billed for Motir. Every plan cap is lifted for it, so there is nothing to outgrow and no seats to buy.",
+      "ai": "This organization isn’t charged for Motir AI. Planning runs whatever the balance reads, and credits are recorded for internal cost visibility rather than billed."
+    },
     "internalBilling": {
       "badge": "Internal billing",
       "note": "This organization is charged exactly like a customer and then made whole — every figure below is real, and the balance nets to zero."
@@ -6211,7 +6216,7 @@
         "gitlab": "GitLab"
       },
       "index": {
-        "current": "Current",
+        "indexed": "Indexed",
         "stale": "Stale",
         "indexing": "Indexing…",
         "never": "Never indexed"
@@ -7221,19 +7226,24 @@
     },
     "frameLoading": "Loading the mock…"
   },
-  "home": {
-    "heading": "Home",
-    "subtitle": "Everything in {project} that is waiting on you.",
+  "workbench": {
+    "heading": "Workbench",
+    "subtitle": "What you are doing in {project}, and what you have just done.",
+    "finishedWindow": "Finished in the last {days} days. Older work stays on the item, and on the board.",
     "tabs": {
-      "label": "Home views",
-      "myWork": "My work",
-      "watching": "Watching"
+      "label": "Workbench views",
+      "toDo": "To do",
+      "inProgress": "In progress",
+      "recentlyFinished": "Recently finished",
+      "watching": "Watching",
+      "toApprove": "To approve"
     },
     "columns": {
       "title": "Title",
       "role": "Your role",
       "assignee": "Assignee",
-      "status": "Status"
+      "status": "Status",
+      "finished": "Finished"
     },
     "row": {
       "unassigned": "Unassigned",
@@ -7246,14 +7256,27 @@
       }
     },
     "empty": {
-      "myWork": {
-        "title": "Nothing is waiting on you",
-        "body": "Work you are assigned or filed will show up here. Pick something up from Ready to get started.",
+      "toDo": {
+        "title": "Nothing to start",
+        "body": "Work you are assigned or filed, and have not started yet, shows up here. Pick something up from Ready to get going.",
         "action": "Find something to start"
+      },
+      "inProgress": {
+        "title": "Nothing in flight",
+        "body": "Nothing you own is being worked on right now — by you or by an agent.",
+        "action": "See what to start"
+      },
+      "recentlyFinished": {
+        "title": "Nothing finished this week",
+        "body": "Work you own that reaches a done status will show up here for a week after it lands."
       },
       "watching": {
         "title": "You are not watching anything",
         "body": "Watch an item from its detail page to follow it without owning it."
+      },
+      "approvals": {
+        "title": "Nothing is waiting on your approval",
+        "body": "Work that needs your sign-off before it can go on will show up here."
       }
     },
     "pager": {

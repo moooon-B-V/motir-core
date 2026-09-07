@@ -61,6 +61,45 @@ export class RealizedRepoAlreadyClaimedError extends Error {
 }
 
 /**
+ * A unique-constraint violation on the project's repository set that the service
+ * could NOT attribute to a specific constraint (Bug MOTIR-4833). It is the
+ * REMAINDER of a positive classification, and it exists so that the remainder has
+ * a name of its own instead of borrowing the name of whichever arm was written
+ * last.
+ *
+ * ⚠️ IT IS NOT A CATCH-ALL FOR "SOMETHING WENT WRONG" — it is a specific claim:
+ * the database refused this write as a duplicate, and the error it refused with
+ * did not say which uniqueness was violated. Both of those halves are true and
+ * both are worth telling the caller, because together they mean exactly one
+ * thing: SOMEONE ELSE WROTE FIRST, so re-read the set and decide again. That is
+ * the one instruction which is correct whichever constraint it turns out to have
+ * been — unlike "rename it", which is actionable, wrong half the time, and was
+ * what this error replaced.
+ *
+ * The service resolves most of these into `RealizedRepoAlreadyClaimedError` or
+ * `ProjectRepoNameTakenError` by re-reading the committed set once the failed
+ * transaction has unwound (`resolveUnclassifiedLinkConflict`). This error is what
+ * survives when even that read finds no explanation — a genuinely unknown
+ * duplicate, which is a 409 the caller can retry, never a 500 and never a lie.
+ * → 409
+ */
+export class ProjectRepoLinkConflictError extends Error {
+  readonly code = 'PROJECT_REPO_LINK_CONFLICT' as const;
+  constructor(
+    readonly projectId: string,
+    readonly repoName: string,
+    readonly githubRepoId: string,
+  ) {
+    super(
+      `Project ${projectId}'s repository set refused this write as a duplicate, and the ` +
+        `database did not say which uniqueness was violated. Another write reached the set ` +
+        `first — re-read it and retry.`,
+    );
+    this.name = 'ProjectRepoLinkConflictError';
+  }
+}
+
+/**
  * An illegal hop in the ADR §4.1 establish machine (e.g. `created → skipped`, or
  * `proposed → created` skipping `creating`). Names the legal targets so a caller
  * self-corrects — the same self-correcting shape `transition_status` uses for a

@@ -43,7 +43,11 @@ describe('the tone is per-STATUS first, per-category second', () => {
     expect(statusPillTone('planning', 'in_progress')).toBe('in-progress');
     expect(statusPillTone('in_review', 'in_progress')).toBe('in-progress');
     expect(statusPillTone('done', 'done')).toBe('done');
-    expect(statusPillTone('cancelled', 'done')).toBe('done');
+    // ⚠️ NOT `done` — `cancelled` is the one status that opts OUT of its
+    // category's hue (MOTIR-4782). It is `done`-category and means ABANDONED,
+    // and the Workbench's Recently finished tab is the first surface that lists
+    // the two together, where the accomplishment tint would be a false claim.
+    expect(statusPillTone('cancelled', 'done')).toBeNull();
     expect(statusPillTone('needs_triage', 'todo')).toBe('planned');
   });
 

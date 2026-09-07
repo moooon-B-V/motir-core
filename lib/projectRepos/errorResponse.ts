@@ -7,6 +7,7 @@ import {
 import {
   GithubIdentityRequiredError,
   ProjectRepoInvalidFieldError,
+  ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
   ProjectRepoNotTransferableError,
@@ -32,11 +33,14 @@ import { OrganizationNotFoundError, OrgForbiddenError } from '@/lib/organization
  *     browse the project but not edit it)
  *   ProjectRepoNameTakenError /
  *   RealizedRepoAlreadyClaimedError /
+ *   ProjectRepoLinkConflictError /
  *   ProjectRepoStateTransitionError                 → 409 (a conflict with the
  *     set's current state — including the LOST RACE, which is why the transition
  *     error is here and not at 422: the caller's move was legal when they chose
  *     it and a concurrent editor moved first, so re-reading and retrying is the
- *     correct response)
+ *     correct response — and `ProjectRepoLinkConflictError` is that same lost
+ *     race when the database declined to say WHICH uniqueness it lost on
+ *     (MOTIR-4833), which changes what we can tell the caller and not the status)
  *   ProjectRepoInvalidFieldError                    → 422 (a value the shape
  *     rules reject — a blank or over-long name, an illegal character)
  *   OrganizationNotFoundError → 404 · OrgForbiddenError → 403 (the ORG-tier gate
@@ -62,6 +66,7 @@ export function mapProjectRepoError(err: unknown): NextResponse | null {
   if (
     err instanceof ProjectRepoNameTakenError ||
     err instanceof RealizedRepoAlreadyClaimedError ||
+    err instanceof ProjectRepoLinkConflictError ||
     err instanceof ProjectRepoStateTransitionError ||
     err instanceof ProjectRepoNotTransferableError ||
     err instanceof ProjectRepoTakeoverStateError ||

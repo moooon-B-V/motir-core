@@ -3,7 +3,8 @@ import type { StatusCategoryDto, WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkItemKindDto } from '@/lib/dto/workItems';
 
-// Pure view-shaping for `/home` (Story MOTIR-2649 · Subtask MOTIR-2653) — the
+// Pure view-shaping for `/workbench` (Story MOTIR-2649 · MOTIR-2653, renamed
+// and widened by Story MOTIR-4777 · MOTIR-4782) — the
 // same job `app/(authed)/items/_components/issueRows.ts` does for `/items`, over
 // the same scope: one project, the active one.
 //
@@ -11,6 +12,14 @@ import type { WorkItemKindDto } from '@/lib/dto/workItems';
 // and the ASSIGNEE (id → display name) happens HERE, on the server, so the
 // client list receives plain data rather than the whole workflow and member
 // tables. Kept Prisma-free and React-free so it unit-tests in isolation.
+//
+// ⚠️ THE `tab` ARGUMENT IS A ROLE QUESTION AND NOTHING ELSE. Five tabs read
+// through this module and only ONE of them changes what it returns: on Watching
+// a row the reader neither assigned nor filed reads `watching`, and on every
+// work tab that row cannot occur, because those reads' own predicate IS
+// assignee-or-reporter. So the parameter narrows to the one bit that matters —
+// `isWatchingTab` — rather than carrying a five-member union whose other four
+// members would all take the same branch.
 //
 // ⚠️ ONE WORKFLOW, and it used to be a MAP keyed by project id (MOTIR-2761).
 // While Home spanned every browsable project, two projects could spell the same
@@ -21,13 +30,13 @@ import type { WorkItemKindDto } from '@/lib/dto/workItems';
 // whose every row reads the same value is not information.
 
 /** The row payload the client list renders. Fully serializable. */
-export interface HomeRowView {
+export interface WorkbenchRowView {
   id: string;
   identifier: string;
   title: string;
   kind: WorkItemKindDto;
   /** The reader's relation to the item — the "Your role" cell. */
-  role: HomeRole;
+  role: WorkbenchRole;
   /** Resolved assignee display name, or null when unassigned. */
   assigneeName: string | null;
   /** Whether an AGENT is executing it — the assignee-avatar badge. */
@@ -39,6 +48,15 @@ export interface HomeRowView {
   statusLabel: string;
   /** Lifecycle category → the Pill tone; null when unclassifiable. */
   statusCategory: StatusCategoryDto | null;
+  /**
+   * ISO-8601 moment it finished, or null on everything that has not.
+   *
+   * Carried on EVERY row rather than only on Recently-finished ones because the
+   * five tabs share one row shape (`HOME_WORK_ITEM_SELECT`), and the read hands
+   * it over already — rendering the Finished cell therefore costs no second
+   * query. It is null on the other four tabs by construction.
+   */
+  completedAt: string | null;
 }
 
 /**
@@ -53,23 +71,23 @@ export interface HomeRowView {
  * own; an item they watch AND own reads `both` there too, which is why the same
  * item legitimately appears in both tabs.
  */
-export type HomeRole = 'assigned' | 'reported' | 'both' | 'watching';
+export type WorkbenchRole = 'assigned' | 'reported' | 'both' | 'watching';
 
-function resolveRole(row: HomeWorkItemRowDto, tab: 'work' | 'watching'): HomeRole {
+function resolveRole(row: HomeWorkItemRowDto, isWatchingTab: boolean): WorkbenchRole {
   if (row.viewerIsAssignee && row.viewerIsReporter) return 'both';
   if (row.viewerIsAssignee) return 'assigned';
   if (row.viewerIsReporter) return 'reported';
-  // Only reachable on the Watching tab — the My work read's predicate IS
+  // Only reachable on the Watching tab — every WORK read's predicate IS
   // assignee-or-reporter, so a row there always matched one of the two above.
-  return tab === 'watching' ? 'watching' : 'assigned';
+  return isWatchingTab ? 'watching' : 'assigned';
 }
 
-export function toHomeRowViews(
+export function toWorkbenchRowViews(
   rows: HomeWorkItemRowDto[],
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
-  tab: 'work' | 'watching',
-): HomeRowView[] {
+  isWatchingTab: boolean,
+): WorkbenchRowView[] {
   const nameByUserId = new Map(members.map((m) => [m.userId, m.name]));
   return rows.map((row) => {
     const status = workflow.statuses.find((s) => s.key === row.status);
@@ -78,12 +96,13 @@ export function toHomeRowViews(
       identifier: row.identifier,
       title: row.title,
       kind: row.kind,
-      role: resolveRole(row, tab),
+      role: resolveRole(row, isWatchingTab),
       assigneeName: row.assigneeId ? (nameByUserId.get(row.assigneeId) ?? null) : null,
       agent: row.executor === 'coding_agent',
       status: row.status,
       statusLabel: status?.label ?? row.status,
       statusCategory: status?.category ?? null,
+      completedAt: row.completedAt,
     };
   });
 }

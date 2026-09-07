@@ -339,20 +339,21 @@ export function SidebarNav({
   if (hasProject) {
     const primaryItems: SidebarItem[] = [
       {
-        // The signed-in landing surface (Story MOTIR-2649 · Subtask
-        // MOTIR-2654, design/home/ Panel A) — the FIRST primary entry, because
-        // it is where signing in now lands and where a reader goes to ask "what
-        // is waiting on me". `/dashboard` keeps its route AND a row of its own:
-        // nothing is re-homed. (This clause named Dashboard as the row directly
-        // below until MOTIR-4799 demoted it under Backlog; Home still leads the
-        // rail, which is the half that was load-bearing.)
+        // The signed-in landing surface (Story MOTIR-2649 · MOTIR-2654,
+        // renamed by MOTIR-4777 · MOTIR-4782, `design/workbench/` Panel A) —
+        // the FIRST primary entry, because it is where signing in lands and
+        // where a reader goes to ask "what am I doing, and what have I just
+        // done". `/dashboard` keeps its route AND a row of its own: nothing is
+        // re-homed. (This clause named Dashboard as the row directly below
+        // until MOTIR-4799 demoted it under Backlog; the Workbench still leads
+        // the rail, which is the half that was load-bearing.)
         //
         // ⚠️ PROJECT-scoped, like every row under it (MOTIR-2761) — which is
         // why this section is the ONLY place it is rendered. It used to be
         // workspace-scoped and carried a duplicate row in the no-project block
         // below; both are gone.
         icon: <House />,
-        label: t('nav.home'),
+        label: t('nav.workbench'),
         href: AUTHED_LANDING_PATH,
         active: isActive(pathname, AUTHED_LANDING_PATH),
       },

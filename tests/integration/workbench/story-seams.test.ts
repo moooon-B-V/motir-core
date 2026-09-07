@@ -2,10 +2,11 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
 import { homeService } from '@/lib/services/homeService';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemRepository, HOME_SLICE_ALL } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -102,10 +103,29 @@ async function readWithoutAccessFilter(
 ): Promise<string[]> {
   return withWorkspaceContext(ctx, async (tx) => {
     const all = await projectRepository.findByWorkspace(ctx.workspaceId, tx);
+    // ⚠️ EVERY category, resolved per project (MOTIR-4781). The scope predicate
+    // is now an INCLUSION — "in one of these statuses" — so the widened control
+    // has to name the whole partition. Passing empty groups the way this helper
+    // once passed `doneStatusKeys: []` would match NOTHING, and the control
+    // would report an empty list for every case: a positive control that always
+    // agrees with the thing it is controlling for is the vacuous pass this file
+    // exists to refuse.
+    const byCategory = await workflowsService.getStatusKeysByCategoryByProjects(
+      all.map((p) => p.id),
+      ctx.workspaceId,
+      tx,
+    );
     const rows = await workItemRepository.findByAssigneeOrReporterInWorkspace(
       ctx.userId,
       ctx.workspaceId,
-      { projectScopes: all.map((p) => ({ projectId: p.id, doneStatusKeys: [] })), take },
+      {
+        projectScopes: all.map((p) => ({
+          projectId: p.id,
+          statusKeysByCategory: byCategory.get(p.id) ?? { todo: [], in_progress: [], done: [] },
+        })),
+        slice: HOME_SLICE_ALL,
+        take,
+      },
       tx,
     );
     return rows.map((r) => r.identifier);
@@ -386,7 +406,7 @@ describe('Home story seam — the scope is the ACTIVE PROJECT (MOTIR-2761)', () 
   it('returns DIFFERENT rows as the reader s ACTIVE PROJECT is switched — through the shipped resolver', async () => {
     // ⚠️ THE INVERSION. Until 2026-08-17 this block was headed "the scope is the
     // WORKSPACE, not the active project" and asserted that switching changed
-    // nothing — a contract test for the defect itself. `/home` sits FIRST in the
+    // nothing — a contract test for the defect itself. `/workbench` sits FIRST in the
     // project tier of the rail, under the switcher the shell renders on every
     // authed page, so "switching changes nothing" was a passing test asserting
     // that a shipped control does nothing on the first screen after sign-in.
