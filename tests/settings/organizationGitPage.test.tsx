@@ -252,6 +252,36 @@ describe('the page`s own contracts', () => {
     expect(PAGE).not.toContain('resolveActiveOrganization(');
   });
 
+  it('⚠️ reads the CONNECTION at the organisation tier too (MOTIR-4836)', () => {
+    // The test above pinned the NAME and the INVENTORY to one subject; the
+    // connection card was the third half and it answered to a different tier
+    // entirely. `getWorkspaceInstallation` is `findByWorkspaceId` — so from a
+    // SIBLING workspace of the installing one, this card found nothing and
+    // offered `Connect GitHub` for an account that is already installed, while
+    // the inventory directly below it listed that same organisation's
+    // repositories. One page, one request, two tiers.
+    //
+    // Pinned by NAME in both directions, because the drift is invisible: the
+    // wrong read returns a plausible null rather than raising, and every other
+    // signal on the page stays green.
+    expect(PAGE).toContain('githubInstallationService.listOrganizationInstallations');
+    expect(PAGE).not.toContain('getWorkspaceInstallation');
+  });
+
+  it('⚠️ RENDERS the connection set — it does not pick `rows[0]` (MOTIR-4836)', () => {
+    // Two workspaces of one organisation may each install the App on a
+    // DIFFERENT GitHub account, and this card is singular. The disposition is to
+    // MAP rather than to choose: for N = 1 — the state Panel 2 of
+    // `design/github/design-notes.md` draws, and every organisation on the
+    // deployment today — the output is the single row it replaces; for N > 1 the
+    // page states every connection. No new element is drawn.
+    expect(PAGE).toContain('installations.map(');
+    // The one affordance that cannot be repeated is supplied only when there IS
+    // exactly one connection to manage, and is otherwise the null the GitLab arm
+    // already renders.
+    expect(PAGE).toContain('installations.length === 1');
+  });
+
   it('⚠️ adds no route-level loading.tsx — the boundary is IN the page', () => {
     // `settings/organization/billing` `notFound()`s on a self-host build; a
     // route-level boundary in this tree flushes the head and turns that 404 into a
