@@ -324,7 +324,6 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/shell/navigation-pending.mock.html', count: 96, card: 'MOTIR-4810' },
   { file: 'design/shell/top-bar.mock.html', count: 28, card: 'MOTIR-4810' },
   { file: 'design/work-items/child-panel-graph.mock.html', count: 48, card: 'MOTIR-4810' },
-  { file: 'design/workbench/workbench.mock.html', count: 140, card: 'MOTIR-4810' },
 ];
 
 /**
@@ -348,6 +347,17 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
  * which is a worse guard than a count somebody maintains. What the count DOES
  * buy is the ratchet the pair of cards was filed for: no asset can gain a dead
  * rule, and the 85 mocks absent from this table are held at zero outright.
+ *
+ * ⚠️ SIX COUNTS DROPPED BY ONE (five, for `context-row`) IN MOTIR-4851, AND THE
+ * RATCHET IS WHY THEY HAD TO BE EDITED RATHER THAN LEFT. A rule is dead when NO
+ * element in ANY mock carries its class — the predicate is tree-wide, not
+ * per-file — so a mock that starts CARRYING a class revives the dead rule
+ * wherever it was declared. `design/workbench/`'s pager panels carry
+ * `cursor-not-allowed`, `cursor-default`, `opacity-55`, `select-none`, `min-w-6`
+ * and `text-[13px]`, which these six files had declared and nothing used. The
+ * table asserts equality in BOTH directions, so a count going DOWN is a failure
+ * exactly as one going up is — which is the ratchet working: the number stays a
+ * measurement somebody maintains rather than a ceiling that quietly drifts.
  */
 const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/ai-callout-menu.mock.html', count: 1, card: 'MOTIR-4811' },
@@ -361,7 +371,7 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/reading-and-handoff.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/ai-chat/target-picker.mock.html', count: 3, card: 'MOTIR-4811' },
   { file: 'design/ai-planning/peek-proposal-mode.mock.html', count: 4, card: 'MOTIR-4811' },
-  { file: 'design/ai-planning/peek-proposed-todos.mock.html', count: 5, card: 'MOTIR-4811' },
+  { file: 'design/ai-planning/peek-proposed-todos.mock.html', count: 4, card: 'MOTIR-4811' },
   { file: 'design/ai-planning/plan-canvas-grouped-roots.mock.html', count: 3, card: 'MOTIR-4811' },
   { file: 'design/ai-planning/plan-detail-refined.mock.html', count: 6, card: 'MOTIR-4811' },
   { file: 'design/ai-usage/search-spend.mock.html', count: 9, card: 'MOTIR-4811' },
@@ -406,9 +416,9 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/roadmap/locate.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/roadmap/roadmap-arrival.mock.html', count: 10, card: 'MOTIR-4811' },
   { file: 'design/roadmap/roadmap.mock.html', count: 19, card: 'MOTIR-4811' },
-  { file: 'design/runs/run-modal.mock.html', count: 8, card: 'MOTIR-4811' },
-  { file: 'design/runs/run-section.mock.html', count: 4, card: 'MOTIR-4811' },
-  { file: 'design/runs/runs-index.mock.html', count: 12, card: 'MOTIR-4811' },
+  { file: 'design/runs/run-modal.mock.html', count: 7, card: 'MOTIR-4811' },
+  { file: 'design/runs/run-section.mock.html', count: 3, card: 'MOTIR-4811' },
+  { file: 'design/runs/runs-index.mock.html', count: 11, card: 'MOTIR-4811' },
   { file: 'design/settings/account-data.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/settings/appearance.mock.html', count: 18, card: 'MOTIR-4811' },
   { file: 'design/settings/arrival.mock.html', count: 7, card: 'MOTIR-4811' },
@@ -417,7 +427,7 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/settings/two-factor.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/shell/3d-immersive-shell.mock.html', count: 4, card: 'MOTIR-4811' },
   { file: 'design/shell/account-menu.mock.html', count: 4, card: 'MOTIR-4811' },
-  { file: 'design/shell/context-row.mock.html', count: 873, card: 'MOTIR-4814' },
+  { file: 'design/shell/context-row.mock.html', count: 868, card: 'MOTIR-4814' },
   { file: 'design/shell/help-menu.mock.html', count: 4, card: 'MOTIR-4811' },
   { file: 'design/shell/navigation-pending.mock.html', count: 6, card: 'MOTIR-4811' },
   { file: 'design/shell/rail-bottom-section.mock.html', count: 5, card: 'MOTIR-4811' },
@@ -435,7 +445,7 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/work-items/provenance.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/work-items/repository-set.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/work-items/saved-filters.mock.html', count: 1, card: 'MOTIR-4811' },
-  { file: 'design/work-items/todo-list.mock.html', count: 4, card: 'MOTIR-4811' },
+  { file: 'design/work-items/todo-list.mock.html', count: 3, card: 'MOTIR-4811' },
   { file: 'design/work-items/type-executor-picker.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/workbench/workbench.mock.html', count: 15, card: 'MOTIR-4811' },
   { file: 'design/workspaces/invite-arrival.mock.html', count: 6, card: 'MOTIR-4811' },

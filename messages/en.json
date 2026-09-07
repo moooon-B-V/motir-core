@@ -7076,10 +7076,6 @@
     "leadConnected": "Where {projectName}'s code lives — the repositories Motir hosts for you, and the ones you connected yourself.",
     "hostedHeading": "Hosted by Motir",
     "hostedHint": "Motir created these and pays for their CI. Move any of them to your own GitHub whenever you want.",
-    "yoursHeading": "Your own repositories",
-    "yoursHint": "Connected to this workspace through the Motir GitHub app. They're already yours — nothing to move, and Motir never bills their CI.",
-    "yoursFoot": "Connected for the whole workspace, not for this project alone.",
-    "yoursManage": "Choose which repositories Motir can see",
     "emptyAction": "Connect a repository",
     "empty": "No repositories are connected to this project yet. Connect the code you already have on GitHub, or approve a plan and Motir will create them for you.",
     "summary": "{moving} moving · {hosted} hosted by Motir · {yours} yours",
@@ -7876,7 +7872,7 @@
     "section": {
       "heading": "From your organisation",
       "hint": "Repositories {org} is connected to that this project works on. Picking one never indexes it again.",
-      "foot": "Add another whenever this project needs it.",
+      "provenance": "Connected to the organisation, not to this project alone.",
       "footNoPermission": "Only owners and admins of your organisation can add a repository. Ask one of them, or add it from Settings → Organisation → Git.",
       "seeAll": "See every repository in {org}"
     },

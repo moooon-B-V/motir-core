@@ -46,8 +46,13 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** Connect repos to the fixture's workspace through a real installation — the
- *  7.10.3 mirror rows the "Use one of mine" picker is built from. */
+/** Connect repos to the fixture's ORGANISATION through a real installation — the
+ *  7.10.3 mirror rows the "Use one of mine" picker is built from.
+ *
+ *  ⚠️ `organizationId` is set on the INSTALLATION as well as on the repos,
+ *  because production sets it (`persistInstallation`, MOTIR-4649) and the picker
+ *  reads the connection at the ORGANISATION tier (MOTIR-4838). Leaving it null
+ *  describes only Motir's shared provisioning row, which is owned by no tenant. */
 async function connectRepos(workspaceId: string, names: string[]) {
   const installationId = `inst-${workspaceId}`;
   const inst = await adminDb.githubInstallation.upsert({
@@ -55,6 +60,7 @@ async function connectRepos(workspaceId: string, names: string[]) {
     create: {
       installationId,
       workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       accountLogin: 'acme-inc',
       accountType: 'Organization',
       provider: 'github',

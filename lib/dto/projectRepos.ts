@@ -392,10 +392,17 @@ export interface ProjectRepoEstablishViewDto {
    *  access step reuses so the user can SEE which account Motir invited
    *  (MOTIR-1900). Null when not connected, or when GitHub had no avatar. */
   githubAvatarUrl: string | null;
-  /** Whether the WORKSPACE has a GitHub App installation (grant 2). */
+  /** Whether the ORGANISATION has a GitHub App connection (grant 2).
+   *  ⚠️ THE ORGANISATION, NOT THE WORKSPACE (MOTIR-4838): a repository is
+   *  connected once, to the organisation (MOTIR-4669), and the App is installed
+   *  from one of its workspaces — so a workspace-keyed read answered `false`
+   *  from every sibling workspace of an organisation that IS connected, and the
+   *  step offered the technical path to nobody there. */
   hasInstallation: boolean;
-  /** The repositories the installation grants, for the "Use one of mine" picker.
-   *  Empty without an installation — the picker then hands off to 7.10. */
+  /** The repositories the organisation's connections grant, for the "Use one of
+   *  mine" picker — the ones this project already claims MARKED rather than
+   *  removed, so the picker never offers a choice that can only 409.
+   *  Empty without a connection — the picker then hands off to 7.10. */
   connectCandidates: ProjectRepoConnectCandidateDto[];
 }
 
