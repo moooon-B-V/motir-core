@@ -14,6 +14,7 @@ colour tokens + `[data-display-style]` shape tokens + the shipped
 | ---------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Org cost dashboard (balance · drill · model · runs · states)**             | **`usage.mock.html`** (HTML mockup)        | The whole org-level token-cost surface. Multi-panel: **access path (org-menu entry)** · cost summary · org→workspace→project drill-down · per-model breakdown · paginated run log · limited member view · low-balance/out-of-credits · empty/loading/error. **Gates 7.2.11 (MOTIR-824).** A `usage.png` full-page export sits beside it (the board-visible face).                                                                                                                                                                                                                                                     |
 | **Search spend (the FIFTH figure · the mixed activity log · the remainder)** | **`search-spend.mock.html`** (HTML mockup) | The web-search spend the grounding channel adds to this dashboard, 6 panels: the summary figure IN PLACE beside the shipped stat row · the same row UNDER THE DRILL, where the org-level and attributed figures come apart · the activity log holding a MIX of search and token rows · the un-attributed REMAINDER and its zero case · states (no spend for the scope · figures unavailable · plain member · META) · the access path, reproduced. Amends the row above; redraws none of it. `search-spend.png` beside it. See § "Amendment 2026-09-05 — search spend on the usage dashboard" at the end of this file. |
+| **Panel 7 detail — the three balance states side by side** (DETAIL EXPORT)   | **`usage-panel7.png`** (export only)       | A crop of `usage.mock.html` panel 7 — 7a low balance · 7b out-of-credits (`!isMeta`) · 7c exempt (`isMeta`) — at the same 1200@2x viewport as the full board. It has no mock of its own by design: it is a VIEW of panel 7, re-cropped whenever that panel changes. It exists because the full board is ~7,800px tall and a design result renders a mock in a 512px frame, so panel 7 sits eight screens down and is, in practice, unreviewable. Added 2026-09-07 (MOTIR-4809).                                                                                                                                       |
 
 ## What this area is
 
@@ -700,6 +701,12 @@ pill, the allotment bar, the drill, the per-model breakdown, the run log and the
 search figures all stay exactly as MOTIR-4572 left them, for every org.
 
 ## Panel 7c — the drawing
+
+**Drawn in `usage.mock.html` panel 7, beside 7a and 7b, and cropped to
+`usage-panel7.png` so it can actually be reviewed** — the full board is ~7,800px
+tall and a published design result renders a mock in a 512px frame, so panel 7
+lands eight screens down. The crop is the artifact a reviewer opens; the board is
+where a reader of the area looks. Re-crop it whenever panel 7 changes.
 
 **Drawn in `usage.mock.html` panel 7, beside 7a and 7b** — that is where this
 area's balance states live, and a reader who opens this asset to find out what
