@@ -25,16 +25,33 @@ import { describe, expect, it } from 'vitest';
 //       references it, and a card read that measure off the stylesheet and
 //       called it "the value the asset draws".
 //
-// (A) silently un-styles the ASSET; (B) misleads a READER. One cause, opposite
-// costs — which is why fixing one alone leaves the pair half-done.
+//   (C) MIS-DECLARED — a rule exists, an element carries it, and it paints a
+//       DIFFERENT token from the one its own name promises (MOTIR-4812). Five
+//       assets declared `.text-\(--el-text-faint\)` as
+//       `color: var(--el-text-secondary)`.
 //
-// ── Why no existing guard sees either ───────────────────────────────────────
+// (A) silently un-styles the ASSET; (B) misleads a READER; (C) survives both,
+// because the class exists and the rule exists and they are in correspondence —
+// the rule is simply not what it says. One cause, three costs, which is why
+// fixing one alone leaves the set incomplete.
+//
+// ── Why no existing guard sees any of them ──────────────────────────────────
 // `design-ink-contrast` and `design-state-ink-contrast` read the ink a rule
 // NAMES; `design-token-layer` rules on the token block; `design-dark-parity` on
 // the dark scope. All of them ask what a rule SAYS, and none asks whether any
 // rule APPLIES. Worse, the direction of the risk is inverted: an un-styled
 // element usually inherits `--el-text`, which PASSES contrast, so direction (A)
 // makes those guards greener rather than redder.
+//
+// (C) is invisible to them for a different reason, and it is worth stating
+// exactly because MOTIR-4812's title states it the other way round. The ink
+// guards do NOT read the declaration for a class-carried ink: `inkVia`
+// (`tests/theme/inkContrastMockScan.ts`) returns `'class'` the moment an
+// element carries `text-(--el-text-faint)`, and only falls through to the
+// stylesheet for an element that does not. So a re-pointed utility does not
+// hand the guard a greener answer — it makes the guard's verdict and the
+// asset's pixels describe different colours, in either direction, with nothing
+// anywhere comparing the two. That is what this direction restores.
 //
 // ── Same mould as its neighbours ────────────────────────────────────────────
 // `design-token-layer.test.ts` (MOTIR-4353) and `design-three-file-set.test.ts`
@@ -432,6 +449,207 @@ export function deadCountByFile(mocks: MockSource[]): Map<string, number> {
   return counts;
 }
 
+// ── DIRECTION (C): the rule agrees with its own NAME (MOTIR-4812) ───────────
+//
+// The two directions above both ask about EXISTENCE — does this class have a
+// rule, does this rule have a class. Neither asks whether the rule DOES what
+// its name says, and an arbitrary-value utility's name is a promise about
+// exactly one thing: `.text-\(--el-text-faint\)` paints `--el-text-faint`.
+//
+// Nothing forces that, because the shim block is hand-written. Five assets
+// declared `.text-\(--el-text-faint\)` as `color: var(--el-text-secondary)`,
+// and the four elements carrying it in
+// `design/ai-planning/plan-detail-refined.mock.html` were therefore marked
+// faint in the markup — which is what a reader and every later card reads —
+// while painting secondary. `--el-text-faint` clears AA on no surface and is
+// enforced at zero, so re-pointing the utility is the cheapest way to make an
+// asset go green, and it is indistinguishable afterwards from having decided
+// which ink the element should carry.
+//
+// ⚠️ THE DISCRIMINATOR IS THE PROPERTY THE UTILITY OWNS, not the shape of the
+// rule. MOTIR-4812 proposed scoping this to single-PROPERTY declarations, on
+// the grounds that a `[data-style]` / `@scope` block legitimately hangs a
+// `box-shadow` off `.rounded-\(--radius-card\)`. That scoping does not
+// discriminate its own example: those 18 overrides ARE single-property rules
+// (`@scope ([data-style='3d-immersive']) … { .rounded-\(--radius-card\) {
+// box-shadow: var(--shadow-card) } }`), so they would be reported, while the
+// two-property rules `.shadow-\(--shadow-card\)` and
+// `.duration-\(--transition-duration\)` — which DO carry the promise — would
+// not be checked. What separates an override from a mis-declaration is that an
+// override sets a property the utility does not name. So the map below records
+// the property each prefix owns, and a declaration of anything else on the same
+// selector is left alone.
+export type UtilityRule = {
+  className: string;
+  prefix: string;
+  token: string;
+  declarations: string[];
+};
+
+type CssBlock = { prelude: string; declarations: string[]; children: CssBlock[] };
+
+/**
+ * A stylesheet as a tree of blocks, each with its OWN declarations.
+ *
+ * `selectorPreludes` above flattens to prelude text because direction (B) only
+ * needs the names; this direction needs the body that goes with one, and it
+ * needs nesting: `.divide-\(--el-border\)` declares nothing itself and puts
+ * `border-color: var(--el-border)` inside a nested
+ * `:where(& > :not(:last-child))`, and `@scope` / `@media` wrap real rules one
+ * or two levels down.
+ */
+export function parseBlocks(css: string): CssBlock[] {
+  const roots: CssBlock[] = [];
+  const stack: CssBlock[] = [];
+  let buffer = '';
+  const flush = () => {
+    const block = stack[stack.length - 1];
+    if (block && buffer.trim()) block.declarations.push(buffer.trim());
+    buffer = '';
+  };
+  for (const ch of css) {
+    if (ch === '{') {
+      const block: CssBlock = { prelude: buffer.trim(), declarations: [], children: [] };
+      (stack[stack.length - 1]?.children ?? roots).push(block);
+      stack.push(block);
+      buffer = '';
+    } else if (ch === '}') {
+      flush();
+      stack.pop();
+    } else if (ch === ';') {
+      flush();
+    } else {
+      buffer += ch;
+    }
+  }
+  return roots;
+}
+
+/** A prelude that is exactly ONE class selector — no compound, no combinator. */
+const LONE_CLASS_SELECTOR = /^\.((?:\\.|[A-Za-z0-9_-])+)$/;
+
+/** `text-(--el-text-faint)` → prefix `text`, token `--el-text-faint`. */
+const ARBITRARY_UTILITY = /^([a-z][a-z-]*)-\((--[a-z0-9-]+)\)$/;
+
+/** A value that is a bare token reference, and nothing else. */
+const BARE_VAR = /^var\(\s*(--[a-z0-9-]+)\s*\)$/;
+
+/**
+ * The property each arbitrary-value utility PREFIX sets — the promise its name
+ * makes. Derived from the tree rather than from Tailwind's documentation: every
+ * prefix below occurs in `design/**`, and the totality assertion in the spec
+ * fails if a prefix appears that this map does not carry, so a new utility
+ * family cannot be added and silently left unchecked.
+ *
+ * The `--tw-*` entries are not an oversight: Tailwind's own output writes the
+ * token into a custom property and then composes the real one out of several
+ * (`box-shadow: var(--tw-inset-shadow), …, var(--tw-shadow)`), so the
+ * declaration that carries the promise is the custom property, and the composed
+ * one is not a bare `var()` at all.
+ */
+export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
+  bg: ['background-color'],
+  border: ['border-color'],
+  decoration: ['text-decoration-color'],
+  divide: ['border-color'],
+  duration: ['transition-duration', '--tw-duration'],
+  fill: ['fill'],
+  gap: ['gap'],
+  h: ['height'],
+  'inset-ring': ['--tw-inset-ring-color'],
+  mb: ['margin-bottom'],
+  'min-h': ['min-height'],
+  'min-w': ['min-width'],
+  mt: ['margin-top'],
+  mx: ['margin-inline'],
+  outline: ['outline-color'],
+  p: ['padding'],
+  pb: ['padding-bottom'],
+  pl: ['padding-left'],
+  pr: ['padding-right'],
+  pt: ['padding-top'],
+  px: ['padding-inline', 'padding-left', 'padding-right'],
+  py: ['padding-block', 'padding-bottom', 'padding-top'],
+  ring: ['--tw-ring-color'],
+  'ring-offset': ['--tw-ring-offset-color'],
+  rounded: ['border-radius'],
+  'rounded-b': ['border-bottom-left-radius', 'border-bottom-right-radius'],
+  'rounded-t': ['border-top-left-radius', 'border-top-right-radius'],
+  shadow: ['--tw-shadow'],
+  size: ['width', 'height'],
+  'space-y': ['margin-block-start', 'margin-block-end'],
+  stroke: ['stroke'],
+  text: ['color'],
+  w: ['width'],
+};
+
+/** Every declaration a block owns, its nested blocks' included. */
+function declarationsWithin(block: CssBlock, out: string[] = []): string[] {
+  out.push(...block.declarations);
+  for (const child of block.children) declarationsWithin(child, out);
+  return out;
+}
+
+/** Every rule in a mock whose selector is one arbitrary-value utility class. */
+export function utilityRules(html: string): UtilityRule[] {
+  const rules: UtilityRule[] = [];
+  const walk = (blocks: CssBlock[]) => {
+    for (const block of blocks) {
+      const selector = LONE_CLASS_SELECTOR.exec(block.prelude);
+      const utility = selector && ARBITRARY_UTILITY.exec(unescapeCss(selector[1]!));
+      if (selector && utility) {
+        rules.push({
+          className: unescapeCss(selector[1]!),
+          prefix: utility[1]!,
+          token: utility[2]!,
+          declarations: declarationsWithin(block),
+        });
+      }
+      walk(block.children);
+    }
+  };
+  walk(parseBlocks(stylesheetOf(html)));
+  return rules;
+}
+
+/**
+ * DIRECTION (C): a rule whose selector names one token and whose declaration of
+ * the property that utility OWNS references a different one — plus a rule whose
+ * prefix this file has no property for, which is reported rather than skipped so
+ * the check cannot pass vacuously on a family nobody mapped.
+ */
+export function misdeclaredUtilities(mock: MockSource): string[] {
+  const findings: string[] = [];
+  for (const rule of utilityRules(mock.source)) {
+    const owned = UTILITY_PROPERTIES[rule.prefix];
+    if (!owned) {
+      findings.push(
+        `${mock.path} declares \`.${rule.className}\` and UTILITY_PROPERTIES has no entry for ` +
+          `\`${rule.prefix}\` — add the property that prefix sets, so the rule is checked against ` +
+          `its own name rather than skipped`,
+      );
+      continue;
+    }
+    for (const declaration of rule.declarations) {
+      const colon = declaration.indexOf(':');
+      if (colon === -1) continue;
+      const property = declaration.slice(0, colon).trim();
+      const value = declaration.slice(colon + 1).trim();
+      if (!owned.includes(property)) continue;
+      const referenced = BARE_VAR.exec(value)?.[1];
+      if (referenced && referenced !== rule.token) {
+        findings.push(
+          `${mock.path} declares \`.${rule.className}\` as \`${property}: ${value}\` — a utility ` +
+            `named for \`${rule.token}\` must declare \`${rule.token}\`. If the other token is the ` +
+            `ink you want, change the CLASS on the element; re-pointing the rule makes two assets ` +
+            `mean different things by one name, and hands every ink guard the answer it reports`,
+        );
+      }
+    }
+  }
+  return findings;
+}
+
 // ── Inherited debt — COUNTS that have to reach zero, each with a card ────────
 // Neither table below is an exemption. Both are asserted EXACT in both
 // directions, so an asset cannot absorb one more finding and a row cannot
@@ -477,7 +695,6 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/shell/navigation-pending.mock.html', count: 96, card: 'MOTIR-4810' },
   { file: 'design/shell/top-bar.mock.html', count: 28, card: 'MOTIR-4810' },
   { file: 'design/work-items/child-panel-graph.mock.html', count: 48, card: 'MOTIR-4810' },
-  { file: 'design/workbench/workbench.mock.html', count: 140, card: 'MOTIR-4810' },
 ];
 
 /**
@@ -500,7 +717,7 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
  * with `origin/main` and 17% of what it counted still could not be deleted.
  *
  * The two mocks that embed a COMPILED Tailwind build
- * (`design/shell/context-row.mock.html` 873, `design/ai-chat/onboarding.mock.html`
+ * (`design/shell/context-row.mock.html` 868, `design/ai-chat/onboarding.mock.html`
  * 249) are what is left. For those two, unused rules
  * are the normal and correct state of machine output — nobody chose them and no
  * sweep can remove them without hand-editing generated CSS. They are held here
@@ -516,10 +733,29 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
  * which is a worse guard than a count somebody maintains. What the count DOES
  * buy is the ratchet the pair of cards was filed for: no asset can gain a dead
  * rule, and the 172 mocks absent from this table are held at zero outright.
+ *
+ * ⚠️ THE PREDICATE IS TREE-WIDE, WHICH CUTS BOTH WAYS, AND MOTIR-4851 IS THE
+ * WORKED EXAMPLE. A rule is dead when NO element in ANY mock carries its class,
+ * so a mock that starts CARRYING one changes the answer for every OTHER file
+ * that declares it: `design/workbench/`'s pager panels picked up
+ * `cursor-not-allowed`, `cursor-default`, `opacity-55`, `select-none`, `min-w-6`
+ * and `text-[13px]`, and six rows in this table dropped by one. The table
+ * asserts equality in BOTH directions, so a count going DOWN failed exactly as
+ * one going up would — the ratchet working, and the number staying a
+ * measurement somebody maintains rather than a ceiling that quietly drifts.
+ *
+ * ⚠️ AFTER MOTIR-4811 THAT SAME MOVE LANDS ON DIRECTION (A) INSTEAD, which is a
+ * sharper failure and the reason to say this here. The hand-written half is now
+ * swept, so there is no dead rule left for a new element to revive: a mock that
+ * begins carrying a class whose declaration this sweep removed is an INERT
+ * class, and direction (A) is enforced at ZERO. **So a sweep of this kind is
+ * re-derived against the tree it will land on, never against the tree it was
+ * planned on** — MOTIR-4811's own population had to be recomputed after
+ * MOTIR-4851 and MOTIR-4812 merged under it.
  */
 const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/onboarding.mock.html', count: 249, card: 'MOTIR-4814' },
-  { file: 'design/shell/context-row.mock.html', count: 873, card: 'MOTIR-4814' },
+  { file: 'design/shell/context-row.mock.html', count: 868, card: 'MOTIR-4814' },
 ];
 
 // ── The real tree ───────────────────────────────────────────────────────────
@@ -758,13 +994,91 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     }
   });
 
+  it('reports a mis-declared utility, and leaves a legitimate override alone', () => {
+    // Direction (C)'s negative path, on the shape MOTIR-4812 was filed for and
+    // on the one the card's own proposed scoping would have caught by mistake.
+    const broken = {
+      path: 'fixture.mock.html',
+      source: '<style>.text-\\(--el-text-faint\\) { color: var(--el-text-secondary); }</style>',
+    };
+    expect(misdeclaredUtilities(broken)).toHaveLength(1);
+    expect(misdeclaredUtilities(broken)[0]).toContain('must declare `--el-text-faint`');
+
+    // The `@scope` override: single-property, and NOT a mis-declaration —
+    // `box-shadow` is not the property `rounded` names, so the rule adds a
+    // shadow to an existing class rather than re-pointing it.
+    expect(
+      misdeclaredUtilities({
+        path: 'fixture.mock.html',
+        source:
+          `<style>@scope ([data-style='3d-immersive']) to ([data-style]) {` +
+          `.rounded-\\(--radius-card\\) { box-shadow: var(--shadow-card); }}</style>`,
+      }),
+      'an override sets a property the utility does not name',
+    ).toEqual([]);
+
+    // Tailwind's own two-property output, which DOES carry the promise: the
+    // token is written into the custom property, and the composed `box-shadow`
+    // is not a bare `var()` at all.
+    expect(
+      misdeclaredUtilities({
+        path: 'fixture.mock.html',
+        source:
+          '<style>.shadow-\\(--shadow-card\\) { --tw-shadow: var(--shadow-card); ' +
+          'box-shadow: var(--tw-inset-shadow), var(--tw-ring-shadow), var(--tw-shadow); }</style>',
+      }),
+    ).toEqual([]);
+
+    // A NESTED declaration is the rule's own — `.divide-(--el-border)` declares
+    // nothing at its top level.
+    expect(
+      misdeclaredUtilities({
+        path: 'fixture.mock.html',
+        source:
+          '<style>.divide-\\(--el-border\\) { :where(& > :not(:last-child)) { ' +
+          'border-color: var(--el-border-soft); } }</style>',
+      }).length,
+      'a nested declaration carries the promise too',
+    ).toBe(1);
+
+    // An unmapped prefix is REPORTED, never skipped — otherwise a new utility
+    // family arrives unchecked and the arm reads green about a set it dropped.
+    expect(
+      misdeclaredUtilities({
+        path: 'fixture.mock.html',
+        source: '<style>.tracking-\\(--el-track\\) { letter-spacing: var(--el-other); }</style>',
+      })[0],
+    ).toContain('UTILITY_PROPERTIES has no entry for `tracking`');
+  });
+
+  it('direction (C) — every utility rule declares the token its NAME promises', () => {
+    // MOTIR-4812's own population, at zero. Five assets declared
+    // `.text-\(--el-text-faint\)` as `color: var(--el-text-secondary)`; four of
+    // them carried it on nothing, and the fifth painted four aria-hidden
+    // chevrons a colour their markup did not name.
+    expect(MOCKS.flatMap(misdeclaredUtilities).sort()).toEqual([]);
+  });
+
+  it('holds `UTILITY_PROPERTIES` tight — an entry no rule in the tree uses fails', () => {
+    // The same treatment the two debt tables get, for the same reason: a map
+    // that may only grow accumulates rows nobody can tell from live ones. The
+    // arm above fails on a prefix the map is MISSING; this fails on one the tree
+    // no longer has.
+    const present = new Set(
+      MOCKS.flatMap(({ source }) => utilityRules(source)).map((r) => r.prefix),
+    );
+    expect([...Object.keys(UTILITY_PROPERTIES)].filter((prefix) => !present.has(prefix))).toEqual(
+      [],
+    );
+  });
+
   it('holds the two tables to a shrinking total', () => {
     // The number a reader checks in one line, and the one that says whether the
     // four follow-up cards are making progress. The ceilings may only be lowered:
     // direction (A)'s is the population measured on `origin/main` `cd77d0225`,
-    // direction (B)'s came down 1493 -> 1122 when MOTIR-4811 swept the
-    // hand-written half, and 1122 is now the two compiled builds alone.
+    // direction (B)'s came down 1493 -> 1117 when MOTIR-4811 swept the
+    // hand-written half, and 1117 is now the two compiled builds alone.
     expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(636);
-    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1122);
+    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1117);
   });
 });

@@ -1699,6 +1699,30 @@ about them; `leadConnected` replaces it when the hosted section is absent, where
 describes something the reader cannot see. `summary` is unchanged as a STRING and changes only in what
 feeds it: a workspace-connected repository counts toward `yours`.
 
+### AMENDMENT (bug MOTIR-4820, 2026-09-07) — the four `yours*` keys are RETIRED
+
+**§17.2 renames this section and §17 draws it as one section; the four keys above belonged to the
+section it renamed, and they are gone from `en.json` / `zh.json`.** They are struck rather than
+deleted from this table because a reader meeting an old citation should land on the reason:
+
+| Key                | What replaced it                                                                                                                                                                                                             |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~`yoursHeading`~~ | `repositoryPicker.section.heading` — **From your organisation** (§17.2)                                                                                                                                                      |
+| ~~`yoursHint`~~    | `repositoryPicker.section.hint`                                                                                                                                                                                              |
+| ~~`yoursFoot`~~    | `repositoryPicker.section.provenance` — the same sentence, RE-TIERED: _"Connected to the organisation, not to this project alone."_ It said **workspace**, which stopped being the tier that owns a repository at MOTIR-4649 |
+| ~~`yoursManage`~~  | `repositoryPicker.section.seeAll` — the footer link stopped being a hand-off and became a view (§17.2)                                                                                                                       |
+
+**`yoursDetail` is NOT one of them and stays.** It is the already-yours row's reassurance inside
+`TakeoverRow` (§14.7), which this card does not touch — the four retired keys are the SECTION's, and
+that one is a ROW's.
+
+**What made them dead is the shape, not the copy.** MOTIR-4681 shipped §17.2's rename as a SECOND
+section keyed on `project_repository.seedSource` and left the old one standing beside it, so a project
+with no repository SET drew an EMPTY `From your organisation` directly above the same repositories
+under `Your own repositories` — while `/settings/organization/git`, moved onto the ladder by
+MOTIR-4802, read `Used by <project>` for every one of them. The section is now the LADDER's answer, so
+the two surfaces agree by construction and there is one section, as Panel 5 draws it.
+
 ## 16.9 · a11y
 
 - Each section is a `<section aria-labelledby>` pointing at its `SectionLabel`, so the two lists are

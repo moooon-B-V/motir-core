@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  BookOpenText,
   Check,
   Download,
   ExternalLink,
@@ -18,6 +19,9 @@ import {
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils/cn';
+import { onboardingReturnHref } from '@/lib/planning/onboardingReturn';
+import { HANDOFF_PARAM_NAMES } from '@/lib/planning/onboardingHandoff';
+import { isMigrateOnboardingStep } from '@/lib/dto/migrateOnboarding';
 import type {
   MigrateIndexStatusDto,
   MigrateOnboardingDto,
@@ -57,22 +61,46 @@ export interface MigrateWizardProps {
 export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateWizardProps) {
   const t = useTranslations('onboardingMigrate');
   const router = useRouter();
+  // THE RETURN ADDRESS the hand-off wrote (MOTIR-4770), if this user came from
+  // the plan window at all.
+  const searchParams = useSearchParams();
+  /** The kept set the hand-off wrote, validated against the machine's own enum. */
+  const keptStepsFromQuery = useMemo(
+    () =>
+      (searchParams.get(HANDOFF_PARAM_NAMES.keptSteps) ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(isMigrateOnboardingStep),
+    [searchParams],
+  );
   const [run, setRun] = useState<MigrateOnboardingDto | null>(initialRun);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // A completed run should have redirected server-side; guard the client too.
   useEffect(() => {
-    if (run?.status === 'completed' || run?.step === 'done') router.push('/roadmap');
-  }, [run, router]);
+    // ⚠️ BACK TO THE WINDOW THEY OPENED, when they came from one (MOTIR-4770).
+    // A user sent here by a routing verdict was promised they would land back in
+    // the plan window; landing them on the roadmap instead is a journey with no
+    // end. `null` is somebody who reached the wizard by another door, and they
+    // keep the destination they always had.
+    if (run?.status === 'completed' || run?.step === 'done') {
+      router.push(onboardingReturnHref(searchParams, 'completed') ?? '/roadmap');
+    }
+  }, [run, router, searchParams]);
 
   /** POST a migrate route + apply the returned run (or surface the error). */
   const postRunRoute = useCallback(
-    async (path: string): Promise<MigrateOnboardingDto | null> => {
+    async (path: string, body?: unknown): Promise<MigrateOnboardingDto | null> => {
       setBusy(true);
       setError(null);
       try {
-        const res = await fetch(path, { method: 'POST' });
+        const res = await fetch(path, {
+          method: 'POST',
+          ...(body
+            ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+            : {}),
+        });
         if (res.status === 409) {
           // A run already exists (start) or the current step's exit condition is
           // unmet (advance) — reload to re-read the authoritative run state.
@@ -92,10 +120,14 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
   );
 
   const startRun = useCallback(() => {
-    void postRunRoute('/api/onboarding/migrate').then((next) => {
+    // THE PLANNER'S KEPT SET (MOTIR-4759), forwarded on the START call. It rides
+    // the address the hand-off wrote (MOTIR-4769) and belongs to the run rather
+    // than to this page: a user who reloads mid-journey must not have their step
+    // set re-derived from whatever URL they happen to be on.
+    void postRunRoute('/api/onboarding/migrate', { keptSteps: keptStepsFromQuery }).then((next) => {
       if (next) setRun(next);
     });
-  }, [postRunRoute]);
+  }, [postRunRoute, keptStepsFromQuery]);
 
   const advance = useCallback(() => {
     if (!run) return;
@@ -131,11 +163,12 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
         flowName={t('brandBar.flowName')}
         userInitial={userInitial}
         planAiLabel={t('brandBar.planAi')}
+        saveExitHref={onboardingReturnHref(searchParams, 'abandoned') ?? '/roadmap'}
         saveExitLabel={t('common.saveExit')}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto flex min-h-full w-full max-w-[64rem] flex-col gap-6 px-6 py-8 md:flex-row md:gap-10">
-          <Rail step={run?.step ?? null} />
+          <Rail step={run?.step ?? null} keptSteps={run?.keptSteps ?? []} />
           <section className="min-w-0 flex-1">
             {error ? (
               <p
@@ -173,11 +206,14 @@ function BrandBar({
   userInitial,
   planAiLabel,
   saveExitLabel,
+  saveExitHref,
 }: {
   flowName: string;
   userInitial: string;
   planAiLabel: string;
   saveExitLabel: string;
+  /** Where LEAVING lands — the host page, never the workspace (MOTIR-4770). */
+  saveExitHref: string;
 }) {
   return (
     <header className="flex items-center gap-3 border-b border-(--el-border) px-6 py-3.5">
@@ -203,8 +239,13 @@ function BrandBar({
           <Sparkles className="size-3.5" strokeWidth={2.2} aria-hidden />
           {planAiLabel}
         </Link>
+        {/* ⚠️ ABANDONING IS NOT COMPLETING, and the difference is the whole of
+            MOTIR-4770 AC3. Somebody who walks away goes back to the PAGE — with
+            no workspace re-opening around them, because re-opening a window
+            somebody deliberately left is the opposite failure to stranding them,
+            and it is the easier one to write by accident. */}
         <Link
-          href="/roadmap"
+          href={saveExitHref}
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
         >
           {saveExitLabel}
@@ -222,37 +263,135 @@ function BrandBar({
 
 // ── Rail ───────────────────────────────────────────────────────────────────
 
-function Rail({ step }: { step: MigrateOnboardingStepDto | null }) {
+/**
+ * THE STEPS THIS RUN DID NOT KEEP (MOTIR-4759) — collapsed into one row that
+ * NAMES them, in `design/onboarding-migrate/` Panel 6's treatment.
+ *
+ * ⚠️ COLLAPSED, NEVER DELETED. A step that silently vanishes reads as something
+ * taken from the user, which is the confusion MOTIR-4755's Panel 5 exists to
+ * prevent — and it gets WORSE with more steps, not better: somebody who came in
+ * expecting a wizard and meets two rows has no way to tell whether Motir skipped
+ * the rest or lost them.
+ *
+ * ⚠️ AND ONE ROW, NOT N SATISFIED ONES. Panel 5's single row is right for ONE
+ * step; four of them beside one live step is a rail whose subject is what the
+ * user did NOT do — the opposite of what a shorter set is for.
+ *
+ * Empty set ⇒ nothing collapses, and the rail is exactly the one that shipped.
+ */
+const STEP_LABEL_KEY = {
+  connect: 'connect',
+  index: 'index',
+  import: 'importStep',
+  discovery: 'discoveryStep',
+} as const satisfies Partial<Record<MigrateOnboardingStepDto, string>>;
+
+const RAIL_STEPS: readonly (keyof typeof STEP_LABEL_KEY)[] = [
+  'connect',
+  'index',
+  'import',
+  'discovery',
+];
+
+function Rail({
+  step,
+  keptSteps,
+}: {
+  step: MigrateOnboardingStepDto | null;
+  keptSteps: readonly MigrateOnboardingStepDto[];
+}) {
   const t = useTranslations('onboardingMigrate');
   const rank = step ? STEP_RANK[step] : -1;
   const stateOf = (stepRank: number) =>
     rank > stepRank ? 'done' : rank === stepRank ? 'current' : 'upcoming';
+  const collapsed = keptSteps.length === 0 ? [] : RAIL_STEPS.filter((s) => !keptSteps.includes(s));
+  const runs = (s: MigrateOnboardingStepDto) => keptSteps.length === 0 || keptSteps.includes(s);
 
   return (
     <nav aria-label={t('rail.title')} className="w-full flex-none md:w-56 md:flex-shrink-0">
       <p className="text-sm font-semibold text-(--el-text)">{t('rail.title')}</p>
-      <p className="mt-1 text-xs text-(--el-text-muted)">{t('rail.sub')}</p>
-
-      <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-        {t('rail.setUp')}
+      <p className="mt-1 text-xs text-(--el-text-muted)">
+        {collapsed.length > 0 ? t('rail.subShort') : t('rail.sub')}
       </p>
-      <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
-        <RailStep label={t('rail.connect')} state={stateOf(0)} />
-        <RailStep label={t('rail.index')} state={stateOf(1)} />
-      </ul>
 
-      <p className="mt-5 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
-        {t('rail.import')}
-        <span className="rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-0.5 text-[0.65rem] text-(--el-text-secondary) normal-case">
-          {t('rail.importOptional')}
-        </span>
-      </p>
-      <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
-        <RailStep
-          label={t('rail.importStep')}
-          state={rank > 2 ? 'done' : rank === 2 ? 'current' : 'optional'}
-        />
-      </ul>
+      {collapsed.length > 0 ? (
+        <>
+          <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+            {t('rail.answeredGroup')}
+          </p>
+          <ul className="mt-2">
+            <li
+              data-testid="migrate-rail-collapsed"
+              className="flex items-start gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-2 text-sm text-(--el-text-secondary)"
+            >
+              {/* Panel 5's SATISFIED marker, verbatim: sky tint and a READ glyph,
+                  because what happened is that something was read. Never the DONE
+                  tick, which says the user did the step, and never the dash, which
+                  says they pressed a control. */}
+              <span
+                className="grid size-5 flex-none place-items-center rounded-full border border-(--el-border) bg-(--el-tint-sky) text-(--el-text-strong)"
+                aria-hidden
+              >
+                <BookOpenText className="size-3" />
+              </span>
+              <span>
+                <span className="block font-semibold text-(--el-text-strong)">
+                  {collapsed.map((s) => t(`rail.${STEP_LABEL_KEY[s]}`)).join(', ')}
+                </span>
+                <span className="mt-px block text-xs text-(--el-text-secondary)">
+                  {t('rail.answeredMeta')}
+                </span>
+              </span>
+            </li>
+          </ul>
+        </>
+      ) : null}
+
+      {runs('connect') || runs('index') ? (
+        <>
+          <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+            {t('rail.setUp')}
+          </p>
+          <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
+            {runs('connect') ? <RailStep label={t('rail.connect')} state={stateOf(0)} /> : null}
+            {runs('index') ? <RailStep label={t('rail.index')} state={stateOf(1)} /> : null}
+          </ul>
+        </>
+      ) : null}
+
+      {runs('discovery') ? (
+        <>
+          {/* ⚠️ ONE ROW, AND IT NEVER NAMES A TIER (MOTIR-4755 revision 2, after
+              Yue's note that a user does not know what Discovery and Vision
+              are). `discovery` / `vision` / `feasibility` / `validation` are the
+              planner's identifiers for questions the user is simply being asked;
+              a rail that listed them would teach a stranger four words before it
+              told them anything. The row says what it IS. */}
+          <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+            {t('rail.directionGroup')}
+          </p>
+          <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
+            <RailStep label={t('rail.discoveryStep')} state={stateOf(4)} />
+          </ul>
+        </>
+      ) : null}
+
+      {runs('import') ? (
+        <>
+          <p className="mt-5 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+            {t('rail.import')}
+            <span className="rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-0.5 text-[0.65rem] text-(--el-text-secondary) normal-case">
+              {t('rail.importOptional')}
+            </span>
+          </p>
+          <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
+            <RailStep
+              label={t('rail.importStep')}
+              state={rank > 2 ? 'done' : rank === 2 ? 'current' : 'optional'}
+            />
+          </ul>
+        </>
+      ) : null}
     </nav>
   );
 }

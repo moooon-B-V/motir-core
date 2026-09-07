@@ -58,6 +58,17 @@ export async function POST(req: Request): Promise<Response> {
   const prompt = typeof rawPrompt === 'string' && rawPrompt.trim() ? rawPrompt.trim() : null;
 
   try {
+    // ⚠️ THIS ROUTE NEVER ASKS FOR A ROUTING VERDICT, AND AN EARLIER REVISION OF
+    // IT DID (MOTIR-4769). It derived `routeOnboarding` from the marker, which
+    // looks right and is wrong for the run AFTER the verdict: `onboardingRanAt`
+    // is stamped on the first plan APPROVED, so it is still null while a
+    // `continue` project does its actual planning — and every ask that user made
+    // would have been routed again and halted, planning nothing, forever.
+    //
+    // The routing verdict belongs to ONE dispatch — `POST /api/ai/plan/route`,
+    // the plan window opening — and this route is what runs afterwards, every
+    // time, for the rest of the project's life. See
+    // `lib/ai/routeOnboardingContext.ts`.
     const { jobId, planId } = await aiGenerationService.startGeneration(ctx, { prompt });
     return NextResponse.json(
       { jobId, planId },

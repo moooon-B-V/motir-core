@@ -43,6 +43,28 @@ export interface AskJobOutcome {
   citations?: string[];
 }
 
+/**
+ * What the next ROUTING run should decide (Story MOTIR-4753 · MOTIR-4762).
+ *
+ * ⚠️ THE LANE COULD NOT REACH THESE STATES BEFORE, which is the check
+ * MOTIR-4762 asks for BEFORE a line of spec is written: every `plan` job settled
+ * as a plain success here, so a plan window asking for a verdict got none and
+ * every journey ended in the workspace. A lane that cannot reach the asserted
+ * state does not go red — it goes green on the unfixed code.
+ */
+export interface RoutingJobOutcome {
+  // ⚠️ FOUR SINCE MOTIR-4828. `wait_for_index` is the outcome with no
+  // destination: the repository is connected, its graph does not exist yet, and
+  // the window HOLDS the person rather than routing them. The acceptance lane
+  // cannot drive that journey at all without an arm here — which is the
+  // *a named fixture that was never built* trap, so the arm ships with the spec
+  // that needs it.
+  outcome: 'continue' | 'onboard_new_project' | 'onboard_existing_project' | 'wait_for_index';
+  message: string;
+  keptSteps?: string[];
+  missing?: string[];
+}
+
 export interface AiJobsFixture {
   /**
    * The `ask_project` outcomes, CONSUMED IN ORDER — one per ask job submitted.
@@ -50,6 +72,15 @@ export interface AiJobsFixture {
    * the turns it actually cares about.
    */
   ask?: AskJobOutcome[];
+  /**
+   * The ROUTING verdicts, CONSUMED IN ORDER — one per run that ASKED for one
+   * (`context.routeOnboarding`). The last entry repeats, same as `ask`.
+   *
+   * ⚠️ A `plan` submit that did NOT ask is untouched and settles as before. That
+   * is the product's own discriminator, not a test convenience: the migrate
+   * wizard's own generate step reaches the same submit and must never be routed.
+   */
+  routing?: RoutingJobOutcome[];
   /** Appended to by the mock: the job kind of every submit, in order. */
   submitted?: { kind: string }[];
 }
@@ -93,6 +124,40 @@ function askOutcomeAt(n: number): AskJobOutcome {
   const queue = readFixture().ask ?? [];
   if (queue.length === 0) return { intent: 'ask', answer: 'No answer was declared.' };
   return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/** The routing verdict for the `n`-th routing run, with the last entry repeating. */
+function routingOutcomeAt(n: number): RoutingJobOutcome {
+  const queue = readFixture().routing ?? [];
+  if (queue.length === 0) {
+    // Nothing declared reads as *no verdict on the envelope*, which the consumer
+    // treats as "this run was never asked for one" — the workspace opens and
+    // nobody is routed. A legible surface rather than a 500 from the boundary.
+    return { outcome: 'continue', message: '' };
+  }
+  return queue[Math.min(n, queue.length - 1)]!;
+}
+
+/**
+ * THE KIND THIS SUBMIT ACTUALLY IS.
+ *
+ * ⚠️ `jobKind` ALONE CANNOT TELL A ROUTING RUN FROM A PLANNING ONE — both are
+ * `plan` (ADR `session-model.md` §6 step 2: one planning kind, and motir-ai reads
+ * WHAT a run is about off the context bag). `context.routeOnboarding` is the
+ * product's own discriminator, so the mock reads the same field the service
+ * writes rather than inventing a second one.
+ */
+function kindOfSubmit(rawBody: string): string {
+  try {
+    const body = JSON.parse(rawBody) as {
+      jobKind?: string;
+      context?: { routeOnboarding?: unknown };
+    };
+    const kind = body.jobKind ?? 'unknown';
+    return kind === 'plan' && body.context?.routeOnboarding === true ? 'plan_routing' : kind;
+  } catch {
+    return 'unknown';
+  }
 }
 
 /** A job id that CARRIES its kind and ordinal, so a failure names what it was. */
@@ -151,12 +216,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
     .intercept({ path: (p) => p === '/v1/jobs' || p.startsWith('/v1/jobs?'), method: 'POST' })
     .reply((req) => {
       const rawBody = String(req.body ?? '{}');
-      let kind = 'unknown';
-      try {
-        kind = (JSON.parse(rawBody) as { jobKind?: string }).jobKind ?? 'unknown';
-      } catch {
-        kind = 'unknown';
-      }
+      const kind = kindOfSubmit(rawBody);
       notifySubmitObservers(rawBody);
       const index = recordSubmit(kind);
       return { statusCode: 202, data: { jobId: jobIdFor(kind, index) }, responseOptions: json };
@@ -191,6 +251,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       // overload unresolvable — and a `result` that is sometimes absent is
       // exactly what the ENVELOPE contract says anyway (per-kind, additive).
       const outcome = askOutcomeAt(index);
+      const routing = routingOutcomeAt(index);
       const result: Record<string, unknown> =
         kind === 'ask_project'
           ? {
@@ -200,7 +261,23 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
                 citations: outcome.citations ?? [],
               },
             }
-          : {};
+          : kind === 'plan_routing' && routing.message !== ''
+            ? {
+                // The HALT's envelope (MOTIR-4767): nothing was planned, and the
+                // verdict is the whole result. motir-ai also sends an EMPTY plan
+                // delta, because its `ResultEnvelope` type requires that field;
+                // it is omitted here because nothing in THIS tree reads one — the
+                // single proposal→tree write path is `approvePlan` →
+                // `materialize`, and `planChangeArchitecture` asserts repo-wide
+                // that no second one exists, this mock included.
+                onboardingRouting: {
+                  outcome: routing.outcome,
+                  message: routing.message,
+                  ...(routing.keptSteps ? { keptSteps: routing.keptSteps } : {}),
+                  ...(routing.missing ? { missing: routing.missing } : {}),
+                },
+              }
+            : {};
       return {
         statusCode: 200,
         data: { status: 'succeeded', result },
