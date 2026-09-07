@@ -27,12 +27,12 @@
       shown: `/home` excluded done work outright (MOTIR-2758), and the window is
       read from `work_item.completedAt` (MOTIR-4780), never from `updatedAt`.
 
-      ⚠️ REVISED 2026-08-17 (MOTIR-2761), carried across unchanged. The surface
-      is scoped to the ACTIVE PROJECT, not the workspace: no PROJECT column in
-      any panel, the subtitle names the project, and Panel 8 draws the
-      no-project state. The cross-project question is retained at the workspace
-      tier as MOTIR-2920 — a different surface, not this one. See
-      `docs/decisions/home-scope.md` and design-notes.md §Scope.
+      ⚠️ REVISED 2026-08-17 (MOTIR-2761), carried across in part. The surface is
+      scoped to the ACTIVE PROJECT, not the workspace: no PROJECT column in any
+      panel, and the subtitle names the project. Its no-project panel is NOT
+      carried across — see the header note above. The cross-project question is
+      retained at the workspace tier as MOTIR-2920 — a different surface, not
+      this one. See `docs/decisions/home-scope.md` and design-notes.md §Scope.
 
       ⚠️ REVISED 2026-08-11 (Yue), carried across unchanged. An earlier revision
       drew four surfaces; two were removed — `Needs you` as a DUPLICATE of the
@@ -62,7 +62,16 @@
         5  the ALL-EMPTY page, with five tabs to be empty in.
         6  every tab's empty state.
         7  narrow (< md).
-        8  no active project.
+
+      There is NO no-project panel, and that is a decision. You are ALWAYS in a
+      project: the target creates a default project at registration (as
+      ensureDefaultWorkspace already does for the workspace) and lands a new
+      reader in /onboarding inside it, so getActiveProject() never returns null
+      and there is no "Create project" screen anywhere. The Workbench's only
+      empty state is "no work" (panel 5). Today no default project is seeded and
+      two project-tier routes render a Create-project screen inside project
+      chrome — a defect, filed as its own card. design-notes.md carries the
+      target and the trace.
     -->
     <style>
       /*! tailwindcss v4.3.0 | MIT License | https://tailwindcss.com */
@@ -4564,9 +4573,9 @@
       <p class="note">
         <strong>Workbench</strong> is the FIRST primary entry, above Dashboard, in the same slot
         Home held — built inside <code>if (hasProject)</code>, so it is absent with no active
-        project (Panel 8) exactly as every other primary entry is. The rail markup here is the
-        shipped <code>SidebarNav</code>'s own output with the label and the href changed; the halo
-        is review decoration, not part of the design. <br /><strong
+        project exactly as every other primary entry is. The rail markup here is the shipped
+        <code>SidebarNav</code>'s own output with the label and the href changed; the halo is review
+        decoration, not part of the design. <br /><strong
           >The glyph stays lucide <code>House</code></strong
         >, and that is a decision rather than an oversight. The mirror products put a house on the
         signed-in landing surface (GitHub’s dashboard) because the glyph means
@@ -5343,6 +5352,10 @@
       </p>
     </div>
 
+    <p class="panel-label">
+      Panel 2 — IN PROGRESS, populated: the Implemented and In Review rows are an agent’s output
+      waiting for a person
+    </p>
     <div class="panel">
       <div class="frame">
         <div class="frame-bar">
@@ -6142,6 +6155,10 @@
       </p>
     </div>
 
+    <p class="panel-label">
+      Panel 3 — RECENTLY FINISHED: the window caption, the Finished column, and Cancelled beside
+      Done
+    </p>
     <div class="panel">
       <div class="frame">
         <div class="frame-bar">
@@ -8817,266 +8834,6 @@
           </p>
         </div>
       </div>
-    </div>
-
-    <p class="panel-label">
-      Panel 8 — NO ACTIVE PROJECT: the create-first door, and a rail with no Workbench row
-    </p>
-    <div class="panel">
-      <div class="frame">
-        <div class="frame-bar">
-          <span>/workbench · a fresh workspace with zero projects</span><span>MOTIR-2761</span>
-        </div>
-        <div class="shell">
-          <div class="rail">
-            <nav
-              aria-label="Primary"
-              data-surface="sidebar"
-              class="flex h-full flex-col bg-(--el-sidebar-bg) border-r border-(--el-sidebar-border) px-3 py-3"
-            >
-              <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-                <div class="flex flex-col gap-3">
-                  <div class="flex flex-col gap-1.5">
-                    <div class="flex flex-col gap-0.5">
-                      <a
-                        href="/settings/workspace"
-                        class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                        ><span
-                          aria-hidden="true"
-                          class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-settings"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
-                            ></path>
-                            <circle cx="12" cy="12" r="3"></circle></svg></span
-                        ><span class="flex-1 truncate">Settings</span></a
-                      ><a
-                        href="/settings/workspace/jobs"
-                        class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                        ><span
-                          aria-hidden="true"
-                          class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-list-checks"
-                            aria-hidden="true"
-                          >
-                            <path d="M13 5h8"></path>
-                            <path d="M13 12h8"></path>
-                            <path d="M13 19h8"></path>
-                            <path d="m3 17 2 2 4-4"></path>
-                            <path d="m3 7 2 2 4-4"></path></svg></span
-                        ><span class="flex-1 truncate">Job runs</span></a
-                      ><a
-                        href="/settings/workspace/github"
-                        class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                        ><span
-                          aria-hidden="true"
-                          class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-git-branch"
-                            aria-hidden="true"
-                          >
-                            <path d="M15 6a9 9 0 0 0-9 9V3"></path>
-                            <circle cx="18" cy="6" r="3"></circle>
-                            <circle cx="6" cy="18" r="3"></circle></svg></span
-                        ><span class="flex-1 truncate">Git</span></a
-                      ><a
-                        href="/docs"
-                        class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                        ><span
-                          aria-hidden="true"
-                          class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                          ><svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="lucide lucide-book-open"
-                            aria-hidden="true"
-                          >
-                            <path d="M12 7v14"></path>
-                            <path
-                              d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
-                            ></path></svg></span
-                        ><span class="flex-1 truncate">Docs</span></a
-                      >
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="mt-3 shrink-0">
-                <button
-                  type="button"
-                  data-variant="ghost"
-                  class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
-                  aria-label="Collapse sidebar"
-                  aria-expanded="true"
-                  data-state="closed"
-                >
-                  <span
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-chevrons-left h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="m11 17-5-5 5-5"></path>
-                      <path d="m18 17-5-5 5-5"></path></svg
-                  ></span>
-                </button>
-              </div>
-            </nav>
-          </div>
-          <div class="content">
-            <div
-              class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
-              data-tilt=""
-              data-surface="card"
-            >
-              <div>
-                <div
-                  class="text-(--el-icon-muted) mb-(--spacing-md) inline-flex h-12 w-12 items-center justify-center"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="lucide lucide-folder-open h-12 w-12"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"
-                    ></path>
-                  </svg>
-                </div>
-                <h2 class="font-serif text-xl text-(--el-text)">Create your first project</h2>
-                <p
-                  class="text-(--el-text-subtitle) mt-(--spacing-sm) max-w-prose font-sans text-sm"
-                >
-                  Projects group your work items and give them a key like ACME-1. Create one to
-                  start planning.
-                </p>
-                <div class="mt-(--spacing-md)">
-                  <button
-                    type="button"
-                    data-variant="primary"
-                    class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-(--el-accent) text-(--el-accent-text) hover:opacity-90 h-(--height-btn-md) px-(--spacing-btn-x)"
-                  >
-                    <span aria-hidden="true" class="inline-flex"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-plus h-4 w-4"
-                        aria-hidden="true"
-                      >
-                        <path d="M5 12h14"></path>
-                        <path d="M12 5v14"></path></svg></span
-                    ><span>Create project</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <p class="note">
-        <strong>This is not a state of the Workbench — the Workbench has none.</strong> A workbench
-        is somewhere you stand INSIDE a project; with no project there is no bench to draw, and a
-        page headed <em>Workbench</em> whose whole content is
-        <em>Create your first project</em> would be a lie in a heading. What is drawn here is a
-        DIFFERENT surface at the same address — the create-first door, which
-        <code>/workbench</code> falls through to. The shipped page already works exactly this way
-        and is unchanged: its <code>!ctx</code> branch returns the door ALONE, with no
-        <code>h1</code>, no subtitle and no tab strip, so nothing on screen claims to be a
-        Workbench. It is drawn in this asset because MOTIR-4782 has to build that branch and needs
-        to see it — not because it belongs to the surface. <br />⚠️
-        <strong>The RENAME is what exposed this</strong>, which is this story's own argument working
-        on itself: <em>Home</em> could tolerate being empty and offering a door, because a home can
-        be empty. <em>Workbench</em> cannot. The name audited the content and found a panel
-        mis-filed. <code>docs/decisions/home-scope.md</code> §2.2 still says
-        <em>"`/home` in the no-project state IS the create-first door"</em>; under the new name the
-        honest sentence is that the ADDRESS falls through to it, and the surface has no such state.
-        That is an amendment to the record, not an address swap — flagged in
-        <code>design-notes.md</code> §Planning flags. <br /><strong
-          >The state this surface never had.</strong
-        >
-        While Home was workspace-scoped it had nothing to say here — it simply rendered its tab
-        empties — and MOTIR-2654 had to invent a SECOND, duplicate Home row in the rail so a reader
-        with no project could get back to the page they had landed on. Both go. <br /><strong
-          >The rail (left)</strong
-        >
-        is the shipped <code>SidebarNav</code>'s own output for <code>activeProject={null}</code>,
-        dumped from the component: <em>no</em> primary section at all, just the bottom one. Home
-        joins Dashboard, Work Items, Ready, Boards and Backlog in being correctly absent — a row
-        offering a page that cannot answer is a promise the product then refuses. <br /><strong
-          >The page (right)</strong
-        >
-        is the shipped <code>ProjectsEmptyState</code> — the same component
-        <code>/dashboard</code> already renders in this exact state, reused rather than redrawn, so
-        it brings its own copy in both catalogues and no <code>home.*</code> key is added. It is the
-        CREATE-FIRST door, not the actionless <code>noProject</code> notice <code>/ready</code>,
-        <code>/items</code> and <code>/boards</code> show: after the rail row goes,
-        <code>/workbench</code> is only ever LANDED on — by the post-auth redirect, a bookmark or a
-        <code>?next=</code> — and landing somewhere with no onward action is not an answer. Drawn
-        with the AI backend UNCONFIGURED; where it is configured the accent
-        <em>Plan a new project with AI</em> door leads, exactly as on <code>/dashboard</code>. The
-        discriminator is on file in <code>docs/decisions/home-scope.md</code> §2.2.
-      </p>
     </div>
   </body>
 </html>
