@@ -267,16 +267,54 @@ describe('the retired keyset path stays retired', () => {
     expect(code('const nextCursor = 1; // a note')).toContain('nextCursor');
   });
 
-  it('leaves the three retired MESSAGE keys to MOTIR-4853, deliberately', () => {
-    // `workbench.pager.next` / `startOver` / `end` are still RENDERED by
-    // `app/(authed)/workbench/page.tsx`, which MOTIR-4852 left on the shipped
-    // two-link affordance so that this card changes a mechanism and not a
-    // surface. A string removed while its consumer still calls for it renders
-    // the KEY to the reader, so the pair move together — in that card, not this
-    // one. Asserted so the omission is a decision somebody can read.
-    const en = JSON.parse(readFileSync(path.join(ROOT, 'messages/en.json'), 'utf8')) as {
-      workbench: { pager: Record<string, string> };
-    };
-    expect(Object.keys(en.workbench.pager).sort()).toEqual(['end', 'next', 'startOver']);
+  it('the three retired MESSAGE keys are gone from BOTH catalogues, and unreferenced', () => {
+    // ⚠️ THIS ASSERTION IS INVERTED FROM WHAT MOTIR-4852 WROTE HERE, and the
+    // inversion is the point rather than a correction. That card left the keyset
+    // MECHANISM behind while keeping the shipped two-link affordance, so
+    // `workbench.pager.next` / `startOver` / `end` were still RENDERED and a
+    // string removed while its consumer still calls for it renders the KEY to
+    // the reader. MOTIR-4853 removed the markup, so the strings go with it — the
+    // pair move together, in that order, which is what this test now pins.
+    for (const locale of ['en', 'zh']) {
+      const catalogue = JSON.parse(
+        readFileSync(path.join(ROOT, `messages/${locale}.json`), 'utf8'),
+      ) as { workbench: Record<string, unknown>; common: { pager?: Record<string, string> } };
+      expect(
+        catalogue.workbench['pager'],
+        `${locale} still carries workbench.pager`,
+      ).toBeUndefined();
+      // And the control's strings have a HOME — a removal that left the pager
+      // untranslated would satisfy the line above and be the worse outcome.
+      expect(Object.keys(catalogue.common.pager ?? {}).sort(), `${locale} common.pager`).toEqual([
+        'nextPage',
+        'page',
+        'pagination',
+        'previousPage',
+        'showing',
+      ]);
+    }
+  });
+
+  it('nothing on the Workbench SURFACE still references the retired keys', () => {
+    // ⚠️ SCOPED TO THE SURFACE, because the KEY IS RELATIVE TO A NAMESPACE and a
+    // bare `pager.next` is not unique in the tree. The first draft of this scan
+    // read all of `app/` and `lib/`, and flagged
+    // `app/(authed)/filters/_components/FiltersDirectory.tsx` — which calls
+    // `useTranslations('savedFilters')` and is reading its OWN
+    // `savedFilters.pager.next`, a legitimate and unrelated namespace. A guard
+    // whose output is mostly noise is a guard people stop reading, so the scan
+    // is narrowed to the files where `useTranslations('workbench')` is the
+    // namespace in play. The catalogue assertion above is the tree-wide half.
+    const hits: string[] = [];
+    for (const file of [...walk('app/(authed)/workbench'), ...walk('lib/workbench')]) {
+      const text = code(readFileSync(path.join(ROOT, file), 'utf8'));
+      for (const key of ['pager.next', 'pager.startOver', 'pager.end'])
+        if (text.includes(key)) hits.push(`${file}: ${key}`);
+    }
+    expect(
+      hits,
+      'A retired message key still has a caller — which renders the KEY to the reader ' +
+        'rather than a string. The pager is `common.pager` now (MOTIR-4853).',
+    ).toEqual([]);
   });
 });

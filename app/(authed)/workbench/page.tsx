@@ -191,14 +191,15 @@ export default async function WorkbenchPage({
 
   const params = await searchParams;
   const tab = parseWorkbenchTab(params['tab']);
-  // ⚠️ TRANSITIONAL, and MOTIR-4853's to finish. MOTIR-4852 replaced the keyset
-  // with an offset, so the page number comes off the URL where the cursor used
-  // to — read with the SHIPPED `parsePage`, which already answers 1 for absent,
-  // non-numeric, zero and negative. What this card does NOT do is change the
-  // affordance: the two links below are the ones this page ships today, with
-  // the same strings and the same markup, driven by a number instead of a
-  // token. `IssueListPager` inside the list box, `workbenchTabHref` taking a
-  // page, and the removal of `?cursor=` are all MOTIR-4853's.
+  // The page rides the URL beside `?tab=`, read with the SHIPPED `parsePage`,
+  // which already answers 1 for absent, non-numeric, zero and negative — the
+  // four degenerate spellings a hand-edited URL or a stale bookmark produces.
+  // The UPPER bound is deliberately NOT clamped here: the parser is scope-blind,
+  // so `homeService` clamps it once it knows the tab's real total, which is the
+  // same division of labour `/items` uses.
+  //
+  // `?cursor=` is neither read nor emitted any more — MOTIR-4852 retired the
+  // keyset and this card took the last reader of the token off the route.
   const page = parsePage(params['page']);
 
   const t = await getTranslations('workbench');
@@ -215,10 +216,6 @@ export default async function WorkbenchPage({
   ]);
 
   const rows = toWorkbenchRowViews(window.items, workflow, members, tab === 'watching');
-  const totalPages = Math.max(1, Math.ceil(window.total / window.pageSize));
-  /** The transitional `?page=` href — MOTIR-4853 moves this onto `workbenchTabHref`. */
-  const pageHref = (n: number) =>
-    `${workbenchTabHref(tab)}${workbenchTabHref(tab).includes('?') ? '&' : '?'}page=${n}`;
   const isEmpty = rows.length === 0;
 
   return (
@@ -246,48 +243,22 @@ export default async function WorkbenchPage({
           </p>
         ) : null}
 
+        {/* ⚠️ AN EMPTY TAB RENDERS ITS EMPTY STATE AND NOTHING ELSE — no list
+            box, and NO PAGER (`design/workbench/` Panel 10). "A pager on every
+            tab", read literally, would put `Showing 0–0 of 0` under an empty
+            state: a second, quieter way of saying what the empty state has just
+            said in a sentence. The pager lives INSIDE `WorkbenchList`, so this
+            branch gets that for free rather than by remembering to suppress it. */}
         {isEmpty ? (
           <EmptyTab tab={tab} />
         ) : (
-          <WorkbenchList rows={rows} label={t(TAB_LABEL_KEY[tab])} tab={tab} />
+          <WorkbenchList
+            rows={rows}
+            label={t(TAB_LABEL_KEY[tab])}
+            tab={tab}
+            pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
+          />
         )}
-
-        {/* Paging is a LINK, not a fetch — the page rides the URL beside `?tab=`,
-            so a page is bookmarkable and the server re-reads. ⚠️ These are the
-            SAME two affordances the page shipped under the keyset, unchanged in
-            copy and markup and now driven by a page number; MOTIR-4853 replaces
-            them with the shipped `IssueListPager` inside the list box, per
-            `design/workbench/` Panels 8-12. */}
-        {window.page < totalPages ? (
-          <div className="flex items-center justify-between gap-3">
-            {window.page > 1 ? (
-              <Link
-                href={workbenchTabHref(tab)}
-                className="text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed)"
-              >
-                {t('pager.startOver')}
-              </Link>
-            ) : (
-              <span />
-            )}
-            <Link
-              href={pageHref(window.page + 1)}
-              className={buttonVariants({ variant: 'secondary', size: 'sm' })}
-            >
-              {t('pager.next')}
-            </Link>
-          </div>
-        ) : window.page > 1 ? (
-          <div className="flex items-center justify-between gap-3">
-            <Link
-              href={workbenchTabHref(tab)}
-              className="text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed)"
-            >
-              {t('pager.startOver')}
-            </Link>
-            <span className="text-xs text-(--el-text-secondary)">{t('pager.end')}</span>
-          </div>
-        ) : null}
       </div>
 
       {/* The quick-view peek — the SAME `?peek=` island /items, /ready and the

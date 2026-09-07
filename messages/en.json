@@ -166,7 +166,14 @@
     "save": "Save",
     "loading": "Loading…",
     "checked": "Checked",
-    "notChecked": "Not checked"
+    "notChecked": "Not checked",
+    "pager": {
+      "showing": "Showing <range>{from}–{to}</range> of <count>{total}</count>",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "page": "Page {page}",
+      "pagination": "Pagination"
+    }
   },
   "planReview": {
     "backToPlans": "Back to plans",
@@ -7335,11 +7342,6 @@
         "title": "Nothing is waiting on your approval",
         "body": "Work that needs your sign-off before it can go on will show up here."
       }
-    },
-    "pager": {
-      "next": "Next",
-      "startOver": "Back to the top",
-      "end": "That's everything."
     }
   },
   "platformAdmin": {
