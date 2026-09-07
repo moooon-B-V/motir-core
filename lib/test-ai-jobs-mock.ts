@@ -258,8 +258,12 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
           : kind === 'plan_routing' && routing.message !== ''
             ? {
                 // The HALT's envelope (MOTIR-4767): nothing was planned, and the
-                // verdict is the whole result.
-                planDelta: { operations: [] },
+                // verdict is the whole result. motir-ai also sends an EMPTY plan
+                // delta, because its `ResultEnvelope` type requires that field;
+                // it is omitted here because nothing in THIS tree reads one — the
+                // single proposal→tree write path is `approvePlan` →
+                // `materialize`, and `planChangeArchitecture` asserts repo-wide
+                // that no second one exists, this mock included.
                 onboardingRouting: {
                   outcome: routing.outcome,
                   message: routing.message,

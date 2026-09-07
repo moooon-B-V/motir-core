@@ -711,6 +711,12 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/explanation/route.ts',
     'app/api/ai/plan-change/session/submit/route.ts',
     'app/api/ai/plan/generate/route.ts',
+    // THE ROUTING RUN (Story MOTIR-4753 · MOTIR-4769). It opens no plan, which
+    // is what makes it look free and is not: it submits a `plan_routing` model
+    // job on the planner, so it draws the same `ai:generate` bucket generation
+    // does — and it is the door a never-onboarded project hits on every open of
+    // the plan window, which is exactly the shape a ceiling is for.
+    'app/api/ai/plan/route-onboarding/route.ts',
     'app/api/ai/plan/sprint/route.ts',
     'app/api/ai/replan/route.ts',
     // `revise_plan` (Story MOTIR-3595 · MOTIR-3599) — the fourth plan-edit

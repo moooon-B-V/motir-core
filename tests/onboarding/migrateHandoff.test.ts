@@ -23,6 +23,9 @@ function makeRun(overrides: Partial<MigrateOnboardingDto> = {}): MigrateOnboardi
     kind: 'migrate',
     step: 'connect',
     status: 'active',
+    // ⚠️ EMPTY MEANS EVERY STEP (MOTIR-4759). A run no routing verdict reached
+    // walks the whole wizard, which is what every case in this file is.
+    keptSteps: [],
     connectedRepoRef: null,
     codeGraphReady: false,
     conventionApprovedAt: null,

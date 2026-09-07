@@ -6495,7 +6495,7 @@
       "stepAuditConvention": "读取你的规范",
       "stepDiscovery": "几个问题",
       "stepGenerate": "起草方案",
-      "stepReview": "复核"
+      "stepReview": "复核方案"
     },
     "routing": {
       "refusalMessage": "我们先把项目建立起来。几个关于你在做什么、做给谁的简短问题，我就有足够的信息和你一起规划了。",

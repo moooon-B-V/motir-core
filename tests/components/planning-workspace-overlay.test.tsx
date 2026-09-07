@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { withoutPlanningOverlay } from '@/lib/planning/launcher';
+import type { OnboardingSubstrate } from '@/lib/dto/onboardingSubstrate';
 
 // THE PLANNING WORKSPACE OVERLAY (MOTIR-4729, under story MOTIR-4725).
 //
@@ -731,13 +732,10 @@ describe('the ROUTING VERDICT is HONOURED (MOTIR-4769)', () => {
   } satisfies OnboardingSubstrate;
 
   const verdict = (over: Record<string, unknown> = {}) => ({
-    kind: 'none' as const,
-    ...{
-      kind: 'verdict' as const,
-      read: {
-        ok: true as const,
-        verdict: { outcome: 'continue', message: 'What shall we plan?', ...over },
-      },
+    kind: 'verdict' as const,
+    read: {
+      ok: true as const,
+      verdict: { outcome: 'continue', message: 'What shall we plan?', ...over },
     },
   });
 

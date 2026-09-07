@@ -107,6 +107,15 @@ export const aiGenerationService = {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
+    // ⚠️ SENT UNCONDITIONALLY, like every other planning submit (MOTIR-4343).
+    // The routing run plans nothing, which is exactly why it would be easy to
+    // think it owes no consent flag — but it is a planning job on the planner
+    // and an ABSENT field reads on the far side as ON, so omitting it would
+    // capture mistakes for a project that switched capture off.
+    const recordPlanningMistakes = await resolveRecordPlanningMistakesForJob(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     return submitJob(
       'plan',
       {
@@ -122,6 +131,7 @@ export const aiGenerationService = {
         // routing question rather than a planning one.
         prompt: null,
         [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
+        [RECORD_PLANNING_MISTAKES_CONTEXT_FIELD]: recordPlanningMistakes,
         ...routeOnboardingContextFor(ctx.project),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),

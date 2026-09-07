@@ -40,7 +40,6 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   getOrgSubscription: vi.fn(),
   createCheckoutSession: vi.fn(),
   createPortalSession: vi.fn(),
-  submitDiscoveryTurn: vi.fn(async () => ({ jobId: 'job-discovery' })),
 }));
 
 const { migrateOnboardingService, stepIsKept } =
@@ -122,8 +121,15 @@ describe('a step the verdict did NOT keep does not run', () => {
     expect(advanced.step).toBe('generate');
     // ⚠️ NO DISCOVERY TURN WAS SUBMITTED. A run that skipped only the exit CHECK
     // would still have started the interview.
-    const client = await import('@/lib/ai/motirAiClient');
-    expect(client.submitDiscoveryTurn).not.toHaveBeenCalled();
+    // `aiChatService.submitDiscoveryTurn` is the kicker, and it reaches the AI
+    // boundary as `submitJob('discovery', …)` — so the client mock is where the
+    // interview would show up if it had started.
+    expect(mocks.submitJob).not.toHaveBeenCalledWith(
+      'discovery',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
     // …and the exit poll never ran either — the pre-plan state was not read.
     expect(mocks.getPreplanState).not.toHaveBeenCalled();
   });

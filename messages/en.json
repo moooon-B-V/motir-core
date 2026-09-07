@@ -6499,7 +6499,7 @@
       "stepAuditConvention": "Read your conventions",
       "stepDiscovery": "A few questions",
       "stepGenerate": "Draft a plan",
-      "stepReview": "Review"
+      "stepReview": "Review the plan"
     },
     "routing": {
       "refusalMessage": "Let's set your project up first. A few short questions about what you're building and who it's for, and I'll have enough to plan it with you.",
