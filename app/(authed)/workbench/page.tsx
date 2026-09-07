@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
-import { HOME_FINISHED_WINDOW_DAYS, homeService } from '@/lib/services/homeService';
+import { HOME_FINISHED_WINDOW_DAYS, HOME_PAGE_SIZE, homeService } from '@/lib/services/homeService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import type { HomeActorContext } from '@/lib/services/homeService';
@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
 import { parseWorkbenchTab, workbenchTabHref } from '@/lib/workbench/tab';
+import { parsePage } from '@/lib/issues/issueListView';
 import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { WorkbenchTabs } from './_components/WorkbenchTabs';
@@ -76,22 +77,18 @@ const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
  * sibling story's (MOTIR-4778). An empty page rather than a fifth query is what
  * makes that boundary visible: there is nothing to read, so nothing is read.
  */
-function readTab(
-  tab: WorkbenchTab,
-  ctx: HomeActorContext,
-  cursor: string | null,
-): Promise<HomePageDto> {
+function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promise<HomePageDto> {
   switch (tab) {
     case 'todo':
-      return homeService.listToDo(ctx, { cursor });
+      return homeService.listToDo(ctx, { page });
     case 'in-progress':
-      return homeService.listInProgress(ctx, { cursor });
+      return homeService.listInProgress(ctx, { page });
     case 'finished':
-      return homeService.listRecentlyFinished(ctx, { cursor });
+      return homeService.listRecentlyFinished(ctx, { page });
     case 'watching':
-      return homeService.listWatching(ctx, { cursor });
+      return homeService.listWatching(ctx, { page });
     case 'approvals':
-      return Promise.resolve({ items: [], nextCursor: null });
+      return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
   }
 }
 
@@ -194,13 +191,20 @@ export default async function WorkbenchPage({
 
   const params = await searchParams;
   const tab = parseWorkbenchTab(params['tab']);
-  const cursorParam = params['cursor'];
-  const cursor = (Array.isArray(cursorParam) ? cursorParam[0] : cursorParam) ?? null;
+  // ⚠️ TRANSITIONAL, and MOTIR-4853's to finish. MOTIR-4852 replaced the keyset
+  // with an offset, so the page number comes off the URL where the cursor used
+  // to — read with the SHIPPED `parsePage`, which already answers 1 for absent,
+  // non-numeric, zero and negative. What this card does NOT do is change the
+  // affordance: the two links below are the ones this page ships today, with
+  // the same strings and the same markup, driven by a number instead of a
+  // token. `IssueListPager` inside the list box, `workbenchTabHref` taking a
+  // page, and the removal of `?cursor=` are all MOTIR-4853's.
+  const page = parsePage(params['page']);
 
   const t = await getTranslations('workbench');
 
-  const [page, counts, members, workflow] = await Promise.all([
-    readTab(tab, ctx, cursor),
+  const [window, counts, members, workflow] = await Promise.all([
+    readTab(tab, ctx, page),
     homeService.tabCounts(ctx),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
     // ONE workflow, for the one project the page reads. This surface used to
@@ -210,7 +214,11 @@ export default async function WorkbenchPage({
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
   ]);
 
-  const rows = toWorkbenchRowViews(page.items, workflow, members, tab === 'watching');
+  const rows = toWorkbenchRowViews(window.items, workflow, members, tab === 'watching');
+  const totalPages = Math.max(1, Math.ceil(window.total / window.pageSize));
+  /** The transitional `?page=` href — MOTIR-4853 moves this onto `workbenchTabHref`. */
+  const pageHref = (n: number) =>
+    `${workbenchTabHref(tab)}${workbenchTabHref(tab).includes('?') ? '&' : '?'}page=${n}`;
   const isEmpty = rows.length === 0;
 
   return (
@@ -244,13 +252,15 @@ export default async function WorkbenchPage({
           <WorkbenchList rows={rows} label={t(TAB_LABEL_KEY[tab])} tab={tab} />
         )}
 
-        {/* Paging is a LINK, not a fetch — the cursor rides the URL beside
-            `?tab=`, so a page is bookmarkable and the server re-reads. There is
-            no "previous": a keyset walks forward, and the way back is the tab's
-            own href, which is what `Start over` is. */}
-        {page.nextCursor ? (
+        {/* Paging is a LINK, not a fetch — the page rides the URL beside `?tab=`,
+            so a page is bookmarkable and the server re-reads. ⚠️ These are the
+            SAME two affordances the page shipped under the keyset, unchanged in
+            copy and markup and now driven by a page number; MOTIR-4853 replaces
+            them with the shipped `IssueListPager` inside the list box, per
+            `design/workbench/` Panels 8-12. */}
+        {window.page < totalPages ? (
           <div className="flex items-center justify-between gap-3">
-            {cursor ? (
+            {window.page > 1 ? (
               <Link
                 href={workbenchTabHref(tab)}
                 className="text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed)"
@@ -261,13 +271,13 @@ export default async function WorkbenchPage({
               <span />
             )}
             <Link
-              href={workbenchTabHref(tab, page.nextCursor)}
+              href={pageHref(window.page + 1)}
               className={buttonVariants({ variant: 'secondary', size: 'sm' })}
             >
               {t('pager.next')}
             </Link>
           </div>
-        ) : cursor ? (
+        ) : window.page > 1 ? (
           <div className="flex items-center justify-between gap-3">
             <Link
               href={workbenchTabHref(tab)}

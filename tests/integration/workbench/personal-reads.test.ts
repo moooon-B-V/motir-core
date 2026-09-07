@@ -5,7 +5,6 @@ import { homeService } from '@/lib/services/homeService';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { decodeHomeCursor, encodeHomeCursor } from '@/lib/workbench/cursor';
 import type { HomeTabCountsDto } from '@/lib/dto/home';
 import { truncateAuthTables } from '../../helpers/db';
 import {
@@ -218,7 +217,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     const page = await homeService.listMyWork(ctx);
 
     // Empty, not an error, and not the OTHER project's rows either.
-    expect(page).toEqual({ items: [], nextCursor: null });
+    expect(page).toMatchObject({ items: [], total: 0 });
     expect(page.items.map((r) => r.id)).not.toContain(hidden.id);
 
     // THE CONTROL: the reader IS the assignee of the hidden item, and the same
@@ -246,7 +245,7 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
     });
 
     // Empty, not an error — the no-existence-leak convention every project gate follows.
-    expect(page).toEqual({ items: [], nextCursor: null });
+    expect(page).toMatchObject({ items: [], total: 0 });
   });
 
   it('does not reach across workspaces', async () => {
@@ -327,33 +326,37 @@ describe('homeService.listMyWork — the assigned-OR-reported read', () => {
 
     const first = await homeService.listMyWork(hctx(fx), { limit: 3 });
     expect(first.items).toHaveLength(3);
-    expect(first.nextCursor).not.toBeNull();
-    // Newest first: Item 6 (2026-08-16) down to Item 4.
-    expect(first.items.map((r) => r.title)).toEqual(['Item 6', 'Item 5', 'Item 4']);
+    // The window reports the whole SET, not the page — the pager's denominator.
+    expect(first).toMatchObject({ total: 7, page: 1, pageSize: 3 });
 
-    const second = await homeService.listMyWork(hctx(fx), { limit: 3, cursor: first.nextCursor });
-    const third = await homeService.listMyWork(hctx(fx), { limit: 3, cursor: second.nextCursor });
+    const second = await homeService.listMyWork(hctx(fx), { limit: 3, page: 2 });
+    const third = await homeService.listMyWork(hctx(fx), { limit: 3, page: 3 });
 
     const seen = [...first.items, ...second.items, ...third.items].map((r) => r.identifier);
     expect(new Set(seen).size).toBe(seen.length); // no repeat across pages
     expect(seen.sort()).toEqual(made.sort()); // no drop across pages
-    expect(third.nextCursor).toBeNull(); // the last page mints no cursor
+    expect(third.items).toHaveLength(1); // 7 rows, 3 per page — the tail
+    expect(third).toMatchObject({ total: 7, page: 3 });
   });
 
-  it('mints no cursor when the last page is exactly full', async () => {
+  it('a set that fits exactly one page reports one page, not two', async () => {
     const fx = await makeFixture({ identifier: 'EXA' });
     for (let i = 0; i < 2; i += 1) {
       await createWorkItem(fx, { kind: 'task', title: `Item ${i}` });
     }
     const page = await homeService.listMyWork(hctx(fx), { limit: 2 });
     expect(page.items).toHaveLength(2);
-    // The has-more PROBE row is what makes this exact — a "the page came back
-    // full, so mint a cursor" rule would hand out a cursor to an empty page.
-    expect(page.nextCursor).toBeNull();
+    // `total / pageSize` is exactly 1, so the pager draws no page nav — the
+    // state `design/workbench/` Panel 9 exists for. Under the keyset this was
+    // the has-more PROBE's job; the total answers it directly now.
+    expect(page).toMatchObject({ total: 2, page: 1, pageSize: 2 });
+    // And asking for page 2 CLAMPS back onto the only page there is, rather
+    // than erroring or serving an empty window (`/items`' contract).
+    expect((await homeService.listMyWork(hctx(fx), { limit: 2, page: 2 })).page).toBe(1);
   });
 });
 
-describe('watcherRepository.listByUser / homeService.listWatching', () => {
+describe('watcherRepository.listByUserInGroup / homeService.listWatching', () => {
   it('returns what the reader watches, and an owned-AND-watched item is in BOTH tabs', async () => {
     const fx = await makeFixture({ identifier: 'WAT' });
     const other = await enrolMember(fx, 'author');
@@ -438,7 +441,7 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
       }),
-    ).toEqual({ items: [], nextCursor: null });
+    ).toMatchObject({ items: [], total: 0 });
   });
 
   it('pages the watching read by the same keyset', async () => {
@@ -452,42 +455,50 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     }
 
     const first = await homeService.listWatching(hctx(fx), { limit: 2 });
-    const second = await homeService.listWatching(hctx(fx), { limit: 2, cursor: first.nextCursor });
-    const third = await homeService.listWatching(hctx(fx), { limit: 2, cursor: second.nextCursor });
+    const second = await homeService.listWatching(hctx(fx), { limit: 2, page: 2 });
+    const third = await homeService.listWatching(hctx(fx), { limit: 2, page: 3 });
 
     const seen = [...first.items, ...second.items, ...third.items].map((r) => r.identifier);
     expect(new Set(seen).size).toBe(seen.length);
     expect(seen.sort()).toEqual(made.sort());
-    expect(third.nextCursor).toBeNull();
+    expect(first.total).toBe(5);
+    expect(third.items).toHaveLength(1);
   });
 });
 
-describe('the Home page cursor', () => {
-  it('round-trips a keyset', () => {
-    const cursor = { at: new Date('2026-08-11T10:20:30.000Z'), id: 'wi_abc' };
-    const decoded = decodeHomeCursor(encodeHomeCursor(cursor));
-    expect(decoded?.id).toBe('wi_abc');
-    expect(decoded?.at.toISOString()).toBe('2026-08-11T10:20:30.000Z');
-  });
-
-  it('degrades an unusable token to page one rather than throwing', () => {
-    // Each of these can only arrive from a hand-edited URL or a stale bookmark.
-    expect(decodeHomeCursor(null)).toBeNull();
-    expect(decodeHomeCursor('')).toBeNull();
-    expect(decodeHomeCursor('not-base64-!!')).toBeNull();
-    expect(decodeHomeCursor(Buffer.from('no-separator').toString('base64url'))).toBeNull();
-    expect(decodeHomeCursor(Buffer.from('|wi_1').toString('base64url'))).toBeNull();
-    expect(decodeHomeCursor(Buffer.from('2026-08-11T00:00:00Z|').toString('base64url'))).toBeNull();
-    expect(decodeHomeCursor(Buffer.from('not-a-date|wi_1').toString('base64url'))).toBeNull();
-  });
-
-  it('serves page one when the caller hands back a broken cursor', async () => {
+describe('the Workbench page WINDOW', () => {
+  // ⚠️ THIS DESCRIBE REPLACES `the Home page cursor` (MOTIR-4852). The keyset it
+  // asserted — a round-tripped token, and a malformed one degrading to page one
+  // rather than throwing — is gone with `lib/workbench/cursor.ts`. The property
+  // it was protecting is not: a `page` that can only arrive from a hand-edited
+  // URL or a stale bookmark must land on a real page, never on an error.
+  it('lands a hand-edited page on a real page rather than on an error', async () => {
     const fx = await makeFixture({ identifier: 'BAD' });
-    await createWorkItem(fx, { kind: 'task', title: 'Only item' });
+    for (let i = 0; i < 3; i += 1) {
+      await createWorkItem(fx, { kind: 'task', title: `Item ${i}` });
+    }
 
-    const page = await homeService.listMyWork(hctx(fx), { cursor: 'garbage' });
+    // Past the end CLAMPS to the last page — `/items`' shipped contract
+    // (`workItemsService.getProjectIssuesList`, count-first for this reason).
+    const past = await homeService.listMyWork(hctx(fx), { limit: 2, page: 99 });
+    expect(past).toMatchObject({ total: 3, page: 2, pageSize: 2 });
+    expect(past.items).toHaveLength(1);
 
-    expect(page.items).toHaveLength(1);
+    // And every degenerate value the parser lets through lands on page one.
+    for (const page of [0, -5, Number.NaN, 1.7]) {
+      const window = await homeService.listMyWork(hctx(fx), { limit: 2, page });
+      expect(window.page, `page ${page}`).toBe(1);
+      expect(window.items, `page ${page}`).toHaveLength(2);
+    }
+  });
+
+  it('an EMPTY tab is page 1 of 0, not an error', async () => {
+    const fx = await makeFixture({ identifier: 'NIL' });
+    expect(await homeService.listMyWork(hctx(fx), { page: 4 })).toMatchObject({
+      items: [],
+      total: 0,
+      page: 1,
+    });
   });
 });
 
@@ -716,13 +727,13 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     }
 
     const first = await homeService.listMyWork(hctx(fx), { limit: 2 });
-    const second = await homeService.listMyWork(hctx(fx), { limit: 2, cursor: first.nextCursor });
+    const second = await homeService.listMyWork(hctx(fx), { limit: 2, page: 2 });
 
     expect(first.items).toHaveLength(2); // asked for 2, got 2 — nothing dropped afterwards
     const seen = [...first.items, ...second.items].map((r) => r.identifier);
     expect(new Set(seen).size).toBe(seen.length); // no repeats across the boundary
     expect(seen.sort()).toEqual(open.sort()); // and no drops: exactly the open set
-    expect(second.nextCursor).toBeNull();
+    expect(first.total).toBe(4);
     expect((await homeService.tabCounts(hctx(fx))).myWork).toBe(4);
   });
 
@@ -736,8 +747,8 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
 
     // Before this card the empty state was unreachable for anyone with history:
     // a reader with 2 000 closed items and none open saw a full page of them.
-    expect(await homeService.listMyWork(hctx(fx))).toEqual({ items: [], nextCursor: null });
-    expect(await homeService.listWatching(hctx(fx))).toEqual({ items: [], nextCursor: null });
+    expect(await homeService.listMyWork(hctx(fx))).toMatchObject({ items: [], total: 0 });
+    expect(await homeService.listWatching(hctx(fx))).toMatchObject({ items: [], total: 0 });
     // ⚠️ `recentlyFinished` is 0 here for a FIXTURE reason, not a product one,
     // and saying so is what keeps this from reading as a claim about the new
     // tab: `setStatus` writes `work_item.status` directly, so these rows never

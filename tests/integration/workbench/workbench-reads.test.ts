@@ -223,21 +223,18 @@ describe('Recently finished reads a STORED completion time', () => {
 
     const first = await homeService.listRecentlyFinished(ctx(), { limit: 2 });
     expect(ids(first)).toEqual([made[0], made[1]]); // newest completion first
-    expect(first.nextCursor).not.toBeNull();
+    expect(first.total).toBe(made.length);
 
-    const second = await homeService.listRecentlyFinished(ctx(), {
-      limit: 2,
-      cursor: first.nextCursor,
-    });
-    const third = await homeService.listRecentlyFinished(ctx(), {
-      limit: 2,
-      cursor: second.nextCursor,
-    });
+    const second = await homeService.listRecentlyFinished(ctx(), { limit: 2, page: 2 });
+    const third = await homeService.listRecentlyFinished(ctx(), { limit: 2, page: 3 });
 
     const seen = [...ids(first), ...ids(second), ...ids(third)];
     expect(new Set(seen).size).toBe(seen.length); // no repeats across boundaries
     expect(seen).toEqual(made); // and no drops, in completion order
-    expect(third.nextCursor).toBeNull();
+    // ⚠️ Recently finished is the ONE tab MOTIR-4852 left on its time axis —
+    // `completedAt DESC` — because *what did I just finish* IS a time question.
+    // Its siblings moved to the kind rank; this assertion is what says so.
+    expect(third.page).toBe(3);
   });
 });
 
@@ -294,30 +291,25 @@ describe('Watching gains an ORDER, not a filter', () => {
       waiting.push(w.identifier);
     }
 
-    const pages: string[] = [];
-    let cursor: string | null = null;
-    for (let i = 0; i < 4; i += 1) {
-      const page: Awaited<ReturnType<typeof homeService.listWatching>> =
-        await homeService.listWatching(ctx(), { limit: 2, cursor });
-      pages.push(...ids(page));
-      cursor = page.nextCursor;
-      if (cursor === null) break;
+    // Walked by page NUMBER (MOTIR-4852). The BAND is the outer key, and under
+    // an offset it has to hold ACROSS a page boundary rather than merely within
+    // a group's own walk — with three moving rows and a page size of 2, page 2
+    // is exactly the straddling page (`design/workbench/` Panel 11).
+    const inOrder: string[] = [];
+    const first = await homeService.listWatching(ctx(), { limit: 2 });
+    const pageCount = Math.max(1, Math.ceil(first.total / first.pageSize));
+    for (let page = 1; page <= pageCount; page += 1) {
+      const window = await homeService.listWatching(ctx(), { limit: 2, page });
+      inOrder.push(...ids(window));
     }
 
-    expect(new Set(pages).size).toBe(pages.length); // no repeats
-    expect(pages.sort()).toEqual([...moving, ...waiting].sort()); // no drops
-    // Read back in order: the three moving rows come first, across the boundary.
-    const inOrder: string[] = [];
-    let c: string | null = null;
-    for (let i = 0; i < 4; i += 1) {
-      const page: Awaited<ReturnType<typeof homeService.listWatching>> =
-        await homeService.listWatching(ctx(), { limit: 2, cursor: c });
-      inOrder.push(...ids(page));
-      c = page.nextCursor;
-      if (c === null) break;
-    }
+    expect(new Set(inOrder).size).toBe(inOrder.length); // no repeats
+    expect([...inOrder].sort()).toEqual([...moving, ...waiting].sort()); // no drops
+    // The three moving rows come first, ACROSS the boundary — page 1 is wholly
+    // moving, page 2 carries the last moving row then the first waiting one.
     expect(inOrder.slice(0, 3).sort()).toEqual([...moving].sort());
     expect(inOrder.slice(3).sort()).toEqual([...waiting].sort());
+    expect(pageCount).toBeGreaterThan(1); // there IS a boundary to be wrong at
   });
 });
 
@@ -339,22 +331,163 @@ describe('paging is exact on every read', () => {
     const first = await homeService.listToDo(ctx(), { limit: 4 });
     expect(first.items).toHaveLength(4); // asked for 4, got 4
 
-    // ⚠️ MOVE A ROW UNDERNEATH THE READER, between the two pages — which is the
-    // whole reason the boundary is a KEYSET rather than an offset. Touching a
-    // row the reader has ALREADY passed re-sorts it to the front of the order;
-    // an offset-paged read would then repeat one row and drop another, and the
-    // keyset must not.
+    // ⚠️ MOVE A ROW UNDERNEATH THE READER, between the two pages. This used to
+    // be the argument FOR the keyset: touching a row the reader had already
+    // passed re-sorted it to the front of an `updatedAt` order, and an offset
+    // would then repeat one row and drop another.
+    //
+    // MOTIR-4852 moved these tabs off `updatedAt` entirely — the order is now
+    // `(kind rank, id DESC)` — so this churn cannot move the boundary at all:
+    // BOTH keys are immutable for the life of a row. The offset inherits the
+    // property the keyset was chosen for, on this axis, for free.
+    //
+    // What it does NOT inherit, said plainly rather than left to be discovered:
+    // a row ENTERING or LEAVING the set between two pages (a status change, a
+    // new item, an archive) still shifts the offset, and can repeat or drop one
+    // row. That is the trade this card made with open eyes — the Workbench is a
+    // bounded personal list, and page numbers, a total and a back button are
+    // worth it. It would be the wrong side of the trade on an unbounded feed.
     const alreadySeen = first.items[0]!.id;
     await adminDb.workItem.update({
       where: { id: alreadySeen },
       data: { updatedAt: new Date() },
     });
 
-    const second = await homeService.listToDo(ctx(), { limit: 4, cursor: first.nextCursor });
+    const second = await homeService.listToDo(ctx(), { limit: 4, page: 2 });
     const seen = [...ids(first), ...ids(second)];
     expect(new Set(seen).size).toBe(seen.length);
     expect(seen.sort()).toEqual(mine.sort());
-    expect(second.nextCursor).toBeNull();
+    expect(second.page).toBe(2);
+  });
+});
+
+describe('the three work tabs order by KIND, and the offset boundary is exact', () => {
+  /** A card of a given KIND the reader reports. `parentId` where the matrix demands one. */
+  async function kinded(
+    kind: 'epic' | 'story' | 'task' | 'bug' | 'subtask',
+    title: string,
+    parentId?: string,
+  ) {
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind, title, ...(parentId ? { parentId } : {}) },
+      fx.ctx,
+    );
+    return { id: item.id, identifier: item.identifier, kind };
+  }
+
+  it('returns `subtask → bug → task → story → epic` ACROSS a page boundary, repeating and dropping nothing', async () => {
+    // ⚠️ SEEDED IN THE WRONG ORDER ON PURPOSE — epics first, subtasks last. A
+    // read that had quietly kept `updatedAt DESC` would return this exact
+    // sequence REVERSED, and a fixture seeded in rank order would pass either
+    // way. Five of each, so the run crosses every boundary between two ranks.
+    const seeded: { identifier: string; kind: string; id: string }[] = [];
+    for (const kind of ['epic', 'story', 'task', 'bug'] as const) {
+      for (let i = 0; i < 5; i += 1) seeded.push(await kinded(kind, `${kind} ${i}`));
+    }
+    // A subtask REQUIRES a parent (the kind-parent matrix), so the five hang
+    // under one of the stories already seeded above. That story is a member of
+    // the set in its own right — the count below is 25 either way.
+    const host = seeded.find((r) => r.kind === 'story')!.id;
+    for (let i = 0; i < 5; i += 1) seeded.push(await kinded('subtask', `subtask ${i}`, host));
+
+    // Twenty-five rows at 10 a page is three pages — the card asks for MORE than
+    // two, because a single boundary can be right by accident.
+    const first = await homeService.listToDo(ctx(), { limit: 10 });
+    expect(first.total).toBe(25);
+    const pageCount = Math.ceil(first.total / first.pageSize);
+    expect(pageCount).toBe(3);
+
+    const walked: string[] = [];
+    for (let page = 1; page <= pageCount; page += 1) {
+      walked.push(...ids(await homeService.listToDo(ctx(), { limit: 10, page })));
+    }
+
+    // No repeat, no drop — the property a shared `kind` key would break without
+    // the total `id` tiebreak after it.
+    expect(new Set(walked).size, 'a row was repeated across a page boundary').toBe(walked.length);
+    expect([...walked].sort(), 'a row was dropped across a page boundary').toEqual(
+      seeded.map((r) => r.identifier).sort(),
+    );
+
+    // And the CONCATENATION is in rank order — the assertion a per-page check
+    // cannot make, which is the whole reason the walk above exists.
+    const kindOf = new Map(seeded.map((r) => [r.identifier, r.kind]));
+    const RANK = { subtask: 0, bug: 1, task: 2, story: 3, epic: 4 } as const;
+    const ranks = walked.map((id) => RANK[kindOf.get(id) as keyof typeof RANK]);
+    expect(ranks, 'the concatenated pages are not in READY_KIND_RANK order').toEqual(
+      [...ranks].sort((a, b) => a - b),
+    );
+    // SENSITIVITY: the run really does contain every rank, so the assertion
+    // above is not vacuously true of a single-kind list.
+    expect(new Set(ranks).size).toBe(5);
+  });
+
+  it('leaves Recently finished on `completedAt DESC` while its siblings move to the rank', async () => {
+    // The one tab the ordering change does NOT touch — asserted here rather
+    // than only in prose, because "unchanged" is the claim nobody re-checks.
+    const older = await kinded('task', 'Finished first');
+    const newer = await kinded('epic', 'Finished second');
+    await finishedDaysAgo(older.id, 3);
+    await finishedDaysAgo(newer.id, 1);
+
+    // By KIND the task would come first; by completion time the epic does.
+    expect(ids(await homeService.listRecentlyFinished(ctx()))).toEqual([
+      newer.identifier,
+      older.identifier,
+    ]);
+  });
+});
+
+describe("each read's TOTAL is the same predicate as its list", () => {
+  // ⚠️ ASSERTED BY MAKING THEM DISAGREE IF THE PREDICATE DRIFTS, not by reading
+  // the two call sites. The fixture puts a row in every category AND one whose
+  // status names no category at all, so a `total` counted with a different
+  // slice — or without the finished WINDOW — comes back a different number than
+  // the walk. MOTIR-2758 is the shape: a badge read ~2 019 where its list read
+  // ~263, and nothing errored.
+  it('agrees with a full walk of the same tab, on all four', async () => {
+    const waiting = await card('Waiting');
+    const blocked = await card('Blocked');
+    await move(blocked.id, 'blocked');
+    const moving = await card('Moving');
+    await move(moving.id, 'in_progress');
+    const inside = await card('Finished inside the window');
+    await finishedDaysAgo(inside.id, 2);
+    const outside = await card('Finished outside the window');
+    await finishedDaysAgo(outside.id, HOME_FINISHED_WINDOW_DAYS + 3);
+    for (const id of [waiting.id, moving.id, inside.id]) {
+      await adminDb.$transaction((tx) => watcherRepository.add(id, fx.ownerId, tx));
+    }
+
+    const reads = [
+      ['toDo', homeService.listToDo],
+      ['inProgress', homeService.listInProgress],
+      ['recentlyFinished', homeService.listRecentlyFinished],
+      ['watching', homeService.listWatching],
+    ] as const;
+
+    for (const [name, read] of reads) {
+      const probe = await read(ctx(), { limit: 1 });
+      const walked: string[] = [];
+      for (let page = 1; page <= Math.max(1, probe.total); page += 1) {
+        walked.push(...ids(await read(ctx(), { limit: 1, page })));
+      }
+      expect(new Set(walked).size, `${name} repeated a row`).toBe(walked.length);
+      expect(
+        walked.length,
+        `${name}: total ${probe.total} but the walk found ${walked.length}`,
+      ).toBe(probe.total);
+    }
+
+    // SENSITIVITY: the numbers are not all the same, and none is zero — so the
+    // loop above ran over four genuinely different sets.
+    const counts = await homeService.tabCounts(ctx());
+    expect([counts.toDo, counts.inProgress, counts.recentlyFinished, counts.watching]).toEqual([
+      2, 1, 1, 3,
+    ]);
+    // And the window really is excluding something, so `recentlyFinished`'s
+    // agreement above is about a FILTERED set rather than an unfiltered one.
+    expect(ids(await homeService.listRecentlyFinished(ctx()))).toEqual([inside.identifier]);
   });
 });
 
@@ -424,7 +557,7 @@ describe('access is enforced server-side on every read', () => {
       homeService.listRecentlyFinished,
       homeService.listWatching,
     ]) {
-      await expect(read(outsider)).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(read(outsider)).resolves.toMatchObject({ items: [], total: 0 });
     }
     expect((await homeService.tabCounts(outsider)).toDo).toBe(0);
   });
