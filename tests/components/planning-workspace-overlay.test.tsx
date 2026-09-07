@@ -33,6 +33,17 @@ const { shallowPush } = vi.hoisted(() => ({ shallowPush: vi.fn() }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush, shallowReplace: vi.fn() }));
 
 const { fetchPlanningAnchor } = vi.hoisted(() => ({ fetchPlanningAnchor: vi.fn() }));
+
+/**
+ * THE ROUTING RUN's own transport (MOTIR-4769) — the overlay dispatches it
+ * whenever it opens with a substrate, so every test in this file that supplies
+ * one reaches it. Mocked at the CLIENT rather than at `fetch`, because what this
+ * suite is about is what the overlay DOES with a resolution, not how the
+ * resolution was fetched (`tests/onboarding/routing-verdict.test.ts` owns the
+ * parse, and the client owns the polling).
+ */
+const { resolveOnboardingRouting } = vi.hoisted(() => ({ resolveOnboardingRouting: vi.fn() }));
+vi.mock('@/lib/planning/onboardingRoutingClient', () => ({ resolveOnboardingRouting }));
 vi.mock('@/lib/planning/planningAnchorClient', () => ({ fetchPlanningAnchor }));
 
 // The actor's permission set — the shell's provider, which is the whole reason
@@ -127,6 +138,11 @@ beforeEach(() => {
   shallowPush.mockReset();
   fetchPlanningAnchor.mockReset();
   fetchPlanningAnchor.mockResolvedValue(ANCHOR);
+  // Default: the verdict has NOT landed yet — which is the state the reading
+  // surface exists for, and the one every MOTIR-4768 test is about. A test that
+  // is about what happens WHEN it lands drives its own resolution.
+  resolveOnboardingRouting.mockReset();
+  resolveOnboardingRouting.mockReturnValue(new Promise(() => {}));
   granted = new Set(['project:browse']);
   mountSeq = 0;
   vetoClose = false;
@@ -648,10 +664,14 @@ describe('the READING state — what the window says while a session decides (MO
     expect(screen.getByTestId('host')).toBeTruthy();
   });
 
-  it('AC4 · NO request is added to the open — the substrate arrives as a prop', async () => {
+  it('AC4 · the SUBSTRATE costs no round trip — it arrives as a prop', async () => {
     // The window that used to eject this project now opens it, and the thing it
-    // shows must not cost a round trip on mount. The anchor read is the only
-    // fetch this component has ever made, and a project launch does not make it.
+    // NAMES must not cost a read on mount: the layout already had the project.
+    //
+    // ⚠️ THE ROUTING DISPATCH IS A DIFFERENT REQUEST AND A DIFFERENT CARD
+    // (MOTIR-4769). It is not the substrate being re-read; it is the planner
+    // being asked a question, which is the whole reason this surface is on
+    // screen. What AC4 forbids is a SECOND read of what was already handed over.
     fetchPlanningAnchor.mockClear();
     openAt('plan=project&planFrom=project');
     mount({ substrate: rich });
@@ -694,5 +714,201 @@ describe('the READING state — what the window says while a session decides (MO
     await act(async () => {});
 
     expect(screen.getByTestId('planning-reading-state')).toBeTruthy();
+  });
+});
+
+describe('the ROUTING VERDICT is HONOURED (MOTIR-4769)', () => {
+  const rich = {
+    itemCount: 214,
+    itemCountTruncated: false,
+    repositories: [{ ref: 'acme/widgets', indexed: true }],
+    repositoryConnected: true,
+    repositoryIndexed: true,
+  } satisfies OnboardingSubstrate;
+
+  const verdict = (over: Record<string, unknown> = {}) => ({
+    kind: 'none' as const,
+    ...{
+      kind: 'verdict' as const,
+      read: {
+        ok: true as const,
+        verdict: { outcome: 'continue', message: 'What shall we plan?', ...over },
+      },
+    },
+  });
+
+  it('`continue` clears the reading state and opens the WORKSPACE — nothing was planned', async () => {
+    // The outcome that draws nothing. A regular session waits to be told what to
+    // plan, so there is no interstitial to celebrate it with.
+    resolveOnboardingRouting.mockResolvedValue(verdict());
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(screen.queryByTestId('planning-reading-state')).toBeNull();
+    expect(screen.queryByTestId('planning-handoff')).toBeNull();
+    expect(screen.getByTestId('host')).toBeTruthy();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('`onboard_new_project` SHOWS the hand-off — it does not redirect out from under them', async () => {
+    resolveOnboardingRouting.mockResolvedValue(
+      verdict({ outcome: 'onboard_new_project', message: "Let's set your project up first." }),
+    );
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    const panel = screen.getByTestId('planning-handoff');
+    expect(panel.getAttribute('data-outcome')).toBe('onboard_new_project');
+    // The planner's own turn is what the user reads.
+    expect(screen.getByText("Let's set your project up first.")).toBeTruthy();
+    // ⚠️ AND NOTHING HAS MOVED YET. The user presses the button.
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('host')).toBeNull();
+  });
+
+  it('`onboard_existing_project` renders the planner’s missing-list and the kept steps', async () => {
+    resolveOnboardingRouting.mockResolvedValue(
+      verdict({
+        outcome: 'onboard_existing_project',
+        message: 'A couple of things first.',
+        keptSteps: ['connect', 'discovery'],
+        missing: ['The repository is still mostly the starter template.'],
+      }),
+    );
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(screen.getByTestId('planning-handoff').getAttribute('data-outcome')).toBe(
+      'onboard_existing_project',
+    );
+    // Every word of it is the planner's; this surface renders it and writes none.
+    expect(screen.getByText('The repository is still mostly the starter template.')).toBeTruthy();
+    // What will be asked, and what is already there — the apology this route owes.
+    expect(screen.getByText('A few questions')).toBeTruthy();
+    expect(screen.getByText('Import work items')).toBeTruthy();
+    // The FOUND block names what was read, from the substrate already in hand.
+    expect(screen.getByText(/acme\/widgets/)).toBeTruthy();
+  });
+
+  it('the move carries the KEPT STEPS and the return address (AC2 · AC6a)', async () => {
+    resolveOnboardingRouting.mockResolvedValue(
+      verdict({
+        outcome: 'onboard_existing_project',
+        message: 'A couple of things first.',
+        keptSteps: ['connect', 'discovery'],
+        missing: [],
+      }),
+    );
+    openAt('plan=item&planFrom=work-item&planItem=ACME-7');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Fill in the gaps' }));
+    });
+
+    const href = push.mock.calls.at(-1)?.[0] as string;
+    expect(href.startsWith('/onboarding/migrate?')).toBe(true);
+    const q = new URLSearchParams(href.split('?')[1]);
+    expect(q.get('via')).toBe('onboard_existing_project');
+    expect(q.get('steps')).toBe('connect,discovery');
+    // ⚠️ THE RETURN ADDRESS. The move leaves the route group entirely, so
+    // MOTIR-4770 has nothing to work with unless it travels here.
+    expect(q.get('backKind')).toBe('work-item');
+    expect(q.get('backItem')).toBe('ACME-7');
+  });
+
+  it('`onboard_new_project` goes to the start-fresh entrance', async () => {
+    resolveOnboardingRouting.mockResolvedValue(
+      verdict({ outcome: 'onboard_new_project', message: 'm' }),
+    );
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Set up my project' }));
+    });
+    const href = push.mock.calls.at(-1)?.[0] as string;
+    expect(href.startsWith('/onboarding?')).toBe(true);
+    expect(new URLSearchParams(href.split('?')[1]).get('backKind')).toBe('project');
+  });
+
+  it('NOT NOW closes the window instead — a hand-off is not a wall', async () => {
+    resolveOnboardingRouting.mockResolvedValue(
+      verdict({ outcome: 'onboard_new_project', message: 'm' }),
+    );
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    });
+    // Closed by writing the address, not by navigating — the page underneath
+    // must not unmount.
+    expect(push).not.toHaveBeenCalled();
+    expect(shallowPush).toHaveBeenCalledWith(
+      withoutPlanningOverlay(`/backlog?plan=project&planFrom=project`),
+    );
+  });
+
+  it('a MALFORMED verdict takes the safe route with Motir’s OWN copy', async () => {
+    // Declining a malformed answer is not disagreeing with a well-formed one.
+    // The copy is Motir's, deliberately: writing a sentence in the planner's
+    // voice about a project it did not read is the thing to avoid.
+    resolveOnboardingRouting.mockResolvedValue({
+      kind: 'verdict',
+      read: { ok: false, outcome: 'onboard_new_project', reason: 'unknown outcome: onboard' },
+    });
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(screen.getByTestId('planning-handoff').getAttribute('data-outcome')).toBe(
+      'onboard_new_project',
+    );
+    // Motir's own refusal copy, not the heading it happens to echo.
+    expect(
+      screen.getByText(/A few short questions about what you're building and who it's for/),
+    ).toBeTruthy();
+  });
+
+  it.each([
+    ['a failed run', { kind: 'none' as const, reason: 'job failed' }],
+    ['a timeout', { kind: 'none' as const, reason: 'timed out' }],
+    ['a dead request', { kind: 'none' as const, reason: 'dispatch failed' }],
+  ])('%s opens the WORKSPACE and moves nobody', async (_what, resolution) => {
+    // None of these is a finding about the project, and turning one into a
+    // hand-off would move a user on the strength of a network error.
+    resolveOnboardingRouting.mockResolvedValue(resolution);
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: rich });
+    await act(async () => {});
+
+    expect(screen.getByTestId('host')).toBeTruthy();
+    expect(screen.queryByTestId('planning-handoff')).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('AC6 · ONE dispatch per open — a re-render is not a new question', async () => {
+    resolveOnboardingRouting.mockResolvedValue(verdict());
+    openAt('plan=project&planFrom=project');
+    const view = mount({ substrate: rich });
+    await act(async () => {});
+    view.rerender(
+      <PlanningWorkspaceOverlay projectKey="ACME" projectName="Acme" substrate={rich} />,
+    );
+    await act(async () => {});
+
+    expect(resolveOnboardingRouting).toHaveBeenCalledTimes(1);
+  });
+
+  it('an ESTABLISHED project is never asked at all', async () => {
+    openAt('plan=project&planFrom=project');
+    mount();
+    await act(async () => {});
+    expect(resolveOnboardingRouting).not.toHaveBeenCalled();
   });
 });

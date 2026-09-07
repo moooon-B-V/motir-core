@@ -371,8 +371,8 @@ describe('the workspace is not hostage to the roadmap read', () => {
     // The access arm is honoured, and the host is mounted only past it.
     expect(overlay).toMatch(/gate === 'no-access'/);
     expect(overlay.indexOf('<PlanningWorkspaceHost')).toBeGreaterThan(gateAt);
-    // NO onboarding arm: the verdict cannot be re-derived here, because the
-    // type no longer has it. (The navigation half is asserted below.)
+    // NO onboarding arm: the gate's verdict cannot be re-derived here, because
+    // the type no longer has it. (The navigation half is asserted below.)
     expect(overlay).not.toMatch(/gate === 'onboarding'/);
     const beforeGate = overlay.slice(0, gateAt);
     // The provider is read ABOVE the gate — that is the ordering half.
@@ -415,9 +415,22 @@ describe('the workspace is not hostage to the roadmap read', () => {
     // has read the project (MOTIR-4767) and the surface SHOWS before it happens
     // (MOTIR-4769) — never something this component does to somebody for
     // arriving.
-    expect(overlay).not.toMatch(/router\.push\(/);
+    // ⚠️ TIGHTENED RATHER THAN RELAXED (MOTIR-4769). This read "no `router.push`
+    // at all", which was right while the component had no navigation of any
+    // kind — and the hand-off gives it one: the user presses a button and is
+    // taken to onboarding. That is the opposite of the defect. The defect was a
+    // navigation NOBODY ASKED FOR, fired from an effect on arrival, so that is
+    // what the guard now says: no push inside a `useEffect`, ever.
+    for (const block of overlay.split('useEffect(').slice(1)) {
+      const body = block.slice(0, block.indexOf('\n  }, ['));
+      expect(body, 'a push inside an effect is a navigation nobody asked for').not.toMatch(
+        /router\.push\(/,
+      );
+    }
+    // …and the destination is still not written here: it is computed by
+    // `handoffDestination` from the VERDICT, so no branch in this component
+    // decides where a user goes.
     expect(overlay).not.toMatch(/ONBOARDING_ENTRY_PATH/);
-    expect(overlay).not.toMatch(/from 'next\/navigation'.*useRouter/);
   });
 
   it('the host takes no roadmap data at all', () => {

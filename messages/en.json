@@ -6477,6 +6477,31 @@
       "chip": "Reading",
       "activity": "This usually takes a few seconds.",
       "activityThin": "One moment."
+    },
+    "handoff": {
+      "eyebrow": "Next",
+      "titleNew": "Let's set your project up first",
+      "titleExisting": "A couple of things first",
+      "found": "I read {sources}.",
+      "missingCap": "What I still need",
+      "keptCap": "What you'll be asked",
+      "skippedCap": "Already there — I'll skip these",
+      "goNew": "Set up my project",
+      "goExisting": "Fill in the gaps",
+      "notNow": "Not now",
+      "promise": "You'll land back in this window, ready to plan.",
+      "stepConnect": "Connect",
+      "stepIndex": "Index",
+      "stepImport": "Import work items",
+      "stepAuditConvention": "Read your conventions",
+      "stepDiscovery": "A few questions",
+      "stepGenerate": "Draft a plan",
+      "stepReview": "Review"
+    },
+    "routing": {
+      "refusalMessage": "Let's set your project up first. A few short questions about what you're building and who it's for, and I'll have enough to plan it with you.",
+      "sourceItems": "{count} work items",
+      "sourceItemsCapped": "{count}+ work items"
     }
   },
   "codeHealth": {

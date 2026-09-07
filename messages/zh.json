@@ -6473,6 +6473,31 @@
       "chip": "读取中",
       "activity": "通常只需要几秒钟。",
       "activityThin": "请稍候。"
+    },
+    "handoff": {
+      "eyebrow": "接下来",
+      "titleNew": "我们先把项目建立起来",
+      "titleExisting": "还差几件事",
+      "found": "我读取了 {sources}。",
+      "missingCap": "我还需要的",
+      "keptCap": "会问你的",
+      "skippedCap": "已经有了 —— 这些会跳过",
+      "goNew": "开始建立项目",
+      "goExisting": "补上这些",
+      "notNow": "暂时不用",
+      "promise": "完成后你会回到这个窗口，可以直接开始规划。",
+      "stepConnect": "连接代码仓库",
+      "stepIndex": "建立索引",
+      "stepImport": "导入工作项",
+      "stepAuditConvention": "读取你的规范",
+      "stepDiscovery": "几个问题",
+      "stepGenerate": "起草方案",
+      "stepReview": "复核"
+    },
+    "routing": {
+      "refusalMessage": "我们先把项目建立起来。几个关于你在做什么、做给谁的简短问题，我就有足够的信息和你一起规划了。",
+      "sourceItems": "{count} 个工作项",
+      "sourceItemsCapped": "{count}+ 个工作项"
     }
   },
   "codeHealth": {

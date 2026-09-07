@@ -161,17 +161,38 @@ describe('THE FLAG — the verdict is REQUESTED, not inferred (MOTIR-4769)', () 
     // The whole reason the flag exists. Both dispatches reach the same service,
     // and a verdict inferred from the tree would send a user who is already in
     // onboarding back to the start of it.
-    const route = readFileSync(join(process.cwd(), 'app/api/ai/plan/generate/route.ts'), 'utf8');
-    expect(route).toContain('routeOnboarding: !ctx.project.onboardingRanAt');
-    // …and never off the body: a caller who could assert it could route a user
-    // into onboarding they do not need.
-    expect(route).not.toMatch(/body[\s\S]{0,80}routeOnboarding/);
+    // ⚠️ ONE DOOR ASKS, AND IT IS NOT `…/plan/generate`. An earlier revision
+    // derived the flag there from the marker, which looks right and is wrong for
+    // the run AFTER the verdict: `onboardingRanAt` is stamped on the first plan
+    // APPROVED, so it is still null while a `continue` project does its actual
+    // planning — every ask that user made would have been routed again and
+    // halted, planning nothing, forever.
+    const routingDoor = readFileSync(
+      join(process.cwd(), 'app/api/ai/plan/route-onboarding/route.ts'),
+      'utf8',
+    );
+    expect(routingDoor).toContain('startRoutingRun');
+    // …and nothing is taken from the client: there is no body on this route at
+    // all. A caller who could assert the flag could route a user into onboarding
+    // they do not need.
+    expect(routingDoor).not.toMatch(/req\.json\(\)/);
+
+    const generate = readFileSync(join(process.cwd(), 'app/api/ai/plan/generate/route.ts'), 'utf8');
+    expect(generate).not.toMatch(/routeOnboarding:/);
 
     const wizard = readFileSync(
       join(process.cwd(), 'lib/services/migrateOnboardingService.ts'),
       'utf8',
     );
     expect(wizard).not.toContain('routeOnboarding');
+
+    // The service's routing dispatch is the ONLY place the context helper is
+    // called, so the flag cannot reach a submit that did not ask for it.
+    const service = readFileSync(
+      join(process.cwd(), 'lib/services/aiGenerationService.ts'),
+      'utf8',
+    );
+    expect((service.match(/routeOnboardingContextFor\(/g) ?? []).length).toBe(1);
   });
 });
 

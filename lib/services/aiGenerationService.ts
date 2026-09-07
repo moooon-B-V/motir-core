@@ -55,24 +55,81 @@ export interface StartGenerationInput {
   /** Optional human label / summary stamped on the opened Plan. */
   title?: string | null;
   summary?: string | null;
-  /**
-   * ASK FOR A ROUTING VERDICT (MOTIR-4769) — *is this the plan window opening on
-   * a project that has never been planned?*
-   *
-   * ⚠️ ONLY ONE DISPATCH SETS IT, and the reason it is a caller's answer rather
-   * than something this service infers is that the SAME submit serves the
-   * migrate wizard's own generate step. That run is also a first plan over an
-   * empty tree, and routing it would send a user who is already in onboarding
-   * back to the start of it.
-   *
-   * ⚠️ AND IT IS NOT A CLIENT'S ANSWER EITHER — the route derives it, because a
-   * caller who could ask for a verdict on somebody else's terms could route a
-   * user into onboarding they do not need.
-   */
-  routeOnboarding?: boolean;
 }
 
 export const aiGenerationService = {
+  /**
+   * THE ROUTING RUN (MOTIR-4769) — dispatched when the universal plan window
+   * OPENS on a project whose first plan has never been approved.
+   *
+   * It asks `motir-ai` ONE question (MOTIR-4767): can this project be planned
+   * from what it has, and if not, which onboarding does the user go to? The run
+   * HALTS on every outcome — `continue` included — so it proposes nothing,
+   * closes no plan and needs no `Plan` row. That absence is the point rather
+   * than an omission: `startGeneration` opens a `generating` Plan bound to its
+   * job, and a routing run would leave one of those sitting `generating` for a
+   * job that was never going to write to it.
+   *
+   * ⚠️ THIS IS THE ONLY DISPATCH THAT ASKS. `startGeneration` — the door every
+   * later ask goes through, and the one the migrate wizard's own generate step
+   * reaches — must never set the flag:
+   *
+   *   · the WIZARD's run is also a first plan over an empty tree, so a verdict
+   *     there would send a user who is already in onboarding back to its start;
+   *   · and `onboardingRanAt` is stamped on the first plan APPROVED, so it is
+   *     still null while a `continue` project does its actual planning. A
+   *     marker-derived flag on `startGeneration` would route every ask that user
+   *     made, forever, and plan nothing.
+   *
+   * The helper still refuses to set it for an established project: there is
+   * nothing to route such a project to.
+   */
+  async startRoutingRun(ctx: ProjectContext): Promise<{ jobId: string }> {
+    // The same gate generation runs behind: deciding a user's route is a
+    // planning act on their project, not a free read.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
+    const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    // The same two context reads generation makes, and for the same reason: the
+    // verdict is a judgement about the code and the backlog, so a run that could
+    // not SEE them would answer a different question from the one being asked.
+    const code = await resolveCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    const repositories = await resolveProjectRepoContext(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    return submitJob(
+      'plan',
+      {
+        organizationId,
+        isMeta,
+        internalBilling,
+        workspaceId: ctx.workspaceId,
+        projectId: ctx.projectId,
+        projectKey: ctx.project.identifier,
+      },
+      {
+        // No prompt: nothing has been asked for yet. That is what makes this a
+        // routing question rather than a planning one.
+        prompt: null,
+        [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
+        ...routeOnboardingContextFor(ctx.project),
+        ...(code ? { code } : {}),
+        ...(repositories ? { repositories } : {}),
+      },
+      { userId: ctx.userId },
+    );
+  },
+
   // Open a `generating` Plan + submit the `generate_tree` job for the actor's
   // active project; return the ids the surface needs ({ jobId, planId }). The job
   // is submitted FIRST so the Plan can bind to it via `sourceJobId` — and so a
@@ -168,14 +225,6 @@ export const aiGenerationService = {
         // conditionally: absence means "the producer predates this field" and
         // sends motir-ai back to inferring it from the tree.
         [ONBOARDING_CONTEXT_FIELD]: onboardingContextFor(ctx.project),
-        // ⚠️ ASK FOR A ROUTING VERDICT, but ONLY on the routing run (MOTIR-4769).
-        // This same submit is what the migrate wizard's GENERATE step reaches,
-        // and a verdict there would send a user who is ALREADY in onboarding
-        // back to the start of it. `input.routeOnboarding` is the caller saying
-        // *this is the plan window opening*, and the helper still refuses to set
-        // the flag for a project whose first plan has been approved — there is
-        // nothing to route such a project to.
-        ...(input.routeOnboarding ? routeOnboardingContextFor(ctx.project) : {}),
         ...(code ? { code } : {}),
         ...(repositories ? { repositories } : {}),
       },
