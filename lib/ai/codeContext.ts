@@ -57,6 +57,27 @@ export interface JobCodeRepo {
    * read reports from, so the three cannot disagree.
    */
   indexed: boolean;
+  /**
+   * HOW CURRENT THAT GRAPH IS (Story MOTIR-1754 · MOTIR-4857) — the four-state
+   * derivation and the drift in COMMITS, beside the ledger fact above.
+   *
+   * ⚠️ OPTIONAL, AND ABSENT MEANS *NOBODY SAID* — never *current*. The set these
+   * entries are built from is the WORKSPACE's installation grant; the freshness
+   * is joined from the PROJECT's configured set, and the second is a subset of
+   * the first. A repository the project has not been given carries no drift
+   * rather than a fabricated one, which is the same three-state discipline
+   * `indexed` itself lands under (MOTIR-4826) and the one motir-ai's reader
+   * already tolerates.
+   *
+   * ⚠️ AND THEY DECIDE NOTHING, exactly as `indexed` decides nothing. What a
+   * drift of three commits MEANS against a drift of three hundred is the
+   * planner's judgement (MOTIR-4590); `motir-core` supplies the number and does
+   * not branch on it. A threshold here would put the decision back in the
+   * repository that five of this story's cards took it out of.
+   */
+  indexState?: CodeGraphIndexState;
+  /** Commits the default branch is ahead of the graph. `null` = not countable. */
+  commitsBehind?: number | null;
 }
 
 /** The `context.code` unit of a planning-job envelope (the plural contract). */
@@ -321,4 +342,39 @@ async function installationIdForWorkspace(ctx: {
     (tx) => githubInstallationRepository.findByWorkspaceId(ctx.workspaceId, tx),
   );
   return installation?.installationId ?? null;
+}
+
+/**
+ * The thin grant-list context, with each repository's FRESHNESS joined on
+ * (Story MOTIR-1754 · MOTIR-4857).
+ *
+ * ⚠️ WHY A COMPOSER RATHER THAN A WIDER `resolveCodeContext`. That resolver is
+ * WORKSPACE-scoped and has four other callers; freshness is a PROJECT-scoped
+ * fact (`resolveCodeContextState` reads the project's configured set). Widening
+ * the workspace read to take a project would either give its other callers a
+ * parameter they have no answer for, or invent one. So the join happens here, at
+ * the one call site that has both.
+ *
+ * ⚠️ IT COMPUTES NOTHING. Every field comes from `resolveCodeContextState`,
+ * which is itself an assembler over `lib/codeGraph/indexState.ts` and
+ * `lib/codeGraph/driftCount.ts` — the ONE derivation of each. A second
+ * comparison written here would be a second answer on a different surface.
+ */
+export async function withCodeFreshness(
+  code: JobCodeContext | undefined,
+  projectId: string,
+  ctx: { userId: string; workspaceId: string },
+): Promise<JobCodeContext | undefined> {
+  if (!code || code.repos.length === 0) return code;
+  const state = await resolveCodeContextState(projectId, ctx);
+  const byRef = new Map(state.repos.map((r) => [r.repoRef, r]));
+  return {
+    repos: code.repos.map((repo) => {
+      const joined = byRef.get(repo.repoRef);
+      // ⚠️ NO JOIN ⇒ NO FIELDS. Spreading `undefined` in would put the keys on
+      // the wire carrying nothing, which reads to a consumer as an answer.
+      if (!joined) return repo;
+      return { ...repo, indexState: joined.indexState, commitsBehind: joined.commitsBehind };
+    }),
+  };
 }

@@ -1,6 +1,10 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { resolveCodeContext, resolvePlanningCodeContext } from '@/lib/ai/codeContext';
+import {
+  resolveCodeContext,
+  resolvePlanningCodeContext,
+  withCodeFreshness,
+} from '@/lib/ai/codeContext';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import {
   RECORD_PLANNING_MISTAKES_CONTEXT_FIELD,
@@ -100,10 +104,17 @@ export const aiGenerationService = {
     // The same two context reads generation makes, and for the same reason: the
     // verdict is a judgement about the code and the backlog, so a run that could
     // not SEE them would answer a different question from the one being asked.
-    const code = await resolveCodeContext({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
+    // ⚠️ AND IT CARRIES THE DRIFT, NOT ONLY `indexed` (MOTIR-4857). The verdict
+    // is asked whether this project can be planned from what is here, and a
+    // graph three commits behind and one three hundred behind are the same fact
+    // to a boolean. `withCodeFreshness` joins the PROJECT-scoped freshness onto
+    // this WORKSPACE-scoped grant list; a repository the project has not been
+    // given carries no drift rather than a fabricated one.
+    const code = await withCodeFreshness(
+      await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    );
     // ⚠️ AND THE MISSING GRAPH IS REPAIRED, NOT ONLY REPORTED (Story MOTIR-4753 ·
     // MOTIR-4826). A repository can be CONNECTED and unindexed — an index that
     // failed, one still running, or somebody who connected their repository and
