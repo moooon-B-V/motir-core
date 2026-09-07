@@ -202,6 +202,26 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       '`withSystemContext`, per workspace, because the ledger is workspace-keyed and an ' +
       "organisation is not — that is the system-context guard's axis, not this one.",
   },
+  'lib/services/githubInstallationService.ts#listOrganizationInstallations': {
+    tables: ['github_installation', 'github_repo'],
+    source: 'scan',
+    why:
+      'MOTIR-4836 — the ORGANISATION`s GitHub connection, for the connection card on ' +
+      'Settings → Organisation → Git and for state C on Settings → Account → Git accounts. ' +
+      '`github_installation` is the ONE table in this sweep that had NO org arm at all when ' +
+      'its call site was written, which is why the defect could not be fixed by binding the ' +
+      'GUC: measured on the live deployment, a sibling workspace of the installing one saw 0 ' +
+      'installations WITH the organisation bound explicitly, and 7 of that organisation`s ' +
+      'repositories in the same transaction. The MOTIR-2956 shape with the worst possible ' +
+      'presentation — the zero rendered as `Connect GitHub`, an ACTION, on an account that ' +
+      'is already installed. `github_installation_org_read` (20260907200000) is what admits ' +
+      'it. `github_repo` is the SECOND table, reported by the scanner and not by the author: ' +
+      'each installation`s repositories are read through `listByInstallation` inside the same ' +
+      'org-bound transaction, so it is this site`s table too and its arm ' +
+      '(`github_repo_org_read`, MOTIR-4677) is what makes the read TOTAL rather than an ' +
+      'installation with an empty repo list — the arm-the-JOIN-target-too clause, arriving ' +
+      'here as a second statement rather than a join.',
+  },
   'lib/services/organizationRepoService.ts#listRepositoryUsage': {
     tables: ['github_repo', 'project_repository'],
     source: 'scan',
