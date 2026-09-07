@@ -221,6 +221,18 @@ describe('the page`s own contracts', () => {
     expect(PAGE).not.toContain('githubIdentityService');
   });
 
+  it('⚠️ resolves the organisation NAME and the INVENTORY from the SAME workspace (MOTIR-4801)', () => {
+    // The heading and the rows below it are two halves of one page, and they used
+    // to answer to different subjects: `resolveActiveOrganization(userId, null)`
+    // for the name (the actor's FIRST org membership) against
+    // `listInventory(ctx)` for the rows (the org that owns `ctx.workspaceId`).
+    // For a member of two organisations that draws one tenant's name over
+    // another tenant's repositories, each with a `Disconnect` button.
+    expect(PAGE).toContain('resolveWorkspaceOrganization(ctx.userId, ctx.workspaceId)');
+    expect(PAGE).toContain('organizationRepoService.listInventory(ctx)');
+    expect(PAGE).not.toContain('resolveActiveOrganization(');
+  });
+
   it('⚠️ adds no route-level loading.tsx — the boundary is IN the page', () => {
     // `settings/organization/billing` `notFound()`s on a self-host build; a
     // route-level boundary in this tree flushes the head and turns that 404 into a
