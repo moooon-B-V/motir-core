@@ -32,6 +32,7 @@ import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import {
   GithubRemovalHappensOnGithubError,
   ProjectRepoInvalidFieldError,
+  ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
@@ -117,21 +118,195 @@ async function inProjectOrg<T>(
   );
 }
 
-/** Translate the `(project_id, github_repo_id)` race into its typed error, so a
- *  raw P2002 never escapes (the concurrency-to-typed-error rule). */
-function translateLinkViolation(
+/**
+ * The two shapes Prisma can put in a `P2002`'s `meta.target`: the COLUMN LIST
+ * (`["project_id", "github_repo_id"]`) or the INDEX NAME
+ * (`project_repository_project_id_github_repo_id_key`). Both are matched, and
+ * both are matched POSITIVELY — see `translateLinkViolation`.
+ */
+function targetFields(err: Prisma.PrismaClientKnownRequestError): string[] | null {
+  const target = err.meta?.['target'];
+  if (Array.isArray(target)) {
+    const fields = target.map(String).filter((f) => f.length > 0);
+    return fields.length > 0 ? fields : null;
+  }
+  if (typeof target === 'string' && target.length > 0) return [target];
+  return null;
+}
+
+/**
+ * The constraint name out of the DRIVER's own error, when `meta.target` has none.
+ *
+ * ⚠️ THIS IS WHERE THE ANSWER ACTUALLY IS UNDER RLS, and it was worth finding:
+ * Prisma drops the constraint name on its way to `meta.target` (the adapter builds
+ * that from `DETAIL` alone), but it PRESERVES the driver's original error beneath
+ * `meta.driverAdapterError`. Measured on a real lost race under the `motir_app`
+ * role:
+ *
+ *   meta = { modelName: 'ProjectRepo', driverAdapterError: { cause: {
+ *     originalCode: '23505',
+ *     originalMessage: 'duplicate key value violates unique constraint
+ *                       "project_repository_project_id_github_repo_id_key"' } } }
+ *
+ * So the index name survives, quoted, in a message PostgreSQL sends whether or not
+ * it is willing to describe the conflicting VALUES — which is exactly the
+ * distinction RLS draws. Reading it turns the ordinary case back into a local,
+ * positive classification with no second query.
+ *
+ * It is read DEFENSIVELY and is never the only path: the message is
+ * server-localized, so a `lc_messages` other than English changes the prose around
+ * the name. Only the QUOTED identifier is taken, and a miss falls through to the
+ * set re-read rather than guessing.
+ */
+function driverConstraintName(err: Prisma.PrismaClientKnownRequestError): string | null {
+  const adapterError = err.meta?.['driverAdapterError'];
+  if (typeof adapterError !== 'object' || adapterError === null) return null;
+  const cause = (adapterError as { cause?: unknown }).cause;
+  if (typeof cause !== 'object' || cause === null) return null;
+  const message = (cause as { originalMessage?: unknown }).originalMessage;
+  if (typeof message !== 'string') return null;
+  return message.match(/"([^"]+)"/)?.[1] ?? null;
+}
+
+/** `@@unique([projectId, githubRepoId])`, in either shape. */
+function namesClaimConstraint(fields: string[]): boolean {
+  // One test covers both shapes: the column is `github_repo_id`, and the index
+  // name `project_repository_project_id_github_repo_id_key` contains it.
+  return fields.some((f) => f.includes('github_repo_id'));
+}
+
+/** `@@unique([projectId, name])`, in either shape. */
+function namesNameConstraint(fields: string[]): boolean {
+  // Two tests, because the index name does NOT contain the bare column: it is
+  // `project_repository_project_id_name_key`. Checked AFTER the claim constraint,
+  // so the ordering never has to arbitrate between them.
+  return fields.some((f) => f === 'name' || f.endsWith('_name_key'));
+}
+
+/**
+ * Translate a unique-constraint violation on the set INSERT into its typed error,
+ * so a raw P2002 never escapes (the concurrency-to-typed-error rule).
+ *
+ * ⚠️ BOTH ARMS ARE POSITIVE, AND THE REMAINDER HAS ITS OWN NAME (Bug MOTIR-4833).
+ * This function used to test for `github_repo_id` and let an `else` throw
+ * `ProjectRepoNameTakenError` — so a violation it could not classify was ASSERTED
+ * to be a name collision. That is not a vaguer answer than the truth, it is a
+ * different and actionable one: it tells a person to rename something, when the
+ * real condition was that another project's write claimed the repository first
+ * and renaming cannot help.
+ *
+ * ⚠️ AND `meta.target` IS ABSENT FOR EVERY LOST RACE ON THIS PATH — which is why
+ * there are three classification layers rather than one. MEASURED, not deduced:
+ *
+ *   1. `project_repository` is `FORCE ROW LEVEL SECURITY`, and the app connects as
+ *      a NON-SUPERUSER role, so PostgreSQL's `BuildIndexValueDescription` declines
+ *      to describe the conflicting key and the `23505` arrives with **no `DETAIL`
+ *      line at all** (verified against this schema's own dev database: as the
+ *      owner `DETAIL` is present, as `motir_app` it is `undefined`, while
+ *      `constraint` — the index name — is present in BOTH).
+ *   2. `@prisma/adapter-pg` derives `meta.target` from `error.detail` ALONE
+ *      (`error.detail?.match(/Key \(([^)]+)\)/)`, `node_modules/@prisma/adapter-pg`),
+ *      and never from `error.constraint`. No `DETAIL` ⇒ no `target`.
+ *
+ * So the index name the database DID report never reaches `meta.target`, the
+ * `github_repo_id` arm was unreachable under RLS, and every lost race — of either
+ * constraint — produced the name error. It stayed invisible because the pre-checks
+ * usually win the race, and because when the NAME race lost the fallback happened
+ * to be the right answer; only the CLAIM race could ever go red.
+ *
+ * ⚠️ THE NAME IS NOT LOST, THOUGH — IT IS ONE LEVEL DOWN. Prisma preserves the
+ * driver's original error under `meta.driverAdapterError`, whose `originalMessage`
+ * quotes the constraint (`driverConstraintName`). So the ordinary case classifies
+ * locally after all, and `resolveUnclassifiedLinkConflict` is the backstop for the
+ * case where neither layer names a constraint rather than the common path.
+ *
+ * ⚠️ EXPORTED FOR ITS OWN UNIT TEST, and that is the point rather than a
+ * concession. The only thing that has ever executed these branches is a
+ * `Promise.allSettled` race whose loser reaches the INSERT — so which arm gets
+ * exercised is decided by a scheduler, and the branch that carried the defect was
+ * covered by luck for as long as it existed. Driving the function directly with
+ * each `meta.target` shape is what turns that into a test.
+ */
+export function translateLinkViolation(
   err: unknown,
   fallback: { name: string; githubRepoId: string; projectId: string },
 ): never {
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-    const target = err.meta?.['target'];
-    const fields = Array.isArray(target) ? target.map(String) : [String(target ?? '')];
-    if (fields.some((f) => f.includes('github_repo_id'))) {
+    // Most reliable first: the STRUCTURED target, when Prisma has one. Then the
+    // constraint name out of the driver's own error, which survives RLS. Then, and
+    // only then, the remainder — resolved against the set by the caller.
+    const fields = targetFields(err) ?? [driverConstraintName(err)].filter((f) => f !== null);
+    if (fields.length > 0 && namesClaimConstraint(fields)) {
       throw new RealizedRepoAlreadyClaimedError(fallback.githubRepoId);
     }
-    throw new ProjectRepoNameTakenError(fallback.name, fallback.projectId);
+    if (fields.length > 0 && namesNameConstraint(fields)) {
+      throw new ProjectRepoNameTakenError(fallback.name, fallback.projectId);
+    }
+    // The instrument this defect cost an elimination argument to reach. One line
+    // here settles the next occurrence by reading it instead of deducing it.
+    console.warn('[organizationRepoService] unclassified P2002 on the repository-set insert', {
+      code: err.code,
+      meta: err.meta,
+      projectId: fallback.projectId,
+      githubRepoId: fallback.githubRepoId,
+    });
+    throw new ProjectRepoLinkConflictError(
+      fallback.projectId,
+      fallback.name,
+      fallback.githubRepoId,
+    );
   }
   throw err;
+}
+
+/**
+ * Resolve an unclassifiable link conflict by ASKING THE SET, once the failed
+ * transaction has unwound.
+ *
+ * ⚠️ IT HAS TO RUN OUT HERE, AND THAT IS THE WHOLE REASON THIS WRAPPER EXISTS.
+ * The obvious place to disambiguate is the `catch` beside the INSERT, where both
+ * the intent and a `tx` are in hand — and it cannot work there: PostgreSQL aborts
+ * the transaction block on the `23505`, so every further statement on that `tx`
+ * fails with `25P02` until it rolls back. By the time control reaches here the
+ * transaction is gone, the WINNER's row is committed, and one read answers the
+ * question the error could not.
+ *
+ * It opens no new authorization surface: the org-admin gate and the project
+ * `repository:manage` gate both passed inside the transaction that just failed,
+ * and this reads the same project's own set under the same workspace context.
+ */
+async function resolveUnclassifiedLinkConflict<T>(
+  projectId: string,
+  ctx: ServiceContext,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (!(err instanceof ProjectRepoLinkConflictError)) throw err;
+    await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      async (tx) => {
+        // The CLAIM is asked first because it is the one a rename cannot fix.
+        const claimed = await projectRepoRepository.findByProjectAndGithubRepoId(
+          projectId,
+          err.githubRepoId,
+          tx,
+        );
+        if (claimed) throw new RealizedRepoAlreadyClaimedError(err.githubRepoId);
+        const named = await projectRepoRepository.findByProjectAndNameInsensitive(
+          projectId,
+          err.repoName,
+          ctx.workspaceId,
+          tx,
+        );
+        if (named) throw new ProjectRepoNameTakenError(err.repoName, projectId);
+      },
+    );
+    // Neither uniqueness explains it. That is a real answer and it keeps its own
+    // name — a 409 the caller can retry, never a name collision it cannot fix.
+    throw err;
+  }
 }
 
 export const organizationRepoService = {
@@ -597,70 +772,72 @@ export const organizationRepoService = {
     input: LinkExistingRepoInput,
     ctx: ServiceContext,
   ): Promise<ProjectRepoDto> {
-    return inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
-      // The org-admin gate, in the SERVICE and inside the transaction. The room's
-      // own `repository:manage` is a PROJECT permission — without this a project
-      // admin who is not an org admin could attach the organisation's
-      // repositories through it. A gate on the button is a gate one caller away
-      // from being missing.
-      await assertOrgAdmin(ctx.userId, organizationId, tx);
+    return resolveUnclassifiedLinkConflict(projectId, ctx, () =>
+      inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
+        // The org-admin gate, in the SERVICE and inside the transaction. The room's
+        // own `repository:manage` is a PROJECT permission — without this a project
+        // admin who is not an org admin could attach the organisation's
+        // repositories through it. A gate on the button is a gate one caller away
+        // from being missing.
+        await assertOrgAdmin(ctx.userId, organizationId, tx);
 
-      const repo = await githubRepoRepository.findById(input.githubRepoId, tx);
-      // Not-found and belongs-to-another-org are ONE answer on purpose: a probe
-      // must not be able to tell a real id in a foreign org from a fictional one.
-      if (!repo || repo.organizationId !== organizationId) {
-        throw new ProjectRepoInvalidFieldError(
-          'githubRepoId',
-          'it does not name a repository connected to this organisation.',
-        );
-      }
+        const repo = await githubRepoRepository.findById(input.githubRepoId, tx);
+        // Not-found and belongs-to-another-org are ONE answer on purpose: a probe
+        // must not be able to tell a real id in a foreign org from a fictional one.
+        if (!repo || repo.organizationId !== organizationId) {
+          throw new ProjectRepoInvalidFieldError(
+            'githubRepoId',
+            'it does not name a repository connected to this organisation.',
+          );
+        }
 
-      const name = (input.name ?? repo.name).trim();
-      const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
-        projectId,
-        name,
-        ctx.workspaceId,
-        tx,
-      );
-      if (clash) throw new ProjectRepoNameTakenError(name, projectId);
-
-      const existing = await projectRepoRepository.findByProjectAndGithubRepoId(
-        projectId,
-        repo.id,
-        tx,
-      );
-      // The double-add raises the SAME typed error and the same 409 MOTIR-4648
-      // preserved through `@@unique([projectId, githubRepoId])` — the guarantee
-      // that survived dropping the global unique index.
-      if (existing) throw new RealizedRepoAlreadyClaimedError(repo.id);
-
-      const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
-      let row;
-      try {
-        row = await projectRepoRepository.create(
-          {
-            workspaceId: ctx.workspaceId,
-            projectId,
-            role: input.role,
-            name,
-            ...(input.label !== undefined ? { label: input.label } : {}),
-            // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
-            // seeds from nothing: the repository is the organisation's and has its own
-            // history. The Repositories room splits its two sections on exactly this
-            // question, so a default here would render the row under "Motir hosts…"
-            // offering Take it over for a repository the organisation already owns.
-            seedSource: SEED_SOURCE_ORGANIZATION,
-            state: 'connected',
-            githubRepoId: repo.id,
-            position: keyForAppend(last),
-          },
+        const name = (input.name ?? repo.name).trim();
+        const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
+          projectId,
+          name,
+          ctx.workspaceId,
           tx,
         );
-      } catch (err) {
-        translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
-      }
-      return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
-    });
+        if (clash) throw new ProjectRepoNameTakenError(name, projectId);
+
+        const existing = await projectRepoRepository.findByProjectAndGithubRepoId(
+          projectId,
+          repo.id,
+          tx,
+        );
+        // The double-add raises the SAME typed error and the same 409 MOTIR-4648
+        // preserved through `@@unique([projectId, githubRepoId])` — the guarantee
+        // that survived dropping the global unique index.
+        if (existing) throw new RealizedRepoAlreadyClaimedError(repo.id);
+
+        const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
+        let row;
+        try {
+          row = await projectRepoRepository.create(
+            {
+              workspaceId: ctx.workspaceId,
+              projectId,
+              role: input.role,
+              name,
+              ...(input.label !== undefined ? { label: input.label } : {}),
+              // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
+              // seeds from nothing: the repository is the organisation's and has its own
+              // history. The Repositories room splits its two sections on exactly this
+              // question, so a default here would render the row under "Motir hosts…"
+              // offering Take it over for a repository the organisation already owns.
+              seedSource: SEED_SOURCE_ORGANIZATION,
+              state: 'connected',
+              githubRepoId: repo.id,
+              position: keyForAppend(last),
+            },
+            tx,
+          );
+        } catch (err) {
+          translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
+        }
+        return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
+      }),
+    );
   },
 
   /**
@@ -690,45 +867,47 @@ export const organizationRepoService = {
       installationId: input.installationId,
     });
 
-    return inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
-      const repo = await githubRepoRepository.findByRepoIdAndProvider(
-        input.providerRepoId,
-        'github',
-        tx,
-      );
-      if (!repo || repo.organizationId !== organizationId) {
-        throw new ProjectRepoInvalidFieldError(
-          'providerRepoId',
-          'the install did not select that repository for this organisation.',
-        );
-      }
-      const name = (input.name ?? repo.name).trim();
-      const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
-      let row;
-      try {
-        row = await projectRepoRepository.create(
-          {
-            workspaceId: ctx.workspaceId,
-            projectId,
-            role: input.role,
-            name,
-            ...(input.label !== undefined ? { label: input.label } : {}),
-            // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
-            // seeds from nothing: the repository is the organisation's and has its own
-            // history. The Repositories room splits its two sections on exactly this
-            // question, so a default here would render the row under "Motir hosts…"
-            // offering Take it over for a repository the organisation already owns.
-            seedSource: SEED_SOURCE_ORGANIZATION,
-            state: 'connected',
-            githubRepoId: repo.id,
-            position: keyForAppend(last),
-          },
+    return resolveUnclassifiedLinkConflict(projectId, ctx, () =>
+      inProjectOrg(projectId, ctx, 'edit', async (tx, organizationId) => {
+        const repo = await githubRepoRepository.findByRepoIdAndProvider(
+          input.providerRepoId,
+          'github',
           tx,
         );
-      } catch (err) {
-        translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
-      }
-      return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
-    });
+        if (!repo || repo.organizationId !== organizationId) {
+          throw new ProjectRepoInvalidFieldError(
+            'providerRepoId',
+            'the install did not select that repository for this organisation.',
+          );
+        }
+        const name = (input.name ?? repo.name).trim();
+        const last = await projectRepoRepository.findLastPosition(projectId, ctx.workspaceId, tx);
+        let row;
+        try {
+          row = await projectRepoRepository.create(
+            {
+              workspaceId: ctx.workspaceId,
+              projectId,
+              role: input.role,
+              name,
+              ...(input.label !== undefined ? { label: input.label } : {}),
+              // ⚠️ NOT `defaultSeedSourceForRole` — see SEED_SOURCE_ORGANIZATION. This row
+              // seeds from nothing: the repository is the organisation's and has its own
+              // history. The Repositories room splits its two sections on exactly this
+              // question, so a default here would render the row under "Motir hosts…"
+              // offering Take it over for a repository the organisation already owns.
+              seedSource: SEED_SOURCE_ORGANIZATION,
+              state: 'connected',
+              githubRepoId: repo.id,
+              position: keyForAppend(last),
+            },
+            tx,
+          );
+        } catch (err) {
+          translateLinkViolation(err, { name, githubRepoId: repo.id, projectId });
+        }
+        return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
+      }),
+    );
   },
 };
