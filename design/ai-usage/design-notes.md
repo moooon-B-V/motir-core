@@ -306,28 +306,29 @@ workaround.
 
 ## Colour roles (`--el-*` — palette, not grey-only · finding #54)
 
-| Element                                                | Token                                                                          | Why                                                                                                           |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| **Balance hero figure / medium figures**               | `--el-text` (serif) · unit in `--el-text-muted`                                | The primary numbers; the unit is quiet so "credits" reads as a label.                                         |
-| **Tier chip**                                          | `--el-tint-lavender` bg + `--el-text-strong`                                   | The org/plan tier — the brand-purple family, matches the org avatar.                                          |
-| **Allotment meter fill (healthy)**                     | `--el-accent`                                                                  | Primary "credits remaining" share.                                                                            |
-| **Allotment meter fill (low)**                         | `--el-warning`                                                                 | Low-balance variant (panel 7a).                                                                               |
-| **Monthly-trend bars**                                 | current `--el-accent` · prior `--el-tint-lavender`                             | The latest month stands out; history is quieter.                                                              |
-| **Spend delta — up / down**                            | `--el-warning` (up) · `--el-success` (down)                                    | Coloured by direction (more spend = warning hue), not grey.                                                   |
-| **Model: Claude Opus**                                 | dot + bar `--el-accent`                                                        | The priciest/heaviest model — the strongest hue, biggest drain.                                               |
-| **Model: Claude Sonnet**                               | dot + bar `--el-info`                                                          | Distinct blue, clearly the mid tier.                                                                          |
-| **Model: Claude Haiku** (reserved)                     | dot + bar `--el-success`                                                       | Green — the cheapest tier (token present for future Haiku rows).                                              |
-| **Model: DeepSeek**                                    | dot + bar `--color-accent-teal` (`--el-type-subtask` hue)                      | The teal family — the non-Claude channel, visibly distinct.                                                   |
-| **Job-kind: `plan`** (MOTIR-4303)                      | `--el-tint-peach` + `--el-text-strong`                                         | The ONE planning kind, post-switch. The last unspent tint in the family.                                      |
-| **Job-kind: generate / expand / augment** (historical) | `--el-tint-lavender` / `--el-tint-sky` / `--el-tint-mint` + `--el-text-strong` | Three planning verbs, three tints — readable at a glance. RETAINED: persisted history, not a live vocabulary. |
-| **Job-kind: re-plan** (historical)                     | neutral `Pill` (`--el-surface`)                                                | Labelled but untinted — `jobKindTint` has no `replan` case, so this is what ships.                            |
-| **Low-balance banner**                                 | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`                | Warning hue in the BANNER tint, not the page (finding #35).                                                   |
-| **Out-of-credits / blocked icon**                      | `--el-tint-yellow` + `--el-warning`                                            | The paused state — warning, not danger (nothing is broken).                                                   |
-| **Error icon tint**                                    | `--el-tint-rose` + `--el-danger-text`                                          | Fetch-error state (panel 8c).                                                                                 |
-| **Read-only chip / member lock note**                  | neutral `Pill` (`--el-surface`) · lock note `i-lock`                           | The limited member view's gating affordance.                                                                  |
-| **Primary CTAs / active scope segment**                | `--el-accent` (+ `--el-accent-text`) · `--el-tint-lavender`                    | Open-planner / Retry / the active drill segment.                                                              |
-| Count / scope-level / "Credits" chips                  | `--el-surface` + `--el-text-secondary` (neutral `Pill`)                        | Genuinely neutral metadata.                                                                                   |
-| Text / surfaces / borders                              | `--el-text*`, `--el-surface*`, `--el-border*`                                  | Standard element tokens — never Tier-0 `--color-*`.                                                           |
+| Element                                                | Token                                                                          | Why                                                                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **Balance hero figure / medium figures**               | `--el-text` (serif) · unit in `--el-text-muted`                                | The primary numbers; the unit is quiet so "credits" reads as a label.                                             |
+| **Tier chip**                                          | `--el-tint-lavender` bg + `--el-text-strong`                                   | The org/plan tier — the brand-purple family, matches the org avatar.                                              |
+| **Allotment meter fill (healthy)**                     | `--el-accent`                                                                  | Primary "credits remaining" share.                                                                                |
+| **Allotment meter fill (low)**                         | `--el-warning`                                                                 | Low-balance variant (panel 7a).                                                                                   |
+| **Monthly-trend bars**                                 | current `--el-accent` · prior `--el-tint-lavender`                             | The latest month stands out; history is quieter.                                                                  |
+| **Spend delta — up / down**                            | `--el-warning` (up) · `--el-success` (down)                                    | Coloured by direction (more spend = warning hue), not grey.                                                       |
+| **Model: Claude Opus**                                 | dot + bar `--el-accent`                                                        | The priciest/heaviest model — the strongest hue, biggest drain.                                                   |
+| **Model: Claude Sonnet**                               | dot + bar `--el-info`                                                          | Distinct blue, clearly the mid tier.                                                                              |
+| **Model: Claude Haiku** (reserved)                     | dot + bar `--el-success`                                                       | Green — the cheapest tier (token present for future Haiku rows).                                                  |
+| **Model: DeepSeek**                                    | dot + bar `--color-accent-teal` (`--el-type-subtask` hue)                      | The teal family — the non-Claude channel, visibly distinct.                                                       |
+| **Job-kind: `plan`** (MOTIR-4303)                      | `--el-tint-peach` + `--el-text-strong`                                         | The ONE planning kind, post-switch. The last unspent tint in the family.                                          |
+| **Job-kind: generate / expand / augment** (historical) | `--el-tint-lavender` / `--el-tint-sky` / `--el-tint-mint` + `--el-text-strong` | Three planning verbs, three tints — readable at a glance. RETAINED: persisted history, not a live vocabulary.     |
+| **Job-kind: re-plan** (historical)                     | neutral `Pill` (`--el-surface`)                                                | Labelled but untinted — `jobKindTint` has no `replan` case, so this is what ships.                                |
+| **Low-balance banner**                                 | `--el-tint-yellow` bg + `--el-text-strong`, icon `--el-warning`                | Warning hue in the BANNER tint, not the page (finding #35).                                                       |
+| **Out-of-credits / blocked icon**                      | `--el-tint-yellow` + `--el-warning`                                            | The paused state — warning, not danger (nothing is broken).                                                       |
+| **Exempt org's exhausted-balance icon (7c)**           | `--el-tint-sky` + `--el-info`                                                  | The EXEMPT state (amendment 2026-09-07) — informational, never a warning: nothing is wrong and nothing is paused. |
+| **Error icon tint**                                    | `--el-tint-rose` + `--el-danger-text`                                          | Fetch-error state (panel 8c).                                                                                     |
+| **Read-only chip / member lock note**                  | neutral `Pill` (`--el-surface`) · lock note `i-lock`                           | The limited member view's gating affordance.                                                                      |
+| **Primary CTAs / active scope segment**                | `--el-accent` (+ `--el-accent-text`) · `--el-tint-lavender`                    | Open-planner / Retry / the active drill segment.                                                                  |
+| Count / scope-level / "Credits" chips                  | `--el-surface` + `--el-text-secondary` (neutral `Pill`)                        | Genuinely neutral metadata.                                                                                       |
+| Text / surfaces / borders                              | `--el-text*`, `--el-surface*`, `--el-border*`                                  | Standard element tokens — never Tier-0 `--color-*`.                                                               |
 
 > **One deliberate Tier-0 reach:** the DeepSeek dot/bar uses `--color-accent-teal`
 > because there is no dedicated `--el-*` teal element token beyond `--el-type-subtask`
@@ -603,3 +604,157 @@ area describes.
 
 Panel (d) is **annotated in place** rather than redrawn: it remains a true record of shipped
 behaviour until MOTIR-4572 merges, and redrawing customer pixels is outside MOTIR-4564's scope.
+
+---
+
+# AMENDMENT 2026-09-07 — panel 7b was kept on a premise that is false, and the EXEMPT org gets its own state (7c)
+
+**Card MOTIR-4809, filed from the run that stopped on it.** This amends the
+2026-09-05 entry directly above. Its DECISION — do not suppress the customer
+panels for an internal org — **stands and is not disturbed**. Its stated REASON
+does not survive, and one of its clauses is therefore withdrawn.
+
+## The clause withdrawn
+
+> ~~**Panels 7a low-balance and 7b out-of-credits RENDER**, and the org is never actually blocked
+> from working: the pairing means the balance never moves, so no refusal valve is ever reached.~~
+
+Both halves are false, for different reasons, and neither is a judgement call.
+
+1. **"the balance never moves" is about a FLOOR. The panel's predicate is a
+   THRESHOLD — and the floor IS the threshold.**
+   `app/(authed)/settings/organization/usage/_components/OrgUsageClient.tsx:190`
+   reads `const outOfCredits = data.balance <= 0`. The paired offset (MOTIR-4570)
+   stops the balance FALLING; it does not lift it above zero. And motir-ai
+   `scripts/reconcile-internal-balance.ts` pins a newly-classified org's ledger at
+   **exactly `0`** — `const target = targetArg ? Number(...) : 0` — describing
+   itself as bringing the balance _"to where the offset will hold it from now
+   on."_ So 7b is an internal org's **permanent resting state**, not the
+   unreachable one the amendment assumed.
+2. **The org this is about is `isMeta` and NOT `internalBilling`, so no pairing
+   runs for it at all.** motir-ai `src/seed/dogfoodDirectionDocs.ts` seeds the
+   dogfood org `{ isMeta: true, internalBilling: false }`, and migration
+   `20260905120000_organization_internal_billing` deliberately flips no data.
+   Its debits are unoffset and the balance drifts **negative** — which
+   `lib/dto/aiUsage.ts:108`'s own comment already said.
+3. **And 7b's copy asserts a consequence no gate performs.**
+   `aiUsage.outOfCredits.body` says _"new planning runs are paused"_. motir-ai
+   exempts `isMeta` at **both** enforcement points — `src/jobs/worker.ts`
+   `assertHasCredits` (`if (isMeta) return;`) and
+   `src/services/gatewaySyncService.ts` `getBalanceForOrg`
+   (`hasCredits = isMeta || balanceCredits > 0`). For a meta org that sentence
+   has never been true. MOTIR-4576 step 7 says the same: _"Whatever the balance
+   reads, start a planning turn and confirm it runs."_
+
+**Rendered rather than reasoned.** `OrgUsageClient` was bundled and screenshotted
+at the live shape (`isMeta: true`, `internalBilling: false`, `balance: -4210`,
+`tier: null`) before any of this was drawn. The page opens with _"Planning is
+paused — you're out of credits"_ above a **-4,210 credits** balance, and — because
+`tier` is `null` for an org that never transacted — **no tier pill and no
+classification chip render at all.** The one sentence on the page that says
+anything about what kind of organization this is, is the false one.
+
+## The ASYMMETRY that decides the scope
+
+The exemption is **`isMeta`-ONLY**. An org that is `internalBilling` but NOT
+`isMeta`, held at `0`, **is genuinely refused** by both gates. For that org 7b
+tells the truth and must keep rendering. "Internal" is not one thing here, and a
+fix keyed on the classification flag would be wrong in the more expensive
+direction — it would hide a real refusal.
+
+## The decision — (c), a THIRD drawn state
+
+Three answers were weighed. **(c) is chosen: panel 7c, drawn.**
+
+- **(a) Suppress 7b where planning is not credit-gated.** REJECTED. It is the
+  cheapest and it is the move the 2026-09-05 amendment exists to refuse — hiding
+  a panel from the internal org rather than making the page honest. It also
+  leaves the reader with a negative balance and **no explanation of any kind**,
+  which the render above shows is already the page's weakest point.
+- **(b) Keep 7b for every org and make its COPY stop asserting a consequence.**
+  REJECTED. It degrades the TRUE case to accommodate the false one: a paying
+  customer whose planning genuinely is paused would be told something vaguer, to
+  spare one exempt org a wrong sentence.
+- **(c) A third state for "balance exhausted AND the org is exempt".** CHOSEN.
+  It follows the 2026-09-05 principle rather than bending it — do not suppress,
+  tell the truth — it answers the two questions a negative balance actually
+  raises (_is something broken?_ / _is my planning stopped?_), and it leaves 7b
+  untouched for every org 7b is true of. Its cost is one drawn state and two
+  copy strings, which is what the rest of this amendment specifies.
+
+## THE PREDICATE — in the terms the code reads
+
+| org                                                 | `balance <= 0` | renders                                     |
+| --------------------------------------------------- | -------------- | ------------------------------------------- |
+| any org, `balance > 0`                              | no             | neither 7b nor 7c                           |
+| `isMeta: false` (paying, or `internalBilling` only) | yes            | **7b**, unchanged — it is genuinely refused |
+| `isMeta: true` (with or without `internalBilling`)  | yes            | **7c**, and never 7b                        |
+
+So: **7b's condition narrows from `balance <= 0` to `balance <= 0 && !isMeta`,
+and 7c is `balance <= 0 && isMeta`.** One flag, read once, in one named
+predicate. It is `isMeta` and never `internalBilling`, for the asymmetry above.
+
+**Panel 7a (low balance) is untouched and needs no branch** — it is already
+`!outOfCredits && allotment > 0`, and an exempt org has no allotment, so it
+cannot fire. Nothing else on the page branches: the balance figure, the tier
+pill, the allotment bar, the drill, the per-model breakdown, the run log and the
+search figures all stay exactly as MOTIR-4572 left them, for every org.
+
+## Panel 7c — the drawing
+
+Drawn in `search-spend.mock.html` panel (5)(d), which is where this area's META
+state has always lived; `usage.mock.html` is byte-unchanged.
+
+| element   | primitive / class                         | token                                            | why                                                                                                                                                                               |
+| --------- | ----------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| container | the `EmptyState` family — `.state.exempt` | `--el-page-bg` + `--el-border` + `--shadow-card` | identical box to 7b; only the icon role differs                                                                                                                                   |
+| icon tint | `.state.exempt .ico`                      | `--el-tint-sky` bg + `--el-info` glyph           | **informational, not a warning** — nothing is wrong and nothing is paused, so it must not reuse 7b's `--el-tint-yellow` + `--el-warning`. A glyph carries no text, so 3:1 applies |
+| icon      | `i-info` (lucide `info`)                  | —                                                | 7b's `i-pause` states a stop; there is no stop here                                                                                                                               |
+| title     | `.state h4`                               | `--el-text`                                      | serif, same weight as 7b's                                                                                                                                                        |
+| body      | `.state p`                                | `--el-text-muted` on `--el-page-bg` (4.54:1 ✓)   | the one surface that ink clears AA on, and the one `.state` sits on                                                                                                               |
+| footnote  | `.state .passive-slot`                    | `--el-surface-soft` + `--el-text-secondary`      | reused verbatim from 7b; **not** an Epic-8 purchase slot here — it carries the negative-balance explanation                                                                       |
+
+Add to this area's **Colour roles** table: `--el-tint-sky` + `--el-info` —
+_"the EXEMPT org's exhausted-balance state (7c): informational, never a warning."_
+
+## Copy — both catalogs, so the code card writes none
+
+`messages/en.json` → `aiUsage.exempt`:
+
+```json
+"exempt": {
+  "title": "This organization isn’t charged for planning",
+  "body": "The {org} organization is exempt from the credit gate, so planning runs whatever the balance reads. The figures below are recorded for internal cost visibility.",
+  "balanceNote": "The balance can be negative here. That is the cost this organization has incurred, not an amount owed — nothing on this page is a bill."
+}
+```
+
+`messages/zh.json` → `aiUsage.exempt`:
+
+```json
+"exempt": {
+  "title": "此组织的规划不计费",
+  "body": "{org} 组织不受额度限制，无论余额显示为多少，规划都会照常运行。下方数字仅用于记录内部成本。",
+  "balanceNote": "此处余额可能为负。那是该组织已产生的成本，而不是欠款——本页任何数字都不是账单。"
+}
+```
+
+`aiUsage.outOfCredits.*` is **unchanged** — 7b keeps its words for every org it
+still renders for.
+
+## Panel (d) redrawn, and why that was owed anyway
+
+The 2026-09-05 entry kept panel (d) drawing the superseded _"Unlimited"_
+treatment _"until MOTIR-4572 merges."_ **MOTIR-4572 is `done`.** The release
+condition was met and nobody came back, so this area has been shipping a mock
+whose meta panel showed a treatment the code had deleted. That is repaired here
+whichever way the decision had gone.
+
+## Who consumes this
+
+- **MOTIR-4806** — the code card. Its criteria 1–4 were written for answer (a)
+  and are amended by this decision in the same pass; it implements the predicate
+  table above and adds the two copy keys.
+- **MOTIR-4576** — the manual step that classifies `moooon` and reconciles its
+  ledger to `--target=0`. That reconciliation is what turns today's drifted
+  negative into a permanent `balance <= 0`, so it is the reason 7c cannot wait.
