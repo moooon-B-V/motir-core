@@ -66,7 +66,7 @@ where an agent leaves work for a person.
 | **In progress**       | `category = 'in_progress'`                         | `In Progress`, `Planning`, `Implemented`, `In Review` |
 | **Recently finished** | `category = 'done'` **and** finished ≤ 7 days      | `Done`, `Cancelled`                                   |
 | **Watching**          | unchanged membership; ORDERED (below)              | —                                                     |
-| **Approvals**         | **not drawn here** — the SLOT only                 | —                                                     |
+| **To approve**        | **not drawn here** — the SLOT only                 | —                                                     |
 
 **⚠️ To do is written as a COMPLEMENT, and that is a drawn decision rather than
 an implementation detail.** Three `IN` predicates are total only if every
@@ -97,7 +97,16 @@ each tab an `<a>` at `--height-control`, `--radius-control`,
 | **In progress**       | `CircleDot`    | `/workbench?tab=in-progress` |
 | **Recently finished** | `CircleCheck`  | `/workbench?tab=finished`    |
 | **Watching**          | `Star`         | `/workbench?tab=watching`    |
-| **Approvals**         | `Inbox`        | `/workbench?tab=approvals`   |
+| **To approve**        | `Inbox`        | `/workbench?tab=approvals`   |
+
+**⚠️ THE LABEL IS AN ACTION AND THE SLUG IS A SET, and the mismatch is
+deliberate.** The tab says **To approve** because that is what it asks of the
+reader — the other four name a state a card is IN, and this one names something
+the reader must DO, which is the whole reason it sits apart from them. Its URL
+stays `?tab=approvals` because a slug names the SET, which is also why _Recently
+finished_ is addressed as `?tab=finished`: an address is a noun a person pastes
+and a label is what they read on the strip, and neither owes the other a
+transliteration.
 
 - **The selection is a URL, not component state** — `aria-current="page"` on the
   active one. A reload stays on the tab and the tab is linkable; that is also
@@ -112,7 +121,7 @@ each tab an `<a>` at `--height-control`, `--radius-control`,
   five `0`s is five numbers a brand-new user has to read and discard. A zero
   beside a non-zero sibling is KEPT, because there it is information. The rule
   is the shipped one and it now suppresses five instead of two.
-- **The Approvals count is drawn as `0`**, which is what this story ships: the
+- **The To-approve count is drawn as `0`**, which is what this story ships: the
   tab's rows, the gate records behind them and the approve/confirm control are
   [MOTIR-4778](motir:cmtqhxi7r000vhvphp60vjymc)'s and are drawn in that story's
   own design amendment. Drawing the whole strip once — rather than four tabs now
@@ -123,19 +132,19 @@ could plausibly break:
 
 | band                          | content box | tab track needed | verdict                       |
 | ----------------------------- | ----------- | ---------------- | ----------------------------- |
-| 1200 viewport (rail 240)      | 894px       | **656px**        | fits, with 238px to spare     |
-| all-empty (counts suppressed) | 894px       | **496px**        | fits                          |
-| narrow `< md` (420 viewport)  | 386px       | **668px**        | **does not fit — it scrolls** |
+| 1200 viewport (rail 240)      | 894px       | **662px**        | fits, with 232px to spare     |
+| all-empty (counts suppressed) | 894px       | **502px**        | fits                          |
+| narrow `< md` (420 viewport)  | 386px       | **662px**        | **does not fit — it scrolls** |
 
 The strip is `inline-flex` inside a flex column, so it stretches to the content
 box and the tabs sit left. That is the SHIPPED behaviour, not a change: the
 two-tab strip measured the same 894px with 249px of tabs in it. The split
-narrows the empty track from 645px to 238px, which reads better rather than
+narrows the empty track from 645px to 232px, which reads better rather than
 worse.
 
 ### ⚠️ Narrow: the strip SCROLLS — it does not shrink and it does not wrap
 
-At `< md` the content box is 386px and five tabs are 668px. The old two-tab
+At `< md` the content box is 386px and five tabs are 662px. The old two-tab
 strip was 249px and fitted, so this is the one place the split changes the
 narrow band's answer.
 
@@ -230,7 +239,7 @@ Panel 6 draws five, all of them the shipped `EmptyState` primitive's own markup
 | **In progress**       | `CircleDot`   | Nothing in flight                   | secondary `Button` → **the To do tab** |
 | **Recently finished** | `CircleCheck` | Nothing finished this week          | **none**                               |
 | **Watching**          | `Star`        | You are not watching anything       | **none** (shipped copy, unchanged)     |
-| **Approvals**         | `Inbox`       | Nothing is waiting on your approval | **none**                               |
+| **To approve**        | `Inbox`       | Nothing is waiting on your approval | **none**                               |
 
 **Only a tab whose emptiness a reader can DO something about carries an action**,
 which is why there are two and not five. To do sends you to Ready. In progress
@@ -252,7 +261,7 @@ none carries a card header of its own.
 | page `h1`             | **Workbench**                                                                  |
 | subtitle              | **"What you are doing in {project}, and what you have just done."**            |
 | window caption        | "Finished in the last 7 days. Older work stays on the item, and on the board." |
-| tab labels            | To do · In progress · Recently finished · Watching · Approvals                 |
+| tab labels            | To do · In progress · Recently finished · Watching · **To approve**            |
 | Watching group labels | In progress · To do                                                            |
 
 **⚠️ THE SUBTITLE DOES NOT SURVIVE, and the card asked whether it should.** The
@@ -349,7 +358,7 @@ four surfaces; two were removed and stay removed:
   archived. It was the only part of the story that needed a table, bought for
   shortcuts to pages the nav already reaches.
 
-**And the Approvals tab's ROWS.** This asset draws the slot, the label, the
+**And the To-approve tab's ROWS.** This asset draws the slot, the label, the
 count and the empty state; the rows, the gate records behind them and the
 approve/confirm control belong to
 [MOTIR-4778](motir:cmtqhxi7r000vhvphp60vjymc).
@@ -501,7 +510,7 @@ on all four surfaces in both themes.
 
 ## What this asset does NOT decide
 
-- **The Approvals tab's rows, its gate records and its approve/confirm control**
+- **The To-approve tab's rows, its gate records and its approve/confirm control**
   — [MOTIR-4778](motir:cmtqhxi7r000vhvphp60vjymc). Only the slot is drawn here.
 - **Ordering within each work tab.** MOTIR-4781 owns it and specifies
   `updatedAt DESC` with a total, stable tiebreak (and `completedAt DESC` for
@@ -522,11 +531,11 @@ on all four surfaces in both themes.
 
 | card                                                     | GIVES                                                                                                                                                               | TAKES                                                                                                                                |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **MOTIR-4782** (the page)                                | The five-tab strip as one composition, every tab's empty state, the window caption, the Watching group band, the copy, the narrow scroll, the rail row and the 308. | Nothing. It draws no element this asset leaves unspecified, and it does not own the Approvals rows.                                  |
+| **MOTIR-4782** (the page)                                | The five-tab strip as one composition, every tab's empty state, the window caption, the Watching group band, the copy, the narrow scroll, the rail row and the 308. | Nothing. It draws no element this asset leaves unspecified, and it does not own the To-approve rows.                                 |
 | **MOTIR-4783** (the sweep)                               | The area's new name and address, so `design/home/` is a hit its sweep must find nowhere.                                                                            | Nothing — but note that the two design-guard REGISTRIES key on the old paths and are re-keyed by THIS card's diff, not by the sweep. |
 | **MOTIR-4781** (the reads)                               | The `Finished` column and the group order as things a reader SEES, so the DTO field and the cursor group are not speculative.                                       | Nothing. Its category predicate is unchanged by anything drawn here.                                                                 |
 | **MOTIR-4780** (`completedAt`)                           | The window caption is the user-facing statement of what that column is for.                                                                                         | Nothing.                                                                                                                             |
-| **MOTIR-4778** (the sibling story)                       | The Approvals SLOT — its position in the strip, its label, its glyph, its count treatment and its empty state.                                                      | **Its own design amendment no longer draws the strip.** The strip is composed once, here; that story draws the ROWS inside the slot. |
+| **MOTIR-4778** (the sibling story)                       | The To-approve SLOT — its position in the strip, its label, its glyph, its count treatment and its empty state.                                                     | **Its own design amendment no longer draws the strip.** The strip is composed once, here; that story draws the ROWS inside the slot. |
 | **MOTIR-2649 / 2653 / 2654 / 2761 / 2758 / 2652 / 2920** | Nothing — they are `done` or archived and are not touched.                                                                                                          | Nothing.                                                                                                                             |
 | **MOTIR-3373** (`AUTHED_LANDING_PATH`)                   | Nothing.                                                                                                                                                            | Nothing — the rename is one write to the constant it already owns, which is why the move is not a sweep.                             |
 

@@ -930,7 +930,12 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
   },
   {
-    file: 'design/home/home.mock.html',
+    // ⚠️ RE-KEYED by MOTIR-4779, which renamed `design/home/` to
+    // `design/workbench/` with the surface. MOTIR-4680 enumerated this row from
+    // a lane run against the old path, and the two landed in the same window —
+    // a merge adjacency, not a disagreement. The exemption is unchanged in
+    // substance; only the file it names moved.
+    file: 'design/workbench/workbench.mock.html',
     address: '/settings/workspace/github',
     why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
   },

@@ -22,8 +22,8 @@
       over one predicate; it is now three tabs over the SAME predicate,
       partitioned on `workflow_status.category` — To do, In progress, Recently
       finished — plus Watching (unchanged membership, newly ORDERED) and the
-      Approvals SLOT, whose rows belong to the sibling story MOTIR-4778 and are
-      NOT drawn here. Recently finished is a dataset this surface has never
+      "To approve" SLOT, whose rows belong to the sibling story MOTIR-4778 and
+      are NOT drawn here. Recently finished is a dataset this surface has never
       shown: `/home` excluded done work outright (MOTIR-2758), and the window is
       read from `work_item.completedAt` (MOTIR-4780), never from `updatedAt`.
 
@@ -3926,10 +3926,10 @@
         <code>design/home/</code> RENAMED and revised: the surface becomes a
         <strong>Workbench</strong>, its one list splits into three tabs on the
         <code>workflow_status.category</code> axis, Watching gains an order, and the strip gains a
-        fifth slot for Approvals — whose rows are the sibling story <strong>MOTIR-4778</strong>'s
-        and are not drawn here. Gates MOTIR-4782 (the page) and MOTIR-4783 (the sweep). Every
-        shipped element below is the real component's own emitted markup, dumped through the repo's
-        vitest + RTL setup. Read <code>design-notes.md</code>
+        fifth slot, <strong>To approve</strong> — whose rows are the sibling story
+        <strong>MOTIR-4778</strong>'s and are not drawn here. Gates MOTIR-4782 (the page) and
+        MOTIR-4783 (the sweep). Every shipped element below is the real component's own emitted
+        markup, dumped through the repo's vitest + RTL setup. Read <code>design-notes.md</code>
         beside this file for the token map, the copy, the column-set measurement, the Planning flags
         and the GIVES / TAKES table.
       </p>
@@ -5013,7 +5013,7 @@
                         <path
                           d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
                         /></svg></span
-                    >Approvals<span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >0</span
                     ></a
@@ -5779,7 +5779,7 @@
                         <path
                           d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
                         /></svg></span
-                    >Approvals<span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >0</span
                     ></a
@@ -6578,7 +6578,7 @@
                         <path
                           d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
                         /></svg></span
-                    >Approvals<span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >0</span
                     ></a
@@ -7304,7 +7304,7 @@
                         <path
                           d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
                         /></svg></span
-                    >Approvals<span
+                    >To approve<span
                       class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                       >0</span
                     ></a
@@ -8162,7 +8162,7 @@
                         <path
                           d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
                         /></svg></span
-                    >Approvals</a
+                    >To approve</a
                   >
                 </nav>
                 <div
@@ -8433,7 +8433,7 @@
         </figure>
         <figure style="margin: 0">
           <figcaption class="cap">
-            Approvals · empty — the SLOT is this story’s; the rows are MOTIR-4778’s
+            To approve · empty — the SLOT is this story’s; the rows are MOTIR-4778’s
           </figcaption>
           <div
             class="rounded-(--radius-card) border border-(--el-border) p-(--spacing-card-padding) transition-shadow duration-(--transition-duration) bg-(--el-card) flex flex-col items-center text-center"
@@ -8631,7 +8631,7 @@
                           <path
                             d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
                           /></svg></span
-                      >Approvals<span
+                      >To approve<span
                         class="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)"
                         >0</span
                       ></a
