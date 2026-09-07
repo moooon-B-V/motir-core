@@ -79,7 +79,7 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 // Drive the production create-project modal end-to-end so we exercise

@@ -193,8 +193,8 @@ test.describe('profile — the Account › Profile pane journey', () => {
     await page.context().clearCookies();
     await signIn(page, email, NEW_PASSWORD);
     // The claim is that the NEW password signs you in — the landing route is
-    // incidental, and it moved to `/home` in MOTIR-2654.
-    await expect(page).toHaveURL(/\/home/);
+    // incidental, and it moved to `/workbench` in MOTIR-2654.
+    await expect(page).toHaveURL(/\/workbench/);
 
     // …and the OLD password no longer works (the anti-enumeration inline error).
     await page.context().clearCookies();
@@ -280,6 +280,6 @@ test.describe('profile — the Account › Profile pane journey', () => {
     // The strongest proof — the new address is now the SIGN-IN key.
     await page.context().clearCookies();
     await signIn(page, newEmail, SHELL_PASSWORD);
-    await expect(page).toHaveURL(/\/home/);
+    await expect(page).toHaveURL(/\/workbench/);
   });
 });

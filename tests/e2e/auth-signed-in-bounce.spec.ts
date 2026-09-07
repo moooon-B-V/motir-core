@@ -32,7 +32,7 @@ test.describe('credential surfaces, signed in (MOTIR-3372)', () => {
     // The bare arrivals: a bookmark, an old link, the auth card's own wordmark.
     await page.goto('/sign-in');
     await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
-    await expect(page.getByTestId('home-page')).toBeVisible();
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
 
     await page.goto('/sign-up');
     await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));

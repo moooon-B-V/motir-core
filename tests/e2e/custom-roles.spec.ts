@@ -58,7 +58,7 @@ const customRow = (page: Page) =>
  * Sign in AND WAIT FOR THE SHELL TO LAND.
  *
  * ⚠️ `signIn` RESOLVES ON THE URL MATCH, WHICH IS NOT THE SAME AS SETTLED. It
- * waits for the landing route (`**\/dashboard` when this was observed, `**\/home`
+ * waits for the landing route (`**\/dashboard` when this was observed, `**\/workbench`
  * since MOTIR-2654 / MOTIR-2921), and the landing page's own navigation can
  * still be in flight when it returns — so the very next `page.goto` races it and
  * Playwright fails the goto outright: *"Navigation to /settings/project is

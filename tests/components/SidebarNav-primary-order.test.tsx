@@ -107,7 +107,7 @@ describe('SidebarNav — the primary section renders in the decided order', () =
 
   it('leaves Home leading the rail — the demotion moved Dashboard, nothing else', () => {
     // MOTIR-2654's own guard (`SidebarNav-home-door.test.tsx`) asserts
-    // `indexOf('/home') < indexOf('/dashboard')` and still passes UNAMENDED
+    // `indexOf('/workbench') < indexOf('/dashboard')` and still passes UNAMENDED
     // through this change, because Dashboard only moved further down. Restated
     // here so the two files agree in the open rather than by coincidence.
     renderWithIntl(

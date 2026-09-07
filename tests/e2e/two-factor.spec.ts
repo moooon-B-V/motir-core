@@ -16,6 +16,27 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { waitForEmail } from './_helpers/email-capture';
 import { secondsLeftInWindow, totpFromSetupKey } from './_helpers/totp';
+import { POST_AUTH_LANDING } from './_helpers/shell-session';
+import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
+
+/**
+ * WHERE A VERIFIED SIGN-IN LANDS — either post-auth destination, composed from
+ * the constants that own them.
+ *
+ * ⚠️ IT USED TO BE `/\/(home|onboarding)/`, WRITTEN OUT (MOTIR-4783). When
+ * MOTIR-4782 renamed the landing to `/workbench`, this spec's six waits hung for
+ * their full 30s each and took the whole `bulk-6` leg red — and neither sweep
+ * that card ran could have found them. The first searched QUOTED literals
+ * (`'/home'`); the second searched the `**\/home` glob; this is a REGEX, where
+ * the address is spelled `\/(home` and contains the substring `/home` nowhere at
+ * all. Three wordings of one fact.
+ *
+ * Composing it from the constants is what ends that: `lib/navigation/landing.ts`
+ * owns both destinations, `tests/navigation/landing-owner-guard.test.ts` keeps
+ * them owned, and a rename is one edit again — which is the whole point of
+ * MOTIR-3373 and the reason a literal here was always borrowed trouble.
+ */
+const POST_AUTH_URL = new RegExp(`(${POST_AUTH_LANDING}|${ONBOARDING_ENTRY_PATH})`);
 
 const EMAIL = 'e2e-2fa-user@example.com';
 const PASSWORD = 'original-password-123';
@@ -34,7 +55,7 @@ async function signUp(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 /** Password step only — stops wherever the sign-in lands it. */
@@ -123,7 +144,7 @@ test('@smoke enrol, then a TOTP code completes the next sign-in', async ({ page 
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await verified).status()).toBe(200);
 
-  await page.waitForURL(/\/(home|onboarding)/);
+  await page.waitForURL(POST_AUTH_URL);
 });
 
 test('a wrong code is refused and keeps the reader on the challenge', async ({ page }) => {
@@ -172,7 +193,7 @@ test('an emailed code completes the sign-in', async ({ page }) => {
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await verified).status()).toBe(200);
 
-  await page.waitForURL(/\/(home|onboarding)/);
+  await page.waitForURL(POST_AUTH_URL);
 });
 
 test('a recovery code works ONCE and the remaining count drops', async ({ page }) => {
@@ -192,7 +213,7 @@ test('a recovery code works ONCE and the remaining count drops', async ({ page }
   await page.getByLabel('Recovery code').fill(codes[0]!);
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await verified).status()).toBe(200);
-  await page.waitForURL(/\/(home|onboarding)/);
+  await page.waitForURL(POST_AUTH_URL);
 
   // The count is the authoritative read, taken from the pane's own server render.
   await page.goto('/settings/account/security');
@@ -215,7 +236,7 @@ test('"don’t ask again" skips the next challenge, and revoking brings it back'
   await page.getByRole('checkbox', { name: /Don’t ask again/ }).click();
   await page.getByRole('button', { name: 'Verify' }).click();
   expect((await trusted).status()).toBe(200);
-  await page.waitForURL(/\/(home|onboarding)/);
+  await page.waitForURL(POST_AUTH_URL);
 
   // Drop the SESSION cookie only — the trust cookie is a different one, and
   // keeping it is the whole point of the test.
@@ -225,7 +246,7 @@ test('"don’t ask again" skips the next challenge, and revoking brings it back'
 
   // Now the password alone lands the session: no challenge.
   await signInWithPassword(page);
-  await page.waitForURL(/\/(home|onboarding)/);
+  await page.waitForURL(POST_AUTH_URL);
   await expect(page.getByRole('heading', { name: 'Two-step verification' })).toBeHidden();
 
   // Revoke, and the challenge returns on the next sign-in.
@@ -259,6 +280,6 @@ test('turning 2FA off removes the challenge entirely', async ({ page }) => {
 
   await page.context().clearCookies();
   await signInWithPassword(page);
-  await page.waitForURL(/\/(home|onboarding)/);
+  await page.waitForURL(POST_AUTH_URL);
   await expect(page.getByRole('heading', { name: 'Two-step verification' })).toBeHidden();
 });

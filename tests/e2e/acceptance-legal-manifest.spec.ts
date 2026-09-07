@@ -166,7 +166,7 @@ test('the legal documents come from configuration — absent when none is set, l
 
   await chapter('Signed in, the rail offers no Legal door', async () => {
     await signUp(page, SELF_HOST_EMAIL);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
     // The CONTROL for the absence is the Docs row beside it — shared with
     // MOTIR-4105's specs, see the helper.
@@ -210,7 +210,7 @@ test('the legal documents come from configuration — absent when none is set, l
 
   await chapter('The rail gains a Legal door onto the configured index', async () => {
     await signUp(page, HOSTED_EMAIL);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
     // The INDEX, derived from the documents' shared base — not a fifth
     // configuration value, and not a path on this host. Shared with MOTIR-4105's
@@ -259,7 +259,7 @@ test('the legal documents come from configuration — absent when none is set, l
     // ── THE TERMINAL ACT ────────────────────────────────────────────────────
     await agree.click();
     await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
     // ⚠️ READ THE RECORD BACK, not just the redirect. Being let through proves
     // the gate re-read; it does not prove a row was written, and the row is the
@@ -286,7 +286,7 @@ test('the legal documents come from configuration — absent when none is set, l
     // The prompt does not recur.
     await enterTheApp(page);
     expect(new URL(page.url()).pathname, 'the interstitial came back').toContain(POST_AUTH_LANDING);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
     await beat();
   });
 });

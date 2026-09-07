@@ -70,7 +70,7 @@ describe('safeNextPath — the only thing between a forgeable header and a redir
     ['an empty string', ''],
     ['null — the header was absent, which is a NORMAL state off-matcher', null],
     ['undefined', undefined],
-  ])('falls back to /home for %s', (_label, candidate) => {
+  ])('falls back to the LANDING for %s', (_label, candidate) => {
     expect(safeNextPath(candidate)).toBe(TWO_FACTOR_FALLBACK_DESTINATION);
     // The landing is decided once, in `lib/navigation/landing.ts` — imported
     // here rather than re-typed, which `tests/navigation/landing.test.ts`
@@ -161,7 +161,7 @@ describe('assertTwoFactorCompliance', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it('falls back to /home when the header is absent — off-matcher is normal', async () => {
+  it('falls back to the LANDING when the header is absent — off-matcher is normal', async () => {
     currentPath.value = null;
     const run = await gate();
     await expect(run('u1')).rejects.toThrow(

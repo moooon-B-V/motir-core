@@ -69,7 +69,7 @@ import { DATA_PRIVACY_PANE_PATH } from '@/lib/users/dataSubjectRequests';
 import { formatDate } from '@/lib/utils/datetime';
 
 /** The landing every credential flow settles on — deliberately NOT a settings route. */
-const NON_SETTINGS_ROUTE = '/home';
+const NON_SETTINGS_ROUTE = '/workbench';
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -157,7 +157,7 @@ test('@smoke the deletion journey: confirm through the ledger → signed out →
   // cannot make, and the one that catches a bar left standing over a cancelled
   // row (the failure the banner's own card names).
   await page.reload();
-  await expect(page.getByTestId('home-page')).toBeVisible();
+  await expect(page.getByTestId('workbench-page')).toBeVisible();
   await expect(page.getByTestId('account-deletion-banner')).toHaveCount(0);
 });
 
