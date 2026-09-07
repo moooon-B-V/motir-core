@@ -550,9 +550,19 @@ assets touched in one pass disagreed about whether the grouping existed.
   | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
   | Repository  | repo glyph + `owner/name`, owner in `--el-text-secondary` (see the ink note below)                                                              |
   | Provider    | the provider mark + label — the inventory spans both, so the pressed Segmented does not answer this                                             |
-  | Index       | a `Pill` in **all four** states: **Current** (mint, check) · **Stale** (peach, clock) · **Indexing…** (sky, dots) · **Never indexed** (neutral) |
+  | Index       | a `Pill` in **all four** states: **Indexed** (mint, check) · **Stale** (peach, clock) · **Indexing…** (sky, dots) · **Never indexed** (neutral) |
   | Used by     | **`Used by N projects`**, drawn AT REST                                                                                                         |
   | _(actions)_ | **`Disconnect`** on both providers, with the VENUE on a second line — `happens on GitHub` / `happens here`                                      |
+
+- **⚠️ THE FOURTH STATE READS `Indexed`, NOT `Current` (MOTIR-4831, amending this asset for
+  MOTIR-4817).** It said `Current` when this surface was drawn, and the product no longer renders
+  that word. **The argument is not here and must not be copied here:**
+  `design/code-context/design-notes.md` §4.1 owns it, MOTIR-4817 carries the code half, and §4.2
+  rules that this org inventory and a project surface draw the SAME pill — which is what makes this
+  asset's word a matter of transcription rather than of judgement.
+
+  What is amended is one label. `Stale` · `Indexing…` · `Never indexed` are untouched, and so is
+  every tone, glyph and column beside them.
 
 - **⚠️ THE LABEL NAMES THE ACT; A SECOND LINE NAMES THE VENUE. `Remove on GitHub` was WRONG, and
   wrong in the dangerous direction (Yue, 2026-09-05).** It reads as _"delete the repository FROM
