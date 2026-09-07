@@ -236,6 +236,25 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── An address named as HISTORY, by the asset that retires it ─────────────
+  // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
+  // Code health, the code index and Git were three things in two rail sections
+  // with opposite gating, and they become one `Code` row. Its "where it was"
+  // table and its §3 argument name `/settings/workspace/github` because that is
+  // the address the collapse REMOVES — MOTIR-4669 moved the surface to
+  // `/settings/organization/git`.
+  //
+  // ⚠️ Correcting the asset to the live address would DESTROY its meaning: the
+  // table's whole content is where these rows used to be, and rewriting the row
+  // to point at the new home would make it claim the collapse never happened.
+  // The guard's premise — "an address it names will be believed by the next
+  // card that reads it" — does not hold for prose that is explicitly about the
+  // past, and this is the sanctioned door for that case.
+  {
+    file: 'design/code-context/design-notes.md',
+    address: '/settings/workspace/github',
+    why: 'Named as the PRE-collapse address, in a table of where things used to be and in the §3 argument for removing the row. MOTIR-4669 retired it in favour of `/settings/organization/git`. Pointing the prose at the live address would make the asset claim the collapse it documents never happened.',
+  },
   // ── A route on a DIFFERENT host, kept in the unified chrome's nav ─────────
   // `design/public-site/` (MOTIR-3880) draws the ONE chrome every motir.co
   // surface wears, and the shipped `Design` showcase nav item resolves on

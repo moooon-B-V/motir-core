@@ -5,6 +5,26 @@ Asset set: `design/code-context/design-notes.md` + `code-context.mock.html` + `c
 
 - `code-context.dark.png`.
 
+> ## ⚠️ AMENDED 2026-09-07 — the registers adopt the SHIPPED vocabulary, and the row composes
+>
+> The 2026-09-05 rework below stands in full. Two corrections on top of it, both forced by substrate
+> that shipped underneath this asset while it sat in review:
+>
+> 1. **The fourth state is `Indexed`, not `Current` (§4.1).** [MOTIR-4724] shipped
+>    `lib/codeGraph/indexState.ts` as the ONE derivation, and its four states are
+>    `never · indexing · indexed · stale`. `indexed` deliberately makes no currency claim: a
+>    repository nobody has pushed has no head sha to be compared against, and — because a push
+>    webhook is the column's **only** writer — it never acquires one, so the overclaim would be
+>    permanent and aimed at exactly the repositories whose graphs are oldest. **This contradicts
+>    what ships today**, which renders `Current`; the disagreement is argued out in §4.1 and
+>    [MOTIR-4817] carries the fix.
+> 2. **The repository row COMPOSES `RepositoryInventory` (§4.2)** rather than being drawn a second
+>    time — the same row and the same pill, with the org-only affordances (`Used by N projects`,
+>    `Disconnect`) absent and the drift and indexed sha added.
+>
+> Panel F keeps the word _current_ in one place, deliberately: a refresh that has just run has
+> **observed** the two shas equal, so there currency is measured rather than assumed.
+
 > ## ⚠️ REWORKED 2026-09-05 — the surface COLLAPSES and the tenancy rule changes
 >
 > This asset's first revision drew the freshness signal across two hosts — `/planning` and
@@ -190,7 +210,66 @@ touches them:
   in this asset).
 - **`stale` and `indexing` are two states and only one is moving** (§10.1 — unchanged).
 - **NEW: `already indexed · shared`.** A repository connected here whose graph exists elsewhere in
-  the organisation reads `current` at once. See §1.
+  the organisation reads `indexed` at once. See §1.
+
+### 4.1 ⚠️ The four states are the SHIPPED ones, and `indexed` is not `current`
+
+`lib/codeGraph/indexState.ts` (MOTIR-4724) is the ONE derivation, and its states are
+**`never` · `indexing` · `indexed` · `stale`**. This asset's first two revisions named the fourth
+one `current`. It is drawn as **`Indexed`**, and the difference is not a synonym.
+
+**`current` claims the graph matches your code. `indexed` claims only that a graph exists and
+nothing has told us it is behind.** The derivation's own header says so, and the gap between the two
+is a real population rather than a pedantic one:
+
+- `stale` is reached only when **both** shas are known and differ.
+- A missing sha falls through to `indexed` — deliberately, because treating an absent comparand as a
+  difference would flip the whole estate to `stale` on deploy.
+- **`defaultBranchHeadSha` is written by a push webhook and by nothing else.** Not by connect, not by
+  the index run (`lib/jobs/indexFleetSteps.ts` only _reads_ it). So a connected, indexed repository
+  that receives no push never acquires a head sha at all.
+
+⚠️ **That makes the overclaim permanent, and pointed at the wrong repositories.** A busy repository
+gets a real head sha within minutes and reports honestly ever after. The repository that would
+permanently read _"Current"_ is the quiet one — precisely the one whose graph is most likely to be an
+old snapshot taken before the column existed.
+
+**One exception, drawn in panel F.** The settled line may say _"now current at `9c14e02`"_, because a
+refresh has just run and observed the two shas equal. Currency is legitimate where it was measured;
+it is not legitimate as a resting label.
+
+**⚠️ This CONTRADICTS what ships today, and the disagreement is recorded rather than papered over.**
+`app/(authed)/settings/organization/git/_components/RepositoryInventory.tsx` renders `indexed` as
+`Current` and defends it in a header comment: the label was promoted from `Indexed` once `stale`
+existed, on the reasoning that _"`indexed` renders as `Current` because that is what it now MEANS."_
+That reasoning holds only when both shas are known, which the null-head population never satisfies.
+**MOTIR-4817** carries the fix and the reproduction; this asset is the design it fixes to.
+
+### 4.2 The repository row COMPOSES the shipped one — it is not a second row
+
+`RepositoryInventory` ships on **Settings → Organisation → Git**, built to
+`design/github/github.mock.html` Panel 6, and it already renders a repository row with exactly this
+anatomy: provider mark, `owner/name` with the owner in `--el-text-secondary` and the name in
+`--el-text`, and the index pill. **This asset does not redraw it.** What it specifies is what
+DIFFERS on a project surface:
+
+| the org inventory row has             | the project row                                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **`Used by N projects`**, expandable  | **absent** — on a project surface the answer is always "this one", so the control would be noise        |
+| **`Disconnect`** / `Remove on GitHub` | **absent** — removal is an ORG act (§3); a project surface that offered it would cascade invisibly      |
+| the index pill alone                  | the pill **plus the drift**: `312 behind` on the chip, and the panel-D block underneath when it matters |
+| nothing about the graph's commit      | the **indexed sha**, mono, so a person can match it against what they pushed                            |
+
+Two rules follow, and they are what stops this becoming a fork:
+
+1. **The pill is the SAME pill**, with the same four tones — `Indexed` mint · `Stale` peach ·
+   `Indexing…` sky · `Never indexed` neutral. A project surface and the org inventory disagreeing
+   about one repository's state is exactly what the ONE derivation exists to prevent, and a second
+   pill would reintroduce it at the presentation layer.
+2. **The row keeps the hover tint**, and therefore the ink rule that comes with it:
+   `--el-text-secondary`, never `--el-text-muted`, which fails AA on the hovered surface. The shipped
+   component carries that correction inline; a copy that dropped it would fail
+   `tests/design-state-ink-contrast.test.ts`.
 
 ---
 
@@ -207,7 +286,7 @@ touches them:
 | **F** | **current again**                         | The moment the warning resolves.                                                   |
 | **G** | **indexing**                              | A refresh genuinely in flight — the only moving state.                             |
 | **H** | **never indexed**                         | Connected, but no graph has ever been built.                                       |
-| **V** | the four verdicts                         | `current · stale · indexing · never indexed`, side by side.                        |
+| **V** | the four verdicts                         | `indexed · stale · indexing · never` — the SHIPPED names (§4.1), side by side.     |
 
 ---
 
@@ -323,13 +402,20 @@ detail beside the drift** — it never leads, and the verdict is never derived f
 - **`null`** → _"Behind by an unknown number of commits"_ in the headline, and **"Behind"** on the
   chip (panel D3). A chip reading **"Stale"** is the age framing in miniature and is not drawn.
 
-**⚠️ This is an obligation this design places on [MOTIR-1767].** That card's verdict function, as
-authored, distinguishes `stale` from `current` by comparing `indexedCommitSha` with the stored
-`GithubRepo.lastPushSha` — a sha _inequality_, which yields a boolean and not a count. A count needs
-a source, and the constraint it inherits from [MOTIR-1766] is that **no provider round-trip may
-happen on a page render**. Which mechanism supplies it is 1767's decision; that it must be supplied,
-and that `null` is a legal answer this surface renders, is settled here. 1767 is amended on the
-record accordingly.
+**⚠️ This is an obligation this design places on [MOTIR-4644], and it has MOVED.** As first written
+it named [MOTIR-1767]'s verdict function, which compared `indexedCommitSha` against a
+`GithubRepo.lastPushSha` of its own. Both are gone: MOTIR-4724 shipped the ONE derivation, and
+`deriveCodeGraphIndexState` distinguishes `stale` from `indexed` by a sha **inequality** — which
+yields a boolean, not a count. So the obligation stands exactly as stated and simply has a new owner:
+
+- **A count needs a source**, and the constraint is unchanged — **no provider round-trip may happen
+  on a page render** (`GithubRepo.defaultBranchHeadSha` is written by the push webhook precisely so
+  that nothing has to ask the provider at render time).
+- `CodeContextRepoDTO.commitsBehind` already exists and is **always `null` today**, carried rather
+  than dropped because `isBadlyStale` pauses the auto-cadence on a THRESHOLD, which
+  `indexState === 'stale'` cannot stand in for.
+- **[MOTIR-4644] is its producer.** That `null` is a legal answer this surface renders — panel D3 —
+  is settled here.
 
 ---
 
@@ -394,27 +480,27 @@ worse than none.
 
 The code card composes these; it does not choose new ones.
 
-| element                                    | primitive                                                  | colour tokens                                                        | shape tokens                              | behaviour specified by                                                           |
-| ------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------- |
-| connect aside container                    | `components/ui/Card.tsx` grammar, **soft** variant         | `--el-surface-soft`, `--el-border`                                   | `--radius-card`, `--spacing-card-padding` | §10.3, `design/coding-convention/design-notes.md`                                |
-| aside eyebrow                              | `components/ui/SectionLabel.tsx`                           | `--el-text-secondary`                                                | —                                         | §10.3                                                                            |
-| aside lead glyph                           | lucide `scan-search`                                       | `--el-accent-on-surface`                                             | —                                         | §10.3                                                                            |
-| aside title                                | serif heading                                              | `--el-text-strong`                                                   | `--font-serif`                            | §10.3                                                                            |
-| dismiss ×                                  | ghost icon button                                          | `--el-text-muted`                                                    | `--radius-control`                        | §8.1 (this file)                                                                 |
-| re-open link                               | text link                                                  | `--el-link`                                                          | —                                         | §8.1 (this file)                                                                 |
-| **Connect a repository**                   | `components/ui/Button.tsx` `variant="primary" size="sm"`   | `--el-accent` / `--el-accent-text`                                   | `--radius-btn`, `--height-btn-sm`         | the shipped grant flow                                                           |
-| **Rebuild now**                            | `components/ui/Button.tsx` `variant="secondary" size="sm"` | `--el-text`, `--el-button-border`                                    | `--radius-btn`, `--height-btn-sm`         | [MOTIR-4604] (the enqueue), [MOTIR-1768] (the wiring)                            |
-| repo row                                   | list row on a card                                         | `--el-card`, `--el-border`, `--el-text-strong`                       | `--radius-card`                           | [MOTIR-1767] (the DTO)                                                           |
-| commit sha                                 | mono inline                                                | `--el-text-secondary`                                                | `--font-mono`                             | [MOTIR-1765] (`commitSha`)                                                       |
-| verdict `current`                          | `components/ui/Pill.tsx`                                   | `--el-success-surface` + `--el-text-strong`, glyph `circle-check`    | `--radius-badge`                          | [MOTIR-1767]                                                                     |
-| verdict `stale`                            | `components/ui/Pill.tsx`                                   | `--el-warning-surface` + `--el-warning-text`, glyph `triangle-alert` | `--radius-badge`                          | [MOTIR-1767]                                                                     |
-| verdict `indexing`                         | `components/ui/Pill.tsx`                                   | `--el-notice-info-bg` + `--el-text-strong`, glyph `loader-circle`    | `--radius-badge`                          | [MOTIR-1767]                                                                     |
-| verdict `never indexed`                    | `components/ui/Pill.tsx`                                   | `--el-muted` + `--el-text-secondary`, glyph `circle-dashed`          | `--radius-badge`                          | [MOTIR-1765] (`indexed: false` + null fields)                                    |
-| stale warning block                        | callout                                                    | `--el-warning-surface`, `--el-warning` edge, `--el-warning-text`     | `--radius-card`                           | §5, §6 (this file)                                                               |
-| indexing block                             | callout                                                    | `--el-notice-info-bg`, `--el-info` glyph                             | `--radius-card`                           | [MOTIR-1767] (`indexing`)                                                        |
-| settled line (F)                           | inline banner                                              | `--el-success-surface`, `--el-success` glyph                         | `--radius-card`                           | §8 (this file)                                                                   |
-| planning-blind block (E)                   | callout                                                    | `--el-warning-surface`, `--el-warning` edge                          | `--radius-card`                           | `lib/ai/codeContext.ts` (`resolveCodeContext` returning `undefined`)             |
-| the head sha staleness is compared against | —                                                          | —                                                                    | —                                         | [MOTIR-1766] (`GithubRepo` head columns, `lib/services/githubWebhookService.ts`) |
+| element                                    | primitive                                                  | colour tokens                                                        | shape tokens                              | behaviour specified by                                                                |
+| ------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| connect aside container                    | `components/ui/Card.tsx` grammar, **soft** variant         | `--el-surface-soft`, `--el-border`                                   | `--radius-card`, `--spacing-card-padding` | §10.3, `design/coding-convention/design-notes.md`                                     |
+| aside eyebrow                              | `components/ui/SectionLabel.tsx`                           | `--el-text-secondary`                                                | —                                         | §10.3                                                                                 |
+| aside lead glyph                           | lucide `scan-search`                                       | `--el-accent-on-surface`                                             | —                                         | §10.3                                                                                 |
+| aside title                                | serif heading                                              | `--el-text-strong`                                                   | `--font-serif`                            | §10.3                                                                                 |
+| dismiss ×                                  | ghost icon button                                          | `--el-text-muted`                                                    | `--radius-control`                        | §8.1 (this file)                                                                      |
+| re-open link                               | text link                                                  | `--el-link`                                                          | —                                         | §8.1 (this file)                                                                      |
+| **Connect a repository**                   | `components/ui/Button.tsx` `variant="primary" size="sm"`   | `--el-accent` / `--el-accent-text`                                   | `--radius-btn`, `--height-btn-sm`         | the shipped grant flow                                                                |
+| **Rebuild now**                            | `components/ui/Button.tsx` `variant="secondary" size="sm"` | `--el-text`, `--el-button-border`                                    | `--radius-btn`, `--height-btn-sm`         | [MOTIR-4604] (the enqueue), [MOTIR-1768] (the wiring)                                 |
+| repo row                                   | **composes `RepositoryInventory.tsx`** — see §4.2          | `--el-card`, `--el-border`, `--el-text-strong`                       | `--radius-card`                           | [MOTIR-1767] (`CodeContextRepoDTO`)                                                   |
+| commit sha                                 | mono inline                                                | `--el-text-secondary`                                                | `--font-mono`                             | `GithubRepo.indexedHeadSha` ([MOTIR-4724])                                            |
+| verdict `indexed` (chip reads **Indexed**) | `components/ui/Pill.tsx`                                   | `--el-success-surface` + `--el-text-strong`, glyph `circle-check`    | `--radius-badge`                          | `lib/codeGraph/indexState.ts` ([MOTIR-4724]); the LABEL by §4.1 + [MOTIR-4817]        |
+| verdict `stale`                            | `components/ui/Pill.tsx`                                   | `--el-warning-surface` + `--el-warning-text`, glyph `triangle-alert` | `--radius-badge`                          | `lib/codeGraph/indexState.ts` ([MOTIR-4724])                                          |
+| verdict `indexing`                         | `components/ui/Pill.tsx`                                   | `--el-notice-info-bg` + `--el-text-strong`, glyph `loader-circle`    | `--radius-badge`                          | `lib/codeGraph/indexState.ts` ([MOTIR-4724]) — the LEDGER resolves it, not the column |
+| verdict `never`                            | `components/ui/Pill.tsx`                                   | `--el-muted` + `--el-text-secondary`, glyph `circle-dashed`          | `--radius-badge`                          | `lib/codeGraph/indexState.ts` ([MOTIR-4724]) — no succeeded run in the ledger         |
+| stale warning block                        | callout                                                    | `--el-warning-surface`, `--el-warning` edge, `--el-warning-text`     | `--radius-card`                           | §5, §6 (this file)                                                                    |
+| indexing block                             | callout                                                    | `--el-notice-info-bg`, `--el-info` glyph                             | `--radius-card`                           | [MOTIR-1767] (`indexState === 'indexing'`)                                            |
+| settled line (F)                           | inline banner                                              | `--el-success-surface`, `--el-success` glyph                         | `--radius-card`                           | §8 (this file)                                                                        |
+| planning-blind block (E)                   | callout                                                    | `--el-warning-surface`, `--el-warning` edge                          | `--radius-card`                           | `lib/ai/codeContext.ts` (`resolveCodeContext` returning `undefined`)                  |
+| the head sha staleness is compared against | —                                                          | —                                                                    | —                                         | `GithubRepo.defaultBranchHeadSha`, written ONLY by `githubWebhookService.ts:340`      |
 
 **Two shape rules the code card must not break.** State is never signalled with a hardcoded **dashed
 or dotted border** — it clashes with `data-style`; use a token-driven tint plus a label and a glyph.
@@ -543,6 +629,9 @@ the change belongs on the record rather than in a build.
 [MOTIR-4590]: https://app.motir.co/items/MOTIR-4590
 [MOTIR-4601]: https://app.motir.co/items/MOTIR-4601
 [MOTIR-4603]: https://app.motir.co/items/MOTIR-4603
+[MOTIR-4644]: https://app.motir.co/items/MOTIR-4644
+[MOTIR-4724]: https://app.motir.co/items/MOTIR-4724
+[MOTIR-4817]: https://app.motir.co/items/MOTIR-4817
 [MOTIR-4604]: https://app.motir.co/items/MOTIR-4604
 [MOTIR-4608]: https://app.motir.co/items/MOTIR-4608
 [MOTIR-4609]: https://app.motir.co/items/MOTIR-4609

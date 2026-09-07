@@ -1881,7 +1881,7 @@
                   <span class="repoMeta">
                     <span class="sha">3f8a21c</span>
                     <span class="verdict v-current"
-                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                     >
                   </span>
                 </div>
@@ -1959,7 +1959,7 @@
                   <span class="repoMeta">
                     <span class="sha">3f8a21c</span>
                     <span class="verdict v-current"
-                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                     >
                   </span>
                 </div>
@@ -1972,7 +1972,7 @@
                   <span class="repoMeta">
                     <span class="sha">b09d4e1</span>
                     <span class="verdict v-current"
-                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                     >
                   </span>
                 </div>
@@ -1989,7 +1989,7 @@
                   <span class="repoMeta">
                     <span class="sha">7c31de0</span>
                     <span class="verdict v-current"
-                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                      ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                     >
                   </span>
                 </div>
@@ -2065,7 +2065,7 @@
                     <span class="repoMeta">
                       <span class="sha">3f8a21c</span><span>github</span>
                       <span class="verdict v-current"
-                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                       >
                     </span>
                   </div>
@@ -2078,7 +2078,7 @@
                     <span class="repoMeta">
                       <span class="sha">b09d4e1</span><span>github</span>
                       <span class="verdict v-current"
-                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                       >
                     </span>
                   </div>
@@ -2127,7 +2127,7 @@
                     <span class="repoMeta">
                       <span class="sha">3f8a21c</span><span>github</span>
                       <span class="verdict v-current"
-                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                       >
                     </span>
                   </div>
@@ -2140,7 +2140,7 @@
                     <span class="repoMeta">
                       <span class="sha">b09d4e1</span><span>github</span>
                       <span class="verdict v-current"
-                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                        ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                       >
                     </span>
                   </div>
@@ -2331,7 +2331,7 @@
                 <span class="repoMeta">
                   <span class="sha">3f8a21c</span><span>indexed 4 min ago</span>
                   <span class="verdict v-current"
-                    ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                    ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                   >
                 </span>
               </div>
@@ -2344,7 +2344,7 @@
                 <span class="repoMeta">
                   <span class="sha">b09d4e1</span><span>indexed 2 h ago</span>
                   <span class="verdict v-current"
-                    ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                    ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                   >
                 </span>
               </div>
@@ -2486,7 +2486,7 @@
       </section>
       <section class="panel">
         <h2 class="panelTitle">
-          <span class="panelNum">F</span>Current again &mdash; the moment the warning resolves.
+          <span class="panelNum">F</span>Rebuilt &mdash; the moment the warning resolves.
         </h2>
         <p class="panelNote">
           Without this state the honest warning we just added never visibly clears, which teaches
@@ -2521,6 +2521,17 @@
             The row underneath returns to its panel&nbsp;C reading. The settled line occupies the
             warning&rsquo;s own slot rather than arriving from the corner of the screen, so nothing
             moves and nothing has to be dismissed.
+          </p>
+          <p class="outNote">
+            <strong
+              >&ldquo;now current&rdquo; here is deliberate, and it is the only place the word
+              appears.</strong
+            >
+            The chip reads <em>Indexed</em> everywhere else because the state cannot support a
+            currency claim &mdash; a repository nobody has pushed has no head to be compared
+            against, so it reaches <code>indexed</code> with nothing observed (&sect;4.1). This
+            moment is the exception: a refresh has just run and observed the two shas equal, so
+            currency is a thing that was measured rather than assumed.
           </p>
         </div>
       </section>
@@ -2706,7 +2717,7 @@
               <span class="repoMeta">
                 <span class="sha">3f8a21c</span>
                 <span class="verdict v-current"
-                  ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Current</span
+                  ><svg aria-hidden="true"><use href="#i-circle-check" /></svg>Indexed</span
                 >
               </span>
             </div>
