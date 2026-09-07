@@ -11,6 +11,8 @@ import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAcce
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';
+import { projectsLayeringConnectedRepos } from '@/lib/projectRepos/effectiveDomain';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
@@ -146,6 +148,36 @@ export const organizationRepoService = {
    * workspace because that is where the actor's role lives — a workspace they are
    * not in returns nothing, by `filterBrowsable`'s null-role rail. A separate
    * count would announce the existence of a project the viewer cannot name.
+   *
+   * ⚠️ "USES" IS THE SCOPE LADDER, NOT `project_repository` (MOTIR-4802). This
+   * read shipped asking the raw link table, and a repository a project WORKS ON
+   * need not have a link row: `lib/projectRepos/effectiveDomain.ts` records the
+   * ladder, whose FIRST rung — a project with no set at all — takes the
+   * workspace's CONNECTED repositories as its whole domain, and that rung is the
+   * common one. On Motir's own project (six connected, indexed repositories, an
+   * empty set) every inventory row read `Used by no project yet`, which is the
+   * exact opposite of the claim the tier move shipped on, in the column the
+   * DISCONNECT dialogue leans on.
+   *
+   * So the answer is composed of TWO halves, and the ladder is not re-derived
+   * here — `projectsLayeringConnectedRepos` owns the rung:
+   *
+   *   EXPLICIT  a `project_repository` link, whichever workspace it comes from —
+   *             the org tier's whole point is that a project may link a
+   *             repository connected from a sibling workspace.
+   *   LAYERED   every project of the repository's OWN workspace whose domain
+   *             layers the connected registry. `listConnectedRepoNames` is
+   *             workspace-scoped, so a project layers the repositories connected
+   *             in ITS workspace and no other — this is the same scoping the
+   *             resolver applies, inverted.
+   *
+   * Two BULK reads gather the ladder's inputs for the whole organisation, rather
+   * than N project-scoped `resolveEffectiveRepoDomain` calls per render. Each
+   * runs under the ONE context that can see all of its rows, and neither may be
+   * moved: `project_repository` answers only under the ORG binding (no system
+   * arm) and `migrate_onboarding` only under SYSTEM context (no org arm). Either
+   * read taken under the wrong one returns a subset that the ladder converts into
+   * a WRONG verdict rather than a short list — the failure this whole card is.
    */
   async listRepositoryUsage(ctx: ServiceContext): Promise<OrgRepoUsageDto[]> {
     // The organisation is resolved from the actor's WORKSPACE row — trusted, not
@@ -156,26 +188,38 @@ export const organizationRepoService = {
     // context, and both would return a SUBSET rather than raise — the MOTIR-2956
     // failure shape, which is why they are bound together rather than one at a
     // time.
-    const { repos, linksByRepo, projectIds } = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const orgId = await resolveOrganizationId(ctx.workspaceId, tx);
-        await assertOrgMember(ctx.userId, orgId, tx);
-        await bindOrganizationContext(tx, orgId);
-        const found = await githubRepoRepository.listByOrganization(orgId, tx);
-        const byRepo = new Map<string, string[]>();
-        const ids = new Set<string>();
-        for (const repo of found) {
-          const links = await projectRepoRepository.listByGithubRepoId(repo.id, tx);
-          byRepo.set(
-            repo.id,
-            links.map((l) => l.projectId),
-          );
-          for (const l of links) ids.add(l.projectId);
-        }
-        return { repos: found, linksByRepo: byRepo, projectIds: [...ids] };
-      },
-    );
+    const { repos, linksByRepo, linkedProjectIds, workspaceIds, setProjectIds } =
+      await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId },
+        async (tx) => {
+          const orgId = await resolveOrganizationId(ctx.workspaceId, tx);
+          await assertOrgMember(ctx.userId, orgId, tx);
+          await bindOrganizationContext(tx, orgId);
+          const found = await githubRepoRepository.listByOrganization(orgId, tx);
+          const byRepo = new Map<string, string[]>();
+          const ids = new Set<string>();
+          for (const repo of found) {
+            const links = await projectRepoRepository.listByGithubRepoId(repo.id, tx);
+            byRepo.set(
+              repo.id,
+              links.map((l) => l.projectId),
+            );
+            for (const l of links) ids.add(l.projectId);
+          }
+          // The ladder's FIRST input, in one read for the whole organisation. It
+          // is gathered HERE and not below because `project_repository` has no
+          // system arm — see the method's own warning.
+          const wsIds = [...new Set(found.map((r) => r.workspaceId))];
+          const withRows = await projectRepoRepository.listProjectIdsWithRows(wsIds, tx);
+          return {
+            repos: found,
+            linksByRepo: byRepo,
+            linkedProjectIds: [...ids],
+            workspaceIds: wsIds,
+            setProjectIds: new Set(withRows),
+          };
+        },
+      );
     if (repos.length === 0) return [];
 
     // The PROJECT rows are read under the system arm `project_workspace_or_system_read`
@@ -183,10 +227,43 @@ export const organizationRepoService = {
     // names, which the access filter below then narrows. No new arm is owed, and
     // no arm is widened: this is the same read `codeGraphOffboardingService`
     // performs on the same table for the same reason.
-    const projectsById = await withSystemContext(async (tx) => {
-      const projects = await projectRepository.findManyByIds(projectIds, tx);
-      return new Map(projects.map((p) => [p.id, p]));
-    });
+    const { projectsById, projectIdsByWorkspace, layering } = await withSystemContext(
+      async (tx) => {
+        // The LAYERING candidates: every non-archived project of a workspace that
+        // has a repository connected. Archived is excluded deliberately — an
+        // archived project is not somebody a disconnect dialogue should warn
+        // about, and `findByWorkspace` is the read that already draws that line.
+        const byWorkspace = new Map<string, string[]>();
+        const found = new Map<string, Project>();
+        for (const workspaceId of workspaceIds) {
+          const projects = await projectRepository.findByWorkspace(workspaceId, tx);
+          byWorkspace.set(
+            workspaceId,
+            projects.map((p) => p.id),
+          );
+          for (const project of projects) found.set(project.id, project);
+        }
+        const candidateIds = [...found.keys()];
+        const ownCode = new Set(
+          await migrateOnboardingRepository.listProjectIdsWithConnectedRepo(candidateIds, tx),
+        );
+        const layers = projectsLayeringConnectedRepos(
+          candidateIds.map((projectId) => ({
+            projectId,
+            hasSet: setProjectIds.has(projectId),
+            hasOwnCode: ownCode.has(projectId),
+          })),
+        );
+        // A LINKED project need not be a candidate: the org tier's whole claim is
+        // that a project may link a repository connected from a sibling
+        // workspace, and that project's own workspace may have none of its own.
+        const outside = linkedProjectIds.filter((id) => !found.has(id));
+        for (const project of await projectRepository.findManyByIds(outside, tx)) {
+          found.set(project.id, project);
+        }
+        return { projectsById: found, projectIdsByWorkspace: byWorkspace, layering: layers };
+      },
+    );
 
     // One filter pass per WORKSPACE — the actor's role is workspace-scoped, so a
     // single call with one ctx would judge every project by their role in one
@@ -206,15 +283,24 @@ export const organizationRepoService = {
       for (const p of allowed) browsable.add(p.id);
     }
 
-    return repos.map((repo) => ({
-      githubRepoId: repo.id,
-      repoRef: `${repo.owner}/${repo.name}`,
-      projects: (linksByRepo.get(repo.id) ?? [])
-        .filter((id) => browsable.has(id))
-        .map((id) => projectsById.get(id))
-        .filter((p): p is NonNullable<typeof p> => !!p)
-        .map(toUsingProjectDto),
-    }));
+    return repos.map((repo) => {
+      // EXPLICIT first, then LAYERED — a stable order, and the one a reader
+      // expects: the projects that named this repository, then the ones whose
+      // domain contains it because their workspace is connected to it.
+      const explicit = linksByRepo.get(repo.id) ?? [];
+      const layered = (projectIdsByWorkspace.get(repo.workspaceId) ?? []).filter((id) =>
+        layering.has(id),
+      );
+      return {
+        githubRepoId: repo.id,
+        repoRef: `${repo.owner}/${repo.name}`,
+        projects: [...new Set([...explicit, ...layered])]
+          .filter((id) => browsable.has(id))
+          .map((id) => projectsById.get(id))
+          .filter((p): p is NonNullable<typeof p> => !!p)
+          .map(toUsingProjectDto),
+      };
+    });
   },
 
   /**

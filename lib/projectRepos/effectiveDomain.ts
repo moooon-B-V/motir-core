@@ -74,6 +74,60 @@ export function mergeDomainsByName(
 }
 
 /**
+ * THE LADDER'S RUNG SELECTOR, AS A PURE PREDICATE — does this project's domain
+ * LAYER the workspace's connected repositories at all? (MOTIR-4802.)
+ *
+ * The three rungs in the module header collapse to one boolean, and this is the
+ * one place it is written:
+ *
+ *   no set                            → LAYERS (the connected registry is the
+ *                                        whole domain)
+ *   a set, project born in Motir      → does NOT layer (the set answers alone)
+ *   a set, project arrived WITH code  → LAYERS (the set first, connected under)
+ *
+ * ⚠️ IT IS PURE, AND THE CALLER SUPPLIES THE FACTS — the same shape
+ * `matchAuthoredTargetRepo` has, and for the same reason. A caller resolving ONE
+ * project reads them one at a time ({@link resolveEffectiveRepoDomain} below); a
+ * caller answering the INVERSE question — *which projects use this repository?*,
+ * the organisation inventory's `Used by N projects` — has to gather them in bulk
+ * for a whole organisation, and a rung it re-derived from its own two reads would
+ * be a THIRD definition of the ladder. That re-derivation against the raw table
+ * is the defect this module was extracted to end (MOTIR-3126) and the one that
+ * reappeared one surface over (MOTIR-4802); a predicate both shapes can reach is
+ * what stops it reappearing a third time.
+ */
+export function layersConnectedRepos(facts: { hasSet: boolean; hasOwnCode: boolean }): boolean {
+  return !facts.hasSet || facts.hasOwnCode;
+}
+
+/** One project's ladder inputs, as {@link projectsLayeringConnectedRepos} takes them. */
+export interface ProjectLadderFacts {
+  projectId: string;
+  /** Whether the project has a repository SET at all (rows, established or not). */
+  hasSet: boolean;
+  /** Whether the project arrived WITH code of its own (`projectHasItsOwnCode`). */
+  hasOwnCode: boolean;
+}
+
+/**
+ * THE LADDER, INVERTED AND IN BULK — which of these projects layer their
+ * workspace's connected repositories into their domain (MOTIR-4802).
+ *
+ * The set membership is what the inverse question needs: a repository connected
+ * in workspace W is used by every project of W in this set, PLUS whatever
+ * `project_repository` links name explicitly. Pure, so the caller decides how to
+ * gather the facts cheaply — the organisation inventory reads both in two bulk
+ * reads rather than resolving N project-scoped domains.
+ */
+export function projectsLayeringConnectedRepos(facts: readonly ProjectLadderFacts[]): Set<string> {
+  const layering = new Set<string>();
+  for (const project of facts) {
+    if (layersConnectedRepos(project)) layering.add(project.projectId);
+  }
+  return layering;
+}
+
+/**
  * A project's repository domain, with the scope ladder already applied — the two
  * registries separately AND merged.
  */
@@ -142,6 +196,9 @@ export async function resolveEffectiveRepoDomain(
 ): Promise<EffectiveRepoDomain> {
   const domains = await projectRepoSetService.getRepoNameDomains(projectId, ctx);
   if (!domains.hasSet) {
+    // `layersConnectedRepos({ hasSet: false, … })` is true for EITHER value of
+    // `hasOwnCode`, which is why no onboarding read is owed on this rung — the
+    // sequencing above is that fact, not an optimisation layered over it.
     const connected = await listConnectedRepoNames(ctx);
     return {
       scope: 'workspace',
@@ -158,7 +215,8 @@ export async function resolveEffectiveRepoDomain(
   // and "the set FIRST, the workspace under it" — never between the two
   // registries — so no row a project gains can SUBTRACT a repository from its
   // domain.
-  if (!(await projectHasItsOwnCode(projectId, ctx))) {
+  const hasOwnCode = await projectHasItsOwnCode(projectId, ctx);
+  if (!layersConnectedRepos({ hasSet: true, hasOwnCode })) {
     return {
       scope: 'project',
       hasSet: true,
