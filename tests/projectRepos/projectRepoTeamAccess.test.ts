@@ -514,6 +514,7 @@ describe('rows and members are independent', () => {
       data: {
         provider: 'github',
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         installationId: (
           await adminDb.githubInstallation.create({
             data: {

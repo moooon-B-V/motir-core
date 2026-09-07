@@ -84,6 +84,7 @@ async function makeConnected(
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         repoId: r.providerRepoId,
         owner: 'moooon-B-V',
         name: r.name,
@@ -420,6 +421,7 @@ describe('the backfill never guesses, and never rewrites', () => {
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         repoId: '7003',
         owner: 'moooon-B-V',
         name: 'gl-project',

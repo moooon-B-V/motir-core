@@ -637,6 +637,7 @@ async function connectRepo(fx: WorkItemFixture, name: string, owner = 'moooon'):
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: `repo-${name}-${randomToken(8)}`,
       owner,
       name,

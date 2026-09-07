@@ -132,6 +132,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise
     create: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: 'repo-1',
       owner: 'moooon-B-V',
       name: 'motir-core',
