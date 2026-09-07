@@ -59,7 +59,7 @@ afterEach(() => {
 });
 
 describe('root page (7.22.1 · MOTIR-3367)', () => {
-  it('sends a SIGNED-IN reader to /home — the landing home-scope.md §2.3 decides', async () => {
+  it('sends a SIGNED-IN reader to the LANDING — the one home-scope.md §2.3 decides', async () => {
     getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue', email: 'yue@example.com' } });
 
     await expect(RootPage()).rejects.toThrow(RedirectError);

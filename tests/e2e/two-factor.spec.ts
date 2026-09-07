@@ -34,7 +34,7 @@ async function signUp(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 /** Password step only — stops wherever the sign-in lands it. */

@@ -54,7 +54,7 @@ async function signUp(page: Page, email: string): Promise<void> {
     await createButton.click();
     const landed = await Promise.race([
       page
-        .waitForURL('**/home', { timeout: 9_000 })
+        .waitForURL('**/workbench', { timeout: 9_000 })
         .then(() => true)
         .catch(() => false),
       rateLimitAlert
@@ -67,7 +67,7 @@ async function signUp(page: Page, email: string): Promise<void> {
     // resets before the next single click.
     await page.waitForTimeout(11_000);
   }
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 // Navigate to an authed route, tolerating the rare post-sign-up race

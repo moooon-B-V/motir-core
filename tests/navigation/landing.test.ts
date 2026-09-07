@@ -66,7 +66,7 @@ describe('ONBOARDING_SIGNUP_DOOR_PATH (MOTIR-4402)', () => {
     );
     expect(next).toBe(ONBOARDING_ENTRY_PATH);
     // The round trip that matters: `/sign-up` sanitizes before resolving, so a
-    // door whose value the sanitizer rejected would silently land on /home.
+    // door whose value the sanitizer rejected would silently land on the landing.
     expect(sanitizeNextPath(next!)).toBe(ONBOARDING_ENTRY_PATH);
     expect(resolvePostAuthDestination({ next })).toBe(ONBOARDING_ENTRY_PATH);
   });

@@ -80,7 +80,9 @@ test.describe('motir-core entry rework — the SIGNED-IN visitor (MOTIR-3367)', 
     await resetDatabase();
   });
 
-  test('root sends a signed-in reader to /home, not to the sign-in form', async ({ page }) => {
+  test('root sends a signed-in reader to the Workbench, not to the sign-in form', async ({
+    page,
+  }) => {
     // A fresh account, so the assertion holds for the reader with the LEAST
     // context in the product: `/workbench`'s no-project branch is the shipped
     // create-first door (MOTIR-2761), which is what makes `/workbench` the right

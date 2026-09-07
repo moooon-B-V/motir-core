@@ -57,7 +57,7 @@ describe('/sign-in shell (MOTIR-3372)', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it('sends a SIGNED-IN reader to /home instead of the form', async () => {
+  it('sends a SIGNED-IN reader to the LANDING instead of the form', async () => {
     getSession.mockResolvedValue(SESSION);
 
     await expect(SignInPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(RedirectError);
@@ -73,7 +73,7 @@ describe('/sign-in shell (MOTIR-3372)', () => {
     expect(redirect).toHaveBeenCalledWith('/device?user_code=ABCD-1234');
   });
 
-  it('refuses an off-origin ?next= and falls back to /home — not an open redirect', async () => {
+  it('refuses an off-origin ?next= and falls back to the LANDING — not an open redirect', async () => {
     getSession.mockResolvedValue(SESSION);
 
     await expect(
@@ -106,7 +106,7 @@ describe('/sign-up shell (MOTIR-3372)', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it('sends a SIGNED-IN reader to /home — the same destination sign-in uses', async () => {
+  it('sends a SIGNED-IN reader to the LANDING — the same destination sign-in uses', async () => {
     getSession.mockResolvedValue(SESSION);
 
     await expect(SignUpPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(RedirectError);

@@ -279,7 +279,7 @@ describe('proxy()', () => {
     const { proxy } = await import('@/proxy');
 
     const res = await proxy(
-      new NextRequest('https://app.motir.co/home', {
+      new NextRequest('https://app.motir.co/workbench', {
         headers: { 'accept-language': 'zh-CN' },
       }),
     );

@@ -63,7 +63,7 @@ test.afterAll(async () => {
 test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-password', async ({
   page,
 }) => {
-  // --- Step a/b/c: sign up → land on /home (MOTIR-2921 moved sign-up onto the
+  // --- Step a/b/c: sign up → land on the Workbench (MOTIR-2921 moved sign-up onto the
   // same landing sign-in already used).
   await page.goto('/sign-up');
 
@@ -77,7 +77,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByPlaceholder('Create a password').fill(ORIGINAL_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
 
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
   // Confirm the session bound by opening the top-nav Account menu and
   // checking the rendered email. The old assertion targeted a
   // `<strong>{email}</strong>` debug dump on the dashboard that
@@ -128,7 +128,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   // BOTH credential flows land on `/workbench` — sign-in since MOTIR-2654, sign-up
   // since MOTIR-2921 (see the wait after "Create account" above), so this is
   // the same destination the sign-up leg waited for.
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
   // See assertSignedInAs docstring (Finding #17) — same re-anchor onto
   // the Account-menu popover as the post-sign-up assertion above.
   await assertSignedInAs(page, TEST_EMAIL);
@@ -170,7 +170,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 
   // Sign-in attempt with the OLD password fails with the inline error.
   await signOut(page);

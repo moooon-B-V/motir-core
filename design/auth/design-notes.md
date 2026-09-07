@@ -487,7 +487,7 @@ when `signIn.email` answers `{ twoFactorRedirect: true }` instead of a session:
 | 1    | `SignInCard` step `'email'`                      | always                                                       |
 | 2    | `SignInCard` step `'password'`                   | always                                                       |
 | 3    | **`SignInCard` step `'twoFactor'`** — this asset | ONLY on `twoFactorRedirect`; **skipped on a trusted device** |
-| 4    | `resolvePostAuthDestination`                     | `?next=` when safe, else `/home`                             |
+| 4    | `resolvePostAuthDestination`                     | `?next=` when safe, else `/workbench`                        |
 
 Two consequences worth stating: the card grows a THIRD step rather than gaining
 a route (so `app/(auth)/layout.tsx`, the shell and the brand lockup are
@@ -546,7 +546,7 @@ Spending the LAST code leaves an account with 2FA on and no way back in if the
 authenticator is also gone — the state the settings pane's zero-callout
 describes, arrived at from the other side. So the challenge says so BEFORE the
 code is spent, and lands the reader on `/settings/account/security` afterwards
-rather than at `/home` with the problem still true.
+rather than at `/workbench` with the problem still true.
 
 ## The copy
 

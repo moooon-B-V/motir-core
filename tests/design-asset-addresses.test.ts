@@ -239,37 +239,18 @@ function sweep(): Finding[] {
 const KNOWN: { file: string; address: string; why: string }[] = [
   // ── The RETIRED landing, which the app still answers on ──────────────────
   //  MOTIR-4782 moved the signed-in landing from `/home` to `/workbench` and
-  //  kept the old address alive as a permanent 308 (`LANDING_REDIRECTS`). So
-  //  `/home` is `redirects-away` rather than `resolves-to-nothing`: a reader
-  //  following one of these still arrives, which is the whole point of the
-  //  redirect — and it is also exactly the drift this guard exists to name,
-  //  because the next card to read one of these assets will believe it.
+  //  kept the old address alive as a permanent 308 (`LANDING_REDIRECTS`), so
+  //  `/home` classifies as `redirects-away` rather than `resolves-to-nothing`.
   //
-  //  ⚠️ THESE ARE PARKED, NOT SETTLED. Correcting the ten shell / auth /
-  //  projects / settings assets means editing their mock sources and
-  //  re-exporting ten PNGs, which is **MOTIR-4783**'s scope by name ("the
-  //  design assets' address lines, each hit dispositioned") — the sibling card
-  //  this one blocks. Parking them here is the same move MOTIR-2316 made and
-  //  MOTIR-2340 discharged: the guard's run IS the audit, and what it finds is
-  //  the sweeping card's work. DELETE EVERY ROW IN THIS BLOCK when 4783 merges.
-  ...(
-    [
-      'design/auth/design-notes.md',
-      'design/projects/public-page.mock.html',
-      'design/settings/arrival.mock.html',
-      'design/shell/3d-immersive-shell.mock.html',
-      'design/shell/account-menu.mock.html',
-      'design/shell/context-row.mock.html',
-      'design/shell/help-menu.mock.html',
-      'design/shell/navigation-pending.mock.html',
-      'design/shell/rail-bottom-section.mock.html',
-      'design/shell/top-bar.mock.html',
-    ] as const
-  ).map((file) => ({
-    file,
-    address: '/home',
-    why: 'Drawn before MOTIR-4782 renamed the landing; the 308 keeps it reachable. MOTIR-4783 corrects the asset. DELETE THIS ROW when that card merges.',
-  })),
+  //  ⚠️ THE TEN SHELL / AUTH / PROJECTS / SETTINGS ASSETS THAT NAMED IT ARE
+  //  CORRECTED, NOT PARKED (MOTIR-4783). They were parked here for exactly one
+  //  card — the sweep that owns the design assets' address lines — and that card
+  //  discharged them: nine mock sources had `href="/home"` re-pointed, thirteen
+  //  visible rail labels now read `Workbench`, four prose lines in the auth and
+  //  ai-chat assets name the new address, and seven PNGs were re-exported for
+  //  the ones where the change is visible. What is left below is the pair that
+  //  names the old address ON PURPOSE.
+  //
   //  The two Workbench assets name `/home` DELIBERATELY and permanently — the
   //  asset's job is to record what the surface was renamed FROM, the same way
   //  the `KNOWN_PATHS` rename rows below record the old `design/home/` path. A

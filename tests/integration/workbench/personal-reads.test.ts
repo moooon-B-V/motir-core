@@ -743,7 +743,7 @@ describe('Home excludes the done CATEGORY (MOTIR-2758)', () => {
     // tab: `setStatus` writes `work_item.status` directly, so these rows never
     // passed through `applyStatusTransition` and carry no `completedAt` for the
     // window to match. The finished window's real coverage is its own suite
-    // (`tests/integration/home/workbench-reads.test.ts`), which transitions
+    // (`tests/integration/workbench/workbench-reads.test.ts`), which transitions
     // rows the way the product does.
     expect(await homeService.tabCounts(hctx(fx))).toEqual(counts());
   });

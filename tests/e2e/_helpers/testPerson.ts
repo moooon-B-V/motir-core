@@ -14,7 +14,7 @@ import { usersService } from '@/lib/services/usersService';
 // way has agreed to nothing and is held on their first page load.
 //
 // The failure then lands nowhere near the cause: `signIn` succeeds, and the
-// spec times out in `shell-session.ts`'s `settleOnHome` waiting for `/workbench`
+// spec times out in `shell-session.ts`'s `settleOnWorkbench` waiting for `/workbench`
 // while the browser sits on `/re-consent`. It reads as a navigation or a timing
 // problem. Ten acceptance specs were red on `main` for exactly this
 // (MOTIR-3715), and not one of them looked like a consent problem.

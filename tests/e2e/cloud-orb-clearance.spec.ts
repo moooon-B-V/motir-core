@@ -40,7 +40,7 @@
 // explicit `document.elementFromPoint` check below:
 //
 //   /items Next page: centre (1214,667) inside the orb rect (1204,644 56×56)
-//   /home  Next:      centre (1221,680) inside the same rect
+//   /workbench Next:   centre (1221,680) inside the same rect
 //   elementFromPoint → button.fixed right-5 bottom-5 z-40 …  (the orb)
 //
 // So the PRIMARY assertion here is the explicit hit test, taken at the control's
@@ -209,7 +209,7 @@ test('the /items List pager clears the orb at the end of a scrolled page, and Ne
   await expect(page.getByRole('dialog', { name: 'Motir AI' })).toHaveCount(0);
 });
 
-test("the /home cursor pager's Next clears the orb at the end of a scrolled page", async ({
+test("the Workbench cursor pager's Next clears the orb at the end of a scrolled page", async ({
   page,
 }) => {
   await seedPaginatedProject(page, `orb-clearance-home-${Date.now()}@example.com`);
@@ -220,7 +220,7 @@ test("the /home cursor pager's Next clears the orb at the end of a scrolled page
   // The seed puts all 65 items in "My work" (creator = reporter), so the
   // 25-row cursor page has a `Next`.
   const next = page.getByRole('link', { name: 'Next', exact: true });
-  await expectReceivesItsOwnClick(page, next, '/home pager Next');
+  await expectReceivesItsOwnClick(page, next, '/workbench pager Next');
 
   await next.click();
   await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
