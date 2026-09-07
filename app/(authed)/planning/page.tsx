@@ -1,5 +1,9 @@
 import { redirect } from 'next/navigation';
-import { parsePlanningLaunch, planningOverlaySearch } from '@/lib/planning/launcher';
+import {
+  parsePlanningLaunch,
+  planningHostPathFor,
+  planningOverlaySearch,
+} from '@/lib/planning/launcher';
 import type { PlanningLaunch, PlanningLaunchContext } from '@/lib/planning/launcher';
 
 // THE FORWARD — all that survives at `/planning` (MOTIR-4732, story MOTIR-4725).
@@ -32,15 +36,6 @@ import type { PlanningLaunch, PlanningLaunchContext } from '@/lib/planning/launc
 // request to `/sign-in?next=/planning…` instead of letting the segment answer
 // with its own gate.
 
-/** Where an old address's context BELONGS — the mapping the route-era Close used. */
-function hostPathFor(launch: PlanningLaunch): string {
-  if (launch.from === 'work-item' && launch.itemKey) {
-    return `/items/${encodeURIComponent(launch.itemKey)}`;
-  }
-  if (launch.from === 'convention-refine') return '/code-health';
-  return '/roadmap';
-}
-
 /** The launch back as the CONTEXT the overlay's parameters are written from. */
 function contextFor(launch: PlanningLaunch): PlanningLaunchContext {
   if (launch.from === 'work-item' && launch.itemKey) {
@@ -57,8 +52,12 @@ function contextFor(launch: PlanningLaunch): PlanningLaunchContext {
 export function planningForwardTarget(
   searchParams: Record<string, string | string[] | undefined>,
 ): string {
-  const launch = parsePlanningLaunch(searchParams);
-  return `${hostPathFor(launch)}?${planningOverlaySearch(contextFor(launch)).toString()}`;
+  const context = contextFor(parsePlanningLaunch(searchParams));
+  // ⚠️ THE MAPPING IS THE LAUNCHER'S NOW (MOTIR-4770). It lived here because
+  // this was the only caller; the RETURN from onboarding asks the same question
+  // — *this context belongs to which page?* — and two copies of it is the drift
+  // MOTIR-4732's own note warned about. The forward consumes the lifted one.
+  return `${planningHostPathFor(context)}?${planningOverlaySearch(context).toString()}`;
 }
 
 export default async function PlanningForwardPage({

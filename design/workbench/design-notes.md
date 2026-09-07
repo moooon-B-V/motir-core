@@ -5,13 +5,24 @@ landing surface** (Story [MOTIR-4777](motir:cmtqhxi4v000uhvphhq0lndce), drawn by
 the MOTIR-4779 design gate). It is the layout source of truth for **MOTIR-4782**
 (the page) and **MOTIR-4783** (the sweep), and both carry it in `blocked_by`.
 
-| Surface                           | Asset                                   | Notes                                                                                                                                                                                      |
-| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **The `/workbench` landing page** | **`workbench.mock.html`** (HTML mockup) | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow. Exports to `workbench.png`. |
+**AMENDED by MOTIR-4851** (Story
+[MOTIR-4850](motir:cmtrqmg1o001yhwphuhguhxni)) with the two things the first
+revision handed forward: **how the surface PAGES** and **how its work tabs are
+ORDERED**. Both were in § _What this asset does NOT decide_; both are now drawn,
+and that section no longer carries them. It is the layout source of truth for
+**MOTIR-4852** (the reads) and **MOTIR-4853** (the page), which carry it in
+`blocked_by`.
+
+| Surface                           | Asset                                   | Notes                                                                                                                                                                                                                      |
+| --------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The `/workbench` landing page** | **`workbench.mock.html`** (HTML mockup) | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow · **the pager, in five states**. Exports to `workbench.png`. |
 
 **Panels:** A the door · 1 To do · 2 In progress · 3 Recently finished ·
 4 Watching, grouped · 5 the all-empty page · 6 every tab's empty state ·
-7 narrow (`< md`). **There is no no-project panel** — see below.
+7 narrow (`< md`) · **8 a paged tab, and the kind order** · **9 a single-page
+tab** · **10 an empty tab, with no pager** · **11 Watching over an offset page
+(+ 11b a page inside one band)** · **12 the pager at narrow, and in `zh`**.
+**There is no no-project panel** — see below.
 
 ---
 
@@ -221,9 +232,140 @@ same count badge the tabs use.
 - **The labels are the tabs' own words** — `In progress`, `To do` — so a reader
   who has just switched from those tabs meets the same vocabulary.
 
-**Groups, not a sort key.** The rows within each group keep the existing
+**Groups, not a sort key — the group is the OUTER key and the kind order runs
+INSIDE it.** ~~The rows within each group keep the existing
 `(updatedAt DESC, id DESC)` order, which is what lets the page boundary stay
-exact; MOTIR-4781 carries the group in the cursor for the same reason.
+exact; MOTIR-4781 carries the group in the cursor for the same reason.~~
+**AMENDED (MOTIR-4851).** The struck sentence was right about the SHAPE and is
+superseded on the sort key and on the mechanism: within each group the rows now
+order by the kind rank (§The ORDER below), and the page boundary is kept exact
+by a total tiebreak rather than by a cursor, because the cursor is retired
+(MOTIR-4852). The band structure is unchanged — Panel 11 draws it over an offset
+page, including the two arrangements the keyset could never produce.
+
+---
+
+## The ORDER — `READY_KIND_RANK`, and the SAME constant rather than a second copy
+
+**The three work tabs — To do, In progress, Watching — order by KIND:**
+`subtask → bug → task → story → epic`. **Recently finished is untouched** and
+keeps `completedAt DESC`, because _what did I just finish_ IS a time question.
+
+**Why kind and not time.** `updatedAt DESC` answers _what did I touch last_,
+which is a question nobody opens this page with. The question they do open it
+with is _what do I pick up next_, and the product already knows the answer:
+`/ready` orders by `READY_KIND_RANK`, most granular first, coarsening to
+containers last, because the most granular work is the work you can actually
+start. It matters more here than anywhere else precisely because agents fill
+this surface — a reader looking at sixty rows is looking at a queue their agents
+built, and the rows that can be started ought to be the rows they see.
+
+**Drawn, not described: Panel 8's twenty-five rows are in that sequence** —
+eleven subtasks, three bugs, five tasks, five stories, one epic — so the
+`IssueTypeIcon` column reads as a sorted run. Panel 11 draws the same run
+INSIDE each of Watching's two bands.
+
+**The rank is read from `lib/workItems/readyFilter.ts`, not re-declared.** Two
+lists that both claim to be "in ready order" and derive it separately will
+disagree eventually, and quietly: nothing errors, one page just puts an epic
+above a subtask. MOTIR-4852 imports the constant and spends a guard on the
+agreement; this asset records that as a drawn property of the surface rather
+than an implementation detail, because "the same order as Ready" is something a
+reader can see and check.
+
+**Nothing about the ROW changes** — the same four columns, the same cells, the
+same 44px. Only the sequence.
+
+### ⚠️ The rows in this asset CAUGHT UP with the shipped component in the same pass
+
+Drawing a sorted-by-kind run made two drifts load-bearing that had been merely
+untidy, so they are fixed here, in this file, with the evidence:
+
+| what                                 | the asset had       | the shipped `WorkbenchList` / `IssueTypeIcon` renders                                        |
+| ------------------------------------ | ------------------- | -------------------------------------------------------------------------------------------- |
+| the **task** glyph (5 rows)          | lucide `circle-dot` | lucide `square-check-big` (`ISSUE_TYPE_META.task.icon`)                                      |
+| the **bug** glyph (4 rows)           | lucide `circle-dot` | lucide `bug` (`ISSUE_TYPE_META.bug.icon`)                                                    |
+| the row **identifier** ink (19 rows) | `--el-text-muted`   | `--el-text-secondary` — muted is 4.17:1 on `--el-surface`, which is the row's own hover fill |
+| the **Unassigned** ink (2 rows)      | `--el-text-muted`   | `--el-text-secondary`, for the same pair                                                     |
+
+The glyph pair is the one that could not be left: with task and bug drawn as the
+same circle, a run ordered `subtask → bug → task → …` is invisible as a run, and
+Panel 8 exists to make it visible. `git grep -c 'lucide-circle-dot text-(--el-type-'`
+returned **9, all of them in this file** — every other asset in the tree already
+drew the shipped glyphs, so this was a local staleness rather than a convention.
+
+---
+
+## The pager — the shipped control, COMPOSED and not re-specified
+
+**The control has an owner, and it is not this asset.**
+`design/work-items/list.mock.html` **panel 5** + `design/work-items/design-notes.md`
+§ _server-paged navigator_ draw the `Showing X–Y of N` range line, the prev
+chevron, the numbered buttons with ellipsis truncation and the next chevron, and
+`app/(authed)/items/_components/IssueListPager.tsx` implements exactly that.
+**This asset does not re-specify the control's internals.** What it decides is
+where the control SITS on the Workbench, what it SAYS there, and the four states
+the Workbench produces that `/items` does not.
+
+**What today's surface does, and why it is being replaced.** `/workbench` pages
+with a keyset cursor and two links — **Next** and **Back to the top** — sitting
+OUTSIDE the bordered box. That is a one-way walk: a reader cannot see how far the
+tab goes, cannot jump, and cannot step back a page except by starting over. Every
+other list in Motir already solved this, so the surface a person lands on after
+signing in is the one place in the product where paging is worse than everywhere
+else.
+
+### The five states, and the decision in each
+
+| panel  | state                        | what is drawn                                                                                                                                                               |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **8**  | a paged tab, at rest         | The footer is the **last row INSIDE the bordered box** (`border-t --el-border` over `--el-surface-soft`), under a full 25-row page, so the reader sees the box close on it. |
+| **9**  | a set that fits one page     | The **range line stays; the page nav is absent.** A lone `[1]` is a control that cannot do anything, but "9 of 9" still answers _is this all of it?_                        |
+| **10** | an empty tab                 | **No pager at all**, and no bordered box — the drawn empty state IS the card. `Showing 0–0 of 0` would say what the empty state has just said, in a quieter voice.          |
+| **11** | Watching over an offset page | The band boundary INSIDE a page, and each band's count reading the **GROUP** rather than the page. Plus **11b**: a page wholly inside one group draws that band ALONE.      |
+| **12** | narrow (`< md`) and `zh`     | The footer **wraps** rather than shrinking; how far depends on the run length, and the ellipsis truncation bounds it to one extra line. The same footer, rendered in 中文.  |
+
+**The pager's `N` is the tab strip's own count.** 63 in the range line and 63 on
+the strip, because they are the same predicate — a reader is never handed two
+numbers to reconcile. Panel 8 draws both in one frame for exactly that reason.
+
+**The page rides the URL beside `?tab=`, and page 1 is the ABSENCE of the
+param** — the same rule that makes To do the absence of `?tab=`, so a link to a
+tab and a link to its first page are one link.
+
+### The copy — `en` and `zh`, named here because the control ships neither
+
+`IssueListPager.tsx` has no `next-intl` import at all: every string below is an
+English literal today, and its number formatting is pinned to `en-US`. The
+Workbench is the surface that ships in both languages, so this is where they are
+named. `/items` and `/items/archived` inherit them unchanged.
+
+| element                        | `en`                             | `zh`                                   |
+| ------------------------------ | -------------------------------- | -------------------------------------- |
+| range line                     | `Showing {from}–{to} of {total}` | `显示第 {from}–{to} 项，共 {total} 项` |
+| previous chevron, `aria-label` | `Previous page`                  | `上一页`                               |
+| next chevron, `aria-label`     | `Next page`                      | `下一页`                               |
+| page button, `aria-label`      | `Page {n}`                       | `第 {n} 页`                            |
+| the nav's `aria-label`         | `Pagination`                     | `分页`                                 |
+
+- **The range line's two numbers stay `<strong>` on `--el-text`** in both
+  languages: they are the answer, and the words around them are the frame.
+- **The numbers are formatted in the ACTIVE locale**
+  (`Intl.NumberFormat(locale)`), not `en-US`. A four-figure total is the only
+  place it shows, and it shows there.
+- **The chevrons carry no visible text in either language**, so the
+  `aria-label` is the whole of their accessible name — which is why they are
+  named here rather than left to the code card.
+
+### The ACCESS PATH is unchanged, and is already drawn
+
+`/workbench` is the signed-in landing surface and the rail's first project-tier
+row; **Panel A draws both doors** (the rail entry and `AUTHED_LANDING_PATH`) and
+neither moves. The pager is a control INSIDE a page the reader is already
+standing on, not a new destination, so this amendment adds no entrance and
+changes none. Stating it rather than leaving it unaddressed, because "draw the
+entrance" is a standing requirement and its answer here is _already drawn, in
+Panel A_.
 
 ---
 
@@ -263,6 +405,7 @@ none carries a card header of its own.
 | window caption        | "Finished in the last 7 days. Older work stays on the item, and on the board." |
 | tab labels            | To do · In progress · Recently finished · Watching · **To approve**            |
 | Watching group labels | In progress · To do                                                            |
+| **pager**             | § _The pager_ → _The copy_ above has the five strings, with their `zh` values  |
 
 **⚠️ THE SUBTITLE DOES NOT SURVIVE, and the card asked whether it should.** The
 shipped line is _"Everything in {project} that is waiting on you."_ It is false
@@ -455,6 +598,16 @@ column-header band with one label and a count; the Finished cell is the row's ow
 `text-xs` secondary cell; every empty state is the `EmptyState` primitive. No new
 primitive, and no new token.
 
+**And so does MOTIR-4851's.** Panels 8–12's footer is `IssueListPager`'s own
+emitted markup — its container, its `PG_BTN` class string, its two lucide
+chevrons and its `aria` attributes, verbatim — so the asset cannot drift from
+the control it composes. Eight of its utility classes, plus
+`text-(--el-type-epic)` (the mock drew no epic row until Panel 8), are declared
+in the mock's own `<style>` block for the same reason the two narrow-strip
+utilities below them are: the stylesheet above is a frozen Tailwind compile of
+this file as it stood BEFORE the revision, and it cannot contain a class the
+file did not yet use. They are written exactly as Tailwind emits them.
+
 ---
 
 ## Layout — one column, and the column set is the real decision
@@ -537,31 +690,50 @@ the meaning.
 
 ## Token map
 
-| Element                           | Colour                                                                                                                                                        | Shape                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| page `h1` / subtitle              | `--el-text` / `--el-text-muted`                                                                                                                               | —                                                                                              |
-| tab track / active tab / inactive | `--el-tabnav-track` · `--el-page-bg` + `--el-text-strong` · `--el-text-secondary`                                                                             | `--radius-btn` (track) · `--radius-control` (tab) · `--height-control` · `--spacing-control-x` |
-| tab glyph active / inactive       | `--el-tabnav-active` / `--el-text-faint`                                                                                                                      | —                                                                                              |
-| tab count badge                   | `--el-count-bg` / `--el-count-text`                                                                                                                           | `--radius-badge` · `--spacing-chip-x`                                                          |
-| **window caption**                | **`--el-text-secondary`**                                                                                                                                     | `text-xs`                                                                                      |
-| list container                    | `--el-border`                                                                                                                                                 | `--radius-card`                                                                                |
-| column header strip               | `--el-surface-soft` / `--el-text-secondary`                                                                                                                   | 40px                                                                                           |
-| **Watching group band**           | **`--el-surface-soft` / `--el-text-secondary`**, count on `--el-count-bg` / `--el-count-text`                                                                 | **30px** · `--radius-badge` (count)                                                            |
-| row · row hover                   | `--el-border` (rule) · `--el-surface` (hover)                                                                                                                 | 44px · `pl-4 pr-7` · `gap-x-4`                                                                 |
-| type glyph                        | `--el-type-{epic,story,task,bug,subtask}`                                                                                                                     | `h-4 w-4`                                                                                      |
-| identifier                        | `--el-text-muted`, `font-mono text-xs`                                                                                                                        | —                                                                                              |
-| title                             | `--el-text`                                                                                                                                                   | truncate                                                                                       |
-| Your role · `Both`                | `--el-text-secondary` · `--el-text-strong` + `font-medium`                                                                                                    | `text-xs`                                                                                      |
-| **`Finished` cell**               | **`--el-text-secondary`**                                                                                                                                     | `text-xs` · 96px                                                                               |
-| avatar                            | `bg-(--el-text)` / `--el-text-inverted`                                                                                                                       | `rounded-full` 22px                                                                            |
-| agent badge                       | `--el-executor-agent` / `--el-accent-text`, `ring-(--el-page-bg)`                                                                                             | `rounded-full` 14px                                                                            |
-| status chip                       | `Pill` tones — `--el-tint-sky` (in-progress category), **`--el-tint-mint` (Done)**, **`--el-chip-bg` (To Do, Blocked, Cancelled)**, all on `--el-text-strong` | `--radius-badge`                                                                               |
-| unassigned                        | `--el-text-muted`                                                                                                                                             | —                                                                                              |
-| empty-state glyph / title / body  | `--el-icon-muted` · `--el-text` (serif) · `--el-text-subtitle`                                                                                                | `--radius-card` · `--spacing-card-padding`                                                     |
-| rail Workbench entry (active)     | `--el-sidebar-item-bg-active` · `--el-text` · `--el-icon-active`                                                                                              | `--radius-control` · `--height-control`                                                        |
+| Element                            | Colour                                                                                                                                                        | Shape                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| page `h1` / subtitle               | `--el-text` / `--el-text-muted`                                                                                                                               | —                                                                                              |
+| tab track / active tab / inactive  | `--el-tabnav-track` · `--el-page-bg` + `--el-text-strong` · `--el-text-secondary`                                                                             | `--radius-btn` (track) · `--radius-control` (tab) · `--height-control` · `--spacing-control-x` |
+| tab glyph active / inactive        | `--el-tabnav-active` / `--el-text-faint`                                                                                                                      | —                                                                                              |
+| tab count badge                    | `--el-count-bg` / `--el-count-text`                                                                                                                           | `--radius-badge` · `--spacing-chip-x`                                                          |
+| **window caption**                 | **`--el-text-secondary`**                                                                                                                                     | `text-xs`                                                                                      |
+| list container                     | `--el-border`                                                                                                                                                 | `--radius-card`                                                                                |
+| column header strip                | `--el-surface-soft` / `--el-text-secondary`                                                                                                                   | 40px                                                                                           |
+| **Watching group band**            | **`--el-surface-soft` / `--el-text-secondary`**, count on `--el-count-bg` / `--el-count-text`                                                                 | **30px** · `--radius-badge` (count)                                                            |
+| row · row hover                    | `--el-border` (rule) · `--el-surface` (hover)                                                                                                                 | 44px · `pl-4 pr-7` · `gap-x-4`                                                                 |
+| type glyph                         | `--el-type-{epic,story,task,bug,subtask}`                                                                                                                     | `h-4 w-4`                                                                                      |
+| identifier                         | `--el-text-muted`, `font-mono text-xs`                                                                                                                        | —                                                                                              |
+| title                              | `--el-text`                                                                                                                                                   | truncate                                                                                       |
+| Your role · `Both`                 | `--el-text-secondary` · `--el-text-strong` + `font-medium`                                                                                                    | `text-xs`                                                                                      |
+| **`Finished` cell**                | **`--el-text-secondary`**                                                                                                                                     | `text-xs` · 96px                                                                               |
+| avatar                             | `bg-(--el-text)` / `--el-text-inverted`                                                                                                                       | `rounded-full` 22px                                                                            |
+| agent badge                        | `--el-executor-agent` / `--el-accent-text`, `ring-(--el-page-bg)`                                                                                             | `rounded-full` 14px                                                                            |
+| status chip                        | `Pill` tones — `--el-tint-sky` (in-progress category), **`--el-tint-mint` (Done)**, **`--el-chip-bg` (To Do, Blocked, Cancelled)**, all on `--el-text-strong` | `--radius-badge`                                                                               |
+| unassigned                         | `--el-text-muted`                                                                                                                                             | —                                                                                              |
+| empty-state glyph / title / body   | `--el-icon-muted` · `--el-text` (serif) · `--el-text-subtitle`                                                                                                | `--radius-card` · `--spacing-card-padding`                                                     |
+| rail Workbench entry (active)      | `--el-sidebar-item-bg-active` · `--el-text` · `--el-icon-active`                                                                                              | `--radius-control` · `--height-control`                                                        |
+| **pager footer bar**               | **`--el-surface-soft`**, top rule `--el-border`                                                                                                               | `px-3.5 py-2.5` (layout, not a control's own box)                                              |
+| **pager range line · its numbers** | **`--el-text-secondary`** · `--el-text` (`font-semibold`)                                                                                                     | `text-[13px]`                                                                                  |
+| **page button (rest)**             | **`--el-page-bg`** / `--el-text`, border `--el-border`, hover `--el-surface`                                                                                  | `--radius-control` · `--height-control` · `--spacing-control-x` · `min-w-(--height-control)`   |
+| **page button (current)**          | **`--el-accent`** / `--el-accent-text`, `border-transparent`                                                                                                  | same                                                                                           |
+| **prev / next chevron**            | glyph `--el-text-muted`; **disabled**: `--el-text-faint` at `opacity-55`                                                                                      | same                                                                                           |
+| **the ellipsis**                   | **`--el-text-faint`**, `aria-hidden`                                                                                                                          | `min-w-6` · `text-[13px]`                                                                      |
 
 **No new token.** Every element above paints with a token the design system
-already ships.
+already ships, the pager included — it is the shipped control's own token set,
+composed rather than re-chosen.
+
+**AA on the pager, checked against the CLAUDE.md contrast table.** The footer's
+ground is `--el-surface-soft`, where `--el-text-muted` is **4.34:1 and fails** —
+which is why the range line is `--el-text-secondary` (6.51:1) and not muted, and
+why the shipped component's own comment says so. `--el-text-faint` appears in
+exactly two places and clears AA on neither surface, so both are exempt by
+kind rather than by measurement: the **ellipsis** is `aria-hidden` decoration,
+and the **disabled chevron's** glyph is disabled text, which 1.4.3 does not
+measure — the button carries `disabled` and `aria-disabled="true"`, which is
+what makes that legitimate rather than merely convenient. The current page is
+**not colour alone**: it is also the only filled, borderless button in the run,
+and it carries `aria-current="page"`.
 
 **AA:** `--el-text-faint` appears only on `aria-hidden` glyphs.
 `--el-text-muted` appears only on the white page/card surface, never on
@@ -577,13 +749,26 @@ on all four surfaces in both themes.
 
 - **The To-approve tab's rows, its gate records and its approve/confirm control**
   — [MOTIR-4778](motir:cmtqhxi7r000vhvphp60vjymc). Only the slot is drawn here.
-- **Ordering within each work tab.** MOTIR-4781 owns it and specifies
+- ~~**Ordering within each work tab.** MOTIR-4781 owns it and specifies
   `updatedAt DESC` with a total, stable tiebreak (and `completedAt DESC` for
-  Recently finished); nothing here overrides that.
-- **The paging affordance** — the mock shows one page. MOTIR-4781's reads are
+  Recently finished); nothing here overrides that.~~ **DECIDED by MOTIR-4851** —
+  § _The ORDER_ above. The three work tabs read `READY_KIND_RANK`; Recently
+  finished keeps `completedAt DESC`, which was never the deferred half.
+- ~~**The paging affordance** — the mock shows one page. MOTIR-4781's reads are
   cursor-paged and hand back an opaque `nextCursor`; MOTIR-4782 picks the control
   (the shipped `IssueListPager` is the obvious reuse) and keeps the cursor in the
-  URL beside `?tab=`.
+  URL beside `?tab=`.~~ **DECIDED by MOTIR-4851** — § _The pager_ above, Panels
+  8–12. The obvious reuse was the right one; what this asset adds is where it
+  SITS, what it says, and the four states nobody had asked for.
+
+  **Both lines are struck rather than deleted, and that is the convention this
+  file already uses** (§Watching, §PR-title). A deferral that simply vanishes
+  reads as though nobody ever raised the question; a struck one tells the next
+  reader that it WAS raised, and where it was answered.
+
+- **The page SIZE.** `HOME_PAGE_SIZE = 25` is drawn as a constant in every
+  panel. Whether a reader may choose it — the `/items` list does not offer that
+  either — is not a question this asset raises.
 - **The finished window's LENGTH as a setting.** Seven days is drawn and is a
   constant; whether it should ever be configurable is not a question this asset
   raises.
@@ -603,6 +788,29 @@ on all four surfaces in both themes.
 | **MOTIR-4778** (the sibling story)                       | The To-approve SLOT — its position in the strip, its label, its glyph, its count treatment and its empty state.                                                     | **Its own design amendment no longer draws the strip.** The strip is composed once, here; that story draws the ROWS inside the slot. |
 | **MOTIR-2649 / 2653 / 2654 / 2761 / 2758 / 2652 / 2920** | Nothing — they are `done` or archived and are not touched.                                                                                                          | Nothing.                                                                                                                             |
 | **MOTIR-3373** (`AUTHED_LANDING_PATH`)                   | Nothing.                                                                                                                                                            | Nothing — the rename is one write to the constant it already owns, which is why the move is not a sweep.                             |
+
+### The MOTIR-4851 revision's own sweep
+
+**Scope of the sweep, stated because it is a judgement:** every `MOTIR-<n>` in
+the NOTES, plus every one in the mock's own **annotation prose** (its
+review-head, panel labels, `.note` blocks and captions). The mock's SAMPLE ROW
+DATA is deliberately excluded — those keys are drawn content standing in for a
+reader's list, not references to cards this asset allocates work to, and a
+GIVES / TAKES line for each would be sixty rows of noise around the seven that
+mean something. The sweep also ran over MOTIR-4850's whole SUBTREE rather than
+only over the keys the asset happens to name.
+
+| card                                                     | GIVES                                                                                                                                                                                                                                                                                                                                                                                              | TAKES                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4852** (the reads)                               | The ORDER as a drawn fact — `subtask → bug → task → story → epic` on the three work tabs, `completedAt DESC` untouched on Recently finished — and the requirement that Watching's GROUP is the outer key across a page boundary, which is why it is ONE ordered read rather than two. Also the pager's denominator: `N` is the tab strip's own count, so the list and the total are one predicate. | **Nothing structural, and one PREMISE it should read:** its disposition table retires the cursor module, and Panel 11's band-boundary arrangement is the thing that table's replacement has to keep producing. Nothing here re-opens the category predicate, the window or `HOME_PAGE_SIZE`. |
+| **MOTIR-4853** (the page)                                | All five panels and every string: the footer INSIDE the box, the single-page and empty states, the two Watching arrangements, the narrow wrap, and the `en` + `zh` values for all five pager strings, so the card transcribes rather than invents.                                                                                                                                                 | **Nothing.** It draws no element this asset leaves unspecified, and the access path it renders is the one Panel A already draws.                                                                                                                                                             |
+| **MOTIR-4854** (the vitest gate)                         | Nothing it can assert against a mock. The kind-order run and the band counts are what its integration seams are seams BETWEEN.                                                                                                                                                                                                                                                                     | Nothing.                                                                                                                                                                                                                                                                                     |
+| **MOTIR-4855** (the E2E + acceptance video)              | The states the walk checks against — the footer, the disabled prev on page 1, the single-page and empty arms, and the Chinese strings its `zh` step reads.                                                                                                                                                                                                                                         | Nothing.                                                                                                                                                                                                                                                                                     |
+| **MOTIR-4850** (the story)                               | Its own acceptance criteria, drawn.                                                                                                                                                                                                                                                                                                                                                                | Nothing.                                                                                                                                                                                                                                                                                     |
+| **MOTIR-4781 / 4782** (`done`)                           | Nothing. This revision REPLACES two behaviours they delivered — `updatedAt DESC` and the keyset links — going forward; it does not re-open either card.                                                                                                                                                                                                                                            | Nothing. Their work shipped and is correct as shipped.                                                                                                                                                                                                                                       |
+| **MOTIR-4778 / 4794** (the sibling story)                | Nothing new. The To-approve SLOT is still drawn once, here, and its rows are still that story's.                                                                                                                                                                                                                                                                                                   | Nothing — but note that the tab **inherits this pager for free** the moment MOTIR-4794 renders rows into the shared list. That is a fact about composition, not a deliverable of either card.                                                                                                |
+| **the `design/work-items/` asset**                       | Nothing. It OWNS the control; this asset composes it and cites it.                                                                                                                                                                                                                                                                                                                                 | **A dependency worth naming:** if panel 5's navigator is ever re-specified, these five panels are downstream of it and are not a second opinion about it.                                                                                                                                    |
+| **MOTIR-1307 / 2651 / 3171 / 3173 / 4779 / 4780 / 4783** | Nothing — named in prose as history or as context, not allocated work by this revision.                                                                                                                                                                                                                                                                                                            | Nothing.                                                                                                                                                                                                                                                                                     |
 
 ---
 

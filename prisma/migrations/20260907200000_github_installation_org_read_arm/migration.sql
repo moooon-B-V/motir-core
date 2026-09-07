@@ -1,0 +1,79 @@
+-- THE INSTALLATION'S OWN ORG READ ARM — MOTIR-4836.
+--
+-- The FIFTH arm of Story MOTIR-4669's tenancy move, and the one that story
+-- deliberately did not add. `20260905214500_github_org_read_arms` armed
+-- `github_repo`, `github_pull_request` and `github_check_run`;
+-- `20260906000000_project_repository_org_read_arm` armed `project_repository`;
+-- `20260906180000_org_read_arms_resolve_the_org_once` made all four cheap.
+-- `github_installation` was left alone, on the record, with a reason:
+--
+--   > `github_installation`'s own policy is deliberately NOT touched, and its
+--   > disposition is the one the 2026-07-31 migration already recorded: the
+--   > shared provisioning row's `workspace_id` is NULL, so it is invisible to
+--   > every tenant read and visible only under the system escape.
+--   > `organization_id` is NULL on that same row for the same reason
+--   > (MOTIR-4649), so adding an org arm there would admit nothing and would
+--   > suggest it might.
+--
+-- ═══════════════════════════════════════════════════════════════════════════
+-- WHY THAT REASONING IS BEING REVERSED — it was right about ONE ROW
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Every word of it is true of `motir-projects`, Motir's SHARED PROVISIONING
+-- installation (MOTIR-1931): it serves N tenants, is owned by none, and carries
+-- NULL on both tiers. An org arm admits nothing for that row, and this arm
+-- still admits nothing for it — `NULL = anything` is NULL, so it stays refused,
+-- exactly as before. MOTIR-1931's disposition is preserved rather than weakened.
+--
+-- The table holds another kind of row. A TENANT'S OWN installation carries a
+-- real `workspace_id` and a BACKFILLED, non-null `organization_id`, and for
+-- those rows an org arm admits precisely what the org tier needs. The sentence
+-- above generalised from the one row whose NULLs are meaningful to the whole
+-- table, which is why it reads on a second pass like a decision that was made.
+--
+-- MEASURED ON THE LIVE DEPLOYMENT (release 36dfa054, as `motir_app`, 2026-09-07
+-- 19:35:42Z), an organisation with two workspaces:
+--
+--     bound as                                  installations   github_repo
+--     moooon  (user + workspace)                      1              7
+--     Taq     (user + workspace)                      0              7   ← the defect
+--     Taq     (user + workspace + organization_id)    0              7   ← no arm reads the GUC
+--
+-- The third row is what makes this a migration rather than a call-site fix: no
+-- binding makes the existing policy answer, because no policy on this table
+-- reads `app.organization_id` at all. A sibling workspace could see all SEVEN
+-- of the organisation's repositories while being told the organisation had no
+-- connection — and the page then offered `Connect GitHub` for an account that
+-- is already installed, which is a destructive-adjacent flow entered on a false
+-- premise.
+--
+-- ═══════════════════════════════════════════════════════════════════════════
+-- THE SHAPE — the same one the other four converged on
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- A COLUMN COMPARISON against `(SELECT app_caller_organization_id())`, byte for
+-- byte the `github_repo_org_read` predicate. Uncorrelated, so Postgres
+-- evaluates the resolver as an InitPlan once per query rather than once per row
+-- — the whole subject of `20260906180000`, whose correlated `EXISTS` tripled
+-- the runtime of test files that touch no repository at all. The arm naming
+-- `app.workspace_id` in its own predicate is what that migration's guard
+-- forbids, and this one does not.
+--
+-- FAILS CLOSED, identically: with nothing bound `current_setting(…, true)` is
+-- NULL, the resolver finds no row and returns NULL, and every comparison
+-- against NULL is NULL. A NULL `organization_id` — the shared provisioning row
+-- — is refused for the same reason.
+--
+-- ⚠️ `FOR SELECT`, AND THE `FOR ALL` POLICY IS UNTOUCHED. DELETE is authorised
+-- by `USING` alone, so an org arm written `FOR ALL` would hand every sibling
+-- workspace the ability to delete or re-point the organisation's installation —
+-- the same argument `20260905214500` made for `github_repo`, and it holds
+-- harder here, because this row is the connection itself.
+-- ---------------------------------------------------------------------------
+DROP POLICY IF EXISTS "github_installation_org_read" ON "github_installation";
+CREATE POLICY "github_installation_org_read" ON "github_installation"
+  FOR SELECT
+  USING (
+    "organization_id" = (SELECT app_caller_organization_id())
+    OR "organization_id" = (SELECT current_setting('app.organization_id', true))
+  );

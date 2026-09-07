@@ -34,6 +34,7 @@
     "db:stamp:onboarding": "tsx --tsconfig tsconfig.node.json scripts/stamp-onboarding-ran.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "coverage:onboarding-routing": "vitest run --config vitest.coverage.onboarding-routing.config.ts --coverage",
     "test:guards": "vitest run --config vitest.guards.config.ts",
     "test:docs-guards": "vitest run --config vitest.docs.config.ts",
     "test:watch": "vitest",

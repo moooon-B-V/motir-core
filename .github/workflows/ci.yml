@@ -2100,6 +2100,67 @@ jobs:
   # against the workflow's actual job keys (a predicate, not a fixed count) so
   # that omission fails CI instead of shipping.
 
+  # STORY MOTIR-4753's `motir-core` COVERAGE FLOOR (MOTIR-4761).
+  #
+  # ⚠️ ITS OWN JOB RATHER THAN A LINE IN `coverage`, for the reason every other
+  # scoped lane here has one: the sharded suite's coverage is merged across
+  # twelve legs and reported GLOBALLY, and a global percentage cannot fail on six
+  # files. A per-file floor needs a run that measures those six and nothing else.
+  #
+  # ⚠️ AND IT IS CHEAP BECAUSE IT IS SCOPED. The config's `include` names the
+  # spec suites that actually reach this surface — 51 files, ~30 s — rather than
+  # the whole tree. The first revision ran all 1 546 files for 860 s to measure
+  # six, which is a gate nobody would run locally and a second copy of the
+  # sharded suite's bill in CI.
+  #
+  # It needs Postgres: the substrate read, the entrance predicate's chain test
+  # and the step machine all run against a real database, per the repository's
+  # own convention.
+  story-4753-coverage:
+    name: Coverage (onboarding routing)
+    runs-on: ubuntu-latest
+    # Observed 0.5 min of test time; the ceiling bounds a hang rather than
+    # setting a target, and the fixed cost (checkout + Postgres + install +
+    # `migrate deploy`) is ~75 s on this runner class.
+    timeout-minutes: 15
+    needs: changes
+    # Same predicate as the sharded suite: a diff that reaches no app code has
+    # nothing here to cover.
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-4753
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-4753
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-4753.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-4753.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm coverage:onboarding-routing
+
   ci-complete:
     name: CI complete
     # WHY `always()` AND an explicit result assertion — neither alone works:
@@ -2127,6 +2188,7 @@ jobs:
         build,
         test,
         coverage,
+        story-4753-coverage,
         e2e,
         e2e-at-scale,
         sandbox,

@@ -8,10 +8,9 @@ import { FolderGit2, TriangleAlert } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { buttonVariants } from '@/components/ui/Button';
-import { connectedNotInSet, splitSetRowsByOrigin } from '@/lib/projectRepos/roomSections';
+import { connectedNotInSet, splitRoomSections } from '@/lib/projectRepos/roomSections';
 import { TakeoverRow } from './TakeoverRow';
 import { TakeoverModal } from './TakeoverModal';
-import { ConnectedRepositories } from './ConnectedRepositories';
 import { OrganizationRepositories } from './OrganizationRepositories';
 import { AddRepositoryButton, AddRepositoryPicker } from './AddRepositoryPicker';
 import type { OrgRepoOptionDto } from '@/lib/dto/organizationRepos';
@@ -44,11 +43,20 @@ import type {
 // never a set-level flag — one row's in-flight request leaves its siblings
 // rendering and pressable.
 //
-// ⚠️ TWO REGISTRIES, TWO SECTIONS (MOTIR-3126 · design §16). The room renders the
-// project's whole repository DOMAIN: the Motir-hosted set (these rows) and the
-// workspace-CONNECTED repositories, which have no `project_repository` row, no
-// takeover and no action of any kind. They are never merged into one list —
-// half its rows would carry an action that means nothing for them.
+// ⚠️ TWO REGISTRIES, TWO SECTIONS (MOTIR-3126 · design §16, re-sourced by
+// MOTIR-4820). The room renders the project's whole repository DOMAIN: the
+// Motir-hosted set (these rows) and the ORGANISATION's repositories, which the
+// LADDER answers — the picked `project_repository` links plus everything
+// `connectedInDomain` layers. They are never merged into ONE list, because half
+// its rows would carry a takeover that means nothing for them.
+//
+// ⚠️ THE ORG SECTION IS NOT `seedSource` ANY MORE. It was, and on a project with
+// no repository SET that drew an EMPTY `From your organisation` directly above
+// the same repositories under `Your own repositories`, while
+// `/settings/organization/git` read `Used by <project>` for every one of them
+// (MOTIR-4802 moved that page onto the ladder; this room was the half it did not
+// reach). `splitRoomSections` is now handed the ladder's own boolean, so the two
+// surfaces cannot disagree about which repositories a project has.
 //
 // ⚠️ AND THE REFETCH KEEPS BOTH HALVES TRUE. The establish-view payload this
 // island already re-reads carries `connectCandidates` — the installation's
@@ -331,14 +339,17 @@ export function RepositoriesRoom({
     return () => clearInterval(id);
   }, [inFlight, refetch]);
 
-  const showConnected = view.connectedInDomain && connected.length > 0;
-  // ⚠️ ONE SPLIT, ONE PLACE (MOTIR-4681). A repository PICKED from the
-  // organisation gets a `project_repository` row, so it enters `rows` — and
-  // `rows` was rendered wholesale as Motir-hosted takeover rows. The discriminator
-  // is the row's own `seedSource`, a FACT the write records rather than a
-  // heuristic the reader infers, and it lives in `roomSections` beside the other
-  // split so the server and this island cannot disagree.
-  const { fromOrganization, motirHosted } = splitSetRowsByOrigin(rows);
+  // ⚠️ ONE SPLIT, ONE PLACE (MOTIR-4681 · MOTIR-4820). `seedSource` still decides
+  // which set rows are Motir-hosted takeover rows and which are organisation
+  // LINKS — a FACT the write records rather than a heuristic the reader infers.
+  // What it no longer decides is what the ORG SECTION holds: that is the ladder's
+  // `connectedInDomain`, passed in rather than re-derived, so the server and this
+  // island cannot disagree and neither can this room and the org inventory.
+  const { fromOrganization, motirHosted } = splitRoomSections(
+    rows,
+    connected,
+    view.connectedInDomain,
+  );
 
   // ⚠️ THE EMPTY STATE IS FOR A PROJECT WITH NEITHER REGISTRY — nothing else.
   // Reading it off `rows.length` alone is the defect MOTIR-3126 fixed: it told a
@@ -362,7 +373,7 @@ export function RepositoriesRoom({
   // So the early return now applies only when there is genuinely nothing to
   // offer. An actor who may add falls through to the section below, whose own
   // zero case is the PICKER.
-  if (rows.length === 0 && !showConnected && !canAddRepositories) {
+  if (fromOrganization.length === 0 && motirHosted.length === 0 && !canAddRepositories) {
     return (
       <EmptyState
         icon={<FolderGit2 className="h-12 w-12" aria-hidden />}
@@ -389,14 +400,19 @@ export function RepositoriesRoom({
         </p>
       ) : null}
 
-      {/* FROM YOUR ORGANISATION (MOTIR-4681) — the repositories this project uses
-          because somebody added them, and the room's ONE add door.
+      {/* FROM YOUR ORGANISATION (MOTIR-4681 · MOTIR-4820) — every repository this
+          project has from the organisation: the ones somebody added, and the ones
+          the LADDER layers into its domain. The room's ONE add door lives here.
           ⚠️ It renders when the project HOLDS one OR when the actor may add:
           without the second arm a project with nothing yet would have no way to
-          get its first repository, which is the two-errands shape §17.4 forbids. */}
+          get its first repository, which is the two-errands shape §17.4 forbids.
+          ⚠️ The empty arm is now for a project with GENUINELY nothing. It used to
+          fire for a set-less project holding seven layered repositories, which is
+          an empty section asserting an absence that is false — the defect
+          MOTIR-4820 fixed. */}
       {fromOrganization.length > 0 || canAddRepositories ? (
         <OrganizationRepositories
-          rows={fromOrganization}
+          entries={fromOrganization}
           organizationName={organizationName}
           inventoryHref={organizationInventoryHref}
           canAdd={canAddRepositories}
@@ -434,11 +450,6 @@ export function RepositoriesRoom({
           </div>
         </section>
       ) : null}
-
-      {/* THE WORKSPACE-CONNECTED REGISTRY. No action on any row, deliberately: the
-          user already owns these, so there is nothing to move and a control would
-          be a promise this room cannot keep. */}
-      {showConnected ? <ConnectedRepositories repos={connected} manageHref={connectHref} /> : null}
 
       <AddRepositoryPicker
         options={options}
