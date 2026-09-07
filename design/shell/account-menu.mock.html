@@ -27,6 +27,30 @@
   This asset draws NO `Legal` row. The row that MOTIR-4237 was going to add
   here is going to a Help menu instead; this asset draws the menu the component
   actually renders, and nothing else.
+
+  REVISED by MOTIR-4845 (Story MOTIR-4843). The `Workspace settings` row LEAVES
+  this menu — a workspace-tier destination filed under the user tier, one line
+  under `Account settings` — for the workspace SWITCHER, the control that
+  already names the tier. `design/settings/workspace-settings.mock.html` panel 5
+  is that row's design of record now, and MOTIR-4847 performs the move in
+  `UserMenu.tsx` / `WorkspaceSwitcher.tsx`.
+
+  ⚠️ IT TAKES AN AXIS WITH IT, WHICH IS WHY PANEL B LOST TWO FRAMES RATHER THAN
+  A ROW. It was the only row here conditional on `workspaceTierRevealed`, so the
+  four state combinations collapse to two: the two departing frames differed
+  from a survivor only by that row. `platformStaff` is the one conditional left,
+  and the menu's FLOOR is unchanged at two rows because the departing row was
+  already conditional and so was never in it.
+
+  ⚠️ NOT RE-RENDERED THROUGH THE COMPONENT, and saying so is the point. The
+  original harness was a temporary one, deleted with MOTIR-4248's run as the
+  design lane's own rule requires, and `UserMenu.tsx` still renders the row this
+  revision removes — MOTIR-4847 is the card that removes it. So this revision is
+  the same surgical edit MOTIR-4254 and MOTIR-4640 made to the rail's own asset:
+  the two `Workspace settings` anchors are deleted from the generated markup and
+  two now-duplicate frames with them, leaving every surviving menu still the
+  real Radix portal output. `prettier --write` then
+  `scripts/render-design-mock.mjs` re-exported the `.png`.
 -->
 <html lang="en">
   <head>
@@ -4054,8 +4078,8 @@
         <h1>The account menu &mdash; every row it renders</h1>
         <p class="sub">
           The avatar popover in the authed top bar carries an identity block and
-          <b>four</b> rows, two of them conditional. This asset draws the <b>access path</b> at each
-          of the three states the bar itself has &mdash; <code>&ge; lg</code> labelled,
+          <b>three</b> rows, one of them conditional. This asset draws the <b>access path</b> at
+          each of the three states the bar itself has &mdash; <code>&ge; lg</code> labelled,
           <code>md</code>&ndash;<code>lg</code> icon-only, and <code>&lt; md</code> where the avatar
           is <b>slot 4 of four</b> &mdash; and then the menu OPEN, with every conditional row drawn
           in <b>both</b> arms.
@@ -5083,148 +5107,34 @@
           conditional one
         </p>
         <p class="panel-n">
-          Declaration order, top to bottom: the <b>identity block</b>, <b>Account settings</b>,
-          <b>Workspace settings</b> (conditional on <code>workspaceTierRevealed</code>), a
+          Declaration order, top to bottom: the <b>identity block</b>, <b>Account settings</b>, a
           separator, <b>Platform admin</b> with its hint line and <code>Staff only</code> pill
           (conditional on <code>platformStaff</code>), a second separator, and <b>Sign out</b>.
           <b>Both <code>role="separator"</code> rules belong to the staff row and leave with it</b>
-          &mdash; they bracket that row rather than dividing the menu, which is why the two lower
-          frames carry none. Nothing marks an absent row: the rows close up and the menu is shorter
+          &mdash; they bracket that row rather than dividing the menu, which is why the lower frame
+          carries none. Nothing marks an absent row: the rows close up and the menu is shorter
           &mdash; no disabled row, no tooltip, no empty state, the same line the rail draws for the
           same reason.
+        </p>
+        <p class="panel-n">
+          <b
+            >⚠️ AMENDED by MOTIR-4845 &mdash; the <code>Workspace settings</code> row LEAVES, and
+            the menu loses a whole AXIS with it.</b
+          >
+          It sat second, conditional on <code>workspaceTierRevealed</code>, and it was the only
+          thing in this menu that varied by workspace count. Its destination is the
+          <b>workspace switcher</b>, the control that already names the tier &mdash; drawn in
+          <code>design/settings/workspace-settings.mock.html</code> panel 5, which is that
+          row&rsquo;s design of record now. So <b>this panel drew FOUR frames and draws TWO</b>: the
+          two it lost differed from a survivor only by that row, and with the row gone they are the
+          same picture. <code>platformStaff</code> is the one conditional left.
         </p>
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 4 rows</span
-              ><span class="fc-note">platform staff &middot; workspace tier revealed</span>
-            </figcaption>
-            <div class="menu">
-              <div
-                data-state="open"
-                role="dialog"
-                data-surface="popover"
-                class="z-50 rounded-(--radius-card) bg-(--el-page-bg) overflow-hidden shadow-(--shadow-elevated) border border-(--el-border) focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0 py-1"
-              >
-                <div class="border-(--el-border) mb-1 border-b px-3 pb-2 pt-2">
-                  <p class="truncate font-sans text-sm font-medium text-(--el-text)">Zhu Yue</p>
-                  <p class="text-(--el-text-muted) truncate font-sans text-xs">
-                    zhuyue11@gmail.com
-                  </p>
-                </div>
-                <div class="px-1">
-                  <a
-                    href="/settings/account"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-user-cog text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="M10 15H6a4 4 0 0 0-4 4v2"></path>
-                      <path d="m14.305 16.53.923-.382"></path>
-                      <path d="m15.228 13.852-.923-.383"></path>
-                      <path d="m16.852 12.228-.383-.923"></path>
-                      <path d="m16.852 17.772-.383.924"></path>
-                      <path d="m19.148 12.228.383-.923"></path>
-                      <path d="m19.53 18.696-.382-.924"></path>
-                      <path d="m20.772 13.852.924-.383"></path>
-                      <path d="m20.772 16.148.924.383"></path>
-                      <circle cx="18" cy="15" r="3"></circle>
-                      <circle cx="9" cy="7" r="4"></circle></svg
-                    >Account settings</a
-                  ><a
-                    href="/settings/workspace"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-settings text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
-                      ></path>
-                      <circle cx="12" cy="12" r="3"></circle></svg
-                    >Workspace settings</a
-                  >
-                  <div role="separator" class="my-1 border-t border-(--el-border)"></div>
-                  <a
-                    href="/admin"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-start gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-shield mt-0.5 h-4 w-4 shrink-0 text-(--el-info)"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
-                      ></path></svg
-                    ><span class="min-w-0 flex-1"
-                      ><span class="block">Platform admin</span
-                      ><span class="block text-xs text-(--el-text-secondary)"
-                        >Operator console · the whole estate</span
-                      ></span
-                    ><span
-                      class="inline-flex items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium border bg-(--el-chip-bg) text-(--el-text-secondary) border-(--el-chip-border) mt-0.5 shrink-0"
-                      >Staff only</span
-                    ></a
-                  >
-                  <div role="separator" class="my-1 border-t border-(--el-border)"></div>
-                  <button
-                    type="button"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-log-out text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="m16 17 5-5-5-5"></path>
-                      <path d="M21 12H9"></path>
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg
-                    >Sign out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </figure>
-          <figure class="frame">
-            <figcaption>
-              <span class="fc-label">Workspace settings ABSENT &mdash; 3 rows</span
+              <span class="fc-label">Complete &mdash; 3 rows</span
               ><span class="fc-note"
-                >the same staff member, in an org below the workspace tier</span
+                >platform staff &mdash; the ONE conditional this menu has left</span
               >
             </figcaption>
             <div class="menu">
@@ -5302,104 +5212,6 @@
                   >
                   <div role="separator" class="my-1 border-t border-(--el-border)"></div>
                   <button
-                    type="button"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-log-out text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="m16 17 5-5-5-5"></path>
-                      <path d="M21 12H9"></path>
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg
-                    >Sign out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </figure>
-        </div>
-        <div class="frames">
-          <figure class="frame">
-            <figcaption>
-              <span class="fc-label">Platform admin ABSENT &mdash; 3 rows</span
-              ><span class="fc-note"
-                >an ordinary member, tier revealed &middot; both separators go with the row</span
-              >
-            </figcaption>
-            <div class="menu">
-              <div
-                data-state="open"
-                role="dialog"
-                data-surface="popover"
-                class="z-50 rounded-(--radius-card) bg-(--el-page-bg) overflow-hidden shadow-(--shadow-elevated) border border-(--el-border) focus:outline-none data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0 py-1"
-              >
-                <div class="border-(--el-border) mb-1 border-b px-3 pb-2 pt-2">
-                  <p class="truncate font-sans text-sm font-medium text-(--el-text)">Zhu Yue</p>
-                  <p class="text-(--el-text-muted) truncate font-sans text-xs">
-                    zhuyue11@gmail.com
-                  </p>
-                </div>
-                <div class="px-1">
-                  <a
-                    href="/settings/account"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-user-cog text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path d="M10 15H6a4 4 0 0 0-4 4v2"></path>
-                      <path d="m14.305 16.53.923-.382"></path>
-                      <path d="m15.228 13.852-.923-.383"></path>
-                      <path d="m16.852 12.228-.383-.923"></path>
-                      <path d="m16.852 17.772-.383.924"></path>
-                      <path d="m19.148 12.228.383-.923"></path>
-                      <path d="m19.53 18.696-.382-.924"></path>
-                      <path d="m20.772 13.852.924-.383"></path>
-                      <path d="m20.772 16.148.924.383"></path>
-                      <circle cx="18" cy="15" r="3"></circle>
-                      <circle cx="9" cy="7" r="4"></circle></svg
-                    >Account settings</a
-                  ><a
-                    href="/settings/workspace"
-                    class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-                    ><svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="lucide lucide-settings text-(--el-text-muted) h-4 w-4"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
-                      ></path>
-                      <circle cx="12" cy="12" r="3"></circle></svg
-                    >Workspace settings</a
-                  ><button
                     type="button"
                     class="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
                   >
@@ -5429,8 +5241,8 @@
             <figcaption>
               <span class="fc-label">Floor &mdash; 2 rows</span
               ><span class="fc-note"
-                >an ordinary member, one workspace &mdash; the open product&rsquo;s day-one
-                state</span
+                >an ordinary member &mdash; at EVERY workspace count now, which is the whole of the
+                MOTIR-4845 amendment</span
               >
             </figcaption>
             <div class="menu">
@@ -5503,12 +5315,15 @@
           </figure>
         </div>
         <p class="panel-n">
-          <b>Two of the four rows are conditional and the menu&rsquo;s FLOOR is two rows</b> &mdash;
-          <i>Account settings</i> &middot; <i>Sign out</i>, the pair every session gets. Neither
-          absent row is hidden or disabled: <code>UserMenu.tsx</code> does not RENDER it, which is
-          half of the 404-not-403 posture for <code>/admin</code> and the whole of the tier
-          disclosure for <code>/settings/workspace</code> &mdash; a dimmed row would still teach the
-          concept the product is not yet offering.
+          <b>ONE of the three rows is conditional and the menu&rsquo;s FLOOR is two rows</b> &mdash;
+          <i>Account settings</i> &middot; <i>Sign out</i>, the pair every session gets.
+          <b>The floor is UNCHANGED by MOTIR-4845</b>: the departing row was already conditional, so
+          it was never in the floor &mdash; the same arithmetic MOTIR-4254 could use for
+          <code>Docs</code>/<code>Legal</code> and MOTIR-4640 could NOT use for <code>Git</code>.
+          What shortened is the COMPLETE arm, from four rows to three. The absent staff row is not
+          hidden or disabled: <code>UserMenu.tsx</code> does not RENDER it, which is half of the
+          404-not-403 posture for <code>/admin</code> &mdash; a dimmed row would still teach the
+          concept the product is not offering.
         </p>
       </section>
 
@@ -5541,20 +5356,13 @@
             </tr>
             <tr>
               <td>2</td>
-              <td><b>Workspace settings</b></td>
-              <td><code>settings</code></td>
-              <td><code>/settings/workspace</code></td>
-              <td>CONDITIONAL &mdash; <code>workspaceTierRevealed</code></td>
-            </tr>
-            <tr>
-              <td>3</td>
               <td><b>Platform admin</b> &middot; hint line + <code>Staff only</code> pill</td>
               <td><code>shield</code></td>
               <td><code>/admin</code></td>
               <td>CONDITIONAL &mdash; <code>platformStaff</code>, with a separator each side</td>
             </tr>
             <tr>
-              <td>4</td>
+              <td>3</td>
               <td><b>Sign out</b></td>
               <td><code>log-out</code></td>
               <td>&mdash; (a button; signs out and bounces to <code>/sign-in</code>)</td>
@@ -5563,10 +5371,18 @@
           </tbody>
         </table>
         <p class="legend">
-          <b>The menu is four rows and an identity block, and it has never been anything else.</b>
-          That is the finding this asset records: it was not drawn because it never changed, and
-          then the first card to reach for it found two partial drawings in other areas that
-          disagreed with each other and with the component.
+          <b
+            >The menu was four rows and an identity block for its whole life until MOTIR-4845, and
+            it is three now.</b
+          >
+          The finding this asset records is why it was never drawn: it did not change, and the first
+          card to reach for it found two partial drawings in other areas that disagreed with each
+          other and with the component.
+          <b
+            >That is also the argument for amending it here rather than in the area that gains the
+            row</b
+          >
+          &mdash; a menu recorded in two places is a menu recorded in neither.
           <b>The identity block&rsquo;s bottom border is not a <code>role="separator"</code></b>
           &mdash; the menu has exactly two of those and both bracket the staff row.
           <b

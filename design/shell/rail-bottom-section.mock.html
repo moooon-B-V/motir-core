@@ -19,6 +19,35 @@
   rows: this asset owns the BOTTOM section, and design/shell/desktop.pen still
   owns the primary one.
 
+  REVISED by MOTIR-4845 (Story MOTIR-4843). The Security row LEAVES, and unlike
+  the revision below THE FLOOR DOES NOT MOVE — do not reuse that sentence here
+  either way round. Security was CONDITIONAL on `workspaceTierRevealed` and was
+  never in the floor, so this is the MOTIR-4254 arithmetic: the complete arm goes
+  from three rows to two and the floor stays `Job runs`, alone. It leaves because
+  it is DUPLICATED rather than relocated — `/settings/workspace/security` becomes
+  a row in the workspace-settings AREA rail
+  (design/settings/workspace-settings.mock.html, MOTIR-4844), which renders under
+  exactly the same condition, so the two doors would sit side by side at the same
+  reveal arm.
+
+  ⚠️ `Job runs` STAYS, and that is the load-bearing half of this revision.
+  `/settings/workspace/jobs` answers 200 at EVERY workspace count — it is
+  workspace-SCOPED but not workspace-NAMED, so §6's reveal leaves it alone
+  (MOTIR-3502 AC 6). Below the reveal the area rail draws `Job runs` alone and
+  neither sibling at all, so this section is that route's only door for anyone
+  arriving without an active project. §6d: a hidden tier may not remove a
+  capability. The section is TWO rows with ONE conditional.
+
+  Revised without re-running the generator, for the reason the MOTIR-4167 note
+  below gives: the change is entirely SECTION DATA — one row removed from the two
+  complete arms and from the icon-only arm, absent from the three floor arms
+  already — so every rail here is still the real `Sidebar` output, edited in the
+  three places the generator's data would have moved. Removing rows can only
+  shorten the content, and *"can only"* is exactly the reasoning that produced the
+  defect the measure step exists for — so the frames were re-checked in the
+  re-export rather than assumed. `prettier --write` then
+  `scripts/render-design-mock.mjs` re-exported the `.png`.
+
   REVISED by MOTIR-4640. The Git row LEAVES this section too — and unlike the
   Docs/Legal departure, THIS ONE NARROWS THE FLOOR. Git was UNCONDITIONAL and
   was IN the floor, so the arithmetic that made the last move cheap does not
@@ -27,7 +56,8 @@
   destinations named in design-notes.md — Settings > Organisation > Git (the
   host connection), Settings > Account > Git accounts (your own identity), and
   Settings > Project > Repositories (which repos a project uses). The section is
-  three rows with two conditionals.
+  three rows with two conditionals. (MOTIR-4845 has since taken Security out;
+  see the revision above — the section is two rows with one conditional now.)
 
   REVISED by MOTIR-4254. The Docs and Legal rows LEFT this section: a rail
   answers "where inside this project can I go today", and neither the terms of
@@ -3654,20 +3684,29 @@
       <header>
         <h1>The rail&rsquo;s bottom section &mdash; every row it renders</h1>
         <p class="sub">
-          The authed rail&rsquo;s bottom section carries <b>four</b> rows, two of them conditional.
-          This asset draws all four at each of the three widths the shell renders &mdash; expanded
-          (240px), collapsed (56px) and the mobile drawer (300px) &mdash; and draws each conditional
+          The authed rail&rsquo;s bottom section carries <b>two</b> rows, one of them conditional.
+          This asset draws both at each of the three widths the shell renders &mdash; expanded
+          (240px), collapsed (56px) and the mobile drawer (300px) &mdash; and draws the conditional
           row in <b>both</b> arms, present and absent. Measured at <code>8d80ac8db</code>; revised
-          by MOTIR-4167, which made the documentation row conditional, and by MOTIR-4254, which
-          moved it and the legal row out of this section entirely.
+          by MOTIR-4167, which made the documentation row conditional, by MOTIR-4254, which moved it
+          and the legal row out of this section entirely, by MOTIR-4640, which took
+          <code>Git</code> out, and by MOTIR-4845, which takes <code>Security</code> out.
+          <b
+            >&#9888; This sentence read &ldquo;four rows, two of them conditional&rdquo; until
+            MOTIR-4845 and had been stale since MOTIR-4640</b
+          >
+          &mdash; the head comment and Panel D were both revised then and this header was not, which
+          is the same drift one altitude up that this asset exists to record.
         </p>
         <p class="sub">
           <b>This asset is the source for this element.</b> <code>desktop.pen</code>,
-          <code>desktop-collapsed.pen</code> and <code>mobile-drawer.pen</code> draw two of the four
-          and cannot be re-exported; the rails in <code>navigation-pending.mock.html</code>,
+          <code>desktop-collapsed.pen</code> and <code>mobile-drawer.pen</code> cannot be
+          re-exported; the rails in <code>navigation-pending.mock.html</code>,
           <code>top-bar.mock.html</code> and <code>design/workbench/workbench.mock.html</code> carry
-          this section as context for something else and are four rows short between them. See the
-          divergence ledger in <code>design-notes.md</code>.
+          this section as context for something else and disagree with it. Their per-asset
+          dispositions are re-measured on each amendment and live in the divergence ledger in
+          <code>design-notes.md</code>, never here &mdash; a count carried in two places is a count
+          nobody re-takes.
         </p>
       </header>
 
@@ -3676,18 +3715,18 @@
           Panel A &mdash; expanded (240px): the section COMPLETE, and at its FLOOR
         </p>
         <p class="panel-n">
-          Left: every conditional row present &mdash; the state a workspace admin on a revealed tier
-          sees on a deployment that has configured its legal documents and its documentation url.
-          Right: both conditionals absent, which is the <b>open product&rsquo;s common case</b>.
-          Nothing marks the gap: the rows simply close up and the section is four shorter. No
-          disabled row, no tooltip, no empty state &mdash; an entry point is a promise about a room,
-          and a disabled row is a promise the product then refuses.
+          Left: the conditional row present &mdash; the state an actor with a visible
+          project-settings area sees. Right: it absent, which is the
+          <b>open product&rsquo;s common case</b> and is the section&rsquo;s FLOOR:
+          <code>Job runs</code>, alone. Nothing marks the gap: the row simply closes up and the
+          section is one shorter. No disabled row, no tooltip, no empty state &mdash; an entry point
+          is a promise about a room, and a disabled row is a promise the product then refuses.
         </p>
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 3 rows</span
-              ><span class="fc-note">Settings · Security · Job runs</span>
+              <span class="fc-label">Complete &mdash; 2 rows</span
+              ><span class="fc-note">Settings · Job runs</span>
             </figcaption>
             <div class="rail" style="width: 240px">
               <nav
@@ -3824,30 +3863,6 @@
                               ></path>
                               <circle cx="12" cy="12" r="3"></circle></svg></span
                           ><span class="flex-1 truncate">Settings</span></a
-                        ><a
-                          href="/settings/workspace/security"
-                          class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-shield-check"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
-                              ></path>
-                              <path d="m9 12 2 2 4-4"></path></svg></span
-                          ><span class="flex-1 truncate">Security</span></a
                         ><a
                           href="/settings/workspace/jobs"
                           class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
@@ -4045,8 +4060,8 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 3 glyphs</span
-              ><span class="fc-note">settings · shield-check · list-checks</span>
+              <span class="fc-label">Complete &mdash; 2 glyphs</span
+              ><span class="fc-note">settings · list-checks</span>
             </figcaption>
             <div class="rail" style="width: 56px">
               <nav
@@ -4189,31 +4204,6 @@
                                 d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
                               ></path>
                               <circle cx="12" cy="12" r="3"></circle></svg></span></a
-                        ><a
-                          href="/settings/workspace/security"
-                          aria-label="Security"
-                          class="relative mx-auto flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-icon-muted) transition-colors hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
-                          data-state="closed"
-                          ><span
-                            aria-hidden="true"
-                            class="inline-flex [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px]"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-shield-check"
-                              aria-hidden="true"
-                            >
-                              <path
-                                d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
-                              ></path>
-                              <path d="m9 12 2 2 4-4"></path></svg></span></a
                         ><a
                           href="/settings/workspace/jobs"
                           aria-label="Job runs"
@@ -4420,8 +4410,8 @@
         <div class="frames">
           <figure class="frame">
             <figcaption>
-              <span class="fc-label">Complete &mdash; 3 rows</span
-              ><span class="fc-note">the configured, revealed, admin state</span>
+              <span class="fc-label">Complete &mdash; 2 rows</span
+              ><span class="fc-note">the configured, admin state</span>
             </figcaption>
             <div class="rail" style="width: 300px">
               <div class="flex h-full flex-col bg-(--el-sidebar-bg) shadow-(--shadow-modal)">
@@ -4587,30 +4577,6 @@
                                   ></path>
                                   <circle cx="12" cy="12" r="3"></circle></svg></span
                               ><span class="flex-1 truncate">Settings</span></a
-                            ><a
-                              href="/settings/workspace/security"
-                              class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
-                              ><span
-                                aria-hidden="true"
-                                class="inline-flex shrink-0 [&amp;_svg]:h-[18px] [&amp;_svg]:w-[18px] text-(--el-icon-muted)"
-                                ><svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="24"
-                                  height="24"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  class="lucide lucide-shield-check"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
-                                  ></path>
-                                  <path d="m9 12 2 2 4-4"></path></svg></span
-                              ><span class="flex-1 truncate">Security</span></a
                             ><a
                               href="/settings/workspace/jobs"
                               class="flex h-(--height-control) items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) text-(--el-text-secondary) hover:bg-(--el-sidebar-item-bg-hover) hover:text-(--el-text)"
@@ -4834,7 +4800,7 @@
         <p class="panel-n">
           Declaration order, from <code>app/(authed)/_components/SidebarNav.tsx</code>&rsquo;s
           <code>sections.push({ id: 'bottom' })</code>.
-          <b>The section is three rows and two of them are conditional.</b> It carried six until
+          <b>The section is TWO rows and one of them is conditional.</b> It carried six until
           MOTIR-4254, when the documentation and legal rows moved to the shell&rsquo;s Help menu,
           and
           <b>the absent-arm reasoning for both moved with them</b>
@@ -4861,6 +4827,43 @@
           works on is <b>Settings &rsaquo; Project &rsaquo; Repositories</b>. What each of those
           contains is theirs to state, not this asset&rsquo;s.
         </p>
+        <p class="legend">
+          <b
+            >&#9888; AMENDED by MOTIR-4845 &mdash; <code>Security</code> LEAVES, and the FLOOR IS
+            UNCHANGED. Do not reuse the MOTIR-4640 sentence directly above.</b
+          >
+          That row was <b>unconditional</b> and <b>in the floor</b>, so the floor narrowed.
+          <code>Security</code> is the opposite case on both counts: it is CONDITIONAL on
+          <code>workspaceTierRevealed</code> and it was never in the floor, so this move is the
+          MOTIR-4254 arithmetic rather than the MOTIR-4640 one &mdash; the COMPLETE arm shortens
+          from three rows to two and <b>the floor stays <code>Job runs</code>, alone</b>. A
+          deployment below the reveal sees exactly what it saw before.
+        </p>
+        <p class="legend">
+          <b>It leaves because it is DUPLICATED, not because it moved.</b> Its row here is already
+          gated on <code>workspaceTierRevealed</code>, and
+          <code>/settings/workspace/security</code> becomes a row in the workspace-settings AREA
+          rail (<code>design/settings/workspace-settings.mock.html</code>, MOTIR-4844) &mdash; which
+          renders under exactly the same condition. Two doors onto one room, side by side, at the
+          same reveal arm.
+        </p>
+        <p class="legend">
+          <b
+            >&#9888; <code>Job runs</code> STAYS, and this is the clause a later tidy-up must not
+            finish.</b
+          >
+          <code>/settings/workspace/jobs</code> answers <b>200 at every workspace count</b> &mdash;
+          it is workspace-SCOPED but not workspace-NAMED, so
+          <code>docs/decisions/organization-tier.md</code> &sect;6&rsquo;s reveal leaves it alone
+          (MOTIR-3502 AC 6, and <code>SidebarNav.tsx</code>&rsquo;s own comment says so). Below the
+          reveal the area rail renders <code>Job runs</code> ALONE and neither of its siblings at
+          all, so
+          <b
+            >this section is that route&rsquo;s only door for anyone arriving without an active
+            project</b
+          >. &sect;6d: <i>a hidden tier may not remove a capability</i>. Removing the row would take
+          one from exactly the customers the disclosure rule protects.
+        </p>
         <table>
           <thead>
             <tr>
@@ -4880,13 +4883,6 @@
               <td>the actor has no visible project-settings area</td>
             </tr>
             <tr>
-              <td><b>Security</b></td>
-              <td><code>shield-check</code></td>
-              <td><code>/settings/workspace/security</code></td>
-              <td>CONDITIONAL — <code>workspaceTierRevealed</code></td>
-              <td>the workspace tier is below its reveal threshold</td>
-            </tr>
-            <tr>
               <td><b>Job runs</b></td>
               <td><code>list-checks</code></td>
               <td><code>/settings/workspace/jobs</code></td>
@@ -4897,7 +4893,7 @@
         </table>
         <p class="legend">
           Every row is a <code>SidebarItem</code>, and
-          <b>all three take an <code>active</code> arm</b> &mdash; every destination is inside this
+          <b>both take an <code>active</code> arm</b> &mdash; every destination is inside this
           shell, so <code>pathname</code> can match. That is a property the section only gained by
           losing the two rows that did not have one: the two departed rows pointed off-shell, so the
           rail was never on screen at their destinations. They are anchors without an
