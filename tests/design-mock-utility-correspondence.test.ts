@@ -56,16 +56,24 @@ const stripCssComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//
 /**
  * A `<style>` / `<script>` element, opening tag to closing tag.
  *
- * ⚠️ `<\/style\s*>` rather than `<\/style>` — an end tag may legally carry
- * whitespace before its `>`, and HTML parsers accept `</style >`. A filter that
- * misses that form stops at the wrong place: the "stylesheet" would then run on
- * into the document, and `markupOf` would leave a stylesheet in the markup for
- * the class scan to read selectors out of. (CodeQL `js/bad-tag-filter`, which
- * is right about it — this pattern is the tree's own text, not hostile input,
- * but a mock's shim block is exactly the place a stray space would appear.)
+ * ⚠️ THE END TAG IS `<\/style\b[^>]*>`, NOT `<\/style>` AND NOT `<\/style\s*>`.
+ * HTML's tokenizer ends the element at the tag NAME: whatever sits between the
+ * name and the `>` is consumed as (ignored) attribute junk, so `</style >`,
+ * `</style\t\n foo>` and `</script bar="baz">` all close the element. A filter
+ * that stops short of that stops at the wrong place — the "stylesheet" would
+ * run on into the document, so `declaredClasses` would read selectors out of
+ * prose and `markupOf` would hand a stylesheet to the attribute scan.
+ *
+ * `\b` is what keeps it honest in the other direction: there is no word
+ * boundary inside `</styles>`, so a longer tag name does not match.
+ *
+ * (CodeQL `js/bad-tag-filter`, twice — it rejected `\s*` for exactly the
+ * attribute-junk case. The input here is the repository's own design tree
+ * rather than anything hostile, but a hand-written shim block is precisely
+ * where a stray space ends up.)
  */
-const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
-const SCRIPT_BLOCK = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi;
+const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style\b[^>]*>/gi;
+const SCRIPT_BLOCK = /<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi;
 
 /**
  * The CSS a document DECLARES: every `<style>` block, comments stripped.
@@ -486,16 +494,22 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(inertUtilities({ path: 'fixture', source: fixture })).toEqual([]);
   });
 
-  it('closes a `<style>` / `<script>` whose end tag carries whitespace', () => {
-    // CodeQL `js/bad-tag-filter`, pinned. `</style >` is a legal end tag, and a
-    // filter that misses it runs the "stylesheet" on into the document — so the
-    // class scan would read selectors out of prose, and `markupOf` would hand a
-    // stylesheet to the attribute scan.
+  it('closes a `<style>` / `<script>` whose end tag carries attribute junk', () => {
+    // CodeQL `js/bad-tag-filter`, pinned in the HARDEST form it names. HTML ends
+    // the element at the tag NAME, so `</style\t\n foo>` and `</script bar="baz">`
+    // both close it; a filter that misses them runs the "stylesheet" on into the
+    // document — the class scan would read selectors out of prose, and `markupOf`
+    // would hand a stylesheet to the attribute scan. The last line is the other
+    // direction: `</styles>` is a DIFFERENT tag and must not close this one.
     const fixture = [
-      '<style>.declared { color: red; }</style >',
+      '<style>.declared { color: red; }</style\t\n foo>',
       '<span class="declared undeclared-[9px]"></span>',
-      '<script>const s = `class="from-[script]"`;</script >',
+      '<script>const s = `class="from-[script]"`;</script bar="baz">',
     ].join('\n');
+    // A FRESH non-global copy: `.test()` on a `/g` regex advances `lastIndex`,
+    // and `matchAll` reads `lastIndex` off the regex it is given — so probing
+    // the shared constant directly would be a trap for whoever edits this next.
+    expect(new RegExp(STYLE_BLOCK.source, 'i').test('<style>a</styles>')).toBe(false);
     expect([...declaredClasses(fixture)]).toEqual(['declared']);
     expect([...usedClasses(fixture).keys()].sort()).toEqual(['declared', 'undeclared-[9px]']);
     expect(inertUtilities({ path: 'fixture', source: fixture })).toEqual([
