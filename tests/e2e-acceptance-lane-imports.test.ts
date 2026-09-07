@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { REPO_ROOT, specifiersOf } from './helpers/importGraph';
+import { globToRegExp, laneDeclarationIn } from './helpers/playwrightLane';
 
 // MOTIR-4751 — the ACCEPTANCE-LANE IMPORT DIRECTION guard.
 //
@@ -63,52 +64,12 @@ const ACCEPTANCE_CONFIG = 'playwright.acceptance.config.ts';
 const RECORDING_MODULE = 'tests/e2e/_helpers/acceptance-video';
 const PROMOTED_MODULE = 'tests/e2e/_helpers/promoted-regression';
 
-/**
- * The lane's own declaration, read out of its config.
- *
- * Parsed from the COMMENT-STRIPPED text: that file's header discusses
- * `acceptance*.spec.ts` in prose several times, so a regex over the raw source
- * can match a sentence about the glob instead of the glob.
- */
-export function laneDeclarationIn(configSource: string): {
-  testDir: string;
-  testMatch: string[];
-} {
-  const code = configSource.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|\n)\s*\/\/[^\n]*/g, '$1');
-  const dir = /\btestDir:\s*'([^']+)'/.exec(code);
-  const match = /\btestMatch:\s*\[([^\]]*)\]/.exec(code);
-  return {
-    testDir: dir?.[1] ?? '',
-    testMatch: [...(match?.[1] ?? '').matchAll(/'([^']+)'/g)].flatMap((m) =>
-      m[1] === undefined ? [] : [m[1]],
-    ),
-  };
-}
-
-/**
- * One glob → one anchored RegExp over a path RELATIVE TO `testDir`, which is
- * what Playwright matches `testMatch` against. `**` spans directory
- * separators, `*` does not.
- */
-export function globToRegExp(glob: string): RegExp {
-  let out = '';
-  for (let i = 0; i < glob.length; i += 1) {
-    const char = glob[i]!;
-    if (char === '*' && glob[i + 1] === '*') {
-      // `**/` matches zero or more directories; a bare `**` matches anything.
-      if (glob[i + 2] === '/') {
-        out += '(?:[^/]*\\/)*';
-        i += 2;
-      } else {
-        out += '.*';
-        i += 1;
-      }
-    } else if (char === '*') out += '[^/]*';
-    else if (char === '?') out += '[^/]';
-    else out += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-  }
-  return new RegExp(`^${out}$`);
-}
+// The lane declaration reader and the glob compiler live in
+// `tests/helpers/playwrightLane.ts` (MOTIR-4830) — a second guard needed the
+// same read of a different Playwright config, and a copied parser is a second
+// authority for the same question. Re-exported so this file's own synthetic
+// cases below, and any reader who arrives here first, still find them.
+export { globToRegExp, laneDeclarationIn };
 
 /** Every runtime import of `file`, normalised to a repo-relative module path. */
 function importedModules(file: string, source: string): string[] {

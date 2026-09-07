@@ -2,6 +2,7 @@ import { test, expect } from './_helpers/promoted-regression';
 import { signIn } from './_helpers/shell-session';
 import { seedScopedRun, SCOPED_RUN_PASSWORD } from './_helpers/scoped-run-seed';
 import { appendEvents, closeRun, ingestContext, openRun } from './_helpers/agent-run-seed';
+import { resetDatabase } from './_helpers/db-reset';
 
 // AGENT RUNS, watched (Story MOTIR-1789 · MOTIR-1800) — the story's acceptance
 // receipt and its end-to-end flow.
@@ -47,6 +48,20 @@ import { appendEvents, closeRun, ingestContext, openRun } from './_helpers/agent
 // swallows the status hides the one fact that explains it.
 
 const EMAIL = 'agent-runs-acceptance@example.com';
+
+// ⚠️ THE LANE'S ISOLATION CONVENTION, AND THIS FILE IS WHERE ITS ABSENCE WAS
+// MEASURED (MOTIR-4830). Every test below seeds a user at a FIXED literal
+// email, and `playwright.cloud.config.ts` retries once in CI against the SAME
+// database — so without this the retry threw `DuplicateEmailError` in the seed
+// before a single assertion ran, and that error REPLACED the real failure in
+// the report (run 34124833957 carried both: the strict-mode defect MOTIR-4822
+// on attempt 1, the collision on attempt 2). Each test seeds its own user and
+// its own project, so nothing here relies on state surviving between them.
+// `tests/e2e-cloud-lane-isolation.test.ts` is what keeps the next spec in this
+// lane from being written without it.
+test.beforeEach(async () => {
+  await resetDatabase();
+});
 
 /** Playwright's own origin — the one the RUNNER can reach. See `ingestContext`. */
 function origin(baseURL: string | undefined): string {
