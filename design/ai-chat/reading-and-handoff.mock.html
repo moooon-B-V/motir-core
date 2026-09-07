@@ -81,6 +81,9 @@
            missing, and the planner's missing-list as rendered copy.
         5  THE RETURN, and the ABANDONED path beside it.
         6  WHAT IT MUST NOT LOOK LIKE — three wrong surfaces, and `continue`.
+        7  READING — the repository is CONNECTED and has NO code graph yet
+           (MOTIR-4825). The BANNER holds the state, the PLANNER's turn says
+           why, and the failed-index arm carries two ways onward.
       Toggle dark mode (top-right) to confirm token parity.
     -->
     <style>
@@ -670,6 +673,105 @@
       }
       /* The ACTIVITY line. Three dots that breathe; no track, no fill, nothing
          that implies a fraction of a whole. */
+      /* ── PANEL 7 · the INDEXING banner (MOTIR-4825) ──────────────────
+         The BANNER is the durable half of the wait; the planner's turn in the
+         rail is the other. Sky tint + --el-text-strong is this asset's own
+         pairing for a tinted surface (.pill.sky, and the source rows at :648);
+         the sub-line takes --el-text-secondary, which clears AA on every
+         surface in both themes — --el-text-muted would not, and this is a
+         TINT rather than the white card its 4.54 was measured on. */
+      .ixbanner {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        background: var(--el-tint-sky);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        margin-bottom: 14px;
+      }
+      .ixbanner .ixtext {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+      }
+      .ixbanner .ixnm {
+        font-size: 13.5px;
+        font-weight: 650;
+        color: var(--el-text-strong);
+        line-height: 1.25;
+      }
+      .ixbanner .ixsub {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.3;
+      }
+      .ixbanner .ixtail {
+        flex: none;
+      }
+      /* Three dots, never a track and a fill: motir-core is told an index has
+         SUCCEEDED and never how far along it is, so a determinate bar would be
+         a claim nothing can support (panel 1's rule, same reason). */
+      .ixspin {
+        display: inline-flex;
+        gap: 4px;
+        flex: none;
+      }
+      .ixspin i {
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--el-text-secondary);
+        animation: ixpulse 1.25s ease-in-out infinite;
+      }
+      .ixspin i:nth-child(2) {
+        animation-delay: 0.18s;
+      }
+      .ixspin i:nth-child(3) {
+        animation-delay: 0.36s;
+      }
+      @keyframes ixpulse {
+        0%,
+        100% {
+          opacity: 0.3;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      /* The FAILED arm keeps the LABEL on --el-text and puts the hue in the
+         GLYPH and the border — the composition CLAUDE.md prefers for a big
+         danger label, since graphics need only 3:1. --el-danger-text is NOT
+         legal here: it is the ink FOR a --el-danger FILL and nothing else. */
+      .ixbanner.bad {
+        background: var(--el-danger-surface);
+        border-color: var(--el-danger-on-surface);
+      }
+      .ixbanner.bad .ixnm {
+        color: var(--el-text);
+      }
+      .ixbanner.bad .ixglyph {
+        display: inline-flex;
+        flex: none;
+        color: var(--el-danger-on-surface);
+      }
+      .ixbanner.bad .ixglyph svg {
+        width: 18px;
+        height: 18px;
+      }
+      .ixacts {
+        display: inline-flex;
+        gap: 8px;
+        flex: none;
+      }
+      .ixrow {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 560px;
+      }
       .activity {
         display: flex;
         align-items: center;
@@ -1730,6 +1832,200 @@
           they asked for is happening. <span class="code">continue</span> makes the run a regular
           planning session from its first system message (MOTIR-4767), and the surface's only job is
           to get out of the way.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════ PANEL 7 ══════════════════════ -->
+    <div class="panel-label">
+      Panel 7 · THE THIRD READING STATE — the repository is connected and has NO code graph yet
+      <b>(MOTIR-4825 · the BANNER holds the state, the PLANNER says why)</b>
+    </div>
+    <div class="panel">
+      <div class="ontop">
+        <div class="ws tall">
+          <div class="wcanvas">
+            <div class="wtop">
+              <span class="wclose">✕ Close <kbd>Esc</kbd></span>
+              <span class="wcrumb">Acme Widgets</span>
+              <span class="pill neutral">Whole project</span>
+            </div>
+            <div class="wbody">
+              <div class="ixbanner" role="status">
+                <span class="ixspin" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="ixtext">
+                  <span class="ixnm">Indexing acme/widgets</span>
+                  <span class="ixsub">Reading the code so the plan can start from it</span>
+                </span>
+                <span class="pill sky ixtail">In progress</span>
+              </div>
+              <div class="card reading">
+                <span class="eyebrow">Before we plan</span>
+                <h2>Getting to know your code</h2>
+                <p class="lede">
+                  Your repository is connected. Motir is building its index now — that is what lets
+                  the plan start from your code instead of from a blank page.
+                </p>
+                <ul class="srcs">
+                  <li class="src">
+                    <span class="ic" aria-hidden="true"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M4 3h13a3 3 0 0 1 3 3v15H7a3 3 0 0 1-3-3z" />
+                        <path d="M4 18h16" /></svg
+                    ></span>
+                    <span
+                      ><span class="nm">acme/widgets</span
+                      ><span class="sub">Connected · building the code graph</span></span
+                    >
+                    <span class="tail pill sky">Indexing</span>
+                  </li>
+                  <li class="src">
+                    <span class="ic" aria-hidden="true"
+                      ><svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M8 6h13" />
+                        <path d="M8 12h13" />
+                        <path d="M8 18h13" />
+                        <path d="M3 6h.01" />
+                        <path d="M3 12h.01" />
+                        <path d="M3 18h.01" /></svg
+                    ></span>
+                    <span
+                      ><span class="nm">12 work items</span
+                      ><span class="sub">Everything in your backlog</span></span
+                    >
+                    <span class="tail pill mint">Read</span>
+                  </li>
+                </ul>
+                <p class="activity">
+                  You can close this and come back — it keeps going without you.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="wrail">
+            <div class="rhead"><span class="lbl">✦ Motir</span></div>
+            <div class="rlog">
+              <div class="turn">
+                <span class="avatar ai" aria-hidden="true">✦</span>
+                <span class="bubble ai"
+                  >You've connected <strong>acme/widgets</strong>, but I haven't read it yet — I'm
+                  building its index now. I'd rather wait than plan your project from a repository I
+                  can't see. As soon as it's done I'll take a proper look and we can start.</span
+                >
+              </div>
+            </div>
+            <div class="composer">
+              <span class="inp off" aria-disabled="true">Ready as soon as the index is</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-cap" style="margin: 22px 0 9px">
+        The banner's TWO live wordings — the same wait, one moment apart
+      </div>
+      <div class="ixrow">
+        <div class="ixbanner" role="status">
+          <span class="ixspin" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="ixtext">
+            <span class="ixnm">Indexing acme/widgets</span>
+            <span class="ixsub">Just started</span>
+          </span>
+          <span class="pill sky ixtail">Queued</span>
+        </div>
+        <div class="ixbanner" role="status">
+          <span class="ixspin" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="ixtext">
+            <span class="ixnm">Indexing acme/widgets</span>
+            <span class="ixsub">Reading the code so the plan can start from it</span>
+          </span>
+          <span class="pill sky ixtail">In progress</span>
+        </div>
+      </div>
+      <p class="muted-note" style="margin-top: 9px; max-width: 700px">
+        <strong
+          >Queued and In progress differ in the TAIL and the sub-line, never in the title.</strong
+        >
+        The person is waiting for the same thing either way, and a title that changes under them
+        reads as a second event.
+        <strong>The tail is the only place the distinction earns its keep</strong> — it is what
+        tells somebody who came back whether anything has moved.
+      </p>
+
+      <div class="state-cap" style="margin: 26px 0 9px">
+        The FAILED arm — an index that did not finish, which is one of the three ways this state is
+        reached at all
+      </div>
+      <div class="ixrow">
+        <div class="ixbanner bad" role="status">
+          <span class="ixglyph" aria-hidden="true"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+              <path
+                d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"
+              /></svg
+          ></span>
+          <span class="ixtext">
+            <span class="ixnm">I couldn't index acme/widgets</span>
+            <span class="ixsub">Nothing is lost — we can try again, or plan without the code</span>
+          </span>
+          <span class="ixacts">
+            <button class="btn sm primary">Try again</button>
+            <button class="btn sm ghost">Plan anyway</button>
+          </span>
+        </div>
+      </div>
+      <p class="muted-note" style="margin-top: 9px; max-width: 700px">
+        <strong>Two ways onward, because a dead end is the one thing panel 6 forbids.</strong>
+        <em>Try again</em> re-enqueues; <em>Plan anyway</em> hands the routing run the project
+        WITHOUT a readable repository, which is a case the verdict already knows — it becomes an
+        ordinary onboarding route rather than a special failure. The copy says what is true and
+        nothing more: it does not name a cause it has not been told, and it does not apologise for a
+        bug that may not exist.
+      </p>
+
+      <div class="pair" style="margin-top: 20px">
+        <p class="muted-note">
+          <strong>TWO INSTRUMENTS, AND THEY ARE NOT THE SAME SENTENCE TWICE.</strong> The
+          <strong>banner</strong> is the STATE: durable, at the top of the window, present whether
+          or not anybody reads a word, and still there when somebody comes back. The
+          <strong>planner's turn</strong> is the REASON, in the second person, naming their
+          repository — it is the verdict's own <span class="code">message</span>, rendered exactly
+          as the other outcomes' messages are (panels 3-4), and it scrolls away like any turn does.
+          A banner alone leaves a person guessing why they are waiting; a turn alone puts a durable
+          state into a transcript. <strong>Neither is the other's caption.</strong>
+        </p>
+        <p class="muted-note">
+          <strong>STILL NOT A PROGRESS BAR</strong>, and for panel 1's reason rather than a new one:
+          <span class="code">motir-core</span> is told an index has SUCCEEDED, never how far along
+          it is, so a track and a fill would be a claim nothing can support. The three dots and the
+          two tail wordings are the whole affordance.
+          <strong>And the EXIT is drawn because the person opened this window to plan</strong> — the
+          card says the work continues without them, and when the index lands the window moves on by
+          itself: the reading state is a client island, so it refetches rather than waiting to be
+          reloaded.
         </p>
       </div>
     </div>
