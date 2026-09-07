@@ -47,8 +47,18 @@
   (panel 5) because that is the door to the room it draws.
 
   Panels: 1 the index in situ · 2 Security · 3 Job runs · 4 BELOW the reveal
-  (the one-row rail) · 5 the ACCESS PATH (the switcher popover) · 6 dark ·
-  7 the registry, row by row.
+  (/settings/organization, with NO workspace rail) · 5 the ACCESS PATH (the
+  switcher popover) · 6 dark · 7 the registry, row by row.
+
+  ⚠️ REVISED 2026-09-07, before this asset ever merged. Panel 4 drew a one-row
+  workspace rail below the reveal, because /settings/workspace/jobs answered at
+  every workspace count while its two siblings 404'd. The story was re-planned:
+  that exemption was an UNFINISHED COLLAPSE rather than a decision — the route
+  had never been given the fold-in the other three workspace surfaces have — so
+  it gains its reveal gate and its dashboard folds into /settings/organization.
+  Below the reveal there is therefore NO workspace rail at all, the registry's
+  revealedOnly axis applies uniformly to all three rows, and §6d is satisfied by
+  RELOCATION rather than by an exception. MOTIR-4859 is the planning bug.
 -->
 <html lang="en" data-theme="light">
   <head>
@@ -338,6 +348,22 @@
         align-items: center;
         gap: 10px;
         padding: 6px var(--spacing-control-x) 2px;
+      }
+      /* the ORGANISATION's tile — lavender, where the workspace's is sky, so the
+         two tiers are told apart by hue when a reader moves between the rails.
+         Panel 4 is the only place this asset draws the org's own rail. */
+      .shell .who .org-ava {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
       }
       .shell .who .ws-ava {
         flex: none;
@@ -714,18 +740,6 @@
         border-radius: var(--radius-badge);
         margin-left: 6px;
       }
-      .reg .always {
-        font-family: var(--font-sans);
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--el-text-strong);
-        background: var(--el-tint-yellow);
-        padding: 1px 7px;
-        border-radius: var(--radius-badge);
-        margin-left: 6px;
-      }
       .reg-note {
         font-size: 12.5px;
         line-height: 1.6;
@@ -762,10 +776,12 @@
           <span class="mono">Sidebar</span> composition; the model is
           <span class="mono">design/org-admin/org-admin.mock.html</span> panels 7a–7d
           (<b>MOTIR-4673</b>), which drew the same move one tier up. What the organisation does not
-          have, and this asset must draw, is a <b>reveal threshold</b> — panel 4. Every pane is
-          COMPOSED here and re-specified nowhere; the shell assets the doors leave are the sibling
-          card <b>MOTIR-4845</b>'s. Source of truth = this HTML; see
-          <span class="mono">design-notes.md</span>. Gates <b>MOTIR-4846</b> and <b>MOTIR-4847</b>.
+          have, and this asset must draw, is a <b>reveal threshold</b> — panel 4, where there is no
+          workspace rail at all and every capability is folded into the organisation page. Every
+          pane is COMPOSED here and re-specified nowhere; the shell assets the doors leave are the
+          sibling card <b>MOTIR-4845</b>'s. Source of truth = this HTML; see
+          <span class="mono">design-notes.md</span>. Gates <b>MOTIR-4846</b>, <b>MOTIR-4847</b> and
+          the <b>FOLD-IN</b> card.
         </p>
       </div>
       <button
@@ -1002,80 +1018,97 @@
       </div>
     </div>
 
-    <!-- ═════════ PANEL 4 — BELOW THE REVEAL ═════════ -->
+    <!-- ═════════ PANEL 4 — BELOW THE REVEAL: THE ORG PAGE, NOT A RAIL ═════════ -->
     <div class="panel-label">
-      4 · <b>BELOW THE REVEAL</b>, at <span class="mono">/settings/workspace/jobs</span> — the arm
-      the organisation has no equivalent of. At ONE workspace the other two routes
-      <span class="mono">notFound()</span>, so the rail renders
-      <b><span class="mono">Job runs</span> alone</b>.
+      4 · <b>BELOW THE REVEAL</b> &mdash; <span class="mono">/settings/organization</span>, and
+      <b>NO workspace rail at all</b>. At ONE workspace all THREE
+      <span class="mono">/settings/workspace/*</span> routes <span class="mono">notFound()</span>,
+      and every capability they carry is hosted here.
     </div>
     <div class="panel">
       <div class="stage">
-        <div class="shell" style="min-height: 380px">
+        <div class="shell" style="min-height: 460px">
           <aside class="rail">
             <div class="rail-head">
               <span class="back"
                 ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to Motir</span
               >
               <div class="who">
-                <span class="ws-ava">A</span>
+                <span class="org-ava">A</span>
                 <span class="meta">
-                  <span class="nm">Acme Co.</span>
-                  <span class="sub">Acme &middot; 4 members</span>
+                  <span class="nm">Acme</span>
+                  <span class="sub">1 workspace &middot; 4 members</span>
                 </span>
               </div>
-              <span class="settings-eyebrow">Workspace settings</span>
+              <span class="settings-eyebrow">Organisation settings</span>
             </div>
-            <nav aria-label="Workspace settings">
+            <nav aria-label="Organisation settings">
               <div class="grp">
-                <div class="grp-label">Operations</div>
+                <div class="grp-label">General</div>
                 <div class="nav-row active">
                   <span class="ni" aria-hidden="true"
-                    ><svg viewBox="0 0 24 24"><use href="#i-list-checks" /></svg
+                    ><svg viewBox="0 0 24 24"><use href="#i-building-2" /></svg
                   ></span>
-                  <span class="nl">Job runs</span>
+                  <span class="nl">Organisation</span>
                 </div>
               </div>
             </nav>
           </aside>
           <div class="content">
             <div class="page-head">
-              <h2>Job runs</h2>
+              <h2>Organisation</h2>
               <p class="sub">
-                Background work for this workspace &mdash; what ran, what failed, and what is
-                waiting in the dead-letter queue.
+                Your organisation&rsquo;s name, its plan, and the sections that belong to it.
               </p>
             </div>
             <div class="stub">
-              <b>A ONE-ROW RAIL IS THE CORRECT RENDERING HERE, NOT A DEGENERATE ONE.</b>
-              <span class="mono">/settings/workspace/jobs</span> answers
-              <b>200 at every workspace count</b> &mdash; it is workspace-SCOPED but not
-              workspace-NAMED, so
-              <span class="mono">docs/decisions/organization-tier.md</span> §6&rsquo;s reveal leaves
-              it alone (<b>MOTIR-3502</b> AC 6). Its two siblings are workspace-NAMED and
-              <span class="mono">notFound()</span> below the threshold, so their rows would point at
-              a 404 and are correctly absent &mdash; and the <span class="mono">General</span> and
-              <span class="mono">Access</span> groups go with them, because
-              <b>a group with no surviving rows is not rendered</b> (no empty heading, no disabled
-              row). §6d: <i>a hidden tier may not remove a capability</i>. Emptying this rail
-              instead, or hiding it, would take away the one door that must survive.
+              <b
+                >The existing <span class="mono">WorkspaceFoldInSection</span>, unchanged by this
+                story</b
+              >
+              &mdash; <span class="mono">NameCard</span> &middot;
+              <span class="mono">MembersCard</span> &middot;
+              <span class="mono">RequireTwoFactorCard</span> &middot;
+              <span class="mono">DangerZoneCard</span>, each keeping its own §6d per-SECTION gate.
+              Four of the workspace tier&rsquo;s capabilities have lived here since
+              <b>MOTIR-3502</b>.
+            </div>
+            <div class="stub">
+              <b>NEW &mdash; the <span class="mono">Job runs</span> fold-in section.</b> The fifth
+              capability, and the one that never had a home here. The dashboard itself is
+              <span class="mono">design/jobs/</span>&rsquo;s and is composed, not redrawn: the
+              <b>Runs</b> tab and the <b>DLQ</b> tab with its count badge for any workspace member,
+              the DLQ <b>replay</b> control for a workspace OWNER, and the <b>System</b> tab for
+              platform staff. <b>Each keeps the gate it asserts today</b> &mdash; this page is
+              org-owner/admin gated as a PAGE, and §6d makes it gate per SECTION, so this section
+              gates on WORKSPACE MEMBERSHIP exactly as the block above it does.
+            </div>
+            <div class="stub">
+              <b>&#9888; THERE IS NO WORKSPACE RAIL ON THIS SCREEN, AND THAT IS THE POINT.</b> The
+              first version of this asset drew a one-row workspace rail here, because
+              <span class="mono">/settings/workspace/jobs</span> answered at every workspace count
+              while its siblings 404&rsquo;d. That exemption was an <b>unfinished collapse</b>, not
+              a decision: the route had never been given the fold-in its three siblings have. With
+              the section above it, all four surfaces hide together and
+              <span class="mono">docs/decisions/organization-tier.md</span> §6d &mdash;
+              <i>a hidden tier may not remove a capability</i> &mdash; is satisfied by
+              <b>RELOCATION</b>, which is what it asks for, rather than by an exception.
             </div>
           </div>
         </div>
       </div>
     </div>
     <p class="panel-note">
-      <b>What is on the other side of that threshold, and why nothing is stranded.</b> Below two
-      workspaces there is no workspace switcher, so there is no door in it &mdash; which is correct,
-      because below the reveal there is no room either:
-      <span class="mono">/settings/workspace</span> and
-      <span class="mono">/settings/workspace/security</span> both
-      <span class="mono">notFound()</span>, and their sections are folded into
-      <span class="mono">/settings/organization</span>, gated per SECTION (§6d). Name, Members and
-      <b>Leave workspace</b> are reachable there for a plain org member who is a workspace member.
-      The one capability that has no fold-in is <span class="mono">Job runs</span>, and the rail's
-      bottom section keeps its row for it &mdash; the sibling card <b>MOTIR-4845</b> is where that
-      is recorded, on the asset that owns that section.
+      <b>Nothing is stranded on the other side of that threshold.</b> Below two workspaces there is
+      no workspace switcher, so there is no door &mdash; and no room: all three
+      <span class="mono">/settings/workspace/*</span> routes <span class="mono">notFound()</span>,
+      and Name, Members, <b>Leave workspace</b>, the require-2FA policy and the job-runs dashboard
+      are all reachable on <span class="mono">/settings/organization</span> for a plain org member
+      who is a workspace member.
+      <b>So the rail&rsquo;s bottom section keeps NEITHER workspace row</b> &mdash; the sibling card
+      <b>MOTIR-4845</b> removes both, on the assets that own that section, and a workspace-tier row
+      inside the PROJECT rail is the tenancy mismatch <b>MOTIR-4640</b> removed for the
+      <span class="mono">Git</span> row a week earlier.
     </p>
 
     <!-- ═════════ PANEL 5 — THE ACCESS PATH ═════════ -->
@@ -1320,22 +1353,38 @@
               <tr>
                 <td class="grp-cell">operations</td>
                 <td>jobs</td>
-                <td class="mono">
-                  /settings/workspace/jobs <span class="always">every count</span>
-                </td>
+                <td class="mono">/settings/workspace/jobs</td>
                 <td class="mono">ListChecks</td>
-                <td>any workspace member, <b>at every workspace count</b></td>
+                <td>any workspace member, <b>at the reveal</b></td>
               </tr>
             </tbody>
           </table>
           <p class="reg-note">
-            <b>ONE filter axis, <span class="mono">revealedOnly</span>, and it DEFAULTS CLOSED.</b>
+            <b
+              >ONE filter axis, <span class="mono">revealedOnly</span>, it DEFAULTS CLOSED, and it
+              applies UNIFORMLY to all three rows.</b
+            >
             The organisation registry has two (what the actor HOLDS, what the BUILD has); this tier
             has neither &mdash; every route here is membership-gated with no role above it, and none
             is cloud-only. What it has instead is the threshold, so the axis is the reveal. It
             defaults closed for the reason its two siblings default closed: a surface that forgets
             to thread it drops the row rather than offering a door onto a route that
             <span class="mono">notFound()</span>s.
+          </p>
+          <p class="reg-note">
+            <b
+              >&#9888; THE THIRD ROW USED TO BE AN EXCEPTION, AND THE EXCEPTION IS RETIRED &mdash;
+              said here because a reader who knows the old behaviour needs to see that it was
+              removed rather than overlooked.</b
+            >
+            <span class="mono">/settings/workspace/jobs</span> answered
+            <b>200 at every workspace count</b> while its two siblings
+            <span class="mono">notFound()</span>ed, and that was written down as a property of the
+            route (<b>MOTIR-3502</b> AC 6). It was an <b>unfinished collapse</b>: the route had
+            never been given the fold-in the other three workspace surfaces have. The FOLD-IN card
+            builds it, this row becomes reveal-gated like its siblings, and the axis stops carrying
+            a carve-out &mdash; which is what lets panel 4 draw a below-reveal state with no
+            workspace rail in it at all.
           </p>
           <p class="reg-note">
             <b
@@ -1439,6 +1488,20 @@
           <path d="M12 8 7.26 5.15" />
           <path d="m12 8 4.74-2.85" />
           <path d="M12 13.5V8" />
+        </g>
+        <g
+          id="i-building-2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 12h4" />
+          <path d="M10 8h4" />
+          <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+          <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" />
+          <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" />
         </g>
         <g
           id="i-shield-check"
