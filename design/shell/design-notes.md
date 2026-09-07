@@ -1116,16 +1116,26 @@ The count below is **taken by re-running the method**, not copied from the MOTIR
 the three `.pen` sources are parsed as JSON and walked to their `Nav Section Bottom` frame; the three
 `.mock.html` assets are loaded in Chromium and every `[data-surface="sidebar"]`'s rows enumerated.
 
-**Fourteen rails across six assets, and ELEVEN of them draw the departing `Git` row.**
+**Fifteen rails across six assets, and TWELVE of them draw the departing `Git` row.**
 
-| Asset                          | Rails | Draws `Git` | Bottom rows measured now                | Disposition                       |
-| ------------------------------ | ----- | ----------- | --------------------------------------- | --------------------------------- |
-| `desktop.pen`                  | 1     | **no**      | Settings · Docs                         | unchanged — nothing to amend      |
-| `desktop-collapsed.pen`        | 1     | **no**      | icon-only, no text nodes                | unchanged — nothing to amend      |
-| `mobile-drawer.pen`            | 1     | **no**      | Settings · Docs                         | unchanged — nothing to amend      |
-| `navigation-pending.mock.html` | 4     | **yes ×4**  | Settings · Job runs · Git · Docs        | **recorded, not amended** (below) |
-| `top-bar.mock.html`            | 1     | **yes ×1**  | Settings · Job runs · Git · Docs        | **recorded, not amended** (below) |
-| `design/home/home.mock.html`   | 6     | **yes ×6**  | Job runs · Git · Docs (Settings on one) | **recorded, not amended** (below) |
+| Asset                                  | Rails | Draws `Git` | Bottom rows measured now         | Disposition                       |
+| -------------------------------------- | ----- | ----------- | -------------------------------- | --------------------------------- |
+| `desktop.pen`                          | 1     | **no**      | Settings · Docs                  | unchanged — nothing to amend      |
+| `desktop-collapsed.pen`                | 1     | **no**      | icon-only, no text nodes         | unchanged — nothing to amend      |
+| `mobile-drawer.pen`                    | 1     | **no**      | Settings · Docs                  | unchanged — nothing to amend      |
+| `navigation-pending.mock.html`         | 4     | **yes ×4**  | Settings · Job runs · Git · Docs | **recorded, not amended** (below) |
+| `top-bar.mock.html`                    | 1     | **yes ×1**  | Settings · Job runs · Git · Docs | **recorded, not amended** (below) |
+| `design/workbench/workbench.mock.html` | 7     | **yes ×7**  | Job runs · Git · Docs            | **recorded, not amended** (below) |
+
+⚠️ **THE SIXTH ROW MOVED AND GREW WHILE THIS AMENDMENT SAT IN REVIEW — which is
+the argument for re-running the method rather than copying a table, arriving on
+schedule.** It was the LANDING surface's own mock — then named for the `home`
+area — with SIX rails when this section was first written; MOTIR-4779 renamed
+that surface to `design/workbench/workbench.mock.html`, and it now draws SEVEN. A table carried forward would have cited a file that no longer
+exists and a count nobody re-took, and `design-asset-addresses` caught precisely
+that — on the merge queue, which is the last place a stale citation is still
+cheap. The numbers above are from a re-run against `origin/main` after that
+rename landed.
 
 **Why the three `.pen` sources need nothing.** They never drew `Git` — that is the four-row shortfall
 the MOTIR-4130 measurement recorded, and it is unchanged by a row leaving. Ledger row 2 already
@@ -1135,13 +1145,13 @@ source disagreeing with the `.png` every consumer opens.
 **Why the three `.mock.html` assets are RECORDED rather than amended, and the evidence for it.**
 Ledger row 3 already holds that those rails are context for something else — a pending grammar, a
 control budget, a landing surface — and that a reader asking _what belongs in this section_ reads
-THIS asset. The measurement supplies the confirming fact: **all eleven of those rails still draw
+THIS asset. The measurement supplies the confirming fact: **all twelve of those rails still draw
 `Docs`**, a row that left in MOTIR-4254 and was never swept out of them. So leaving them is the
 established disposition for a departure here, not a new exemption invented for this one — and
 sweeping `Git` while `Docs` stayed would leave them wrong in a way that is harder to reason about
 than wrong-as-of-a-date.
 
-⚠️ **What that costs, stated rather than hidden:** eleven rails in this repository will draw a row
+⚠️ **What that costs, stated rather than hidden:** twelve rails in this repository will draw a row
 the product does not render once MOTIR-4643 lands. They are point-in-time records and this asset is
 the source of record for the section — but a sweep of all three, taking `Docs` and `Git` together, is
 worth its own card, and nothing here should be read as saying they are correct.
