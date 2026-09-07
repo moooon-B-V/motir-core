@@ -2445,7 +2445,10 @@
       "empty": {
         "title": "{projectName} has no code yet",
         "body": "When a plan is approved, Motir creates this project's repositories — and everyone who can edit {projectName} gets invited to them. There is nothing to grant until then.",
-        "action": "Review the plan"
+        "action": "Review the plan",
+        "connectedTitle": "Motir hasn't made any repositories for {projectName}",
+        "connectedBody": "This page counts only the repositories Motir made. {projectName} works on {count, plural, one {one repository} other {# repositories}} connected to your organisation instead — a repository the team already owns is reached through GitHub, not through Motir.",
+        "connectedAction": "See this project's repositories"
       },
       "establishing": {
         "pill": "Setting up",

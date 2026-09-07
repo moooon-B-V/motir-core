@@ -5,6 +5,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { MigrateOnboardingNotFoundError } from '@/lib/migrateOnboarding/errors';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // migrateOnboardingService.getIndexStatus — the Index step's per-repo progress
 // (Story 7.15 · MOTIR-934), against a REAL Postgres (the motir-core convention).
@@ -68,6 +69,7 @@ async function seedRepo(
     data: {
       installationId: inst.id,
       workspaceId: inst.workspaceId,
+      organizationId: await organizationIdOf(inst.workspaceId),
       repoId: `repo-${rand}`,
       owner,
       name,

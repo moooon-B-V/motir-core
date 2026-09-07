@@ -24,6 +24,7 @@ import type { WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createV1Caller, createV1ProjectCaller, withTokenFor } from '../fixtures/apiV1Fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // STORY GATE for MOTIR-3584 — `motir link` brings the code down (Subtask
 // MOTIR-3590). It runs over the story's ASSEMBLED state and measures the seams
@@ -98,6 +99,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `repo-${name}-${randomBytes(6).toString('hex')}`,
       owner: 'moooon',
       name,

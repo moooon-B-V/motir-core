@@ -162,7 +162,12 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             indexingRunId: r.repoIndexingRunId,
             provider: r.repoProvider!,
             workspaceId: r.repoWorkspaceId!,
-            organizationId: r.repoOrganizationId,
+            // Non-null since MOTIR-4700, and the `!` is the same assertion every
+            // sibling field on this branch already makes: the LEFT JOIN types
+            // every projected column nullable, and this branch is only reached
+            // when `repoRowId` is non-null — i.e. when the join matched a row,
+            // whose `organization_id` the constraint guarantees.
+            organizationId: r.repoOrganizationId!,
             installationId: r.repoInstallationId!,
             repoId: r.repoHostId!,
             owner: r.repoOwner!,

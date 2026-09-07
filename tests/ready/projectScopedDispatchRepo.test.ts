@@ -14,6 +14,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // PROJECT-SCOPED repo resolution + the CLONE coordinates on the dispatch payload
 // (Story MOTIR-1775 · MOTIR-1783) — the two gaps MOTIR-1804 left, over real
@@ -90,6 +91,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `${name}-${randomToken(8)}`,
       owner,
       name,
