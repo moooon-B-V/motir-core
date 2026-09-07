@@ -153,12 +153,22 @@ describe('⚠️ ONE derivation — no second implementation of "stale" under li
       .filter(Boolean)
       .sort();
 
-    // The derivation, the two places that WRITE the column, and the DTO that
-    // re-exports the union. Nothing else may read it.
+    // The derivation, the two places that WRITE the column, and the ASSEMBLERS
+    // that hand its facts to `deriveCodeGraphIndexState`. Nothing else may read
+    // it.
+    //
+    // ⚠️ THIS LIST IS AN EXACT MATCH ON PURPOSE — adding a reader is meant to be
+    // a decision somebody makes in a diff, not a thing that happens quietly. The
+    // two assemblers are the ORG-scoped inventory and the PROJECT-scoped code
+    // context (MOTIR-1767): the same four facts, two different questions —
+    // *"what does this organisation have?"* and *"what does this project work
+    // on?"* — and neither of them compares anything, which the second half of
+    // this test is what actually enforces.
     expect(hits).toEqual([
       'lib/codeGraph/indexState.ts',
       'lib/repositories/githubRepoRepository.ts',
       'lib/repositories/projectRepoRepository.ts',
+      'lib/services/codeContextService.ts',
       'lib/services/organizationRepoService.ts',
     ]);
 
