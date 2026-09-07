@@ -12,6 +12,7 @@ import { BuildInPublicButton } from './build-in-public/BuildInPublicButton';
 import { BuildingInPublicHeaderLink } from './build-in-public/BuildingInPublicHeaderLink';
 import { ReportButton } from './ReportButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
@@ -204,8 +205,25 @@ export async function TopNav({
               The overflow ITSELF is a pre-existing shell defect, logged
               separately rather than absorbed here — this card must not silently
               redesign a responsive bar the brand design never drew. */}
+          {/* ⚠️ The destination is the LANDING, and it is IMPORTED (MOTIR-4799).
+              This read `href="/dashboard"` from the day the slot was built, under
+              an `aria-label` whose own key is `brandHome` — the label said home,
+              the href said dashboard, and `design/brand/design-notes.md` §7 says
+              the mark "in five of the six [slots] is also the home link". It is
+              the seventh member of the family `lib/navigation/landing.ts` owns
+              (MOTIR-2921 · MOTIR-3171 · MOTIR-3173 · MOTIR-3367 · MOTIR-3372 ·
+              MOTIR-4403), and the one that survived the owner-guard: all three of
+              its scans read a literal or a COMMENT, and this element declared its
+              intent in its ACCESSIBLE NAME, where nothing was looking.
+              MOTIR-3173 read this exact line and left it deliberately, calling it
+              a product question rather than a stale constant; MOTIR-4800 is the
+              guard scan that closes the carrier.
+
+              Never re-type the value here — `AUTHED_LANDING_PATH` moves to
+              `/workbench` with MOTIR-4782, and a literal both fails the guard's
+              first scan and becomes the tenth stale copy. */}
           <Link
-            href="/dashboard"
+            href={AUTHED_LANDING_PATH}
             aria-label={t('topNav.brandHome')}
             // The tile (MOTIR-2557 · design/shell § *The brand tile*). The box
             // was always here and simply unpainted; it now takes an

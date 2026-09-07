@@ -2,6 +2,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { WAVE_BAND_PATH } from '@/components/brand/waveBand';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
+
+// MOTIR-4799 — the selector every assertion below reaches the mark through.
+//
+// It was the LITERAL `a[href="/dashboard"]` until this card, and that is exactly
+// how the defect stayed green: the mark had pointed at the retired home since
+// MOTIR-2654 moved the landing, and six assertions here agreed with it, because
+// a test that pins a literal without saying why that literal is the answer goes
+// stale the same way a comment does (`tests/components/OnboardingExit.test.tsx`
+// is the same failure, one repair earlier). Composed from the owner constant, it
+// cannot: MOTIR-4782 moves `AUTHED_LANDING_PATH` to `/workbench`, and this file
+// follows it without an edit.
+const BRAND_HREF = `a[href="${AUTHED_LANDING_PATH}"]`;
 
 // MOTIR-1150 — the app shell's brand slot (design/brand/design-notes.md §7a).
 //
@@ -72,7 +85,7 @@ afterEach(() => {
 describe('the shell brand slot (§7a)', () => {
   it('fills the slot this file’s docstring reserved, with the real mark', async () => {
     const { container } = render(await TopNav(props));
-    const brand = container.querySelector('a[href="/dashboard"]')!;
+    const brand = container.querySelector(BRAND_HREF)!;
     expect(brand.querySelector('path')!.getAttribute('d')).toBe(WAVE_BAND_PATH);
   });
 
@@ -80,7 +93,7 @@ describe('the shell brand slot (§7a)', () => {
     // The left cluster already carries org › workspace as text. The brand sits
     // OUTSIDE that hierarchy, which is what the hairline divider says.
     const { container } = render(await TopNav(props));
-    const brand = container.querySelector('a[href="/dashboard"]')!;
+    const brand = container.querySelector(BRAND_HREF)!;
     expect(brand.textContent).toBe('');
     expect(container.querySelector('.brand-lockup')).toBeNull();
     expect(brand.querySelector('svg')!.getAttribute('width')).toBe('24');
@@ -88,7 +101,7 @@ describe('the shell brand slot (§7a)', () => {
 
   it('carries the accessible name, because nothing else here can (§8)', async () => {
     const { container } = render(await TopNav(props));
-    const brand = container.querySelector('a[href="/dashboard"]')!;
+    const brand = container.querySelector(BRAND_HREF)!;
     expect(brand.getAttribute('aria-label')).toBe('topNav.brandHome');
     // The glyph stays hidden even though it is the only content: the LINK is
     // what carries the name, so exposing the svg as well would double it.
@@ -101,7 +114,7 @@ describe('the shell brand slot (§7a)', () => {
     // 8.3.1 renders established it has no room. Order is the whole point of §7a,
     // so it is asserted rather than eyeballed.
     const { container } = render(await TopNav(props));
-    const cluster = container.querySelector('a[href="/dashboard"]')!.parentElement!;
+    const cluster = container.querySelector(BRAND_HREF)!.parentElement!;
     const order = Array.from(cluster.children);
     expect(order[0]!.tagName).toBe('A');
     // The hairline divider that used to sit here is GONE (MOTIR-2557): the
@@ -128,7 +141,7 @@ describe('the shell brand slot (§7a)', () => {
     // `top-nav-control-budget.test.tsx`; the hit-test is
     // `tests/e2e/cloud-top-bar-budget.spec.ts`.
     const { container } = render(await TopNav(props));
-    const brand = container.querySelector('a[href="/dashboard"]')!;
+    const brand = container.querySelector(BRAND_HREF)!;
     expect(brand.className).toContain('hidden');
     expect(brand.className).toContain('md:flex');
     // …and it is now a painted TILE rather than a bare glyph (MOTIR-2557). The
@@ -140,5 +153,37 @@ describe('the shell brand slot (§7a)', () => {
     // two leads the cluster at any width.
     const hamburgerWrapper = container.querySelector('[data-testid="hamburger"]')!.parentElement!;
     expect(hamburgerWrapper.className).toContain('md:hidden');
+  });
+});
+
+describe('the mark goes to the LANDING, not to the dashboard (MOTIR-4799)', () => {
+  // The seventh member of the family `lib/navigation/landing.ts` was built to
+  // end (MOTIR-2921 · MOTIR-3171 · MOTIR-3173 · MOTIR-3367 · MOTIR-3372 ·
+  // MOTIR-4403). It survived all six repairs AND the owner-guard, because every
+  // one of them looks for a literal under a COMMENT and this link declared its
+  // intent in its ACCESSIBLE NAME: `aria-label={t('topNav.brandHome')}` on an
+  // anchor pointing at `/dashboard`. MOTIR-3173 read this exact line, called it
+  // a product question rather than a stale constant, and left it deliberately;
+  // this is that question answered.
+  //
+  // Asserted off the RENDERED anchor rather than off the constant, because the
+  // constant is what the fix imports — reading it back would assert the fix
+  // against itself.
+
+  it('points at the signed-in landing', async () => {
+    const { container } = render(await TopNav(props));
+    const brand = container.querySelector<HTMLAnchorElement>(`a[aria-label="topNav.brandHome"]`)!;
+    expect(brand).not.toBeNull();
+    expect(brand.getAttribute('href')).toBe(AUTHED_LANDING_PATH);
+  });
+
+  it('does NOT point at /dashboard — the destination its own label denied', async () => {
+    // The negative is asserted separately and on purpose. `AUTHED_LANDING_PATH`
+    // is about to become `/workbench` (MOTIR-4782), so the positive above will
+    // keep passing through that rename; this one states the thing that must stay
+    // false whatever the landing is called.
+    const { container } = render(await TopNav(props));
+    const brand = container.querySelector<HTMLAnchorElement>(`a[aria-label="topNav.brandHome"]`)!;
+    expect(brand.getAttribute('href')).not.toBe('/dashboard');
   });
 });
