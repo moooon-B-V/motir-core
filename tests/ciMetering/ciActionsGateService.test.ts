@@ -23,6 +23,7 @@ import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // THE CI-ACTIONS GATE against real Postgres (Story MOTIR-1775 · MOTIR-1907) —
 // `docs/decisions/ci-minutes-allowance.md` §A, §4.4, §6.5, §8.6.
@@ -111,6 +112,7 @@ async function seedRepo(
     data: {
       installationId: inst.id,
       workspaceId: tenant.workspaceId,
+      organizationId: await organizationIdOf(tenant.workspaceId),
       repoId: `${name}-${randomToken(8)}`,
       owner,
       name,

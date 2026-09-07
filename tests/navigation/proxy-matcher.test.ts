@@ -139,7 +139,6 @@ describe('proxy config.matcher', () => {
       'dashboard',
       'direction',
       'filters',
-      'home',
       'invite',
       'items',
       // MOTIR-4732 — the FORWARD for old `/planning` links, and the eighteenth
@@ -155,6 +154,9 @@ describe('proxy config.matcher', () => {
       'settings',
       'sprints',
       'triage',
+      // MOTIR-4782 — the signed-in landing, renamed from `home`. The count is
+      // unchanged: a rename moved a segment, it did not add one.
+      'workbench',
     ]);
   });
 });
@@ -277,7 +279,7 @@ describe('proxy()', () => {
     const { proxy } = await import('@/proxy');
 
     const res = await proxy(
-      new NextRequest('https://app.motir.co/home', {
+      new NextRequest('https://app.motir.co/workbench', {
         headers: { 'accept-language': 'zh-CN' },
       }),
     );

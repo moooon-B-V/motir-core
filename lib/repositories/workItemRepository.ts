@@ -20,6 +20,7 @@ import {
 } from '@/lib/filters/registry';
 import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
+import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
 
 /**
@@ -145,6 +146,7 @@ export interface HomeWorkItemRow {
   storyPoints: Prisma.Decimal | null;
   estimateMinutes: number | null;
   updatedAt: Date;
+  completedAt: Date | null;
   project: { id: string; identifier: string; name: string };
 }
 
@@ -170,32 +172,60 @@ export const HOME_WORK_ITEM_SELECT = {
   storyPoints: true,
   estimateMinutes: true,
   updatedAt: true,
+  // WHEN it finished (MOTIR-4780) — null on everything that has not. Selected
+  // for every tab, not only Recently finished, because ONE projection is what
+  // keeps the tabs from drifting into different columns, and the alternative is
+  // a second read to render a date the row already has.
+  completedAt: true,
   project: { select: { id: true, identifier: true, name: true } },
 } as const satisfies Prisma.WorkItemSelect;
 
 /**
- * The keyset a Home page resumes after — the exact pair both reads ORDER BY,
- * `(updatedAt DESC, id DESC)`. A keyset rather than an offset or a bare id
- * because rows keep being updated while a reader pages: an offset would repeat
- * and drop rows as items move, and `updatedAt` alone is not a total order.
+ * Which timestamp a Workbench read ORDERS BY — and therefore which one its
+ * cursor keys on (Story MOTIR-4777 · MOTIR-4781).
+ *
+ * ⚠️ THE TWO ARE ONE DECISION, not two. A keyset mints a POSITION in a sort, so
+ * a cursor keyed on a different pair than the `ORDER BY` is a page boundary
+ * that drifts — it repeats and drops rows silently, and the list "sometimes
+ * ends early" is a bug nobody traces. Naming the axis once, here, is what makes
+ * it impossible to order a read by one column and page it by another.
+ */
+export type HomeSortField = 'updatedAt' | 'completedAt';
+
+/**
+ * The keyset a Workbench page resumes after — the exact pair its read ORDERS
+ * BY, `(<sortField> DESC, id DESC)`. A keyset rather than an offset or a bare
+ * id because rows keep being updated while a reader pages: an offset would
+ * repeat and drop rows as items move, and a timestamp alone is not a total
+ * order.
+ *
+ * ⚠️ `at` IS DELIBERATELY NOT NAMED `updatedAt` ANY MORE. Three of the four
+ * reads order by `updatedAt` and Recently-finished orders by `completedAt`, so
+ * a field called `updatedAt` carrying a completion time would be a lie in the
+ * one place a reader goes to check exactly this. The wire token is unchanged
+ * and opaque either way (`lib/workbench/cursor.ts`).
  */
 export interface HomeCursor {
-  updatedAt: Date;
+  at: Date;
   id: string;
 }
 
 /**
  * The `WHERE` half of the keyset — "strictly after this position in
- * `(updatedAt DESC, id DESC)`". Shared by both Home reads so the two tabs page
+ * `(<field> DESC, id DESC)`". Shared by every Workbench read so the tabs page
  * by identical rules. Returns `{}` for the first page.
+ *
+ * `field` is REQUIRED rather than defaulted: a default would let a read order
+ * by `completedAt` and page by `updatedAt` without anybody typing anything
+ * wrong, which is precisely the drift {@link HomeSortField} exists to prevent.
  */
-export function homeKeysetWhere(cursor: HomeCursor | null | undefined): Prisma.WorkItemWhereInput {
+export function homeKeysetWhere(
+  cursor: HomeCursor | null | undefined,
+  field: HomeSortField,
+): Prisma.WorkItemWhereInput {
   if (!cursor) return {};
   return {
-    OR: [
-      { updatedAt: { lt: cursor.updatedAt } },
-      { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
-    ],
+    OR: [{ [field]: { lt: cursor.at } }, { [field]: cursor.at, id: { lt: cursor.id } }],
   };
 }
 
@@ -213,26 +243,64 @@ export function homeKeysetWhere(cursor: HomeCursor | null | undefined): Prisma.W
 export interface HomeProjectScope {
   projectId: string;
   /**
-   * The keys of THAT project's `category = 'done'` statuses (`done` +
-   * `cancelled` out of the box, plus any the workspace defined). Empty on a
-   * workflow with no terminal status — the degenerate case
-   * `savedFilters/builtins.ts` already handles the same way: nothing to exclude,
-   * so the project contributes an unfiltered clause rather than a
-   * never-matching one.
+   * THAT project's own status keys, grouped by `workflow_status.category` —
+   * `todo` / `in_progress` / `done`. All three groups are always present; an
+   * empty one means the project has no status in that category, which is a
+   * legitimate answer a custom workflow can give.
+   *
+   * ⚠️ WIDENED FROM AN EXCLUSION TO A PARTITION (Story MOTIR-4777 ·
+   * MOTIR-4781). This was `doneStatusKeys` — one group, used only to subtract
+   * finished work. The Workbench needs the other two as well, because it splits
+   * one list into three ALONG this axis, and carrying the whole partition
+   * rather than one slice of it is what stops the next tab from arriving with
+   * its own second resolver.
    */
-  doneStatusKeys: readonly string[];
+  statusKeysByCategory: Readonly<Record<StatusCategoryDto, readonly string[]>>;
 }
 
 /**
- * The `WHERE` half of Home's project scope — "in one of these projects, and not
- * terminal ACCORDING TO THAT PROJECT'S OWN workflow".
+ * WHICH lifecycle slice a Workbench read is for.
  *
- * ⚠️ PER PROJECT, never one flat `status: { notIn: [...] }`. Statuses are
- * project-defined open vocabulary and Home is the one surface in the product
- * that reads ACROSS projects, so a flat exclusion would let project A's
- * `released` hide project B's rows — where the same key may be perfectly open.
- * A flat implementation passes every single-project test and is wrong the first
- * time a workspace renames a status.
+ * `in` — the statuses of these categories. `notIn` — everything EXCEPT them.
+ *
+ * ⚠️ THE COMPLEMENT FORM IS NOT A CONVENIENCE, IT IS WHAT MAKES THE THREE WORK
+ * TABS TOTAL. The story's own criterion is that the tabs *"hold every row the
+ * old My work held plus the recently-finished ones — no row appears in two
+ * tabs, and none is dropped"*, and a partition written as three `IN` predicates
+ * cannot promise that: it is total only if every `work_item.status` in the
+ * database names a live `workflow_status` row of its project, which is a
+ * property of the data rather than of the query. A row whose status names no
+ * category — a legacy key, a column deleted around the reassign path, the
+ * schema's own vestigial `"open"` default — would then appear in NO tab at all,
+ * invisible on the one surface that exists to say what is on you.
+ *
+ * So To do is written as the COMPLEMENT of *in progress* and *done* rather than
+ * as the `todo` group: whatever is neither moving nor finished is waiting, by
+ * construction, whether or not its status was ever registered. That is also
+ * exactly where the shipped `/home` list put such a row (MOTIR-2758's
+ * done-EXCLUSION), so nothing a reader can see today disappears.
+ */
+export type HomeCategorySlice =
+  | { in: readonly StatusCategoryDto[] }
+  | { notIn: readonly StatusCategoryDto[] };
+
+/**
+ * The `WHERE` half of a Workbench read's project scope — "in one of these
+ * projects, and in (or out of) THAT PROJECT'S OWN statuses for the categories
+ * the slice names".
+ *
+ * ⚠️ PER PROJECT, never one flat `status` list. Statuses are project-defined
+ * open vocabulary, so a flat list would let project A's `released` decide
+ * project B's rows — where the same key may mean something else entirely. A
+ * flat implementation passes every single-project test and is wrong the first
+ * time two workspaces disagree about a name. (The surface reads ONE project
+ * today; the shape is kept because the reason it was written that way has not
+ * changed, and re-widening the scope must not silently re-open the defect.)
+ *
+ * A project with NO status in the named categories contributes, correctly,
+ * either a clause that matches nothing (`in`) or an unfiltered clause
+ * (`notIn`) — a workflow with no done-category status has no finished work to
+ * show and none to hide.
  *
  * Emitted as a `Prisma.WorkItemWhereInput` carrying an `OR`, so every caller
  * must place it inside an explicit `AND` alongside {@link homeKeysetWhere} —
@@ -240,14 +308,65 @@ export interface HomeProjectScope {
  */
 export function homeProjectScopeWhere(
   scopes: readonly HomeProjectScope[],
+  slice: HomeCategorySlice,
 ): Prisma.WorkItemWhereInput {
   return {
-    OR: scopes.map(({ projectId, doneStatusKeys }) =>
-      doneStatusKeys.length > 0
-        ? { projectId, status: { notIn: [...doneStatusKeys] } }
-        : { projectId },
-    ),
+    OR: scopes.map(({ projectId, statusKeysByCategory }) => {
+      const named = ('in' in slice ? slice.in : slice.notIn).flatMap((c) => [
+        ...statusKeysByCategory[c],
+      ]);
+      return 'in' in slice
+        ? { projectId, status: { in: named } }
+        : // An empty exclusion is an unfiltered clause, NOT a never-matching
+          // one: `notIn: []` and "no constraint" are the same predicate, and
+          // Prisma renders the former as a tautology anyway.
+          { projectId, ...(named.length > 0 ? { status: { notIn: named } } : {}) };
+    }),
   };
+}
+
+/**
+ * TO DO — the complement of *in progress* and *done*. See
+ * {@link HomeCategorySlice} for why this is a complement rather than the `todo`
+ * group.
+ */
+export const HOME_SLICE_TODO: HomeCategorySlice = { notIn: ['in_progress', 'done'] };
+
+/** IN PROGRESS — what is moving, including an agent's output awaiting a person. */
+export const HOME_SLICE_IN_PROGRESS: HomeCategorySlice = { in: ['in_progress'] };
+
+/** RECENTLY FINISHED — the terminal slice; the caller adds the window. */
+export const HOME_SLICE_DONE: HomeCategorySlice = { in: ['done'] };
+
+/**
+ * EVERYTHING NOT FINISHED — the set the shipped `/home` "My work" list showed,
+ * and the union of the two work tabs.
+ *
+ * It is MOTIR-2758's done-exclusion, unchanged and now written down once, which
+ * is what lets the old read and the two tabs that replace it share one
+ * implementation instead of drifting apart.
+ */
+export const HOME_SLICE_UNFINISHED: HomeCategorySlice = { notIn: ['done'] };
+
+/** Every row, whatever its status — the widened set a positive control reads. */
+export const HOME_SLICE_ALL: HomeCategorySlice = { notIn: [] };
+
+/**
+ * WHICH of Watching's two groups a page stopped in (Story MOTIR-4777 ·
+ * MOTIR-4781).
+ *
+ * Watching orders `in_progress`-category rows ahead of `todo`-category ones,
+ * and Prisma cannot order by a computed rank — so the read walks the groups in
+ * sequence (`watcherRepository.listByUser`). A cursor that recorded only a
+ * position would be ambiguous between the two, so it records the group as well:
+ * resuming inside `todo` means the `in_progress` group is already behind the
+ * reader, and re-reading it would repeat every one of its rows.
+ */
+export type WatchingGroup = 'in_progress' | 'todo';
+
+/** A {@link HomeCursor} plus the group it was minted in. */
+export interface WatchingCursor extends HomeCursor {
+  group: WatchingGroup;
 }
 
 export interface WorkItemListRow {
@@ -876,12 +995,30 @@ export const workItemRepository = {
     workspaceId: string,
     options: {
       projectScopes: readonly HomeProjectScope[];
+      /**
+       * WHICH lifecycle slice this read is for. One read per Workbench tab, all
+       * sharing the membership `OR` above it.
+       */
+      slice: HomeCategorySlice;
       take: number;
       cursor?: HomeCursor | null;
+      /**
+       * The axis to order AND page by. `completedAt` for the finished window,
+       * `updatedAt` for everything else — one argument for both, because they
+       * are one decision ({@link HomeSortField}).
+       */
+      sortField?: HomeSortField;
+      /**
+       * The FINISHED WINDOW: only rows whose `sortField` is at or after this
+       * moment. Applied IN SQL, never after the read — a post-read filter
+       * shortens pages instead of failing, and "the list sometimes ends early"
+       * is a bug nobody traces back to a date comparison.
+       */
+      since?: Date;
     },
     tx: Prisma.TransactionClient,
   ): Promise<HomeWorkItemRow[]> {
-    const { projectScopes, take, cursor } = options;
+    const { projectScopes, slice, take, cursor, sortField = 'updatedAt', since } = options;
     if (projectScopes.length === 0) return [];
     return tx.workItem.findMany({
       where: {
@@ -893,12 +1030,13 @@ export const workItemRepository = {
         // workspace's items from page two onward.
         AND: [
           { OR: [{ assigneeId: userId }, { reporterId: userId }] },
-          homeProjectScopeWhere(projectScopes),
-          homeKeysetWhere(cursor),
+          homeProjectScopeWhere(projectScopes, slice),
+          homeKeysetWhere(cursor, sortField),
+          ...(since ? [{ [sortField]: { gte: since } } as Prisma.WorkItemWhereInput] : []),
         ],
       },
       select: HOME_WORK_ITEM_SELECT,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ [sortField]: 'desc' }, { id: 'desc' }],
       take,
     });
   },
@@ -963,9 +1101,16 @@ export const workItemRepository = {
     userId: string,
     workspaceId: string,
     projectScopes: readonly HomeProjectScope[],
+    options: {
+      slice: HomeCategorySlice;
+      /** The finished window, on the same axis the matching list read uses. */
+      since?: Date;
+      sortField?: HomeSortField;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     if (projectScopes.length === 0) return 0;
+    const { slice, since, sortField = 'updatedAt' } = options;
     return tx.workItem.count({
       where: {
         workspaceId,
@@ -973,7 +1118,8 @@ export const workItemRepository = {
         triagedAt: null,
         AND: [
           { OR: [{ assigneeId: userId }, { reporterId: userId }] },
-          homeProjectScopeWhere(projectScopes),
+          homeProjectScopeWhere(projectScopes, slice),
+          ...(since ? [{ [sortField]: { gte: since } } as Prisma.WorkItemWhereInput] : []),
         ],
       },
     });
@@ -1040,6 +1186,68 @@ export const workItemRepository = {
       where: { sessionBranch, workspaceId },
       orderBy: { key: 'asc' },
     });
+  },
+
+  /**
+   * WHICH REPOSITORIES HAS EACH OF THESE PROJECTS NAMED ON ITS WORK — the
+   * evidence that a project has CHOSEN a repository rather than merely being
+   * allowed to reach one (MOTIR-4821).
+   *
+   * ⚠️ THIS IS NOT THE SCOPE LADDER AND MUST NOT BECOME ONE.
+   * `lib/projectRepos/effectiveDomain.ts` answers *which repositories MAY this
+   * project reach*, and its first rung hands a set-less project the whole
+   * connected registry as a PERMISSIVE DEFAULT. Read backwards it says every
+   * empty project uses every repository, which is how the organisation's
+   * `Used by N projects` column came to name a scratch project against all seven
+   * (MOTIR-4802's fix, inverted one surface over). This read answers a different
+   * question with its own evidence: a repository NAME the project actually put on
+   * a work item. A project with a set expresses the same choice as a
+   * `project_repository` row, so the caller unions the two — see
+   * `organizationRepoService.listRepositoryUsage`.
+   *
+   * `targetRepos` is the array and `targetRepo` IS `targetRepos[0]`, but both are
+   * read: rows written before the array existed carry only the scalar, and a
+   * dropped name is a project silently missing from a DISCONNECT dialogue.
+   *
+   * Returns the names AS STORED, de-duplicated per project. Normalizing them to
+   * the comparable identity is the caller's job (`repoNameKey`) — this method
+   * does not know which spelling the `github_repo` row it will be matched against
+   * uses, and a repository whose name reaches this list is a handful of distinct
+   * strings per project however many work items name it.
+   *
+   * `workspaceId` is filtered explicitly alongside the project ids (finding #26 —
+   * RLS is inert under the dev/CI superuser), so a caller cannot read one
+   * workspace's work by binding another. Empty `projectIds` short-circuits.
+   */
+  async listRepoNamesByProject(
+    workspaceId: string,
+    projectIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, string[]>> {
+    const byProject = new Map<string, string[]>();
+    if (projectIds.length === 0) return byProject;
+    const rows = await tx.$queryRaw<Array<{ projectId: string; repoName: string }>>`
+      SELECT DISTINCT "projectId", "repoName"
+      FROM (
+        SELECT w."projectId", unnest(w."targetRepos") AS "repoName"
+        FROM "work_item" w
+        WHERE w."projectId" = ANY(${[...projectIds]}::text[])
+          AND w."workspaceId" = ${workspaceId}
+        UNION ALL
+        SELECT w."projectId", w."targetRepo" AS "repoName"
+        FROM "work_item" w
+        WHERE w."projectId" = ANY(${[...projectIds]}::text[])
+          AND w."workspaceId" = ${workspaceId}
+          AND w."targetRepo" IS NOT NULL
+      ) named
+      WHERE "repoName" IS NOT NULL AND btrim("repoName") <> ''
+    `;
+    for (const row of rows) {
+      const list = byProject.get(row.projectId) ?? [];
+      list.push(row.repoName);
+      byProject.set(row.projectId, list);
+    }
+    return byProject;
   },
 
   /**

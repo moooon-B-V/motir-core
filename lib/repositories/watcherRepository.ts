@@ -1,12 +1,17 @@
 import { Prisma, type Watcher } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import {
+  HOME_SLICE_IN_PROGRESS,
+  HOME_SLICE_TODO,
+  HOME_SLICE_UNFINISHED,
   HOME_WORK_ITEM_SELECT,
   homeKeysetWhere,
   homeProjectScopeWhere,
   type HomeCursor,
   type HomeProjectScope,
   type HomeWorkItemRow,
+  type WatchingCursor,
+  type WatchingGroup,
 } from '@/lib/repositories/workItemRepository';
 
 // Watcher repository — single Prisma operations on the `watcher` table
@@ -77,29 +82,46 @@ export const watcherRepository = {
   },
 
   /**
-   * One PAGE of the items a USER watches, within a workspace — the Watching tab
-   * of Home (Story MOTIR-2649 · Subtask MOTIR-2651). The read this repository
-   * did not have: every method above answers a question about ONE item's
-   * roster; this one answers "what am I watching", which is the axis
-   * `model Watcher`'s `@@index([userId])` was added for (its own comment says
-   * so: *"the issues I watch read path"*).
+   * One PAGE of the items a USER watches, within a workspace — the Workbench's
+   * Watching tab (Story MOTIR-2649 · MOTIR-2651, re-ordered by MOTIR-4781).
+   * The read this repository did not have: every method above answers a
+   * question about ONE item's roster; this one answers "what am I watching",
+   * which is the axis `model Watcher`'s `@@index([userId])` was added for (its
+   * own comment says so: *"the issues I watch read path"*).
    *
-   * Projects the SAME {@link HomeWorkItemRow} the My work read returns, through
-   * the `workItem` relation, so the two tabs cannot drift into different
-   * columns — and orders by the same total `(workItem.updatedAt DESC,
-   * workItem.id DESC)` keyset, so both tabs page by identical rules and one
-   * cursor type serves both.
+   * Projects the SAME {@link HomeWorkItemRow} the work reads return, through the
+   * `workItem` relation, so the tabs cannot drift into different columns.
+   *
+   * ⚠️ WHAT IS MOVING SITS ABOVE WHAT IS WAITING — an ORDER, not a filter
+   * (MOTIR-4781). Membership is untouched and nothing is dropped: every
+   * `in_progress`-category row comes back ahead of every `todo`-category one,
+   * with the existing `(updatedAt DESC, id DESC)` keyset ordering WITHIN each
+   * group exactly as it did before.
+   *
+   * ⚠️ IT IS TWO QUERIES, AND THAT IS THE POINT RATHER THAN A SHORTCUT.
+   * Postgres would express this as `ORDER BY (status = ANY($1)) DESC, …`, and
+   * Prisma has no way to order by a computed expression — `orderBy` reaches
+   * scalars and relation scalars only. The three alternatives were all worse:
+   * ordering by `status` sorts the keys ALPHABETICALLY (a silent wrong answer
+   * that looks grouped in the default workflow, where `in_progress` happens to
+   * precede `todo`); re-ordering in the SERVICE only groups WITHIN a page, so
+   * the boundary drifts the moment a reader pages; and dropping to `$queryRaw`
+   * would hand-write the projection this file shares with the work reads
+   * precisely so the two cannot diverge. So the groups are read in sequence,
+   * each with its own keyset, and the CURSOR records which group it stopped in
+   * — which is what makes the order stable ACROSS a page boundary and not
+   * merely within one.
    *
    * `projectScopes` is the actor's BROWSABLE set, passed IN by `homeService` for
-   * the same reason as the My work read: filtering after the query shortens
-   * pages instead of erroring. An empty set short-circuits. Each scope carries
-   * its project's own done-category keys ({@link HomeProjectScope}) — Watching
-   * is in scope for that exclusion too (MOTIR-2758): an item you watch that has
-   * shipped is not waiting on you either, its notification already fired through
-   * the bell, and leaving it in would keep this tab's badge reading the
-   * graveyard.
+   * the same reason as the work reads: filtering after the query shortens pages
+   * instead of erroring. An empty set short-circuits. Each scope carries its
+   * project's own status keys grouped by category ({@link HomeProjectScope}),
+   * which is both what defines the two groups and what keeps finished work out
+   * — an item you watch that has shipped is not waiting on you either, its
+   * notification already fired through the bell, and leaving it in would keep
+   * this tab's badge reading the graveyard (MOTIR-2758).
    *
-   * ⚠️ Watching is NOT a partition of My work. An item the reader owns AND
+   * ⚠️ Watching is NOT a partition of the work tabs. An item the reader owns AND
    * watches is returned by both reads, deliberately — they answer different
    * questions about the same item.
    *
@@ -113,9 +135,6 @@ export const watcherRepository = {
    * superuser and bypass RLS. `take` is required for a duller reason: the page
    * size is `homeService`'s to decide (`HOME_PAGE_SIZE`), and a second default
    * here would be a number nobody reads.
-   *
-   * The trailing `.map` is a PROJECTION, not logic: one Prisma op, unwrapped to
-   * the row shape the mapper takes.
    */
   async listByUser(
     userId: string,
@@ -123,31 +142,55 @@ export const watcherRepository = {
     options: {
       projectScopes: readonly HomeProjectScope[];
       take: number;
-      cursor?: HomeCursor | null;
+      cursor?: WatchingCursor | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<HomeWorkItemRow[]> {
     const { projectScopes, take, cursor } = options;
     if (projectScopes.length === 0) return [];
-    const rows = await tx.watcher.findMany({
-      where: {
-        userId,
-        workItem: {
-          workspaceId,
-          archivedAt: null,
-          triagedAt: null, // read-exclusion (6.11.3), same as every list read
-          // ⚠️ BOTH fragments carry an `OR`, so they go in an explicit `AND` —
-          // spreading them would have one overwrite the other. (The keyset used
-          // to be spread here; it was safe only for as long as it was the sole
-          // `OR` in this object, which MOTIR-2758's scope clause ends.)
-          AND: [homeProjectScopeWhere(projectScopes), homeKeysetWhere(cursor)],
+
+    const page = async (
+      group: WatchingGroup,
+      limit: number,
+      within: HomeCursor | null,
+    ): Promise<HomeWorkItemRow[]> => {
+      if (limit <= 0) return [];
+      const rows = await tx.watcher.findMany({
+        where: {
+          userId,
+          workItem: {
+            workspaceId,
+            archivedAt: null,
+            triagedAt: null, // read-exclusion (6.11.3), same as every list read
+            // ⚠️ BOTH fragments carry an `OR`, so they go in an explicit `AND` —
+            // spreading them would have one overwrite the other. (The keyset used
+            // to be spread here; it was safe only for as long as it was the sole
+            // `OR` in this object, which MOTIR-2758's scope clause ends.)
+            AND: [
+              homeProjectScopeWhere(
+                projectScopes,
+                group === 'in_progress' ? HOME_SLICE_IN_PROGRESS : HOME_SLICE_TODO,
+              ),
+              homeKeysetWhere(within, 'updatedAt'),
+            ],
+          },
         },
-      },
-      select: { workItem: { select: HOME_WORK_ITEM_SELECT } },
-      orderBy: [{ workItem: { updatedAt: 'desc' } }, { workItem: { id: 'desc' } }],
-      take,
-    });
-    return rows.map((r) => r.workItem);
+        select: { workItem: { select: HOME_WORK_ITEM_SELECT } },
+        orderBy: [{ workItem: { updatedAt: 'desc' } }, { workItem: { id: 'desc' } }],
+        take: limit,
+      });
+      return rows.map((r) => r.workItem);
+    };
+
+    // Resuming INSIDE the `todo` group means the `in_progress` group is already
+    // behind the reader — re-reading it would repeat every one of its rows.
+    const resumingIn: WatchingGroup = cursor?.group ?? 'in_progress';
+    const within: HomeCursor | null = cursor ? { at: cursor.at, id: cursor.id } : null;
+
+    const moving = resumingIn === 'in_progress' ? await page('in_progress', take, within) : [];
+    const waiting = await page('todo', take - moving.length, resumingIn === 'todo' ? within : null);
+
+    return [...moving, ...waiting];
   },
 
   /**
@@ -173,7 +216,7 @@ export const watcherRepository = {
           // The `AND` form even though the keyset is absent here: the twin above
           // needs it, and a count that is one refactor away from disagreeing
           // with its list is the defect this card fixed.
-          AND: [homeProjectScopeWhere(projectScopes)],
+          AND: [homeProjectScopeWhere(projectScopes, HOME_SLICE_UNFINISHED)],
         },
       },
     });

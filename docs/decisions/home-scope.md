@@ -3,6 +3,32 @@
 **Status:** accepted · **Date:** 2026-08-17 · **Card:** MOTIR-2904 (Epic 8, Launch
 readiness) · **Unblocks:** MOTIR-2761 · **Files:** MOTIR-2920, MOTIR-2921
 
+> ### ⚠️ THE ADDRESS MOVED — `/home` is now `/workbench` (MOTIR-4777 · MOTIR-4782)
+>
+> Everything below is left **exactly as written**, and the address it argues about
+> is no longer the one the app serves. `/home` answers a permanent **308** to
+> `/workbench` (`LANDING_REDIRECTS` in `next.config.ts`), the page lives at
+> `app/(authed)/workbench/page.tsx`, and `lib/home/*` is `lib/workbench/*`.
+>
+> **The decisions themselves still stand and are still cited by live code** — §2.1
+> (the rail row is project-tier), §2.2 (the no-project state renders the shipped
+> create-first door) and §2.3 (post-auth lands here, unconditionally) are all
+> unchanged by the rename, which is why the citations in the source were not
+> re-pointed at a new document. What the rename changes is only what the surface
+> is CALLED and where it answers.
+>
+> **One decision below is on its way out, and by a different card:** §2.2's
+> create-first door is retired by [MOTIR-4815](motir:cmtr20oyh00bchuphqur71fja),
+> which seeds a default project at registration so `getActiveProject()` stops
+> being able to return `null`. Until that lands, §2.2 describes the shipped
+> behaviour.
+>
+> This banner is an ADDITION rather than an edit. A decision record that is
+> rewritten to match the present has stopped being a record of a decision — the
+> argument below was made about `/home`, in August, and reading it as though it
+> had always said `/workbench` would misrepresent both what was decided and what
+> it was decided against.
+
 ## Context
 
 MOTIR-2649 shipped `/home` as the signed-in landing surface: two tabs (My work,

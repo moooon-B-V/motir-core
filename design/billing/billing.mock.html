@@ -443,6 +443,14 @@
         color: var(--el-text-secondary);
         border-color: var(--el-border);
       }
+      /* EXEMPT (amendment 2026-09-07, MOTIR-4819) — an org that is never billed.
+         Deliberately NOT --el-tint-sky: that is `pill-trial` on this same surface,
+         and "exempt" reading as "on the free trial" is the confusion this state
+         exists to end. Peach is this area's one unspent tint. */
+      .pill-exempt {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
       .pill-readonly {
         background: var(--el-surface);
         color: var(--el-text-secondary);
@@ -1523,11 +1531,13 @@
 
     <!-- ════════════════ PANEL 2 — BILLING SETTINGS PANEL (owner, active) ══════ -->
     <div class="panel-label">
-      2 · Billing settings panel — owner view, populated &amp; active. The TWO billed lines: ① the
-      Motir (free here, within caps) and ② Motir AI (Standard, active) with its allotment meter,
-      renewal and Manage-plan → Stripe Portal / Change-plan. Plus the payment method + invoices (the
-      Customer Portal) and the cross-link to Usage &amp; cost. Credits = allotment; the only $ is
-      the plan FEE paid to Stripe.
+      2 · Billing settings panel — owner view, populated &amp; active,
+      <strong>for a BILLED org</strong> (paying, or <code>internalBilling</code> — charged then made
+      whole, so every line here is true for it). An <code>isMeta</code> org gets panel 3 (d)/(e)
+      instead. The TWO billed lines: ① the Motir (free here, within caps) and ② Motir AI (Standard,
+      active) with its allotment meter, renewal and Manage-plan → Stripe Portal / Change-plan. Plus
+      the payment method + invoices (the Customer Portal) and the cross-link to Usage &amp; cost.
+      Credits = allotment; the only $ is the plan FEE paid to Stripe.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1703,6 +1713,13 @@
       3 · Panel states — the non-happy subscription lifecycle (decision §5). past_due / dunning
       keeps access through the grace window with a warning banner; trialing shows the one-time free
       trial grant; canceled has dropped to the free allotment (data retained, never deleted).
+      <strong>ADDED 2026-09-07 (MOTIR-4819):</strong> (d) and (e), the
+      <strong>EXEMPT</strong> treatment of both lines for an <code>isMeta</code> org. It is not a
+      lifecycle state — nothing transitions into or out of it — but it is what those two cards look
+      like, so it is drawn beside them. It keys on <code>isMeta</code> and <strong>never</strong> on
+      <code>internalBilling</code>: an <code>internalBilling</code> org IS billed and IS capped, and
+      its lines are panel 2's, unchanged. See <code>design-notes.md</code> § the 2026-09-07
+      amendment.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1812,6 +1829,86 @@
                 </div>
                 <div class="acts"><button class="btn btn-primary">Resubscribe</button></div>
               </div>
+            </div>
+          </div>
+
+          <!-- (d) + (e) EXEMPT — the isMeta org. NOT a lifecycle state; it REPLACES
+               panel 2's two lines for that org, and never renders beside them. -->
+          <div class="grid-2 top" style="margin-top: 24px">
+            <div>
+              <p class="crumb">d · Motir, exempt — <code>isMeta</code></p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico tracker"
+                      ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir</h3>
+                      <div class="hsub">
+                        The project-management tool — free for your team, paid only at scale.
+                      </div>
+                    </div>
+                  </div>
+                  <span class="pill pill-exempt">Not billed</span>
+                </div>
+                <div class="card-body">
+                  <div class="banner banner-info">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    <span class="bt">
+                      This organization isn’t billed for Motir. Every plan cap is lifted for it, so
+                      there is nothing to outgrow and no seats to buy.
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p class="crumb" style="margin-top: 8px">
+                GONE, and each for its own reason: the CAPS block (there are none), the seat
+                calculator and its <code>N × $5</code> total (a price quote to the house), and
+                <strong>Upgrade Motir</strong> (a checkout for an org that is never charged).
+              </p>
+            </div>
+
+            <div>
+              <p class="crumb">e · Motir AI, exempt — <code>isMeta</code></p>
+              <div class="card">
+                <div class="card-head">
+                  <div class="ttl">
+                    <span class="gico ai"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Motir AI</h3>
+                      <div class="hsub">
+                        Planning &amp; hosted agents — an org-level monthly credit pool.
+                      </div>
+                    </div>
+                  </div>
+                  <span class="pill pill-exempt">Not billed</span>
+                </div>
+                <div class="card-body" style="display: flex; flex-direction: column; gap: 14px">
+                  <div class="banner banner-info">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    <span class="bt">
+                      This organization isn’t charged for Motir AI. Planning runs whatever the
+                      balance reads, and credits are recorded for internal cost visibility rather
+                      than billed.
+                    </span>
+                  </div>
+                  <div class="acts">
+                    <a class="xlink" href="#"
+                      ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg> View Usage &amp;
+                      cost</a
+                    >
+                  </div>
+                </div>
+              </div>
+              <p class="crumb" style="margin-top: 8px">
+                GONE: the <strong>Free</strong> chip and <em>“on the one-time free trial”</em> (it
+                is exempt, not trialing — the AI paywall is off for it), and
+                <strong>Choose a Motir AI plan</strong>. The Usage &amp; cost cross-link STAYS:
+                those figures are real, and they are the reason this org reads this page.
+              </p>
             </div>
           </div>
         </div>

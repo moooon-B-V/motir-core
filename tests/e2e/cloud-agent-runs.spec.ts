@@ -250,9 +250,21 @@ test('nothing has run yet reads as a fact, not an error', async ({ page }) => {
   await signIn(page, 'agent-runs-empty@example.com', SCOPED_RUN_PASSWORD);
   await page.goto('/runs');
 
-  await expect(page.getByText('Nothing has run yet')).toBeVisible();
+  // ⚠️ BY ROLE, NEVER BY TEXT — `/runs` streams behind an in-page `<Suspense>`
+  // (`app/(authed)/runs/page.tsx`), so React's streaming SSR leaves the resolved
+  // subtree in a `<div hidden id="S:0">` at the end of `<body>` while the live
+  // copy sits in `<main>`: TWO `<h2>Nothing has run yet</h2>` in the DOM, one of
+  // them hidden. Playwright resolves locators BEFORE filtering on visibility, so
+  // an unscoped `getByText` loses strict mode on a coin flip — green in the
+  // merge queue at 11:36 and 12:17, red twice at 13:11, on app code that never
+  // changed (MOTIR-4822). `getByRole` is immune: the accessibility tree excludes
+  // the hidden copy (`CLAUDE.md`, the loading-boundary rule).
+  const emptyHeading = page.getByRole('heading', { name: 'Nothing has run yet' });
+  await expect(emptyHeading).toBeVisible();
   // It names the command that changes it — an empty state that only says
-  // "nothing" leaves a reader with nowhere to go.
-  await expect(page.getByText(/motir run/)).toBeVisible();
+  // "nothing" leaves a reader with nowhere to go. Read THROUGH the heading's own
+  // card: the body copy is a `<p>` with no role to ask for, so scoping to the
+  // live subtree is what buys it the immunity the line above gets from a role.
+  await expect(emptyHeading.locator('..').getByText(/motir run/)).toBeVisible();
   expect(seed.projectKey).toBeTruthy();
 });

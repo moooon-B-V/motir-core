@@ -35,17 +35,17 @@ async function signUp(page: Page, email: string): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
     await createButton.click();
     const landed = await page
-      .waitForURL('**/home', { timeout: 9_000 })
+      .waitForURL('**/workbench', { timeout: 9_000 })
       .then(() => true)
       .catch(() => false);
-    if (landed || page.url().includes('/home')) return;
+    if (landed || page.url().includes('/workbench')) return;
     await page.waitForTimeout(11_000);
   }
-  await page.waitForURL('**/home');
+  await page.waitForURL('**/workbench');
 }
 
 async function createFirstProject(page: Page, name: string): Promise<void> {
-  // The projects-empty-state CTA (on /home, where sign-up lands) opens the
+  // The projects-empty-state CTA (on /workbench, where sign-up lands) opens the
   // create-project modal.
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
@@ -74,11 +74,16 @@ test('@smoke shell: sidebar nav renders, navigates, and marks the active item', 
   //
   // Scoped to the rail, as `shell-flows` and `shell-a11y` already scope the same
   // assertion. Playwright matches an accessible name by SUBSTRING unless
-  // `exact`, and the top bar's brand link is labelled "Motir — go to dashboard"
-  // (MOTIR-1150 · design/brand/design-notes.md §8 — mark-only, so the link
-  // carries the name), which an unscoped `name: 'Dashboard'` also matches. The
-  // rail is what this test is about, so naming it is the fix rather than
-  // tightening the string.
+  // `exact`, and the mobile drawer carries the same row names, so an unscoped
+  // `name: 'Dashboard'` resolves to more than one element. The rail is what this
+  // test is about, so naming it is the fix rather than tightening the string.
+  //
+  // ⚠️ The brand link USED to be a third match — it was labelled "Motir — go to
+  // dashboard" (MOTIR-1150 · design/brand/design-notes.md §8 — mark-only, so the
+  // link carries the name) until MOTIR-4799 pointed it at the landing and
+  // relabelled it. That collision is gone; the scoping stands on the drawer
+  // alone, and this note records why the reason changed rather than deleting a
+  // sentence the next reader would re-derive.
   const rail = page.getByRole('navigation', { name: 'Primary' });
   await expect(rail.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
     'aria-current',

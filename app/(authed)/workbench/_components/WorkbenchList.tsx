@@ -2,16 +2,20 @@
 
 import Link from 'next/link';
 import { Bot } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Avatar, StatusValue } from '../../items/_components/issueCellPrimitives';
 import { usePeekRowClick } from '../../items/_components/IssueQuickView';
-import type { HomeRowView } from './homeRows';
+import type { WorkbenchTab } from '@/lib/workbench/tab';
+import type { WorkbenchRowView } from './workbenchRows';
 
-// The Home list (Story MOTIR-2649 · Subtask MOTIR-2653, per
-// design/home/design-notes.md §Layout) — My work and Watching render the SAME
-// list; only the rows differ.
+// The Workbench list (Story MOTIR-2649 · MOTIR-2653, renamed and widened by
+// Story MOTIR-4777 · MOTIR-4782, per `design/workbench/design-notes.md`
+// §Layout) — all five tabs render the SAME list. Two of them add something:
+// Recently finished adds a FINISHED column, and Watching adds GROUP BANDS.
+// Everything else about a row is identical across the five, which is the point:
+// a reader switching tabs should be reading the same object.
 //
 // ⚠️ It composes the shipped `/items` CELLS rather than the shipped `/items`
 // ROW, and the design measured why. The `/items` grid is nine columns with a
@@ -36,11 +40,22 @@ import type { HomeRowView } from './homeRows';
 // `md`, so its three cells become grid children of the row itself. One DOM tree,
 // two arrangements — no duplicated markup to drift.
 
-/** The Home column set. See design-notes §Measurements for the numbers. */
+/** The Workbench column set. See design-notes §Measurements for the numbers. */
 const GRID_TEMPLATE = 'minmax(10rem,1fr) 96px 140px 108px';
 
+/**
+ * Recently finished adds `Finished (96)` — minimum 734px, still inside the
+ * 894px content box at a 1200 viewport (design-notes §Recently finished).
+ *
+ * A separate NAMED template rather than a conditional sixth column spliced onto
+ * the shared string: the template is read by BOTH the header and every row, and
+ * the two must agree or the columns shear. One name per column set is what makes
+ * disagreeing impossible.
+ */
+const GRID_TEMPLATE_FINISHED = 'minmax(10rem,1fr) 96px 140px 108px 96px';
+
 /** The whole-row navigation + peek link, stretched behind the cells. */
-function RowLink({ row, label }: { row: HomeRowView; label: string }) {
+function RowLink({ row, label }: { row: WorkbenchRowView; label: string }) {
   const onPeekClick = usePeekRowClick();
   return (
     <Link
@@ -53,8 +68,8 @@ function RowLink({ row, label }: { row: HomeRowView; label: string }) {
 }
 
 /** The assignee cell — the shipped row `Avatar`, badged when an agent is on it. */
-function AssigneeCell({ row }: { row: HomeRowView }) {
-  const t = useTranslations('home');
+function AssigneeCell({ row }: { row: WorkbenchRowView }) {
+  const t = useTranslations('workbench');
   if (!row.assigneeName) {
     // Same pair as the identifier above: this sits in a row whose hover fill is
     // `--el-surface`, where muted fails AA. The guard cannot see this one (it
@@ -89,18 +104,40 @@ function AssigneeCell({ row }: { row: HomeRowView }) {
   );
 }
 
-function HomeRow({ row }: { row: HomeRowView }) {
-  const t = useTranslations('home');
+/**
+ * The relative finish time — "yesterday", "2 days ago".
+ *
+ * `Intl.RelativeTimeFormat` in the ACTIVE locale rather than a hand-rolled
+ * string table, so `zh` gets its own phrasing for free and neither catalogue
+ * carries a plural form per day. The window is seven days, so `day` is the only
+ * unit that can occur, and `numeric: 'auto'` is what turns −1 into "yesterday"
+ * rather than "1 day ago". Clamped at 0: a clock skew must not render "in 1 day"
+ * on a list of finished work.
+ */
+function useFinishedLabel(): (iso: string) => string {
+  const locale = useLocale();
+  return (iso: string) => {
+    const days = Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000);
+    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(
+      -Math.max(days, 0),
+      'day',
+    );
+  };
+}
+
+function WorkbenchRow({ row, showFinished }: { row: WorkbenchRowView; showFinished: boolean }) {
+  const t = useTranslations('workbench');
+  const finishedLabel = useFinishedLabel();
   return (
     <div
       role="row"
-      data-testid={`home-row-${row.identifier}`}
+      data-testid={`workbench-row-${row.identifier}`}
       className={cn(
         'group relative flex flex-col gap-1 border-b border-(--el-border) px-4 py-2.5 last:border-b-0',
         'hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2',
         'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-7 md:pl-4',
       )}
-      style={{ gridTemplateColumns: GRID_TEMPLATE }}
+      style={{ gridTemplateColumns: showFinished ? GRID_TEMPLATE_FINISHED : GRID_TEMPLATE }}
     >
       <div role="cell" className="flex min-w-0 items-center">
         <RowLink row={row} label={`${row.identifier} ${row.title}`} />
@@ -149,19 +186,91 @@ function HomeRow({ row }: { row: HomeRowView }) {
             label={row.statusLabel}
           />
         </div>
+        {/* Recently finished only. `--el-text-secondary` for the same reason the
+            identifier above takes it: this cell sits in a row whose hover fill is
+            `--el-surface`, where `--el-text-muted` is 4.17:1 and fails AA. */}
+        {showFinished ? (
+          <div role="cell" className="flex min-w-0 items-center">
+            <span className="truncate text-xs text-(--el-text-secondary)">
+              {row.completedAt ? finishedLabel(row.completedAt) : ''}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-export function HomeList({ rows, label }: { rows: HomeRowView[]; label: string }) {
-  const t = useTranslations('home');
+/**
+ * A Watching GROUP band — what is moving, then what is waiting.
+ *
+ * The COLUMN-HEADER band's grammar with one label and a count, which is the
+ * design's decision: the surface already has exactly one structural band, so
+ * reusing it makes a reader read this as STRUCTURE rather than as a row. Two
+ * things stop it reading as a SECOND set of column labels, which is the risk of
+ * sitting directly under the first — it carries ONE left-aligned label rather
+ * than four aligned to the columns, and it carries a COUNT, which a column
+ * header never does. 30px against the header's 40px, so the hierarchy shows
+ * without a second colour.
+ */
+function GroupBand({ label, count }: { label: string; count: number }) {
+  return (
+    <div
+      role="row"
+      className="flex items-center gap-2 border-b border-(--el-border) bg-(--el-surface-soft) px-4"
+      style={{ height: 30 }}
+    >
+      <div role="rowheader" className="flex min-w-0 items-center">
+        <span className="truncate text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase">
+          {label}
+        </span>
+      </div>
+      <span className="inline-flex h-[18px] min-w-[20px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-[11px] font-semibold text-(--el-count-text)">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Split a Watching page at its group boundary.
+ *
+ * The READ already ordered it — every `in_progress` row ahead of every other,
+ * with `(updatedAt DESC, id DESC)` preserved inside each group — so this finds
+ * the boundary rather than sorting anything. Doing otherwise would be a
+ * client-side re-sort of a keyset-paged list, which is exactly the thing that
+ * makes a page boundary stop being exact. A page can hold either group alone,
+ * which is why each band is rendered only when its group is non-empty.
+ */
+function splitWatchingGroups(rows: WorkbenchRowView[]): {
+  moving: WorkbenchRowView[];
+  waiting: WorkbenchRowView[];
+} {
+  const boundary = rows.findIndex((row) => row.statusCategory !== 'in_progress');
+  return boundary === -1
+    ? { moving: rows, waiting: [] }
+    : { moving: rows.slice(0, boundary), waiting: rows.slice(boundary) };
+}
+
+export function WorkbenchList({
+  rows,
+  label,
+  tab,
+}: {
+  rows: WorkbenchRowView[];
+  label: string;
+  tab: WorkbenchTab;
+}) {
+  const t = useTranslations('workbench');
+  const showFinished = tab === 'finished';
   const columns = [
     t('columns.title'),
     t('columns.role'),
     t('columns.assignee'),
     t('columns.status'),
+    ...(showFinished ? [t('columns.finished')] : []),
   ];
+  const groups = tab === 'watching' ? splitWatchingGroups(rows) : null;
   return (
     <div
       data-surface="card"
@@ -174,7 +283,10 @@ export function HomeList({ rows, label }: { rows: HomeRowView[]; label: string }
           <div
             role="row"
             className="sticky top-0 z-20 grid items-center gap-x-4 border-b border-(--el-border) bg-(--el-surface-soft) pr-7 pl-4"
-            style={{ gridTemplateColumns: GRID_TEMPLATE, height: 40 }}
+            style={{
+              gridTemplateColumns: showFinished ? GRID_TEMPLATE_FINISHED : GRID_TEMPLATE,
+              height: 40,
+            }}
           >
             {columns.map((c) => (
               <div key={c} role="columnheader" className="flex min-w-0 items-center">
@@ -185,11 +297,35 @@ export function HomeList({ rows, label }: { rows: HomeRowView[]; label: string }
             ))}
           </div>
         </div>
-        <div role="rowgroup">
-          {rows.map((row) => (
-            <HomeRow key={row.id} row={row} />
-          ))}
-        </div>
+        {/* Watching is banded; the other four are one flat run. Two rowgroups
+            rather than one, because that is what the band MEANS — a group is a
+            row group, and a screen reader gets the same structure the eye does. */}
+        {groups ? (
+          <>
+            {groups.moving.length > 0 ? (
+              <div role="rowgroup">
+                <GroupBand label={t('tabs.inProgress')} count={groups.moving.length} />
+                {groups.moving.map((row) => (
+                  <WorkbenchRow key={row.id} row={row} showFinished={false} />
+                ))}
+              </div>
+            ) : null}
+            {groups.waiting.length > 0 ? (
+              <div role="rowgroup">
+                <GroupBand label={t('tabs.toDo')} count={groups.waiting.length} />
+                {groups.waiting.map((row) => (
+                  <WorkbenchRow key={row.id} row={row} showFinished={false} />
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div role="rowgroup">
+            {rows.map((row) => (
+              <WorkbenchRow key={row.id} row={row} showFinished={showFinished} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

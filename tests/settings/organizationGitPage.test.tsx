@@ -7,7 +7,7 @@ import { RepositoryInventory } from '@/app/(authed)/settings/organization/git/_c
 import { CODE_GRAPH_RETENTION_WINDOW_DAYS } from '@/lib/codeGraph/offboarding';
 import { SETTINGS_REDIRECTS } from '../../next.config';
 import type { OrgRepoInventoryRowDto } from '@/lib/dto/organizationRepos';
-import type { CodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import { deriveCodeGraphIndexState, type CodeGraphIndexState } from '@/lib/codeGraph/indexState';
 
 // SETTINGS → ORGANISATION → GIT (Story MOTIR-4669 · MOTIR-4680), against
 // `design/github/github.mock.html` Panel 6 and the surrounding contracts.
@@ -19,7 +19,8 @@ import type { CodeGraphIndexState } from '@/lib/codeGraph/indexState';
 //      the count being the LIST'S LENGTH so a project the viewer cannot browse is
 //      never announced as a digit.
 //   2. ZERO projects is an ORDINARY ROW, not an empty state and not a warning.
-//   3. The index column says only what is KNOWN.
+//   3. The index column says only what is KNOWN — including the NULL-HEAD
+//      repository, which may not claim currency it cannot support (MOTIR-4817).
 //   4. The disconnect dialog names every affected project, interpolates the
 //      retention window, and makes NO permanence claim.
 //   5. GitHub discloses BEFORE the link-out; GitLab confirms in-app.
@@ -116,13 +117,18 @@ describe('the inventory — one row per connected repository', () => {
     expect(screen.getByText('design-system')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Used by 0/ })).toBeNull();
     expect(screen.getByText(/A repository no project uses stays connected/)).toBeTruthy();
+    // …and the same disclosure at rest, said ONCE for the organisation rather
+    // than by naming N projects on every row (MOTIR-4821).
+    expect(
+      screen.getByText(/no repositories of its own can also reach the ones connected/),
+    ).toBeTruthy();
   });
 });
 
 describe('the INDEX column — all four states (MOTIR-4724)', () => {
   it('renders the fixture`s own states', () => {
     renderInventory();
-    expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Indexed').length).toBeGreaterThan(0);
     expect(screen.getByText('Never indexed')).toBeTruthy();
   });
 
@@ -140,10 +146,36 @@ describe('the INDEX column — all four states (MOTIR-4724)', () => {
         ROW('r4', 'd', [], 'never'),
       ],
     });
-    expect(screen.getByText('Current')).toBeTruthy();
+    expect(screen.getByText('Indexed')).toBeTruthy();
     expect(screen.getByText('Stale')).toBeTruthy();
     expect(screen.getByText('Indexing…')).toBeTruthy();
     expect(screen.getByText('Never indexed')).toBeTruthy();
+  });
+
+  it('⚠️ the NULL-HEAD repository makes NO currency claim (MOTIR-4817)', () => {
+    // The bug this replaces: `indexed` rendered as `Current`, on the reasoning
+    // that the state MEANS "the graph matches the head, as last observed". That
+    // holds only when both shas are KNOWN — and `defaultBranchHeadSha` is null
+    // until somebody pushes, with the push webhook its only writer, so a
+    // repository nobody pushes never acquires a head and claimed `Current` for
+    // ever. The state is derived HERE rather than hard-coded, so this case is
+    // wired to the derivation the row actually reads: if the arm ever stopped
+    // falling through to `indexed`, this test would be measuring nothing.
+    const nullHead = deriveCodeGraphIndexState({
+      hasSucceededIndex: true,
+      defaultBranchHeadSha: null,
+      indexedHeadSha: 'abc123',
+      hasRunningIndex: false,
+    });
+    expect(nullHead).toBe('indexed');
+
+    renderInventory({ rows: [ROW('r1', 'quiet-repo', ['Atlas'], nullHead)] });
+
+    expect(screen.getByText('Indexed')).toBeTruthy();
+    // The claim the label may not make. `Stale` is what carries drift, and this
+    // row has no evidence either way — which is exactly why it may not say the
+    // graph is up to date.
+    expect(screen.queryByText('Current')).toBeNull();
   });
 });
 
@@ -155,6 +187,20 @@ describe('the DISCONNECT dialog', () => {
     expect(screen.getByText('3 projects lose this repository.')).toBeTruthy();
     const body = screen.getByText(/The code index Motir built from it is kept/);
     expect(body.textContent).toContain(String(CODE_GRAPH_RETENTION_WINDOW_DAYS));
+  });
+
+  it('⚠️ discloses the permissive default ONCE, instead of naming projects that never chose (MOTIR-4821)', () => {
+    // The list names projects that CHOSE this repository — a link, or work that
+    // names it. A project with no repositories of its own can still REACH it
+    // through the scope ladder's first rung, and that is a property of the
+    // organisation rather than of any one project. Naming those projects
+    // individually is the over-report this line replaces: the dialogue warned
+    // that a scratch project which had never touched the repository would lose
+    // it, on the disclosure a DESTRUCTIVE act rests on.
+    renderInventory();
+    fireEvent.click(screen.getAllByRole('button', { name: /Disconnect/ })[0]!);
+
+    expect(screen.getByText(/no repositories of its own can also reach this one/)).toBeTruthy();
   });
 
   it('⚠️ makes NO permanence claim — re-adding inside the window cancels it', () => {
@@ -219,6 +265,18 @@ describe('the page`s own contracts', () => {
     // Drawing a personal credential on the ORGANISATION's page is this story's own
     // tier confusion pointed the other way (MOTIR-4682 owns it).
     expect(PAGE).not.toContain('githubIdentityService');
+  });
+
+  it('⚠️ resolves the organisation NAME and the INVENTORY from the SAME workspace (MOTIR-4801)', () => {
+    // The heading and the rows below it are two halves of one page, and they used
+    // to answer to different subjects: `resolveActiveOrganization(userId, null)`
+    // for the name (the actor's FIRST org membership) against
+    // `listInventory(ctx)` for the rows (the org that owns `ctx.workspaceId`).
+    // For a member of two organisations that draws one tenant's name over
+    // another tenant's repositories, each with a `Disconnect` button.
+    expect(PAGE).toContain('resolveWorkspaceOrganization(ctx.userId, ctx.workspaceId)');
+    expect(PAGE).toContain('organizationRepoService.listInventory(ctx)');
+    expect(PAGE).not.toContain('resolveActiveOrganization(');
   });
 
   it('⚠️ adds no route-level loading.tsx — the boundary is IN the page', () => {

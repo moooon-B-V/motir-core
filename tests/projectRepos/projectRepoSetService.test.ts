@@ -24,6 +24,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // The project REPOSITORY SET over real Postgres (Story MOTIR-1775 · MOTIR-1780) —
 // the substrate every other card in the Story stands on, so what is pinned here is
@@ -81,6 +82,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `${name}-${randomToken(8)}`,
       owner,
       name,

@@ -46,7 +46,7 @@ import { projectsService } from '@/lib/services/projectsService';
 //
 // ── And the second test: the two credential flows land in the SAME place ──
 //
-// MOTIR-2654 moved sign-IN to `/home` and left sign-UP on `/dashboard`, so for
+// MOTIR-2654 moved sign-IN to `/workbench` and left sign-UP on `/dashboard`, so for
 // a season the answer to "where does authenticating put me" depended on which
 // of two visually identical forms you had filled in — and the flow on the old
 // route was the one a brand-new account takes. MOTIR-2921 closed that. The
@@ -130,7 +130,7 @@ test.describe('post-auth landing', () => {
       landingNavigations.push(r.isNavigationRequest() ? 'document' : 'rsc');
     });
 
-    // The shared helper settles on a RENDERED `/home` — the URL AND the
+    // The shared helper settles on a RENDERED `/workbench` — the URL AND the
     // `home-page` marker — so reaching this line already proves the route.
     await signUp(page, SIGNUP_EMAIL);
     await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
@@ -141,7 +141,7 @@ test.describe('post-auth landing', () => {
     ).toHaveLength(1);
 
     // A brand-new account has an auto-created workspace with ZERO projects, so
-    // `/home` renders the shipped create-first door rather than its My-work
+    // `/workbench` renders the shipped create-first door rather than its My-work
     // list (MOTIR-2761; `docs/decisions/home-scope.md` §2.2). This is the
     // criterion the landing move turns on — the actor most affected by "where
     // does post-auth land" is the one who has nothing yet, and what they must

@@ -133,6 +133,28 @@ describe('no loading boundary sits above a route that decides existence (MOTIR-3
     expect(deciders.length).toBeGreaterThan(5);
   });
 
+  it('the WORKBENCH is in the swept population, and carries no boundary (MOTIR-4784)', () => {
+    // ⚠️ THE STORY GATE ASKED FOR THE OPPOSITE OF THIS, and the card's citation
+    // is the reason the point is worth writing down rather than quietly
+    // satisfying. MOTIR-4784 asks that "every authed route resolves to a loading
+    // boundary — the shipped shape from MOTIR-3437"; that WAS the shipped shape
+    // when the card was written against MOTIR-3437, and MOTIR-3492 inverted it
+    // after measuring what a group-level boundary costs: eleven `app/(authed)`
+    // pages call `notFound()`, and a boundary above them flushes the response
+    // head, turning every one of those 404s into a 200. `KNOWN_STATUS_DEBT` is
+    // empty and `app/(authed)` carries no `loading.tsx` at all.
+    //
+    // So the honest re-assertion for the new route is the CURRENT rule, not the
+    // retired one: the Workbench is in the population this file sweeps, and
+    // nothing above it draws a frame. A pending frame for it, if one is ever
+    // wanted, is an in-page `<Suspense>` placed after the page's own gate
+    // (`motir-core/CLAUDE.md`; `design/shell/design-notes.md` § the
+    // navigation-pending grammar).
+    const workbench = pages.filter((dir) => dir.replace(/\\/g, '/').endsWith('/workbench'));
+    expect(workbench, 'the Workbench page is not in the swept tree').toHaveLength(1);
+    expect(nearestBoundary(workbench[0]!, loading)).toBeNull();
+  });
+
   it('no page that calls notFound() resolves to a loading boundary', () => {
     const listed = new Set(KNOWN_STATUS_DEBT.map((d) => d.page));
     const unlisted = offenders

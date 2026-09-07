@@ -15,6 +15,9 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 const store = new Map<string, { size: number; contentType: string }>();
+// The MINT half of the same store (bug MOTIR-4750) — faked as a GRANT rather
+// than as a string, so `putUploaded` can refuse a pathname nobody granted.
+const minted = new Map<string, { contentType: string; maxBytes: number }>();
 // ⚠️ THE FAKE APPLIES THE SAME RANDOM SUFFIX THE REAL HELPER DOES, and that is
 // not a detail. `putObject` calls `withRandomSuffix(pathname)` and
 // `putPrivateAttachment` RETURNS the key it actually wrote, so a caller that
@@ -36,6 +39,12 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
     store.set(written, { contentType, size: body.byteLength });
     return { pathname: written };
   }),
+  mintPrivateUploadToken: vi.fn(
+    async (pathname: string, opts: { contentType: string; maxBytes: number }) => {
+      minted.set(pathname, { contentType: opts.contentType, maxBytes: opts.maxBytes });
+      return `https://store.example/signed/${encodeURIComponent(pathname)}`;
+    },
+  ),
   headPrivateBlob: vi.fn(async (pathname: string) => store.get(pathname) ?? null),
   deleteAttachmentBlob: vi.fn(async () => {}),
 }));
@@ -138,8 +147,16 @@ function callPublish(
   });
 }
 
+/** Simulate the agent's own PUT — only to a pathname that was actually granted. */
+function putUploaded(pathname: string, size: number): void {
+  const grant = minted.get(pathname);
+  if (!grant) throw new Error(`no grant was minted for ${pathname}`);
+  store.set(pathname, { contentType: grant.contentType, size });
+}
+
 beforeEach(async () => {
   store.clear();
+  minted.clear();
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "design_asset", "design_evidence", "attachment", "work_item" RESTART IDENTITY CASCADE',
   );
@@ -180,6 +197,48 @@ describe('the tool is REGISTERED on the shipped server', () => {
     expect(required).toEqual(expect.arrayContaining(['key', 'assets']));
     expect(required).not.toContain('noteMd');
     expect(required).not.toContain('commitSha');
+
+    await client.close();
+  });
+});
+
+describe('the MINT half is registered too (bug MOTIR-4750)', () => {
+  // A tool that exists in the source and not on the shipped server is exactly
+  // the failure this bug is: `docs/mcp.md` described a door, and the population
+  // that needed it could not open one.
+  it('appears in tools/list with the fields its description promises', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connect(await tokenWith(fx, GRANTABLE_PERMISSIONS, 'full'));
+
+    const { tools } = await client.listTools();
+    const tool = tools.find((t) => t.name === 'create_design_upload');
+    expect(tool, 'create_design_upload is not registered on the shipped server').toBeDefined();
+
+    const schema = tool!.inputSchema as {
+      properties: Record<string, unknown>;
+      required?: string[];
+    };
+    for (const field of ['key', 'files', 'withinParentKey']) {
+      expect(schema.properties, `tools/list omits \`${field}\``).toHaveProperty(field);
+    }
+    const required = schema.required ?? [];
+    expect(required).toEqual(expect.arrayContaining(['key', 'files']));
+    expect(required).not.toContain('withinParentKey');
+
+    // It says WHY it exists, not merely what it does: an agent that reads only
+    // "mints an upload URL" will keep sending base64 until something refuses it.
+    expect(tool!.description, 'the two-step instruction').toMatch(/STEP 1 OF 2/);
+    expect(tool!.description, 'the reason the inline form is not merely slower').toMatch(
+      /never pass through a tool argument/i,
+    );
+    expect(tool!.description, 'the target rule it shares with the publish').toMatch(/LEAF/);
+
+    // And the published catalogue carries it — home #6, which no `tsc` error
+    // reaches.
+    const row = mcpCatalogue()
+      .flatMap((group) => group.tools)
+      .find((t) => t.name === 'create_design_upload');
+    expect(row, 'the tool is missing from the published catalogue').toBeDefined();
 
     await client.close();
   });
@@ -237,6 +296,15 @@ describe('the DESCRIPTION states each rule this tool depends on', () => {
     expect(tool!.description).toMatch(/attach_file.*refuses it/);
   });
 
+  it('states the TWO asset forms, so the big-asset path is discoverable', () => {
+    // The bug this closes was not that the mint did not exist — it was that the
+    // one door an agent reads about could not carry a real design board. An
+    // agent meeting only `contentBase64` will try it and produce nothing.
+    expect(tool!.description, 'the two forms').toMatch(/contentBase64/);
+    expect(tool!.description).toMatch(/create_design_upload/);
+    expect(tool!.description, 'one publish uses one form').toMatch(/one form/);
+  });
+
   it('does NOT claim CI publishes it — the retired mechanism must not come back', () => {
     // The `not.toMatch` half. This tool exists because a CI job used to do
     // this; a description that still mentions one would send an agent to read a
@@ -285,6 +353,62 @@ describe('GRANTED: the sandboxed-run grant CAN call it', () => {
       [...store.values()].map((v) => v.contentType).sort(),
       'the mock must have reached the store as text/html',
     ).toEqual(['image/png', 'text/html']);
+
+    await client.close();
+  });
+
+  it('mints, uploads and publishes an asset too large to send inline', async () => {
+    // The end-to-end shape MOTIR-4750 exists for, over the real transport with
+    // the grant a dispatched run actually holds. A mint the sandboxed agent
+    // cannot reach would leave this bug exactly where it was found.
+    const fx = await makeWorkItemFixture();
+    const key = await makeItem(fx, 'Design a multi-sheet board');
+    const client = await connect(await tokenWith(fx, CLI_TOKEN_GRANT, 'cli-grant'));
+
+    const grant = await client.callTool({
+      name: 'create_design_upload',
+      arguments: {
+        key,
+        files: [
+          {
+            kind: 'image',
+            sourcePath: 'design/ai-chat/planning-workspace.png',
+            contentType: 'image/png',
+          },
+        ],
+      },
+    });
+    expect(
+      grant.isError,
+      `CLI_TOKEN_GRANT cannot call create_design_upload: ${JSON.stringify(grant)}`,
+    ).toBeFalsy();
+    const [target] = (grant.structuredContent as { targets: Array<Record<string, unknown>> })
+      .targets;
+    expect(target!.uploadUrl).toContain('https://store.example/signed/');
+
+    // 3,929,899 bytes — the board measured on MOTIR-4742, which is 5.24 MB of
+    // base64 and cannot travel as a tool argument at all.
+    putUploaded(target!.pathname as string, 3_929_899);
+
+    const published = await client.callTool({
+      name: 'publish_design_result',
+      arguments: {
+        key,
+        assets: [
+          {
+            kind: 'image',
+            sourcePath: 'design/ai-chat/planning-workspace.png',
+            pathname: target!.pathname as string,
+          },
+        ],
+        noteMd: '## The planning workspace\n\nWhat changed.\n',
+      },
+    });
+    expect(published.isError, JSON.stringify(published)).toBeFalsy();
+
+    const evidence = await adminDb.designEvidence.findFirstOrThrow({ include: { assets: true } });
+    expect(evidence.isCurrent).toBe(true);
+    expect(evidence.assets).toHaveLength(1);
 
     await client.close();
   });

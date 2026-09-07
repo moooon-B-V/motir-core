@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { organizationIdOf } from '../../helpers/organizationOf';
 
 // The historical-PR mirror backfill against real Postgres (MOTIR-1965) — the
 // half the leaf's unit suite cannot assert: that the sweep reads the right
@@ -79,6 +80,7 @@ async function makeConnectedRepo(): Promise<{ fx: WorkItemFixture; repoId: strin
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: REPO_PROVIDER_ID,
       owner: 'moooon-B-V',
       name: 'motir-core',
@@ -365,6 +367,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
       data: {
         installationId: otherInst.id,
         workspaceId: other.workspaceId,
+        organizationId: await organizationIdOf(other.workspaceId),
         repoId: '9002',
         owner: 'other',
         name: 'app',
@@ -376,6 +379,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
       data: {
         installationId: otherInst.id,
         workspaceId: other.workspaceId,
+        organizationId: await organizationIdOf(other.workspaceId),
         repoId: '9003',
         owner: 'other',
         name: 'gl-project',
@@ -424,6 +428,7 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
       data: {
         installationId: otherInst.id,
         workspaceId: other.workspaceId,
+        organizationId: await organizationIdOf(other.workspaceId),
         repoId: '9002',
         owner: 'other',
         name: 'app',

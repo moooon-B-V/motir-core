@@ -1110,3 +1110,115 @@ is the specification the next agent builds to.
 today; each is annotated in place. They are **not redrawn here** — MOTIR-4572 owns the change to
 the customer surfaces, and this sweep owns the note that stops them being read as the internal
 org's future experience.
+
+---
+
+# AMENDMENT 2026-09-07 — the 2026-09-05 clause was reasoned about an `internalBilling` org and applied to an `isMeta` one
+
+**Card MOTIR-4819, filed from MOTIR-4818 (Yue's dogfooding report).** This amends
+the 2026-09-05 entry above. Its **DECISION stands** — do not suppress the billed
+lines from an internal org — and this card does not disturb it. What fails is its
+**RANGE**.
+
+## The clause whose range is wrong
+
+> **every billed line, its states and its figures render for an internal org exactly as for a paying one**
+
+That is TRUE of an **`internalBilling`** org and FALSE of an **`isMeta`** one, and
+the two are opposites:
+
+|                                                | `internalBilling`                                                                  | `isMeta`                   |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------- |
+| charged?                                       | **yes** — every debit lands, then a paired `internal_offset` credit makes it whole | **never**                  |
+| capped?                                        | **yes** — §4 applies normally                                                      | **no** — every cap lifted  |
+| so "every line renders as for a paying org" is | **true**, and worth keeping                                                        | **false**, four times over |
+
+## What `moooon` is shown today — RENDERED, not read
+
+`BillingClient` was bundled (esbuild + the real `globals.css`/`theme.css` + a
+`next-intl` provider) and screenshotted at the live shape: `isMeta: true`,
+`internalBilling: false`, `motir.scaledTrackerSubscription: null`,
+`motirAi.tier: null`, `ci.applicable: false`.
+
+1. a **Free** chip on Motir, and _"You'll only pay $5 / seat / mo if the org crosses a cap"_ — it will never pay and cannot cross a cap.
+2. the free caps as **filled meters** — Work items _Up to 250_ · Projects _Up to 3_ · Storage _Up to 2 GB_. `lib/services/entitlementsService.ts`'s header states the META org _"short-circuits to the internal `meta` tier (**every cap lifted**)"_. The meters draw consumption against ceilings that do not exist.
+3. _"Scaling bills 1 seat per member — 3 today"_ and **3 × $5 = $15 / mo** — a price quote to the house.
+4. **Upgrade Motir** — a Stripe checkout.
+5. a **Free** chip on Motir AI and _"No paid AI plan — on the one-time free trial"_. It is EXEMPT, not trialing: `lib/services/billingService.ts:252` is `if (org?.isMeta) return notApplicableAiAccess();`.
+6. **Choose a Motir AI plan** — a second checkout.
+
+Correct on the same render and **not touched by this card**: no CI line
+(`applicable: false`, `bypassed` — §4.4), and the Motir Search line with its real
+figures. Those two are already true for this org.
+
+## The decision — (c), a drawn EXEMPT variant of each line
+
+- **(a) Restore an "Internal plan" card in place of the storefront.** REJECTED. It is what shipped before, and the 2026-09-05 amendment removed it for a reason that still holds: it hid every state from the seat most likely to notice a bug in them. It also over-corrects — the Search line and the balance ARE true here.
+- **(b) Keep every line and suppress only the untrue parts.** REJECTED as an END STATE. It is the right subtraction and it leaves no positive statement: a reader sees a line with its price and caps removed and cannot tell whether that is a treatment or a loading failure.
+- **(c) A drawn exempt variant of each line.** **CHOSEN.** It performs (b)'s subtraction AND says what the org's relationship to that product actually is — the same move MOTIR-4809 made for the usage dashboard's panel 7c, so the two settings pages read as one system.
+
+## THE PREDICATE — in the terms the code reads
+
+| org                                                                  | Motir line                                                        | Motir AI line                                         |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
+| paying, or free, or `internalBilling` (any org with `isMeta: false`) | **panel 2 ①, unchanged** — caps, seat calculator, `Upgrade Motir` | **panel 2 ②, unchanged** — tier, allotment, plan CTAs |
+| `isMeta: true` (with or without `internalBilling`)                   | **panel 3 (d)**                                                   | **panel 3 (e)**                                       |
+
+**It keys on `isMeta` and NEVER on `internalBilling`**, and getting that backwards
+fails in the more expensive direction: it would hide a real price from an org that
+really owes it. The CI line and the Search line branch on neither.
+
+## Panel 3 (d) and (e) — the drawing
+
+Drawn in `billing.mock.html` **panel 3**, beside the lifecycle states, because
+that is the panel a reader opens to see what these two cards look like in a given
+state. Panel 2's caption is scoped to a BILLED org and points here.
+
+| element        | primitive / class        | token                                  | why                                                                                                                                                                                                                     |
+| -------------- | ------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| card           | `.card` + `.card-head`   | unchanged                              | identical container to panel 2's lines; only the body differs                                                                                                                                                           |
+| status pill    | **`.pill-exempt`** (new) | `--el-tint-peach` + `--el-text-strong` | ⚠️ deliberately **NOT** `--el-tint-sky`: that is `.pill-trial` on this same surface, and "exempt" reading as "on the free trial" is the exact confusion this state exists to end. Peach is this area's one unspent tint |
+| body           | `.banner.banner-info`    | `--el-tint-sky` + `--el-info` glyph    | reused verbatim; informational, never a warning — nothing is wrong                                                                                                                                                      |
+| (e) cross-link | `.xlink` + `i-coins`     | `--el-link`                            | **kept**: the usage figures are real, and they are why this org opens this page                                                                                                                                         |
+
+**What each state REMOVES, and why each one goes** — recorded on the mock beside
+the cards so the code card cannot drop one by accident:
+
+- **(d)** the caps block (there are none), the seat calculator and its `N × $5` total (a price quote to the house), and `Upgrade Motir` (a checkout for an org that is never charged).
+- **(e)** the `Free` chip and _"on the one-time free trial"_ (exempt, not trialing), and `Choose a Motir AI plan`.
+
+## Copy — both catalogs, so the code card writes none
+
+`messages/en.json` → `billing.exempt`:
+
+```json
+"exempt": {
+  "pill": "Not billed",
+  "motir": "This organization isn’t billed for Motir. Every plan cap is lifted for it, so there is nothing to outgrow and no seats to buy.",
+  "ai": "This organization isn’t charged for Motir AI. Planning runs whatever the balance reads, and credits are recorded for internal cost visibility rather than billed."
+}
+```
+
+`messages/zh.json` → `billing.exempt`:
+
+```json
+"exempt": {
+  "pill": "不计费",
+  "motir": "此组织不为 Motir 计费。所有套餐上限均已解除，因此没有需要突破的额度，也无需购买席位。",
+  "ai": "此组织不为 Motir AI 计费。无论余额显示为多少，规划都会照常运行；额度仅用于记录内部成本，不产生账单。"
+}
+```
+
+Every other `billing.*` key is unchanged — panel 2 keeps its words for every org
+it still renders for.
+
+## Scope
+
+`ci-line.mock.html` and `search-line.mock.html` are **byte-unchanged**: both lines
+are already correct for an exempt org, and their own META panels were
+dispositioned by MOTIR-4564. Panels 1, 4–8 of `billing.mock.html` are untouched.
+
+## Who consumes this
+
+- **MOTIR-4818** — the code card. It implements the predicate table above and adds the two copy blocks.
+- **MOTIR-4809** — the `design/ai-usage` half of the same re-take, and where the exempt grammar this borrows was set.

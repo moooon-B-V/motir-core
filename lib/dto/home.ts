@@ -65,8 +65,20 @@ export interface HomeWorkItemRowDto {
   executor: ExecutorDto | null;
   storyPoints: number | null;
   estimateMinutes: number | null;
-  /** ISO-8601 last-modified stamp — also the first half of the page cursor. */
+  /** ISO-8601 last-modified stamp — the page cursor's axis on three of the four reads. */
   updatedAt: string;
+  /**
+   * ISO-8601 moment this item ENTERED a done-category status (MOTIR-4780), or
+   * `null` on everything that has not finished.
+   *
+   * Carried on EVERY row rather than only on Recently finished ones, because
+   * the four tabs share one row shape and one projection — a second DTO for the
+   * one tab that renders a finish date would be the drift `HOME_WORK_ITEM_SELECT`
+   * exists to prevent. It is also the axis the Recently-finished page cursor
+   * keys on, so a caller that needs to reason about the boundary has the value
+   * the boundary is made of.
+   */
+  completedAt: string | null;
   project: HomeProjectRefDto;
   viewerIsAssignee: boolean;
   viewerIsReporter: boolean;
@@ -96,6 +108,32 @@ export interface HomePageDto {
  * both when they are zero — a "0" beside a tab is noise a new user has to parse.
  */
 export interface HomeTabCountsDto {
+  /**
+   * ⚠️ TRANSITIONAL, and owned by MOTIR-4782. The shipped `/home` page still
+   * renders two tabs, and this card is backend-only — so the old number
+   * survives beside the new ones until the page it feeds is replaced. It is
+   * exactly `toDo + inProgress`, computed from the same round trip rather than
+   * from a fifth query, so the two can never disagree.
+   *
+   * @deprecated Remove with `/home` when MOTIR-4782 lands `/workbench`.
+   */
   myWork: number;
+  /** Nothing has been started. */
+  toDo: number;
+  /** In flight — including the cards an agent has finished and a person has not looked at. */
+  inProgress: number;
+  /** Finished inside the rolling window (`HOME_FINISHED_WINDOW_DAYS`). */
+  recentlyFinished: number;
+  /**
+   * What is waiting on YOU to approve.
+   *
+   * ⚠️ ALWAYS `0` FROM THIS CARD, and that is a scope boundary rather than a
+   * placeholder to forget. MOTIR-4777 draws the Approvals tab's SLOT and ships
+   * nothing behind it; the rows, the gate records and the approve/confirm
+   * control are the sibling story's (MOTIR-4778). The number rides here now so
+   * the tab strip can render a five-slot composition without a second DTO
+   * change when that story lands.
+   */
+  approvals: number;
   watching: number;
 }

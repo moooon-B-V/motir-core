@@ -23,6 +23,15 @@ import type { OrgRepoInventoryRowDto } from '@/lib/dto/organizationRepos';
 // number: an org member may not browse every project, and a count of four beside
 // two names is the same leak arriving as a digit.
 //
+// ⚠️ AND IT COUNTS WHAT A PROJECT HAS CHOSEN, NOT WHAT IT MAY REACH
+// (MOTIR-4821). The service briefly answered this from the scope ladder, which
+// hands a project with no repositories of its own the whole connected registry —
+// so every empty project was named against every repository, on the disclosure a
+// DESTRUCTIVE act rests on. A warning that names people who were never affected
+// is how a reader learns to click through warnings. The permissive default is
+// still real and is still disclosed: ONCE, in the card foot and in the dialog,
+// as a property of the organisation.
+//
 // ⚠️ A REPOSITORY USED BY ZERO PROJECTS IS AN ORDINARY ROW. It belongs to the
 // organisation, stays in the inventory and stays indexed — dropping the graph
 // when the last project unlinks would re-introduce per-project ownership through
@@ -34,6 +43,9 @@ import type { OrgRepoInventoryRowDto } from '@/lib/dto/organizationRepos';
 // for a graph that might be months behind tells a person their index matches
 // their code at the exact moment they are deciding whether to trust a plan built
 // from it. MOTIR-4724 built the substrate; the tone map below is the design's.
+// ⚠️ AND THE WORD IT REFUSED STAYED REFUSED (MOTIR-4817): the four-state column
+// briefly promoted `indexed` to `Current`, which is the same overclaim one state
+// narrower — see the pill below for why a null head makes it permanent.
 //
 // The state is DERIVED IN ONE PLACE (`lib/codeGraph/indexState.ts`) and this
 // component only chooses a pill for it. A second comparison written here would be
@@ -122,16 +134,26 @@ export function RepositoryInventory({
                     {t(`provider.${row.repo.provider}`)}
                   </span>
 
-                  {/* The design's tones: Current mint · Stale peach · Indexing
-                      sky · Never indexed the neutral chip. `indexed` renders as
-                      `Current` because that is what it now MEANS — the graph
-                      matches the head, as last observed. */}
+                  {/* The design's tones: Indexed mint · Stale peach · Indexing
+                      sky · Never indexed the neutral chip.
+                      ⚠️ `indexed` renders as `Indexed`, NOT `Current` (MOTIR-4817).
+                      It read `Current` on the reasoning that the state now MEANS
+                      "the graph matches the head, as last observed" — and that
+                      holds only when BOTH shas are known. `deriveCodeGraphIndexState`
+                      falls through to `indexed` when `defaultBranchHeadSha` is null,
+                      and the ONLY writer of that column is the push webhook
+                      (`githubWebhookService.ts`), so a repository nobody pushes never
+                      acquires a head and would claim `Current` for ever — the quiet
+                      repository, whose graph is likeliest to be an old snapshot. The
+                      derivation's own header says `indexed` "never claims currency it
+                      cannot support"; `Indexed` is the word that keeps that promise,
+                      and `Stale` remains the signal that carries drift. */}
                   {row.indexState === 'indexing' ? (
                     <Pill severity="info">{t('index.indexing')}</Pill>
                   ) : row.indexState === 'stale' ? (
                     <Pill severity="warning">{t('index.stale')}</Pill>
                   ) : row.indexState === 'indexed' ? (
-                    <Pill severity="success">{t('index.current')}</Pill>
+                    <Pill severity="success">{t('index.indexed')}</Pill>
                   ) : (
                     <Pill tone="neutral">{t('index.never')}</Pill>
                   )}
@@ -241,6 +263,14 @@ export function RepositoryInventory({
           <p className="font-sans text-sm text-(--el-text)">
             {td('projects', { count: confirming?.projects.length ?? 0 })}
           </p>
+          {/* ⚠️ THE PERMISSIVE DEFAULT, SAID ONCE (MOTIR-4821). The list above
+              names projects that CHOSE this repository — a link, or work that
+              names it. A project with no repositories of its own can still reach
+              it through the scope ladder's first rung, and that is true of the
+              ORGANISATION rather than of any one project: naming those projects
+              individually is what made this dialogue warn about a scratch project
+              that had never touched the repository. */}
+          <p className="font-sans text-sm text-(--el-text-secondary)">{td('alsoReachable')}</p>
           {confirming && confirming.projects.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {confirming.projects.map((project) => (

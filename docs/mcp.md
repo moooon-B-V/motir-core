@@ -239,7 +239,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **58 tools**.
+`initialize` handshake and registers **59 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -1421,12 +1421,20 @@ inferences are now three declarations, and the file is in no repository at all.
 
 Each `assets[]` entry:
 
-| Field           | Type   | Required | Notes                                                                                               |
-| --------------- | ------ | -------- | --------------------------------------------------------------------------------------------------- |
-| `kind`          | string | yes      | `"mock"` for the `*.mock.html`, `"image"` for the `.png`, `"note_file"` for the complete note text. |
-| `sourcePath`    | string | yes      | The path the file has IN THE REPOSITORY, e.g. `"design/work-items/detail.png"`.                     |
-| `contentType`   | string | yes      | `text/html`, `image/png` or `text/markdown`. Anything else is refused.                              |
-| `contentBase64` | string | yes      | The file's bytes, base64-encoded.                                                                   |
+| Field           | Type   | Required             | Notes                                                                                                                                       |
+| --------------- | ------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kind`          | string | yes                  | `"mock"` for the `*.mock.html`, `"image"` for the `.png`, `"note_file"` for the complete note text.                                         |
+| `sourcePath`    | string | yes                  | The path the file has IN THE REPOSITORY, e.g. `"design/work-items/detail.png"`.                                                             |
+| `contentType`   | string | with `contentBase64` | `text/html`, `image/png` or `text/markdown`. Anything else is refused. Omit it with `pathname` — the STORE's answer is authoritative there. |
+| `contentBase64` | string | one of two           | The file's bytes, base64-encoded — the INLINE form, for a small file.                                                                       |
+| `pathname`      | string | one of two           | The `pathname` of a `create_design_upload` grant you have already PUT this file to.                                                         |
+
+⚠️ **Each asset carries `contentBase64` OR `pathname`, and one publish uses one
+form for ALL of its assets.** Both, neither, or a mix are refused by name
+(`AMBIGUOUS_ASSET_SOURCE` / `MISSING_ASSET_SOURCE` / `MIXED_ASSET_SOURCES`) —
+the two forms reach two different service methods, so reconciling them here
+would make the tool the one place that decides how a design result is assembled.
+Minting a grant for every asset is one extra call and costs nothing.
 
 **The three kinds are a closed set** (`mock` / `image` / `note_file`), mirroring
 the `design_asset_kind` column. `note_file` carries the COMPLETE note text as a
@@ -1453,20 +1461,73 @@ three-asset publish does not have to be bisected.
 **Refusals** — every one comes from the shipped design-evidence service, so this
 tool and the HTTP publish route answer one rule:
 
-| Refusal                         | When                                                                                                                                                                      |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INVALID_BASE64`                | An asset's `contentBase64` is not valid base64. Names the `sourcePath`.                                                                                                   |
-| container target                | `key` names an epic / story / task with children. A design result belongs to the LEAF that produced it.                                                                   |
-| not a child                     | `withinParentKey` is given and `key` is not one of that container's children. One transposed digit once addressed 126 artifacts to a manual billing task in another epic. |
-| disallowed media type           | A `contentType` outside `text/html` / `image/png` / `text/markdown`.                                                                                                      |
-| oversize file                   | An asset over the per-file upload cap. The surviving mint-then-PUT route is the door for one that genuinely does not fit.                                                 |
-| unknown / cross-workspace `key` | A 404, indistinguishable from a work item the token cannot reach.                                                                                                         |
+| Refusal                                                                   | When                                                                                                                                                                      |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INVALID_BASE64`                                                          | An asset's `contentBase64` is not valid base64. Names the `sourcePath`.                                                                                                   |
+| container target                                                          | `key` names an epic / story / task with children. A design result belongs to the LEAF that produced it.                                                                   |
+| not a child                                                               | `withinParentKey` is given and `key` is not one of that container's children. One transposed digit once addressed 126 artifacts to a manual billing task in another epic. |
+| disallowed media type                                                     | A `contentType` outside `text/html` / `image/png` / `text/markdown`.                                                                                                      |
+| oversize file                                                             | An asset over the per-file upload cap.                                                                                                                                    |
+| `AMBIGUOUS_ASSET_SOURCE` · `MISSING_ASSET_SOURCE` · `MIXED_ASSET_SOURCES` | An asset carries both forms, neither, or the publish mixes them. Names the `sourcePath`.                                                                                  |
+| unknown / cross-workspace `key`                                           | A 404, indistinguishable from a work item the token cannot reach.                                                                                                         |
 
 **Permission** — `work_item:edit`. The same key `attach_file` asserts, and one
 the token `motir auth login` mints **does** carry — so a dispatched run can
 actually call it. Moving the publish from CI to the agent therefore added no
 credential and no trust; it only stopped requiring a script to be present in the
 repository.
+
+#### `create_design_upload`
+
+**STEP 1 OF 2 for a design asset that is too large to send inline.** Mints a
+short-lived (~5 min) presigned PUT per file, each bound to one exact object and
+one media type; you PUT the bytes straight to the store and then name the
+`pathname` in `publish_design_result`. Same target rules as the publish (a LEAF,
+and `withinParentKey` asserts the child relationship), same design-asset
+allowlist, same per-file cap — it is the same service call the CI-authed HTTP
+mint route makes.
+
+**WHICH DOOR AT WHICH SIZE — and the second limit is the binding one.**
+
+| the asset                                   | the door                                               |
+| ------------------------------------------- | ------------------------------------------------------ |
+| a note file, a small mock — tens of KB      | inline `contentBase64`, one call                       |
+| anything a full-page `.png` export produces | `create_design_upload` → PUT → `publish_design_result` |
+
+⚠️ **Two independent limits sit under an inline publish, and only the first one
+is about Motir** (bug MOTIR-4750). The MCP route is a serverless function whose
+body is capped around 4.5 MB, and base64 is 1.37× the file — so an inline
+publish fails at roughly a 3 MB asset. But the bytes also have to be **EMITTED
+by the agent, as a tool argument**: measured on MOTIR-4742, a 3,929,899-byte
+board is 5.24 MB of base64, base64 tokenises at ≈0.4 characters per token, and
+even a 44 KB thumbnail nobody could read costs ~150,000 tokens. **Raising the
+route's cap would not make an inline publish of a real board possible.** A
+multi-sheet design board is over both limits, which for that whole population
+made the one tool the corpus calls mandatory uncallable — silently, in the shape
+the door exists to prevent: files written, commit landed, checks green, panel
+empty.
+
+| Input             | Type   | Required | Notes                                                                                                                       |
+| ----------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `key`             | string | yes      | The work item this result belongs to, e.g. `"ACME-7"`. A LEAF, as with the publish.                                         |
+| `files`           | array  | yes      | `{ kind, sourcePath, contentType }` per file, at least one. One grant is minted per entry, in order.                        |
+| `withinParentKey` | string | no       | On a PARENT-RUN publish: the container whose branch this belongs to. Asserts the target is one of its children; not stored. |
+
+**Output** — `structuredContent`: `workItemKey` and `targets`, one per file, each
+`{ kind, sourcePath, pathname, uploadUrl, contentType, maxBytes }`. `maxBytes` is
+the org's per-file cap, told up front so an over-cap PUT is a decision rather
+than an opaque store error.
+
+**The PUT is yours and nothing about it goes through Motir** —
+`curl -X PUT --upload-file <file> -H 'Content-Type: image/png' "<uploadUrl>"`.
+The grant is bound to that exact object and that exact media type, so a PUT of
+anything else is refused by the store. Then `publish_design_result` HEADs each
+object for its authoritative size and type: a lying, absent or cross-tenant
+`pathname` can never be recorded.
+
+**Permission** — `work_item:edit`, the same key the publish asserts and one
+`CLI_TOKEN_GRANT` already carries. Minting a presigned write is a WRITE even
+though it persists no row.
 
 #### `create_acceptance_upload` · `publish_acceptance_result`
 

@@ -2173,6 +2173,41 @@ model WorkItem {
   // no-`@map` columns; not an enum (a third provider-neutral value would be a
   // contained change, and the roll-up filters on the literal).
   ciState               String?
+  // WHEN this item finished (Story MOTIR-4777 · MOTIR-4780) — the moment it
+  // ENTERED a `done`-CATEGORY status, cleared the moment it leaves one. The
+  // Workbench's "Recently finished" tab is the first reader; it is also the
+  // first honest input to cycle time and throughput, which nothing in this
+  // schema could express before (there is no status-history table, and
+  // `WorkflowTransition` models the workflow's ALLOWED edges, not a log).
+  //
+  // ⚠️ `updatedAt` IS NOT A SUBSTITUTE, and that is the whole reason this
+  // column exists. It moves on ANY edit — a re-title, a label, a comment-driven
+  // touch — so a "finished this week" list built on it lists work finished in
+  // June that somebody renamed today. The two columns answer different
+  // questions and only one of them is about completion.
+  //
+  // CATEGORY, never a status KEY. Statuses are project-defined open vocabulary
+  // (`workflow_status` rows, not an enum), so "done" is resolved per project
+  // through `workflowsService.getTerminalStatusKeysByProjects` — the same
+  // resolver `workItemsService.isReady` and `homeService` already ask. A
+  // hardcoded `'done' | 'cancelled'` pair would be a subset carrying a totality
+  // certificate: exhaustive over the literal, silent about every status a
+  // customer adds.
+  //
+  // Written at ONE seam — `workItemsService.applyStatusTransition`, inside the
+  // same `$transaction` and under the same `lockById` as the status write, so
+  // the stamp cannot drift from the status it describes and two racing
+  // transitions cannot produce two stamps. `tests/rls/status-write-guard.test.ts`
+  // is what keeps a future write path from reaching `work_item.status` around it.
+  //
+  // A `done → cancelled` hop does NOT re-stamp (both are done-category: the
+  // item never left, so its completion moment did not move); a
+  // `done → in_progress` hop CLEARS it, because a re-opened card has not
+  // finished. camelCase with NO `@map`, matching this table's other 35 columns
+  // — the same within-table-consistency call already recorded for `storyPoints`
+  // and `sprintId` / `backlogRank` (decision-authority rung 2 > the card's
+  // `@map` prose).
+  completedAt           DateTime?
   createdAt             DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
 
@@ -2331,6 +2366,16 @@ model WorkItem {
   // names a handful of items) and the column is NULL on the vast majority of
   // rows, so a plain single-column index stays small.
   @@index([sessionBranch])
+  // The FINISHED-WINDOW read (Story MOTIR-4777 · MOTIR-4780 · MOTIR-4781) — the
+  // Workbench's "Recently finished" tab asks one project for the rows whose
+  // `completedAt` falls inside a rolling window, ordered `completedAt DESC`.
+  // This composite serves the range predicate AND the sort off one index, which
+  // is what keeps the tab from degenerating into a scan of every finished row
+  // the project has ever had. Leading with `projectId` matches the surface's
+  // ACTIVE-PROJECT scope (`docs/decisions/home-scope.md`) and the shape of every
+  // other composite on this table. `completedAt` is NULL on the overwhelming
+  // majority of rows, which keeps the index small.
+  @@index([projectId, completedAt])
   // pg_trgm GIN over the free-text contains-match columns (Story 6.1 · 6.1.1,
   // finding #57): the filter builder's `text contains` compiles to ILIKE over
   // title + description, which must not table-scan at 10k issues. A multicolumn
@@ -5754,23 +5799,41 @@ model GithubRepo {
   /// repository were two connections and two graphs built from identical bytes;
   /// this column is what stops that being expressible.
   ///
-  /// ⚠️ NULLABLE TODAY, AND THAT IS A DEPLOY-WINDOW PROPERTY RATHER THAN A MODEL
-  /// ONE. The migration adds it nullable and backfills it to zero nulls, because
-  /// a NOT NULL in the same migration would break every insert the OLD build
-  /// makes in the window between the migration running and the new pods serving.
-  /// Every writer stamps it (`githubRepoRepository.upsert` requires it), so a row
-  /// written in that window is not left null either. TIGHTENING it to NOT NULL is
-  /// a follow-up once the old build is gone, and it is FILED rather than left as
-  /// a sentence here.
+  /// NOT NULL since MOTIR-4700. It was added NULLABLE by MOTIR-4649 for a
+  /// DEPLOY WINDOW — a migration runs before the new pods serve, and a NOT NULL
+  /// in that same migration would have failed every insert the OLD build
+  /// attempted on the two unattended write paths. That window closed when the
+  /// pre-MOTIR-4649 build went out of service, and the constraint is what makes
+  /// the guarantee the writers already enforce a property of the DATABASE:
+  /// `UpsertGithubRepoInput.organizationId` is required and
+  /// `resolveOrganizationId` throws rather than returning null, so no caller
+  /// could manufacture a null — but only the constraint says so to anything that
+  /// is not a caller.
+  ///
+  /// ⚠️ `GithubInstallation.organizationId` stays NULLABLE, and that asymmetry is
+  /// the model rather than an oversight: Motir's SHARED PROVISIONING INSTALLATION
+  /// (MOTIR-1931) serves N tenants and is owned by none, so it can name neither a
+  /// workspace nor an organisation — its `workspaceId` is null for the same
+  /// reason. The repository rows it holds carry both tiers, which is what lets
+  /// THIS column be tightened while that one cannot.
+  ///
+  /// ⚠️ AND THE ROW-LEVEL SECURITY NOW READS THIS COLUMN — MOTIR-4677 landed
+  /// with MOTIR-4649, so the sentence that used to stand here ("the shipped
+  /// policies still key on `workspaceId`; rewriting them is MOTIR-4677's card")
+  /// describes a world that no longer exists. TWO permissive policies stand on
+  /// this table and Postgres ORs them: `github_repo_workspace_or_system`
+  /// (`FOR ALL`, on `workspace_id` — the writes and the workspace-scoped read)
+  /// and `github_repo_org_read` (`FOR SELECT`, on `organization_id`).
+  ///
+  /// Which is a second reason the NOT NULL matters rather than only tidying: a
+  /// row with a null organisation is invisible to the org read arm by
+  /// construction — `NULL = <anything>` is NULL, never true — so it would be
+  /// readable through the workspace arm alone and silently absent from every
+  /// organisation-tier read. The constraint removes that shape.
   ///
   /// `workspaceId` above is KEPT and still non-null: it is the tier a repository
-  /// is connected FROM and what the shipped RLS policies still key on. Rewriting
-  /// those policies onto this column is MOTIR-4677's card, deliberately not this
-  /// one — a card that moved the column AND the policies would be untestable in
-  /// the way that matters, because nothing in its diff would say whether a
-  /// failure came from the column or from the policy, and one of those two
-  /// failure modes is a data-exposure bug.
-  organizationId String? @map("organization_id")
+  /// is connected FROM, and it is what the `FOR ALL` policy authorises writes on.
+  organizationId String  @map("organization_id")
   /// GitHub's numeric repository id (as a string) — stable across renames.
   repoId         String  @map("repo_id")
   owner          String
@@ -5851,11 +5914,11 @@ model GithubRepo {
   /// takes its mirrored repos with it, exactly as it did when they hung off the
   /// installation.
   workspace                   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  /// The owning ORGANISATION (MOTIR-4649) — modelled on BOTH sides, like every
-  /// other FK in this schema (the CLAUDE.md migration rule). Cascade, for the same
-  /// reason the workspace relation has it: a deleted organisation takes its
-  /// mirrored repos with it.
-  organization                Organization?                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// The owning ORGANISATION (MOTIR-4649, made required by MOTIR-4700) —
+  /// modelled on BOTH sides, like every other FK in this schema (the CLAUDE.md
+  /// migration rule). Cascade, for the same reason the workspace relation has it:
+  /// a deleted organisation takes its mirrored repos with it.
+  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pullRequests                GithubPullRequest[]
   /// Metered CI runs on this repo (Story MOTIR-1775 · MOTIR-1896). SetNull, like
   /// `ProjectRepo.githubRepoId`: disconnecting the repo must not delete the

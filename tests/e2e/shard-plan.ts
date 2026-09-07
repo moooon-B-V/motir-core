@@ -527,7 +527,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'general-attachment.spec.ts': 8.0,
   'gitlab.spec.ts': 6.1,
   'hero-ai-control-styles.spec.ts': 12.0,
-  'home.spec.ts': 10.9,
+  'workbench.spec.ts': 10.9,
   'import.spec.ts': 9.1,
   'implemented-lifecycle.spec.ts': 16.0,
   'issue-create-edit-flow.spec.ts': 16.7,

@@ -16,6 +16,7 @@ import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { createV1Caller, createV1ProjectCaller, withTokenFor } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { organizationIdOf } from '../../helpers/organizationOf';
 
 // GET /api/v1/projects/{projectKey}/repositories (Story MOTIR-3584 · Subtask
 // MOTIR-3586) against real Postgres — the whole route → service → repository →
@@ -86,6 +87,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `${name}-${randomBytes(6).toString('hex')}`,
       owner,
       name,
