@@ -238,6 +238,39 @@ describe('the planning workspace overlay groups the roots that are in no epic', 
     expect(drawnIds().some((id) => id.startsWith('proposed:'))).toBe(false);
     expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
   });
+
+  it('the ANCHOR a pending add is proposed UNDER stays on the road', async () => {
+    // The commonest contextual ask — "break this story into subtasks" — touches
+    // its anchor through NOTHING the three `nodeId` clauses reach: no `modify`,
+    // no `remove`, and a still-pending add whose own node id is `proposed:`-
+    // prefixed and matches no committed row. Only `parentNodeId` names it.
+    const review: PlanReviewDto = planReview(
+      [
+        planReviewItem({
+          planItemId: 'pi_digest',
+          op: 'add',
+          nodeId: 'pi_digest',
+          kind: 'subtask',
+          title: 'An email digest',
+          parentNodeId: STORY_ROOT,
+        }),
+      ],
+      { status: 'planned', itemCount: 1 },
+    );
+
+    render(<PlanChangeCanvas projectKey="MOTIR" index={indexPlanReview(review)} diffKey="k3" />);
+
+    // Group the anchor away and the proposal is UNREACHABLE rather than merely
+    // hidden: it is drawn one level down, under a row that has just moved behind
+    // the group's door, so the reviewer cannot drill to the thing they are being
+    // asked to confirm. That is the E2E `cloud-contextual-plan-confirm` drills.
+    await waitFor(() => expect(el(STORY_ROOT)).not.toBeNull());
+    // …and the rule stays NARROW: the two roots the plan says nothing about are
+    // still grouped, so the count falls from 3 to 2 rather than the group going.
+    expect(el(BUG_A)).toBeNull();
+    expect(el(BUG_B)).toBeNull();
+    expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
+  });
 });
 
 describe('the plan-detail canvas takes the same ruling (DECISION 5 / criterion 5)', () => {
@@ -263,6 +296,30 @@ describe('the plan-detail canvas takes the same ruling (DECISION 5 / criterion 5
     expect(el(EPIC_ID)).not.toBeNull();
     expect(el(BUG_A)).toBeNull();
     expect(el(STORY_ROOT)).toBeNull();
+    expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
+  });
+
+  it('keeps the anchor a pending add is parented on, on the road too', async () => {
+    // This canvas keys the third conjunct on its own merge set rather than
+    // `touchedByProposal`, so the pending-add TARGET has to be widened here as
+    // well — the same gap, in the second of the two places that decides it.
+    const items = [
+      planReviewItem({
+        planItemId: 'pi_toasts',
+        op: 'add',
+        nodeId: 'pi_toasts',
+        kind: 'subtask',
+        title: 'In-app toasts',
+        parentNodeId: STORY_ROOT,
+      }),
+    ];
+
+    render(<PlanReviewCanvas items={items} projectKey="MOTIR" version={1} />);
+
+    await waitFor(() => expect(el(STORY_ROOT)).not.toBeNull());
+    expect(el(EPIC_ID)).not.toBeNull();
+    expect(el(BUG_A)).toBeNull();
+    expect(el(BUG_B)).toBeNull();
     expect(screen.getByTestId('level-group-node').textContent).toContain('2 items');
   });
 });

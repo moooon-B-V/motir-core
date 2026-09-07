@@ -195,11 +195,22 @@ export function proposalForItem(
  * `pendingAdds`, and the accepted card is appended a second time as a keyless
  * ghost). A still-PENDING add cannot collide here: its `nodeId` carries the
  * `proposed:` prefix, which no work-item id has.
+ *
+ * A pending add's TARGET qualifies through `parentNodeId`, and it is the case the
+ * `nodeId` clauses above all miss: the commonest contextual ask ("break this
+ * story into subtasks") touches the anchor through nothing but the parent ref its
+ * adds carry — no `modify`, no `remove`, and a `proposed:`-prefixed `nodeId` that
+ * matches no committed row. Group the anchor away and the proposal becomes
+ * UNREACHABLE: it is drawn one level down, under a row that is now behind the
+ * group's door, so the reviewer cannot drill to the thing they are being asked to
+ * confirm. `parentNodeId` has already been through `canvasNodeId`, so a committed
+ * parent compares as its real work-item id and a proposed one carries the prefix
+ * and stays inert here — the same asymmetry the `nodeId` clause relies on.
  */
 export function touchedByProposal(index: PlanChangeDiffIndex, workItemId: string): boolean {
   if (index.isEmpty) return false;
   if (index.changesById.has(workItemId) || index.removalsById.has(workItemId)) return true;
-  return index.adds.some((add) => add.nodeId === workItemId);
+  return index.adds.some((add) => add.nodeId === workItemId || add.parentNodeId === workItemId);
 }
 
 /** The proposed items that belong on the level currently in focus. `focusNodeId`

@@ -360,7 +360,19 @@ export function PlanReviewCanvas({
   // it is inert here; a `modify` / `remove` keys by its TARGET, and a
   // materialized `add` re-keys to the card it became (MOTIR-3160 / MOTIR-3161),
   // which are exactly the three the design names.
-  const touchedNodeIds = useMemo(() => new Set(items.map((i) => i.nodeId)), [items]);
+  // …plus a pending `add`'s TARGET, which none of those three reaches: an add
+  // proposed UNDER a committed row names it only through `parentNodeId`, and
+  // grouping that row away files the proposal behind a door the reviewer cannot
+  // open (it is drawn one level down, under the row that just left the level).
+  // `op === 'add'` is the whole widening — a `modify` / `remove` already keys by
+  // its own target, so pulling ITS parent onto the road would be over-wide.
+  const touchedNodeIds = useMemo(() => {
+    const ids = new Set(items.map((i) => i.nodeId));
+    for (const i of items) {
+      if (i.op === 'add' && i.parentNodeId !== null) ids.add(i.parentNodeId);
+    }
+    return ids;
+  }, [items]);
 
   // DECISION 4's second half: *"the DETAIL keeps §6 and gains the tile too."* The
   // list-view arm (Part XIII §6) chooses the ARRIVAL VIEW for the arrival level;
