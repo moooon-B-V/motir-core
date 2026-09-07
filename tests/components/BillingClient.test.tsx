@@ -180,6 +180,115 @@ describe('BillingClient', () => {
     await waitFor(() => expect(screen.getByText('Scale up Motir')).toBeTruthy());
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // THE EXEMPT ORG (MOTIR-4818 · design/billing AMENDMENT 2026-09-07, panel 3
+  // (d)+(e)). The 2026-09-05 clause above — "every billed line renders for an
+  // internal org exactly as for a paying one" — was reasoned about an
+  // `internalBilling` org and applied to an `isMeta` one. Its DECISION stands
+  // and the cases above keep asserting it; what is wrong is its RANGE. An
+  // `isMeta` org is never charged and never capped, so the storefront does not
+  // show it a figure it will not be charged — it shows it a FALSE one, beside
+  // two checkouts.
+  //
+  // The `isMeta` fixture is the meta org's LIVE shape (MOTIR-4818's render):
+  // no scaled-tracker subscription and no AI tier, which is what makes the
+  // shipped surface reach for the `Free` chip and the trial copy in the first
+  // place.
+  function metaOrg(over: Partial<BillingStatusDTO> = {}): BillingStatusDTO {
+    return {
+      ...activeStandard(),
+      isMeta: true,
+      internalBilling: false,
+      motir: { scaledTrackerSubscription: null, aiIncludedSeat: false },
+      motirAi: {
+        tier: null,
+        balance: 0,
+        subscription: {
+          status: null,
+          currentPeriodEnd: null,
+          priceId: null,
+          planTier: null,
+        },
+      },
+      ci: ciState({ applicable: false, state: 'bypassed' }),
+      ...over,
+    };
+  }
+
+  it('(d) the Motir line renders the EXEMPT variant for an isMeta org — no caps, no seat quote', async () => {
+    renderWithBody(metaOrg());
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    // The chip and the body the amendment specifies.
+    expect(screen.getAllByText('Not billed').length).toBe(2);
+    expect(
+      screen.getByText(
+        'This organization isn’t billed for Motir. Every plan cap is lifted for it, so there is nothing to outgrow and no seats to buy.',
+      ),
+    ).toBeTruthy();
+
+    // GONE — the three things (d) removes, each named on the mock.
+    expect(screen.queryByText('Up to 250')).toBeNull();
+    expect(screen.queryByText('Up to 3')).toBeNull();
+    expect(screen.queryByText('Up to 2 GB')).toBeNull();
+    expect(screen.queryByText(/\$5 = /)).toBeNull();
+    expect(screen.queryByText(/Scaling bills 1 seat per member/)).toBeNull();
+  });
+
+  it('(e) the Motir AI line renders the EXEMPT variant — and KEEPS the Usage & cost cross-link', async () => {
+    renderWithBody(metaOrg());
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    expect(
+      screen.getByText(
+        'This organization isn’t charged for Motir AI. Planning runs whatever the balance reads, and credits are recorded for internal cost visibility rather than billed.',
+      ),
+    ).toBeTruthy();
+
+    // GONE — it is EXEMPT, not trialing.
+    expect(screen.queryByText('Free')).toBeNull();
+    expect(screen.queryByText(/one-time free trial/)).toBeNull();
+
+    // KEPT — those figures are real, and they are why this org opens this page.
+    const usage = screen.getByRole('link', { name: /View Usage & cost/ });
+    expect(usage.getAttribute('href')).toBe('/settings/organization/usage');
+  });
+
+  // ⚠️ ASSERTED AGAINST A FIXED COUNTERFACTUAL, NOT ONLY BY ABSENCE. A render
+  // that failed to mount at all would satisfy every `queryBy… → null` above, so
+  // the SAME DTO is rendered with `isMeta` flipped and the two CTAs are proved
+  // to come back. That is what makes their absence a property of the flag.
+  it('neither checkout renders for an isMeta org, and BOTH return when the flag is off', async () => {
+    renderWithBody(metaOrg());
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Upgrade Motir' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Choose a Motir AI plan' })).toBeNull();
+
+    cleanup();
+    vi.unstubAllGlobals();
+
+    renderWithBody(metaOrg({ isMeta: false }));
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Upgrade Motir' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Choose a Motir AI plan' })).toBeTruthy();
+  });
+
+  // ⚠️ THE FIX MUST NOT WIDEN TO THE CLASSIFICATION FLAG. An
+  // `internalBilling: true, isMeta: false` org IS charged (every debit lands,
+  // then a paired `internal_offset` credit makes it whole) and IS capped, so
+  // every line of the storefront is a TRUE statement about it — hiding its
+  // price would fail in the more expensive direction, which is the one the
+  // 2026-09-05 amendment was right about.
+  it('an internalBilling org that is NOT meta keeps the whole storefront', async () => {
+    renderWithBody({ ...activeStandard(), internalBilling: true, isMeta: false });
+    await waitFor(() => expect(screen.getByText('Billing & plans')).toBeTruthy());
+
+    expect(screen.getByRole('button', { name: 'Upgrade Motir' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Change plan' })).toBeTruthy();
+    expect(screen.getByText('Internal billing')).toBeTruthy();
+    expect(screen.queryByText('Not billed')).toBeNull();
+  });
+
   it('shows the error state when the boundary fails', async () => {
     vi.stubGlobal(
       'fetch',

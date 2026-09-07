@@ -5718,6 +5718,11 @@
         "askOwner": "Ask an owner to upgrade"
       }
     },
+    "exempt": {
+      "pill": "Not billed",
+      "motir": "This organization isn’t billed for Motir. Every plan cap is lifted for it, so there is nothing to outgrow and no seats to buy.",
+      "ai": "This organization isn’t charged for Motir AI. Planning runs whatever the balance reads, and credits are recorded for internal cost visibility rather than billed."
+    },
     "internalBilling": {
       "badge": "Internal billing",
       "note": "This organization is charged exactly like a customer and then made whole — every figure below is real, and the balance nets to zero."
