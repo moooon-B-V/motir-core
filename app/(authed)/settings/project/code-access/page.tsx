@@ -115,30 +115,32 @@ export default async function ProjectCodeAccessPage() {
   const refused = await guardSettingsPage('code-access', ctx);
   if (refused) return refused;
 
+  // ⚠️ THE LADDER JOINS THE WAVE — IT IS CONSULTED FOR THE EMPTY STATE, AND FOR
+  // NOTHING ELSE (MOTIR-4803). The matrix and strip reads stay the SET; the
+  // paragraph at the top of this file is unchanged and is still the reason. What
+  // was wrong was the SENTENCE the pane renders when that set is empty:
+  // "{project} has no code yet" quantifies over the project's code, and Motir's
+  // own project has six repositories while holding no set at all. So the pane
+  // needs to know whether the absence is total or merely its own, and
+  // `resolveEffectiveRepoDomain` is the one place that question is answered
+  // (MOTIR-3086 · MOTIR-3126).
+  //
+  // ⚠️ IN the `Promise.all`, not after it. It was sequenced after the batch
+  // first, to skip the read on a project whose set makes the answer irrelevant —
+  // and that traded a query for a ROUND TRIP, which is the wrong direction and
+  // is what `tests/navigation/loading-boundary-guard.test.ts`'s serial-read
+  // ratchet (MOTIR-3449) exists to catch. It caught it: five serial reads
+  // against a ceiling of four. A parallel read costs no latency, and the module
+  // sequences its OWN two reads so a project answered by its set alone still
+  // does the minimum — so the saving was never this page's to make.
   const actorCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const [access, repos, identity, caps] = await Promise.all([
+  const [access, repos, identity, caps, domain] = await Promise.all([
     projectRepoAccessService.listTeamAccess(ctx.projectId, actorCtx),
     projectRepoSetService.listByProject(ctx.projectId, actorCtx),
     githubIdentityService.getIdentityForUser(ctx.userId),
     projectAccessService.getSettingsCapabilities(ctx.projectId, actorCtx),
+    resolveEffectiveRepoDomain(ctx.projectId, actorCtx),
   ]);
-
-  // ⚠️ THE LADDER IS CONSULTED FOR THE EMPTY STATE, AND FOR NOTHING ELSE
-  // (MOTIR-4803). The read above stays the SET — the paragraph at the top of
-  // this file is unchanged and is still the reason. What was wrong was the
-  // SENTENCE the pane renders when that set is empty: "{project} has no code
-  // yet" quantifies over the project's code, and Motir's own project has six
-  // repositories while holding no set at all. So the pane needs to know whether
-  // the absence is total or merely its own, and `resolveEffectiveRepoDomain` is
-  // the one place that question is answered (MOTIR-3086 · MOTIR-3126).
-  //
-  // Sequenced after the batch, deliberately — the module's own header makes the
-  // same argument about its two reads: a project WITH a set never renders an
-  // empty state, so its answer could not matter and is not paid for.
-  const connectedRepoCount =
-    repos.length === 0
-      ? (await resolveEffectiveRepoDomain(ctx.projectId, actorCtx)).connected.length
-      : 0;
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
@@ -167,7 +169,7 @@ export default async function ProjectCodeAccessPage() {
         plansHref="/plans"
         membersHref="/settings/project/members"
         repositoriesHref={REPOSITORIES_PATH}
-        connectedRepoCount={connectedRepoCount}
+        connectedRepoCount={domain.connected.length}
       />
     </div>
   );
