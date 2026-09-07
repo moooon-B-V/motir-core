@@ -90,6 +90,9 @@ interface JoinedRow {
   repoIndexedHeadSha: string | null;
   repoIndexedAt: Date | null;
   repoIndexingRunId: string | null;
+  repoCommitsBehind: number | null;
+  repoCommitsBehindBaseSha: string | null;
+  repoCommitsBehindHeadSha: string | null;
   repoProvider: string | null;
   repoWorkspaceId: string | null;
   /** The mirror row's ORGANISATION (MOTIR-4649) — nullable in the column, and
@@ -160,6 +163,9 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             indexedHeadSha: r.repoIndexedHeadSha,
             indexedAt: r.repoIndexedAt,
             indexingRunId: r.repoIndexingRunId,
+            commitsBehind: r.repoCommitsBehind,
+            commitsBehindBaseSha: r.repoCommitsBehindBaseSha,
+            commitsBehindHeadSha: r.repoCommitsBehindHeadSha,
             provider: r.repoProvider!,
             workspaceId: r.repoWorkspaceId!,
             // Non-null since MOTIR-4700, and the `!` is the same assertion every
@@ -266,7 +272,10 @@ export const projectRepoRepository = {
         gr."default_branch_head_sha" AS "repoDefaultBranchHeadSha",
         gr."indexed_head_sha"        AS "repoIndexedHeadSha",
         gr."indexed_at"              AS "repoIndexedAt",
-        gr."indexing_run_id"         AS "repoIndexingRunId"
+        gr."indexing_run_id"         AS "repoIndexingRunId",
+        gr."commits_behind"          AS "repoCommitsBehind",
+        gr."commits_behind_base_sha" AS "repoCommitsBehindBaseSha",
+        gr."commits_behind_head_sha" AS "repoCommitsBehindHeadSha"
       FROM "project_repository" pr
       LEFT JOIN "github_repo" gr ON gr."id" = pr."github_repo_id"
       -- The APPROVING USER's record only: permission = 'admin' is what selects it

@@ -1,5 +1,6 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import { resolveDriftCount } from '@/lib/codeGraph/driftCount';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
@@ -112,10 +113,17 @@ export async function resolveCodeContextState(
           hasRunningIndex: repo.indexingRunId !== null && runningRunIds.has(repo.indexingRunId),
         }),
         indexedAt: repo.indexedAt,
-        // ALWAYS null until MOTIR-4644 ships its producer — a drawn answer, not
-        // a gap. See the DTO's own note for why a THRESHOLD on this count is not
-        // interchangeable with the index state's behind-ness arm.
-        commitsBehind: null,
+        // ⚠️ THE STORED COUNT, SERVED ONLY IF IT BELONGS TO THE PAIR ON THE ROW
+        // RIGHT NOW (MOTIR-4644). `resolveDriftCount` is the one rule; a
+        // comparison written here would be a second definition of "still
+        // current". `null` remains a first-class answer — never computed, a pair
+        // that has since moved, no common ancestor, or a host that could not
+        // answer all render the same way.
+        //
+        // ⚠️ AND THIS READ MAKES NO PROVIDER CALL. MOTIR-1766 kept the head off
+        // the render path on purpose; the count is computed by the recompute job
+        // and read from a column, exactly like the head it is compared against.
+        commitsBehind: resolveDriftCount(repo),
       },
     ];
   });

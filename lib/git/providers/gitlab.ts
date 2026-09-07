@@ -1,7 +1,12 @@
 import { registerGitProvider } from '../registry';
 import { gitlabConnectionService } from '@/lib/services/gitlabConnectionService';
 import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
-import { REPO_FILE_MAX_BYTES, REPO_FILE_READ_TIMEOUT_MS, type GitProvider } from '../provider';
+import {
+  COMMIT_COMPARE_TIMEOUT_MS,
+  REPO_FILE_MAX_BYTES,
+  REPO_FILE_READ_TIMEOUT_MS,
+  type GitProvider,
+} from '../provider';
 import { byteLength, describeBody, normalizeRepoFilePath } from '../fileRead';
 import { RepoFileReadError } from '../errors';
 import type {
@@ -14,6 +19,7 @@ import type {
   NormalizedRepo,
   NormalizedStatusEvent,
   RepoFileReadResult,
+  CommitComparison,
 } from '../types';
 
 // The GitLab implementation of the GitProvider seam (Story 7.23 · MOTIR-1474) —
@@ -86,6 +92,15 @@ function mapPipelineStatus(raw: string): CiConclusion {
 
 const ZERO_SHA = '0'.repeat(40);
 
+/**
+ * GitLab's compare endpoint caps the commits it returns; a response sitting on
+ * the cap may have been cut, and a cut list's LENGTH is a wrong drift count that
+ * renders exactly like a right one. 1000 is GitLab's documented ceiling for the
+ * compare response — treated as "at or above ⇒ inexact", so the boundary case
+ * lands on `null` rather than on a number nobody can vouch for.
+ */
+const GITLAB_COMPARE_MAX_COMMITS = 1000;
+
 export const gitlabProvider: GitProvider = {
   id: 'gitlab',
 
@@ -138,6 +153,77 @@ export const gitlabProvider: GitProvider = {
   // with the connection's token, in the process that already holds it, and what
   // comes back is text. Nothing credential-shaped crosses a boundary, so the
   // §4/§10 objection has nothing to bite on.
+  /**
+   * `GET /api/v4/projects/:id/repository/compare?from=<base>&to=<head>` — GitLab
+   * answers with a `commits[]` array rather than a count, so the count is that
+   * array's LENGTH.
+   *
+   * ⚠️ AND THAT IS WHY THIS IMPLEMENTATION IS MORE CAUTIOUS THAN GITHUB'S. A
+   * length is only the drift if the host returned EVERY commit; GitLab caps the
+   * compare response, and a capped array yields a number that is
+   * arithmetically real and wrong — the worst kind, because it renders exactly
+   * like a correct one. So when the array arrives at the cap this returns
+   * `inexact` (`null`), never the capped length.
+   *
+   * ⚠️ AN EMPTY `commits[]` IS AMBIGUOUS ON THIS HOST, and it is resolved by
+   * `compare_same_ref`: GitLab answers `[]` both for "identical refs" (a genuine
+   * ZERO) and for "no common ancestor" (UNDEFINED). Reading the flag is what
+   * keeps a force-pushed repository from rendering as current.
+   */
+  async compareCommits(
+    installationId: string,
+    owner: string,
+    name: string,
+    base: string,
+    head: string,
+  ): Promise<CommitComparison> {
+    const { token } = await gitlabConnectionService.getAccessToken(installationId);
+    const project = encodeURIComponent(`${owner}/${name}`);
+    const url =
+      `${gitlabBaseUrl()}/api/v4/projects/${project}/repository/compare` +
+      `?from=${encodeURIComponent(base)}&to=${encodeURIComponent(head)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), COMMIT_COMPARE_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
+        signal: controller.signal,
+      });
+    } catch {
+      return { behindBy: null, reason: 'unreachable' };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (res.status === 404) return { behindBy: null, reason: 'no_common_ancestor' };
+    if (!res.ok) return { behindBy: null, reason: 'unreachable' };
+
+    const body: unknown = await res.json().catch(() => null);
+    if (!body || typeof body !== 'object') return { behindBy: null, reason: 'inexact' };
+    const bag = body as Record<string, unknown>;
+    const commits = bag['commits'];
+    if (!Array.isArray(commits)) return { behindBy: null, reason: 'inexact' };
+
+    // An empty list means IDENTICAL only when the host says the refs are the
+    // same; otherwise the pair has no path between them and the count is
+    // undefined.
+    if (commits.length === 0) {
+      return bag['compare_same_ref'] === true
+        ? { behindBy: 0 }
+        : { behindBy: null, reason: 'no_common_ancestor' };
+    }
+    // A TRUNCATED comparison is not a smaller one. `compare_timeout` is GitLab's
+    // own signal that it stopped early, and a response sitting exactly on the
+    // cap is indistinguishable from one that was cut — both are `inexact`.
+    if (bag['compare_timeout'] === true || commits.length >= GITLAB_COMPARE_MAX_COMMITS) {
+      return { behindBy: null, reason: 'inexact' };
+    }
+    return { behindBy: commits.length };
+  },
+
   async readFileAtRef(
     installationId: string,
     owner: string,

@@ -13,6 +13,7 @@ import type {
   NormalizedWorkflowJobEvent,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
+  CommitComparison,
 } from './types';
 
 // The GitProvider seam (Story 7.10 · MOTIR-891). ONE interface every Git host
@@ -53,6 +54,16 @@ export const REPO_TARBALL_TIMEOUT_MS = 60_000;
  * to a comment.
  */
 export const REPO_FILE_READ_TIMEOUT_MS = 5_000;
+
+/**
+ * Deadline for a commit comparison, in ms (MOTIR-4644).
+ *
+ * Longer than a file read because a compare walks history rather than fetching
+ * one blob, and SHORTER than any page budget because nothing on a render path is
+ * allowed to wait for it — the call happens off that path, and this bound exists
+ * so a host that hangs cannot hold a job open indefinitely.
+ */
+export const COMMIT_COMPARE_TIMEOUT_MS = 10_000;
 
 /**
  * The largest file this capability will hand back, in bytes.
@@ -193,6 +204,46 @@ export interface GitProvider {
     path: string,
     ref: string,
   ): Promise<RepoFileReadResult>;
+
+  /**
+   * HOW FAR `head` IS AHEAD OF `base`, IN COMMITS (MOTIR-4644) — the drift count
+   * three surfaces render and nothing computed.
+   *
+   * ⚠️ REQUIRED, for {@link readFileAtRef}'s reason and not
+   * {@link resolveRepoTarballUrl}'s. That one is optional because GitLab
+   * genuinely CANNOT back it — a credential-free container needs a
+   * self-authorizing URL, which GitLab has no way to mint at the privilege §10
+   * permits. Comparing two commits has no such constraint: the call happens
+   * HERE, in the process holding the token, and what leaves is a number. GitHub
+   * backs it with `GET /repos/{owner}/{name}/compare/{base}...{head}`
+   * (`behind_by`), GitLab with
+   * `GET /api/v4/projects/:id/repository/compare` — so both hosts can, and
+   * therefore both must. Declaring it optional would re-create the exact
+   * disguise MOTIR-2124 removed: a provider that looks complete while the
+   * capability a consumer needs is missing, failing silently at every call site.
+   *
+   * ⚠️ IT RETURNS ITS FAILURES AS `behindBy: null`, NEVER BY THROWING, and never
+   * as `0`. Zero means CURRENT to every consumer, so a "could not tell" rendered
+   * as zero would put the most reassuring answer on the least evidence. The
+   * named `reason` arms exist for the log, not for a surface.
+   *
+   * ⚠️ NO CALLER MAY INVOKE THIS ON A RENDER PATH. MOTIR-1766 chose a push
+   * webhook over a HEAD fetch precisely to keep provider latency and rate limits
+   * off the two surfaces that read staleness, and that reasoning binds this
+   * method: it is called from a JOB, and the read path serves a cached count or
+   * `null`. `tests/git/commitCompare.test.ts` asserts the read makes no provider
+   * call, with a double that fails the test if it is invoked.
+   *
+   * Implementations MUST bound the request with
+   * {@link COMMIT_COMPARE_TIMEOUT_MS}.
+   */
+  compareCommits(
+    installationId: string,
+    owner: string,
+    name: string,
+    base: string,
+    head: string,
+  ): Promise<CommitComparison>;
 
   /**
    * Fetch an installation's account (login + type) from the host, given only the

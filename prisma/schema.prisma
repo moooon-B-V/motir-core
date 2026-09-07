@@ -5860,6 +5860,32 @@ model GithubRepo {
   /// whatever its shas say, because an abandoned run is not an index in progress.
   indexingRunId String? @map("indexing_run_id")
 
+  /// THE DRIFT COUNT — how many commits the default branch is ahead of the graph
+  /// (MOTIR-4644), and the exact PAIR it was computed for.
+  ///
+  /// ⚠️ THE TWO SHA COLUMNS ARE NOT REDUNDANT WITH THE ONES ABOVE, and they are
+  /// what makes this cache safe. A count is a fact about ONE pair
+  /// `(indexedHeadSha, defaultBranchHeadSha)`. Either of those can move at any
+  /// moment — a push, an index run — and the stored number is then a fact about
+  /// a pair that no longer exists. Storing the count ALONE would leave no way to
+  /// tell a current answer from a stale one, so the read compares the pair and
+  /// returns `null` when it has moved rather than a number that was true
+  /// yesterday.
+  ///
+  /// ⚠️ AND `null` IS NEVER `0`. Zero means the graph MATCHES the head; null
+  /// means nobody has counted, or the count is not defined for this pair (a
+  /// force-push has no common ancestor), or the host could not answer. The
+  /// surfaces draw them differently and must keep being able to.
+  ///
+  /// Written only by the recompute job — never on a render path, which is
+  /// MOTIR-1766's constraint carried forward: no provider round-trip while
+  /// somebody is waiting for a page.
+  commitsBehind        Int?    @map("commits_behind")
+  /// The `indexedHeadSha` the stored count was computed against.
+  commitsBehindBaseSha String? @map("commits_behind_base_sha")
+  /// The `defaultBranchHeadSha` the stored count was computed against.
+  commitsBehindHeadSha String? @map("commits_behind_head_sha")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

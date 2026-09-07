@@ -48,6 +48,7 @@ import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
 import { planTargetLockSweep } from './definitions/planTargetLockSweep';
 import { supervisionSweep } from './definitions/supervisionSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
+import { codeGraphDriftSweep } from './definitions/codeGraphDriftSweep';
 import { jobRunReap } from './definitions/jobRunReap';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
@@ -115,6 +116,7 @@ export const jobDefinitions = [
   planTargetLockSweep,
   supervisionSweep,
   abandonedPlanSweep,
+  codeGraphDriftSweep,
   jobRunReap,
   dataExportBuild,
   dataExportExpirySweep,
