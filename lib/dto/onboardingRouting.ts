@@ -35,13 +35,24 @@ export type OnboardingRoutingOutcome =
   /** Nothing readable — the user goes to the start-fresh entrance. */
   | 'onboard_new_project'
   /** Something real, something missing — the user goes to the migrate flow. */
-  | 'onboard_existing_project';
+  | 'onboard_existing_project'
+  /**
+   * THE REPOSITORY IS THERE AND ITS CODE GRAPH IS NOT (MOTIR-4828 / MOTIR-4829).
+   *
+   * ⚠️ NOBODY IS ROUTED ANYWHERE, which is what makes it unlike the two
+   * onboarding outcomes: there is no destination and no button that leads to
+   * one. Motir is building the graph, the surface shows that, and the person
+   * plans when it lands. `handoffDestination` refuses it for exactly that
+   * reason — a hand-off with nowhere to hand off to is a dead end.
+   */
+  | 'wait_for_index';
 
 /** Every outcome, for a caller that has to enumerate them. */
 export const ONBOARDING_ROUTING_OUTCOMES: readonly OnboardingRoutingOutcome[] = [
   'continue',
   'onboard_new_project',
   'onboard_existing_project',
+  'wait_for_index',
 ];
 
 /**

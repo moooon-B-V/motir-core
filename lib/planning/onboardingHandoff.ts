@@ -77,6 +77,18 @@ export function handoffDestination(
   verdict: OnboardingRoutingVerdict,
   context: PlanningLaunchContext,
 ): string {
+  // ⚠️ `wait_for_index` HAS NO DESTINATION, and the refusal is the point
+  // (MOTIR-4829). Nobody is routed anywhere on that outcome: Motir is building
+  // the graph and the person waits in the window they opened. Falling through to
+  // the start-fresh entrance would be the worst possible move — an interview
+  // about a codebase that was seconds from being readable — so it is a THROW
+  // rather than a default, because a silent wrong destination is exactly the
+  // failure this story exists to remove.
+  if (verdict.outcome === 'wait_for_index') {
+    throw new Error(
+      'handoffDestination: `wait_for_index` routes nowhere — the window shows the wait (MOTIR-4829)',
+    );
+  }
   const path =
     verdict.outcome === 'onboard_existing_project'
       ? `${ONBOARDING_ENTRY_PATH}/migrate`

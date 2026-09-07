@@ -9,6 +9,10 @@ import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHo
 import { PlanningWorkspaceSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
 import { PlanningReadingState } from '@/components/planning/PlanningReadingState';
 import { PlanningHandOff } from '@/components/planning/PlanningHandOff';
+import {
+  PlanningIndexingWait,
+  type IndexingWaitPhase,
+} from '@/components/planning/PlanningIndexingWait';
 import { useProjectAccess } from '@/app/(authed)/_components/ProjectAccessProvider';
 import {
   parsePlanningOverlay,
@@ -31,6 +35,12 @@ import {
 } from '@/lib/dto/onboardingRouting';
 import { resolveOnboardingRouting } from '@/lib/planning/onboardingRoutingClient';
 import { handoffDestination } from '@/lib/planning/onboardingHandoff';
+import {
+  anyRepositoryIndexed,
+  fetchPlanningSubstrate,
+  SUBSTRATE_POLL_CEILING_MS,
+  SUBSTRATE_POLL_INTERVAL_MS,
+} from '@/lib/planning/substratePoll';
 
 // THE PLANNING WORKSPACE OVERLAY (MOTIR-4729, under story MOTIR-4725) — the
 // workspace as a full-screen layer over whatever authed page is open, which is
@@ -292,6 +302,17 @@ export function PlanningWorkspaceOverlay({
   // collapses all of them to `none` and this branch treats `none` as *carry on*.
   const [routed, setRouted] = useState<OnboardingRoutingVerdict | 'clear' | null>(null);
   const routingAskedRef = useRef(false);
+  /**
+   * ASK AGAIN — a monotonic counter, bumped by the two things that legitimately
+   * re-open the question (MOTIR-4829): the index landing, and *Try again*.
+   *
+   * ⚠️ A REF ALONE CANNOT DO THIS, and that is why the counter exists. Clearing
+   * `routingAskedRef` does not re-run the effect — a ref is not a dependency —
+   * so the guard would be released and nothing would fire. This is the provider
+   * TICK shape (`CLAUDE.md` § page state after a mutation, case 3) at component
+   * scope: a value the effect WATCHES, bumped by whatever has new information.
+   */
+  const [routingAttempt, setRoutingAttempt] = useState(0);
   // ⚠️ AND NOT ON THE WAY BACK (MOTIR-4770). A user returning from onboarding was
   // routed thirty seconds ago and has just done what they were sent to do;
   // reading them again and possibly routing them again is the loop this marker
@@ -323,7 +344,65 @@ export function PlanningWorkspaceOverlay({
       setRouted(verdict.outcome === 'continue' ? 'clear' : verdict);
     })();
     return () => controller.abort();
-  }, [open, substrate, justReturned, tr]);
+  }, [open, substrate, justReturned, tr, routingAttempt]);
+
+  // ── THE WAIT (MOTIR-4829) ──────────────────────────────────────────────────
+  //
+  // `wait_for_index` is the one outcome with nowhere to send anybody: the
+  // repository is connected, its graph does not exist yet, Motir has started
+  // building it, and the person plans when it lands. So the window HOLDS them,
+  // says what is happening, and moves on by itself.
+  //
+  // ⚠️ THE FINISH NEEDS A POLL, AND THE CHOICE IS EXPLAINED RATHER THAN
+  // DEFAULTED. This overlay is a `'use client'` island seeded from server props;
+  // `router.refresh()` re-runs the server read and the island never sees it
+  // (`CLAUDE.md` § page state after a mutation, case 3). The two instruments
+  // that DO reach an island are a provider TICK and a refetch — and a tick needs
+  // something in this browser to bump it, while the event being waited on
+  // happens in a background job on another machine. So the island asks.
+  // The verdict itself when it is the wait, narrowed ONCE so the JSX below reads
+  // a value rather than re-deriving the same three conditions.
+  const waitVerdict =
+    routed !== null && routed !== 'clear' && routed.outcome === 'wait_for_index' ? routed : null;
+  const waiting = waitVerdict !== null;
+  const [waitPhase, setWaitPhase] = useState<IndexingWaitPhase>('queued');
+  const [waitCleared, setWaitCleared] = useState(false);
+  useEffect(() => {
+    if (!waiting || waitCleared) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    // The first tick is what turns `queued` into `running`: the wait is real by
+    // then, and the two wordings differ so somebody who came back can tell
+    // whether anything has moved.
+    const tick = async (): Promise<void> => {
+      const fresh = await fetchPlanningSubstrate({ signal: controller.signal });
+      if (cancelled) return;
+      if (anyRepositoryIndexed(fresh)) {
+        // ⚠️ THE WAIT ENDED — SO ASK AGAIN, rather than deciding here. The graph
+        // exists now; whether it is ENOUGH is the same judgement as before and
+        // it is still the planner's (MOTIR-4828). Clearing the guard and the
+        // verdict re-fires the routing effect above with the project as it now
+        // stands.
+        setWaitCleared(true);
+        routingAskedRef.current = false;
+        setRouted(null);
+        setRoutingAttempt((n) => n + 1);
+        return;
+      }
+      // ⚠️ A CEILING ON THE PROMISE, NOT ON THE INDEX. The job keeps running
+      // whatever this says; what expires is the window's claim that it is about
+      // to finish, because a spinner that has spun for ten minutes has stopped
+      // being information.
+      setWaitPhase(Date.now() - startedAt > SUBSTRATE_POLL_CEILING_MS ? 'failed' : 'running');
+    };
+    const id = setInterval(() => void tick(), SUBSTRATE_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(id);
+    };
+  }, [waiting, waitCleared]);
 
   /** What Motir read, already named — the hand-off's FOUND block. */
   const readSources = useMemo(() => {
@@ -421,6 +500,35 @@ export function PlanningWorkspaceOverlay({
             backLabel={ta('backToProjects')}
           />
         </div>
+      ) : substrate !== null && waiting ? (
+        // THE WAIT (MOTIR-4829) — the repository is connected and its code graph
+        // is being built. TWO ELEMENTS, and they are not the same sentence twice
+        // (Yue: *"with the banner and say it"*): the BANNER carries the durable
+        // state, the TURN carries the planner's own reason. This branch sits
+        // BEFORE the hand-off's, because `wait_for_index` has no destination and
+        // `handoffDestination` refuses it outright rather than defaulting.
+        <PlanningIndexingWait
+          repositories={substrate.repositories.filter((r) => !r.indexed).map((r) => r.ref)}
+          message={waitVerdict?.message ?? ''}
+          phase={waitPhase}
+          // ⚠️ RE-ENQUEUE BY RE-ASKING. The routing dispatch is what triggers a
+          // first index (MOTIR-4826), so *Try again* is the same call this
+          // window already makes — no second door, and no client-side opinion
+          // about whether an index is warranted.
+          onRetry={() => {
+            setWaitPhase('queued');
+            routingAskedRef.current = false;
+            setRouted(null);
+            setRoutingAttempt((n) => n + 1);
+          }}
+          // ⚠️ PLAN ANYWAY OPENS THE WORKSPACE, and that is the honest meaning of
+          // the button: the person has said they would rather plan without the
+          // code than keep waiting. The session is an ordinary one from here.
+          onPlanAnyway={() => {
+            setWaitCleared(true);
+            setRouted('clear');
+          }}
+        />
       ) : substrate !== null && routed !== 'clear' && routed !== null ? (
         // THE HAND-OFF (MOTIR-4769) — SHOWN before the move happens, never a
         // silent redirect out from under somebody who pressed *Plan with AI*.

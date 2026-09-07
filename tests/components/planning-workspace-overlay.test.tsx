@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { withoutPlanningOverlay } from '@/lib/planning/launcher';
+import { SUBSTRATE_POLL_INTERVAL_MS } from '@/lib/planning/substratePoll';
 import type { OnboardingSubstrate } from '@/lib/dto/onboardingSubstrate';
 
 // THE PLANNING WORKSPACE OVERLAY (MOTIR-4729, under story MOTIR-4725).
@@ -45,6 +46,17 @@ const { fetchPlanningAnchor } = vi.hoisted(() => ({ fetchPlanningAnchor: vi.fn()
  */
 const { resolveOnboardingRouting } = vi.hoisted(() => ({ resolveOnboardingRouting: vi.fn() }));
 vi.mock('@/lib/planning/onboardingRoutingClient', () => ({ resolveOnboardingRouting }));
+
+// THE WAIT'S OWN SEAM (MOTIR-4829) — the island asks the server whether the
+// index has landed, because `router.refresh()` cannot reach a `useState`-seeded
+// island. Mocked at the CLIENT rather than at `fetch`, for the same reason the
+// routing client is: what these tests are about is what the WINDOW does with an
+// answer, not how the answer is transported.
+const { fetchPlanningSubstrate } = vi.hoisted(() => ({ fetchPlanningSubstrate: vi.fn() }));
+vi.mock('@/lib/planning/substratePoll', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/planning/substratePoll')>()),
+  fetchPlanningSubstrate: (...a: unknown[]) => fetchPlanningSubstrate(...a),
+}));
 vi.mock('@/lib/planning/planningAnchorClient', () => ({ fetchPlanningAnchor }));
 
 // The actor's permission set — the shell's provider, which is the whole reason
@@ -147,6 +159,8 @@ beforeEach(() => {
   // surface exists for, and the one every MOTIR-4768 test is about. A test that
   // is about what happens WHEN it lands drives its own resolution.
   resolveOnboardingRouting.mockReset();
+  fetchPlanningSubstrate.mockReset();
+  fetchPlanningSubstrate.mockResolvedValue(null);
   resolveOnboardingRouting.mockReturnValue(new Promise(() => {}));
   granted = new Set(['project:browse']);
   mountSeq = 0;
@@ -719,6 +733,107 @@ describe('the READING state — what the window says while a session decides (MO
     await act(async () => {});
 
     expect(screen.getByTestId('planning-reading-state')).toBeTruthy();
+  });
+});
+
+describe('THE WAIT — an unindexed repository holds the window (MOTIR-4829)', () => {
+  const unindexed = {
+    itemCount: 12,
+    itemCountTruncated: false,
+    repositories: [{ ref: 'acme/widgets', indexed: false }],
+    repositoryConnected: true,
+    repositoryIndexed: false,
+  } satisfies OnboardingSubstrate;
+
+  const waitVerdict = {
+    kind: 'verdict' as const,
+    read: {
+      ok: true as const,
+      verdict: {
+        outcome: 'wait_for_index',
+        message: "I'm building the index for acme/widgets now — we can start as soon as it's done.",
+      },
+    },
+  };
+
+  it('shows BOTH the banner and the planner’s turn — and NOT the hand-off', async () => {
+    // ⚠️ NOBODY IS ROUTED. `wait_for_index` has no destination, so the hand-off
+    // (which exists to move somebody) must not be what they meet.
+    resolveOnboardingRouting.mockResolvedValue(waitVerdict);
+    openAt('plan=project&planFrom=project');
+    mount({ substrate: unindexed });
+    await act(async () => {});
+
+    expect(screen.getByTestId('planning-indexing-banner')).toBeTruthy();
+    expect(screen.getByTestId('planning-indexing-turn')).toBeTruthy();
+    expect(screen.queryByTestId('planning-handoff')).toBeNull();
+    expect(screen.queryByTestId('host')).toBeNull();
+    // …and nothing has moved.
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('names the UNINDEXED repository, not every connected one', async () => {
+    resolveOnboardingRouting.mockResolvedValue(waitVerdict);
+    openAt('plan=project&planFrom=project');
+    mount({
+      substrate: {
+        ...unindexed,
+        repositories: [
+          { ref: 'acme/widgets', indexed: false },
+          { ref: 'acme/already-read', indexed: true },
+        ],
+      },
+    });
+    await act(async () => {});
+
+    const banner = screen.getByTestId('planning-indexing-banner');
+    expect(banner.textContent).toContain('acme/widgets');
+    // The one that HAS a graph is not something anybody is waiting for.
+    expect(banner.textContent).not.toContain('acme/already-read');
+  });
+
+  it('THE FINISH — when the graph lands the window ASKS AGAIN rather than deciding', async () => {
+    // ⚠️ THE WAIT ENDING IS NOT A VERDICT. The graph exists now; whether it is
+    // ENOUGH is the same judgement as before and it is still the planner's
+    // (MOTIR-4828). So the window re-fires the routing run rather than opening
+    // the workspace on its own authority.
+    //
+    // ⚠️ AND THE INSTRUMENT IS A POLL BECAUSE `router.refresh()` CANNOT REACH AN
+    // ISLAND (`CLAUDE.md` § page state after a mutation, case 3). This drives the
+    // seam the island asks through, which is the only thing standing between the
+    // wait and the rest of the journey.
+    vi.useFakeTimers();
+    try {
+      resolveOnboardingRouting.mockResolvedValueOnce(waitVerdict).mockResolvedValue({
+        kind: 'verdict' as const,
+        read: {
+          ok: true as const,
+          verdict: { outcome: 'continue', message: 'What shall we plan?' },
+        },
+      });
+      // First tick: still nothing. Second: the index has landed.
+      fetchPlanningSubstrate.mockResolvedValueOnce(unindexed).mockResolvedValue({
+        ...unindexed,
+        repositories: [{ ref: 'acme/widgets', indexed: true }],
+      });
+
+      openAt('plan=project&planFrom=project');
+      mount({ substrate: unindexed });
+      await act(async () => {});
+      expect(screen.getByTestId('planning-indexing-banner')).toBeTruthy();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SUBSTRATE_POLL_INTERVAL_MS * 2 + 10);
+      });
+
+      // The wait is over, the verdict was asked a SECOND time, and this project
+      // is now plannable — so the workspace opens.
+      expect(resolveOnboardingRouting.mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect(screen.queryByTestId('planning-indexing-banner')).toBeNull();
+      expect(screen.getByTestId('host')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

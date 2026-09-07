@@ -60,6 +60,11 @@ export default defineConfig({
         'lib/planning/onboardingReturn.ts',
         // The entrance predicate that stopped deciding on an item count alone.
         'lib/onboarding/migrateHandoff.ts',
+        // ⚠️ THE WAIT'S OWN SEAM (MOTIR-4829). The island asks this whether the
+        // index has landed, because `router.refresh()` cannot reach a
+        // `useState`-seeded island — so it is the one thing standing between the
+        // wait and the rest of the journey, and it belongs in the floor.
+        'lib/planning/substratePoll.ts',
       ],
       thresholds: {
         perFile: true,
@@ -86,6 +91,16 @@ export default defineConfig({
           functions: 85,
           branches: 70,
           lines: 85,
+        },
+        // Reading taken 2026-09-07 with this lane's own command, rounded DOWN.
+        // The lane's aggregate with this file in it is 99.05 / 94.56 / 100 /
+        // 98.83, so the floor is set at the same bar its neighbours carry rather
+        // than at a number only this file could meet.
+        'lib/planning/substratePoll.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 75,
+          lines: 90,
         },
         'lib/planning/onboardingReturn.ts': {
           statements: 85,

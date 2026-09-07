@@ -216,7 +216,26 @@ describe('the CAUSE is repaired — the index is enqueued', () => {
 describe('⚠️ motir-core has NO OPINION about the route', () => {
   const source = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 
-  it('no branch anywhere reads `indexed` back to choose a destination', () => {
+  it('no read of `indexed` chooses a DESTINATION — the two that exist choose other things', () => {
+    // ⚠️ AMENDED 2026-09-07 (MOTIR-4829), AND THE AMENDMENT NARROWS IT TO WHAT IT
+    // MEANT. The first version of this guard counted `.indexed` reads and allowed
+    // exactly one — the enqueue trigger. That was right when the only consumer
+    // was the dispatch, and it went wrong the moment the WINDOW had to render the
+    // wait: naming which repositories are still being indexed is a read that
+    // decides what is DISPLAYED, and forbidding it would have been forbidding the
+    // surface from telling somebody which repository they are waiting on.
+    //
+    // The claim was never about the COUNT. It is that no read of this fact
+    // decides WHERE A PERSON GOES — that is the planner's (MOTIR-4828), and a
+    // branch here would put the routing decision back where five of this story's
+    // cards took it out of. So each site is named with what it decides, and the
+    // destination-choosing shapes are asserted absent.
+    const ALLOWED: Record<string, string> = {
+      'lib/services/aiGenerationService.ts':
+        'the ENQUEUE trigger — repairs a cause, chooses nothing',
+      'components/planning/PlanningWorkspaceOverlay.tsx':
+        'NAMES the repositories still being indexed, for the banner to say',
+    };
     for (const path of [
       'lib/services/aiGenerationService.ts',
       'lib/planning/onboardingRoutingClient.ts',
@@ -226,10 +245,22 @@ describe('⚠️ motir-core has NO OPINION about the route', () => {
       const code = source(path)
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/[^\n]*$/gm, '');
-      // The ONE legal read is the enqueue trigger, which chooses no destination.
       const reads = [...code.matchAll(/\.indexed\b/g)].length;
-      const trigger = code.includes('code?.repos.some((repo) => !repo.indexed)') ? 1 : 0;
-      expect(reads, `${path} reads .indexed ${reads} time(s)`).toBe(trigger);
+      if (!(path in ALLOWED)) {
+        expect(reads, `${path} reads .indexed ${reads} time(s) and is not on the named list`).toBe(
+          0,
+        );
+        continue;
+      }
+      // ⚠️ THE SHAPE, NOT THE COUNT. Wherever `indexed` is read, it may not sit
+      // in the same expression as a navigation or an outcome — the two ways a
+      // destination gets chosen in this tree.
+      for (const line of code.split('\n')) {
+        if (!line.includes('.indexed')) continue;
+        expect(line, `${path}: ${ALLOWED[path]}`).not.toMatch(
+          /router\.push|handoffDestination|outcome\s*[=:]|ONBOARDING_ROUTING/,
+        );
+      }
     }
   });
 

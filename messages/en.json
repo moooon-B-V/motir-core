@@ -6487,6 +6487,20 @@
       "activity": "This usually takes a few seconds.",
       "activityThin": "One moment."
     },
+    "indexing": {
+      "eyebrow": "Before we plan",
+      "title": "Indexing {repos}",
+      "subQueued": "Just started",
+      "subRunning": "Reading the code so the plan can start from it",
+      "chipQueued": "Queued",
+      "chipRunning": "In progress",
+      "exit": "You can close this and come back — it keeps going without you.",
+      "failedTitle": "I couldn't index {repos}",
+      "failedSub": "Nothing is lost — we can try again, or plan without the code",
+      "retry": "Try again",
+      "planAnyway": "Plan anyway",
+      "stalled": "This is taking longer than usual. It's still going — you can close this and come back."
+    },
     "handoff": {
       "eyebrow": "Next",
       "titleNew": "Let's set your project up first",

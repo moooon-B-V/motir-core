@@ -6483,6 +6483,20 @@
       "activity": "通常只需要几秒钟。",
       "activityThin": "请稍候。"
     },
+    "indexing": {
+      "eyebrow": "开始规划前",
+      "title": "正在索引 {repos}",
+      "subQueued": "刚刚开始",
+      "subRunning": "正在读取代码，以便方案从它出发",
+      "chipQueued": "排队中",
+      "chipRunning": "进行中",
+      "exit": "你可以关掉这个窗口再回来——它会继续跑。",
+      "failedTitle": "我没能索引 {repos}",
+      "failedSub": "没有任何东西丢失——可以重试，也可以先不读代码直接规划",
+      "retry": "重试",
+      "planAnyway": "直接规划",
+      "stalled": "比平时久一些。它还在跑——你可以关掉再回来。"
+    },
     "handoff": {
       "eyebrow": "接下来",
       "titleNew": "我们先把项目建立起来",
