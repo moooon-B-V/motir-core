@@ -52,7 +52,7 @@ describe('platformToStackHint', () => {
 describe('conventionEstablishService.establishForFreshProject — FRESH gate', () => {
   it('does NOT submit when the workspace has a connected repo (the migrate path owns the convention)', async () => {
     vi.mocked(resolveCodeContext).mockResolvedValue({
-      repos: [{ provider: 'github', repoRef: 'acme/app', defaultBranch: 'main' }],
+      repos: [{ provider: 'github', repoRef: 'acme/app', defaultBranch: 'main', indexed: true }],
     });
 
     const result = await conventionEstablishService.establishForFreshProject(input);

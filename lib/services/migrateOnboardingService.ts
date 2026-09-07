@@ -124,6 +124,27 @@ interface StepWiring {
   checkExit: (input: StepInput) => Promise<ExitResult>;
 }
 
+/**
+ * DOES THIS RUN ACTUALLY RUN `step`? (MOTIR-4759)
+ *
+ * ⚠️ AN EMPTY SET MEANS *EVERY STEP*, and that is the whole compatibility story:
+ * a run created by any door other than the routing hand-off has no verdict, so
+ * it walks the wizard exactly as it always did. There is nothing to backfill and
+ * no flag to remember.
+ *
+ * ⚠️ AND `motir-core` DOES NOT DECIDE THE SET, nor second-guess one it is handed
+ * (MOTIR-4767's own boundary). The planner returns which steps to KEEP; this
+ * function only asks whether a given step is in it. A set naming a step that does
+ * not exist was already refused upstream — the navigation sibling routes such a
+ * verdict to new-project onboarding rather than repairing it here.
+ */
+export function stepIsKept(
+  run: Pick<MigrateOnboarding, 'keptSteps'>,
+  step: MigrateOnboardingStep,
+): boolean {
+  return run.keptSteps.length === 0 || run.keptSteps.includes(step);
+}
+
 /** Build the run's project context (the `projectKey`/identifier the AI services
  *  need) from the persisted run — the transitions are keyed by run id, not by the
  *  actor's active project, so the project is resolved from the row. */
@@ -457,6 +478,34 @@ async function advance(
 
   const pctx = await resolveProjectContext(existing.projectId, ctx);
   let run = existing;
+
+  // ── THE PLANNER'S KEPT SET (MOTIR-4759) ────────────────────────────────────
+  //
+  // A step the verdict did not keep does not run: no kick, no exit poll, straight
+  // to the hop. The project's own substrate already answered whatever that step
+  // would have asked, which is what the routing verdict decided (MOTIR-4767) and
+  // what the rail's collapsed row says out loud.
+  //
+  // ⚠️ IT IS ONE GATE FOR THE WHOLE MACHINE, NOT A CONDITION PER STEP, and the
+  // card's own re-scope is why: `discovery` is not a special case, it is one
+  // member of a set the planner decides alongside `connect`, `index` and
+  // `import`. A per-step exit condition here would have to be generalised later,
+  // and the generalisation is the thing being asked for.
+  //
+  // ⚠️ AND IT SKIPS THE KICK, WHICH IS THE POINT. A step that is not run must not
+  // submit its motir-ai job or write its side effect — `DISCOVERY.ensureKicked`
+  // would otherwise start the very interview this exists to spare the user.
+  if (!stepIsKept(run, wiring.from)) {
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
+      (tx) =>
+        commitAdvance(
+          { id, workspaceId: ctx.workspaceId, wiring, patch: {}, onPreconditionMiss: 'throw' },
+          tx,
+        ),
+    );
+    return toMigrateOnboardingDto(row!);
+  }
 
   // (1) Kick the current step's driving action (idempotent). A kick that submits
   // a metered motir-ai job lets its typed error (out-of-credits / transport)
@@ -821,6 +870,12 @@ export const migrateOnboardingService = {
               step: 'connect',
               status: 'active',
               connectedRepoRef: input.connectedRepoRef ?? null,
+              // THE PLANNER'S KEPT SET, when the routing verdict sent this user
+              // here (MOTIR-4759). Persisted at CREATE and never after: the set
+              // describes the verdict that opened this run, and a later write
+              // would let one journey be re-scoped mid-flight by a stale address.
+              // Absent → `[]` → every step runs, exactly as before.
+              keptSteps: input.keptSteps ?? [],
             },
             tx,
           ),

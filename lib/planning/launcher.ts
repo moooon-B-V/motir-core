@@ -229,8 +229,30 @@ export const OVERLAY_PARAM_NAMES = {
   repo: 'planRepo',
 } as const;
 
-/** Every overlay parameter name, for the strip and the collision guards. */
-const OVERLAY_PARAMS: readonly string[] = Object.values(OVERLAY_PARAM_NAMES);
+/**
+ * THE RETURN MARKER (MOTIR-4770) — set on the address onboarding sends a user
+ * BACK to, and read once by the overlay it re-opens.
+ *
+ * ⚠️ IT IS NOT ONE OF THE FOUR. `OVERLAY_PARAM_NAMES` above is the set the
+ * design pins and `parsePlanningOverlay` reads to decide whether the workspace
+ * is OPEN; this one says nothing about that and is not part of the launch. What
+ * it says is *you have just come back from onboarding*, which the overlay needs
+ * for exactly one decision: not to ask for a routing verdict again (MOTIR-4769's
+ * run) about a project that was routed thirty seconds ago and has just done what
+ * it was sent to do.
+ *
+ * ⚠️ IT IS STRIPPED WITH THEM THOUGH, and that is why it lives beside them. A
+ * marker that survived Close would suppress the routing run for the rest of that
+ * page's life — a stale query parameter quietly changing what the next open
+ * does.
+ */
+export const PLANNING_RETURN_PARAM = 'planReturned' as const;
+
+/** Every parameter the overlay OWNS, for the strip and the collision guards. */
+const OVERLAY_PARAMS: readonly string[] = [
+  ...Object.values(OVERLAY_PARAM_NAMES),
+  PLANNING_RETURN_PARAM,
+];
 
 /**
  * The overlay's parameters for a launch context — the mode, the origin, and the
@@ -290,6 +312,28 @@ function joinHref(path: string, query: URLSearchParams, hash: string): string {
  * is a same-address navigation, and two `plan=` values would make the parse
  * order-dependent.
  */
+/**
+ * WHERE A LAUNCH CONTEXT BELONGS — the page the workspace should be open OVER.
+ *
+ * ⚠️ LIFTED HERE FROM `app/(authed)/planning/page.tsx` (MOTIR-4770), which is
+ * the only place it had survived. Two callers now ask the same question and
+ * neither is the forward:
+ *
+ *   · the FORWARD — an old `/planning?…` address named a context but no page;
+ *   · the RETURN — onboarding is finished and the user has a context but has
+ *     left the route group entirely, so there is no page underneath to go back
+ *     to.
+ *
+ * They are the same question — *this context belongs to which page?* — and the
+ * forward's own note already said so, calling itself `planningLaunchBackHref`'s
+ * mapping inlined. Two copies of it is the drift MOTIR-4732's note is about.
+ */
+export function planningHostPathFor(context: PlanningLaunchContext): string {
+  if (context.kind === 'work-item') return `/items/${encodeURIComponent(context.itemKey)}`;
+  if (context.kind === 'convention-refine') return '/code-health';
+  return '/roadmap';
+}
+
 export function withPlanningOverlay(href: string, context: PlanningLaunchContext): string {
   const { path, query, hash } = splitHref(href);
   for (const name of OVERLAY_PARAMS) query.delete(name);

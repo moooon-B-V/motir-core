@@ -54,17 +54,44 @@ export function migrateRunReachedPlanning(run: MigrateOnboardingDto | null): boo
 
 /**
  * Should a start-fresh onboarding entrance route this project to the migrate
- * wizard? True when the project has an existing tree (the MOTIR-1259 condition)
+ * wizard? True when the project already HAS something to plan from — an existing
+ * tree (the MOTIR-1259 condition) **or a connected repository** (MOTIR-4756) —
  * AND its migrate run has not already handed off to planning (MOTIR-1725).
+ *
+ * | items | repository | before      | after                        |
+ * |-------|------------|-------------|------------------------------|
+ * |   0   | none       | start-fresh | start-fresh — **the FLOOR**  |
+ * |   0   | connected  | start-fresh | **migrate wizard**           |
+ * |  > 0  | any        | wizard      | wizard                       |
+ *
+ * ⚠️ ONLY ROW 2 MOVES, and it is the row this whole story is for. The predicate
+ * read a single number, the item count, and never asked whether there was code —
+ * so someone who connects their repository first and has not written a work item
+ * yet was sent down the path built for people with nothing, and that path does
+ * not read code (`MIGRATE_DISCOVERY_PROMPT` is passed only by the wizard).
+ *
+ * ⚠️ AND THE MANUAL CHOICE IS UNTOUCHED. The entrance's own *"I have an existing
+ * project — migrate it"* affordance still routes wherever it routed; this
+ * changes the DEFAULT, never what the user can pick.
+ *
+ * `repositoryConnected` rather than `repositoryIndexed` is deliberate: the
+ * wizard's own INDEX step is what waits for a graph, so routing a
+ * connected-but-unindexed project here lands it exactly where it can wait.
  *
  * Callers have already established that the project is never-AI-planned
  * (`onboardingRanAt == null`); that gate stays at the call site because its
  * redirect target differs (`/roadmap`, not the wizard).
+ *
+ * Still a PURE predicate over an already-read DTO — no I/O, no `server-only` —
+ * so both Server Components share one decision and it stays unit-testable
+ * without a database. The read that produces `repositoryConnected` is
+ * `onboardingSubstrateService`'s, at the call site.
  */
 export function shouldRouteToMigrateWizard(args: {
   itemCount: number;
+  repositoryConnected: boolean;
   run: MigrateOnboardingDto | null;
 }): boolean {
-  if (args.itemCount <= 0) return false;
+  if (args.itemCount <= 0 && !args.repositoryConnected) return false;
   return !migrateRunReachedPlanning(args.run);
 }

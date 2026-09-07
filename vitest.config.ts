@@ -1183,15 +1183,19 @@ export default defineConfig({
         'app/**/settings/project/repositories/_components/TakeoverModal.tsx',
         'app/**/settings/project/repositories/_components/RepositoriesRoom.tsx',
         // MOTIR-3126 — the room's SECOND registry. Same argument as the block
-        // above, one registry over: the surface's claims are that a
-        // workspace-connected repository is NAMED, SOURCED and carries no action,
-        // and that the empty state belongs to a project with neither registry.
-        // Every one of those is a branch, and the defect being fixed here is
-        // precisely a branch nobody could take. The reader and the section split
-        // are gated for the same reason — they are now the ONE definition the
-        // resolver and every surface share, so an unexercised branch in them is a
-        // disagreement waiting to happen.
-        'app/**/settings/project/repositories/_components/ConnectedRepositories.tsx',
+        // above, one registry over: the surface's claims are that an
+        // organisation repository is NAMED, SOURCED and carries an action only
+        // where there is a LINK to remove, and that the empty state belongs to a
+        // project with neither registry. Every one of those is a branch, and the
+        // defect being fixed here is precisely a branch nobody could take. The
+        // reader and the section split are gated for the same reason — they are
+        // now the ONE definition the resolver and every surface share, so an
+        // unexercised branch in them is a disagreement waiting to happen.
+        // ⚠️ `ConnectedRepositories.tsx` stood here until MOTIR-4820, which folded
+        // that section into the organisation one and deleted the component. Its
+        // claims did not go with it — they are asserted of `domain` entries in
+        // `OrganizationRepositories`, which this list already covers by glob.
+        'app/**/settings/project/repositories/_components/OrganizationRepositories.tsx',
         'lib/projectRepos/effectiveDomain.ts',
         'lib/projectRepos/roomSections.ts',
         // Story MOTIR-1755 · MOTIR-1758 → gated by MOTIR-1760. The provenance
@@ -3293,14 +3297,22 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
-        'app/**/settings/project/repositories/_components/ConnectedRepositories.tsx': {
+        // ⚠️ MOTIR-4820 MOVED THIS KEY, IT DID NOT DROP IT. It named
+        // `ConnectedRepositories.tsx`, which that card deleted by folding the
+        // section into the organisation one — and a key naming no file gates
+        // NOTHING while looking exactly like a gate (`tests/coverage-gate-globs.test.ts`
+        // is what turns that into a red build). The claims the key was bought for
+        // are now branches of `OrganizationRepositories`, so the gate follows them
+        // rather than being retired with the filename.
+        'app/**/settings/project/repositories/_components/OrganizationRepositories.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
         'lib/projectRepos/effectiveDomain.ts': { branches: 90, functions: 90, lines: 90 },
         // ⚠️ `statements` added by MOTIR-4681, which gave this module
-        // `splitSetRowsByOrigin`. The module was ALREADY pinned here, so the
+        // `splitSetRowsByOrigin` (MOTIR-4820 replaced it with
+        // `splitRoomSections`). The module was ALREADY pinned here, so the
         // story strengthens the existing row rather than adding a second one —
         // two entries for one path is a duplicate key, and the later wins
         // silently.

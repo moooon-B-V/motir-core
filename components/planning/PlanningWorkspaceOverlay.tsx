@@ -7,21 +7,40 @@ import { Modal } from '@/components/ui/Modal';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { PlanningWorkspaceHost } from '@/components/planning/PlanningWorkspaceHost';
 import { PlanningWorkspaceSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
+import { PlanningReadingState } from '@/components/planning/PlanningReadingState';
+import { PlanningHandOff } from '@/components/planning/PlanningHandOff';
+import {
+  PlanningIndexingWait,
+  type IndexingWaitPhase,
+} from '@/components/planning/PlanningIndexingWait';
 import { useProjectAccess } from '@/app/(authed)/_components/ProjectAccessProvider';
 import {
   parsePlanningOverlay,
   withoutPlanningOverlay,
   withPlanningOverlay,
   OVERLAY_PARAM_NAMES,
+  PLANNING_RETURN_PARAM,
   type PlanningLaunch,
   type PlanningLaunchContext,
 } from '@/lib/planning/launcher';
 import { resolvePlanningHostGate } from '@/lib/planning/workspaceHost';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
-import { ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 import { workItemCrumbLabel, type CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
+import type { OnboardingSubstrate } from '@/lib/dto/onboardingSubstrate';
+import {
+  ONBOARDING_ROUTING_REFUSAL,
+  type OnboardingRoutingVerdict,
+} from '@/lib/dto/onboardingRouting';
+import { resolveOnboardingRouting } from '@/lib/planning/onboardingRoutingClient';
+import { handoffDestination } from '@/lib/planning/onboardingHandoff';
+import {
+  anyRepositoryIndexed,
+  fetchPlanningSubstrate,
+  SUBSTRATE_POLL_CEILING_MS,
+  SUBSTRATE_POLL_INTERVAL_MS,
+} from '@/lib/planning/substratePoll';
 
 // THE PLANNING WORKSPACE OVERLAY (MOTIR-4729, under story MOTIR-4725) — the
 // workspace as a full-screen layer over whatever authed page is open, which is
@@ -87,13 +106,32 @@ export interface PlanningWorkspaceOverlayProps {
   projectKey: string;
   projectName: string;
   /**
-   * The project's immutable onboarding-ran marker, serialised. Null means
-   * onboarding still owns this project's journey and the workspace forwards
-   * rather than opening — the SAME marker `/onboarding`'s own redirect reads,
-   * so the two surfaces cannot disagree.
+   * WHAT THIS PROJECT ALREADY HAS, resolved once by the layout (MOTIR-4768) —
+   * the values the READING state names on screen.
+   *
+   * ⚠️ `null` MEANS ESTABLISHED, AND IT IS NOT A GATE. A project whose first
+   * plan has been approved has no reading state to show, and pays for no read
+   * either — the layout does not ask. A never-onboarded project opens this
+   * workspace exactly as an established one does (MOTIR-4765); this prop only
+   * decides what it SAYS while it opens.
+   *
+   * ⚠️ IT ARRIVES AS A PROP RATHER THAN A FETCH. This component is a client
+   * island and may not reach a service; more to the point, it must add no
+   * request to its own open — the layout already had the project in hand.
    */
-  onboardingRanAt: string | null;
+  substrate: OnboardingSubstrate | null;
 }
+
+// ⚠️ THERE IS NO `onboardingRanAt` PROP, AND THAT IS THE DELIBERATE SHAPE
+// (MOTIR-4765). It used to arrive from `app/(authed)/layout.tsx` for one reason:
+// to feed `resolvePlanningHostGate`, which answered `'onboarding'` and made this
+// component `router.push` the reader out of the window they had just opened. The
+// marker says *"has never had a plan APPROVED"* — not *"has never planned"* — so
+// that ejected established, code-bearing projects. Whether this project can be
+// planned is the planner's judgement now (MOTIR-4767), made INSIDE the session
+// this component hosts, and the surface that acts on it is MOTIR-4769's. The
+// prop is gone rather than unused so nothing can quietly re-derive a wall from
+// it.
 
 /**
  * What the anchor read SETTLED on, and for which key.
@@ -114,14 +152,15 @@ interface AnchorLoad {
 export function PlanningWorkspaceOverlay({
   projectKey,
   projectName,
-  onboardingRanAt,
+  substrate,
 }: PlanningWorkspaceOverlayProps) {
   const t = useTranslations('planningWorkspace');
   const ta = useTranslations('projectAccess');
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { can } = useProjectAccess();
+  const router = useRouter();
+  const tr = useTranslations('planningWorkspace.routing');
 
   // The host's veto (MOTIR-4731) — see `requestClose`.
   const closeGuardRef = useRef<(() => boolean) | null>(null);
@@ -229,20 +268,155 @@ export function PlanningWorkspaceOverlay({
 
   // ── THE GATE ───────────────────────────────────────────────────────────────
   // `no-project` cannot occur: the mount itself is behind `Boolean(activeProject)`
-  // in the layout, the same gate the orb is behind.
+  // in the layout, the same gate the orb is behind. So the only verdict this
+  // component actually branches on is `no-access`.
+  //
+  // ⚠️ AND THERE IS NO NAVIGATION HERE — not on mount, not in an effect, not for
+  // any project (MOTIR-4765). The gate has no `onboarding` verdict left to fire
+  // one, and a never-onboarded project OPENS the workspace exactly as an
+  // established one does. A move to onboarding is something the SESSION asks for
+  // once it has read the project (MOTIR-4767's verdict, honoured by MOTIR-4769),
+  // shown to the reader before it happens; it is never something this component
+  // does to somebody for arriving.
   const gate = resolvePlanningHostGate({
     hasActiveProject: true,
     canBrowse: can('project:browse'),
-    onboardingRanAt,
   });
 
-  // Never onboarded → onboarding still owns this project (it decides between the
-  // start-fresh entrance and the migrate wizard). A REAL navigation, with the
-  // overlay stripped so returning does not immediately re-open it.
+  // ── THE ROUTING RUN (MOTIR-4769) ───────────────────────────────────────────
+  //
+  // The window has opened on a project whose first plan has never been approved
+  // (that is what a non-null `substrate` means). Ask the planner ONE question —
+  // can this be planned, and if not where does the user go — and hold the
+  // reading state until it answers.
+  //
+  // ⚠️ ONE DISPATCH PER OPEN, guarded by a ref rather than by an effect
+  // dependency list. A verdict acted on twice is a user moved twice, and a
+  // re-render is not a new question. Returning to this surface does not re-fire
+  // it either: the effect keys on `open`, and a project that has been onboarded
+  // arrives with no substrate at all.
+  //
+  // ⚠️ AND EVERY FAILURE OPENS THE WORKSPACE. A failed job, a dead request, a
+  // timeout — none of those is a finding about the project, and turning one into
+  // a hand-off would move a user on the strength of a network error. The client
+  // collapses all of them to `none` and this branch treats `none` as *carry on*.
+  const [routed, setRouted] = useState<OnboardingRoutingVerdict | 'clear' | null>(null);
+  const routingAskedRef = useRef(false);
+  /**
+   * ASK AGAIN — a monotonic counter, bumped by the two things that legitimately
+   * re-open the question (MOTIR-4829): the index landing, and *Try again*.
+   *
+   * ⚠️ A REF ALONE CANNOT DO THIS, and that is why the counter exists. Clearing
+   * `routingAskedRef` does not re-run the effect — a ref is not a dependency —
+   * so the guard would be released and nothing would fire. This is the provider
+   * TICK shape (`CLAUDE.md` § page state after a mutation, case 3) at component
+   * scope: a value the effect WATCHES, bumped by whatever has new information.
+   */
+  const [routingAttempt, setRoutingAttempt] = useState(0);
+  // ⚠️ AND NOT ON THE WAY BACK (MOTIR-4770). A user returning from onboarding was
+  // routed thirty seconds ago and has just done what they were sent to do;
+  // reading them again and possibly routing them again is the loop this marker
+  // exists to prevent. It rides the address onboarding returns to and is
+  // stripped by Close with the overlay's own parameters, so it cannot linger.
+  const justReturned = searchParams.get(PLANNING_RETURN_PARAM) !== null;
   useEffect(() => {
-    if (!open || gate !== 'onboarding') return;
-    router.push(ONBOARDING_ENTRY_PATH);
-  }, [open, gate, router]);
+    if (!open || substrate === null || justReturned || routingAskedRef.current) return;
+    routingAskedRef.current = true;
+    const controller = new AbortController();
+    void (async () => {
+      const resolution = await resolveOnboardingRouting({ signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (resolution.kind === 'none') return setRouted('clear');
+      if (!resolution.read.ok) {
+        // A MALFORMED verdict is declined, not guessed at: the safe route is the
+        // one outcome with no precondition, and it is taken with Motir's own
+        // copy rather than in the planner's voice about a project it did not
+        // read. `motir-ai` carries the same discipline for its own refusals.
+        return setRouted({
+          outcome: ONBOARDING_ROUTING_REFUSAL,
+          message: tr('refusalMessage'),
+        });
+      }
+      const { verdict } = resolution.read;
+      // `continue` — the substrate answers what planning needs. Nothing was
+      // planned and nothing should be: the window becomes an ordinary planning
+      // session and the planner asks (Yue, 2026-09-07).
+      setRouted(verdict.outcome === 'continue' ? 'clear' : verdict);
+    })();
+    return () => controller.abort();
+  }, [open, substrate, justReturned, tr, routingAttempt]);
+
+  // ── THE WAIT (MOTIR-4829) ──────────────────────────────────────────────────
+  //
+  // `wait_for_index` is the one outcome with nowhere to send anybody: the
+  // repository is connected, its graph does not exist yet, Motir has started
+  // building it, and the person plans when it lands. So the window HOLDS them,
+  // says what is happening, and moves on by itself.
+  //
+  // ⚠️ THE FINISH NEEDS A POLL, AND THE CHOICE IS EXPLAINED RATHER THAN
+  // DEFAULTED. This overlay is a `'use client'` island seeded from server props;
+  // `router.refresh()` re-runs the server read and the island never sees it
+  // (`CLAUDE.md` § page state after a mutation, case 3). The two instruments
+  // that DO reach an island are a provider TICK and a refetch — and a tick needs
+  // something in this browser to bump it, while the event being waited on
+  // happens in a background job on another machine. So the island asks.
+  // The verdict itself when it is the wait, narrowed ONCE so the JSX below reads
+  // a value rather than re-deriving the same three conditions.
+  const waitVerdict =
+    routed !== null && routed !== 'clear' && routed.outcome === 'wait_for_index' ? routed : null;
+  const waiting = waitVerdict !== null;
+  const [waitPhase, setWaitPhase] = useState<IndexingWaitPhase>('queued');
+  const [waitCleared, setWaitCleared] = useState(false);
+  useEffect(() => {
+    if (!waiting || waitCleared) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    // The first tick is what turns `queued` into `running`: the wait is real by
+    // then, and the two wordings differ so somebody who came back can tell
+    // whether anything has moved.
+    const tick = async (): Promise<void> => {
+      const fresh = await fetchPlanningSubstrate({ signal: controller.signal });
+      if (cancelled) return;
+      if (anyRepositoryIndexed(fresh)) {
+        // ⚠️ THE WAIT ENDED — SO ASK AGAIN, rather than deciding here. The graph
+        // exists now; whether it is ENOUGH is the same judgement as before and
+        // it is still the planner's (MOTIR-4828). Clearing the guard and the
+        // verdict re-fires the routing effect above with the project as it now
+        // stands.
+        setWaitCleared(true);
+        routingAskedRef.current = false;
+        setRouted(null);
+        setRoutingAttempt((n) => n + 1);
+        return;
+      }
+      // ⚠️ A CEILING ON THE PROMISE, NOT ON THE INDEX. The job keeps running
+      // whatever this says; what expires is the window's claim that it is about
+      // to finish, because a spinner that has spun for ten minutes has stopped
+      // being information.
+      setWaitPhase(Date.now() - startedAt > SUBSTRATE_POLL_CEILING_MS ? 'failed' : 'running');
+    };
+    const id = setInterval(() => void tick(), SUBSTRATE_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(id);
+    };
+  }, [waiting, waitCleared]);
+
+  /** What Motir read, already named — the hand-off's FOUND block. */
+  const readSources = useMemo(() => {
+    if (substrate === null) return [];
+    const named = substrate.repositories.map((r) => r.ref);
+    if (substrate.itemCount > 0) {
+      named.push(
+        substrate.itemCountTruncated
+          ? tr('sourceItemsCapped', { count: substrate.itemCount })
+          : tr('sourceItems', { count: substrate.itemCount }),
+      );
+    }
+    return named;
+  }, [substrate, tr]);
 
   // ── THE ANCHOR READ ────────────────────────────────────────────────────────
   // Only a `work-item` launch has one. The dialog frame is up while it is in
@@ -288,7 +462,7 @@ export function PlanningWorkspaceOverlay({
     return () => controller.abort();
   }, [open, anchorKey]);
 
-  if (!open || gate === 'onboarding') return null;
+  if (!open) return null;
 
   // The anchor's result is only usable while it is still the key in the address:
   // a re-target swaps `anchorKey` before the new read lands, and the previous
@@ -326,6 +500,55 @@ export function PlanningWorkspaceOverlay({
             backLabel={ta('backToProjects')}
           />
         </div>
+      ) : substrate !== null && waiting ? (
+        // THE WAIT (MOTIR-4829) — the repository is connected and its code graph
+        // is being built. TWO ELEMENTS, and they are not the same sentence twice
+        // (Yue: *"with the banner and say it"*): the BANNER carries the durable
+        // state, the TURN carries the planner's own reason. This branch sits
+        // BEFORE the hand-off's, because `wait_for_index` has no destination and
+        // `handoffDestination` refuses it outright rather than defaulting.
+        <PlanningIndexingWait
+          repositories={substrate.repositories.filter((r) => !r.indexed).map((r) => r.ref)}
+          message={waitVerdict?.message ?? ''}
+          phase={waitPhase}
+          // ⚠️ RE-ENQUEUE BY RE-ASKING. The routing dispatch is what triggers a
+          // first index (MOTIR-4826), so *Try again* is the same call this
+          // window already makes — no second door, and no client-side opinion
+          // about whether an index is warranted.
+          onRetry={() => {
+            setWaitPhase('queued');
+            routingAskedRef.current = false;
+            setRouted(null);
+            setRoutingAttempt((n) => n + 1);
+          }}
+          // ⚠️ PLAN ANYWAY OPENS THE WORKSPACE, and that is the honest meaning of
+          // the button: the person has said they would rather plan without the
+          // code than keep waiting. The session is an ordinary one from here.
+          onPlanAnyway={() => {
+            setWaitCleared(true);
+            setRouted('clear');
+          }}
+        />
+      ) : substrate !== null && routed !== 'clear' && routed !== null ? (
+        // THE HAND-OFF (MOTIR-4769) — SHOWN before the move happens, never a
+        // silent redirect out from under somebody who pressed *Plan with AI*.
+        <PlanningHandOff
+          verdict={routed}
+          sources={readSources}
+          onGo={() => router.push(handoffDestination(routed, launchContext(launch)))}
+          onDismiss={requestClose}
+        />
+      ) : substrate !== null && routed === null && !justReturned ? (
+        // ⚠️ BEFORE THE ANCHOR READ, DELIBERATELY (MOTIR-4768). A never-onboarded
+        // project has no plan to anchor to and nothing on the canvas to scope,
+        // so waiting on `fetchPlanningAnchor` to draw the reading state would
+        // put a skeleton in front of the one moment the user most needs a
+        // sentence. What Motir is reading does not depend on which card the
+        // reader launched from.
+        //
+        // It comes down when the verdict lands, above: either the user is being
+        // moved, or `routed === 'clear'` and this is an ordinary workspace.
+        <PlanningReadingState substrate={substrate} />
       ) : waitingForAnchor ? (
         <PlanningWorkspaceSkeleton />
       ) : (
@@ -356,6 +579,7 @@ export function PlanningWorkspaceOverlay({
           // what decides whether the banner is an invitation or a 403.
           canManage={can('ai:configure')}
           initialTarget={settled?.target ?? null}
+          {...(justReturned ? { justReturnedFromOnboarding: true } : {})}
           initialCanvasTrail={settled?.trail}
         />
       )}

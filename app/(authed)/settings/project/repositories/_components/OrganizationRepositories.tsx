@@ -7,9 +7,10 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
+import type { OrgSectionEntry } from '@/lib/projectRepos/roomSections';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 
-// FROM YOUR ORGANISATION — the section a picked repository lands in (Story
+// FROM YOUR ORGANISATION — the project's organisation repositories (Story
 // MOTIR-4669 · MOTIR-4681), `design/repository-set/design-notes.md` §17.2 / §17.6.
 //
 // ⚠️ THE HEADING CHANGED, AND THE COPY WITH IT. It read *Your own repositories*,
@@ -17,11 +18,28 @@ import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 // org-owned one: these are not the reader's personally, they are the
 // organisation's, and the project has them because somebody added them.
 //
-// ⚠️ THE ROW CARRIES ONE ACTION, and it is the first affordance a repository in
-// this half has ever had. The old section said "no action of any kind" and gave
-// the reason — the user already owned these, so there was nothing to do. There is
-// now: **a project's LINK to an organisation repository is exactly the thing a
-// project may change.**
+// ⚠️ AND MOTIR-4820 GAVE THE SECTION THE ROWS THE HEADING ALWAYS PROMISED. §17.2
+// is one section — it RENAMES the connected list and gives its rows an action —
+// and MOTIR-4681 shipped it as a second section beside the old one, keyed on
+// `seedSource`. On a project with no repository SET that left this section EMPTY
+// above the very repositories it is about, while `/settings/organization/git`
+// read `Used by <project>` for each of them (MOTIR-4802). The section now renders
+// the LADDER's answer, which is what the org page counts, so the two surfaces
+// agree by construction.
+//
+// ⚠️ TWO KINDS OF ROW, ONE LIST — and the only thing that distinguishes them is
+// whether there is a LINK to remove:
+//
+//   - a `link`   — a `project_repository` row somebody picked. It carries
+//                  `Remove from this project`.
+//   - a `domain` — a repository the ladder layers into this project's domain,
+//                  with no row of its own. NOTHING to remove, so no action —
+//                  the same absence §16.6 drew, for the same reason: an
+//                  affordance here would be a promise this room cannot keep.
+//
+// ⚠️ THE ROW ACTION IS THE FIRST AFFORDANCE A REPOSITORY IN THIS HALF HAS EVER
+// HAD, and it is a legitimate one: a project's LINK to an organisation
+// repository is exactly the thing a project may change.
 //
 // ⚠️ THE TWO REMOVALS MUST NOT LOOK ALIKE (§17.6). This one is a quiet row action
 // whose confirm's primary is a SECONDARY button and whose copy spends its length
@@ -39,7 +57,12 @@ import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 const HEADING_ID = 'project-repositories-organization';
 
 export interface OrganizationRepositoriesProps {
-  rows: ProjectRepoDto[];
+  /**
+   * The section's rows — links and ladder-layered repositories, already ordered
+   * and de-duplicated by `splitRoomSections`. This component renders what it is
+   * handed and decides nothing about membership.
+   */
+  entries: OrgSectionEntry[];
   /** The organisation's display name, for the heading and the confirm copy. */
   organizationName: string;
   /** The org inventory — `See every repository in <org>`. */
@@ -53,7 +76,7 @@ export interface OrganizationRepositoriesProps {
 }
 
 export function OrganizationRepositories({
-  rows,
+  entries,
   organizationName,
   inventoryHref,
   canAdd,
@@ -86,14 +109,20 @@ export function OrganizationRepositories({
       <Card
         footer={
           <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* ⚠️ NOT SILENT when the actor cannot add. A room whose one action
+            {/* ⚠️ THE PROVENANCE SENTENCE, RE-TIERED (MOTIR-4820). The section it
+                absorbed carried "Connected for the whole workspace, not for this
+                project alone" — a true sentence about the wrong tier, since
+                MOTIR-4649 moved a repository's tenancy to the ORGANISATION. It
+                matters more here than it did there, because this section now
+                holds rows the project cannot remove, and this is what says why.
+                ⚠️ NOT SILENT when the actor cannot add. A room whose one action
                 simply vanishes leaves a reader wondering whether they are looking
                 at a bug; the footer says WHO can do it and WHERE, which is what
                 turns an absence into an answer. And not DISABLED either — an entry
                 point is a promise about a room, and a disabled control is a
                 promise the product then refuses (MOTIR-2468). */}
-            <p className="font-sans text-sm text-(--el-text-secondary)">
-              {canAdd ? t('section.foot') : t('section.footNoPermission')}
+            <p className="min-w-0 font-sans text-sm text-(--el-text-secondary)">
+              {canAdd ? t('section.provenance') : t('section.footNoPermission')}
             </p>
             {/* ⚠️ THE FOOTER LINK STOPPED BEING A HAND-OFF AND BECAME A VIEW. It
                 read "Choose which repositories Motir can see" — the way to perform
@@ -110,9 +139,9 @@ export function OrganizationRepositories({
         }
       >
         <ul className="flex flex-col gap-1">
-          {rows.map((row) => (
+          {entries.map((entry) => (
             <li
-              key={row.id}
+              key={entry.id}
               className="flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)"
             >
               <FolderGit2
@@ -120,29 +149,29 @@ export function OrganizationRepositories({
                 aria-hidden
               />
               <span className="min-w-0 flex-1 truncate font-sans text-sm">
-                {row.realizedRepo ? (
-                  <>
-                    <span className="text-(--el-text-secondary)">{row.realizedRepo.owner}/</span>
-                    <span className="font-medium text-(--el-text)">{row.realizedRepo.name}</span>
-                  </>
-                ) : (
-                  <span className="font-medium text-(--el-text)">{row.name}</span>
-                )}
+                <span className="text-(--el-text-muted)">{ownerPrefix(entry)}</span>
+                <span className="font-medium text-(--el-text)">{repoName(entry)}</span>
               </span>
-              {row.realizedRepo?.defaultBranch ? (
+              {defaultBranch(entry) ? (
                 <span className="shrink-0 rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-xs text-(--el-code-text)">
-                  {row.realizedRepo.defaultBranch}
+                  {defaultBranch(entry)}
                 </span>
               ) : null}
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setConfirming(row)}
-                className="shrink-0 text-(--el-danger-on-surface) hover:bg-(--el-danger-surface)"
-              >
-                {t('remove.action')}
-              </Button>
+              {/* ⚠️ ONLY A LINK CARRIES THIS. A ladder-layered repository has no
+                  `project_repository` row, so there is nothing for a remove to
+                  delete — and a control that cannot keep its promise is worse
+                  than its absence (§16.2). */}
+              {entry.kind === 'link' ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirming(entry.row)}
+                  className="shrink-0 text-(--el-danger-on-surface) hover:bg-(--el-danger-surface)"
+                >
+                  {t('remove.action')}
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -187,4 +216,35 @@ export function OrganizationRepositories({
       </Modal>
     </section>
   );
+}
+
+/**
+ * The three things a row PRINTS, read off whichever half of the union it is.
+ *
+ * A LINK prefers its REALIZED repository — the host's own casing is what a
+ * checkout answers to, and it can legitimately differ from the row's authored
+ * name once someone renames the repository on GitHub. A DOMAIN entry has only
+ * `repoRef`, which is `owner/name` and is that shape's identity, so the owner is
+ * split off it rather than carried as its own field: the room's domain read has
+ * no owner column to carry.
+ *
+ * A ref that somehow holds no `/` renders as just the name — the honest
+ * degradation, and never a stray slash.
+ */
+function repoName(entry: OrgSectionEntry): string {
+  return entry.kind === 'link' ? (entry.row.realizedRepo?.name ?? entry.row.name) : entry.repo.name;
+}
+
+function ownerPrefix(entry: OrgSectionEntry): string {
+  if (entry.kind === 'link') {
+    return entry.row.realizedRepo ? `${entry.row.realizedRepo.owner}/` : '';
+  }
+  const cut = entry.repo.repoRef.lastIndexOf('/');
+  return cut === -1 ? '' : `${entry.repo.repoRef.slice(0, cut)}/`;
+}
+
+function defaultBranch(entry: OrgSectionEntry): string | null {
+  return entry.kind === 'link'
+    ? (entry.row.realizedRepo?.defaultBranch ?? null)
+    : entry.repo.defaultBranch;
 }

@@ -237,6 +237,25 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── An address named as HISTORY, by the asset that retires it ─────────────
+  // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
+  // Code health, the code index and Git were three things in two rail sections
+  // with opposite gating, and they become one `Code` row. Its "where it was"
+  // table and its §3 argument name `/settings/workspace/github` because that is
+  // the address the collapse REMOVES — MOTIR-4669 moved the surface to
+  // `/settings/organization/git`.
+  //
+  // ⚠️ Correcting the asset to the live address would DESTROY its meaning: the
+  // table's whole content is where these rows used to be, and rewriting the row
+  // to point at the new home would make it claim the collapse never happened.
+  // The guard's premise — "an address it names will be believed by the next
+  // card that reads it" — does not hold for prose that is explicitly about the
+  // past, and this is the sanctioned door for that case.
+  {
+    file: 'design/code-context/design-notes.md',
+    address: '/settings/workspace/github',
+    why: 'Named as the PRE-collapse address, in a table of where things used to be and in the §3 argument for removing the row. MOTIR-4669 retired it in favour of `/settings/organization/git`. Pointing the prose at the live address would make the asset claim the collapse it documents never happened.',
+  },
   // ── The RETIRED landing, which the app still answers on ──────────────────
   //  MOTIR-4782 moved the signed-in landing from `/home` to `/workbench` and
   //  kept the old address alive as a permanent 308 (`LANDING_REDIRECTS`), so
@@ -1611,11 +1630,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/brand/design-notes.md',
     path: 'design/brand/brand-mark.design-notes.md',
     why: "The asset's own File-name note, recording the filename the card asked for and why it ships as `design/brand/design-notes.md` instead. It has to name the path it did not use.",
-  },
-  {
-    file: 'design/audit-coverage/design-notes.md',
-    path: 'design/code-context',
-    why: 'A verified-absent claim the asset makes inline — "its asset is not drawn yet — verified: there is no `design/code-context/` on `origin/main`".',
   },
   // ── Forward-looking: the asset proposes the file ──────────────────────────
   {

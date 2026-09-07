@@ -310,11 +310,21 @@ export function deadCountByFile(mocks: MockSource[]): Map<string, number> {
  *     MOTIR-4812 exists to stop being answered by re-pointing the utility.
  *
  * ── What MOTIR-4810 did with those two, and why only one of them arose ──────
- * The 484 `[&_svg]:h-[18px]` / `[&_svg]:w-[18px]` occurrences across seven
- * assets were DECLARED, in the form `design/shell/rail-bottom-section.mock.html`
- * already carried — it is the control that rules out "the mocks intend 24px",
- * and copying its rule rather than authoring one is what keeps the eight shell
- * assets saying the same thing. Every affected `.png` was re-exported.
+ * The `[&_svg]:h-[18px]` / `[&_svg]:w-[18px]` occurrences were DECLARED, in the
+ * form `design/shell/rail-bottom-section.mock.html` already carried — it is the
+ * control that rules out "the mocks intend 24px", and copying its rule rather
+ * than authoring one is what keeps the shell assets saying the same thing.
+ * Every affected `.png` was re-exported.
+ *
+ * ⚠️ SIX assets, 344 occurrences — not the seven and 484 the population had,
+ * because `design/workbench/workbench.mock.html` (140) LANDED FIRST, in
+ * MOTIR-4851, which declared the same pair while redrawing the pager. Two cards
+ * fixing one asset's inert utilities independently is not a collision to
+ * prevent: the row simply left this table under whichever landed first, and the
+ * second found its own edit already made. What it does mean is that a count
+ * taken when a card is FILED is a measurement of that moment — MOTIR-4862 is
+ * the planning bug about this card's numbers, and this is the benign half of
+ * the same fact.
  *
  * The 48 `[&_.seg-ic]:` / `[&_.seg-trail]:` occurrences in
  * `design/work-items/child-panel-graph.mock.html` were REMOVED, and the second
@@ -363,6 +373,17 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
  * which is a worse guard than a count somebody maintains. What the count DOES
  * buy is the ratchet the pair of cards was filed for: no asset can gain a dead
  * rule, and the 85 mocks absent from this table are held at zero outright.
+ *
+ * ⚠️ SIX COUNTS DROPPED BY ONE (five, for `context-row`) IN MOTIR-4851, AND THE
+ * RATCHET IS WHY THEY HAD TO BE EDITED RATHER THAN LEFT. A rule is dead when NO
+ * element in ANY mock carries its class — the predicate is tree-wide, not
+ * per-file — so a mock that starts CARRYING a class revives the dead rule
+ * wherever it was declared. `design/workbench/`'s pager panels carry
+ * `cursor-not-allowed`, `cursor-default`, `opacity-55`, `select-none`, `min-w-6`
+ * and `text-[13px]`, which these six files had declared and nothing used. The
+ * table asserts equality in BOTH directions, so a count going DOWN is a failure
+ * exactly as one going up is — which is the ratchet working: the number stays a
+ * measurement somebody maintains rather than a ceiling that quietly drifts.
  */
 const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/ai-callout-menu.mock.html', count: 1, card: 'MOTIR-4811' },
@@ -376,7 +397,7 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/reading-and-handoff.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/ai-chat/target-picker.mock.html', count: 3, card: 'MOTIR-4811' },
   { file: 'design/ai-planning/peek-proposal-mode.mock.html', count: 4, card: 'MOTIR-4811' },
-  { file: 'design/ai-planning/peek-proposed-todos.mock.html', count: 5, card: 'MOTIR-4811' },
+  { file: 'design/ai-planning/peek-proposed-todos.mock.html', count: 4, card: 'MOTIR-4811' },
   { file: 'design/ai-planning/plan-canvas-grouped-roots.mock.html', count: 3, card: 'MOTIR-4811' },
   { file: 'design/ai-planning/plan-detail-refined.mock.html', count: 6, card: 'MOTIR-4811' },
   { file: 'design/ai-usage/search-spend.mock.html', count: 9, card: 'MOTIR-4811' },
@@ -421,9 +442,9 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/roadmap/locate.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/roadmap/roadmap-arrival.mock.html', count: 10, card: 'MOTIR-4811' },
   { file: 'design/roadmap/roadmap.mock.html', count: 19, card: 'MOTIR-4811' },
-  { file: 'design/runs/run-modal.mock.html', count: 8, card: 'MOTIR-4811' },
-  { file: 'design/runs/run-section.mock.html', count: 4, card: 'MOTIR-4811' },
-  { file: 'design/runs/runs-index.mock.html', count: 12, card: 'MOTIR-4811' },
+  { file: 'design/runs/run-modal.mock.html', count: 7, card: 'MOTIR-4811' },
+  { file: 'design/runs/run-section.mock.html', count: 3, card: 'MOTIR-4811' },
+  { file: 'design/runs/runs-index.mock.html', count: 11, card: 'MOTIR-4811' },
   { file: 'design/settings/account-data.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/settings/appearance.mock.html', count: 18, card: 'MOTIR-4811' },
   { file: 'design/settings/arrival.mock.html', count: 7, card: 'MOTIR-4811' },
@@ -432,17 +453,21 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/settings/two-factor.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/shell/3d-immersive-shell.mock.html', count: 4, card: 'MOTIR-4811' },
   { file: 'design/shell/account-menu.mock.html', count: 4, card: 'MOTIR-4811' },
-  // 873 → 872 with MOTIR-4810, and the arithmetic is worth stating because it
+  // 868 → 867 with MOTIR-4810, and the arithmetic is worth stating because it
   // went the OTHER way first. Removing the four vestigial `[&_.seg-*]:` tokens
   // from `child-panel-graph.mock.html` orphaned this file's compiled
   // `.[&_.seg-trail]:text-(--el-text-faint)` rule — the tree-wide predicate had
-  // been holding it alive off that one carrier — so the count rose to 874. The
+  // been holding it alive off that one carrier — so the count ROSE to 869. The
   // remedy the failure message itself prescribes is to DELETE the rule, not to
-  // raise the pin: this table is a ratchet, and a count that grows to absorb
-  // the diff that broke it is the mute button it exists not to be. Deleting the
-  // rule dropped TWO declared names, because its nested `& .seg-trail` prelude
-  // declared the second, and `.seg-trail` was already inside the 873.
-  { file: 'design/shell/context-row.mock.html', count: 872, card: 'MOTIR-4814' },
+  // raise the pin: this table is a ratchet, and a count that grows to absorb the
+  // diff that broke it is the mute button it exists not to be. Deleting the rule
+  // dropped TWO declared names, because its nested `& .seg-trail` prelude
+  // declared the second, and `.seg-trail` was already inside the pinned count.
+  // (The baseline is 868 rather than the 873 this card was written against:
+  // MOTIR-4851 took five off it, by the mirror of the same tree-wide predicate
+  // — its pager panels started CARRYING classes these files had declared and
+  // nothing used. Same mechanism, opposite direction.)
+  { file: 'design/shell/context-row.mock.html', count: 867, card: 'MOTIR-4814' },
   { file: 'design/shell/help-menu.mock.html', count: 4, card: 'MOTIR-4811' },
   { file: 'design/shell/navigation-pending.mock.html', count: 6, card: 'MOTIR-4811' },
   { file: 'design/shell/rail-bottom-section.mock.html', count: 5, card: 'MOTIR-4811' },
@@ -460,7 +485,7 @@ const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/work-items/provenance.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/work-items/repository-set.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/work-items/saved-filters.mock.html', count: 1, card: 'MOTIR-4811' },
-  { file: 'design/work-items/todo-list.mock.html', count: 4, card: 'MOTIR-4811' },
+  { file: 'design/work-items/todo-list.mock.html', count: 3, card: 'MOTIR-4811' },
   { file: 'design/work-items/type-executor-picker.mock.html', count: 1, card: 'MOTIR-4811' },
   { file: 'design/workbench/workbench.mock.html', count: 15, card: 'MOTIR-4811' },
   { file: 'design/workspaces/invite-arrival.mock.html', count: 6, card: 'MOTIR-4811' },
@@ -643,8 +668,10 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     // which is what the ratchet is for — the ceiling comes DOWN with the fix and
     // cannot go back up.
     expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(104);
-    // 1493 → 1492: one compiled rule in `context-row.mock.html` that MOTIR-4810
-    // orphaned and then deleted (see its row above).
-    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1492);
+    // Direction (B)'s ceiling stays at its measured population: MOTIR-4851 took
+    // ten off the table and MOTIR-4810 one more without lowering it, because the
+    // per-file rows are the real ratchet here — each is asserted EXACT, so the
+    // ceiling is a backstop rather than the instrument.
+    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1493);
   });
 });
