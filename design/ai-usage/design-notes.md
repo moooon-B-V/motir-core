@@ -701,8 +701,21 @@ search figures all stay exactly as MOTIR-4572 left them, for every org.
 
 ## Panel 7c — the drawing
 
-Drawn in `search-spend.mock.html` panel (5)(d), which is where this area's META
-state has always lived; `usage.mock.html` is byte-unchanged.
+**Drawn in `usage.mock.html` panel 7, beside 7a and 7b** — that is where this
+area's balance states live, and a reader who opens this asset to find out what
+happens at an exhausted balance goes to panel 7, not to the amendment asset. 7b's
+crumb now states its narrowed condition and 7c sits full-width beneath the pair,
+because it REPLACES 7b for one class of org rather than joining it.
+
+**And in `search-spend.mock.html` panel (5)(d)**, whose META state had been
+drawing the superseded “Unlimited” treatment (below). The two are the same state
+drawn in the two assets that each owe it: panel 7 owes the balance states, and
+(5)(d) owes the META row of its own states panel.
+
+**⚠️ An earlier revision of this amendment drew 7c ONLY in the amendment asset and
+left `usage.mock.html` byte-unchanged.** That was wrong and is recorded rather
+than quietly fixed: a design about panel 7b that does not touch panel 7 is a
+design a reviewer cannot find. Panels 1–6 and 8 remain out of scope.
 
 | element   | primitive / class                         | token                                            | why                                                                                                                                                                               |
 | --------- | ----------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
