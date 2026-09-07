@@ -52,6 +52,7 @@ import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   declareRoutingVerdict,
+  finishIndexFor,
   seedConnectedOnlyRepository,
   seedReadableRepository,
   seedRoutingJourney,
@@ -63,6 +64,8 @@ test.describe.configure({ timeout: 240_000 });
 const workspace = (page: Page) => page.getByRole('dialog');
 const readingState = (page: Page) => page.getByTestId('planning-reading-state');
 const handOff = (page: Page) => page.getByTestId('planning-handoff');
+const indexBanner = (page: Page) => page.getByTestId('planning-indexing-banner');
+const indexTurn = (page: Page) => page.getByTestId('planning-indexing-turn');
 
 /**
  * Open the plan window on the active project by writing the overlay's own
@@ -82,7 +85,7 @@ async function openPlanWindow(page: Page): Promise<void> {
   expect((await dispatched).status()).toBe(200);
 }
 
-test('three projects, three destinations', async ({ page, chapter, beat, acceptanceStory }) => {
+test('four projects, four destinations', async ({ page, chapter, beat, acceptanceStory }) => {
   acceptanceStory('MOTIR-4753');
 
   // ── 1 ────────────────────────────────────────────────────────────────────
@@ -201,6 +204,80 @@ test('three projects, three destinations', async ({ page, chapter, beat, accepta
     const rail = page.getByRole('navigation', { name: /migration/i });
     await expect(rail).toContainText('A few questions');
     await expect(rail).not.toContainText(/discovery|vision|Pre-plan/i);
+    await beat();
+  });
+
+  // ── FOUR · THE WAIT (MOTIR-4827) ──────────────────────────────────────────
+  //
+  // The journey a reviewer would most want to see, because it is the one that
+  // used to be invisible: somebody connects a repository and opens the plan
+  // window before the graph exists. Every code-graph tool then answers EMPTY —
+  // indistinguishable from a repository with nothing in it — so the old shape
+  // routed them into an interview about a codebase Motir was seconds from
+  // reading. Nothing errored; they simply got the slow path.
+  await chapter('A repository with no code graph yet — Motir waits, and says why', async () => {
+    await resetDatabase();
+    const seed = await seedRoutingJourney('routing-indexing@e2e.motir.test', {
+      identifier: 'RTIX',
+    });
+    const ref = await seedConnectedOnlyRepository(seed.workspaceId);
+    declareRoutingVerdict({
+      outcome: 'wait_for_index',
+      message:
+        "You've connected " +
+        ref +
+        " but I haven't read it yet — I'm building its index now. I'd rather wait than plan " +
+        'your project from a repository I cannot see. As soon as it is done we can start.',
+    });
+
+    await signIn(page, 'routing-indexing@e2e.motir.test', ROUTING_JOURNEY_PASSWORD);
+    await openPlanWindow(page);
+
+    // ⚠️ NOBODY IS ROUTED. This outcome has no destination, so the hand-off —
+    // which exists to MOVE somebody — must not be what they meet, and the
+    // address must not have changed under them.
+    await expect(indexBanner(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+    await expect(handOff(page)).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe('/roadmap');
+    await beat();
+
+    // ⚠️ TWO ELEMENTS, AND THE RECORDING SHOWS THEM TOGETHER (Yue: *"with the
+    // banner and say it"*). The BANNER carries the durable state and names the
+    // repository; the TURN carries the planner's own reason. A build that
+    // collapsed them would satisfy neither of these.
+    await expect(indexBanner(page)).toContainText(ref);
+    await expect(indexTurn(page)).toContainText("I'd rather wait than plan");
+    await expect(indexTurn(page)).toContainText('As soon as it is done');
+    await beat();
+
+    // …and the EXIT is on screen, because they opened this window to plan and
+    // are owed the fact that closing it does not cancel anything.
+    await expect(page.getByTestId('planning-indexing-exit')).toContainText('come back');
+    await beat();
+
+    // ── THE WAIT ENDS ───────────────────────────────────────────────────────
+    //
+    // A REAL ledger write, the same fact the index job itself records — not a
+    // network stub, which would have tested this spec's own harness. The window
+    // polls, sees the graph, and ASKS AGAIN rather than deciding: whether the
+    // substrate is now enough is still the planner's judgement.
+    declareRoutingVerdict({
+      outcome: 'continue',
+      message: "I've read " + ref + ' now. What shall we plan first?',
+    });
+    const reasked = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === '/api/ai/plan/route-onboarding' &&
+        r.request().method() === 'POST',
+    );
+    await finishIndexFor(seed.workspaceId, ref);
+    expect((await reasked).status()).toBe(200);
+    await beat();
+
+    // The wait resolves rather than spinning: the banner comes down and the
+    // workspace opens, which is what makes this a receipt of a wait that ENDS.
+    await expect(indexBanner(page)).toHaveCount(0);
+    await expect(workspace(page)).toBeVisible();
     await beat();
   });
 });

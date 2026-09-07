@@ -53,7 +53,13 @@ export interface AskJobOutcome {
  * state does not go red — it goes green on the unfixed code.
  */
 export interface RoutingJobOutcome {
-  outcome: 'continue' | 'onboard_new_project' | 'onboard_existing_project';
+  // ⚠️ FOUR SINCE MOTIR-4828. `wait_for_index` is the outcome with no
+  // destination: the repository is connected, its graph does not exist yet, and
+  // the window HOLDS the person rather than routing them. The acceptance lane
+  // cannot drive that journey at all without an arm here — which is the
+  // *a named fixture that was never built* trap, so the arm ships with the spec
+  // that needs it.
+  outcome: 'continue' | 'onboard_new_project' | 'onboard_existing_project' | 'wait_for_index';
   message: string;
   keptSteps?: string[];
   missing?: string[];

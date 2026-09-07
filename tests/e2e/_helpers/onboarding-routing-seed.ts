@@ -29,7 +29,7 @@ export const JOBS_FIXTURE =
   process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ?? '/tmp/motir-acceptance-ai-jobs-fixture.json';
 
 export interface RoutingVerdictFixture {
-  outcome: 'continue' | 'onboard_new_project' | 'onboard_existing_project';
+  outcome: 'continue' | 'onboard_new_project' | 'onboard_existing_project' | 'wait_for_index';
   message: string;
   keptSteps?: string[];
   missing?: string[];
@@ -62,6 +62,19 @@ export async function seedConnectedOnlyRepository(workspaceId: string): Promise<
   const repo = E2E_INDEX_REPOS[0];
   await seedConnectedRepos(workspaceId, [repo]);
   return indexRepoRef(repo);
+}
+
+/**
+ * FINISH the index a journey has been waiting on (MOTIR-4827).
+ *
+ * ⚠️ IT IS A REAL LEDGER WRITE, NOT A NETWORK STUB. What `readOnboardingSubstrate`
+ * reads — and therefore what the window's poll learns — is a SUCCEEDED
+ * `system.code-graph-index` run, which is a row in this lane's own database. A
+ * `page.route` interception would have tested the harness rather than the
+ * product; this drives the same fact the real index job writes.
+ */
+export async function finishIndexFor(workspaceId: string, repoRef: string): Promise<void> {
+  await recordIndexSucceeded(workspaceId, repoRef);
 }
 
 export const ROUTING_JOURNEY_PASSWORD = 'RoutingJourney1!';
