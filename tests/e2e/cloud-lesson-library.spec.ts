@@ -223,11 +223,21 @@ test('a project with no lessons gets the designed empty screen, not a blank pane
   await expectSettledVisible(doorCard(page));
   await doorLink(page).click();
 
-  await expect(page.getByText("Motir hasn't learned anything here yet")).toBeVisible();
+  // BY ROLE — the empty state's `<h2>` (`EmptyState`), on a route that streams
+  // behind a boundary: an unscoped `getByText` matches the hidden streamed copy
+  // too and loses strict mode (MOTIR-4822; `CLAUDE.md`, the loading-boundary
+  // rule). The accessibility tree excludes the hidden copy.
+  const emptyHeading = page.getByRole('heading', {
+    name: "Motir hasn't learned anything here yet",
+  });
+  await expect(emptyHeading).toBeVisible();
   // It EXPLAINS rather than apologising: what would appear, and where the switch
-  // that stops it lives.
-  await expect(page.getByText(/Motir writes down the correction/)).toBeVisible();
-  await expect(page.getByText(/Recording can be switched off/)).toBeVisible();
+  // that stops it lives. Read THROUGH the heading's own card — the two lines are
+  // `<span>`s with no role to ask for, so scoping is what buys them the same
+  // immunity the heading gets from a role.
+  const emptyBody = emptyHeading.locator('..');
+  await expect(emptyBody.getByText(/Motir writes down the correction/)).toBeVisible();
+  await expect(emptyBody.getByText(/Recording can be switched off/)).toBeVisible();
   await expect(page.getByTestId('lesson-row')).toHaveCount(0);
 });
 

@@ -143,7 +143,12 @@ test('paid + on, no evidence yet → the pending "waiting for the video" state',
   const story = await seedInReviewStory(ctx, seed.projectId, 'No video yet');
 
   await page.goto(`/items/${story.identifier}`);
-  await expect(page.getByText('Waiting for the acceptance video')).toBeVisible();
+  // BY ROLE — `AcceptancePanel` renders each state's title as an `<h3>`; an
+  // unscoped `getByText` also matches the hidden streamed copy of the subtree
+  // and loses strict mode (MOTIR-4822; `CLAUDE.md`, the loading-boundary rule).
+  await expect(
+    page.getByRole('heading', { name: 'Waiting for the acceptance video' }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 });
 
@@ -155,7 +160,8 @@ test('paid + toggle OFF (admin) → the Turn-on switch + Go to settings', async 
   const story = await seedInReviewStory(ctx, seed.projectId, 'Toggle off');
 
   await page.goto(`/items/${story.identifier}`);
-  await expect(page.getByText('Acceptance video is off')).toBeVisible();
+  // BY ROLE — the panel's `<h3>` (MOTIR-4822, as above).
+  await expect(page.getByRole('heading', { name: 'Acceptance video is off' })).toBeVisible();
   await expect(page.getByRole('switch')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Go to settings' })).toHaveAttribute(
     'href',
@@ -170,7 +176,10 @@ test('no plan → the Upgrade CTA (no player)', async ({ page }) => {
   const story = await seedInReviewStory(ctx, seed.projectId, 'Free plan');
 
   await page.goto(`/items/${story.identifier}`);
-  await expect(page.getByText('Get a video receipt for every story')).toBeVisible();
+  // BY ROLE — the panel's `<h3>` (MOTIR-4822, as above).
+  await expect(
+    page.getByRole('heading', { name: 'Get a video receipt for every story' }),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Upgrade' })).toHaveAttribute(
     'href',
     '/settings/organization/billing',
