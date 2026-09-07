@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation';
+import { onboardingReturnHref } from '@/lib/planning/onboardingReturn';
+import { searchParamsToEntries } from '@/lib/navigation/searchParamsToEntries';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
@@ -29,7 +31,22 @@ import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
 // (`/onboarding/migrate`) instead of showing the start-fresh entrance. Existing
 // items ARE the project's understanding — the 4-tier pre-plan is skipped.
 
-export default async function OnboardingEntrancePage() {
+export default async function OnboardingEntrancePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // ⚠️ WHERE A FINISHED JOURNEY LANDS IS NOT ALWAYS `/roadmap` (MOTIR-4770). A
+  // user who reached onboarding from the plan window was SENT here by a routing
+  // verdict, and they were promised they would land back in the window they
+  // opened. The return address rides the query the hand-off wrote; `null` means
+  // they came in by another door — the entrance, a bookmark, a fresh sign-up —
+  // and those keep the destination they always had.
+  const back = onboardingReturnHref(
+    new URLSearchParams(searchParamsToEntries(await searchParams)),
+    'completed',
+  );
+
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -49,7 +66,7 @@ export default async function OnboardingEntrancePage() {
   // surface, exactly as the discovery route does. A never-onboarded project (null
   // marker) sees the entrance — unless it already has existing work items
   // (MOTIR-1259: a manually-built or seeded tree → route to the migrate wizard).
-  if (ctx.project.onboardingRanAt) redirect('/roadmap');
+  if (ctx.project.onboardingRanAt) redirect(back ?? '/roadmap');
 
   // Existing-item gate (MOTIR-1259): a never-AI-planned project with a
   // non-empty work-item tree skips the start-fresh pre-plan path and routes to

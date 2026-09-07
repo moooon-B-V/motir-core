@@ -15,6 +15,7 @@ import {
   withoutPlanningOverlay,
   withPlanningOverlay,
   OVERLAY_PARAM_NAMES,
+  PLANNING_RETURN_PARAM,
   type PlanningLaunch,
   type PlanningLaunchContext,
 } from '@/lib/planning/launcher';
@@ -291,8 +292,14 @@ export function PlanningWorkspaceOverlay({
   // collapses all of them to `none` and this branch treats `none` as *carry on*.
   const [routed, setRouted] = useState<OnboardingRoutingVerdict | 'clear' | null>(null);
   const routingAskedRef = useRef(false);
+  // ⚠️ AND NOT ON THE WAY BACK (MOTIR-4770). A user returning from onboarding was
+  // routed thirty seconds ago and has just done what they were sent to do;
+  // reading them again and possibly routing them again is the loop this marker
+  // exists to prevent. It rides the address onboarding returns to and is
+  // stripped by Close with the overlay's own parameters, so it cannot linger.
+  const justReturned = searchParams.get(PLANNING_RETURN_PARAM) !== null;
   useEffect(() => {
-    if (!open || substrate === null || routingAskedRef.current) return;
+    if (!open || substrate === null || justReturned || routingAskedRef.current) return;
     routingAskedRef.current = true;
     const controller = new AbortController();
     void (async () => {
@@ -316,7 +323,7 @@ export function PlanningWorkspaceOverlay({
       setRouted(verdict.outcome === 'continue' ? 'clear' : verdict);
     })();
     return () => controller.abort();
-  }, [open, substrate, tr]);
+  }, [open, substrate, justReturned, tr]);
 
   /** What Motir read, already named — the hand-off's FOUND block. */
   const readSources = useMemo(() => {
@@ -423,7 +430,7 @@ export function PlanningWorkspaceOverlay({
           onGo={() => router.push(handoffDestination(routed, launchContext(launch)))}
           onDismiss={requestClose}
         />
-      ) : substrate !== null && routed === null ? (
+      ) : substrate !== null && routed === null && !justReturned ? (
         // ⚠️ BEFORE THE ANCHOR READ, DELIBERATELY (MOTIR-4768). A never-onboarded
         // project has no plan to anchor to and nothing on the canvas to scope,
         // so waiting on `fetchPlanningAnchor` to draw the reading state would

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   AlertCircle,
@@ -18,6 +18,7 @@ import {
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils/cn';
+import { onboardingReturnHref } from '@/lib/planning/onboardingReturn';
 import type {
   MigrateIndexStatusDto,
   MigrateOnboardingDto,
@@ -57,14 +58,24 @@ export interface MigrateWizardProps {
 export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateWizardProps) {
   const t = useTranslations('onboardingMigrate');
   const router = useRouter();
+  // THE RETURN ADDRESS the hand-off wrote (MOTIR-4770), if this user came from
+  // the plan window at all.
+  const searchParams = useSearchParams();
   const [run, setRun] = useState<MigrateOnboardingDto | null>(initialRun);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // A completed run should have redirected server-side; guard the client too.
   useEffect(() => {
-    if (run?.status === 'completed' || run?.step === 'done') router.push('/roadmap');
-  }, [run, router]);
+    // ⚠️ BACK TO THE WINDOW THEY OPENED, when they came from one (MOTIR-4770).
+    // A user sent here by a routing verdict was promised they would land back in
+    // the plan window; landing them on the roadmap instead is a journey with no
+    // end. `null` is somebody who reached the wizard by another door, and they
+    // keep the destination they always had.
+    if (run?.status === 'completed' || run?.step === 'done') {
+      router.push(onboardingReturnHref(searchParams, 'completed') ?? '/roadmap');
+    }
+  }, [run, router, searchParams]);
 
   /** POST a migrate route + apply the returned run (or surface the error). */
   const postRunRoute = useCallback(
@@ -131,6 +142,7 @@ export function MigrateWizard({ initialRun, projectName, userInitial }: MigrateW
         flowName={t('brandBar.flowName')}
         userInitial={userInitial}
         planAiLabel={t('brandBar.planAi')}
+        saveExitHref={onboardingReturnHref(searchParams, 'abandoned') ?? '/roadmap'}
         saveExitLabel={t('common.saveExit')}
       />
       <main className="flex-1 overflow-y-auto">
@@ -173,11 +185,14 @@ function BrandBar({
   userInitial,
   planAiLabel,
   saveExitLabel,
+  saveExitHref,
 }: {
   flowName: string;
   userInitial: string;
   planAiLabel: string;
   saveExitLabel: string;
+  /** Where LEAVING lands — the host page, never the workspace (MOTIR-4770). */
+  saveExitHref: string;
 }) {
   return (
     <header className="flex items-center gap-3 border-b border-(--el-border) px-6 py-3.5">
@@ -203,8 +218,13 @@ function BrandBar({
           <Sparkles className="size-3.5" strokeWidth={2.2} aria-hidden />
           {planAiLabel}
         </Link>
+        {/* ⚠️ ABANDONING IS NOT COMPLETING, and the difference is the whole of
+            MOTIR-4770 AC3. Somebody who walks away goes back to the PAGE — with
+            no workspace re-opening around them, because re-opening a window
+            somebody deliberately left is the opposite failure to stranding them,
+            and it is the easier one to write by accident. */}
         <Link
-          href="/roadmap"
+          href={saveExitHref}
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1.5')}
         >
           {saveExitLabel}
