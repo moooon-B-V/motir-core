@@ -1043,6 +1043,68 @@ export const workItemRepository = {
   },
 
   /**
+   * WHICH REPOSITORIES HAS EACH OF THESE PROJECTS NAMED ON ITS WORK — the
+   * evidence that a project has CHOSEN a repository rather than merely being
+   * allowed to reach one (MOTIR-4821).
+   *
+   * ⚠️ THIS IS NOT THE SCOPE LADDER AND MUST NOT BECOME ONE.
+   * `lib/projectRepos/effectiveDomain.ts` answers *which repositories MAY this
+   * project reach*, and its first rung hands a set-less project the whole
+   * connected registry as a PERMISSIVE DEFAULT. Read backwards it says every
+   * empty project uses every repository, which is how the organisation's
+   * `Used by N projects` column came to name a scratch project against all seven
+   * (MOTIR-4802's fix, inverted one surface over). This read answers a different
+   * question with its own evidence: a repository NAME the project actually put on
+   * a work item. A project with a set expresses the same choice as a
+   * `project_repository` row, so the caller unions the two — see
+   * `organizationRepoService.listRepositoryUsage`.
+   *
+   * `targetRepos` is the array and `targetRepo` IS `targetRepos[0]`, but both are
+   * read: rows written before the array existed carry only the scalar, and a
+   * dropped name is a project silently missing from a DISCONNECT dialogue.
+   *
+   * Returns the names AS STORED, de-duplicated per project. Normalizing them to
+   * the comparable identity is the caller's job (`repoNameKey`) — this method
+   * does not know which spelling the `github_repo` row it will be matched against
+   * uses, and a repository whose name reaches this list is a handful of distinct
+   * strings per project however many work items name it.
+   *
+   * `workspaceId` is filtered explicitly alongside the project ids (finding #26 —
+   * RLS is inert under the dev/CI superuser), so a caller cannot read one
+   * workspace's work by binding another. Empty `projectIds` short-circuits.
+   */
+  async listRepoNamesByProject(
+    workspaceId: string,
+    projectIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Map<string, string[]>> {
+    const byProject = new Map<string, string[]>();
+    if (projectIds.length === 0) return byProject;
+    const rows = await tx.$queryRaw<Array<{ projectId: string; repoName: string }>>`
+      SELECT DISTINCT "projectId", "repoName"
+      FROM (
+        SELECT w."projectId", unnest(w."targetRepos") AS "repoName"
+        FROM "work_item" w
+        WHERE w."projectId" = ANY(${[...projectIds]}::text[])
+          AND w."workspaceId" = ${workspaceId}
+        UNION ALL
+        SELECT w."projectId", w."targetRepo" AS "repoName"
+        FROM "work_item" w
+        WHERE w."projectId" = ANY(${[...projectIds]}::text[])
+          AND w."workspaceId" = ${workspaceId}
+          AND w."targetRepo" IS NOT NULL
+      ) named
+      WHERE "repoName" IS NOT NULL AND btrim("repoName") <> ''
+    `;
+    for (const row of rows) {
+      const list = byProject.get(row.projectId) ?? [];
+      list.push(row.repoName);
+      byProject.set(row.projectId, list);
+    }
+    return byProject;
+  },
+
+  /**
    * One LAYER of the top-down ready traversal (Subtask 7.0.13): the project's
    * non-archived, non-triage work items at a single parent level — the ROOTS
    * (`parentIds === null` → `parentId IS NULL`) or the direct children of a set

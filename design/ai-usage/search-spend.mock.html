@@ -863,6 +863,14 @@
         background: var(--el-tint-yellow);
         color: var(--el-warning);
       }
+      /* 7c — the EXEMPT org's exhausted balance. INFORMATIONAL, not a warning:
+         nothing is wrong and nothing is paused, so it takes the sky tint + the
+         info hue rather than 7b's yellow + warning. Both are existing --el-*
+         slots; the glyph carries no text, so 3:1 applies, not 4.5:1. */
+      .state.exempt .ico {
+        background: var(--el-tint-sky);
+        color: var(--el-info);
+      }
       .state .ico svg {
         width: 22px;
         height: 22px;
@@ -1689,8 +1697,12 @@
       (b) FIGURES UNAVAILABLE — <code>OrgUsageDTO.search</code> is <code>null</code>, meaning the
       boundary did not report the block. An em-dash, never a zero, and per-CARD: the token figures
       beside it are unaffected; (c) the PLAIN MEMBER under the shipped 6.10.4 gate — their own
-      project's attributed spend, and no org-wide figure; (d) the META org, which shows the
-      unlimited treatment and no billed figure at all.
+      project's attributed spend, and no org-wide figure; (d) the EXEMPT (<code>isMeta</code>) org
+      at an exhausted balance — panel <strong>7c</strong>, the state this asset adds, drawn beside
+      the shipped 7b it replaces for that org only.
+      <strong>Redrawn 2026-09-07 (MOTIR-4809)</strong>; the superseded &ldquo;Unlimited&rdquo;
+      treatment it used to show is recorded in <code>design-notes.md</code> &sect; the 2026-09-07
+      amendment, not here.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1789,26 +1801,35 @@
             <div class="card-head">
               <div class="ttl">
                 <div>
-                  <h3>d · The META org</h3>
-                  <p class="hsub">moooon B.V. — internal, never billed</p>
+                  <h3>d · The EXEMPT org, at an exhausted balance</h3>
+                  <p class="hsub">panel 7c — <code>isMeta</code> only, never the classification</p>
                 </div>
               </div>
-              <span class="pill pill-neutral">Unlimited</span>
+              <span class="pill pill-neutral">Not gated</span>
             </div>
             <div class="card-body">
-              <div class="note">
+              <div class="state exempt">
+                <span class="ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                ></span>
+                <h4>This organization isn’t charged for planning</h4>
+                <p>
+                  <strong>moooon</strong> is exempt from the credit gate, so planning runs whatever
+                  the balance reads. The figures below are recorded for internal cost visibility.
+                </p>
+                <div class="passive-slot">
+                  The balance can be negative here. That is the cost this organization has incurred,
+                  not an amount owed — nothing on this page is a bill.
+                </div>
+              </div>
+              <div class="note" style="margin-top: 14px">
                 <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
                 <span
-                  ><mark class="superseded"
-                    >⚠️ SUPERSEDED 2026-09-05 (MOTIR-4337 / MOTIR-4572): an INTERNAL org reads a
-                    REAL balance that nets to zero because every debit is offset in the same
-                    transaction — not “Unlimited”. Panels 7a and 7b render for it too. Kept as a
-                    record of shipped behaviour until that card merges.</mark
-                  >
-                  The shipped <code>isMeta</code> treatment is unchanged: the balance reads
-                  <strong>Unlimited</strong> rather than a figure. Search spend is still
-                  <strong>recorded and shown</strong> here — it is internal cost visibility, which
-                  is what that branch is for — but no figure on this page is a bill.</span
+                  >Every figure beside it renders exactly as it does for a paying organization —
+                  balance, spend, search spend, the drill, the per-model breakdown and the run log.
+                  <strong>This card replaces 7b for this org and nothing else</strong>: an org that
+                  is <code>internalBilling</code> but NOT <code>isMeta</code> is genuinely refused
+                  at a zero balance, so it keeps the shipped 7b.</span
                 >
               </div>
             </div>

@@ -6,7 +6,11 @@ import {
   truncateCodeGraphOffboarding,
   truncateJobRuns,
 } from '../../helpers/db';
-import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
+import {
+  createTestWorkItem,
+  makeWorkItemFixture,
+  type WorkItemFixture,
+} from '../../fixtures/workItemFixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { organizationRepoService } from '@/lib/services/organizationRepoService';
 import { isOrgAdminForWorkspace } from '@/lib/services/organizationAccessService';
@@ -190,6 +194,14 @@ describe('⚠️ THE FULL LIFECYCLE — link, unlink to ZERO, re-link', () => {
     // one-step test can assert the row is gone, and a two-step test can assert
     // nothing was enqueued — but only the third step shows that the graph was
     // still there to be re-used, which is the whole reason the rule exists.
+    // The project WORKS in this repository — the evidence `Used by` reads once
+    // the link is gone (MOTIR-4821); see the assertion below for why it is here.
+    const item = await createTestWorkItem(fx, { kind: 'task', title: 'work in the repo' });
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { targetRepo: 'motir-core', targetRepos: ['motir-core'] },
+    });
+
     const row = await organizationRepoService.linkExistingRepo(
       fx.projectId,
       { githubRepoId: repoId, role: 'api' },
@@ -209,7 +221,23 @@ describe('⚠️ THE FULL LIFECYCLE — link, unlink to ZERO, re-link', () => {
     // …still in the inventory…
     const inventory = await organizationRepoService.listInventory(fx.ctx);
     expect(inventory.map((r) => r.repo.id)).toContain(repoId);
-    expect(inventory.find((r) => r.repo.id === repoId)?.projects).toEqual([]);
+    // ⚠️ AND `Used by` READS WHAT THE PROJECT HAS CHOSEN, NOT THE LINK COUNT —
+    // MOTIR-4802, CORRECTED BY MOTIR-4821. Removing the only set row takes the
+    // LINK away and does not take the WORK away: the project still names this
+    // repository on a work item (seeded above), so it is still using it and the
+    // disclosure still says so. The link count is zero — asserted above, and it
+    // is what "zero projects" was ever about here.
+    //
+    // ⚠️ THE SEED IS THE ASSERTION, not fixture plumbing. Between MOTIR-4802 and
+    // MOTIR-4821 this line passed with NO work at all, because the ladder named
+    // every set-less project against every connected repository — so it was
+    // agreeing with the over-report exactly as the `toEqual([])` before it had
+    // agreed with the under-report. Delete the seed and it should go back to
+    // `[]`, which is now the honest answer for a project that has neither linked
+    // the repository nor worked in it.
+    expect(inventory.find((r) => r.repo.id === repoId)?.projects.map((p) => p.id)).toEqual([
+      fx.projectId,
+    ]);
 
     // …and re-linking it pays nothing, which is what "legal" was protecting.
     await organizationRepoService.linkExistingRepo(

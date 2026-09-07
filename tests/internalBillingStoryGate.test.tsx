@@ -416,13 +416,43 @@ describe('GUARD — no figure on the billing or usage client is derived from `is
     }
   });
 
-  it('and the count is pinned at ZERO, so any reintroduction is deliberate', () => {
-    // The ratchet beside the behaviour predicate. Today neither client reads the
-    // flag at all; a future card that wants a second chip has to move this
-    // number and say why, which is the right amount of friction for putting a
-    // flag read back on a screen this story just cleared.
-    for (const path of [BILLING_CLIENT, USAGE_CLIENT]) {
-      expect((read(path).match(/\bisMeta\b/g) ?? []).length, `${path} reads isMeta`).toBe(0);
+  it('and the count is RATCHETED per client, so any reintroduction is deliberate', () => {
+    // The ratchet beside the behaviour predicate. It was `0` for both clients,
+    // and its comment asked a future card that wants a flag read back to "move
+    // this number and say why". MOTIR-4818 is that card, and this is the why.
+    //
+    // ⚠️ THE STORY'S DECISION IS NOT WEAKENED — its RANGE is corrected, and the
+    // arm above is what still holds it. MOTIR-4572 removed a branch that hid
+    // the storefront from an org that genuinely HAS one: an `internalBilling`
+    // org is charged like a customer and made whole by a paired ledger credit,
+    // so every figure on the page is TRUE for it. That is still forbidden, by
+    // the `suppressions()` arm directly above, which passes unchanged — no
+    // branch, ternary, predicate or widening derives a FIGURE from the flag.
+    //
+    // What MOTIR-4818 adds is the shape MOTIR-4572 already permits one of: a
+    // presentational swap that changes no number. An `isMeta` org is neither
+    // charged nor capped (`pmTierForOrg` short-circuits it to the internal
+    // `meta` tier with every cap lifted; `billingService.ts:252` switches its
+    // AI paywall off), so the storefront was not showing it a figure it would
+    // not be charged — it was showing it a FALSE one, beside two checkouts.
+    // `design/billing/design-notes.md` § AMENDMENT 2026-09-07 replaces those
+    // two lines with a chip and a banner for that org alone.
+    //
+    // ONE read, in ONE named predicate (`isBillingExempt`), which is why the
+    // count is 1 rather than "a few": the number is the ratchet, and a second
+    // read is a second conversation.
+    const ALLOWED_ISMETA_READS: Record<string, number> = {
+      // `isBillingExempt` — the single predicate the exempt variants branch on.
+      [BILLING_CLIENT]: 1,
+      // ⚠️ STILL ZERO, and deliberately so. The usage surface has the SAME
+      // defect (MOTIR-4806) and it is NOT fixed here — its re-take is
+      // MOTIR-4809's, against `design/ai-usage`. Whoever fixes it moves this
+      // number in that card, not this one.
+      [USAGE_CLIENT]: 0,
+    };
+
+    for (const [path, allowed] of Object.entries(ALLOWED_ISMETA_READS)) {
+      expect((read(path).match(/\bisMeta\b/g) ?? []).length, `${path} reads isMeta`).toBe(allowed);
     }
   });
 });
