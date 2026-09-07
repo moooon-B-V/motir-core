@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render as renderRaw, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import type { HomeWorkItemRowDto } from '@/lib/dto/home';
+import type { HomeTabCountsDto, HomeWorkItemRowDto } from '@/lib/dto/home';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
@@ -64,6 +64,9 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
     storyPoints: null,
     estimateMinutes: null,
     updatedAt: '2026-08-11T00:00:00.000Z',
+    // Null unless a test says otherwise: `completedAt` (MOTIR-4780) is stamped
+    // only on entry to a done-category status, and this strip's rows are live.
+    completedAt: null,
     project: { id: 'p1', identifier: 'MOTIR', name: 'Motir' },
     viewerIsAssignee: true,
     viewerIsReporter: true,
@@ -231,7 +234,19 @@ describe('toHomeRowViews — the role fallback', () => {
 });
 
 describe('the Home tab strip', () => {
-  const counts = { myWork: 12, watching: 4 };
+  // ⚠️ The SHIPPED `/home` strip reads `myWork` + `watching` and this card
+  // changes no surface, so those are still the numbers under test. The three
+  // lifecycle counts and the Approvals slot ride the DTO from MOTIR-4781 and are
+  // rendered by the Workbench strip MOTIR-4782 builds; they are supplied here so
+  // the fixture is a real `HomeTabCountsDto` rather than a partial one.
+  const counts: HomeTabCountsDto = {
+    myWork: 12,
+    toDo: 5,
+    inProgress: 7,
+    recentlyFinished: 2,
+    approvals: 0,
+    watching: 4,
+  };
 
   it('spells each tab as a real href, with the active one marked', async () => {
     renderRaw(await HomeTabs({ active: 'work', counts }));
@@ -259,7 +274,12 @@ describe('the Home tab strip', () => {
   });
 
   it('SUPPRESSES both counts when both are zero', async () => {
-    renderRaw(await HomeTabs({ active: 'work', counts: { myWork: 0, watching: 0 } }));
+    renderRaw(
+      await HomeTabs({
+        active: 'work',
+        counts: { ...counts, myWork: 0, toDo: 0, inProgress: 0, watching: 0 },
+      }),
+    );
     // A brand-new user's first screen: a "0" beside each tab is a number they
     // have to read and then discard.
     expect(within(screen.getByTestId('home-tab-work')).queryByText('0')).toBeNull();
@@ -267,7 +287,7 @@ describe('the Home tab strip', () => {
   });
 
   it('KEEPS a zero that sits beside a non-zero sibling', async () => {
-    renderRaw(await HomeTabs({ active: 'work', counts: { myWork: 3, watching: 0 } }));
+    renderRaw(await HomeTabs({ active: 'work', counts: { ...counts, myWork: 3, watching: 0 } }));
     // That zero is information — "nothing over there either" — rather than
     // noise, which is why the suppression is on both-zero and not on each.
     expect(within(screen.getByTestId('home-tab-watching')).getByText('0')).toBeTruthy();

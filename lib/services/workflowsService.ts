@@ -342,6 +342,51 @@ export const workflowsService = {
   },
 
   /**
+   * Every project's status keys GROUPED BY CATEGORY, from ONE query — the
+   * generalisation of {@link getTerminalStatusKeysByProjects} from the terminal
+   * slice to the whole partition (Story MOTIR-4777 · MOTIR-4781).
+   *
+   * The Workbench splits one personal list into three along the lifecycle axis,
+   * and the axis it keys on is `workflow_status.category` rather than the status
+   * KEY — because a project defines its own statuses as rows, so a tab keyed on
+   * `'in_review'` is a tab that empties the day somebody renames a column. That
+   * needs all three groups where the terminal read needed one.
+   *
+   * Every requested projectId is present, and every CATEGORY is present within
+   * it (empty array when the project has no status in that category), so a
+   * caller can index twice without a null gap. That totality is the point: an
+   * absent group and an empty one are the same answer to *which statuses of this
+   * project are in progress?*, and making the caller distinguish them is how a
+   * `?? []` ends up standing in for a missing project.
+   *
+   * ⚠️ A supplied `tx` is used INSTEAD OF opening a context, exactly as
+   * {@link getTerminalStatusKeysByProjects} does and for the same measured
+   * reason: `workflow_status` is RLS-gated on `app.workspace_id`, the GUC is
+   * already bound on the caller's transaction, and nesting an interactive
+   * transaction inside another exhausts the pool on a read that runs on every
+   * Workbench render.
+   */
+  async getStatusKeysByCategoryByProjects(
+    projectIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, Record<StatusCategoryDto, string[]>>> {
+    const unique = [...new Set(projectIds)];
+    const map = new Map<string, Record<StatusCategoryDto, string[]>>(
+      unique.map((pid) => [pid, { todo: [], in_progress: [], done: [] }]),
+    );
+    const statuses = tx
+      ? await workflowsRepository.findStatusesByProjects(unique, workspaceId, tx)
+      : await withWorkspaceServiceContext(workspaceId, (t) =>
+          workflowsRepository.findStatusesByProjects(unique, workspaceId, t),
+        );
+    for (const s of statuses) {
+      map.get(s.projectId)?.[s.category as StatusCategoryDto].push(s.key);
+    }
+    return map;
+  },
+
+  /**
    * The status META (key · label · category) for MANY projects at once, as
    * `Map<projectId, Map<statusKey, WorkItemRefStatusDto>>` from ONE query (no
    * N+1) — the batched read behind the internal-link chip's status dot (Subtask
