@@ -227,7 +227,7 @@ describe('the planning workspace overlay groups the roots that are in no epic', 
         projectKey="MOTIR"
         index={indexPlanReview(review)}
         diffKey="k2"
-        outcome="approved"
+        outcome="accepted"
       />,
     );
 
