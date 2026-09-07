@@ -347,6 +347,20 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
             },
           ],
         },
+        // MOTIR-4750 — the design publisher's own mint half, and the mint is
+        // the worse half of any such pair: it hands back a presigned PUT into
+        // A's object store, under A's own design prefix. The key must read as
+        // not-found before a grant is minted.
+        create_design_upload: {
+          key: item1,
+          files: [
+            {
+              kind: 'image',
+              sourcePath: 'design/rogue/rogue.png',
+              contentType: 'image/png',
+            },
+          ],
+        },
         // MOTIR-4704 — the same argument one artifact over. A cross-tenant
         // acceptance publish would put a stranger's RECORDING on A's story, and
         // the mint half is worse than the register half: it hands back a
@@ -816,6 +830,19 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
               sourcePath: 'design/scoped/scoped.png',
               contentType: 'image/png',
               contentBase64: 'eA==',
+            },
+          ],
+        },
+        // MOTIR-4750 — the caller's OWN item. Minting a presigned write is a
+        // WRITE even though it persists no row, so the read-only-token loop
+        // asserts it is REFUSED at the scope gate.
+        create_design_upload: {
+          key: item1,
+          files: [
+            {
+              kind: 'image',
+              sourcePath: 'design/scoped/scoped.png',
+              contentType: 'image/png',
             },
           ],
         },

@@ -439,9 +439,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   publish_design_result: {
     summary:
-      'Put the design RESULT on a design work item — the note sections you changed, the mock and the .png export, in one call. It is the deliverable a reviewer opens, and nothing else publishes it.',
+      'Put the design RESULT on a design work item — the note sections you changed, the mock and the .png export, in one call. It is the deliverable a reviewer opens, and nothing else publishes it. Each asset arrives inline as base64, or as the pathname of a create_design_upload grant when it is too large to send.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '8742db646e68',
+    descriptionFingerprint: 'b0b34207ed0a',
+  },
+  create_design_upload: {
+    summary:
+      'Mint a short-lived presigned PUT for a design asset too large to send inline \u2014 step 1 ' +
+      'of 2, because a multi-megabyte board is larger than a tool argument can carry. Upload the ' +
+      'bytes straight to the store, then publish the pathname.',
+    // Regenerated from a live `tools/list` handshake, never from the source.
+    descriptionFingerprint: '3a8f473b8138',
   },
   create_acceptance_upload: {
     summary:
