@@ -23,6 +23,15 @@ import type { OrgRepoInventoryRowDto } from '@/lib/dto/organizationRepos';
 // number: an org member may not browse every project, and a count of four beside
 // two names is the same leak arriving as a digit.
 //
+// ⚠️ AND IT COUNTS WHAT A PROJECT HAS CHOSEN, NOT WHAT IT MAY REACH
+// (MOTIR-4821). The service briefly answered this from the scope ladder, which
+// hands a project with no repositories of its own the whole connected registry —
+// so every empty project was named against every repository, on the disclosure a
+// DESTRUCTIVE act rests on. A warning that names people who were never affected
+// is how a reader learns to click through warnings. The permissive default is
+// still real and is still disclosed: ONCE, in the card foot and in the dialog,
+// as a property of the organisation.
+//
 // ⚠️ A REPOSITORY USED BY ZERO PROJECTS IS AN ORDINARY ROW. It belongs to the
 // organisation, stays in the inventory and stays indexed — dropping the graph
 // when the last project unlinks would re-introduce per-project ownership through
@@ -241,6 +250,14 @@ export function RepositoryInventory({
           <p className="font-sans text-sm text-(--el-text)">
             {td('projects', { count: confirming?.projects.length ?? 0 })}
           </p>
+          {/* ⚠️ THE PERMISSIVE DEFAULT, SAID ONCE (MOTIR-4821). The list above
+              names projects that CHOSE this repository — a link, or work that
+              names it. A project with no repositories of its own can still reach
+              it through the scope ladder's first rung, and that is true of the
+              ORGANISATION rather than of any one project: naming those projects
+              individually is what made this dialogue warn about a scratch project
+              that had never touched the repository. */}
+          <p className="font-sans text-sm text-(--el-text-secondary)">{td('alsoReachable')}</p>
           {confirming && confirming.projects.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {confirming.projects.map((project) => (

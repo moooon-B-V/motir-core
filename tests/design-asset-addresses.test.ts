@@ -975,11 +975,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
   },
   {
-    file: 'design/shell/rail-bottom-section.mock.html',
-    address: '/settings/workspace/github',
-    why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
-  },
-  {
     file: 'design/shell/top-bar.mock.html',
     address: '/settings/workspace/github',
     why: "MOTIR-4680 moved the git connect surface a TIER — a repository is connected once, to the ORGANISATION — so `/settings/workspace/github` is a PERMANENT redirect to `/settings/organization/git`. Every asset here draws the rail row, the room's footer or the connect hand-off as it stood, and each is a point-in-time record of a surface that shipped: the address resolves (308) rather than 404s, and correcting a drawing to a destination it never depicted would rewrite what the panel recorded. ENUMERATED from a run of this lane, per MOTIR-4680's own acceptance criterion — never guessed.",
