@@ -63,6 +63,7 @@ async function addRepoRow(
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         repoId: `repo-${randomToken(8)}`,
         owner: 'moooon',
         name: opts.realizedName ?? name,

@@ -17,6 +17,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding } from './helpers/db';
+import { organizationIdOf } from './helpers/organizationOf';
 
 // THE CODE-GRAPH OFFBOARDING QUEUE (MOTIR-2166 ·
 // `docs/decisions/code-graph-index-fleet.md` §14) — real Postgres, the shipped
@@ -481,6 +482,7 @@ describe('the four lifecycle triggers (§14.3)', () => {
         data: {
           installationId: conn.id,
           workspaceId: workspace.id,
+          organizationId: await organizationIdOf(workspace.id),
           repoId: repoId!,
           owner: 'acme',
           name: name!,

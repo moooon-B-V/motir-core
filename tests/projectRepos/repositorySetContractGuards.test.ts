@@ -11,6 +11,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { spyOnJobDispatch, dispatchedEvents } from '../helpers/jobs';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Story-level ARCHITECTURE / CONTRACT guards for the repository set (Story
@@ -175,6 +176,7 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
       data: {
         installationId: inst.id,
         workspaceId,
+        organizationId: await organizationIdOf(workspaceId),
         repoId: `${name}-id`,
         owner: 'moooon',
         name,
@@ -279,6 +281,7 @@ describe('what a delete does to a repository row', () => {
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         repoId: 'acme-web-id',
         owner: 'moooon',
         name: 'acme-web',

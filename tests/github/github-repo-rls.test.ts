@@ -5,6 +5,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // `github_repo` isolation — direct-DB RLS proof (MOTIR-1931), the tenancy half of
 // this card's acceptance: "a repo mirrored under Motir's SHARED provisioning
@@ -99,6 +100,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
     data: {
       installationId: installation.id,
       workspaceId: wsA.id,
+      organizationId: await organizationIdOf(wsA.id),
       repoId: '910001',
       owner: MOTIR_ORG,
       name: 'alpha-web',
@@ -110,6 +112,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
     data: {
       installationId: installation.id,
       workspaceId: wsB.id,
+      organizationId: await organizationIdOf(wsB.id),
       repoId: '910002',
       owner: MOTIR_ORG,
       name: 'bravo-web',
@@ -206,6 +209,7 @@ describe('github_repo RLS — a shared installation, two tenants', () => {
 
   it('refuses an INSERT that tenants a row to another workspace (WITH CHECK)', async () => {
     const fx = await makeSharedMirror();
+    const organizationId = await organizationIdOf(fx.workspaceBId);
 
     await expect(
       asAppRole({ workspaceId: fx.workspaceAId }, (tx) =>
@@ -213,6 +217,7 @@ describe('github_repo RLS — a shared installation, two tenants', () => {
           data: {
             installationId: fx.installationRowId,
             workspaceId: fx.workspaceBId,
+            organizationId,
             repoId: '910003',
             owner: MOTIR_ORG,
             name: 'planted',

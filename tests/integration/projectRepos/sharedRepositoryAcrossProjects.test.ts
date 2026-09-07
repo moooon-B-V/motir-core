@@ -59,6 +59,7 @@ beforeEach(async () => {
     data: {
       installationId: installation.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: `repo-shared-${fx.workspaceId}`,
       owner: 'moooon',
       name: 'shared-repo',

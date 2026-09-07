@@ -54,10 +54,13 @@ async function openPalette(page: Page) {
 
 /**
  * The primary rail. Every nav assertion below is scoped to it, and that is not
- * tidiness: the top bar's brand link is labelled "Motir — go to dashboard" and
- * the mobile drawer carries the same names, so an unscoped `name: 'Dashboard'`
- * resolves to two elements and fails strict mode. `shell.spec.ts` documents the
- * same trap — naming the rail is the fix, not tightening the string.
+ * tidiness: the mobile drawer carries the same row names, so an unscoped
+ * `name: 'Dashboard'` resolves to more than one element and fails strict mode.
+ * `shell.spec.ts` documents the same trap — naming the rail is the fix, not
+ * tightening the string.
+ *
+ * ⚠️ The brand link was a second source of that collision, labelled "Motir — go
+ * to dashboard", until MOTIR-4799 pointed it at the landing and relabelled it.
  */
 const rail = (page: Page) => page.getByRole('navigation', { name: 'Primary' });
 

@@ -122,8 +122,16 @@ async function OrgGitBody({
   // ⚠️ `allSettledOrThrow`, never a bare `Promise.all` (MOTIR-3066): each arm
   // opens its own transaction, and `Promise.all` abandons the others' connections
   // on the first rejection rather than letting them settle.
+  //
+  // ⚠️ THE NAME AND THE INVENTORY RESOLVE FROM THE SAME WORKSPACE (MOTIR-4801).
+  // The heading once came from the ACTOR-scoped resolve with no preference —
+  // the caller's FIRST org membership — while `listInventory` below resolved the
+  // organisation from `ctx.workspaceId`. For a member of two organisations the
+  // two halves of this page could therefore disagree: a heading naming one
+  // tenant over rows belonging to another, each with a `Disconnect` button.
+  // Both arms now read `ctx.workspaceId`, so the page has ONE subject.
   const [organization, canDisconnect, installation, rows] = await allSettledOrThrow([
-    organizationsService.resolveActiveOrganization(ctx.userId, null),
+    organizationsService.resolveWorkspaceOrganization(ctx.userId, ctx.workspaceId),
     isOrgAdminForWorkspace(ctx.userId, ctx.workspaceId),
     githubInstallationService.getWorkspaceInstallation({
       userId: ctx.userId,
@@ -131,7 +139,7 @@ async function OrgGitBody({
     }),
     organizationRepoService.listInventory(ctx),
   ]);
-  const organizationName = organization?.organization.name ?? '';
+  const organizationName = organization?.name ?? '';
 
   // ⚠️ THE GITLAB ARM IS A DIFFERENT CONNECTION, NOT A DIFFERENT SKIN. One OAuth
   // authorization conveys identity and project access, and selection happens in

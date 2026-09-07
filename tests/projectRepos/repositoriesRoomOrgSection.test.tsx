@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { RepositoriesRoom } from '@/app/(authed)/settings/project/repositories/_components/RepositoriesRoom';
@@ -258,5 +259,23 @@ describe('REMOVING from the project — the narrow one of the two removals', () 
     await waitFor(() => expect(screen.getByRole('alert', { hidden: true })).toBeTruthy());
     expect(screen.getByText('motir-core')).toBeTruthy();
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+// THE PAGE'S OWN CONTRACT — which organisation the room is told to name
+// (MOTIR-4801). The component above is handed `organizationName` as a prop and
+// cannot be wrong about it; the page that computes the prop can, and did.
+describe('the page names the PROJECT`s organisation, not the actor`s', () => {
+  const PAGE = readFileSync('app/(authed)/settings/project/repositories/page.tsx', 'utf8');
+
+  it('⚠️ resolves the organisation from the WORKSPACE, never from an actor-scoped read', () => {
+    // `resolveActiveOrganization(userId, null)` falls through to the caller's
+    // FIRST org membership in row order. It never sees the project, the
+    // workspace or the org cookie — so for a member of two organisations the
+    // section heading, the hint, the picker segment and the `See every
+    // repository in <org>` link all named a tenant this project has nothing to
+    // do with, and were accidentally right for everybody with one membership.
+    expect(PAGE).toContain('resolveWorkspaceOrganization(userId, workspaceId)');
+    expect(PAGE).not.toContain('resolveActiveOrganization(');
   });
 });

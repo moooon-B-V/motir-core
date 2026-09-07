@@ -11,6 +11,7 @@ import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { randomToken } from '../../helpers/random';
+import { organizationIdOf } from '../../helpers/organizationOf';
 
 // The dispatch payload carries the WHOLE repository set (Story MOTIR-2731 ·
 // MOTIR-3131 — ADR `work-item-repository-set.md` § *Amendment 2026-08-19* §B1).
@@ -62,6 +63,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: caller.fixture.workspaceId,
+      organizationId: await organizationIdOf(caller.fixture.workspaceId),
       repoId: `repo-${randomToken(8)}`,
       owner: 'moooon',
       name,

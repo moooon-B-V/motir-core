@@ -378,6 +378,7 @@ async function motirOwnedRow(fx: WorkItemFixture, name: string): Promise<void> {
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: `host-${name}`,
       owner: MOTIR_ORG,
       name,
@@ -406,6 +407,7 @@ async function connectedRow(fx: WorkItemFixture, name: string): Promise<void> {
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: `host-${name}`,
       owner: USER_LOGIN,
       name,

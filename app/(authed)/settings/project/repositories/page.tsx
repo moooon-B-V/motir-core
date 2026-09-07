@@ -141,6 +141,16 @@ async function RepositoriesPaneBody({
   // door or the sentence that says who can, and names the organisation in both
   // the section heading and the picker.
   //
+  // ⚠️ THE ORGANISATION COMES FROM THE WORKSPACE, NOT FROM THE ACTOR (MOTIR-4801).
+  // This read once asked the ACTOR-scoped resolve with no preference, which
+  // falls through to the caller's FIRST org membership in row order — right for a
+  // member of one organisation and a coin flip for a member of two, while the
+  // question ("whose repositories does this project draw on?") is about the
+  // PROJECT. `resolveWorkspaceOrganization` reads it off `workspace.organizationId`,
+  // which is the same source `projectRepoRoomService` and every add path already
+  // resolve against, so the heading, the hint, the picker segment and the
+  // inventory link cannot name a tenant the rows do not belong to.
+  //
   // ⚠️ `isOrgAdminForWorkspace` is a RENDERING question, not a gate. The gate is
   // `organizationRepoService`'s `assertOrgAdmin`, inside the transaction that
   // performs the add — this only decides which affordance is drawn, which is why
@@ -151,9 +161,9 @@ async function RepositoriesPaneBody({
   const [view, canAddRepositories, organization] = await allSettledOrThrow([
     projectRepoRoomService.getRoomView(projectId, { userId, workspaceId }),
     isOrgAdminForWorkspace(userId, workspaceId),
-    organizationsService.resolveActiveOrganization(userId, null),
+    organizationsService.resolveWorkspaceOrganization(userId, workspaceId),
   ]);
-  const organizationName = organization?.organization.name ?? '';
+  const organizationName = organization?.name ?? '';
 
   // ONE timestamp for the whole render, threaded into the rows: `Date.now()` in
   // a client render would disagree with the server's by the round-trip and the

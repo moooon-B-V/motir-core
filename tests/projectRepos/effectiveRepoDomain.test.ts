@@ -8,6 +8,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // THE EFFECTIVE REPOSITORY DOMAIN, as a SURFACE can read it (MOTIR-3126) — over
 // real Postgres.
@@ -224,6 +225,7 @@ async function connectRepo(workspaceId: string, repoName: string): Promise<Githu
     data: {
       installationId: inst.id,
       workspaceId,
+      organizationId: await organizationIdOf(workspaceId),
       repoId: `${repoName}-${randomToken(8)}`,
       owner: 'moooon',
       name: repoName,
