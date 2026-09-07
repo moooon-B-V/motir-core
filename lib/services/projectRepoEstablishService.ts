@@ -14,10 +14,24 @@ import type {
 // It exists because the step needs three facts that live in three services, and a
 // route handler is not allowed to compose them (CLAUDE.md's one-service-call
 // rule): the project's repository SET (MOTIR-1780), the actor's GitHub IDENTITY
-// (grant 1), and the workspace's INSTALLATION with the repositories it grants
+// (grant 1), and the ORGANISATION's CONNECTIONS with the repositories they grant
 // (grant 2). Composing them here also makes them ONE snapshot, which matters:
 // rendering a picker built from an installation read taken after the set read
 // could offer a repository a row had already claimed in between.
+//
+// ⚠️ GRANT 2 IS THE ORGANISATION'S, NOT THE WORKSPACE'S (MOTIR-4838). This read
+// asked `getWorkspaceInstallation`, which compares `workspace_id` in the SQL. A
+// repository is connected ONCE, to the ORGANISATION (MOTIR-4669), and the App is
+// installed from ONE workspace — so from every OTHER workspace of that
+// organisation the installation read answered null, `connectCandidates` was
+// built from `installation?.repos ?? []` and came back EMPTY, and the step read
+// as "connect the App first" for an organisation that already has. The question
+// this surface asks is an organisation question, so it now asks the
+// organisation, through the read MOTIR-4836 added for it.
+//
+// `githubInstallationRepository.findByWorkspaceId` is NOT the defect and is
+// untouched: it is honestly named and correct for a workspace's OWN grant. What
+// was wrong was which surface asked it.
 //
 // ⚠️ THE DEFAULT PATH ASKS FOR NOTHING FROM GITHUB, and this shape is built to
 // keep that true. The GitHub halves are nullable FACTS, never a "grant state":
@@ -41,10 +55,12 @@ export const projectRepoEstablishService = {
    * from `projectRepoSetService.getSet` before either GitHub read runs, so the
    * no-existence-leak posture is inherited rather than re-implemented.
    *
-   * The GitHub reads run only AFTER that gate, and are workspace/user-scoped in
-   * their own right. They are sequenced after — not `Promise.all`'d with — the set
-   * read on purpose: a caller who may not see the project must not cause a read of
-   * this workspace's installation at all.
+   * The GitHub reads run only AFTER that gate, and are organisation/user-scoped
+   * in their own right (the connection read resolves the organisation from the
+   * actor's own workspace row and asserts membership before it binds anything).
+   * They are sequenced after — not `Promise.all`'d with — the set read on
+   * purpose: a caller who may not see the project must not cause a read of this
+   * organisation's connections at all.
    */
   async getEstablishView(
     projectId: string,
@@ -52,9 +68,9 @@ export const projectRepoEstablishService = {
   ): Promise<ProjectRepoEstablishViewDto> {
     const set = await projectRepoSetService.getSet(projectId, ctx);
 
-    const [identity, installation] = await Promise.all([
+    const [identity, installations] = await Promise.all([
       githubIdentityService.getIdentityForUser(ctx.userId),
-      githubInstallationService.getWorkspaceInstallation({
+      githubInstallationService.listOrganizationInstallations({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       }),
@@ -71,16 +87,20 @@ export const projectRepoEstablishService = {
       set.rows.map((row) => row.realizedRepo?.id).filter((id): id is string => Boolean(id)),
     );
 
-    const connectCandidates: ProjectRepoConnectCandidateDto[] = (installation?.repos ?? []).map(
-      (repo) => ({
+    // Every connection the organisation holds, flattened. `listOrganizationInstallations`
+    // returns the SET rather than picking one, because two workspaces of one
+    // organisation may each have installed the App on a different GitHub account;
+    // a picker is exactly the surface that wants all of them.
+    const connectCandidates: ProjectRepoConnectCandidateDto[] = installations
+      .flatMap((installation) => installation.repos)
+      .map((repo) => ({
         id: repo.id,
         owner: repo.owner,
         name: repo.name,
         repoRef: `${repo.owner}/${repo.name}`,
         defaultBranch: repo.defaultBranch,
         claimed: claimed.has(repo.id),
-      }),
-    );
+      }));
 
     return {
       set,
@@ -90,7 +110,7 @@ export const projectRepoEstablishService = {
       hostOwner: provisioningOrgLogin(),
       githubLogin: identity?.githubLogin ?? null,
       githubAvatarUrl: identity?.avatarUrl ?? null,
-      hasInstallation: installation !== null,
+      hasInstallation: installations.length > 0,
       connectCandidates,
     };
   },
