@@ -26,11 +26,33 @@ import { join, relative, resolve, sep } from 'node:path';
 // is a guard nobody has watched fire, and the two false-positive shapes the
 // existing scans handle by construction were never written down as assertions.
 //
+// MOTIR-4800 added the FOURTH scan, and it is about a CARRIER rather than a
+// destination. Every scan above reads a string literal or a COMMENT, and
+// MOTIR-4799's defect sat in the tree for the whole life of this file without
+// tripping one of them: `app/(authed)/_components/TopNav.tsx` carried
+// `href="/dashboard"` under `aria-label={t('topNav.brandHome')}`, and the
+// surrounding comment discusses the brand slot, the width budget and the tile's
+// fill — the words *home* and *landing* appear in it nowhere, at any distance.
+// So a wider window for the second scan would not have found it: the intent was
+// declared in the element's ACCESSIBLE NAME, which is an axis none of the three
+// read. Widening the window is a change to a parameter; the defect was in the
+// axis. The fourth scan reads that axis, and stays as dumb as the rest.
+//
 // ⚠️ It is NOT a member of the guards lane, and that is a measurement rather
 // than an omission: `tests/ci-structural-guards-lane.test.ts` derives lane
 // membership from "imports a scanner module and parses the tree with the
-// TypeScript compiler API", which this does not do. It reads ~700 files with
-// `readFileSync` and two regexes, in well under a second.
+// TypeScript compiler API", which this does not do. It reads the tree with
+// `readFileSync` and a handful of regexes.
+//
+// ⚠️ THE FILE COUNT IN THAT SENTENCE WAS ~700 AND IS NOW 2,127 (MOTIR-4800).
+// The scans did not change; the tree grew under them, and each `it` walked and
+// re-read the whole of it — so the "well under a second" that came with the
+// count stopped being true some time before anybody re-measured it, at three
+// walks. `sourceFiles()` and the per-file reads are MEMOISED below for exactly
+// that reason: nothing writes to the tree while this file runs, so the four
+// scans read it once between them and the fourth is close to free. Measured on
+// this tree, three runs each: 2.14-2.46s of test time at three walks (the
+// state on `main`, before this card), 0.69-0.90s at one walk with four scans.
 
 const ROOT = resolve(__dirname, '..', '..');
 const ROOTS = ['app', 'components', 'lib'];
@@ -111,6 +133,110 @@ const ONBOARDING_LITERAL_ALLOWLIST: ReadonlyArray<{ file: string; because: strin
 ];
 
 /**
+ * Files allowed to point a `/dashboard` link from an element whose accessible
+ * name claims the home, each with the reason it is allowed — the same
+ * `{ file, because }` shape as `ONBOARDING_LITERAL_ALLOWLIST`, for the same
+ * reason: an entry whose reason has stopped being true is the thing a reader
+ * can spot, and a bare list of paths gives them nothing to spot it with.
+ *
+ * It is EMPTY, and it is meant to stay that way. An element that says *home*
+ * and goes to `/dashboard` is the MOTIR-4799 defect; the repair is to point it
+ * at `AUTHED_LANDING_PATH`, not to name it here. A second site found by this
+ * scan is its own bug (MOTIR-4800's scope boundary), never an entry.
+ */
+const DASHBOARD_NAME_ALLOWLIST: ReadonlyArray<{ file: string; because: string }> = [];
+
+/**
+ * How far a scan will look for the tag a `/dashboard` literal sits inside.
+ *
+ * The fixture is why this is not a tight bound: MOTIR-4799's brand mark put
+ * `href="/dashboard"` on line 2 of its `<Link`, `aria-label` on line 3, and the
+ * closing `>` twenty-five lines further down behind a comment about the tile's
+ * fill. Those lines are BLANK by the time this reads them (`codeLinesOf`), so
+ * the span costs nothing to cross — and a bound tight enough to feel careful
+ * would have missed the one element this scan exists for.
+ */
+const ELEMENT_SPAN = 60;
+
+/** The start of a JSX element — `<Link`, `<a`, `<Nav.Item`. */
+const OPENS_AN_ELEMENT = /<[A-Za-z][\w.]*/;
+
+/** The end of an OPENING tag — `>` or `/>`, once arrows have been removed. */
+const CLOSES_AN_OPENING_TAG = /\/?>/;
+
+/**
+ * `=>` and `>=` are not tag ends, and a prop holding either (`onClick={() =>
+ * …}`) is ordinary. Removing them before the test above is the whole of the
+ * approximation, and it fails toward a MISS: an element this cuts short simply
+ * has fewer attributes to read.
+ */
+function withoutArrows(line: string | undefined): string {
+  return (line ?? '').replace(/=>/g, '  ').replace(/>=/g, '  ');
+}
+
+/**
+ * The OPENING TAG a `/dashboard` literal sits inside, or `null` when it sits
+ * in no tag at all (a `redirect('/dashboard')` in a service, a route table).
+ *
+ * Deliberately dumb, in the register of the rest of this file: walk BACK to the
+ * nearest line that opens an element, then FORWARD to the nearest line that
+ * closes an opening tag. A nested element cannot appear before that `>`, so the
+ * region this returns is the attributes of ONE element — and every way it can
+ * be wrong (a tag that never closes inside the span, a JSX-valued prop whose
+ * own `/>` arrives first) shortens the region rather than widening it.
+ */
+export function openingTagAround(code: string[], index: number): string | null {
+  let start = -1;
+  for (let i = index; i >= 0 && index - i <= ELEMENT_SPAN; i -= 1) {
+    const line = withoutArrows(code[i]);
+    if (OPENS_AN_ELEMENT.test(line)) {
+      start = i;
+      break;
+    }
+    // A tag that closed ABOVE us means the literal is not in an attribute list.
+    if (i !== index && CLOSES_AN_OPENING_TAG.test(line)) return null;
+  }
+  if (start === -1) return null;
+
+  for (let i = start; i < code.length && i - start <= ELEMENT_SPAN; i += 1) {
+    if (!CLOSES_AN_OPENING_TAG.test(withoutArrows(code[i]))) continue;
+    // The tag closed before the literal — a different element's attributes.
+    return i < index ? null : code.slice(start, i + 1).join('\n');
+  }
+  return null;
+}
+
+/**
+ * An ACCESSIBLE-NAME attribute and its value. `aria-label` and `title` are the
+ * two an element declares its own name with; `aria-labelledby` points at some
+ * other node's text and is not readable by a string scan, so it is out of
+ * scope rather than forgotten.
+ */
+const ACCESSIBLE_NAME_ATTR = /(?:aria-label|title)\s*=\s*(\{[^}]*\}|"[^"]*"|'[^']*')/g;
+
+/**
+ * A name that CLAIMS THE HOME. Two arms, because the claim travels in two
+ * registers: as a word in the name itself (`aria-label="Home"`,
+ * `title="Landing"`), and as the tail of an i18n KEY, which is how MOTIR-4799
+ * carried it — `t('topNav.brandHome')`, where `\bhome\b` cannot match because
+ * `brandHome` is one word. The second arm reads that camel-case tail, so a
+ * `navHome` or a `goLanding` key is caught by the rule rather than by a list.
+ */
+const NAME_CLAIMS_THE_HOME = /\b(?:home|landing)\b/i;
+const CAMEL_NAME_CLAIMS_THE_HOME = /[a-z](?:Home|Landing)\b/;
+
+/** The first accessible-name attribute on `tag` that claims the home. */
+export function nameClaimingTheHome(tag: string): string | null {
+  for (const match of tag.matchAll(ACCESSIBLE_NAME_ATTR)) {
+    const value = match[1] ?? '';
+    if (NAME_CLAIMS_THE_HOME.test(value) || CAMEL_NAME_CLAIMS_THE_HOME.test(value)) {
+      return match[0].replace(/\s+/g, ' ');
+    }
+  }
+  return null;
+}
+
+/**
  * The claim that made three repairs necessary: a comment calling something the
  * home, the landing, or the post-auth destination. MOTIR-3173's diagnosis, in a
  * regex — *"the three that mattered are the three sitting under a sentence
@@ -124,7 +250,20 @@ const CLAIMS_TO_BE_THE_HOME =
   /\b(the\s+)?(app'?s\s+)?(default\s+)?(authed\s+)?(post-auth\s+)?(home|landing)\b/i;
 const NEGATED = /\b(no longer|not|never|isn'?t|instead of)\b/i;
 
+/**
+ * The walk and the reads are MEMOISED, and that is a cost decision rather than
+ * a style one (MOTIR-4800). Four scans over ~2,100 files is four walks and four
+ * full reads of the same bytes; nothing writes to the tree between them, so a
+ * module-level cache is exact. It is what keeps a fourth scan close to free —
+ * and what put the file back under the second its own docstring claimed.
+ */
+let sourceFileCache: string[] | null = null;
+const rawCache = new Map<string, string>();
+const lineCache = new Map<string, string[]>();
+const codeLineCache = new Map<string, string[]>();
+
 function sourceFiles(): string[] {
+  if (sourceFileCache) return sourceFileCache;
   const out: string[] = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir)) {
@@ -138,11 +277,26 @@ function sourceFiles(): string[] {
     }
   };
   for (const root of ROOTS) walk(join(ROOT, root));
+  sourceFileCache = out;
   return out;
 }
 
+function raw(file: string): string {
+  let source = rawCache.get(file);
+  if (source === undefined) {
+    source = readFileSync(file, 'utf8');
+    rawCache.set(file, source);
+  }
+  return source;
+}
+
 function lines(file: string): string[] {
-  return readFileSync(file, 'utf8').split('\n');
+  let split = lineCache.get(file);
+  if (!split) {
+    split = raw(file).split('\n');
+    lineCache.set(file, split);
+  }
+  return split;
 }
 
 /**
@@ -155,7 +309,12 @@ function lines(file: string): string[] {
  * hand-swept site, which is the state this whole card is leaving behind.
  */
 function codeLines(file: string): string[] {
-  return codeLinesOf(readFileSync(file, 'utf8'));
+  let blanked = codeLineCache.get(file);
+  if (!blanked) {
+    blanked = codeLinesOf(raw(file));
+    codeLineCache.set(file, blanked);
+  }
+  return blanked;
 }
 
 /**
@@ -246,7 +405,7 @@ describe('the landing has ONE owner (MOTIR-3373)', () => {
     for (const file of sourceFiles()) {
       const rel = relative(ROOT, file).split(sep).join('/');
       if (allowed.has(rel)) continue;
-      codeLinesOf(readFileSync(file, 'utf8')).forEach((line, i) => {
+      codeLines(file).forEach((line, i) => {
         if (ONBOARDING_LITERAL.test(line)) offenders.push(`${rel}:${i + 1} — ${line.trim()}`);
       });
     }
@@ -262,6 +421,46 @@ describe('the landing has ONE owner (MOTIR-3373)', () => {
         'friends) is a different route and does not match:\n  ' +
         offenders.join('\n  '),
     ).toEqual([]);
+  });
+
+  it('no /dashboard literal sits on an element whose ACCESSIBLE NAME claims the home (MOTIR-4800)', () => {
+    const allowed = new Set(DASHBOARD_NAME_ALLOWLIST.map((entry) => entry.file));
+    const offenders: string[] = [];
+
+    for (const file of sourceFiles()) {
+      const rel = relative(ROOT, file).split(sep).join('/');
+      if (allowed.has(rel)) continue;
+      const code = codeLines(file);
+      code.forEach((line, i) => {
+        if (!DASHBOARD_LITERAL.test(line)) return;
+        const tag = openingTagAround(code, i);
+        if (!tag) return;
+        const claim = nameClaimingTheHome(tag);
+        if (claim) offenders.push(`${rel}:${i + 1} — ${line.trim()}\n      name: ${claim}`);
+      });
+    }
+
+    expect(
+      offenders,
+      'An element that NAMES ITSELF the home and goes to /dashboard is the MOTIR-4799 ' +
+        'defect, and it is invisible to the three scans above: they read literals and ' +
+        'COMMENTS, and this claim travels in the accessible name. The brand mark carried ' +
+        'href="/dashboard" under aria-label={t(\'topNav.brandHome\')} for the whole life of ' +
+        'this file. Point it at AUTHED_LANDING_PATH — or rename the label, if the ' +
+        'destination is genuinely the dashboard and not the landing:\n  ' +
+        offenders.join('\n  '),
+    ).toEqual([]);
+  });
+
+  it('every dashboard-name allowlist entry names a file that exists and says WHY (MOTIR-4800)', () => {
+    for (const entry of DASHBOARD_NAME_ALLOWLIST) {
+      expect(existsSync(join(ROOT, entry.file)), `${entry.file} is allowlisted and absent`).toBe(
+        true,
+      );
+      expect(entry.because.length, `${entry.file} is allowlisted with no reason`).toBeGreaterThan(
+        20,
+      );
+    }
   });
 
   it('every onboarding allowlist entry names a file that exists and says WHY', () => {
@@ -335,5 +534,122 @@ describe('the onboarding scan itself (MOTIR-4403)', () => {
     // The same two exemptions the live scan grants: a different route, and prose.
     expect(retired(`redirect('/homepage');`)).toEqual([]);
     expect(retired(`// the old address, now a 308 to '/home'`)).toEqual([]);
+  });
+
+  // ── The FOURTH scan (MOTIR-4800) ──────────────────────────────────────────
+  //
+  // The one it exists for is MOTIR-4799's brand mark, so the fixture IS that
+  // element — `href` and `aria-label` on their own lines, twenty-five lines of
+  // comment between the last attribute and the closing `>`, which is exactly
+  // the shape a tight element window would have missed.
+  const named = (source: string): string[] => {
+    const code = codeLinesOf(source);
+    const hits: string[] = [];
+    code.forEach((line, i) => {
+      if (!DASHBOARD_LITERAL.test(line)) return;
+      const tag = openingTagAround(code, i);
+      if (!tag) return;
+      const claim = nameClaimingTheHome(tag);
+      if (claim) hits.push(claim);
+    });
+    return hits;
+  };
+
+  const TOP_NAV_TILE_COMMENT = [
+    '            // The tile (MOTIR-2557 · design/shell § *The brand tile*). The box',
+    '            // was always here and simply unpainted; it now takes an',
+    '            // `--el-surface` field and an `--el-border` hairline, and the',
+    "            // hairline DIVIDER that used to follow it is gone — the tile's own",
+    '            // edge says what the divider said, and that returns 9px to a row',
+    '            // measured at 69px of slack.',
+    '            //',
+    '            // Deliberately NOT a tint. The ORIGINAL reason was adjacency:',
+    "            // OrgControl's avatar was a 20px `--el-tint-lavender` tile and",
+    '            // ProjectAvatar an `--el-avatar-lavender` one, so a third lavender',
+    '            // square 20px away would have read as another tier chip. MOTIR-2679',
+    '            // deleted both of those squares, and the conclusion is re-affirmed',
+    '            // on new grounds (MOTIR-2674, design/shell/design-notes.md § The',
+    '            // brand tile): the tile is now the ONLY boxed element in the left',
+    '            // cluster, so the box itself is what marks it as identity rather',
+    '            // than as a control — a tint would re-introduce the very tier-chip',
+    '            // reading the neutral field was chosen to avoid.',
+  ].join('\n');
+
+  const topNav = (href: string): string =>
+    [
+      '          <Link',
+      `            href=${href}`,
+      "            aria-label={t('topNav.brandHome')}",
+      TOP_NAV_TILE_COMMENT,
+      '            className="hidden h-8 w-8 flex-none items-center justify-center md:flex"',
+      '          >',
+      '            <BrandMark variant="mark" size={24} />',
+      '          </Link>',
+    ].join('\n');
+
+  it("FLAGS TopNav's pre-fix brand mark — the element MOTIR-4799 fixed (MOTIR-4800)", () => {
+    expect(named(topNav('"/dashboard"'))).toEqual(["aria-label={t('topNav.brandHome')}"]);
+  });
+
+  it('does NOT flag the SAME element once it points at the landing (MOTIR-4800)', () => {
+    expect(named(topNav('{AUTHED_LANDING_PATH}'))).toEqual([]);
+  });
+
+  it('reads the claim off a one-line element too, in either name attribute', () => {
+    expect(named(`<Link href="/dashboard" aria-label="Home">m</Link>`)).toEqual([
+      'aria-label="Home"',
+    ]);
+    expect(named(`<a href="/dashboard" title="The landing">m</a>`)).toEqual([
+      'title="The landing"',
+    ]);
+    expect(named(`<Link href="/dashboard" aria-label={t('nav.goHome')} />`)).toEqual([
+      "aria-label={t('nav.goHome')}",
+    ]);
+  });
+
+  it('does NOT flag a /dashboard link whose name says DASHBOARD — the honest case', () => {
+    expect(named(`<Link href="/dashboard" aria-label={t('nav.dashboard')}>D</Link>`)).toEqual([]);
+    expect(named(`<Link href="/dashboard" title="Dashboard">D</Link>`)).toEqual([]);
+  });
+
+  it('does NOT flag a /dashboard literal that sits in no element at all', () => {
+    expect(named(`redirect('/dashboard');`)).toEqual([]);
+    expect(named(`export const DASHBOARD = '/dashboard'; // the home of the charts`)).toEqual([]);
+  });
+
+  it('does NOT reach into a SIBLING element for its name', () => {
+    expect(
+      named(
+        [
+          '<nav>',
+          '  <Link href="/dashboard">Dashboard</Link>',
+          '  <Link href={AUTHED_LANDING_PATH} aria-label="Home" />',
+          '</nav>',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('does NOT read a name out of a COMMENT — the axis this scan was added for', () => {
+    expect(
+      named(
+        [
+          '<Link',
+          '  href="/dashboard"',
+          '  // the home of the charts, and the landing before MOTIR-2654',
+          '>',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('an arrow in a prop does not end the tag early', () => {
+    expect(
+      named(
+        ['<Link', '  href="/dashboard"', '  onClick={() => go()}', '  aria-label="Home"', '>'].join(
+          '\n',
+        ),
+      ),
+    ).toEqual(['aria-label="Home"']);
   });
 });
