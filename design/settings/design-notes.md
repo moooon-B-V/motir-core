@@ -7,16 +7,17 @@ grows. Built FROM the real design system (`app/globals.css` `--el-*` / shape
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no Pencil→code gap.
 
-| Surface                        | Asset                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Account settings area**      | **`account-settings.mock.html`** (HTML mock)           | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                     |
-| **Token permission selection** | **`token-scopes.mock.html`** (HTML mock)               | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes) and, as amended by **MOTIR-2578**, MOTIR-2579 / -2580 (the permission picker over the MOTIR-2254 catalog — SIX rows, five domains; see that section, which supersedes the 7.7.18 one).                               |
-| **Appearance pane**            | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                  |
-| **Connect the CLI**            | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                     |
-| **Profile pane**               | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
-| **Two-factor authentication**  | **`two-factor.mock.html`** (HTML mock)                 | The `Security › Two-factor authentication` pane: enrol an authenticator app, email as a labelled lower-security fallback, ten single-use recovery codes, the browsers that stopped being asked, and the way out. Adds a SECOND entry to the rail's Security group — that row is the access path. Multi-panel (off · on · enrol · codes shown once · low/exhausted/turn-off/errors · dark). **Gates MOTIR-1220**; the login challenge is `../auth/two-factor-challenge.mock.html`.                        |
-| **Passkeys**                   | **`passkeys.mock.html`** (HTML mock)                   | The `Security` pane's PASSKEYS card — register a WebAuthn credential, see the ones you hold, rename one, remove one. Its OWN card between the two-factor state card and the methods list, never a third row inside them. Adds NO rail entry: it is a new section on a pane that already has a door. Multi-panel (zero · populated · registering · rename · remove · refusals · dark). **Gates MOTIR-3612**; the sign-in half is `../auth/passkey-sign-in.mock.html`.                                     |
-| **Arrival frame**              | **`arrival.mock.html`** (HTML mock)                    | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                        |
+| Surface                        | Asset                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Account settings area**      | **`account-settings.mock.html`** (HTML mock)           | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                                                                                                               |
+| **Token permission selection** | **`token-scopes.mock.html`** (HTML mock)               | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes) and, as amended by **MOTIR-2578**, MOTIR-2579 / -2580 (the permission picker over the MOTIR-2254 catalog — SIX rows, five domains; see that section, which supersedes the 7.7.18 one).                                                                                                                         |
+| **Appearance pane**            | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                                                                                                            |
+| **Connect the CLI**            | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                                                                                                               |
+| **Profile pane**               | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.**                                                                                           |
+| **Two-factor authentication**  | **`two-factor.mock.html`** (HTML mock)                 | The `Security › Two-factor authentication` pane: enrol an authenticator app, email as a labelled lower-security fallback, ten single-use recovery codes, the browsers that stopped being asked, and the way out. Adds a SECOND entry to the rail's Security group — that row is the access path. Multi-panel (off · on · enrol · codes shown once · low/exhausted/turn-off/errors · dark). **Gates MOTIR-1220**; the login challenge is `../auth/two-factor-challenge.mock.html`.                                                                                                                  |
+| **Passkeys**                   | **`passkeys.mock.html`** (HTML mock)                   | The `Security` pane's PASSKEYS card — register a WebAuthn credential, see the ones you hold, rename one, remove one. Its OWN card between the two-factor state card and the methods list, never a third row inside them. Adds NO rail entry: it is a new section on a pane that already has a door. Multi-panel (zero · populated · registering · rename · remove · refusals · dark). **Gates MOTIR-3612**; the sign-in half is `../auth/passkey-sign-in.mock.html`.                                                                                                                               |
+| **Workspace settings area**    | **`workspace-settings.mock.html`** (HTML mock)         | The FOURTH and last settings tier to become an AREA: the rail, its three-row registry, the switcher row that is its door, and — the thing no other tier has — the BELOW-THE-REVEAL arm, where two of the three routes `notFound()` and the rail renders `Job runs` alone. Composes the three panes and re-specifies none (`design/workspaces/settings.pen` · `design/org-admin/security-policy.mock.html` · `design/jobs/`). Multi-panel (index · security · jobs · below-reveal · the switcher popover · dark · the registry). **Gates MOTIR-4846** (the area) **and MOTIR-4847** (the entrance). |
+| **Arrival frame**              | **`arrival.mock.html`** (HTML mock)                    | The settings family's PENDING drawing: the pane-only frame each of the 31 `settings/**` routes renders IN-PAGE after its own gate, the width-is-a-prop rule, and the three-tier streaming allocation for all 14 heavy panes. Applies `design/shell/design-notes.md` § _The navigation-pending grammar_ (2nd revision); adds no `loading.tsx`. Multi-panel (in situ · anatomy · widths · the two superseded skeletons · mount points · dark). **Gates MOTIR-3443 and MOTIR-3448.**                                                                                                                  |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -2574,3 +2575,245 @@ to catch.
 - **The OAuth round trip itself**, and where the callback returns to — a code card
   (`the callback returns to the surface that STARTED the flow`), not a drawing.
 - **Bringing Panels 1–3's rail up to date** — a change to what those panels record.
+
+---
+
+# The workspace-settings AREA (MOTIR-4843 · MOTIR-4844)
+
+`workspace-settings.mock.html` / `.png` is **the design of record for the workspace-settings area**:
+its rail, its registry, both arms of the reveal threshold, and the switcher row that is its door. It
+**gates MOTIR-4846** (the registry, the area layout and `SidebarNav`'s fourth branch) and
+**MOTIR-4847** (the entrance moving into the workspace switcher).
+
+Motir has **four settings tiers**, and this is the fourth and last to get an area. `settings/project/`,
+`settings/account/` and — since **MOTIR-4710** — `settings/organization/` each have an area
+`layout.tsx`, a nav registry in `lib/settings/`, and a `SidebarNav` branch that swaps the rail.
+`settings/workspace/` has none of the three: its three routes appear as loose rows scattered through
+the rail's no-project bottom section, and the surface's own door is a row labelled
+`Workspace settings` inside the ACCOUNT menu — a workspace-tier destination filed under the user
+tier, one line under `Account settings`.
+
+**The model of record is `design/org-admin/org-admin.mock.html` panels 7a–7d (MOTIR-4673)**, which
+drew the same move one tier up. This asset is that composition applied to the workspace, plus the one
+thing the organisation does not have: **a reveal threshold**.
+
+## The registry (Panel 7)
+
+A sibling of `lib/settings/organizationSettingsNav.ts` and `lib/settings/accountSettingsNav.ts`, with
+the same `{ id, group, href, icon, labelKey, exact? }` entry shape and the same group-order
+discipline.
+
+| group        | id          | route                             | glyph         | who sees the row                         |
+| ------------ | ----------- | --------------------------------- | ------------- | ---------------------------------------- |
+| `general`    | `workspace` | `/settings/workspace` (**exact**) | `Boxes`       | any workspace member, **at the reveal**  |
+| `access`     | `security`  | `/settings/workspace/security`    | `ShieldCheck` | any workspace member, **at the reveal**  |
+| `operations` | `jobs`      | `/settings/workspace/jobs`        | `ListChecks`  | any workspace member, **at every count** |
+
+**ONE filter axis, `revealedOnly`, and it DEFAULTS CLOSED.** The organisation registry has two (what
+the actor HOLDS, what the BUILD has); this tier has neither — every route here is membership-gated
+with no role above it, and none is cloud-only. What it has instead is the threshold, so the axis is
+the reveal. It defaults closed for the reason its two siblings default closed: a surface that forgets
+to thread it drops the row rather than offering a door onto a route that `notFound()`s.
+
+**The index row is called `Workspace`, not `Settings`** — the word the switcher's own row uses for
+the same route. Inside a settings area a row named "Settings" names its own container; the
+organisation rail has the same row and calls it `Organisation`, the project rail calls it `Details`.
+The SWITCHER keeps its word: it is outside the area, where "Workspace settings" is what the
+destination IS.
+
+### The glyphs — two carried, one chosen
+
+**`security` and `jobs` are CARRIED, not chosen.** Read out of
+`app/(authed)/_components/SidebarNav.tsx`'s bottom section, where those two rows render
+`<ShieldCheck />` and `<ListChecks />` today, quoted from the file:
+
+```tsx
+{ icon: <ShieldCheck />, label: t('nav.security'),  href: '/settings/workspace/security', … }
+{ icon: <ListChecks />, label: t('nav.jobRuns'),   href: '/settings/workspace/jobs',     … }
+```
+
+Two doors onto one room that disagree about its icon are two rooms.
+
+**`workspace` is this asset's own choice, and it is `Boxes`:** a workspace is the CONTAINER its
+projects and teammates live in, so its glyph is a set of things held together — where `Building2`
+(taken by the organisation in `organizationSettingsNav.ts`, and forbidden here for exactly that
+reason) is the company itself. Stated because the family resemblance is real and deliberate rather
+than accidental: the project rail's `components` row carries the singular `Box`, one tier down, in a
+rail that never renders beside this one. `Boxes` is otherwise unused anywhere in `app/`,
+`components/` or `lib/`.
+
+### The group names
+
+`general` and `access` mirror the organisation's. **The third is `operations`**, and the name is a
+decision: `Job runs` configures nothing and gates nobody — it is where you look when something did
+not happen — so it is neither of the other two. It gets its own group rather than being filed under
+`general` because **a group whose rows all filter away is not rendered** (no empty heading, no
+disabled row — `groupOrganizationSettingsNav`'s existing behaviour), which is exactly what Panel 4
+needs to be true in reverse: at one workspace `operations` is the ONLY group that survives, and a
+third group is what makes that arm cost nothing.
+
+## The rail HEAD — it follows the ORGANISATION's shape, not the project's
+
+Three heads exist: `SettingsSidebarHeader` (the project — a `ProjectSwitcher`),
+`AccountSidebarHeader` (the user — a static identity) and `OrganizationSidebarHeader` (the
+organisation — a static identity). The constant across all three is what the head NAMES: the tenant
+the area configures.
+
+**This one is STATIC, i.e. the organisation's shape.** The workspace HAS a switcher, so the project's
+shape was available and is declined: a switcher in a settings rail would let you change WHICH
+workspace you are configuring from inside the pane, and switching a workspace re-points the active
+project and navigates away (`afterContextSwitchTarget`) — a context switch buried in a configuration
+surface. The switcher stays in the top bar, where it already is and where Panel 5 draws it.
+
+Composition, mirroring `OrganizationSidebarHeader.tsx`: a `← Back to Motir` link (the href is
+`AUTHED_LANDING_PATH`, imported and never retyped — `tests/components/rail-head-back-link.test.tsx`
+is the guard), the workspace's initial tile + name, and a `Workspace settings` eyebrow. The TILE is a
+**square** with `--radius-control`, matching the organisation's: the circle is this product's PERSON
+grammar (avatars, the `UserMenu`), and a workspace is not a person. Its fill is `--el-tint-sky` where
+the organisation's is `--el-tint-lavender`, so the two tiers are told apart by hue at a glance when a
+reader moves between the two rails; the ink on both is `--el-text-strong`, which is the AA-safe
+pairing on a tint in both themes.
+
+## ⚠️ THE REVEAL IS THE HARD EDGE, AND §6d GOVERNS IT (Panel 4)
+
+Below two workspaces there is no workspace switcher, so there is no door — which is correct, because
+below the reveal there is no room either: `/settings/workspace` and `/settings/workspace/security`
+both `notFound()`, and their sections are folded into `/settings/organization`, gated per SECTION.
+
+**The one route that does NOT follow that rule is `/settings/workspace/jobs`, which answers 200 at
+every workspace count** (MOTIR-3502 AC 6, and `SidebarNav.tsx`'s own comment says so): it is
+workspace-SCOPED but not workspace-NAMED, so §6's reveal leaves it alone.
+
+So below the reveal **the rail renders `Job runs` alone, and a one-row rail is the correct rendering
+rather than a degenerate one.** `docs/decisions/organization-tier.md` §6d: _a hidden tier may not
+remove a capability … relocating a surface preserves its gate._ Emptying this rail instead, or hiding
+it, would take away the one door that has to survive the threshold — and would reproduce MOTIR-3500's
+original defect one surface over.
+
+**Nothing else is stranded on that side.** Name, Members and **Leave workspace** are reachable at
+`/settings/organization` for a plain org member who is a workspace member (§6d's table, and
+`leaveWorkspaceAction`'s single consumer). The rail's bottom section keeps its own `Job runs` row for
+the same capability, which is recorded on the asset that owns that section — **MOTIR-4845**, not
+here.
+
+## THE ACCESS PATH — the switcher row (Panel 5)
+
+The design gate requires the entry affordance drawn in its parent surface, and this asset owns that
+decision: the row's label, its glyph and its position.
+
+**The popover is `WorkspaceSwitcher.tsx`'s, unchanged** — a 320px `Popover.Content`, the `WORKSPACES`
+mono-caps heading, one row per membership with a `Check` on the active one and a neutral role `Pill`,
+then `Create workspace` and `Invite teammates` behind dividers (the composition
+`design/workspaces/design-notes.md` § _Workspace switcher_ records). Only the `Workspace settings`
+row is new.
+
+**WHERE IT SITS: in the LAST group, ABOVE `Invite teammates`.** The three groups answer three
+different questions — _which workspace am I in_, _make a new one_, and _act on THIS one_ — and both
+of the last group's rows are about the active workspace. Settings goes first because
+`Invite teammates` already points **into** it (`/settings/workspace#members`): the general door above
+the shortcut through it, never the other way round.
+
+**WHY THE `Settings` GEAR.** It is the glyph the account menu's `Workspace settings` row carries
+today (`UserMenu.tsx`) and the one the rail's bottom `Settings` row carries, so the departure and the
+arrival read as one move rather than as two rows — the same argument MOTIR-4673 made for keeping
+`GitBranch` when the `Git` row changed tier.
+
+**Below the reveal this panel does not exist**, and none is owed: there is no switcher at one
+workspace, and the two rooms this row opens onto `notFound()` there. Panel 4 is the arm that matters,
+and the row it depends on is in the rail, not in this popover.
+
+## ⚠️ COMPOSED, not redrawn — the three panes and their owners
+
+Every pane already has an owner and this asset re-specifies none of them. It draws the **frame**:
+
+| pane                                          | drawn by                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| the index page's Name / Members / Danger zone | `design/workspaces/settings.pen` / `settings.png`                          |
+| the require-2FA policy card                   | `design/org-admin/security-policy.mock.html` (MOTIR-3642 — for BOTH tiers) |
+| the background-jobs dashboard                 | `design/jobs/`                                                             |
+
+**Nothing moves.** The three existing sub-routes become rows and the index becomes the `Workspace`
+row; no page's content changes. `Members` in particular stays a card ON the index page — giving it a
+route of its own is a different deliverable (a route move, a redirect, and the
+`WorkspaceFoldInSection` host that renders the same card below the reveal), and this story neither
+performs it nor depends on it.
+
+## Where it lives
+
+- **This asset:** `design/settings/workspace-settings.mock.html` + `workspace-settings.png`, and this
+  section. It owns the area rail, its registry, the rail head, both reveal arms, and the switcher
+  row's label / glyph / position.
+- **NOT this asset — `design/shell/account-menu.mock.html` and
+  `design/shell/rail-bottom-section.mock.html` are the SIBLING card MOTIR-4845's.** The account menu
+  losing its `Workspace settings` row, and the rail's bottom section losing `Security` while KEEPING
+  `Job runs`, are amendments to the shell's own design of record, which has its own notes, its own
+  asset inventory and its own address guard. This asset draws the switcher row (Panel 5) because that
+  is the door to the room it draws; it touches neither shell asset.
+- **NOT this asset — `design/workspaces/design-notes.md` § _Workspace switcher_** gains its
+  `Workspace settings` entry from MOTIR-4845 too, pointing at Panel 5 here as the drawing of record.
+  This asset DRAWS the row; that note RECORDS it.
+
+## How the render was produced
+
+Hand-authored HTML against `app/globals.css`'s token block, carried verbatim from
+`design/org-admin/org-admin.mock.html` so two assets drawing one rail cannot draw it differently —
+every `.shell` rule is that asset's panel-7 block, which is itself
+`design/settings/account-settings.mock.html`'s drawing of the shipped `Sidebar` / `SidebarSection` /
+`SidebarNavItem`. Every glyph is a real `lucide-react` `__iconNode` path read out of the installed
+package rather than drawn.
+
+**The Tier-3 `--el-*` layer is declared on `:root, [data-appearance-scope]`**, which is
+`packages/design-system/theme.css`'s own selector, and Panel 6 carries
+`data-theme="dark" data-appearance-scope` together. That pairing is what makes the dark panel
+actually recompute: a custom property's `var()` is substituted where the property is DECLARED, so a
+Tier-3 layer declared on `:root` alone inherits its LIGHT literal into a nested `data-theme="dark"`
+subtree and the panel renders light under a dark caption (MOTIR-3592 ·
+`tests/design-dark-parity.test.ts`).
+
+Board-chrome ink is `--el-text-secondary`, never `--el-text-muted`: this board's body is
+`--el-surface`, where muted is 4.17:1 and fails AA
+(`docs/decisions/design-board-chrome-aa.md`).
+
+`prettier --write`, then `node scripts/render-design-mock.mjs --width 1200` exported the `.png`
+(a new asset has no committed export to recover a viewport from, so the width is passed).
+
+## GIVES / TAKES
+
+Every `MOTIR-<n>` this asset names, and whether the design gives that card an element, a structure or
+a premise, or takes one away.
+
+| card           | gives / takes | what                                                                                                                                                                                                                                                                     |
+| -------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MOTIR-4846** | **GIVES**     | The registry's three rows with their ids, groups, routes, glyphs and `exact` flag; the `revealedOnly` axis and its default-closed disposition; the rail head's shape, tile and eyebrow; and the below-reveal arm as a ONE-ROW rail with its two empty groups unrendered. |
+| **MOTIR-4847** | **GIVES**     | The switcher row: its label (`Workspace settings`), its glyph (`Settings`), and its position — last group, above `Invite teammates`, with the reason for that order.                                                                                                     |
+| **MOTIR-4845** | neither       | The sibling design card. This asset names the two `design/shell/` assets as ITS, and draws neither. Nothing is taken from it and nothing added.                                                                                                                          |
+| **MOTIR-4673** | neither       | The model. Its panel 7 is lifted as the composition and re-specified nowhere.                                                                                                                                                                                            |
+| **MOTIR-4710** | neither       | The build that panel 7 gated — cited as the shape MOTIR-4846 mirrors.                                                                                                                                                                                                    |
+| **MOTIR-3642** | neither       | Owns the require-2FA card, which Panel 2 composes as a stub and does not redraw.                                                                                                                                                                                         |
+| **MOTIR-3502** | neither       | Cited for AC 6 — `/settings/workspace/jobs` answers 200 at every count. A finished fact this asset reads, not a scope it touches.                                                                                                                                        |
+| **MOTIR-3500** | neither       | Cited as the defect Panel 4 exists not to reproduce.                                                                                                                                                                                                                     |
+| **MOTIR-4843** | neither       | The parent story. Its acceptance criteria are met by the assembled children; this asset settles none of them alone.                                                                                                                                                      |
+| **MOTIR-4844** | —             | This card. Named in the asset as its own provenance.                                                                                                                                                                                                                     |
+| **MOTIR-3592** | neither       | The dark-parity guard's card, cited for the `:root, [data-appearance-scope]` mechanism Panel 6 uses. A guard this asset satisfies, not a scope it touches.                                                                                                               |
+
+**TAKES: none — and this was CHECKED against both cards' criteria, not assumed.** MOTIR-4846 asks
+for the same three entries, the same `exact` root, the same default-closed `revealedOnly`, the same
+one-row below-reveal arm with its two groups ABSENT rather than disabled, and a
+`WorkspaceSidebarHeader` carrying the workspace name and the `Workspace settings` eyebrow — every
+one of them a clause this drawing settles rather than contradicts. MOTIR-4847 defers the row's
+label, glyph and position to Panel 5 by name and pins none of the three itself. Every criterion
+this asset settles is one MOTIR-4846 and MOTIR-4847 were written to
+receive — both were authored in the same plan pass, both are `blocked_by` this card, and neither
+carries a criterion this drawing contradicts. So no `update_work_item` amendment is owed on either.
+
+## Explicitly OUT of scope here
+
+- **The account menu's loss of its `Workspace settings` row**, and the rail bottom section's loss of
+  `Security` — **MOTIR-4845**, `design/shell/`.
+- **Any pane's content** — the three owners are tabled above.
+- **`Members` as a route of its own**, the org fold-in, `WorkspaceFoldInSection`, and §6d's
+  per-section gating on `/settings/organization` — untouched, and named so the boundary is checkable.
+- **The command palette.** The organisation registry deliberately does not drive its palette group
+  (`organizationSettingsNav.ts`'s own note: hand-written org actions would have to be retired in the
+  same change), and this one inherits that disposition — the palette is not a surface this asset
+  draws.
