@@ -5,13 +5,14 @@ landing surface** (Story [MOTIR-4777](motir:cmtqhxi4v000uhvphhq0lndce), drawn by
 the MOTIR-4779 design gate). It is the layout source of truth for **MOTIR-4782**
 (the page) and **MOTIR-4783** (the sweep), and both carry it in `blocked_by`.
 
-| Surface                           | Asset                                   | Notes                                                                                                                                                                                                          |
-| --------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **The `/workbench` landing page** | **`workbench.mock.html`** (HTML mockup) | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow · no active project. Exports to `workbench.png`. |
+| Surface                           | Asset                                   | Notes                                                                                                                                                                                                                    |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **The `/workbench` landing page** | **`workbench.mock.html`** (HTML mockup) | The whole surface, multi-panel: the door · To do · In progress · Recently finished · Watching grouped · the all-empty page · every tab's empty state · narrow · the no-project fall-through. Exports to `workbench.png`. |
 
 **Panels:** A the door · 1 To do · 2 In progress · 3 Recently finished ·
 4 Watching, grouped · 5 the all-empty page · 6 every tab's empty state ·
-7 narrow (`< md`) · 8 no active project.
+7 narrow (`< md`) · 8 the no-project fall-through — **the ADDRESS’s state, not the
+Workbench’s** (below).
 
 ---
 
@@ -32,17 +33,17 @@ they will think is stale.
 
 **Panel-by-panel carry-over, so nothing is lost in the move:**
 
-| old                   | new                           | what happened                                                                                                   |
-| --------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| A the door            | **A the door**                | Rail row relabelled and re-addressed; the 308 added; the glyph decision recorded (below).                       |
-| 1 populated (My work) | **1 To do**                   | Same frame, same row, same columns — the rows are now the `todo`-category slice.                                |
-| —                     | **2 In progress**             | NEW tab. Same frame; the rows are the `in_progress` category, including Implemented and In Review.              |
-| —                     | **3 Recently finished**       | NEW tab, and a dataset this surface has never shown. Fifth column, window caption, `Done` and `Cancelled` rows. |
-| 2 Watching            | **4 Watching, grouped**       | Same membership, same rows; the two GROUPS and their band are new.                                              |
-| 3 the all-empty page  | **5 the all-empty page**      | Five tabs to be empty in; the both-zero count suppression is unchanged and now suppresses five.                 |
-| 4 both empty states   | **6 every tab's empty state** | Two became five.                                                                                                |
-| 5 narrow              | **7 narrow**                  | The row collapse is unchanged; the STRIP now scrolls (measured, below).                                         |
-| 6 no active project   | **8 no active project**       | Unchanged but for the address and the absent rail row's name.                                                   |
+| old                   | new                               | what happened                                                                                                                            |
+| --------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| A the door            | **A the door**                    | Rail row relabelled and re-addressed; the 308 added; the glyph decision recorded (below).                                                |
+| 1 populated (My work) | **1 To do**                       | Same frame, same row, same columns — the rows are now the `todo`-category slice.                                                         |
+| —                     | **2 In progress**                 | NEW tab. Same frame; the rows are the `in_progress` category, including Implemented and In Review.                                       |
+| —                     | **3 Recently finished**           | NEW tab, and a dataset this surface has never shown. Fifth column, window caption, `Done` and `Cancelled` rows.                          |
+| 2 Watching            | **4 Watching, grouped**           | Same membership, same rows; the two GROUPS and their band are new.                                                                       |
+| 3 the all-empty page  | **5 the all-empty page**          | Five tabs to be empty in; the both-zero count suppression is unchanged and now suppresses five.                                          |
+| 4 both empty states   | **6 every tab's empty state**     | Two became five.                                                                                                                         |
+| 5 narrow              | **7 narrow**                      | The row collapse is unchanged; the STRIP now scrolls (measured, below).                                                                  |
+| 6 no active project   | **8 the no-project fall-through** | Drawing unchanged; its FRAMING is corrected — it is not a Workbench state (below). Was also re-addressed and the absent rail row's name. |
 
 ---
 
@@ -334,14 +335,53 @@ Three consequences, all still drawn:
 
 1. **No `Project` column**, in any panel.
 2. **The subtitle names the PROJECT**, not the workspace.
-3. **A no-project state exists** — Panel 8 — and it is the **create-first door**
-   (the shipped `ProjectsEmptyState`, reused from `/dashboard`) rather than the
-   actionless `noProject` notice, because with no project there is no rail row
-   and the surface is only ever LANDED on.
+3. **The ADDRESS has a no-project fall-through** — Panel 8 — and it is the
+   **create-first door** (the shipped `ProjectsEmptyState`, reused from
+   `/dashboard`) rather than the actionless `noProject` notice, because with no
+   project there is no rail row and the address is only ever LANDED on. **It is
+   not a state of the Workbench**, which has none — see the section below.
 
 The cross-project question — _"what is on me across this whole workspace"_ — is
 retained at the workspace tier as **MOTIR-2920**; it is a different surface, not
 this one. `docs/decisions/home-scope.md` is the record.
+
+---
+
+## ⚠️ THE WORKBENCH HAS NO NO-PROJECT STATE — the ADDRESS falls through
+
+**A workbench is somewhere you stand INSIDE a project.** With no project there
+is no bench to draw, and a page headed _Workbench_ whose entire content is
+_Create your first project_ would be a lie in a heading. So Panel 8 does not draw
+a Workbench: it draws the **create-first door**, a DIFFERENT surface that
+`/workbench` falls through to when `getActiveProject()` returns null.
+
+**The shipped page already works exactly this way, and nothing here asks it to
+change.** `app/(authed)/home/page.tsx`'s `!ctx` branch returns
+`ProjectsEmptyState` **alone** — no `h1`, no subtitle, no tab strip — so nothing
+on screen ever claims to be a Workbench with no project. The panel is faithful;
+what was wrong was this asset calling it _"the state this surface never had"_,
+which files it under a surface that cannot have it.
+
+**It stays in this asset** because MOTIR-4782 has to build that branch and needs
+to see it. What changes is that the asset now says whose state it is.
+
+### ⚠️ The RENAME is what exposed this, and it falsifies a clause of the record
+
+This is the story's own argument working on itself. _Home_ could tolerate being
+empty and offering a door — a home can be empty, and `home-scope.md` §2.2 reasoned
+about it under that name. _Workbench_ cannot. The name audited the content and
+found a panel mis-filed, which is exactly what the story says a rename is for.
+
+`docs/decisions/home-scope.md` §2.2 still reads _"`/home` in the no-project state
+**is** the create-first door"_, and §2.3 leans on that sentence to reject
+branching the landing (_"there is nothing left for a branch to accomplish"_).
+**Both conclusions survive the rename; the sentence does not.** The honest form
+is that the ADDRESS falls through to the door and the SURFACE has no such state —
+same behaviour, same discriminator (§2.2's _landed-on gets a door, navigated-to
+gets a notice_ is untouched), different noun.
+
+That is an **amendment to a decision record, not an address swap**, which is why
+it is flagged rather than folded into MOTIR-4783's sweep — see §Planning flags.
 
 ---
 
@@ -552,20 +592,35 @@ on all four surfaces in both themes.
    leaves them behind turns the design lane red on its own pull request. Naming
    it here because MOTIR-4783's sweep would otherwise be expected to own it, and
    by then it would already have failed.
-2. **`design/shell/` names this asset twice, by its old path.** Its
+2. **`home-scope.md` §2.2's sentence is falsified by the rename, and MOTIR-4783
+   is scoped too small to fix it.** That card sweeps what still _says_ `/home` or
+   _Home_ — an address swap. This is not one: §2.2 concludes _"`/home` in the
+   no-project state **is** the create-first door"_, and §2.3 rests on it
+   (_"there is nothing left for a branch to accomplish"_). Both CONCLUSIONS
+   survive — the behaviour is unchanged and the landed-on-vs-navigated-to
+   discriminator is untouched — but the sentence has to become _the ADDRESS falls
+   through to the door; the surface has no such state_, because a Workbench with
+   no project is not a thing. A sweep that only re-addresses `/home` → `/workbench`
+   leaves a record asserting a state this asset says does not exist. **Whoever
+   picks up MOTIR-4783 should amend §2.2's wording, not just its addresses** —
+   and if that is judged out of its scope, it is a decision card of its own. The
+   section above is the design's position; the record is not this asset's to
+   rewrite.
+
+3. **`design/shell/` names this asset twice, by its old path.** Its
    `design-notes.md` rail-inventory table and `rail-bottom-section.mock.html`
    both cite `design/home/home.mock.html` as context for a DIFFERENT question
    (the rail's control budget). Neither is a broken reference to this surface —
    they are references to a rail — but both now name a file that does not exist.
    MOTIR-4783's sweep is the right owner; it is flagged so that sweep has the
    hits enumerated.
-3. **The strip stretches to the content box and the tabs sit left**, leaving
+4. **The strip stretches to the content box and the tabs sit left**, leaving
    238px of empty track at 1200. That is shipped behaviour inherited from the
    `inline-flex`-in-a-flex-column composition, and it is not this story's to
    change — but with five tabs it is now visible enough to be a question
    somebody will ask. Whether the track should hug its tabs is a change to the
    shipped Segmented, not to this surface.
-4. **Nothing checks that an `--el-*` named in a design note resolves in
+5. **Nothing checks that an `--el-*` named in a design note resolves in
    `theme.css`.** This asset names no new token, so it is not exposed — but the
    check does not exist, and it is a guard-lane test rather than a design card.
 

@@ -9035,14 +9035,37 @@
         </div>
       </div>
       <p class="note">
-        <strong>The state this surface never had.</strong> While Home was workspace-scoped it had
-        nothing to say here — it simply rendered its tab empties — and MOTIR-2654 had to invent a
-        SECOND, duplicate Home row in the rail so a reader with no project could get back to the
-        page they had landed on. Both go. <br /><strong>The rail (left)</strong> is the shipped
-        <code>SidebarNav</code>'s own output for <code>activeProject={null}</code>, dumped from the
-        component: <em>no</em> primary section at all, just the bottom one. Home joins Dashboard,
-        Work Items, Ready, Boards and Backlog in being correctly absent — a row offering a page that
-        cannot answer is a promise the product then refuses. <br /><strong>The page (right)</strong>
+        <strong>This is not a state of the Workbench — the Workbench has none.</strong> A workbench
+        is somewhere you stand INSIDE a project; with no project there is no bench to draw, and a
+        page headed <em>Workbench</em> whose whole content is
+        <em>Create your first project</em> would be a lie in a heading. What is drawn here is a
+        DIFFERENT surface at the same address — the create-first door, which
+        <code>/workbench</code> falls through to. The shipped page already works exactly this way
+        and is unchanged: its <code>!ctx</code> branch returns the door ALONE, with no
+        <code>h1</code>, no subtitle and no tab strip, so nothing on screen claims to be a
+        Workbench. It is drawn in this asset because MOTIR-4782 has to build that branch and needs
+        to see it — not because it belongs to the surface. <br />⚠️
+        <strong>The RENAME is what exposed this</strong>, which is this story's own argument working
+        on itself: <em>Home</em> could tolerate being empty and offering a door, because a home can
+        be empty. <em>Workbench</em> cannot. The name audited the content and found a panel
+        mis-filed. <code>docs/decisions/home-scope.md</code> §2.2 still says
+        <em>"`/home` in the no-project state IS the create-first door"</em>; under the new name the
+        honest sentence is that the ADDRESS falls through to it, and the surface has no such state.
+        That is an amendment to the record, not an address swap — flagged in
+        <code>design-notes.md</code> §Planning flags. <br /><strong
+          >The state this surface never had.</strong
+        >
+        While Home was workspace-scoped it had nothing to say here — it simply rendered its tab
+        empties — and MOTIR-2654 had to invent a SECOND, duplicate Home row in the rail so a reader
+        with no project could get back to the page they had landed on. Both go. <br /><strong
+          >The rail (left)</strong
+        >
+        is the shipped <code>SidebarNav</code>'s own output for <code>activeProject={null}</code>,
+        dumped from the component: <em>no</em> primary section at all, just the bottom one. Home
+        joins Dashboard, Work Items, Ready, Boards and Backlog in being correctly absent — a row
+        offering a page that cannot answer is a promise the product then refuses. <br /><strong
+          >The page (right)</strong
+        >
         is the shipped <code>ProjectsEmptyState</code> — the same component
         <code>/dashboard</code> already renders in this exact state, reused rather than redrawn, so
         it brings its own copy in both catalogues and no <code>home.*</code> key is added. It is the
