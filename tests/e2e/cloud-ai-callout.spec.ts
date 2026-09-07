@@ -95,12 +95,12 @@ const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' 
 /**
  * The page-level heading proving the authed shell is up right after `signIn()`.
  *
- * Sign-in lands on `/home`, not `/dashboard`, since MOTIR-2654 moved the
+ * Sign-in lands on `/workbench`, not `/dashboard`, since MOTIR-2654 moved the
  * `callbackURL` default. The assertion is unchanged in KIND — a page-level
  * heading proving the shell rendered — only in which page it names, exactly as
  * the non-acceptance twin `ai-callout-gate.spec.ts` was changed by that story.
  */
-const landingHeading = (page: Page) => page.getByRole('heading', { name: 'Home', level: 1 });
+const landingHeading = (page: Page) => page.getByRole('heading', { name: 'Workbench', level: 1 });
 
 /**
  * The `/dashboard` page's own heading — and the non-interactive point OUTSIDE

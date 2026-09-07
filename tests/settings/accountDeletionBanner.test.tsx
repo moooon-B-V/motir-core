@@ -122,7 +122,7 @@ describe('the app-wide banner — mounted in the SHELL, so it is on every authed
 
   it('⚠️ is placed ABOVE the top nav, on a route that is NOT the pane', () => {
     // `AppLayout` is the frame EVERY signed-in surface renders inside, so a
-    // banner in its slot is on `/home`, `/items`, a board — everywhere. The
+    // banner in its slot is on `/workbench`, `/items`, a board — everywhere. The
     // route below is deliberately not `/settings/account/data`.
     const { container } = render(
       <AppLayout

@@ -320,7 +320,7 @@ test.describe('board-config @smoke', () => {
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await page.getByPlaceholder('Password').fill(SHELL_PASSWORD);
     await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
-    // Sign-in lands on `/home` (MOTIR-2654). The landing is incidental here —
+    // Sign-in lands on `/workbench` (MOTIR-2654). The landing is incidental here —
     // this waits only to know the session is bound before navigating to the
     // surface under test.
     await page.waitForURL('**/home');

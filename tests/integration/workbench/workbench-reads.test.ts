@@ -154,7 +154,7 @@ describe('the three work tabs partition ONE membership set', () => {
     expect(ids(await homeService.listToDo(ctx()))).toContain(orphan.identifier);
     expect(ids(await homeService.listInProgress(ctx()))).not.toContain(orphan.identifier);
     expect(ids(await homeService.listRecentlyFinished(ctx()))).not.toContain(orphan.identifier);
-    // It is also where the shipped `/home` list put it, so nothing a reader can
+    // It is also where the shipped `/workbench` list put it, so nothing a reader can
     // see today disappears.
     expect(ids(await homeService.listMyWork(ctx()))).toContain(orphan.identifier);
   });
@@ -399,7 +399,7 @@ describe('the five tab counts agree with the lists they sit beside', () => {
       // measuring the fixture instead of the read.
       watching: 2,
       // Transitional, and derived rather than counted again, so it cannot
-      // disagree with the two above it (MOTIR-4782 removes it with `/home`).
+      // disagree with the two above it (MOTIR-4782 removes it with `/workbench`).
       myWork: 2,
     });
 

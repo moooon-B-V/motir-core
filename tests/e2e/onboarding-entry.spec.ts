@@ -82,15 +82,15 @@ test.describe('motir-core entry rework — the SIGNED-IN visitor (MOTIR-3367)', 
 
   test('root sends a signed-in reader to /home, not to the sign-in form', async ({ page }) => {
     // A fresh account, so the assertion holds for the reader with the LEAST
-    // context in the product: `/home`'s no-project branch is the shipped
-    // create-first door (MOTIR-2761), which is what makes `/home` the right
+    // context in the product: `/workbench`'s no-project branch is the shipped
+    // create-first door (MOTIR-2761), which is what makes `/workbench` the right
     // destination for every signed-in actor (docs/decisions/home-scope.md §2.3).
     await signUp(page, 'entry-signed-in@example.com');
 
     await page.goto('/');
 
     await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
-    await expect(page.getByTestId('home-page')).toBeVisible();
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
     // The form the reader used to land on is not what they get.
     await expect(page.getByRole('heading', { name: 'Welcome back!' })).toBeHidden();
   });

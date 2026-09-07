@@ -44,7 +44,7 @@ async function signUp(page: Page, email: string): Promise<void> {
         .then(() => false)
         .catch(() => false),
     ]);
-    if (landed || page.url().includes('/home')) return;
+    if (landed || page.url().includes('/workbench')) return;
     await page.waitForTimeout(11_000);
   }
   await page.waitForURL('**/home');

@@ -61,7 +61,7 @@ describe('/sign-in shell (MOTIR-3372)', () => {
     getSession.mockResolvedValue(SESSION);
 
     await expect(SignInPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(RedirectError);
-    expect(redirect).toHaveBeenCalledWith('/home');
+    expect(redirect).toHaveBeenCalledWith('/workbench');
   });
 
   it('follows ?next= for a signed-in reader — the CLI hand-off costs no re-authentication', async () => {
@@ -79,7 +79,7 @@ describe('/sign-in shell (MOTIR-3372)', () => {
     await expect(
       SignInPage({ searchParams: Promise.resolve({ next: 'https://evil.example/steal' }) }),
     ).rejects.toThrow(RedirectError);
-    expect(redirect).toHaveBeenCalledWith('/home');
+    expect(redirect).toHaveBeenCalledWith('/workbench');
   });
 
   it('RENDERS for a signed-in reader when ?draft= is present, so the claim can plant its cookie', async () => {
@@ -110,7 +110,7 @@ describe('/sign-up shell (MOTIR-3372)', () => {
     getSession.mockResolvedValue(SESSION);
 
     await expect(SignUpPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(RedirectError);
-    expect(redirect).toHaveBeenCalledWith('/home');
+    expect(redirect).toHaveBeenCalledWith('/workbench');
   });
 
   it('follows a safe ?next= and refuses an unsafe one', async () => {
@@ -124,7 +124,7 @@ describe('/sign-up shell (MOTIR-3372)', () => {
     await expect(
       SignUpPage({ searchParams: Promise.resolve({ next: '//evil.example' }) }),
     ).rejects.toThrow(RedirectError);
-    expect(redirect).toHaveBeenLastCalledWith('/home');
+    expect(redirect).toHaveBeenLastCalledWith('/workbench');
   });
 });
 

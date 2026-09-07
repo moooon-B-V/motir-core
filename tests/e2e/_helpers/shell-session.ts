@@ -15,7 +15,7 @@ export const SHELL_PASSWORD = 'shell-a11y-spec-pass-123';
 // ⚠️ ONE LANDING FOR BOTH CREDENTIAL FLOWS — sign-IN and sign-UP alike settle
 // here, so there is a single answer to "where does authenticating put me".
 //
-// Sign-in moved to `/home` first (Story MOTIR-2649 · Subtask MOTIR-2654) and
+// Sign-in moved to `/workbench` first (Story MOTIR-2649 · Subtask MOTIR-2654) and
 // sign-up stayed on `/dashboard` for a season, because a brand-new account has
 // nothing waiting on it and Home's My-work empty state pointed at `/ready`,
 // which needs a project. MOTIR-2761 closed that: Home resolves the ACTIVE
@@ -36,7 +36,7 @@ export const POST_AUTH_LANDING = AUTHED_LANDING_PATH;
  * ── Why the URL reading right did not mean sign-in had FINISHED ──
  *
  * (The route named below was `/dashboard` when this was measured; MOTIR-2654
- * and MOTIR-2921 have since moved both flows to `/home`. The mechanism is the
+ * and MOTIR-2921 have since moved both flows to `/workbench`. The mechanism is the
  * landing route's, not that route's, so the paths are left as observed.)
  *
  * Signing in used to start TWO navigations to the landing route. The page ran
@@ -80,7 +80,7 @@ export const POST_AUTH_LANDING = AUTHED_LANDING_PATH;
  * this race got worse under load, which is exactly where a tuned sleep would
  * fail).
  *
- * ONE settle serves both flows, because both land on `/home`, and `home-page`
+ * ONE settle serves both flows, because both land on `/workbench`, and `home-page`
  * is carried by BOTH of that page's branches — the create-first door a fresh
  * sign-up sees and the list an existing account sees.
  */
@@ -100,7 +100,7 @@ async function settleOnHome(page: Page): Promise<void> {
   );
   await clearReconsentHold(page);
   await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
-  await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 }
 
 /**
@@ -176,10 +176,10 @@ const SESSION_COOKIE_MARKER = 'better-auth';
  * arrive at a credential form.
  *
  * ⚠️ Required since MOTIR-3372: `/sign-in` and `/sign-up` are server shells that
- * REDIRECT a reader who is already signed in (to `?next=`, else `/home`), so a
+ * REDIRECT a reader who is already signed in (to `?next=`, else `/workbench`), so a
  * spec that authenticates as a second identity mid-test no longer reaches the
  * form at all — `getByPlaceholder('Email address').fill(…)` times out on a page
- * that has already navigated to `/home`. That is the product behaving correctly:
+ * that has already navigated to `/workbench`. That is the product behaving correctly:
  * a credential form is for somebody who needs credentials, and switching
  * accounts means leaving the first one, exactly as it does in the browser.
  *
@@ -211,7 +211,7 @@ export async function signUp(page: Page, email: string): Promise<void> {
 // sign-in UI — the two-step email→password flow, both steps submitted with the
 // "Continue" button (Subtask 3.5.1). Used by the at-scale board specs to sign in
 // as the server-seeded board-seed owner, who is created via usersService (not
-// signed up), then land on the project board. Lands on the default `/home` —
+// signed up), then land on the project board. Lands on the default `/workbench` —
 // the same place `signUp` lands (MOTIR-2654, then MOTIR-2921); callers that
 // need a different surface `goto` it afterwards, which is safe because sign-in
 // performs exactly ONE navigation (MOTIR-2645).
@@ -228,7 +228,7 @@ export async function signIn(page: Page, email: string, password: string): Promi
 // Create the first project via the projects-empty-state CTA, so the
 // project-scoped sidebar nav (Dashboard / Issues / Boards / Reports) renders.
 // The CTA is the same `ProjectsEmptyState` component wherever it is reached —
-// `/home`'s no-project branch (where `signUp` now lands) and `/dashboard`'s
+// `/workbench`'s no-project branch (where `signUp` now lands) and `/dashboard`'s
 // alike — so this works without knowing which page the caller is on.
 export async function createFirstProject(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: 'Create project' }).first().click();

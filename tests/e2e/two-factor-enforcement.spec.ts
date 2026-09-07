@@ -66,7 +66,7 @@ async function signUp(page: Page, email: string): Promise<void> {
 
 /**
  * Sign in the way `tests/e2e/_helpers/shell-session.ts` does — BOTH steps are a
- * button labelled "Continue" — but without settling on `/home`, because half the
+ * button labelled "Continue" — but without settling on `/workbench`, because half the
  * people in this file are held before they get there.
  */
 async function signIn(page: Page, email: string): Promise<void> {
@@ -209,7 +209,7 @@ test.describe('2FA enforcement', () => {
     await enrolPasskey(page);
 
     // ── 1 · the admin turns it on, through the org menu ──────────────────
-    await page.goto('/home');
+    await page.goto('/workbench');
     await page.getByRole('button', { name: 'Organization menu' }).click();
     const orgMenu = page.getByRole('list').filter({
       has: page.locator('a[href="/settings/organization/members"]'),
@@ -248,7 +248,7 @@ test.describe('2FA enforcement', () => {
     ).toBeVisible();
 
     // …and NOTHING else is reachable. Asked for an app route, held again.
-    await page.goto('/home');
+    await page.goto('/workbench');
     await page.waitForURL('**/two-factor-required**');
 
     // ── 3 · they enrol, FOR REAL, and the block lifts ────────────────────
@@ -292,7 +292,7 @@ test.describe('2FA enforcement', () => {
     ).toBe(false);
 
     // The rest of the product is open again.
-    await page.goto('/home');
+    await page.goto('/workbench');
     await page.waitForURL('**/home');
   });
 

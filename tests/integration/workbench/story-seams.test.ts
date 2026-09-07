@@ -406,7 +406,7 @@ describe('Home story seam — the scope is the ACTIVE PROJECT (MOTIR-2761)', () 
   it('returns DIFFERENT rows as the reader s ACTIVE PROJECT is switched — through the shipped resolver', async () => {
     // ⚠️ THE INVERSION. Until 2026-08-17 this block was headed "the scope is the
     // WORKSPACE, not the active project" and asserted that switching changed
-    // nothing — a contract test for the defect itself. `/home` sits FIRST in the
+    // nothing — a contract test for the defect itself. `/workbench` sits FIRST in the
     // project tier of the rail, under the switcher the shell renders on every
     // authed page, so "switching changes nothing" was a passing test asserting
     // that a shipped control does nothing on the first screen after sign-in.

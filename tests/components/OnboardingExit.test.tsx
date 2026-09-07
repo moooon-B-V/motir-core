@@ -10,11 +10,11 @@ import { DiscoveryOnboarding } from '@/components/onboarding/DiscoveryOnboarding
 // state is persisted server-side). An unsent composer message is the only thing
 // exit could drop, so a light confirm guards that case only.
 //
-// MOTIR-3173 — and the destination is `/home`, the signed-in landing. This file
+// MOTIR-3173 — and the destination is `/workbench`, the signed-in landing. This file
 // already exercised the exit through a real click, and it still went stale: it
 // asserted the LITERAL `/dashboard` because that was the landing when MOTIR-1488
 // was written, so when MOTIR-2654 and MOTIR-2921 moved both credential flows to
-// `/home`, the assertion moved the wrong way — it kept the old destination green.
+// `/workbench`, the assertion moved the wrong way — it kept the old destination green.
 // A test that pins a literal is a comment with a runner attached unless it also
 // says WHY that literal is the answer, so the constant below carries the reason:
 // the destination is whatever post-auth lands on (`docs/decisions/home-scope.md`
@@ -58,11 +58,11 @@ const CONFIRM_TITLE = 'Leave onboarding?';
 
 // The app's signed-in landing — where both credential flows default to
 // (`docs/decisions/home-scope.md` §2.3) and therefore where a person who steps
-// out of onboarding belongs. `/home` resolves the ACTIVE project and renders the
+// out of onboarding belongs. `/workbench` resolves the ACTIVE project and renders the
 // shipped create-first door when there is none (§2.2), so it is a safe
 // destination for an actor who has just described a project and may not have one
 // yet.
-const HOME = '/home';
+const HOME = '/workbench';
 // The retired landing. `/dashboard` keeps its route and its own rail entry and is
 // reached by navigating to it; nothing lands a reader there any more.
 const RETIRED_LANDING = '/dashboard';

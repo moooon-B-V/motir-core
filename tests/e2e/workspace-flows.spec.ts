@@ -62,7 +62,7 @@ async function signUp(page: Page, email: string): Promise<void> {
         .then(() => false)
         .catch(() => false),
     ]);
-    if (landed || page.url().includes('/home')) return;
+    if (landed || page.url().includes('/workbench')) return;
     // Throttled — wait out the full 10s window (+buffer) so the bucket
     // resets before the next single click.
     await page.waitForTimeout(11_000);

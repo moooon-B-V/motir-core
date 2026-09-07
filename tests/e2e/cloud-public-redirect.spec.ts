@@ -24,8 +24,8 @@ import { signUp } from './_helpers/shell-session';
  * once a browser follows them).
  *
  * ── SIGNED-IN SURFACES ARE UNAFFECTED ───────────────────────────────────────
- * The redirect must not swallow the application: a signed-in visit to `/home`
- * still lands on `/home`, not on the public origin.
+ * The redirect must not swallow the application: a signed-in visit to `/workbench`
+ * still lands on `/workbench`, not on the public origin.
  */
 
 test.describe.configure({ timeout: 120_000 });

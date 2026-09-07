@@ -170,7 +170,7 @@ describe('the OPEN state is the address, and nothing else', () => {
   });
 
   it('renders the workspace inside a dialog on ANY authed route', async () => {
-    for (const path of ['/backlog', '/boards', '/items/MOTIR-9', '/home']) {
+    for (const path of ['/backlog', '/boards', '/items/MOTIR-9', '/workbench']) {
       openAt('plan=project&planFrom=project', path);
       const view = mount();
       await act(async () => {});

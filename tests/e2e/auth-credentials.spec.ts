@@ -125,7 +125,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(ORIGINAL_PASSWORD);
   await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
-  // BOTH credential flows land on `/home` — sign-in since MOTIR-2654, sign-up
+  // BOTH credential flows land on `/workbench` — sign-in since MOTIR-2654, sign-up
   // since MOTIR-2921 (see the wait after "Create account" above), so this is
   // the same destination the sign-up leg waited for.
   await page.waitForURL('**/home');

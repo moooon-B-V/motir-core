@@ -246,7 +246,7 @@ test('the legal documents have left this repository, and the journey that needed
 
   await chapter('Signed in, the rail points off this host too', async () => {
     await signUp(page, HOSTED_EMAIL);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
     await expectRailLegalRow(page);
     await beat();
   });
@@ -295,7 +295,7 @@ test('the legal documents have left this repository, and the journey that needed
     // ── THE TERMINAL ACT ────────────────────────────────────────────────────
     await agree.click();
     await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
 
     // ⚠️ READ THE RECORD BACK, not just the redirect. Being let through proves
     // the gate re-read; it does not prove a row was written, and the row is the
@@ -322,7 +322,7 @@ test('the legal documents have left this repository, and the journey that needed
     // The prompt does not recur.
     await enterTheApp(page);
     expect(new URL(page.url()).pathname, 'the interstitial came back').toContain(POST_AUTH_LANDING);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
     await beat();
   });
 
@@ -349,7 +349,7 @@ test('the legal documents have left this repository, and the journey that needed
     await beat();
 
     await signUp(page, SELF_HOST_EMAIL);
-    await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
     await expectNoRailLegalRow(page);
 
     // ── AND NOTHING 500s ────────────────────────────────────────────────────

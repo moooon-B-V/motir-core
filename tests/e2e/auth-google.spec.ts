@@ -145,7 +145,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
   // The Google button carries the HOST PAGE's `callbackURL`, so it lands
   // wherever that page's default points — and since MOTIR-2921 both auth pages
-  // point at `/home`, so the same button has one destination from either.
+  // point at `/workbench`, so the same button has one destination from either.
   await page.waitForURL('**/home', { timeout: 15_000 });
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 

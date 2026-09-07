@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 //
 // Two server-side routing contracts, tested without a DOM (we inspect the
 // returned React element / the redirect call, not rendered markup):
-//   1. The root `app/page.tsx` branches on the SESSION — `/home` when there is
+//   1. The root `app/page.tsx` branches on the SESSION — `/workbench` when there is
 //      one, `/sign-in` when there is not (MOTIR-3367). It used to redirect
 //      UNCONDITIONALLY to /sign-in, and this test asserted exactly that, which is
 //      why a signed-in reader met the login form for months with a green suite:
@@ -63,7 +63,7 @@ describe('root page (7.22.1 · MOTIR-3367)', () => {
     getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue', email: 'yue@example.com' } });
 
     await expect(RootPage()).rejects.toThrow(RedirectError);
-    expect(redirect).toHaveBeenCalledWith('/home');
+    expect(redirect).toHaveBeenCalledWith('/workbench');
     expect(redirect).not.toHaveBeenCalledWith('/sign-in');
   });
 
@@ -72,7 +72,7 @@ describe('root page (7.22.1 · MOTIR-3367)', () => {
 
     await expect(RootPage()).rejects.toThrow(RedirectError);
     expect(redirect).toHaveBeenCalledWith('/sign-in');
-    expect(redirect).not.toHaveBeenCalledWith('/home');
+    expect(redirect).not.toHaveBeenCalledWith('/workbench');
   });
 });
 

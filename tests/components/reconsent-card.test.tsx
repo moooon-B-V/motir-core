@@ -70,7 +70,7 @@ describe('the re-consent interstitial', () => {
     // card: the delta and the link still say what to read. What must not happen
     // is an invented sentence describing a change nobody described.
     renderWithIntl(
-      <ReconsentCard documents={[outstanding({ changeSummary: null })]} destination="/home" />,
+      <ReconsentCard documents={[outstanding({ changeSummary: null })]} destination="/workbench" />,
     );
 
     expect(screen.getByText('1.0.0 → 2.0.0')).toBeTruthy();
@@ -84,7 +84,7 @@ describe('the re-consent interstitial', () => {
     renderWithIntl(
       <ReconsentCard
         documents={[outstanding(), outstanding({ slug: 'privacy', title: 'Privacy Policy' })]}
-        destination="/home"
+        destination="/workbench"
       />,
     );
 
@@ -98,7 +98,7 @@ describe('the re-consent interstitial', () => {
       outstanding({ slug: 'privacy', title: 'Privacy Policy' }),
       outstanding({ slug: 'acceptable-use', title: 'Acceptable Use Policy' }),
     ];
-    renderWithIntl(<ReconsentCard documents={three} destination="/home" />);
+    renderWithIntl(<ReconsentCard documents={three} destination="/workbench" />);
     expect(screen.getByRole('button', { name: /agree to all and continue/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /we've updated 3 of our documents/i })).toBeTruthy();
   });
@@ -122,7 +122,7 @@ describe('the re-consent interstitial', () => {
     // into the product with nothing on file, and the gate would catch them again
     // on the next page load — which reads as the button being broken.
     acceptAction.mockRejectedValueOnce(new Error('nope'));
-    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/home" />);
+    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/workbench" />);
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /agree and continue/i }));
@@ -137,7 +137,7 @@ describe('the re-consent interstitial', () => {
     // trap: somebody on a borrowed laptop, or who simply does not want to do
     // this now, must be able to leave. The line under it removes the fear that
     // leaving costs something.
-    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/home" />);
+    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/workbench" />);
 
     expect(screen.getByText(/we'll ask again the next time you sign in/i)).toBeTruthy();
     await act(async () => {
@@ -151,7 +151,7 @@ describe('the re-consent interstitial', () => {
     // A decline path that silently does nothing is worse than no decline path —
     // and reading the consequence must not itself be a commitment, which is why
     // this is a local view with a way back rather than a navigation.
-    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/home" />);
+    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/workbench" />);
 
     fireEvent.click(screen.getByRole('button', { name: /tell us you don't accept/i }));
 
@@ -174,21 +174,21 @@ describe('the re-consent interstitial', () => {
     // alarming — and the one alert this surface CAN show is for a failed write,
     // which is a real error and is asserted separately above.
     const { container } = renderWithIntl(
-      <ReconsentCard documents={[outstanding()]} destination="/home" />,
+      <ReconsentCard documents={[outstanding()]} destination="/workbench" />,
     );
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(container.querySelector('[aria-live]')).toBeNull();
   });
 
   it('says the effective date, and says so honestly when nothing is in force yet', () => {
-    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/home" />);
+    renderWithIntl(<ReconsentCard documents={[outstanding()]} destination="/workbench" />);
     expect(screen.getByText(/takes effect 12 october 2026/i)).toBeTruthy();
     cleanup();
 
     // `effectiveDate: TBD` maps to null in the loader, and `TBD` must never
     // reach a rendered page.
     renderWithIntl(
-      <ReconsentCard documents={[outstanding({ effectiveDate: null })]} destination="/home" />,
+      <ReconsentCard documents={[outstanding({ effectiveDate: null })]} destination="/workbench" />,
     );
     expect(screen.getByText(/not yet in effect/i)).toBeTruthy();
     expect(screen.queryByText(/TBD/)).toBeNull();
@@ -196,7 +196,10 @@ describe('the re-consent interstitial', () => {
 
   it('reads a never-accepted document as NEW rather than as a delta from nothing', () => {
     renderWithIntl(
-      <ReconsentCard documents={[outstanding({ acceptedVersion: null })]} destination="/home" />,
+      <ReconsentCard
+        documents={[outstanding({ acceptedVersion: null })]}
+        destination="/workbench"
+      />,
     );
     expect(screen.getByText(/new — version 2\.0\.0/i)).toBeTruthy();
   });
@@ -206,7 +209,7 @@ describe('the re-consent interstitial', () => {
     // is in before the headline says what to do about it. Asserted by DOM order
     // rather than by a class, so a restyle cannot silently reverse it.
     const { container } = renderWithIntl(
-      <ReconsentCard documents={[outstanding()]} destination="/home" />,
+      <ReconsentCard documents={[outstanding()]} destination="/workbench" />,
     );
     const header = container.querySelector('header')!;
     const chip = screen.getByText(/takes effect/i);
@@ -270,7 +273,7 @@ describe('a document whose url the manifest does not carry', () => {
     renderWithIntl(
       <ReconsentCard
         documents={[outstanding({ url: null as unknown as string })]}
-        destination="/home"
+        destination="/workbench"
       />,
     );
 
@@ -293,7 +296,7 @@ describe('a document whose url the manifest does not carry', () => {
     renderWithIntl(
       <ReconsentCard
         documents={[outstanding({ url: null as unknown as string })]}
-        destination="/home"
+        destination="/workbench"
       />,
     );
 
@@ -305,7 +308,7 @@ describe('a document whose url the manifest does not carry', () => {
     renderWithIntl(
       <ReconsentCard
         documents={[outstanding({ url: null as unknown as string })]}
-        destination="/home"
+        destination="/workbench"
       />,
     );
     expect(screen.getByRole('button', { name: /agree and continue/i })).toBeTruthy();

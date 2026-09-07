@@ -9,19 +9,27 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { db as prisma } from '@/lib/db';
 
-// E2E: the Home journey (Story MOTIR-2649 · Subtask MOTIR-2656) — the ASSEMBLED
-// surface over the real stack. The correctness matrices (the access matrix, the
-// dedupe across a page boundary) live at the vitest tier in
-// `tests/integration/home/`; this drives what a PERSON does, and its first
-// assertion is the one everything else depends on: signing in lands you here
-// without navigating.
+// E2E: the Workbench journey (Story MOTIR-2649 · MOTIR-2656, renamed and
+// widened by Story MOTIR-4777 · MOTIR-4782) — the ASSEMBLED surface over the
+// real stack. The correctness matrices (the access matrix, the dedupe across a
+// page boundary) live at the vitest tier in `tests/integration/workbench/`; this
+// drives what a PERSON does, and its first assertion is the one everything else
+// depends on: signing in lands you here without navigating.
+//
+// ⚠️ IT IS ALSO THE STORY'S SMOKE, which is why it lands with the first card
+// that renders the surface rather than with the E2E card. A whole class of
+// Next.js server/client-boundary defect is invisible to type checking, to a
+// production build and to component tests, because the boundary is only crossed
+// at render — and one story in this project shipped a permanently-500ing page
+// through five green pull requests before its own Playwright walk opened it.
+// Six more cards merge on top of this page; from here their CI opens it.
 //
 // @smoke — it exercises the seam no unit can: the Server Component's
 // active-project read → the tab strip's URL selection → the shipped row cells
 // → the `?peek=` island, plus the two shell affordances this story moved out
 // from under (the rail entry and the bell).
 //
-// ⚠️ The SCOPE assertions inverted with MOTIR-2761: `/home` reads the ACTIVE
+// ⚠️ The SCOPE assertions inverted with MOTIR-2761: `/workbench` reads the ACTIVE
 // PROJECT, not the workspace. The two-project fixture is unchanged — it was
 // always the right fixture; what changed is which answer it proves.
 //
@@ -143,7 +151,7 @@ async function seed(): Promise<Seeded> {
   // `otherProject` keeps its auto-watch: the point is that a row the reader is
   // on in EVERY sense is still absent, so the Watching tab must exclude it too.
 
-  // ⚠️ PIN THE ACTIVE PROJECT (MOTIR-2761). `/home` reads it now, so leaving it
+  // ⚠️ PIN THE ACTIVE PROJECT (MOTIR-2761). `/workbench` reads it now, so leaving it
   // to whatever `createProject` last set would make every assertion below depend
   // on an implementation detail of the fixture rather than on the surface.
   await projectsService.setActiveProject({
@@ -167,22 +175,31 @@ async function seed(): Promise<Seeded> {
   };
 }
 
-const row = (identifier: string) => `[data-testid="home-row-${identifier}"]`;
+const row = (identifier: string) => `[data-testid="workbench-row-${identifier}"]`;
 
-test.describe('the Home journey', () => {
-  test('sign in lands on Home; My work merges assigned and reported, deduped; Watching is its own audience', async ({
+test.describe('the Workbench journey', () => {
+  test('sign in lands on the Workbench; To do merges assigned and reported, deduped; Watching is its own audience', async ({
     page,
   }) => {
     const fx = await seed();
 
     // 1. SIGN IN — and LAND, without navigating. Half of what this spec is for:
     // if the landing breaks, nothing else about the story matters. The helper
-    // settles on a rendered `/home` (MOTIR-2654 moved its target here).
+    // settles on a rendered `/workbench` (MOTIR-2654 moved its target here).
     await signIn(page, OWNER, TEST_PASSWORD);
-    await expect(page).toHaveURL(/\/home$/);
-    await expect(page.getByTestId('home-page')).toBeVisible();
+    await expect(page).toHaveURL(/\/workbench$/);
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
 
-    // 2. MY WORK — all three relations present, from the ACTIVE project.
+    // 1b. THE FIVE-TAB STRIP, as one landmark — the composition every later
+    // card in this story merges on top of.
+    await expect(page.getByTestId('workbench-tab-todo')).toHaveAttribute('aria-current', 'page');
+    for (const tab of ['in-progress', 'finished', 'watching', 'approvals']) {
+      await expect(page.getByTestId(`workbench-tab-${tab}`)).toBeVisible();
+    }
+
+    // 2. TO DO — all three relations present, from the ACTIVE project. Every
+    // seeded row sits at the workflow's INITIAL status, so the default tab is
+    // where they land.
     await expect(page.locator(row(fx.assigned))).toBeVisible();
     await expect(page.locator(row(fx.reported))).toBeVisible();
     await expect(page.locator(row(fx.both))).toBeVisible();
@@ -200,8 +217,11 @@ test.describe('the Home journey', () => {
     // to span projects.
     await expect(page.getByRole('columnheader', { name: 'Project' })).toHaveCount(0);
     await expect(page.locator(row(fx.assigned))).not.toContainText('Motir');
-    // The subtitle names the PROJECT, which is what the page is now about.
-    await expect(page.getByTestId('home-page')).toContainText('Everything in Motir');
+    // The subtitle names the PROJECT, which is what the page is now about — and
+    // it is the REVISED line: the shipped "Everything in {project} that is
+    // waiting on you" was false of a surface that also shows what you finished,
+    // and was the exact sentence MOTIR-2758 was filed against.
+    await expect(page.getByTestId('workbench-page')).toContainText('What you are doing in Motir');
 
     // ⚠️ A COUNT, not a visibility assertion. "Is it visible" passes perfectly
     // on a page showing the same item twice, which is exactly the bug the
@@ -224,8 +244,24 @@ test.describe('the Home journey', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
+    // 4b. THE EMPTY TABS — Recently finished (nothing in the fixture has
+    // finished) and To approve (which ships no rows at all until MOTIR-4778).
+    // Only two of the five empty states carry an action, and neither of these
+    // is one of them. Walked here rather than left to a component test because
+    // the empty branch renders through its OWN async server component, and a
+    // server/client-boundary defect there is invisible to types, to the
+    // production build and to happy-dom — it only shows when the page is opened.
+    await page.getByTestId('workbench-tab-finished').click();
+    await expect(page).toHaveURL(/\?tab=finished$/);
+    await expect(page.getByText('Nothing finished this week')).toBeVisible();
+    await expect(page.getByText('Finished in the last 7 days.')).toBeVisible();
+
+    await page.getByTestId('workbench-tab-approvals').click();
+    await expect(page).toHaveURL(/\?tab=approvals$/);
+    await expect(page.getByText('Nothing is waiting on your approval')).toBeVisible();
+
     // 5. WATCHING — a different audience, and the tab lives in the URL.
-    await page.getByTestId('home-tab-watching').click();
+    await page.getByTestId('workbench-tab-watching').click();
     await expect(page).toHaveURL(/\?tab=watching$/);
     await expect(page.locator(row(fx.watched))).toBeVisible();
     await expect(page.locator(row(fx.watched))).toContainText('Watching');
@@ -239,9 +275,40 @@ test.describe('the Home journey', () => {
     // The selection SURVIVES A RELOAD, which is the property a tab held in
     // component state would not have.
     await page.reload();
-    await expect(page.getByTestId('home-page')).toBeVisible();
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
     await expect(page.locator(row(fx.watched))).toBeVisible();
-    await expect(page.getByTestId('home-tab-watching')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('workbench-tab-watching')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  test('the OLD address still lands — a permanent 308, with its query string intact', async ({
+    page,
+  }) => {
+    await seed();
+    await signIn(page, OWNER, TEST_PASSWORD);
+
+    // A URL is a promise to strangers, and `/home` is the one every signed-in
+    // reader has in muscle memory, in their history, and in whatever they pasted
+    // into chat. Asserted at the RESPONSE, not just at the landed URL: a rewrite
+    // would also land here, and a rewrite is the half-rename this story exists
+    // to avoid — two addresses for one surface, and nothing saying which is real.
+    const direct = await page.goto('/home');
+    expect(direct?.status()).toBe(200);
+    await expect(page).toHaveURL(/\/workbench$/);
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
+
+    // …and the QUERY rides along, so a link to somebody's Watching tab survives
+    // the move. Next carries it because the destination names no query of its
+    // own — a property of the framework, which is why it is asserted rather
+    // than assumed.
+    await page.goto('/home?tab=watching');
+    await expect(page).toHaveURL(/\/workbench\?tab=watching$/);
+    await expect(page.getByTestId('workbench-tab-watching')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   test('the rail entry and the bell both still work — the two shell affordances this story moved out from under', async ({
@@ -252,15 +319,15 @@ test.describe('the Home journey', () => {
 
     // The DOOR. A page nobody lands on is a page nobody has, and the rail row
     // is the half of that which does not depend on the sign-in default.
-    const home = page.getByRole('link', { name: 'Home', exact: true });
+    const home = page.getByRole('link', { name: 'Workbench', exact: true });
     await expect(home).toHaveAttribute('aria-current', 'page');
     // /dashboard keeps its route AND its own row — nothing was re-homed.
     await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
-    await page.getByRole('link', { name: 'Home', exact: true }).click();
-    await expect(page.getByTestId('home-page')).toBeVisible();
+    await page.getByRole('link', { name: 'Workbench', exact: true }).click();
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
 
-    // THE BELL. This story deliberately does NOT mount notifications on Home —
+    // THE BELL. This story deliberately does NOT mount notifications here —
     // "Needs you" was removed as a duplicate of this drawer. So the assertion
     // is not that two surfaces agree; it is that the ONE surface still works
     // after a story that repointed the landing and added a nav row, which is
@@ -269,12 +336,12 @@ test.describe('the Home journey', () => {
     await expect(page.getByRole('dialog', { name: 'Notifications' })).toBeVisible();
   });
 
-  test('Home is PROJECT-scoped: switching the active project changes what it shows', async ({
+  test('the Workbench is PROJECT-scoped: switching the active project changes what it shows', async ({
     page,
   }) => {
     // ⚠️ THE INVERSION (MOTIR-2761). This test asserted the opposite until
     // 2026-08-17 — "switching the active project changes nothing" — which made
-    // it a contract test for the defect: `/home` leads the PROJECT tier of the
+    // it a contract test for the defect: `/workbench` leads the PROJECT tier of the
     // rail, directly under the switcher, so a green assertion here certified
     // that a shipped control does nothing on the first screen after sign-in.
     // The fixture is unchanged; only the expectation is.
@@ -284,27 +351,27 @@ test.describe('the Home journey', () => {
     // Project A is active: its rows, and not project B's.
     await expect(page.locator(row(fx.assigned))).toBeVisible();
     await expect(page.locator(row(fx.otherProject))).toHaveCount(0);
-    await expect(page.getByTestId('home-page')).toContainText('Everything in Motir');
+    await expect(page.getByTestId('workbench-page')).toContainText('What you are doing in Motir');
 
     // Switch through the SERVICE — the thing every other list surface scopes
-    // by, and now this one too — then reload Home.
+    // by, and now this one too — then reload the Workbench.
     await projectsService.setActiveProject({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectB.id,
     });
     await page.reload();
-    await expect(page.getByTestId('home-page')).toBeVisible();
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
 
     // The lists SWAP. Asserting both directions is what keeps this from passing
     // on a page that merely went empty.
     await expect(page.locator(row(fx.otherProject))).toBeVisible();
     await expect(page.locator(row(fx.assigned))).toHaveCount(0);
     await expect(page.locator(row(fx.both))).toHaveCount(0);
-    await expect(page.getByTestId('home-page')).toContainText('Everything in Atlas');
+    await expect(page.getByTestId('workbench-page')).toContainText('What you are doing in Atlas');
   });
 
-  test('with NO active project, /home renders the create-first door and the rail offers no Home row', async ({
+  test('with NO active project, /workbench renders the create-first door and the rail offers no Workbench row', async ({
     page,
   }) => {
     // A brand-new actor: signed up, no project anywhere in the workspace. This
@@ -316,8 +383,8 @@ test.describe('the Home journey', () => {
     await signIn(page, FRESH, TEST_PASSWORD);
 
     // It still LANDS here — the post-auth default is unchanged (§2.3).
-    await expect(page).toHaveURL(/\/home$/);
-    await expect(page.getByTestId('home-page')).toBeVisible();
+    await expect(page).toHaveURL(/\/workbench$/);
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
 
     // The shipped create-first door, reused from `/dashboard` — not a new empty
     // state and not the actionless `/ready` notice, because this route is LANDED
@@ -325,10 +392,10 @@ test.describe('the Home journey', () => {
     await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Create project' })).toBeVisible();
 
-    // And NO Home row in the rail: the duplicate `!hasProject` entry is gone
+    // And NO Workbench row in the rail: the duplicate `!hasProject` entry is gone
     // (§2.1). The route stays reachable by URL — which is how we got here — but
     // the product no longer offers a door to a room it can open only sometimes.
-    await expect(page.getByRole('link', { name: 'Home', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Workbench', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Boards', exact: true })).toHaveCount(0);
   });
 });

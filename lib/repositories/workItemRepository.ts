@@ -203,7 +203,7 @@ export type HomeSortField = 'updatedAt' | 'completedAt';
  * reads order by `updatedAt` and Recently-finished orders by `completedAt`, so
  * a field called `updatedAt` carrying a completion time would be a lie in the
  * one place a reader goes to check exactly this. The wire token is unchanged
- * and opaque either way (`lib/home/cursor.ts`).
+ * and opaque either way (`lib/workbench/cursor.ts`).
  */
 export interface HomeCursor {
   at: Date;

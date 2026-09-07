@@ -5,7 +5,7 @@ import { homeService } from '@/lib/services/homeService';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { decodeHomeCursor, encodeHomeCursor } from '@/lib/home/cursor';
+import { decodeHomeCursor, encodeHomeCursor } from '@/lib/workbench/cursor';
 import type { HomeTabCountsDto } from '@/lib/dto/home';
 import { truncateAuthTables } from '../../helpers/db';
 import {

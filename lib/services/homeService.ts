@@ -22,7 +22,7 @@ import {
   decodeWatchingCursor,
   encodeHomeCursor,
   encodeWatchingCursor,
-} from '@/lib/home/cursor';
+} from '@/lib/workbench/cursor';
 import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
 
 // The Home landing surface's read layer (Story MOTIR-2649 · Subtask

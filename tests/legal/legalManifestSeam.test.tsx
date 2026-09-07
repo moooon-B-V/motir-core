@@ -115,7 +115,7 @@ describe('the whole wire, from a configured manifest to a rendered href', () => 
 
     // 5 — and the row a person actually sees links THAT url. This is the hop
     //     every isolated suite mocks, and the reason the assertion lands here.
-    renderWithIntl(<ReconsentCard documents={outstanding} destination="/home" />);
+    renderWithIntl(<ReconsentCard documents={outstanding} destination="/workbench" />);
     expect(screen.getByRole('link', { name: /read the new version/i }).getAttribute('href')).toBe(
       CONFIGURED,
     );

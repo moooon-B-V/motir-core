@@ -63,7 +63,7 @@ import type { Page } from '@playwright/test';
 /** UNIQUE PER RUN. The acceptance lane does not reset its database between runs,
  *  and a fixed address makes the second run fail at sign-up with "An account with
  *  this email already exists" — which surfaces as a 30s `waitForURL` timeout on
- *  `/home` and reads exactly like a starved renderer. Same idiom as
+ *  `/workbench` and reads exactly like a starved renderer. Same idiom as
  *  `ai-callout-gate` / `onboarding-fresh`. */
 const EMAIL = `e2e-repository-reference-${Date.now()}@example.com`;
 /** What `E2E_REPO` is renamed TO, mid-clip. Deliberately unlike the original so
