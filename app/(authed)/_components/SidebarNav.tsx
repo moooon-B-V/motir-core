@@ -46,8 +46,15 @@ import {
   isAccountSettingsEntryActive,
   isAccountSettingsPath,
 } from '@/lib/settings/accountSettingsNav';
+import {
+  groupOrganizationSettingsNav,
+  isOrganizationSettingsEntryActive,
+  isOrganizationSettingsPath,
+  visibleOrganizationSettingsNav,
+} from '@/lib/settings/organizationSettingsNav';
 import { SettingsSidebarHeader } from './SettingsSidebarHeader';
 import { AccountSidebarHeader } from './AccountSidebarHeader';
+import { OrganizationSidebarHeader } from './OrganizationSidebarHeader';
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with the
@@ -105,6 +112,24 @@ export interface SidebarNavProps {
    * session (the same `{ name, email }` the TopNav user menu shows).
    */
   user: { name: string; email: string };
+  /**
+   * The ACTIVE ORGANISATION (Story MOTIR-4669 · MOTIR-4710) — its name for the
+   * organisation-settings area rail header, and whether the actor administers it
+   * for the registry's row filter. Resolved once in the (authed) layout, from the
+   * same `resolveActiveOrganization` call the top bar's org control already makes.
+   *
+   * ⚠️ ABSENT DEFAULTS CLOSED, exactly as `settingsPermissions` does: with no
+   * organisation the area rail renders its General group alone rather than
+   * revealing four admin rows to a caller that forgot to thread the prop.
+   */
+  organization?: { name: string; isOrgAdmin: boolean } | null;
+  /**
+   * Whether this build has the commercial surface (`isCloudBilling()`) — gates
+   * the organisation nav's `Billing & plans` row, which `notFound()`s off cloud.
+   * The SAME predicate the org menu already gates its own Billing row on, so the
+   * two doors onto that page cannot disagree about whether it exists.
+   */
+  billingAvailable?: boolean;
   /**
    * The active org reveals the WORKSPACE tier (≥2 workspaces the viewer belongs
    * to — `lib/workspaces/tierDisclosure.ts`). Retargets the no-project settings
@@ -167,6 +192,8 @@ export function SidebarNav({
   variant = 'rail',
   settingsPermissions,
   user,
+  organization = null,
+  billingAvailable = false,
   workspaceTierRevealed = false,
   publicProjectsAvailable = false,
   helpMenu,
@@ -209,6 +236,50 @@ export function SidebarNav({
   // this actor holds. Built here with `held`, for the same reason: the rail and
   // the area door must filter on one answer, not two.
   const availability = { publicProjectsAvailable };
+
+  // ORGANISATION-settings AREA (Story MOTIR-4669 · MOTIR-4710): the third and
+  // last settings tier to become an area. Like the account branch it does NOT
+  // gate on an active project — an organisation is configured with no project
+  // selected, and the rail's own bottom `Settings` row points here in exactly
+  // that state — and the header names the ORGANISATION rather than the project
+  // or the user.
+  //
+  // ⚠️ THE ROW FILTER IS NOT THE PAGE'S GATE. `organization-tier.md` §6d gates
+  // this area PER SECTION, because below the workspace-tier reveal the index page
+  // hosts two tiers' sections; the registry decides which ROWS exist and the
+  // index page keeps its own per-section treatment untouched. That is why
+  // `organization` (the index row) carries no admin flag: it is the only route to
+  // the folded-in workspace sections, and Leave workspace has no other surface
+  // anywhere in the product.
+  if (isOrganizationSettingsPath(pathname)) {
+    const orgSections: SidebarSection[] = groupOrganizationSettingsNav(
+      visibleOrganizationSettingsNav({ isOrgAdmin: organization?.isOrgAdmin ?? false }, undefined, {
+        billingAvailable,
+      }),
+    ).map(({ group, entries }) => ({
+      id: `org-settings-${group}`,
+      label: ts(`organization.nav.group.${group}`),
+      items: entries.map((entry) => ({
+        icon: <entry.icon />,
+        label: ts(`organization.nav.${entry.labelKey}`),
+        href: entry.href,
+        active: isOrganizationSettingsEntryActive(entry, pathname),
+      })),
+    }));
+    return (
+      <Sidebar
+        aria-label={ts('organization.eyebrow')}
+        header={
+          organization ? (
+            <OrganizationSidebarHeader organization={organization} collapsed={collapsed} />
+          ) : undefined
+        }
+        sections={orgSections}
+        footer={footer}
+        collapsed={isDrawer ? false : undefined}
+      />
+    );
+  }
 
   // Account-settings AREA (Subtask 7.8.12): swap the project nav for the
   // registry-driven account-settings nav. Unlike the project area this does NOT
@@ -269,10 +340,12 @@ export function SidebarNav({
     const primaryItems: SidebarItem[] = [
       {
         // The signed-in landing surface (Story MOTIR-2649 · Subtask
-        // MOTIR-2654, design/home/ Panel A) — the FIRST primary entry, above
-        // Dashboard, because it is where signing in now lands and where a
-        // reader goes to ask "what is waiting on me". `/dashboard` keeps its
-        // route AND the row below: nothing is re-homed.
+        // MOTIR-2654, design/home/ Panel A) — the FIRST primary entry, because
+        // it is where signing in now lands and where a reader goes to ask "what
+        // is waiting on me". `/dashboard` keeps its route AND a row of its own:
+        // nothing is re-homed. (This clause named Dashboard as the row directly
+        // below until MOTIR-4799 demoted it under Backlog; Home still leads the
+        // rail, which is the half that was load-bearing.)
         //
         // ⚠️ PROJECT-scoped, like every row under it (MOTIR-2761) — which is
         // why this section is the ONLY place it is rendered. It used to be
@@ -282,12 +355,6 @@ export function SidebarNav({
         label: t('nav.home'),
         href: AUTHED_LANDING_PATH,
         active: isActive(pathname, AUTHED_LANDING_PATH),
-      },
-      {
-        icon: <LayoutDashboard />,
-        label: t('nav.dashboard'),
-        href: '/dashboard',
-        active: isActive(pathname, '/dashboard'),
       },
       {
         icon: <CircleDot />,
@@ -351,17 +418,40 @@ export function SidebarNav({
         active: isActive(pathname, '/plans'),
       },
       {
-        // The backlog / sprint-planning surface (Subtask 4.2.3) — between
-        // Boards and Reports, with the layout-list glyph (4.2.1 design notes).
+        // The backlog / sprint-planning surface (Subtask 4.2.3), with the
+        // layout-list glyph (4.2.1 design notes). It sits after Plans and, since
+        // MOTIR-4799, immediately before Dashboard — the line here read "between
+        // Boards and Reports" until then, which had already stopped being true
+        // when Roadmap, Plans and Triage arrived between the two.
         icon: <LayoutList />,
         label: t('nav.backlog'),
         href: '/backlog',
         active: isActive(pathname, '/backlog'),
       },
       {
+        // ⚠️ DEMOTED here from second place, below Backlog (MOTIR-4799). Yue:
+        // "move the Dashboard nav item all the way down after Backlog in the
+        // left nav, the reason is dashboard is not important" — a product
+        // judgement, recorded so the next reader knows this position was DECIDED
+        // rather than inherited. The row sat directly under Home from the day
+        // MOTIR-2654 added Home above it, which encoded the opposite claim: that
+        // Dashboard is the second thing a reader wants. `/dashboard` keeps its
+        // route and its row; only the position moved.
+        //
+        // The ordered list is asserted in
+        // `tests/components/SidebarNav-primary-order.test.tsx`, off the rendered
+        // rail — before that file this array's order was decided in comments and
+        // checked nowhere.
+        icon: <LayoutDashboard />,
+        label: t('nav.dashboard'),
+        href: '/dashboard',
+        active: isActive(pathname, '/dashboard'),
+      },
+      {
         // The incoming-work front door (Story 6.11 · Subtask 6.11.6) — the
         // triage inbox of un-acted-on bug reports & feature requests. `Inbox`
-        // is the 6.11 design-notes glyph; sits after Backlog.
+        // is the 6.11 design-notes glyph; sits after Dashboard (it followed
+        // Backlog directly until MOTIR-4799 moved Dashboard between them).
         icon: <Inbox />,
         label: t('nav.triage'),
         href: '/triage',
@@ -463,8 +553,9 @@ export function SidebarNav({
                 isActive(pathname, '/settings') &&
                 !isActive(pathname, '/settings/workspace/security') &&
                 !isActive(pathname, '/settings/workspace/jobs') &&
-                !isActive(pathname, '/settings/workspace/github') &&
-                !isActive(pathname, '/settings/workspace/gitlab'),
+                // Git moved to the organisation tier (MOTIR-4680); the clause
+                // follows the row it exists to yield to.
+                !isActive(pathname, '/settings/organization/git'),
             },
           ]
         : []),
@@ -497,19 +588,23 @@ export function SidebarNav({
       },
       {
         // Git integration settings (Story 7.10 GitHub + 7.23 GitLab · MOTIR-1478)
-        // — the SHARED connect-settings surface: connect the workspace to GitHub
-        // or GitLab (a provider Segmented swaps the variant) and see the connected
-        // repos/projects. ONE "Git" row (git-branch glyph) — GitLab does NOT get a
-        // second row; the row lands on the GitHub variant by default, and is
-        // active on both provider routes. A workspace-scoped settings sub-page
-        // reached the same way Job runs is (a bottom-nav deep link — there is no
-        // separate workspace-settings rail).
+        // — the SHARED connect-settings surface. ONE "Git" row (git-branch
+        // glyph): GitLab does NOT get a second row, because the provider is a
+        // Segmented on the page rather than a second destination.
+        //
+        // ⚠️ IT POINTS AT THE ORGANISATION NOW (Story MOTIR-4669 · MOTIR-4680).
+        // A repository is connected ONCE, to the organisation, so the surface
+        // moved a tier and `/settings/workspace/{github,gitlab}` are deleted.
+        // The ROW stays and is RE-POINTED rather than removed:
+        // `organization-tier.md` §6 — a relocation preserves the door, and this
+        // is the deep link from anywhere in the app, reached the same way Job
+        // runs is. Leaving it on the old path would still have worked, through
+        // the permanent redirect, and would have made every visit pay a hop for
+        // a link the app itself controls.
         icon: <GitBranch />,
         label: t('nav.git'),
-        href: '/settings/workspace/github',
-        active:
-          isActive(pathname, '/settings/workspace/github') ||
-          isActive(pathname, '/settings/workspace/gitlab'),
+        href: '/settings/organization/git',
+        active: isActive(pathname, '/settings/organization/git'),
       },
       // Docs and Legal documents LEFT this section for the Help menu
       // (MOTIR-4239 · design/shell/help-menu.mock.html): the authed shell now

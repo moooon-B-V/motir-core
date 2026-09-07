@@ -10,6 +10,15 @@ import { randomBytes } from 'node:crypto';
 // media type the service acts on are the ones the bytes actually had.
 const store = new Map<string, { size: number; contentType: string }>();
 
+// ⚠️ AND THE MINT IS FAKED AS A GRANT, NOT AS A STRING (bug MOTIR-4750). The
+// real `mintPrivateUploadToken` returns a presigned PUT bound to one exact key
+// and one content type, and the new door's whole contract is that the agent
+// uploads to the URL it was handed and publishes the pathname it was handed. So
+// the fake derives the URL FROM the pathname, and `putUploaded` below refuses a
+// pathname nobody granted — otherwise a test that publishes an ungranted
+// pathname would pass here while the real service refused it.
+const minted = new Map<string, { contentType: string; maxBytes: number }>();
+
 // ⚠️ THE FAKE APPLIES THE SAME RANDOM SUFFIX THE REAL HELPER DOES, and that is
 // not a detail. `putObject` calls `withRandomSuffix(pathname)` and
 // `putPrivateAttachment` RETURNS the key it actually wrote, so a caller that
@@ -31,17 +40,28 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => ({
     store.set(written, { contentType, size: body.byteLength });
     return { pathname: written };
   }),
+  mintPrivateUploadToken: vi.fn(
+    async (pathname: string, opts: { contentType: string; maxBytes: number }) => {
+      minted.set(pathname, { contentType: opts.contentType, maxBytes: opts.maxBytes });
+      return `https://store.example/signed/${encodeURIComponent(pathname)}`;
+    },
+  ),
   headPrivateBlob: vi.fn(async (pathname: string) => store.get(pathname) ?? null),
   deleteAttachmentBlob: vi.fn(async () => {}),
 }));
 
-const { runPublishDesignResult, PUBLISH_DESIGN_RESULT_TOOL_NAME } =
-  await import('@/lib/mcp/tools/publishDesignResult');
+const {
+  runPublishDesignResult,
+  runCreateDesignUpload,
+  PUBLISH_DESIGN_RESULT_TOOL_NAME,
+  CREATE_DESIGN_UPLOAD_TOOL_NAME,
+} = await import('@/lib/mcp/tools/publishDesignResult');
 const { runAttachFile } = await import('@/lib/mcp/tools/attachFile');
 const { CLI_TOKEN_GRANT, TOOL_PERMISSIONS } = await import('@/lib/mcp/toolPermissions');
 const { TOOL_SCOPES } = await import('@/lib/mcp/scopes');
 const { MCP_TOOL_NAMES } = await import('@/lib/mcp/registry');
 const { NOTE_MD_CAP_BYTES } = await import('@/lib/services/designEvidenceService');
+const { MAX_UPLOAD_BYTES } = await import('@/lib/blob/allowlist');
 const { workItemsService } = await import('@/lib/services/workItemsService');
 const { makeWorkItemFixture } = await import('../fixtures');
 const { truncateAuthTables } = await import('../helpers/db');
@@ -60,6 +80,7 @@ let fx: Awaited<ReturnType<typeof makeWorkItemFixture>>;
 
 beforeEach(async () => {
   store.clear();
+  minted.clear();
   await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "design_asset", "design_evidence", "attachment", "work_item" RESTART IDENTITY CASCADE',
   );
@@ -89,6 +110,24 @@ async function makeContainerWithChild(title: string): Promise<{ key: string; id:
 }
 
 const b64 = (s: string) => Buffer.from(s).toString('base64');
+
+/** Simulate the agent's own PUT: it may only write to a pathname that was
+ *  actually granted, and the object it leaves is what `head` will report. */
+function putUploaded(pathname: string, size: number): void {
+  const grant = minted.get(pathname);
+  if (!grant) throw new Error(`no grant was minted for ${pathname}`);
+  store.set(pathname, { contentType: grant.contentType, size });
+}
+
+/** The structured payload of a successful tool result. */
+function payload(result: { structuredContent?: unknown }): Record<string, unknown> {
+  return result.structuredContent as Record<string, unknown>;
+}
+
+/** The grants a `create_design_upload` result carries, in the order asked for. */
+function targets(result: { structuredContent?: unknown }): Array<Record<string, unknown>> {
+  return payload(result).targets as Array<Record<string, unknown>>;
+}
 
 /** What the STORE actually holds for an asset, reached the way the panel is —
  *  through the asset's `Attachment` row, which is where the pathname lives. */
@@ -149,6 +188,22 @@ describe('the tool is reachable by the caller it was built for', () => {
   it('is registered, and carries a WRITE scope', () => {
     expect(MCP_TOOL_NAMES).toContain(PUBLISH_DESIGN_RESULT_TOOL_NAME);
     expect(TOOL_SCOPES[PUBLISH_DESIGN_RESULT_TOOL_NAME]).toBe('work_items:write');
+  });
+
+  it('the MINT half asks for the same key and is registered too', () => {
+    // ⚠️ The mint is a WRITE even though it persists no row: it hands back a
+    // presigned PUT into the workspace's own object store, under this item's
+    // design prefix. Declaring it a read would give out store grants on a
+    // browse permission.
+    expect(MCP_TOOL_NAMES).toContain(CREATE_DESIGN_UPLOAD_TOOL_NAME);
+    expect(TOOL_SCOPES[CREATE_DESIGN_UPLOAD_TOOL_NAME]).toBe('work_items:write');
+    expect(TOOL_PERMISSIONS[CREATE_DESIGN_UPLOAD_TOOL_NAME]).toBe(
+      TOOL_PERMISSIONS[PUBLISH_DESIGN_RESULT_TOOL_NAME],
+    );
+    expect(
+      CLI_TOKEN_GRANT,
+      'the door added for the assets an agent cannot emit must be reachable by that agent',
+    ).toContain(TOOL_PERMISSIONS[CREATE_DESIGN_UPLOAD_TOOL_NAME]);
   });
 });
 
@@ -218,6 +273,290 @@ describe('one call publishes a complete result', () => {
       fx.ctx,
     );
     expect(await adminDb.designEvidence.count()).toBe(1);
+  });
+});
+
+// ── bug MOTIR-4750: the door for an asset an agent cannot emit ──────────────
+//
+// The inline form is fine for a note section and a small mock and stays the
+// default. It is not reachable at all for a real design board: the MCP route is
+// a serverless function capped around 4.5 MB, base64 is 1.37x the file, and —
+// the limit no cap change can lift — the bytes have to be EMITTED by a model as
+// a tool argument, at ~0.4 base64 characters per token. So this pair is the
+// difference between a design result and an empty panel, for a whole population
+// of assets.
+describe('mint → upload → publish carries an asset the inline form cannot', () => {
+  it('the two forms reach the SAME panel — one uploaded, one inline', async () => {
+    const uploaded = await makeItem('Design, published from grants');
+    const inline = await makeItem('Design, published inline');
+
+    const grant = await runCreateDesignUpload(
+      {
+        key: uploaded.key,
+        files: [
+          {
+            kind: 'mock',
+            sourcePath: 'design/ai-chat/planning-workspace.mock.html',
+            contentType: 'text/html',
+          },
+          {
+            kind: 'image',
+            sourcePath: 'design/ai-chat/planning-workspace.png',
+            contentType: 'image/png',
+          },
+        ],
+      },
+      fx.ctx,
+    );
+    expect(grant.isError, JSON.stringify(grant)).toBeFalsy();
+    const [mockTarget, imageTarget] = targets(grant);
+
+    // One grant per file, in the order asked for, each bound to its own media
+    // type and carrying the cap up front — the thing MOTIR-1911's lesson says
+    // the caller should not have to discover by exceeding it.
+    expect(targets(grant)).toHaveLength(2);
+    expect(mockTarget!.contentType).toBe('text/html');
+    expect(imageTarget!.contentType).toBe('image/png');
+    expect(mockTarget!.uploadUrl).toContain('https://store.example/signed/');
+    expect(mockTarget!.maxBytes).toBe(MAX_UPLOAD_BYTES);
+    // Under THIS item's design prefix, which is what makes the register half's
+    // prefix check meaningful rather than decorative.
+    expect(mockTarget!.pathname as string).toContain(`/${uploaded.id}/`);
+
+    // The agent's own PUT. Nothing about this step goes through Motir.
+    putUploaded(mockTarget!.pathname as string, 48_120);
+    putUploaded(imageTarget!.pathname as string, 3_929_899);
+
+    const published = await runPublishDesignResult(
+      {
+        key: uploaded.key,
+        assets: [
+          {
+            kind: 'mock',
+            sourcePath: 'design/ai-chat/planning-workspace.mock.html',
+            pathname: mockTarget!.pathname as string,
+          },
+          {
+            kind: 'image',
+            sourcePath: 'design/ai-chat/planning-workspace.png',
+            pathname: imageTarget!.pathname as string,
+          },
+        ],
+        noteMd: '## The planning workspace\n\nWhat changed.\n',
+        commitSha: 'ba5eba11',
+      },
+      fx.ctx,
+    );
+    expect(published.isError, JSON.stringify(published)).toBeFalsy();
+
+    // …and the inline form still publishes, unchanged. This card ADDS a door.
+    const inlineResult = await runPublishDesignResult(
+      { key: inline.key, assets: [MOCK, IMAGE, NOTE], noteMd: '## Detail\n\nWhat changed.\n' },
+      fx.ctx,
+    );
+    expect(inlineResult.isError, JSON.stringify(inlineResult)).toBeFalsy();
+
+    // BOTH reached the panel's read — the same current row, the same asset
+    // kinds, the same note. A door that published somewhere else would satisfy
+    // every assertion above and none of these.
+    for (const item of [uploaded, inline]) {
+      const evidence = await adminDb.designEvidence.findFirstOrThrow({
+        where: { workItemId: item.id, isCurrent: true },
+        include: { assets: true },
+      });
+      expect(evidence.noteMd).toContain('What changed.');
+      expect(evidence.assets.map((a) => a.kind)).toContain('mock');
+      expect(evidence.assets.map((a) => a.kind)).toContain('image');
+    }
+
+    // The store holds the mock as `text/html` on the UPLOADED path too — §5's
+    // one-entrance guarantee is a property of the design path, not of the
+    // inline form that happened to be the only way in.
+    expect(store.get(mockTarget!.pathname as string)!.contentType).toBe('text/html');
+  });
+
+  it('publishes an asset whose INLINE argument would be larger than the per-file cap ITSELF', async () => {
+    // ⚠️ ASSERTED BY SIZE, against the repository's own constant rather than a
+    // number typed into this test. `MAX_UPLOAD_BYTES` is the only shipped size
+    // policy there is, and base64 inflates by 4/3 — so an asset whose ENCODED
+    // form exceeds that cap could not be sent as a tool argument under any
+    // reading of the limits, before the agent's own output budget is even
+    // considered. That is the case MOTIR-4750 was filed for, and it is the case
+    // this test covers.
+    const item = await makeItem('Design a multi-sheet board');
+    const sizeBytes = Math.ceil((MAX_UPLOAD_BYTES * 3) / 4) + 1_024;
+    expect(
+      Math.ceil(sizeBytes / 3) * 4,
+      'the fixture must be one the inline form genuinely cannot carry',
+    ).toBeGreaterThan(MAX_UPLOAD_BYTES);
+
+    const grant = await runCreateDesignUpload(
+      {
+        key: item.key,
+        files: [
+          { kind: 'image', sourcePath: 'design/ai-chat/board.png', contentType: 'image/png' },
+        ],
+      },
+      fx.ctx,
+    );
+    const [target] = targets(grant);
+    putUploaded(target!.pathname as string, sizeBytes);
+
+    const published = await runPublishDesignResult(
+      {
+        key: item.key,
+        assets: [
+          {
+            kind: 'image',
+            sourcePath: 'design/ai-chat/board.png',
+            pathname: target!.pathname as string,
+          },
+        ],
+      },
+      fx.ctx,
+    );
+    expect(published.isError, JSON.stringify(published)).toBeFalsy();
+
+    // The size recorded is the STORE's, and nothing in either call reported it —
+    // which is also what makes the per-file cap enforceable on this path.
+    const asset = await adminDb.designAsset.findFirstOrThrow();
+    const attachment = await adminDb.attachment.findFirstOrThrow({
+      where: { id: asset.attachmentId! },
+    });
+    expect(attachment.sizeBytes).toBe(sizeBytes);
+    expect(attachment.sizeBytes).toBeLessThanOrEqual(MAX_UPLOAD_BYTES);
+  });
+
+  it('refuses a pathname NOBODY granted — a lying key cannot be published', async () => {
+    // The register half HEADs every object, so a pathname outside this item's
+    // prefix (or naming nothing at all) is refused before any row is written.
+    const item = await makeItem('Design');
+    const result = await runPublishDesignResult(
+      {
+        key: item.key,
+        assets: [
+          {
+            kind: 'image',
+            sourcePath: 'design/x/x.png',
+            pathname: 'design/some-other-workspace/some-other-item/stolen.png',
+          },
+        ],
+      },
+      fx.ctx,
+    );
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('DESIGN_EVIDENCE');
+    expect(await adminDb.designEvidence.count()).toBe(0);
+  });
+
+  it('the mint re-uses the publish’s own gates — a CONTAINER target is refused', async () => {
+    // It adds no policy: the same `resolveTarget` the publish runs, so a design
+    // result cannot be minted onto a container any more than it can be
+    // published onto one.
+    const container = await makeContainerWithChild('A story');
+    const result = await runCreateDesignUpload(
+      {
+        key: container.key,
+        files: [{ kind: 'image', sourcePath: 'design/x/x.png', contentType: 'image/png' }],
+      },
+      fx.ctx,
+    );
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('DESIGN_EVIDENCE_NOT_A_LEAF');
+    expect(minted.size, 'no grant may be minted for a target that cannot own a result').toBe(0);
+  });
+
+  it('the mint refuses a media type outside the design allowlist, granting nothing', async () => {
+    const item = await makeItem('Design');
+    const result = await runCreateDesignUpload(
+      {
+        key: item.key,
+        files: [
+          { kind: 'image', sourcePath: 'design/x/x.exe', contentType: 'application/x-msdownload' },
+        ],
+      },
+      fx.ctx,
+    );
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('UNSUPPORTED_FILE_TYPE');
+    expect(minted.size).toBe(0);
+  });
+});
+
+describe('one publish uses ONE form for all of its assets', () => {
+  // The two forms reach two different service methods, so reconciling them here
+  // would make this adapter the one place that decides how a design result is
+  // assembled — which is exactly what it is written not to own. Each refusal
+  // names the asset and the fix, because an agent mid-run gets one hop.
+  it('refuses a MIX of inline and uploaded assets, naming the counts', async () => {
+    const item = await makeItem('Design');
+    const grant = await runCreateDesignUpload(
+      {
+        key: item.key,
+        files: [{ kind: 'image', sourcePath: 'design/x/x.png', contentType: 'image/png' }],
+      },
+      fx.ctx,
+    );
+    const [target] = targets(grant);
+    putUploaded(target!.pathname as string, 2_000_000);
+
+    const result = await runPublishDesignResult(
+      {
+        key: item.key,
+        assets: [
+          MOCK,
+          { kind: 'image', sourcePath: 'design/x/x.png', pathname: target!.pathname as string },
+        ],
+      },
+      fx.ctx,
+    );
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('MIXED_ASSET_SOURCES');
+    expect(JSON.stringify(result), 'the refusal must name the fix').toContain(
+      CREATE_DESIGN_UPLOAD_TOOL_NAME,
+    );
+    expect(await adminDb.designEvidence.count()).toBe(0);
+  });
+
+  it('refuses an asset carrying BOTH forms, naming which one', async () => {
+    const item = await makeItem('Design');
+    const result = await runPublishDesignResult(
+      { key: item.key, assets: [{ ...IMAGE, pathname: 'design/a/b/c.png' }] },
+      fx.ctx,
+    );
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result);
+    expect(text).toContain('AMBIGUOUS_ASSET_SOURCE');
+    expect(text).toContain('design/work-items/detail.png');
+  });
+
+  it('refuses an asset carrying NEITHER form, and points at the mint', async () => {
+    const item = await makeItem('Design');
+    const result = await runPublishDesignResult(
+      {
+        key: item.key,
+        assets: [{ kind: 'image', sourcePath: 'design/x/x.png', contentType: 'image/png' }],
+      },
+      fx.ctx,
+    );
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result);
+    expect(text).toContain('MISSING_ASSET_SOURCE');
+    expect(text).toContain(CREATE_DESIGN_UPLOAD_TOOL_NAME);
+  });
+
+  it('refuses inline bytes with no declared media type — the store cannot be asked', async () => {
+    const item = await makeItem('Design');
+    const result = await runPublishDesignResult(
+      {
+        key: item.key,
+        assets: [{ kind: 'image', sourcePath: 'design/x/x.png', contentBase64: b64('PNG\r\n') }],
+      },
+      fx.ctx,
+    );
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).toContain('MISSING_CONTENT_TYPE');
+    expect(store.size).toBe(0);
   });
 });
 

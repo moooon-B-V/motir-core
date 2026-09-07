@@ -33,6 +33,7 @@ async function makeWorkspace(email: string) {
  *  set, so the token-store / provider paths have a real row to act on. */
 async function seedConnection(args: {
   workspaceId: string;
+  organizationId: string;
   installationId: string;
   accessToken: string;
   refreshToken: string;
@@ -43,6 +44,7 @@ async function seedConnection(args: {
       {
         installationId: args.installationId,
         workspaceId: args.workspaceId,
+        organizationId: args.organizationId,
         accountLogin: 'octocat',
         accountType: 'User',
         accessTokenEncrypted: encryptToken(args.accessToken),
@@ -154,6 +156,7 @@ describe('gitlabConnectionService.getAccessToken', () => {
     const installationId = `gitlab-ws-${workspace.id}`;
     await seedConnection({
       workspaceId: workspace.id,
+      organizationId: workspace.organizationId,
       installationId,
       accessToken: 'still-good',
       refreshToken: 'refresh-x',
@@ -175,6 +178,7 @@ describe('gitlabConnectionService.getAccessToken', () => {
     const installationId = `gitlab-ws-${workspace.id}`;
     await seedConnection({
       workspaceId: workspace.id,
+      organizationId: workspace.organizationId,
       installationId,
       accessToken: 'stale-access',
       refreshToken: 'old-refresh',
@@ -218,6 +222,7 @@ describe('gitlabConnectionService.getAccessToken', () => {
     const installationId = `gitlab-ws-${workspace.id}`;
     await seedConnection({
       workspaceId: workspace.id,
+      organizationId: workspace.organizationId,
       installationId,
       accessToken: 'revoked-access',
       refreshToken: 'revoked-refresh',
@@ -240,6 +245,7 @@ describe('gitlabConnectionService.getAccessToken', () => {
     const installationId = `gitlab-ws-${workspace.id}`;
     await seedConnection({
       workspaceId: workspace.id,
+      organizationId: workspace.organizationId,
       installationId,
       accessToken: 'old-access',
       refreshToken: 'net-refresh',
@@ -267,6 +273,7 @@ describe('gitlabConnectionService.getAccessToken', () => {
         {
           installationId,
           workspaceId: workspace.id,
+          organizationId: workspace.organizationId,
           accountLogin: 'octocat',
           accountType: 'User',
           accessTokenEncrypted: 'not-a-valid-token',
@@ -287,6 +294,7 @@ describe('gitlab provider fetch methods (through the seam, real connection)', ()
     const installationId = `gitlab-ws-${workspace.id}`;
     await seedConnection({
       workspaceId: workspace.id,
+      organizationId: workspace.organizationId,
       installationId,
       accessToken: 'good-token',
       refreshToken: 'r',
@@ -357,6 +365,7 @@ describe('gitlabConnectionService.getConnectionForWorkspace + disconnect', () =>
     const { user, workspace } = await makeWorkspace('g@example.com');
     await seedConnection({
       workspaceId: workspace.id,
+      organizationId: workspace.organizationId,
       installationId: `gitlab-ws-${workspace.id}`,
       accessToken: 'a',
       refreshToken: 'r',

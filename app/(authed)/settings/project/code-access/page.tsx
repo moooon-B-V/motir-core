@@ -5,6 +5,7 @@ import { getActiveProject } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { resolveEffectiveRepoDomain } from '@/lib/projectRepos/effectiveDomain';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CodeAccessSettings } from './_components/CodeAccessSettings';
@@ -41,9 +42,19 @@ import { guardSettingsPage } from '../_guard';
 // revoke. Listing one here would render a row of members whose access state is
 // unknowable and whose only action Motir cannot perform — strictly worse than its
 // absence. So `projectRepoSetService.listByProject` stays the right read for this
-// pane, and the empty state ("nothing to grant until a plan is approved") stays
-// true for a project whose repositories are all its own: there is genuinely
-// nothing for Motir to grant.
+// pane: there is genuinely nothing for Motir to grant.
+//
+// ⚠️ AMENDED BY MOTIR-4803, and only in its LAST CLAUSE — the read is unchanged
+// and the reasoning above is why. ~~the empty state ("nothing to grant until a
+// plan is approved") stays true for a project whose repositories are all its
+// own~~ **The LIST was right and the SENTENCE was not.** The pane rendered
+// `{projectName} has no code yet`, which quantifies over the PROJECT's code
+// while this room is scoped to the repositories Motir MADE — false of Motir's
+// own project, which holds six repositories and no set at all, and the reporter
+// who met it could not tell a scoped page from a broken one. The narrowness of
+// the read was never the defect; a sentence wider than the read was. So the
+// empty state now has two arms and the ladder is consulted to pick between them
+// (below) — nothing is added to the matrix.
 //
 // If a revoke/read-back path for connected repositories ever lands, this is the
 // comment to come back to — the boundary is the INVITATION, not the registry.
@@ -54,10 +65,34 @@ import { guardSettingsPage } from '../_guard';
 // `canEdit` here only governs which affordances render. A non-admin sees the same
 // data, plus the one action that is theirs alone: connecting their own GitHub.
 
-/** The shipped 7.10 connect pane — grant 1 (identity) is all this surface needs;
- *  no repository permission is asked for, because none is needed to be invited to
- *  a repository. Redrawn nowhere (design §15.14). */
-const GITHUB_SETTINGS_PATH = '/settings/workspace/github';
+/**
+ * Where a member goes to connect their OWN git account — grant 1 (identity) is
+ * all this surface needs; no repository permission is asked for, because none is
+ * needed to be invited to a repository. Redrawn nowhere (design §15.14).
+ *
+ * ⚠️ RE-POINTED BY MOTIR-4682, and it is load-bearing rather than tidying. This
+ * was `/settings/workspace/github` — a page that hosted the member's personal
+ * identity beside the workspace's installation, and that MOTIR-4680 redirects
+ * away once the connection moves to the organisation. Left alone, **the one
+ * action nobody can take on a member's behalf** would have lost its door: this
+ * link is the only route to it from the room where a member discovers they need
+ * it.
+ *
+ * The destination is the ACCOUNT tier because that is where the credential
+ * lives — `GithubIdentity` is `userId @unique` and has never belonged to a
+ * workspace. `tests/settings/accountGitAccounts.test.tsx` asserts this constant
+ * names a route that is not redirected away, so the door cannot go stale again
+ * behind a rename.
+ */
+const GIT_ACCOUNT_PATH = '/settings/account/git';
+
+/**
+ * The Repositories room — the surface that answers "WHICH repositories does this
+ * project work on", over the whole effective domain rather than the set
+ * (MOTIR-3126 · MOTIR-4669). It is where a reader who finds THIS pane empty
+ * should go, and until MOTIR-4803 nothing on this pane said so.
+ */
+const REPOSITORIES_PATH = '/settings/project/repositories';
 
 export default async function ProjectCodeAccessPage() {
   const session = await getSession();
@@ -80,12 +115,31 @@ export default async function ProjectCodeAccessPage() {
   const refused = await guardSettingsPage('code-access', ctx);
   if (refused) return refused;
 
+  // ⚠️ THE LADDER JOINS THE WAVE — IT IS CONSULTED FOR THE EMPTY STATE, AND FOR
+  // NOTHING ELSE (MOTIR-4803). The matrix and strip reads stay the SET; the
+  // paragraph at the top of this file is unchanged and is still the reason. What
+  // was wrong was the SENTENCE the pane renders when that set is empty:
+  // "{project} has no code yet" quantifies over the project's code, and Motir's
+  // own project has six repositories while holding no set at all. So the pane
+  // needs to know whether the absence is total or merely its own, and
+  // `resolveEffectiveRepoDomain` is the one place that question is answered
+  // (MOTIR-3086 · MOTIR-3126).
+  //
+  // ⚠️ IN the `Promise.all`, not after it. It was sequenced after the batch
+  // first, to skip the read on a project whose set makes the answer irrelevant —
+  // and that traded a query for a ROUND TRIP, which is the wrong direction and
+  // is what `tests/navigation/loading-boundary-guard.test.ts`'s serial-read
+  // ratchet (MOTIR-3449) exists to catch. It caught it: five serial reads
+  // against a ceiling of four. A parallel read costs no latency, and the module
+  // sequences its OWN two reads so a project answered by its set alone still
+  // does the minimum — so the saving was never this page's to make.
   const actorCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const [access, repos, identity, caps] = await Promise.all([
+  const [access, repos, identity, caps, domain] = await Promise.all([
     projectRepoAccessService.listTeamAccess(ctx.projectId, actorCtx),
     projectRepoSetService.listByProject(ctx.projectId, actorCtx),
     githubIdentityService.getIdentityForUser(ctx.userId),
     projectAccessService.getSettingsCapabilities(ctx.projectId, actorCtx),
+    resolveEffectiveRepoDomain(ctx.projectId, actorCtx),
   ]);
 
   return (
@@ -111,9 +165,11 @@ export default async function ProjectCodeAccessPage() {
         canEdit={caps.canEdit}
         selfLogin={identity?.githubLogin ?? null}
         selfAvatarUrl={identity?.avatarUrl ?? null}
-        connectHref={GITHUB_SETTINGS_PATH}
+        connectHref={GIT_ACCOUNT_PATH}
         plansHref="/plans"
         membersHref="/settings/project/members"
+        repositoriesHref={REPOSITORIES_PATH}
+        connectedRepoCount={domain.connected.length}
       />
     </div>
   );

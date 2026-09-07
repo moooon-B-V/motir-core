@@ -52,6 +52,39 @@ export const migrateOnboardingRepository = {
   },
 
   /**
+   * WHICH of these projects arrived WITH code of their own — the ladder's second
+   * input, for a whole organisation in ONE read (MOTIR-4802).
+   *
+   * Keyed on `connectedRepoRef` being present, exactly as
+   * `lib/projectRepos/ownCode.ts` reads it one project at a time: that field is
+   * the only project-scoped record of a repository the project did NOT get from
+   * its own set, and a run parked at `connect` with nothing connected answers no.
+   * This is the bulk shape of the same question, for the organisation inventory's
+   * `Used by N projects` — which needs it per project of an org and cannot pay a
+   * read each.
+   *
+   * ⚠️ CROSS-WORKSPACE, so it must run under `withSystemContext` — the same arm
+   * (`migrate_onboarding_workspace_or_system_admin`, MOTIR-2082) the sweep read
+   * below relies on. Under a workspace context it would answer for the caller's
+   * own workspace and return an empty answer for every other, which the ladder
+   * reads as "born in Motir": a silent subset that changes the verdict rather
+   * than shortening the list. The caller access-filters the projects it then
+   * NAMES; this read is a fact about the tree, not a disclosure.
+   */
+  async listProjectIdsWithConnectedRepo(
+    projectIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (projectIds.length === 0) return [];
+    const rows = await tx.migrateOnboarding.findMany({
+      where: { projectId: { in: [...projectIds] }, connectedRepoRef: { not: null } },
+      select: { projectId: true },
+      distinct: ['projectId'],
+    });
+    return rows.map((row) => row.projectId);
+  },
+
+  /**
    * Take a row lock on the run (`SELECT … FOR UPDATE`) so a step transition
    * serializes against a concurrent transition on the SAME run — the lost-update
    * guard for the one-directional step lifecycle (the lock-before-read-derived-

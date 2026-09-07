@@ -5,6 +5,7 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { SettingsSidebarHeader } from '@/app/(authed)/_components/SettingsSidebarHeader';
 import { AccountSidebarHeader } from '@/app/(authed)/_components/AccountSidebarHeader';
+import { OrganizationSidebarHeader } from '@/app/(authed)/_components/OrganizationSidebarHeader';
 
 // MOTIR-3171 — the two rail heads' "← Back to …" link goes to the PROJECT HOME,
 // and the project home is `/home`.
@@ -22,10 +23,12 @@ import { AccountSidebarHeader } from '@/app/(authed)/_components/AccountSidebarH
 //     draws the link TWICE — an expanded row and a collapsed (56px) icon button —
 //     from one constant, so a test that reads the constant proves one thing about
 //     two branches and would keep passing if either branch stopped using it.
-//   * Assert BOTH heads. They are one pattern written twice (the account head is
-//     the settings head "retargeted", in its own words), which is why they carried
-//     the same wrong value under the same wrong sentence; fixing one and leaving
-//     the other is how the pair diverges.
+//   * Assert EVERY head. They are one pattern written repeatedly (the account head
+//     is the settings head "retargeted", in its own words), which is why they
+//     carried the same wrong value under the same wrong sentence; fixing one and
+//     leaving the other is how the set diverges. There are THREE now — MOTIR-4710
+//     added the organisation head when organisation settings became an area — and
+//     a fourth must be added here in the commit that writes it.
 
 const PROJECT = {
   id: 'p1',
@@ -36,6 +39,8 @@ const PROJECT = {
 } as unknown as ProjectDTO;
 
 const USER = { name: 'Yue', email: 'yue@example.com' };
+
+const ORG = { name: 'moooon' };
 
 const HOME = '/home';
 
@@ -64,13 +69,26 @@ describe('the rail-head back link points at the project home (MOTIR-3171)', () =
     expect(link.getAttribute('href')).toBe(HOME);
   });
 
-  it('neither head links to /dashboard any more — the retired landing', () => {
+  it.each([
+    ['expanded', false],
+    ['collapsed', true],
+  ])('organisation rail head — %s (MOTIR-4710)', (_name, collapsed) => {
+    renderWithIntl(<OrganizationSidebarHeader organization={ORG} collapsed={collapsed} />);
+
+    const link = screen.getByRole('link', { name: 'Back to Motir' });
+    expect(link.getAttribute('href')).toBe(HOME);
+  });
+
+  it('NO head links to /dashboard any more — the retired landing', () => {
     const { container: settings } = renderWithIntl(
       <SettingsSidebarHeader activeProject={PROJECT} />,
     );
     const { container: account } = renderWithIntl(<AccountSidebarHeader user={USER} />);
+    const { container: organization } = renderWithIntl(
+      <OrganizationSidebarHeader organization={ORG} />,
+    );
 
-    for (const container of [settings, account]) {
+    for (const container of [settings, account, organization]) {
       expect(container.querySelector('a[href="/dashboard"]')).toBeNull();
     }
   });

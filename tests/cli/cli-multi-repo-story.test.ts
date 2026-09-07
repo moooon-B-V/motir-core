@@ -120,6 +120,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: `repo-${name}-${randomToken(8)}`,
       owner: 'moooon',
       name,

@@ -11,6 +11,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } from '../helpers/db';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // ── THE STORY SEAM (MOTIR-2193, for Story MOTIR-2192) ────────────────────────
 //
@@ -129,6 +130,7 @@ async function seedGitlab(workspaceId: string) {
       data: {
         installationId: conn.id,
         workspaceId,
+        organizationId: await organizationIdOf(workspaceId),
         repoId,
         owner: 'acme',
         name,

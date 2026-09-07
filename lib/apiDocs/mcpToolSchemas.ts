@@ -553,6 +553,56 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  create_design_upload: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      files: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            kind: {
+              type: 'string',
+              enum: ['mock', 'image', 'note_file'],
+              description:
+                'What this file IS: "mock" for the `*.mock.html`, "image" for the `.png` export, "note_file" for the complete `design-notes.md` text.',
+            },
+            sourcePath: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The path the file has IN THE REPOSITORY, e.g. "design/ai-chat/planning-workspace.png". Its basename is carried into the minted key, so a grant stays recognisable.',
+            },
+            contentType: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The media type you will PUT — "text/html", "image/png" or "text/markdown". The grant is BOUND to it: a PUT sending anything else is refused by the store.',
+            },
+          },
+          required: ['kind', 'sourcePath', 'contentType'],
+          additionalProperties: false,
+        },
+        minItems: 1,
+        description:
+          'The files you are about to upload — one grant is minted per entry, in this order.',
+      },
+      withinParentKey: {
+        type: 'string',
+        description:
+          'On a PARENT-RUN publish only: the container whose branch this belongs to. It asserts the target is one of that container’s children, and is not stored.',
+      },
+    },
+    required: ['key', 'files'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   create_plan: {
     type: 'object',
     properties: {
@@ -1235,20 +1285,27 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               type: 'string',
               minLength: 1,
               description:
-                'The file’s media type — "text/html", "image/png" or "text/markdown". Anything else is refused: this is the ONE path on which "text/html" is accepted at all.',
+                'The file’s media type — "text/html", "image/png" or "text/markdown". Anything else is refused: this is the ONE path on which "text/html" is accepted at all. Required with `contentBase64`; omit it with `pathname`, where the STORE’s own answer is authoritative.',
             },
             contentBase64: {
               type: 'string',
               minLength: 1,
-              description: 'The file’s bytes, base64-encoded.',
+              description:
+                'The file’s bytes, base64-encoded — the INLINE path, for a small asset. Send this OR `pathname`, never both and never neither.',
+            },
+            pathname: {
+              type: 'string',
+              minLength: 1,
+              description:
+                'The `pathname` of a `create_design_upload` grant you have already PUT this file to — the path for an asset too large to travel as a tool argument. Send this OR `contentBase64`.',
             },
           },
-          required: ['kind', 'sourcePath', 'contentType', 'contentBase64'],
+          required: ['kind', 'sourcePath'],
           additionalProperties: false,
         },
         minItems: 1,
         description:
-          'The files to publish — normally three: the mock, the `.png`, and the note as a "note_file". At least one is required.',
+          'The files to publish — normally three: the mock, the `.png`, and the note as a "note_file". At least one is required. Each entry carries EITHER `contentBase64` (the bytes inline, for a small asset) OR the `pathname` of a `create_design_upload` grant you have already PUT to. One publish uses one of the two forms for ALL its assets.',
       },
       noteMd: {
         type: 'string',

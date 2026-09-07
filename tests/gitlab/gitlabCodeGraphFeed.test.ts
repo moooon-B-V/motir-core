@@ -79,6 +79,7 @@ async function makeScenario(email: string, opts: { withRepo?: boolean } = {}) {
       {
         installationId: `gitlab-ws-${workspace.id}`,
         workspaceId: workspace.id,
+        organizationId: workspace.organizationId,
         accountLogin: 'octocat',
         accountType: 'User',
         accessTokenEncrypted: encryptToken('good-token'),
@@ -92,6 +93,7 @@ async function makeScenario(email: string, opts: { withRepo?: boolean } = {}) {
         {
           installationId: connection.id,
           workspaceId: workspace.id,
+          organizationId: workspace.organizationId,
           repoId: PROJECT_ID,
           owner: 'octocat',
           name: 'acme',

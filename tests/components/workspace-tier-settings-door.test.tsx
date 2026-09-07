@@ -16,7 +16,7 @@ import { SidebarNav } from '@/app/(authed)/_components/SidebarNav';
 // re-pointed row does not: it targets `/settings/organization`, the page that
 // hosts the folded-in sections.
 //
-// The Job runs and Git rows are asserted UNCHANGED at both counts, because they
+// The Job runs and Git rows are asserted PRESENT at both counts, because they
 // are workspace-SCOPED but not workspace-NAMED and §6 reveals a tier rather than
 // relocating every page beneath it (the card's AC 5).
 
@@ -69,10 +69,16 @@ describe('the no-project settings door BELOW the reveal threshold', () => {
     expect(container.innerHTML).toContain('href="/settings/organization"');
   });
 
-  it('keeps the workspace-SCOPED sub-routes, which §6 does not relocate', () => {
+  it('keeps the sub-routes beside it — §6 relocates neither', () => {
+    // ⚠️ GIT NOW NAMES THE ORGANISATION (Story MOTIR-4669 · MOTIR-4680), and
+    // that is a TIER move, not the §6 fold this file is about. Job runs is still
+    // workspace-scoped and still points at the workspace route; Git is
+    // organisation-scoped now and points at its own. Both rows are present at
+    // both counts, which is the claim — the gate is on Security, not on its
+    // neighbours.
     const { container } = renderRail(false);
     expect(container.innerHTML).toContain('/settings/workspace/jobs');
-    expect(container.innerHTML).toContain('/settings/workspace/github');
+    expect(container.innerHTML).toContain('/settings/organization/git');
   });
 });
 
@@ -85,6 +91,6 @@ describe('the no-project settings door AT the reveal threshold', () => {
   it('keeps the sub-routes here too', () => {
     const { container } = renderRail(true);
     expect(container.innerHTML).toContain('/settings/workspace/jobs');
-    expect(container.innerHTML).toContain('/settings/workspace/github');
+    expect(container.innerHTML).toContain('/settings/organization/git');
   });
 });

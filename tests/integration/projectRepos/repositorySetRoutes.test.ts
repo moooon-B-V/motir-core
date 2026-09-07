@@ -340,6 +340,7 @@ describe('POST …/[rowId]/state — the three moves the step offers', () => {
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         repoId: 'r-1',
         owner: 'acme-inc',
         name: 'booking-service',

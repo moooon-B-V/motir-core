@@ -12,6 +12,7 @@ import { createV1ProjectCaller, type V1ProjectCaller } from '../fixtures/apiV1Fi
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // The repository SET's READ SEAMS (Story MOTIR-2725 · MOTIR-2728, ADR
 // `docs/decisions/work-item-repository-set.md` §3).
@@ -51,6 +52,7 @@ async function connectRepo(caller: V1ProjectCaller, name: string, defaultBranch 
     data: {
       installationId: inst.id,
       workspaceId: caller.fixture.workspaceId,
+      organizationId: await organizationIdOf(caller.fixture.workspaceId),
       repoId: `repo-${randomToken(8)}`,
       owner: 'moooon',
       name,

@@ -38,6 +38,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import type { ProjectContext } from '@/lib/projects';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 const PASSWORD = 'hunter2hunter2';
 
@@ -116,6 +117,7 @@ async function addRow(
       data: {
         installationId: inst.id,
         workspaceId: ctx.workspaceId,
+        organizationId: await organizationIdOf(ctx.workspaceId),
         repoId: `repo-${randomToken(8)}`,
         owner: 'moooon',
         name: opts.realizedName,

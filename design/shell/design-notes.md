@@ -1002,14 +1002,14 @@ each asset stayed correct about the day it was drawn and quietly wrong about eve
 **The measurement, at `8d80ac8db`.** Fourteen rails across six assets draw this section, and **not one
 of them drew the `Legal` row or the `Security` row**:
 
-| Asset                          | Rails | The bottom section it draws             | Short by |
-| ------------------------------ | ----- | --------------------------------------- | -------- |
-| `desktop.pen`                  | 1     | Settings · Docs                         | **4**    |
-| `desktop-collapsed.pen`        | 1     | `settings` · `book-open` (icon-only)    | **4**    |
-| `mobile-drawer.pen`            | 1     | Settings · Docs                         | **4**    |
-| `navigation-pending.mock.html` | 4     | Settings · Job runs · Git · Docs        | **2**    |
-| `top-bar.mock.html`            | 1     | Settings · Job runs · Git · Docs        | **2**    |
-| `design/home/home.mock.html`   | 6     | Job runs · Git · Docs (Settings on one) | **2–3**  |
+| Asset                                  | Rails | The bottom section it draws             | Short by |
+| -------------------------------------- | ----- | --------------------------------------- | -------- |
+| `desktop.pen`                          | 1     | Settings · Docs                         | **4**    |
+| `desktop-collapsed.pen`                | 1     | `settings` · `book-open` (icon-only)    | **4**    |
+| `mobile-drawer.pen`                    | 1     | Settings · Docs                         | **4**    |
+| `navigation-pending.mock.html`         | 4     | Settings · Job runs · Git · Docs        | **2**    |
+| `top-bar.mock.html`                    | 1     | Settings · Job runs · Git · Docs        | **2**    |
+| `design/workbench/workbench.mock.html` | 6     | Job runs · Git · Docs (Settings on one) | **2–3**  |
 
 Method: parse each `.pen` as JSON and walk to its `Nav Section Bottom` frame; load each `.mock.html`
 in Chromium and enumerate every `[data-surface="sidebar"]`'s rows. **The count is the section's, not
@@ -1057,11 +1057,11 @@ floor did not move.
 
 ### The divergence ledger — which source wins for this element
 
-| #   | The older assets say                                                                                          | This asset says                                                                                                                                                                                                                                       | Since      |
-| --- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 1   | `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` draw **Settings · Docs** and nothing else       | **Four rows**, two of them conditional. **This asset WINS for the bottom section**; those three keep the PRIMARY section, the rail head, the top bar and the drawer chrome, which this asset does not draw.                                           | MOTIR-4130 |
-| 2   | The three `.pen` sources cannot be corrected in place                                                         | **They are not edited.** Pencil is not in this tree, so a `.pen` edit produces a source disagreeing with the `.png` every consumer opens — a second divergence, not a fix. The same call `design/auth/` made for its own legacy artboards.            | MOTIR-4130 |
-| 3   | `navigation-pending.mock.html`, `top-bar.mock.html` and `design/home/home.mock.html` draw four rows, or three | Those rails are **context for something else** — a pending grammar, a control budget, a landing surface — and are not the source for this section. They are re-exportable and may be swept, but a reader asking _what belongs here_ reads THIS asset. | MOTIR-4130 |
+| #   | The older assets say                                                                                                    | This asset says                                                                                                                                                                                                                                       | Since      |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1   | `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` draw **Settings · Docs** and nothing else                 | **Four rows**, two of them conditional. **This asset WINS for the bottom section**; those three keep the PRIMARY section, the rail head, the top bar and the drawer chrome, which this asset does not draw.                                           | MOTIR-4130 |
+| 2   | The three `.pen` sources cannot be corrected in place                                                                   | **They are not edited.** Pencil is not in this tree, so a `.pen` edit produces a source disagreeing with the `.png` every consumer opens — a second divergence, not a fix. The same call `design/auth/` made for its own legacy artboards.            | MOTIR-4130 |
+| 3   | `navigation-pending.mock.html`, `top-bar.mock.html` and `design/workbench/workbench.mock.html` draw four rows, or three | Those rails are **context for something else** — a pending grammar, a control budget, a landing surface — and are not the source for this section. They are re-exportable and may be swept, but a reader asking _what belongs here_ reads THIS asset. | MOTIR-4130 |
 
 | 4 | **This asset's own earlier revisions** drew `Docs` and `Legal` as rail rows, and carried their absent-arm reasoning | **Both rows are GONE from this section, and so is that reasoning** — they moved to the **Help menu**, whose asset (MOTIR-4238) is the design of record for both doors now. A rail answers _where inside this project can I go today_; neither door is a daily-work destination. Nothing else moved: the other four rows keep their destinations and their order, and the floor is unchanged at two. | MOTIR-4254 |
 

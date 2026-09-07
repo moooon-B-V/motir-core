@@ -1,5 +1,6 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
@@ -70,11 +71,16 @@ export const gitlabConnectionService = {
 
     const row = await withWorkspaceContext(
       { userId: args.userId, workspaceId: args.workspaceId },
-      (tx) =>
+      async (tx) =>
         githubInstallationRepository.upsertGitlabConnection(
           {
             installationId: connectionId(args.workspaceId),
             workspaceId: args.workspaceId,
+            // The tier that OWNS the connection (Story MOTIR-4669 · MOTIR-4649),
+            // resolved through the workspace. Never null here: a GitLab
+            // connection is always a tenant's own grant — there is no shared
+            // installation on this provider.
+            organizationId: await resolveOrganizationId(args.workspaceId, tx),
             accountLogin: gitlabUser.username,
             accountType: 'User',
             accessTokenEncrypted: encryptToken(tokens.accessToken),
@@ -257,6 +263,8 @@ export const gitlabConnectionService = {
             // connection's workspace — but the column is the gate the
             // `github_repo` RLS policy now reads, so it must be stamped here too.
             workspaceId: ctx.workspaceId,
+            // …and the tier that owns it (MOTIR-4649), resolved the same way.
+            organizationId: await resolveOrganizationId(ctx.workspaceId, tx),
             repoId: match.providerRepoId,
             owner: match.owner,
             name: match.name,

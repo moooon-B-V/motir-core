@@ -35,15 +35,27 @@ export class ProjectRepoNameTakenError extends Error {
 }
 
 /**
- * The realized `GithubRepo` is already claimed by ANOTHER project's set row. This
- * is the corruption the `github_repo_id` unique index exists to prevent — a repo
- * created for project A being recorded as project B's — surfaced as a typed error
- * rather than a raw P2002. → 409
+ * The realized `GithubRepo` is already in THIS PROJECT's set — a second row in
+ * one project claiming one repository. Surfaced as a typed error rather than a
+ * raw P2002. → 409
+ *
+ * ⚠️ RE-AIMED, NOT RETIRED (Story MOTIR-4669 · MOTIR-4648). It used to read: *"the
+ * realized `GithubRepo` is already claimed by ANOTHER project's set row … the
+ * corruption the `github_repo_id` unique index exists to prevent — a repo created
+ * for project A being recorded as project B's."* A repository belongs to the
+ * ORGANISATION and a repository in two projects is the ordinary case, so that is
+ * no longer corruption and no longer refused.
+ *
+ * What IS refused is a repository appearing twice in one project's set, which is
+ * always a mistake — and it is still enforced in the database, by
+ * `@@unique([projectId, githubRepoId])`. The error KEEPS its `code` and its
+ * status: the same 409 the product already returned, asked at the grain the
+ * product now has.
  */
 export class RealizedRepoAlreadyClaimedError extends Error {
   readonly code = 'REALIZED_REPO_ALREADY_CLAIMED' as const;
   constructor(githubRepoId: string) {
-    super(`Connected repository ${githubRepoId} is already claimed by another project's set.`);
+    super(`Connected repository ${githubRepoId} is already in this project's repository set.`);
     this.name = 'RealizedRepoAlreadyClaimedError';
   }
 }
@@ -176,5 +188,30 @@ export class RepoTransferRefusedError extends Error {
   constructor(readonly detail: string) {
     super(`GitHub refused the repository transfer: ${detail}`);
     this.name = 'RepoTransferRefusedError';
+  }
+}
+
+/**
+ * Thrown when an org-level disconnect is attempted on a GITHUB repository
+ * (Story MOTIR-4669 · MOTIR-4679).
+ *
+ * ⚠️ IT IS NOT A PERMISSION REFUSAL AND NOT A BUG — it is the product telling the
+ * truth about who owns the act. Which repositories Motir may read is the GitHub
+ * App's own install screen; a Motir-side "stop tracking" would delete the mirror
+ * row while leaving the App's grant in place, and the repository would reappear
+ * on the next installation reconcile. Two sources of truth for one fact.
+ *
+ * The surface answers it with the pre-link-out DISCLOSURE (`design/github` panel
+ * 7): the org-wide consequence stated on the way out, then `Continue on GitHub`.
+ * The removal then arrives through the `installation_repositories` webhook, which
+ * already prunes the row and enqueues the windowed offboarding.
+ */
+export class GithubRemovalHappensOnGithubError extends Error {
+  readonly code = 'GITHUB_REMOVAL_HAPPENS_ON_GITHUB' as const;
+  constructor(readonly repoRef: string) {
+    super(
+      `${repoRef} is a GitHub repository: Motir cannot remove it. Change the Motir App's repository access on GitHub.`,
+    );
+    this.name = 'GithubRemovalHappensOnGithubError';
   }
 }

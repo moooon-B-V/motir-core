@@ -191,6 +191,14 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // therefore adds no credential and no trust; it only stops requiring a script
   // to be present in the repository. `CLI_TOKEN_GRANT` is NOT widened here.
   publish_design_result: 'work_item:edit',
+  // ⚠️ `create_design_upload` (bug MOTIR-4750) MINTS a presigned write against
+  // the workspace's object store, so it is a WRITE key even though it persists
+  // no row — the same reading `create_acceptance_upload` gets below, and for the
+  // same reason: declaring it a read would hand out object-store grants on a
+  // browse permission. Same key as the publish it is step 1 of, so it needs no
+  // credential the design publisher did not already have, and `CLI_TOKEN_GRANT`
+  // is NOT widened here either.
+  create_design_upload: 'work_item:edit',
   // The ACCEPTANCE publish pair (MOTIR-4704) — the SAME key again, and not by
   // analogy: `ACCEPTANCE_PUBLISH_PERMISSION` in `lib/tokens/grant.ts` IS
   // `work_item:edit`, and the service's own `resolveStory` asserts it on the

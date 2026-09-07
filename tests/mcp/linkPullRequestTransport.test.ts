@@ -93,6 +93,7 @@ async function connectRepo(fx: WorkItemFixture): Promise<string> {
     data: {
       installationId: installation.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: '970001',
       owner: OWNER,
       name: REPO_NAME,

@@ -7,6 +7,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { withOrgContext } from '@/lib/organizations/context';
+import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import {
@@ -19,10 +20,10 @@ import {
   AlreadyOrgMemberError,
   LastOrgOwnerError,
   OrganizationNotFoundError,
-  OrgForbiddenError,
   OrgInviteeNotFoundError,
   OrgSlugCollisionError,
 } from '@/lib/organizations/errors';
+import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAccessService';
 import {
   toCurrentOrganizationDTO,
   toOrganizationDTO,
@@ -595,6 +596,48 @@ export const organizationsService = {
     });
   },
 
+  /**
+   * THE ORGANIZATION THAT OWNS A WORKSPACE — the answer a surface needs when its
+   * subject is a PROJECT or a WORKSPACE rather than the reader (MOTIR-4801).
+   *
+   * ⚠️ IT IS NOT `resolveActiveOrganization` WITH A DIFFERENT ARGUMENT, and that
+   * is the whole reason it exists. That method answers "which organization is
+   * this ACTOR in?", and with no preference it falls through to `orgs[0]` — the
+   * caller's FIRST membership, in row order. For a member of one organization it
+   * is accidentally right, which is why two surfaces shipped calling it with
+   * `null` for a question about a project; for a member of two it names a tenant
+   * the project has nothing to do with, in every sentence on the page.
+   *
+   * A project belongs to a workspace and a workspace belongs to an organization
+   * (`workspace.organizationId`, MOTIR-4649), so the WORKSPACE is the answer and
+   * the actor's session is not part of the question.
+   *
+   * ⚠️ NO ROLE, deliberately. The callers name a tenant; attaching the actor's
+   * org role would put an actor-scoped read back into an entity-scoped answer,
+   * and returning null for a missing membership would blank the name for exactly
+   * the reader the page is explaining itself to. `resolveActiveOrganization` is
+   * still the right call for anything that IS about the actor — the org
+   * switcher, the org settings panes, the tier disclosure.
+   *
+   * Reads under `withWorkspaceContext`, like `isOrgAdminForWorkspace`, which asks
+   * the same question about the same workspace: the workspace row is admitted by
+   * `workspace_active` (so an org admin who is not a workspace member still
+   * resolves), and the organization row by `organization_membership_visible`,
+   * which reads the `app.user_id` this context also binds. Throws through
+   * `resolveOrganizationId` for a workspace id that names no row — a caller
+   * error, never a state a guarded page can be in.
+   */
+  async resolveWorkspaceOrganization(
+    userId: string,
+    workspaceId: string,
+  ): Promise<OrganizationDTO | null> {
+    return withWorkspaceContext({ userId, workspaceId }, async (tx) => {
+      const organizationId = await resolveOrganizationId(workspaceId, tx);
+      const org = await organizationRepository.findByIdInTx(organizationId, tx);
+      return org ? toOrganizationDTO(org) : null;
+    });
+  },
+
   // ── The cross-workspace member roster (paginated — the at-scale rule) ─────
 
   /**
@@ -730,33 +773,6 @@ export const organizationsService = {
 
 // ── Internal authorization helpers (read the actor's own membership; the
 // org_membership RLS policy's userId branch admits it under the bound context) ─
-
-async function assertOrgMember(
-  userId: string,
-  organizationId: string,
-  tx: Prisma.TransactionClient,
-): Promise<OrganizationRole> {
-  const membership = await organizationMembershipRepository.findByOrgAndUserInTx(
-    organizationId,
-    userId,
-    tx,
-  );
-  // Cross-tenant no-leak: a non-member sees the org as not-found, never as
-  // forbidden (the 404-not-403 rule).
-  if (!membership) throw new OrganizationNotFoundError(organizationId);
-  return membership.role;
-}
-
-async function assertOrgAdmin(
-  userId: string,
-  organizationId: string,
-  tx: Prisma.TransactionClient,
-): Promise<void> {
-  const role = await assertOrgMember(userId, organizationId, tx);
-  // The actor IS in the org (so it's visible to them) but lacks admin rights →
-  // 403, distinct from the not-found gate above.
-  if (!isOrgAdminRole(role)) throw new OrgForbiddenError(userId, organizationId);
-}
 
 async function assertNotLastOwner(
   organizationId: string,

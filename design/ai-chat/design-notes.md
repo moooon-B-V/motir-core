@@ -2885,3 +2885,222 @@ The three-file set under `design/ai-chat/` for this surface: `design-notes.md`
 `PlanChangeRail` / `PlanChangeComposer`; grounded in the consumer half already
 merged in `motir-ai` (**MOTIR-4060**'s boundary mailbox); gates **MOTIR-4067**,
 **MOTIR-4068** and **MOTIR-4069**.
+
+---
+
+## ⭐ The plan surface READING the project, and the two hand-offs out of it (MOTIR-4766, 2026-09-06)
+
+**Asset:** `reading-and-handoff.mock.html` + `reading-and-handoff.png`, six panels.
+**Story:** MOTIR-4753 — _the DEPTH of onboarding is a judgement about the project's SUBSTRATE_.
+
+### Why this is a NEW surface in this area rather than a panel on `planning-workspace`
+
+`planning-workspace.mock.html` draws the workspace AT WORK — its canvas, its rail, its overlay
+frame, its exits. This asset draws the ~15 seconds **before any of that exists** for a project that
+has never been planned, and the two doors out of it. Different moment, different reader question,
+its own three-file set. The overlay CHROME is composed from that asset's sheet 6, never redrawn.
+
+### The change this asset is the visual half of
+
+MOTIR-4765 removes the gate. Until it lands, `resolvePlanningHostGate` returns `'onboarding'`
+whenever `Project.onboardingRanAt` is null and `PlanningWorkspaceOverlay` `router.push()`es to
+`/onboarding` — so pressing **Plan with AI** on a project with a connected, indexed repository ejects
+the user to a wizard. After it, the window OPENS, a session READS the project, and **the planner**
+decides one of three things (MOTIR-4767): `continue`, `onboard_new_project`,
+`onboard_existing_project`. Panels 1–2 exist because the window now opens; panels 3–4 are the two
+onboarding outcomes; panel 6's last cell is `continue`.
+
+### Where each depicted behaviour comes from (grounding, not invention)
+
+| Panel                           | Grounded in                                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1–2 · the READING state         | **MOTIR-4768** — it NAMES the connected repository and the committed work items, from `readOnboardingSubstrate`; "a statement of activity, not a progress bar" is that card's own wording. |
+| the four values named on screen | **MOTIR-4756** — `itemCount`, `itemCountTruncated`, `repositoryConnected`, `repositoryIndexed`, and `ONBOARDING_SUBSTRATE_ITEM_CAP = 200`.                                                 |
+| 3–4 · the two hand-offs         | **MOTIR-4767** — the three outcomes, and on `onboard_existing_project` the KEPT STEPS and WHAT IS MISSING.                                                                                 |
+| the move is SHOWN, not silent   | **MOTIR-4769** — "the hand-off is SHOWN before it happens… the move is not a silent redirect out from under them."                                                                         |
+| 5 · the RETURN, and abandonment | **MOTIR-4770** — the launch context travels with the move, onboarding returns the user to the window they opened, and a user who walks away lands on an ordinary page.                     |
+| the kept-step chips             | **MOTIR-4759** renders the set; **`design/onboarding-migrate/` Panel 6** is the rail it renders into. Same `satisfied` vocabulary, said once here and once there.                          |
+
+### Panel 1–2 · THE READING STATE
+
+**It names the things, and that is the whole design.** A spinner says _something is happening_; this
+says _I am reading acme/widgets, acme/widgets-api and 214 work items_ — the product demonstrating in
+one sentence the thing the story argues for, before any plan exists to judge. Three `.src` rows, one
+per named source: repository rows come from `repositoryConnected`, and `repositoryIndexed` decides
+whether the sub-line can say _Code graph ready_; the third row is `itemCount`.
+
+**NOT a progress bar**, and the constraint is MOTIR-4768's own: nothing on this path knows a
+duration. A bar has a track, a fill and therefore a claim about how far along it is, and it would
+have to keep that claim while a model call sits in the middle of it. Three quiet dots and _usually
+takes a few seconds_ promise only what is true.
+
+**The cap is drawn.** At `itemCountTruncated: true` the row reads **200+ work items · Reading the
+most recent 200**, never an exact _200_. The read explicitly reports the count as a FLOOR, and the
+surface may not upgrade it into a total — it is the same number the planner's judgement is about to
+be based on.
+
+**The THIN substrate is a SENTENCE, never an empty list.** Three rows with _none_ beside each is a
+report card, handed to the user in the four seconds before they are moved somewhere — which turns
+the move into a verdict on them. The sentence states the same fact and carries a clause the list
+cannot: _that's normal for a new project, and it's the next thing we'll fix together_. The heading
+changes with it — _Having a look at your project_, not _Reading_, because there is nothing to read.
+It commits to nothing about the destination: the routing is the planner's and it has not answered
+yet.
+
+### Panel 3–4 · THE TWO HAND-OFFS
+
+**They are told apart by STRUCTURE, not by a colour** — which is what makes them distinguishable at
+a glance and in a screen reader alike.
+
+|              | A · `onboard_new_project`                       | B · `onboard_existing_project`                              |
+| ------------ | ----------------------------------------------- | ----------------------------------------------------------- |
+| heading      | _Let's set your project up first_               | _Two things I still need_ (it COUNTS)                       |
+| found block  | — (there is nothing to have found)              | `.found` — _I read **acme/widgets** and **214 work items**_ |
+| missing list | —                                               | `.missing` — the planner's own words, rendered              |
+| kept steps   | —                                               | `.kept` — one `run` chip, three `satisfied` chips           |
+| actions      | _Set up my project_ · _Not now_                 | _Fill in the gaps_ · _Not now_                              |
+| closing line | _you'll land back in this window ready to plan_ | _straight back here and we can get planning_                |
+
+**Every word of the missing list is the planner's** (MOTIR-4767 returns it); the surface renders it
+and writes none of it. It is drawn as a list of gaps — a dashed open circle per row — and NOT as an
+error list: no red, no warning triangle. The thing is incomplete, not wrong.
+
+**The kept-step strip is the apology this route owes.** MOTIR-4767's own argument: sending someone to
+re-connect a repository they connected last week is the same insult as the interview, one surface
+along. So the strip shows, BEFORE the user commits, what they will be asked (_A few questions_) and
+what is already there (_Connect_, _Index_, _Import work items_). The satisfied chips reuse
+`design/onboarding-migrate/`'s sky tint and read glyph (Panel 5, MOTIR-4755) rather than inventing a
+second way to say the same thing.
+
+**_Not now_ is deliberately present on both.** A user who opened the plan window to look around is
+allowed to close it again, and a hand-off with one button is a wall with a door painted on it.
+
+### Panel 5 · THE RETURN — a fourth moment, not a mirror of the third
+
+The hand-off says _we need something first_; the return says _we have it — what do you want to plan?_
+So it is **not another full-card interstitial**: the workspace is simply there, ready to do what the
+user pressed the button for, and the acknowledgement is one line in the conversation —
+
+> ✓ You answered the two questions. Picking up where we left off.
+
+#### ⚠️ THE PLANNER ASKS — it does NOT hand over a plan (Yue, 2026-09-06)
+
+The first revision of this panel drew the canvas full of dashed proposals and a footer reading _42
+proposed work items · nothing is added until you say so_, with the planner opening on _"here's a plan
+across acme/widgets and all 214 of your items — 42 work items, in six pieces"_. **That is not what a
+planning session is.** A regular session **arrives with the context and WAITS to be told what to
+plan**; it asks, it does not propose a tree unprompted. It is also exactly what `continue` means one
+repository over (**MOTIR-4767**: _the session asks and plans exactly as a regular session does_).
+
+So the panel draws: the canvas showing the project **as it stands** — the items that are already
+there, no proposals; a footer saying what the session can **see** (`214 work items` ·
+_acme/widgets · code graph ready_) rather than what it has produced; the planner's turn ending in a
+**question**; and a live, empty composer reading _Tell Motir what to plan…_. The two hand-off panels'
+closing lines were corrected in the same pass for the same reason — they promised _a plan waiting_
+and now promise _ready to plan_.
+
+**The same correction removed `design/onboarding-migrate/`'s Panel 0**, which drew the identical
+mistake at the end of the migrate wizard (finished-step done-cards, a _"here's a plan grounded in your
+code"_ lead, a canvas of proposed subtasks, a confirm bar). Nothing about the end of that wizard is
+migrate-specific: it opens the universal plan window and the regular session begins. See
+`design/onboarding-migrate/design-notes.md` §Panel 0.
+
+**The line sits in the RAIL because the rail is where the session speaks.** A toast would fade; a
+banner over the canvas would put chrome between the user and the thing they came back for.
+
+**The earlier turns are still above it**, and that is the design claim MOTIR-4770 AC5 makes
+checkable: the conversation is a persisted server thread (`usePlanChangeConversation`'s resume
+payload, re-read on mount), so the user comes back to the session they left rather than a new one
+that looks similar.
+
+**Nothing in this asset warns about losing a draft.** An earlier draft of the card treated the
+route-group unmount as a data hazard; it is not. The thread is a server row, the proposals are
+addressed by `planId`, and at the moment of the move the only client-only state — the composer draft
+and the local target queue — cannot hold anything, because the verdict is decided in the reader
+before any pass runs. MOTIR-4731's confirm-before-close exists for a user CHOOSING to close over a
+decision they can see; being routed away seconds after opening is not that situation.
+
+**The ABANDONED path is drawn beside it**: an ordinary authed page, no scrim, no dialog, no re-opened
+workspace. Re-opening a window somebody walked away from is the opposite failure to stranding them,
+and it is the easier one to write by accident — the return path already knows where to go, so the
+temptation is to take it unconditionally. The launch context is a RETURN ADDRESS and it expires.
+
+### Panel 6 · WHAT IT MUST NOT LOOK LIKE
+
+Three surfaces this must never become, drawn so a builder can recognise the pull toward each:
+
+- **Not an error** — _"We couldn't plan your project."_ Nothing failed; the read worked and produced
+  a finding.
+- **Not a refusal** — _"This project isn't ready for AI planning."_ A judgement about the project
+  reads as a judgement about the person who made it. The finding is about what Motir can SEE.
+- **Not a dead end** — a card whose only control is Close. The user pressed _Plan with AI_; every
+  surface here carries a way onward and says where it leads.
+
+**And the third outcome draws nothing.** `continue` means the reading state resolves straight into an
+ordinary planning session — the regular framing, the regular questions, the planner waiting to be
+told what to plan — and the user never learns a decision was made about them. That is stated
+explicitly in the asset because an asset full of interstitials invites a fourth one saying _Good
+news, we can plan this!_ — and nobody needs to be told that the thing they asked for is happening.
+
+### Vocabulary — no string names a direction tier
+
+**No panel, label, chip or annotation in this asset uses "Pre-plan" or names a tier.** MOTIR-4757
+retires the term from `messages/` and guards it there; MOTIR-4755 revision 2 collapsed the migrate
+rail's four tier-named rows to ONE after Yue's note that a user does not know what Discovery and
+Vision are. `discovery` / `vision` / `feasibility` / `validation` are identifiers a kept-step set
+travels as; the copy says what the user is doing — _a few short questions about what you're building
+and who it's for_.
+
+### Primitives composed (no hand-rolling)
+
+`Modal size="full"` (`rounded-none border-0 p-0`, `hideClose`) as `PlanningWorkspaceOverlay` mounts
+it · `PlanningWorkspaceHost`'s top bar with its top-LEFT Close chip and `Esc` `<kbd>` · the
+conversation rail (`.rhead` / turns / bubbles / composer) · `Card` for the reading and hand-off
+surfaces · `Button` primary + ghost · `Pill` (sky / mint / lavender / neutral) · the
+`design/roadmap/` node language for the returned canvas · the shipped `AppLayout` nav + top bar for
+the abandoned path. The overlay's two-pane geometry and its 49px top bar are the numbers MOTIR-4726
+MEASURED on the real components at 1440×780 and recorded in `planning-workspace.mock.html` § sheet 6;
+this asset inherits them and draws the frame taller because the reading card, not the canvas, is its
+subject.
+
+### Per-element token roles
+
+| Element                            | colour                                                                                    | shape                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| dialog frame                       | `--el-page-bg`, `--el-border`, `--shadow-card`                                            | `--radius-modal`                                     |
+| host top bar                       | `--el-surface`, `--el-border-soft`                                                        | —                                                    |
+| Close chip                         | `--el-card` / `--el-border` / `--el-text-strong`; `<kbd>` `--el-text-secondary`           | `--radius-btn`, `<kbd>` `--radius-control`           |
+| canvas ground                      | `--el-canvas` + a dot texture in `--el-border`                                            | —                                                    |
+| reading / hand-off card            | `--el-card`, `--el-border`, `--shadow-subtle`                                             | `--radius-card`, `--spacing-card-padding`            |
+| eyebrow                            | `--el-text-eyebrow`                                                                       | —                                                    |
+| card heading · lede                | `--el-text` · `--el-text-secondary`                                                       | —                                                    |
+| `.src` row · its icon tile         | `--el-surface-soft` / `--el-border`; tile `--el-tint-sky` + `--el-text-strong`            | `--radius-control`, `--spacing-control-x/y`          |
+| _Reading_ chip                     | `--el-tint-sky` + `--el-text-strong`                                                      | `--radius-badge`, `--spacing-chip-x/y`               |
+| activity dots                      | `--el-accent` (decorative, `aria-hidden`)                                                 | `--radius-badge`                                     |
+| `.found` block                     | `--el-surface-soft` / `--el-border` / `--el-text-secondary`, `<b>` `--el-text-strong`     | `--radius-card`                                      |
+| `.missing` row · its gap glyph     | `--el-text`; glyph dashed `--el-border-strong` (`aria-hidden`)                            | `--radius-badge`                                     |
+| kept chip · run / satisfied        | `--el-accent` + `--el-accent-text` / `--el-tint-sky` + `--el-text-strong` + `--el-border` | `--radius-badge`, `--spacing-chip-x/y`               |
+| buttons — primary / ghost          | `--el-accent` + `--el-accent-text` / `--el-text`                                          | `--radius-btn`, `--height-btn-md`, `--spacing-btn-x` |
+| rail                               | `--el-card`, `--el-border`, `--el-border-soft`                                            | —                                                    |
+| AI bubble · user bubble            | `--el-surface-soft` + `--el-text` / `--el-accent` + `--el-accent-text`                    | `--radius-card`                                      |
+| the return's system line           | `--el-tint-mint` + `--el-text-strong`                                                     | `--radius-control`                                   |
+| composer input · its disabled form | `--el-input-border` + `--el-text-secondary` / `--el-muted` + `--el-text-faint`            | `--radius-input`, `--height-control`                 |
+| proposal node                      | dashed `--el-accent` on `--el-callout-bg` + `--el-callout-text`                           | `--radius-control`                                   |
+| "must not look like" card          | dashed `--el-danger` border; caption `--el-danger-on-surface`; body `--el-text-secondary` | `--radius-card`                                      |
+
+**`--el-danger-text` appears nowhere.** Per `CLAUDE.md` it is the ink FOR a danger FILL and measures
+1.00–1.04:1 on a light page in all ten palettes; the three _must not look like_ cards carry the hue
+in the BORDER (graphics contrast) and the caption in `--el-danger-on-surface`, with the body copy on
+`--el-text-secondary`. Every annotation in the board chrome is `--el-text-secondary` — never
+`--el-text-muted`, which fails AA on `--el-surface` / `--el-surface-soft` / `--el-muted`, and never
+`--el-text-faint`, which clears AA on nothing. `--el-text-faint` appears once, on the DISABLED
+composer, which 1.4.3 exempts. The asset declares `--el-canvas` and `--el-danger-on-surface`
+alongside the token block copied from `packages/design-system/theme.css`, because that copy omitted
+them; both definitions are theme.css's own, verbatim.
+
+### Deliverable
+
+`design/ai-chat/reading-and-handoff.mock.html` · `design/ai-chat/reading-and-handoff.png` (1200
+viewport, `deviceScaleFactor: 2`) · this section. The migrate half — the rail that renders the kept
+set — is `design/onboarding-migrate/design-notes.md` § _AMENDMENT (2026-09-06 · MOTIR-4766)_ and
+Panel 6 of that area's mock, published under the same card.

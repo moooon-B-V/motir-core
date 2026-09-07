@@ -89,8 +89,11 @@ describe('the settings rail', () => {
       expect(container.innerHTML, `revealed=${revealed}`).toContain(
         'href="/settings/workspace/jobs"',
       );
+      // Git moved to the ORGANISATION tier (MOTIR-4680) — a different change
+      // from this file's §6 fold, and the row is still here at both counts,
+      // which is what this case is about.
       expect(container.innerHTML, `revealed=${revealed}`).toContain(
-        'href="/settings/workspace/github"',
+        'href="/settings/organization/git"',
       );
     }
   });

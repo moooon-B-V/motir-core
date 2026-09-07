@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { parseReturnSurfaceId, type GithubReturnSurfaceId } from './returnSurface';
 
 // Signed, self-contained state carried through the GitHub App install round-trip
 // (MOTIR-1588). Unlike the OAuth identity flow — which stashes a CSRF nonce in an
@@ -33,14 +34,34 @@ function sign(payloadB64: string): string {
 export interface InstallState {
   workspaceId: string;
   userId: string;
+  /** WHERE THE FLOW STARTED, so the setup handler can return the person there
+   *  (MOTIR-4676). OPTIONAL, and it has to stay optional: an envelope minted
+   *  before this field existed is still in somebody's browser, still verifies,
+   *  and must decode to a state with no origin rather than to a rejection.
+   *
+   *  It is an ID from `GITHUB_RETURN_SURFACES`, never a path — see that module
+   *  for why. It rides INSIDE the signature rather than beside it because the
+   *  App install starts from a bare github.com URL where no cookie can be set,
+   *  so this value takes the round trip and has to come back unforged. */
+  origin?: GithubReturnSurfaceId;
 }
 
-/** Encode + sign a short-lived install-state token. */
+/** Encode + sign a short-lived install-state token.
+ *
+ *  ⚠️ `o` is OMITTED when there is no origin rather than written as `null`, so
+ *  a token minted with no origin is byte-identical to one minted before the
+ *  field existed. That keeps the compatibility claim above testable with a
+ *  fixture rather than with a promise. */
 export function encodeInstallState(
   state: InstallState,
   nowSeconds: number = Math.floor(Date.now() / 1000),
 ): string {
-  const payload = { w: state.workspaceId, u: state.userId, exp: nowSeconds + TTL_SECONDS };
+  const payload: { w: string; u: string; exp: number; o?: GithubReturnSurfaceId } = {
+    w: state.workspaceId,
+    u: state.userId,
+    exp: nowSeconds + TTL_SECONDS,
+  };
+  if (state.origin) payload.o = state.origin;
   const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${b64}.${sign(b64)}`;
 }
@@ -74,7 +95,7 @@ export function decodeInstallStateResult(
   const b = Buffer.from(expectedSig);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return { ok: false, reason: 'malformed' };
 
-  let payload: { w?: unknown; u?: unknown; exp?: unknown };
+  let payload: { w?: unknown; u?: unknown; exp?: unknown; o?: unknown };
   try {
     payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8')) as typeof payload;
   } catch {
@@ -91,7 +112,15 @@ export function decodeInstallStateResult(
   // claiming a past `exp` must stay `malformed`, so the expiry banner (which
   // says nothing is broken) is never reachable from an unauthenticated string.
   if (payload.exp < nowSeconds) return { ok: false, reason: 'expired' };
-  return { ok: true, state: { workspaceId: payload.w, userId: payload.u } };
+  // The origin is NARROWED, not trusted. It arrived inside the signature, so it
+  // is ours — but an id this build no longer registers (a surface that was
+  // renamed or removed between minting and return) must decode to "no origin"
+  // and fall back, never to a path this build cannot serve.
+  const origin = parseReturnSurfaceId(typeof payload.o === 'string' ? payload.o : null);
+  return {
+    ok: true,
+    state: { workspaceId: payload.w, userId: payload.u, ...(origin ? { origin } : {}) },
+  };
 }
 
 /** Verify + decode an install-state token, or `null` when it is malformed,

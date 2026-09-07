@@ -20,10 +20,13 @@
   mock to an ephemeral preview host so an iframe has a URL — is **superseded by
   this record**; see §7.
 - **Amended by:** **AMENDMENT 1** (MOTIR-3750, 2026-08-28 — §1's note arm
-  matches a suffix) and **AMENDMENT 2** (MOTIR-3780, 2026-08-28 — the publish
+  matches a suffix), **AMENDMENT 2** (MOTIR-3780, 2026-08-28 — the publish
   door is the MCP tool; **§6 is superseded in full** and §1 keeps its
-  classification table while losing its producer). **Read both before treating
-  §1 or §6 as current.** The title still names "the CI trigger" because that is
+  classification table while losing its producer) and **AMENDMENT 3**
+  (MOTIR-4750, 2026-09-07 — **AMENDMENT 2 Q3's single-call shape is no longer
+  the only shape**: `create_design_upload` adds the mint-then-PUT door Q3
+  rejected, because the ceiling Q3 measured was not the binding one). **Read all
+  three before treating §1, §6 or AMENDMENT 2 Q3 as current.** The title still names "the CI trigger" because that is
   what this record decided and every citation of it lands here; AMENDMENT 2 is
   where it stops being true.
 
@@ -611,6 +614,78 @@ open while its children are un-landed. The gate now lives in the sibling story,
 and the sibling story is `blocked_by` this one, so `readiness.blockedByAncestor`
 holds every retirement until the tool has actually shipped. Recorded as planning
 bug MOTIR-3794.
+
+### AMENDMENT 3 (MOTIR-4750, 2026-09-07): the mint-then-PUT door AMENDMENT 2 Q3 rejected is now a TOOL — the inline ceiling was not the binding limit
+
+**AMENDMENT 2 Q3 is amended, not superseded.** Its single-call shape stays, it
+stays the DEFAULT, and every word of its measurement is still true. What was
+wrong is the conclusion drawn from it: Q3 measured ONE limit and treated the
+answer as bounded by it.
+
+**The two limits, and the one Q3 did not measure:**
+
+| limit                         | value                                                                                                                                                                                            | measured by     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- |
+| the per-file blob cap         | 10 MiB → **7.5 MiB of raw asset**, against a 4.96 MiB largest — 1.51× headroom                                                                                                                   | Q3              |
+| the MCP route's own body cap  | a serverless function, capped ≈4.5 MB → base64 fails at **≈3 MB of raw asset**                                                                                                                   | neither         |
+| **the agent's OUTPUT budget** | the bytes are a TOOL ARGUMENT a model must EMIT: base64 tokenises at **≈0.4 characters per token**, so a 3.9 MB board is ≈5.24 MB of base64 and even a 44 KB thumbnail costs **~150,000 tokens** | **AMENDMENT 3** |
+
+**The third limit is the binding one, and it cannot be raised.** Q3's own
+`create_acceptance_upload` twin had already written it down one section away in
+`docs/mcp.md` — _"the bytes would have to be EMITTED by the agent as a tool
+argument"_ — as one of the two reasons a recording gets a mint-then-PUT door.
+Both halves of that reasoning apply verbatim to a design board; the premise that
+kept the design result on the inline path was the sentence _"a design asset
+arrives inline as base64"_, and for a multi-sheet board that premise is false.
+Measured: `design/ai-chat/planning-workspace.png` is **3,929,899 B**, and it is
+not an outlier in Q3's own population (192 files, 1.32 MB mean, five over 4 MB).
+
+**And Q3's escape hatch did not hold.** It named the surviving HTTP mint-then-PUT
+routes as _"a named door rather than a hope"_ for the extreme, and Q1 kept them
+partly for that reason. But those routes authenticate a **CI job over GitHub
+OIDC** (`authenticateCiPublisher` / `authenticateGithubOidc`) — a credential a
+dispatched agent does not hold and cannot obtain. So the door existed and the
+caller who needed it could not open it. **A fallback the failing caller cannot
+reach is not a fallback**, and Q1's argument for keeping the routes stands on its
+other leg (a non-MCP publisher), not on this one.
+
+**The failure mode is the one this whole record exists to prevent.** A run that
+cannot emit the bytes has two options and both look like success: skip the call
+and report a green pull request, or publish a thumbnail that satisfies the letter
+of the rule and shows a reviewer nothing. Files written, commit landed, checks
+green, panel empty — AMENDMENT 2 Q2's own words for the hazard it accepted, now
+arriving for a reason nobody chose.
+
+**DECISION.** `create_design_upload` mints one short-lived presigned PUT per
+file, bound to one object and one media type; `publish_design_result` accepts a
+`pathname` per asset as an alternative to `contentBase64`. It is the same two
+calls `create_acceptance_upload` + `publish_acceptance_result` already are, over
+`designEvidenceService.createUploadTokens` + `.recordFromPathnames` — the service
+methods the HTTP routes have called since MOTIR-2667. **No policy is added and no
+service changed**: the leaf / child gates, the allowlist, the per-file cap, the
+authoritative `head`, the prefix check, `capNoteMd`, supersede and idempotency
+all stay exactly where they are.
+
+**ONE publish uses ONE form for all its assets; a mix is refused by name.** The
+two forms reach two different service methods, and reconciling them inside the
+adapter would make the tool the only place that decides how a design result is
+assembled — the one thing AMENDMENT 2 was careful not to let it become. Minting a
+grant for every asset costs one call.
+
+**What Q3's rejection got right, and why the default does not move.** Its
+objections to mint-then-PUT — 1 + N round trips, a multi-step protocol an agent
+can abandon halfway, the one-call criterion — are all still true, and they are
+why this is an ADDED door rather than a replacement. On Q3's own distribution the
+usual publish (a note section, a ~48 KB mock, a 1.3 MB mean `.png`) is well
+inside the inline path and should stay there. Q3 also named its own revisit
+trigger — _"if that becomes routine rather than exceptional, THAT is the trigger
+to revisit this answer"_ — and this is that trigger firing, with the correction
+that the number to watch was never the blob cap.
+
+**What does NOT change:** the entire _What does NOT change_ list under
+AMENDMENT 2 Q3, unchanged, plus AMENDMENT 2 itself — the agent still DECLARES its
+target, nothing is inferred from a branch, a title or a diff, and a design card
+is still unfinished until the evidence id is on it.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 
