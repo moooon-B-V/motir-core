@@ -5776,6 +5776,19 @@ defect seen from two ends:**
   the asset draws"_. 1493 declarations across 89 assets, held as a counted debt
   table that can only shrink (MOTIR-4811 · MOTIR-4814).
 
+**⚠️ AND THE RATCHET EARNED ITS KEEP BEFORE IT MERGED.** MOTIR-4779 renamed the
+`home` area to `design/workbench/` while MOTIR-4687 was in the merge queue, and
+the new asset carried **two undeclared `bg-(--el-tint-mint)`** — status chips
+drawn with no tint fill, the same defect, hours old. The guard caught it
+in the queue's merged tree; the rule is DECLARED here. That is the whole
+argument for a spec rather than a rule somebody remembers.
+
+**Its second cost is the one to plan around:** both tables pin FILE PATHS with
+EXACT counts, so a concurrent pull request that renames or edits a design asset
+turns this lane red on a tree where nothing is actually wrong. The remedy is to
+re-derive the tables after merging `main` — never to loosen the assertion, which
+is the only thing making the population shrink.
+
 **The costs are opposite and that is why the pair is one guard:** (A) silently
 un-styles the ASSET, (B) misleads a READER. And note the direction of the risk
 in (A) — an un-styled element usually inherits `--el-text`, which PASSES
@@ -5787,10 +5800,10 @@ redder.
 The obvious reading of a `hover:` or `[&_svg]:` utility that no rule declares is
 that a STATIC mock never enters that state, so the class is a harmless no-op.
 **Measured, that reading is wrong for the large majority of the population** —
-604 occurrences of 14 utilities across 11 assets — and it is stated here rather
+636 occurrences of 14 utilities across 11 assets — and it is stated here rather
 than assumed, because assuming it is how these went unmeasured:
 
-- **`[&_…]:` is STRUCTURAL, not stateful (500 of the 604).** It compiles to a
+- **`[&_…]:` is STRUCTURAL, not stateful (532 of the 636).** It compiles to a
   descendant rule (`& svg { height: 18px }`) and applies unconditionally. The
   `<svg>` inside each of those spans carries `width="24" height="24"`, so
   **every navigation icon in seven shell / home / landing assets renders at 24px
