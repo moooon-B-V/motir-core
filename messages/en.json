@@ -6883,7 +6883,11 @@
       "importOptional": "optional",
       "connect": "Connect",
       "index": "Index",
-      "importStep": "Import work items"
+      "importStep": "Import work items",
+      "subShort": "Just what your project couldn't answer.",
+      "answeredGroup": "Already answered by your project",
+      "answeredMeta": "Motir read your code and your work items",
+      "discoveryStep": "A few questions"
     },
     "common": {
       "back": "Back",

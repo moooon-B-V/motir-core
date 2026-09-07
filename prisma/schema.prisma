@@ -6322,6 +6322,19 @@ model MigrateOnboarding {
   /// is overwritten with `done` by that write, so without this the only record
   /// of how far the journey actually got is destroyed in place.
   reconciledFromStep   MigrateOnboardingStep?  @map("reconciled_from_step")
+  /// WHICH STEPS THIS RUN ACTUALLY RUNS — the PLANNER's answer (MOTIR-4759),
+  /// carried here by the routing verdict that sent the user to this wizard
+  /// (MOTIR-4767 decides it, MOTIR-4769 moves it).
+  ///
+  /// EMPTY means "no verdict reached this run" and every step runs, which is
+  /// exactly the behaviour every run had before this field existed — so there is
+  /// nothing to backfill and a run created by any other door is untouched.
+  ///
+  /// A step ABSENT from a non-empty set was answered by the project's own
+  /// substrate rather than by the user, and that is also the RECORD of how it
+  /// was satisfied: the provenance line reads this, and so does the rail that
+  /// collapses the steps it did not run.
+  keptSteps            MigrateOnboardingStep[] @map("kept_steps")
   createdAt            DateTime                @default(now()) @map("created_at")
   updatedAt            DateTime                @updatedAt @map("updated_at")
 

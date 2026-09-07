@@ -6879,7 +6879,11 @@
       "importOptional": "可选",
       "connect": "连接",
       "index": "索引",
-      "importStep": "导入工作项"
+      "importStep": "导入工作项",
+      "subShort": "只问你的项目回答不了的。",
+      "answeredGroup": "你的项目已经回答了",
+      "answeredMeta": "Motir 读取了你的代码和工作项",
+      "discoveryStep": "几个问题"
     },
     "common": {
       "back": "返回",

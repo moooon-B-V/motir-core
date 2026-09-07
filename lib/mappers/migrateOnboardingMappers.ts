@@ -23,6 +23,9 @@ export function toMigrateOnboardingDto(row: MigrateOnboarding): MigrateOnboardin
     generateJobId: row.generateJobId,
     importSkipped: row.importSkipped,
     importCompleted: row.importCompleted,
+    // The planner's kept set (MOTIR-4759) — `[]` for a run no verdict reached,
+    // which is every run created by a door other than the routing hand-off.
+    keptSteps: row.keptSteps,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
