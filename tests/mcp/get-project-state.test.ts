@@ -71,15 +71,23 @@ function stateOf(res: CallToolResult): ProjectStateDto {
   return res.structuredContent as unknown as ProjectStateDto;
 }
 
-/** Seed ONE GitHub installation for the fixture's workspace (one per workspace —
- *  the connected-set read is a `findFirst`, so repos meant to be visible together
- *  MUST share it). */
+/** Seed ONE GitHub connection for the fixture's ORGANISATION (one per workspace —
+ *  repos meant to be visible together MUST share it).
+ *
+ *  ⚠️ `organizationId` is set because production sets it: `persistInstallation`
+ *  resolves it from the workspace row (MOTIR-4649), and the connection is read at
+ *  the ORGANISATION tier (MOTIR-4838). A fixture that leaves it null is not
+ *  describing the system — it is describing the state the column's nullability
+ *  permits for exactly ONE row, Motir's shared provisioning installation, which
+ *  is owned by no tenant. Same reason `organizationIdOf` exists for
+ *  `github_repo`. */
 async function seedInstallation(fx: WorkItemFixture) {
   const rand = randomToken(6);
   return adminDb.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
       workspaceId: fx.workspaceId,
+      organizationId: await organizationIdOf(fx.workspaceId),
       accountLogin: 'moooon-B-V',
       accountType: 'Organization',
     },

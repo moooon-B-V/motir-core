@@ -35,14 +35,21 @@ export interface ProjectStateProjectDto {
   onboardingRanAt: string | null;
 }
 
-/** Is code connected to the workspace, and is it INDEXED? */
+/** Is code connected to this tenant, and is it INDEXED? */
 export interface ProjectCodeStateDto {
   /**
-   * Whether the workspace has a GitHub App installation at all. Distinct from
-   * `index.total === 0`: an installation whose grant covers no repos is a
-   * DIFFERENT state from no installation, and the two need different fixes
-   * (widen the grant vs. install the App). `resolveCodeContext` collapses both
-   * to `undefined`, which is why this flag is carried explicitly.
+   * Whether the ORGANISATION has a GitHub App installation at all.
+   *
+   * ⚠️ THE ORGANISATION, NOT THE WORKSPACE (MOTIR-4838, correcting MOTIR-1968).
+   * The QUESTION is unchanged — it is still "is a git host connected at all?" —
+   * and only the tier it is asked at moved, to the tier that has owned a
+   * connection since MOTIR-4669. A workspace-keyed read answered `false` for
+   * every sibling workspace of an organisation that IS connected.
+   *
+   * Distinct from `index.total === 0`: an installation whose grant covers no
+   * repos is a DIFFERENT state from no installation, and the two need different
+   * fixes (widen the grant vs. install the App). `resolveCodeContext` collapses
+   * both to `undefined`, which is why this flag is carried explicitly.
    */
   installed: boolean;
   /**
@@ -51,9 +58,18 @@ export interface ProjectCodeStateDto {
    * shape), including its honest aggregate `hasRunning`: the ledger cannot tie a
    * RUNNING index row to one repo, so in-flight is a set-level fact.
    *
+   * ⚠️ THE ORGANISATION's connected set (MOTIR-4838) — it was the WORKSPACE's,
+   * reached through that workspace's own installation, which is what made it
+   * empty from a sibling workspace. Still the CONNECTED registry and still
+   * deliberately distinct from `repoSet` below: what moved is the tier, not the
+   * question.
+   *
    * `pending` means "no succeeded index run matches this repo's ref" — which is
    * exactly the MOTIR-1961 state a repo connected before the index feature
-   * shipped sits in, and the state that was twice asserted away.
+   * shipped sits in, and the state that was twice asserted away. ⚠️ It ALSO
+   * covers a repository indexed from a SIBLING workspace: the index ledger is
+   * workspace-keyed, and re-tiering the code graph to the organisation is Story
+   * MOTIR-4642's subject rather than this field's.
    */
   index: MigrateIndexStatusDto;
 }
@@ -74,9 +90,10 @@ export interface ProjectStateDto {
   code: ProjectCodeStateDto;
   /**
    * The PROJECT's repository set (MOTIR-1780) — deliberately distinct from
-   * `code.index.repos`, which is the WORKSPACE's connected set. An empty list is
-   * the honest answer for a project that never ran the establish step, not an
-   * error.
+   * `code.index.repos`, which is the ORGANISATION's connected set (MOTIR-4838
+   * moved that tier; the distinction it is drawn against is unchanged). An empty
+   * list is the honest answer for a project that never ran the establish step,
+   * not an error.
    */
   repoSet: ProjectRepoDto[];
   /**
