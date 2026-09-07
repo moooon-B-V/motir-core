@@ -9,6 +9,7 @@ import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // MOTIR-1650 — the keyless GitHub-OIDC publish auth, against real Postgres (the
 // repo→workspace + workspace-owner resolution) with a LOCALLY served JWKS +
@@ -209,6 +210,7 @@ describe('authenticateGithubOidc', () => {
         {
           installationId: installation.id,
           workspaceId: a.workspace.id,
+          organizationId: await organizationIdOf(a.workspace.id),
           repoId: '920001',
           owner: 'motir-projects',
           name: 'alpha-web',
@@ -218,6 +220,7 @@ describe('authenticateGithubOidc', () => {
         {
           installationId: installation.id,
           workspaceId: b.workspace.id,
+          organizationId: await organizationIdOf(b.workspace.id),
           repoId: '920002',
           owner: 'motir-projects',
           name: 'bravo-web',

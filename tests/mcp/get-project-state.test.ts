@@ -16,6 +16,7 @@ import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // `get_project_state` (MOTIR-1968) over real Postgres — the project-CONFIGURATION
 // read a planning agent needs to VERIFY a tenant precondition instead of
@@ -97,6 +98,7 @@ async function seedRepo(
     data: {
       installationId: inst.id,
       workspaceId: inst.workspaceId,
+      organizationId: await organizationIdOf(inst.workspaceId),
       repoId: `repo-${rand}`,
       owner,
       name,

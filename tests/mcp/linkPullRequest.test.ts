@@ -15,6 +15,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { adminDb } from '../helpers/adminDb';
 import { deliveredItemIds } from '../helpers/prLink';
 import { truncateAuthTables } from '../helpers/db';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // Story MOTIR-3525 · Subtask MOTIR-3528 — the suite for `link_pull_request`.
 //
@@ -101,6 +102,7 @@ async function makeScenario(opts: {
     data: {
       installationId: installation.id,
       workspaceId: workspace.id,
+      organizationId: await organizationIdOf(workspace.id),
       repoId: opts.repoHostId,
       owner: OWNER,
       name: opts.repoName,

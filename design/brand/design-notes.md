@@ -522,15 +522,15 @@ reading "the lattice appears nowhere" would delete the record this asset exists 
 The rule is about the **container**, not the mark: _if the visible wordmark is beside it, the glyph is
 decorative; if the glyph stands alone, it carries the name._
 
-| Slot                   | Form                    | Markup                                                         | Accessible name                    |
-| ---------------------- | ----------------------- | -------------------------------------------------------------- | ---------------------------------- |
-| Shell top bar (7a)     | mark only, is a link    | `<Link aria-label="Motir — go to dashboard"><svg aria-hidden>` | **informative** — the link's label |
-| Auth card (7b)         | lockup, is a link       | `<svg aria-hidden>` + visible "Motir"                          | **decorative**                     |
-| `ExploreTopBar` (7c)   | lockup, is a link       | `<svg aria-hidden>` + visible "Motir"                          | **decorative**                     |
-| `PublicTopBar` (7d)    | quiet lockup, is a link | `<svg aria-hidden>` + visible "on Motir"                       | **decorative**                     |
-| Email (7e)             | image, not a link       | `<img alt="Motir">`                                            | **informative**                    |
-| Favicon / app icon (5) | image, OS chrome        | `manifest.name = 'Motir'`                                      | **informative**                    |
-| OG card (6)            | image, social embed     | `export const alt`                                             | **informative**                    |
+| Slot                   | Form                    | Markup                                                 | Accessible name                    |
+| ---------------------- | ----------------------- | ------------------------------------------------------ | ---------------------------------- |
+| Shell top bar (7a)     | mark only, is a link    | `<Link aria-label="Motir — go home"><svg aria-hidden>` | **informative** — the link's label |
+| Auth card (7b)         | lockup, is a link       | `<svg aria-hidden>` + visible "Motir"                  | **decorative**                     |
+| `ExploreTopBar` (7c)   | lockup, is a link       | `<svg aria-hidden>` + visible "Motir"                  | **decorative**                     |
+| `PublicTopBar` (7d)    | quiet lockup, is a link | `<svg aria-hidden>` + visible "on Motir"               | **decorative**                     |
+| Email (7e)             | image, not a link       | `<img alt="Motir">`                                    | **informative**                    |
+| Favicon / app icon (5) | image, OS chrome        | `manifest.name = 'Motir'`                              | **informative**                    |
+| OG card (6)            | image, social embed     | `export const alt`                                     | **informative**                    |
 
 - **Never both.** An `aria-label` on the link _plus_ a visible wordmark inside it makes a screen reader
   announce "Motir" twice, or announce the label and silently drop the visible text. One per slot — the

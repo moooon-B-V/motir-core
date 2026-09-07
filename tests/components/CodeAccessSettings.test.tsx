@@ -142,6 +142,8 @@ function renderSurface(
       connectHref="/settings/workspace/github"
       plansHref="/plans"
       membersHref="/settings/project/members"
+      repositoriesHref="/settings/project/repositories"
+      connectedRepoCount={0}
       {...over}
     />,
   );
@@ -611,6 +613,45 @@ describe('the states that are not the happy one', () => {
     expect(screen.getByText('Atlas has no code yet')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Review the plan' })).toBeTruthy();
     expect(screen.queryByText('People')).toBeNull();
+  });
+
+  // MOTIR-4803. The empty state above is TRUE of a project with nothing
+  // anywhere, and FALSE of one whose repositories are its organisation's —
+  // which is the shape Motir's own project is in. "Atlas has no code yet"
+  // quantifies over the project's code; this pane is scoped to the
+  // repositories Motir MADE, and the gap between those two sentences is the
+  // whole bug: a reader cannot tell a scoped page from a broken one.
+  it('a project whose repositories are its organisation’s says so, instead of claiming it has no code', () => {
+    renderSurface({ initialRepos: [], connectedRepoCount: 6 }, { projectId: 'proj-1', rows: [] });
+
+    expect(screen.queryByText('Atlas has no code yet')).toBeNull();
+    expect(screen.getByText("Motir hasn't made any repositories for Atlas")).toBeTruthy();
+
+    // The body answers the reporter's second question — what this room is for,
+    // and who grants access to the repositories it is NOT for.
+    const body = screen.getByText(/6 repositories connected to your organisation/);
+    expect(body.textContent).toContain('counts only the repositories Motir made');
+    expect(body.textContent).toContain('reached through GitHub, not through Motir');
+
+    // And it names the room that DOES answer "which repositories" — a scoped
+    // empty state with a route out, not a dead end.
+    const link = screen.getByRole('link', { name: "See this project's repositories" });
+    expect(link.getAttribute('href')).toBe('/settings/project/repositories');
+    expect(screen.queryByRole('link', { name: 'Review the plan' })).toBeNull();
+  });
+
+  it('counts one connected repository in the singular', () => {
+    renderSurface({ initialRepos: [], connectedRepoCount: 1 }, { projectId: 'proj-1', rows: [] });
+    expect(screen.getByText(/one repository connected to your organisation/)).toBeTruthy();
+  });
+
+  // The scoped state is about an EMPTY set, never about a populated one: a
+  // project that has both keeps its matrix, and the connected repositories stay
+  // out of it (MOTIR-3126 decided this pane lists what Motir can invite to).
+  it('never replaces the matrix when the project does have repositories of its own', () => {
+    renderSurface({ connectedRepoCount: 6 });
+    expect(screen.queryByText("Motir hasn't made any repositories for Atlas")).toBeNull();
+    expect(screen.getByText('Olivia Owner')).toBeTruthy();
   });
 
   it('a set still being made says so and promises nothing is lost', () => {

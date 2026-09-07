@@ -81,6 +81,23 @@ export interface CodeAccessSettingsProps {
   /** The Access & members pane — `Change role` is a link to it, never a control
    *  this surface owns. */
   membersHref: string;
+  /** The Repositories room — the surface that answers "WHICH repositories does
+   *  this project work on", which is the question a reader who lands on an empty
+   *  code-access pane is usually actually asking (MOTIR-4803). */
+  repositoriesHref: string;
+  /**
+   * How many repositories this project's domain gets from the ORGANISATION
+   * rather than from its own `project_repository` set — `resolveEffectiveRepoDomain`'s
+   * `connected.length`, resolved by the page (MOTIR-4803).
+   *
+   * ⚠️ It selects an EMPTY STATE and nothing else. It never adds a row: a
+   * connected repository has no invitation for Motir to report, grant or revoke,
+   * which is exactly why this pane reads the SET and MOTIR-3126 left it there.
+   * What the count buys is the difference between "this project has no code" —
+   * false, and the shipped bug — and "Motir hosts none of it", which is true and
+   * says where the code actually is.
+   */
+  connectedRepoCount: number;
 }
 
 export function CodeAccessSettings({
@@ -95,6 +112,8 @@ export function CodeAccessSettings({
   connectHref,
   plansHref,
   membersHref,
+  repositoriesHref,
+  connectedRepoCount,
 }: CodeAccessSettingsProps) {
   const t = useTranslations('settings.codeAccess');
   const tAccess = useTranslations('settings.access');
@@ -199,15 +218,37 @@ export function CodeAccessSettings({
 
   // No repository has ever been proposed for this project — not an error and not
   // an empty table: there is genuinely nothing to grant until a plan is approved.
+  //
+  // ⚠️ TWO empty states, and picking the wrong one is what MOTIR-4803 was
+  // (`design-notes.md` §15.8 A, amended). Nothing is here EITHER WAY — the
+  // matrix crosses members with the SET, so an empty set has no row behind this
+  // card to hide. What differs is whether the absence is the whole truth. A
+  // project with an empty set and repositories from its organisation is told
+  // "{projectName} has no code yet", which is false about a project holding six
+  // of them, and the reader cannot tell a scoped page from a broken one. So the
+  // scoped arm says what Motir has not done, where the code actually is, and who
+  // grants access there — and it keeps the room's boundary rather than widening
+  // the list past it (§17.5's shape: an absence plus one sentence naming WHO and
+  // WHERE is an answer; a silent one is a bug report).
   if (view.repos.length === 0) {
+    const connected = connectedRepoCount > 0;
     return (
       <EmptyState
         icon={<FolderGit2 className="h-12 w-12" aria-hidden />}
-        title={t('empty.title', { projectName })}
-        description={t('empty.body', { projectName })}
+        title={
+          connected ? t('empty.connectedTitle', { projectName }) : t('empty.title', { projectName })
+        }
+        description={
+          connected
+            ? t('empty.connectedBody', { projectName, count: connectedRepoCount })
+            : t('empty.body', { projectName })
+        }
         action={
-          <Link href={plansHref} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
-            {t('empty.action')}
+          <Link
+            href={connected ? repositoriesHref : plansHref}
+            className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+          >
+            {connected ? t('empty.connectedAction') : t('empty.action')}
           </Link>
         }
       />

@@ -141,6 +141,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: 
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
       repoId: `${800_000 + number}`,
       owner: 'moooon-B-V',
       name: `motir-core-${number}`,
@@ -309,6 +310,7 @@ describe('clear_cancelled_manual_provenance — every other row is left alone', 
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
+        organizationId: fx.workspace.organizationId,
         repoId: '810000',
         owner: 'moooon-B-V',
         name: 'motir-core-unlinked',

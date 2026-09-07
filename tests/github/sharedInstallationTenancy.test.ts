@@ -22,6 +22,7 @@ import type { NormalizedWorkflowRunEvent } from '@/lib/git/types';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { organizationIdOf } from '../helpers/organizationOf';
 
 // MOTIR-1931 — Motir's PROVISIONING-ORG mirror is PER-WORKSPACE.
 //
@@ -122,6 +123,7 @@ async function seedTenantWithCreatedRepo(opts: {
       installationId: opts.sharedInstallationRowId,
       // The row's OWN tenancy — the whole point of the card.
       workspaceId: workspace.id,
+      organizationId: await organizationIdOf(workspace.id),
       repoId: opts.repoHostId,
       owner: MOTIR_ORG,
       name: opts.repoName,

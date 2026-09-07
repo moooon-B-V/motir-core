@@ -981,7 +981,7 @@
     },
     "topNav": {
       "global": "全局",
-      "brandHome": "Motir — 前往工作台"
+      "brandHome": "Motir — 前往主页"
     },
     "pageLoading": "页面加载中",
     "project": {
@@ -2445,7 +2445,10 @@
       "empty": {
         "title": "{projectName}还没有代码",
         "body": "计划获批后，Motir 会创建这个项目的仓库——能编辑{projectName}的每个人都会收到邀请。在那之前没有可授予的访问。",
-        "action": "查看计划"
+        "action": "查看计划",
+        "connectedTitle": "Motir 还没有为{projectName}创建任何仓库",
+        "connectedBody": "本页面只统计 Motir 创建的仓库。{projectName} 使用的是已连接到你的组织的 {count} 个仓库——团队自己拥有的仓库通过 GitHub 授予访问权限，而不是通过 Motir。",
+        "connectedAction": "查看本项目的仓库"
       },
       "establishing": {
         "pill": "正在创建",
