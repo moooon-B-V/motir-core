@@ -975,7 +975,6 @@
       "reports": "Reports",
       "codeHealth": "Code health",
       "settings": "Settings",
-      "jobRuns": "Job runs",
       "git": "Git",
       "github": "GitHub",
       "backlog": "Backlog",
@@ -983,8 +982,7 @@
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
-      "resumeOnboardingInProgress": "Resume onboarding, in progress",
-      "security": "Security"
+      "resumeOnboardingInProgress": "Resume onboarding, in progress"
     },
     "topNav": {
       "global": "Global",
@@ -1012,6 +1010,7 @@
       "switch": "Switch workspace",
       "select": "Select workspace",
       "heading": "Workspaces",
+      "settings": "Workspace settings",
       "invite": "Invite teammates",
       "nameLabel": "Workspace name",
       "namePlaceholder": "My workspace",
@@ -1033,7 +1032,6 @@
     },
     "userMenu": {
       "account": "Account menu",
-      "workspaceSettings": "Workspace settings",
       "accountSettings": "Account settings",
       "signingOut": "Signing out…",
       "platformAdmin": "Platform admin",
@@ -1735,6 +1733,18 @@
       "security": {
         "title": "Security",
         "subtitle": "Sign-in requirements for everyone in {workspace}."
+      },
+      "eyebrow": "Workspace settings",
+      "back": "Back to Motir",
+      "nav": {
+        "group": {
+          "general": "General",
+          "access": "Access",
+          "operations": "Operations"
+        },
+        "workspace": "Workspace",
+        "security": "Security",
+        "jobs": "Job runs"
       }
     },
     "name": {
@@ -3576,6 +3586,10 @@
         "security": "Security",
         "usage": "Usage & cost",
         "billing": "Billing & plans"
+      },
+      "jobRunsFoldIn": {
+        "title": "Job runs",
+        "subtitle": "Background work for this workspace — what ran, what failed, and what is waiting in the dead-letter queue."
       }
     },
     "gitAccounts": {

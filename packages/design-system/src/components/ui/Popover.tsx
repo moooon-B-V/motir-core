@@ -95,7 +95,14 @@ const PopoverContent = forwardRef<
           overflowVisible ? 'overflow-visible' : 'overflow-hidden',
           'shadow-(--shadow-elevated) border border-(--el-border)',
           'focus:outline-none',
-          'data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0',
+          // NO entry/exit animation utilities here. Overlay motion is the
+          // THEME's, declared per style in `theme.css` against the
+          // `data-surface="popover"` hook above and gated behind
+          // `prefers-reduced-motion` — see the `immersive-menu-open` block.
+          // `animate-in` / `fade-in-0` are a Tailwind PLUGIN's vocabulary this
+          // repository has never installed, so they generated nothing
+          // (MOTIR-4889); `tests/theme/no-inert-animation-utilities.test.ts`
+          // keeps them out.
           className,
         )}
         style={{ width: typeof width === 'number' ? `${width}px` : width, ...style }}
