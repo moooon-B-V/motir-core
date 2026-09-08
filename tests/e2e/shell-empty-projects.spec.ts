@@ -56,8 +56,15 @@ test('@smoke shell: zero-projects sidebar shows the CTA, hides project nav, keep
   await expect(page.getByRole('link', { name: 'Boards' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Reports' })).toHaveCount(0);
 
-  // Settings + Git (the bottom section) stay visible. Docs and Legal
-  // documents left this section for the Help menu (MOTIR-4239).
+  // Settings (the bottom section) stays visible. Docs and Legal documents left
+  // this section for the Help menu (MOTIR-4239).
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Git' })).toBeVisible();
+  // ⚠️ AND `Git` LEFT IT TOO (MOTIR-4643) — asserted as an ABSENCE so the row
+  // cannot silently return. The connection lifecycle is an org-admin act at
+  // Settings → Organisation → Git, and a member's own account connect is at
+  // Settings → Account → Git; neither is gone, and neither belongs on a PROJECT
+  // rail. What answers *what code does Motir know about?* is the `Codebase` row
+  // in the primary section, which this zero-project state does not render at all
+  // because there is no project to have code.
+  await expect(page.getByRole('link', { name: 'Git' })).toHaveCount(0);
 });

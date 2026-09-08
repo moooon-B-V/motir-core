@@ -139,7 +139,16 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // no tooltip, no "ask an admin" line. The rows below simply close up.
   await expect(settingsDoor(page)).toHaveCount(0);
   await expect(rail(page).getByRole('link', { name: 'Job runs' })).toBeVisible();
-  await expect(rail(page).getByRole('link', { name: 'Git' })).toBeVisible();
+  // ⚠️ `Git` LEFT THIS SECTION (MOTIR-4643), so `Job runs` above is the whole
+  // floor now and carries this claim on its own. Asserted as an ABSENCE rather
+  // than dropped, so the row cannot silently return.
+  await expect(rail(page).getByRole('link', { name: 'Git' })).toHaveCount(0);
+  // ⚠️ AND A MEMBER IS OFFERED THE `Codebase` ROOM — the capability the collapse
+  // could have taken and did not. `/code`'s Repositories section asserts nothing
+  // past browse; its Health section keeps the `ai:configure` gate INSIDE itself
+  // and renders its own admin-only state. Gating the ROW on the stricter of the
+  // two would have hidden the browse-reachable half behind the admin-only one.
+  await expect(rail(page).getByRole('link', { name: 'Codebase' })).toBeVisible();
 
   // ⌘K offers no settings deep link either — the palette reads the same registry.
   const palette = await openPalette(page);

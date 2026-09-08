@@ -216,9 +216,14 @@ test('⚠️ STALE AFTER A PUSH — the head moves past the graph, and the row s
   // is current, and one built two hours ago on 300 overnight commits is badly
   // stale.
   await expect(row(page).getByText('312 commits behind')).toBeVisible();
-  // And nothing on the surface reads as an ERROR — it is a warning register, not
-  // a destructive one.
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  // And the ROW itself reads as a warning, not as an error — §10 puts this state
+  // one register up from the invitation grammar and no further: no red, no
+  // destructive family, no blocking.
+  //
+  // ⚠️ SCOPED TO THE ROW. A bare `getByRole('alert')` matches the shell's own
+  // live regions, which are none of this section's business — it is not that the
+  // page has no alerts, it is that this repository is not reported as one.
+  await expect(row(page).getByRole('alert')).toHaveCount(0);
 });
 
 test('⚠️ a DEAD refresh says the index is not updating — the DLQ signal a person sees', async ({
@@ -286,7 +291,14 @@ test('the Health section keeps its own gate, and Repositories works beside it', 
   await openRepositories(page);
   await expect(row(page).getByText(REPO_REF)).toBeVisible();
 
-  await page.getByRole('radio', { name: 'Health' }).click();
+  // ⚠️ A BUTTON, NOT A RADIO. `Segmented` renders a labelled `role="group"` whose
+  // options are real `<button>`s — the primitive's own a11y note says so, and
+  // guessing the ARIA pattern from the control's appearance is what a role-based
+  // selector exists to stop.
+  await page
+    .getByRole('group', { name: 'Code sections' })
+    .getByRole('button', { name: 'Health' })
+    .click();
   await expect(page).toHaveURL(/section=health/);
   // The switch is SHALLOW — the URL changes and the page does not re-navigate,
   // so the repository list is still mounted behind the switch.
