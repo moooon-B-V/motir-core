@@ -211,6 +211,147 @@ async function recordLastActiveProjectBestEffort(userId: string, projectId: stri
   }
 }
 
+/**
+ * INSERT one project + its two seeds, inside a caller-supplied transaction.
+ *
+ * Extracted from `createProject` (MOTIR-4870) so `ensureDefaultProject` can
+ * create a project WITHOUT nesting a second `withWorkspaceContext` inside the
+ * one holding its workspace-row lock — nesting would deadlock on the same
+ * connection, the same reason `workspacesService.resolveActiveWorkspace` runs
+ * its self-heal outside its own transaction.
+ *
+ * ⚠️ ONE writer of the project row. The alternative — `ensureDefaultProject`
+ * re-implementing the cap check, the reserved-key guard and the two seeds —
+ * would be a second source of truth for what a project IS, and the next thing
+ * a project needs at birth would be added to exactly one of them.
+ *
+ * The caller owns the transaction, the RLS binding, and the retry loop: this
+ * throws `ReservedIdentifierSentinel` or a P2002 on a taken candidate and does
+ * not re-suffix, because a poisoned transaction can only be retried from
+ * outside itself.
+ */
+async function insertProjectWithSeedsInTx(
+  input: { workspaceId: string; name: string; slug: string; identifier: string },
+  tx: Prisma.TransactionClient,
+): Promise<Project> {
+  // §4 project cap (8.1.11): block before any work when the org is at
+  // its free-tier project ceiling. Org resolved UP from the workspace;
+  // the assert locks the org row FOR UPDATE (inert off-cloud / scaled).
+  const capOrgId = await workspaceRepository.findOrganizationId(input.workspaceId, tx);
+  if (capOrgId) await entitlementsService.assertWithinProjectCap(capOrgId, tx);
+  // Reserved-key guard (Story 6.8): a new project must not take a key
+  // reserved by another project's retired-key alias. The alias table is
+  // a SEPARATE table from `project`, so a reserved key does NOT trip the
+  // project's unique index — it needs an explicit check. Throwing the
+  // sentinel rolls back this attempt and re-suffixes in the catch,
+  // exactly like a P2002 (nothing has been written yet).
+  const reserved = await projectKeyAliasRepository.findByWorkspaceAndIdentifier(
+    input.workspaceId,
+    input.identifier,
+    tx,
+  );
+  if (reserved) throw new ReservedIdentifierSentinel();
+  const created = await projectRepository.create(
+    {
+      workspaceId: input.workspaceId,
+      name: input.name,
+      slug: input.slug,
+      identifier: input.identifier,
+    },
+    tx,
+  );
+  // Seed the default status workflow in the SAME transaction (Subtask
+  // 2.2.2): a project either has its workflow or doesn't exist. A
+  // P2002 on identifier/slug rolls back the project AND its seed; the
+  // next retry re-seeds in a fresh transaction.
+  await workflowsService.seedDefaultWorkflow(created.id, input.workspaceId, tx);
+  // Then seed the default Kanban board (Subtask 3.1.2) in the SAME
+  // transaction — it reads the statuses just written above to project
+  // one column per status, so it MUST run after the workflow seed and
+  // within the same tx (the statuses aren't visible outside it yet).
+  await boardsService.seedDefaultBoard(created.id, input.workspaceId, tx);
+  return created;
+}
+
+/**
+ * The resolver's third answer (MOTIR-4870): the actor IS a member of this
+ * workspace and the workspace has no non-archived project.
+ *
+ * `getActiveProject` used to return `null` for this AND for "not a member",
+ * and the two need opposite treatment — the first is the state the invariant
+ * forbids and heals, the second is a real null nothing should paper over. A
+ * sentinel keeps them apart inside the transaction, where the membership row
+ * has already been read and the distinction is free.
+ */
+const NO_PROJECT_IN_WORKSPACE = Symbol('no-project-in-workspace');
+
+/**
+ * The resolution half of `getActiveProject`, in ONE transaction — split out
+ * (MOTIR-4870) so the self-heal can run BETWEEN two calls of it rather than
+ * inside one, which the nested-transaction deadlock forbids.
+ *
+ * Returns the DTO, `null` when the actor is not a member of this workspace, or
+ * {@link NO_PROJECT_IN_WORKSPACE} when they are a member and the workspace
+ * holds no non-archived project.
+ *
+ * ⚠️ MODULE-PRIVATE, and not merely by preference: the sentinel is a `unique
+ * symbol`, so a method on the exported service literal puts an unnameable type
+ * in that literal's inferred shape and `tsc -b` refuses to emit a declaration
+ * for every consumer of it (TS2527, then TS6305 across the job tests). Keeping
+ * it here keeps the sentinel off the public surface, which is where it belongs
+ * anyway — `getActiveProject` is the door, and the only caller that treats it.
+ */
+async function resolveActiveProjectInContext(
+  userId: string,
+  workspaceId: string,
+): Promise<ProjectDTO | null | typeof NO_PROJECT_IN_WORKSPACE> {
+  return withWorkspaceContext({ userId, workspaceId }, async (tx) => {
+    const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
+      userId,
+      workspaceId,
+      tx,
+    );
+    if (!membership) return null;
+
+    if (membership.activeProjectId) {
+      const pinned = await projectRepository.findById(membership.activeProjectId, tx);
+      // Accept the pinned project whether archived or not (#29.2): an
+      // archived active project is surfaced (with archivedAt set) so the
+      // shell shows the "Archived" pill. Only a genuinely unresolvable
+      // pointer — hard-deleted (the FK's onDelete: SetNull would have
+      // nulled it, but belt + suspenders) or cross-workspace — falls
+      // through to recovery below.
+      if (pinned && pinned.workspaceId === workspaceId) {
+        return toProjectDTO(pinned);
+      }
+    }
+
+    // No resolvable pinned project. Recover to the first non-archived
+    // project if one exists (#29.3), persisting it so the pointer heals.
+    const projects = await projectRepository.findByWorkspace(workspaceId, tx);
+    const first = projects[0];
+    // A MEMBER with no project — the healable state, told apart from the
+    // `null` above (MOTIR-4870). `getActiveProject` is what acts on it.
+    if (!first) return NO_PROJECT_IN_WORKSPACE;
+
+    if (membership.activeProjectId) {
+      // The pointer was SET but didn't resolve — a real inconsistency
+      // (deleted / cross-workspace). Worth a warning so we can watch it.
+      console.warn(
+        '[projectsService.getActiveProject] active-project pointer unresolvable; auto-recovering',
+        {
+          userId,
+          workspaceId,
+          staleProjectId: membership.activeProjectId,
+          recoveredProjectId: first.id,
+        },
+      );
+    }
+    await workspaceMembershipRepository.setActiveProject(userId, workspaceId, first.id, tx);
+    return toProjectDTO(first);
+  });
+}
+
 export const projectsService = {
   /**
    * Create a project in a workspace. Asserts the actor is a member, derives
@@ -254,46 +395,120 @@ export const projectsService = {
         // current one, so we can't catch-and-continue inside a single tx.
         const project = await withWorkspaceContext(
           { userId: input.actorUserId, workspaceId: input.workspaceId },
-          async (tx) => {
-            // §4 project cap (8.1.11): block before any work when the org is at
-            // its free-tier project ceiling. Org resolved UP from the workspace;
-            // the assert locks the org row FOR UPDATE (inert off-cloud / scaled).
-            const capOrgId = await workspaceRepository.findOrganizationId(input.workspaceId, tx);
-            if (capOrgId) await entitlementsService.assertWithinProjectCap(capOrgId, tx);
-            // Reserved-key guard (Story 6.8): a new project must not take a key
-            // reserved by another project's retired-key alias. The alias table is
-            // a SEPARATE table from `project`, so a reserved key does NOT trip the
-            // project's unique index — it needs an explicit check. Throwing the
-            // sentinel rolls back this attempt and re-suffixes in the catch,
-            // exactly like a P2002 (nothing has been written yet).
-            const reserved = await projectKeyAliasRepository.findByWorkspaceAndIdentifier(
-              input.workspaceId,
-              identifier,
-              tx,
-            );
-            if (reserved) throw new ReservedIdentifierSentinel();
-            const created = await projectRepository.create(
+          (tx) =>
+            insertProjectWithSeedsInTx(
               { workspaceId: input.workspaceId, name: trimmedName, slug, identifier },
               tx,
-            );
-            // Seed the default status workflow in the SAME transaction (Subtask
-            // 2.2.2): a project either has its workflow or doesn't exist. A
-            // P2002 on identifier/slug rolls back the project AND its seed; the
-            // next retry re-seeds in a fresh transaction.
-            await workflowsService.seedDefaultWorkflow(created.id, input.workspaceId, tx);
-            // Then seed the default Kanban board (Subtask 3.1.2) in the SAME
-            // transaction — it reads the statuses just written above to project
-            // one column per status, so it MUST run after the workflow seed and
-            // within the same tx (the statuses aren't visible outside it yet).
-            await boardsService.seedDefaultBoard(created.id, input.workspaceId, tx);
-            return created;
-          },
+            ),
         );
         return toProjectDTO(project);
       } catch (err) {
         // A P2002 (live identifier/slug collision) OR a reserved-alias hit both
         // mean "this candidate is taken" — re-suffix BOTH fields and retry in a
         // fresh transaction (see method docstring).
+        if (isUniqueViolation(err) || err instanceof ReservedIdentifierSentinel) {
+          identifier = identifierWithSuffix(identifierBase, attempt + 1);
+          slug = `${slugBase}-${randomSlugSuffix()}`;
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new IdentifierCollisionError(lastIdentifier);
+  },
+
+  /**
+   * IDEMPOTENT SELF-HEAL: guarantee this workspace has at least one project,
+   * returning its first non-archived one (MOTIR-4870).
+   *
+   * The project-tier analogue of `workspacesService.ensureDefaultWorkspace`,
+   * and deliberately the same SHAPE, because the invariant is the same shape:
+   * *you are always in a project* is a property of the WORKSPACE, not an event
+   * at registration. Three paths produce a project-less workspace and a
+   * registration hook would close only the first:
+   *
+   *   1. a brand-new account (`provisionForNewUser` → `createWorkspace`);
+   *   2. a workspace created later from the org menu — `createWorkspace`
+   *      inserts the workspace and its owner memberships and nothing else;
+   *   3. archiving the last project, which `archiveProject` leaves resolving
+   *      to nothing.
+   *
+   * Enforced in the same two places the workspace analogue is: best-effort
+   * right after `createWorkspace` (so the row exists before anyone looks) and
+   * lazily from `getActiveProject` (so it is TRUE rather than usually-true).
+   *
+   * ⚠️ CONCURRENCY — the lock is on the WORKSPACE row, and the count is
+   * re-read INSIDE it. Two parallel first-requests (two tabs right after
+   * signup) must not each mint a project: the second blocks on the lock, then
+   * re-reads a non-empty list and returns the first caller's project.
+   * `lockByIdForUpdate` returns FALSE when the row matched nothing — a
+   * `SELECT … FOR UPDATE` over zero rows locks nothing and reports success —
+   * so a false is a refusal, never a lock.
+   *
+   * ⚠️ AND IT RUNS UNDER `withWorkspaceContext`, NOT A BARE `db.$transaction`.
+   * `project`'s RLS policy gates on `app.workspace_id`, so an unbound read
+   * returns zero rows for a workspace that HAS projects — RLS removes rows, it
+   * does not raise. The idempotency guard would then fail OPEN and this method
+   * would mint a duplicate on every call, which is exactly what MOTIR-2874 did
+   * one tier up with `ensureDefaultWorkspace`'s membership count. The FOR
+   * UPDATE lock serialises the race and cannot see what RLS hid, so the
+   * binding is doing the work here, not the lock.
+   *
+   * Each slug/identifier-collision retry opens a FRESH transaction, because a
+   * P2002 poisons the current one; the lock is re-taken and the count re-read
+   * on every attempt, so the idempotency survives the retries too.
+   */
+  async ensureDefaultProject(input: {
+    workspaceId: string;
+    actorUserId: string;
+  }): Promise<ProjectDTO> {
+    await projectsService.assertMembership(input.actorUserId, input.workspaceId);
+
+    // The default project is named for its WORKSPACE. Not for the user (a
+    // second workspace's default would carry the first one's owner) and not
+    // "Untitled" (which reads as a placeholder nobody chose).
+    //
+    // ⚠️ Read BOUND. `workspace` is a tenant-root table with no public arm, so
+    // an unbound `findById` compares the policy against NULL and answers null
+    // for a workspace that exists — the same fail-closed-and-dishonest shape
+    // `readMembership`'s header documents, and it would surface here as a
+    // spurious NotAMemberError under the non-bypass role only.
+    const workspace = await withWorkspaceContext(
+      { userId: input.actorUserId, workspaceId: input.workspaceId },
+      (tx) => workspaceRepository.findByIdInTx(input.workspaceId, tx),
+    );
+    if (!workspace) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+    const name = workspace.name.trim();
+    const identifierBase = deriveIdentifierBase(name);
+    const slugBase = slugify(name);
+
+    let identifier = identifierBase;
+    let slug = slugBase;
+    let lastIdentifier = identifier;
+
+    for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+      lastIdentifier = identifier;
+      try {
+        const project = await withWorkspaceContext(
+          { userId: input.actorUserId, workspaceId: input.workspaceId },
+          async (tx) => {
+            const locked = await workspaceRepository.lockByIdForUpdate(input.workspaceId, tx);
+            if (!locked) throw new NotAMemberError(input.actorUserId, input.workspaceId);
+
+            // Re-read INSIDE the lock — this is the idempotency check, and the
+            // whole point of taking the lock first.
+            const existing = await projectRepository.findByWorkspace(input.workspaceId, tx);
+            const first = existing[0];
+            if (first) return first;
+
+            return insertProjectWithSeedsInTx(
+              { workspaceId: input.workspaceId, name, slug, identifier },
+              tx,
+            );
+          },
+        );
+        return toProjectDTO(project);
+      } catch (err) {
         if (isUniqueViolation(err) || err instanceof ReservedIdentifierSentinel) {
           identifier = identifierWithSuffix(identifierBase, attempt + 1);
           slug = `${slugBase}-${randomSlugSuffix()}`;
@@ -714,49 +929,30 @@ export const projectsService = {
    * can't shear the result.
    */
   async getActiveProject(userId: string, workspaceId: string): Promise<ProjectDTO | null> {
-    return withWorkspaceContext({ userId, workspaceId }, async (tx) => {
-      const membership = await workspaceMembershipRepository.findByUserAndWorkspaceWithWorkspace(
-        userId,
-        workspaceId,
-        tx,
-      );
-      if (!membership) return null;
+    const resolved = await resolveActiveProjectInContext(userId, workspaceId);
+    if (resolved !== NO_PROJECT_IN_WORKSPACE) return resolved;
 
-      if (membership.activeProjectId) {
-        const pinned = await projectRepository.findById(membership.activeProjectId, tx);
-        // Accept the pinned project whether archived or not (#29.2): an
-        // archived active project is surfaced (with archivedAt set) so the
-        // shell shows the "Archived" pill. Only a genuinely unresolvable
-        // pointer — hard-deleted (the FK's onDelete: SetNull would have
-        // nulled it, but belt + suspenders) or cross-workspace — falls
-        // through to recovery below.
-        if (pinned && pinned.workspaceId === workspaceId) {
-          return toProjectDTO(pinned);
-        }
-      }
+    // ── The self-heal (MOTIR-4870) ────────────────────────────────────────
+    // A member of this workspace, and the workspace has no project. That is
+    // the one state "you are always in a project" forbids, and it is reached
+    // by three paths, not one: a fresh registration, a workspace created from
+    // the org menu (`createWorkspace` seeds no project), and archiving the
+    // last project.
+    //
+    // ⚠️ It runs OUTSIDE the transaction above, for the same reason
+    // `workspacesService.resolveActiveWorkspace` runs ITS self-heal outside
+    // its own: `ensureDefaultProject` owns a transaction with a FOR UPDATE
+    // lock, and nesting one inside another on the same connection deadlocks.
+    await projectsService.ensureDefaultProject({ workspaceId, actorUserId: userId });
 
-      // No resolvable pinned project. Recover to the first non-archived
-      // project if one exists (#29.3), persisting it so the pointer heals.
-      const projects = await projectRepository.findByWorkspace(workspaceId, tx);
-      const first = projects[0];
-      if (!first) return null;
-
-      if (membership.activeProjectId) {
-        // The pointer was SET but didn't resolve — a real inconsistency
-        // (deleted / cross-workspace). Worth a warning so we can watch it.
-        console.warn(
-          '[projectsService.getActiveProject] active-project pointer unresolvable; auto-recovering',
-          {
-            userId,
-            workspaceId,
-            staleProjectId: membership.activeProjectId,
-            recoveredProjectId: first.id,
-          },
-        );
-      }
-      await workspaceMembershipRepository.setActiveProject(userId, workspaceId, first.id, tx);
-      return toProjectDTO(first);
-    });
+    // Re-resolve rather than returning the ensured row directly: the resolver
+    // is what PERSISTS the `activeProjectId` pointer, and re-entering it heals
+    // the pointer through the one code path that owns that write instead of a
+    // second copy of it. Bounded to ONE retry by construction — the sentinel
+    // on a second pass means the heal produced nothing, and a resolver that
+    // looped here would spin on whatever prevented it.
+    const healed = await resolveActiveProjectInContext(userId, workspaceId);
+    return healed === NO_PROJECT_IN_WORKSPACE ? null : healed;
   },
 
   // ── Story 6.8 — edit project details + change project key ──────────────────

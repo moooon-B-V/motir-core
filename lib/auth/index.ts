@@ -11,6 +11,7 @@ import { resolveBaseUrl, resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { sendAuthEmail } from '@/lib/auth/authMail';
 import { assertAccountNotSuspended } from '@/lib/auth/accountSuspension';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
 import { twoFactorService } from '@/lib/services/twoFactorService';
 import { legalAcceptanceService } from '@/lib/services/legalAcceptanceService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
@@ -373,9 +374,21 @@ export const authOptions: BetterAuthOptions & {
             // owner memberships for both, atomically. provisionForNewUser is the
             // named entry for this (it delegates to createWorkspace's
             // mint-own-org branch).
-            await workspacesService.provisionForNewUser({
+            const { workspace } = await workspacesService.provisionForNewUser({
               userId: user.id,
               userName: user.name,
+            });
+            // MOTIR-4870 — YOU ARE ALWAYS IN A PROJECT. The tenancy above ends
+            // at the workspace, and a workspace with no project is the state
+            // the invariant forbids; seed it in the same breath, so a brand-new
+            // reader is inside a project before their first authed request.
+            // Same best-effort contract as everything else in this hook: the
+            // lazy self-heal in `projectsService.getActiveProject` is the real
+            // guarantee, and it also covers the two doors this hook is not on
+            // (a workspace created later, and archiving the last project).
+            await projectsService.ensureDefaultProject({
+              workspaceId: workspace.id,
+              actorUserId: user.id,
             });
           } catch (err) {
             // Post-commit best-effort: do not rethrow (the user row is
@@ -383,8 +396,9 @@ export const authOptions: BetterAuthOptions & {
             // response). The lazy backfill recreates this on first
             // workspace-context resolution.
             console.error(
-              `[auth] default-workspace creation failed for user ${user.id}; ` +
-                `the lazy backfill will retry on next context resolution.`,
+              `[auth] default tenancy (workspace + project) creation failed for ` +
+                `user ${user.id}; the lazy backfills will retry on next context ` +
+                `resolution.`,
               err,
             );
           }
