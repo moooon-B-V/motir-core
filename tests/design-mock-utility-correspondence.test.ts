@@ -564,10 +564,56 @@ export function misdeclaredUtilities(mock: MockSource): string[] {
  * 34 → 6.
  */
 const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
-  { file: 'design/ai-chat/plan-change-run-live.mock.html', count: 88, card: 'MOTIR-4813' },
-  { file: 'design/ai-planning/peek-proposal-mode.mock.html', count: 2, card: 'MOTIR-4813' },
-  { file: 'design/shell/account-menu.mock.html', count: 8, card: 'MOTIR-4813' },
-  { file: 'design/shell/help-menu.mock.html', count: 6, card: 'MOTIR-4813' }, // was 34; 28 structural landed with MOTIR-4810
+  // ⚠️ EMPTY, AND THAT IS THE POINT OF THE TABLE RATHER THAN AN ABSENCE OF ONE.
+  // MOTIR-4810 took 636 → 104 (the structural `[&_…]:` half) and MOTIR-4813 took
+  // 104 → 0 (the STATE half), so direction (A) is now at zero over the WHOLE
+  // tree in both halves and the exact-count arm below holds every mock there.
+  // The table stays because it is the ratchet: an inert variant landing in any
+  // asset now fails with no row to hide behind, and a row added back has to
+  // carry a card that says why.
+  //
+  // ⚠️ ZERO HERE IS ZERO FOR `isArbitrary`, WHICH IS NARROWER THAN IT READS.
+  // 93 occurrences of 6 PLAIN inert variants survive in
+  // `design/ai-chat/plan-change-run-live.mock.html` — `disabled:opacity-50` 25,
+  // `hover:opacity-90` 11 and four more — because the filter above excludes a
+  // token carrying no `[` or `(`. Its stated reason is that a plain class may
+  // come from an inherited stylesheet, and a `*.mock.html` inherits none. That
+  // is MOTIR-4890, with the measurement and its command.
+  //
+  // What MOTIR-4813 disposed of, per utility rather than per class — the
+  // judgement the card exists for, since "a static mock is never hovered" is an
+  // answer that ends the enquiry and is false three ways here:
+  //
+  //   DECLARE (7 rules across 2 assets; the class is on a real element that
+  //   wants it) — `focus-visible:ring-(--focus-ring-color)` 34,
+  //   `hover:bg-(--el-surface-soft)` 18, `active:scale-(--active-scale)` 16,
+  //   `hover:text-(--el-text)` 11 and `placeholder:text-(--el-text-secondary)`
+  //   9 in `plan-change-run-live`, `active:bg-(--el-surface-soft)` 2 in
+  //   `peek-proposal-mode`. The placeholder one paints with no interaction at
+  //   all, so it moved that asset's `.png`; the rest fire in the browser a
+  //   reviewer opens the mock in. `focus-visible:ring-2` and
+  //   `focus-visible:outline-none` were declared alongside — they are not
+  //   arbitrary and so are invisible to this guard, but the ring COLOUR alone
+  //   paints nothing without the rule that composes the shadow, and a DECLARE
+  //   that still renders nothing is not a fix. The eight `@property --tw-*`
+  //   blocks that composition reads were copied verbatim from
+  //   `peek-proposal-mode`, which already carried them.
+  //
+  //   REMOVE (7 elements across 2 assets) — `data-[state=open]:animate-in` and
+  //   `data-[state=closed]:animate-out` on the popover panels of `account-menu`
+  //   and `help-menu`, with `fade-in-0` / `fade-out-0` (not arbitrary, so not
+  //   counted here) in the same four-class group. Both are a verbatim
+  //   transcription of `packages/design-system/src/components/ui/Popover.tsx`
+  //   line 98 — and NOTHING in this repository generates them: there is no
+  //   `tailwindcss-animate` / `tw-animate-css` dependency, no `@keyframes enter`
+  //   or `exit`, and no `--tw-enter-*`, so they are inert in the SHIPPED
+  //   component too — filed as MOTIR-4889 against all four sites. There is
+  //   therefore no value in
+  //   `packages/design-system/theme.css` to declare them from, and inventing an
+  //   animation the product does not have is the opposite of designing against
+  //   shipped reality. `data-[state=closed]:` additionally selects nothing here
+  //   under any reading: every panel in both assets carries a literal
+  //   `data-state="open"`.
 ];
 
 /**
@@ -960,10 +1006,11 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     // The number a reader checks in one line, and the one that says whether the
     // four follow-up cards are making progress. The ceilings are the populations
     // measured on `origin/main` `cd77d0225`; they may only be lowered.
-    // 636 → 104 with MOTIR-4810: the whole structural half landed at once,
-    // which is what the ratchet is for — the ceiling comes DOWN with the fix and
-    // cannot go back up.
-    expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(104);
+    // 636 → 104 with MOTIR-4810 (the structural half), 104 → 0 with MOTIR-4813
+    // (the state half), which is what the ratchet is for — the ceiling comes
+    // DOWN with the fix and cannot go back up. At zero it is no longer a budget
+    // but a floor, and the exact-count arm above is what enforces it per file.
+    expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(0);
     // Direction (B)'s ceiling stays at its measured population: MOTIR-4851 took
     // ten off the table and MOTIR-4810 one more without lowering it, because the
     // per-file rows are the real ratchet here — each is asserted EXACT, so the
