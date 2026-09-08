@@ -332,25 +332,74 @@ export class LaneGuardReadError extends Error {
  *
  * A resolvable story ALWAYS answers 200 — `{ evidence: null }` when it has no
  * receipt yet — which is what makes every non-2xx unambiguous enough to throw on.
+ *
+ * ── ONE BATCH, NOT N ROUND TRIPS (MOTIR-4901) ───────────────────────────────
+ *
+ * The reads are issued CONCURRENTLY and the cost is one round trip, not `N` of
+ * them. It was a serial `for … await` loop until the lane reached fourteen
+ * members, at which point the caller — inheriting `vitest.config.ts`'s 15 s
+ * default — timed out in the merge queue against `https://app.motir.co`. `N`
+ * only ever grows, so a serial read was a guard with a deadline it walked
+ * towards one spec at a time, and a TIMEOUT is not a verdict: the lane could be
+ * genuinely dirty and the check reports the identical red.
+ *
+ * Nothing about a key's read depends on any other key's, so the loop was serial
+ * for no reason. What the batch DOES have to preserve, and does:
+ *
+ *   · ONE KEY'S FAILURE LOSES NO OTHER KEY. Every per-key read resolves — the
+ *     transport `catch` is INSIDE the mapped function, so a rejected hop never
+ *     reaches the aggregator and cannot discard the batch the way a bare
+ *     `Promise.all` over throwing reads would.
+ *   · THE THROW IS DETERMINISTIC AND IS THE SERIAL LOOP'S OWN CHOICE — the
+ *     FIRST key in `storyKeys` order that could not be read, whichever response
+ *     happened to land first. Errors are carried back as values and re-thrown in
+ *     input order below.
+ *
+ * The one behaviour that genuinely changes: a route-level failure no longer
+ * SUPPRESSES the reads after it, because they have already been issued. That is
+ * the fix, not a regression — the guard asks the same question of every key and
+ * still reports the first key that could not answer.
  */
 export async function fetchApprovedStories(
   storyKeys: readonly string[],
   source: StatusSource,
   fetchImpl: typeof fetch = fetch,
 ): Promise<Set<string>> {
+  type Read =
+    | { outcome: 'approved' }
+    | { outcome: 'not-approved' }
+    | { outcome: 'unreachable' }
+    | { outcome: 'unreadable'; error: unknown };
+
+  const reads = await Promise.all(
+    storyKeys.map(async (key): Promise<Read> => {
+      const url = `${source.baseUrl}/api/work-items/${key}/acceptance-evidence`;
+      let res: Response;
+      try {
+        res = await fetchImpl(url, { headers: authHeaders(source) });
+      } catch {
+        // Unreachable for this key: not evidence of anything. Skip it.
+        return { outcome: 'unreachable' };
+      }
+      if (!res.ok)
+        return { outcome: 'unreadable', error: new LaneGuardReadError(key, res.status, url) };
+      try {
+        const body = (await res.json()) as { evidence?: { status?: string } | null };
+        return body?.evidence?.status === 'approved'
+          ? { outcome: 'approved' }
+          : { outcome: 'not-approved' };
+      } catch (error) {
+        // A 2xx whose body will not parse is the same class of wiring defect as
+        // a route-level status, and the serial loop propagated it too.
+        return { outcome: 'unreadable', error };
+      }
+    }),
+  );
+
   const approved = new Set<string>();
-  for (const key of storyKeys) {
-    const url = `${source.baseUrl}/api/work-items/${key}/acceptance-evidence`;
-    let res: Response;
-    try {
-      res = await fetchImpl(url, { headers: authHeaders(source) });
-    } catch {
-      // Unreachable for this key: not evidence of anything. Skip it.
-      continue;
-    }
-    if (!res.ok) throw new LaneGuardReadError(key, res.status, url);
-    const body = (await res.json()) as { evidence?: { status?: string } | null };
-    if (body?.evidence?.status === 'approved') approved.add(key);
+  for (const [i, read] of reads.entries()) {
+    if (read.outcome === 'unreadable') throw read.error;
+    if (read.outcome === 'approved') approved.add(storyKeys[i]);
   }
   return approved;
 }

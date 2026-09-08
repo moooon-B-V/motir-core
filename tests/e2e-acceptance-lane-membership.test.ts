@@ -71,6 +71,23 @@ import {
 // `tests/acceptance-evidence-status-route.test.ts`, which cannot import a spec
 // file without re-running its suite. One implementation, two callers.
 
+// ── THE NETWORK-BOUND CASE'S OWN BUDGET (MOTIR-4901) ────────────────────────
+//
+// The root config's 15 s `testTimeout` is sized for a database call, and it
+// never described THIS case: `requireStatusSource` + `collectLaneMembers` are
+// cheap, but `fetchApprovedStories` reaches `https://app.motir.co` from a
+// GitHub runner. A budget is only honest once it describes the work
+// (`vitest.guards.config.ts:74-78` says the same thing about its own lane).
+//
+// What the work now is: ONE batch of N concurrent cross-internet requests, so
+// the cost is a single round trip plus its slowest tail — NOT `N × round-trip`,
+// which is the defect this budget was raised alongside. 30 s is roughly 30x a
+// normal round trip to production: wide enough that ordinary latency, a TLS
+// handshake and a cold route cannot red-light an unrelated pull request,
+// narrow enough that a genuinely hung read still fails rather than hanging the
+// shard. It is deliberately NOT the global default — see the guard below.
+const LANE_READ_BUDGET_MS = 30_000;
+
 describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => {
   // ⚠️ ITS OWN `it()`, AND THAT IS THE POINT (MOTIR-4093 AC 2). The obvious home
   // for this assertion is inside the membership check below, and that is exactly
@@ -84,41 +101,45 @@ describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => 
     expect(() => requireStatusSource(process.env)).not.toThrow();
   });
 
-  it('no spec in the lane has an approved receipt, and every one declares its story', async () => {
-    // Resolved FIRST, above the empty-lane return, for the same reason the test
-    // above exists: a source read after that return is a source nobody reads.
-    const source = requireStatusSource(process.env);
-    const members = collectLaneMembers();
+  it(
+    'no spec in the lane has an approved receipt, and every one declares its story',
+    async () => {
+      // Resolved FIRST, above the empty-lane return, for the same reason the test
+      // above exists: a source read after that return is a source nobody reads.
+      const source = requireStatusSource(process.env);
+      const members = collectLaneMembers();
 
-    if (members.length === 0) {
-      // A legitimate and, after a triage, common state: no story is in review.
-      // Not a skip — an empty lane genuinely satisfies the rule.
-      expect(members).toEqual([]);
-      return;
-    }
+      if (members.length === 0) {
+        // A legitimate and, after a triage, common state: no story is in review.
+        // Not a skip — an empty lane genuinely satisfies the rule.
+        expect(members).toEqual([]);
+        return;
+      }
 
-    if (!source) {
-      // The stated degradation, and it is now reachable only where the
-      // environment has NOT declared that it must bind — a laptop, a fork's
-      // pull request. Never a silent pass: the reason is printed, and the
-      // undeclared-story half of the rule is checked anyway because it needs no
-      // credential at all.
-      const verdict = judgeLane(members, new Set());
-      expect(
-        verdict.ok,
-        `${verdict.message}\n\n(The approved-receipt half of this guard was SKIPPED: this ` +
-          `environment resolved no origin + token and did not set ${GUARD_REQUIRED_VAR}=true, so ` +
-          'the product could not be asked which receipts are approved. That is correct on a ' +
-          "laptop and on a fork's pull request. Every other environment declares itself and " +
-          'FAILS instead — see MOTIR-4093.)',
-      ).toBe(true);
-      return;
-    }
+      if (!source) {
+        // The stated degradation, and it is now reachable only where the
+        // environment has NOT declared that it must bind — a laptop, a fork's
+        // pull request. Never a silent pass: the reason is printed, and the
+        // undeclared-story half of the rule is checked anyway because it needs no
+        // credential at all.
+        const verdict = judgeLane(members, new Set());
+        expect(
+          verdict.ok,
+          `${verdict.message}\n\n(The approved-receipt half of this guard was SKIPPED: this ` +
+            `environment resolved no origin + token and did not set ${GUARD_REQUIRED_VAR}=true, so ` +
+            'the product could not be asked which receipts are approved. That is correct on a ' +
+            "laptop and on a fork's pull request. Every other environment declares itself and " +
+            'FAILS instead — see MOTIR-4093.)',
+        ).toBe(true);
+        return;
+      }
 
-    const keys = members.map((m) => m.storyKey).filter((k): k is string => k !== null);
-    const verdict = judgeLane(members, await fetchApprovedStories(keys, source));
-    expect(verdict.ok, verdict.message).toBe(true);
-  });
+      const keys = members.map((m) => m.storyKey).filter((k): k is string => k !== null);
+      const verdict = judgeLane(members, await fetchApprovedStories(keys, source));
+      expect(verdict.ok, verdict.message).toBe(true);
+    },
+    LANE_READ_BUDGET_MS,
+  );
 });
 
 // ── THE GUARD CAN FAIL ──────────────────────────────────────────────────────
@@ -127,6 +148,86 @@ describe('the acceptance lane holds only IN-FLIGHT stories (MOTIR-2770)', () => 
 // same judgement the check above runs, on fixtures.
 
 const SOURCE: StatusSource = { baseUrl: 'https://motir.test', token: 't', authMode: 'bearer' };
+
+// ── THE BATCH INSTRUMENT (MOTIR-4901) ───────────────────────────────────────
+//
+// A `fetchImpl` that answers NOTHING until every expected read has been ISSUED.
+// It is the only shape that can separate a batch from a loop without measuring
+// wall-clock time on a shared box: a serial implementation deadlocks against it
+// by construction, because read 1 cannot resolve until read N has started and
+// read N cannot start until read 1 resolves.
+//
+// The deadline is what turns that deadlock into a legible failure instead of a
+// 15 s timeout: it rejects the pending read, the guard's own transport `catch`
+// skips that key, and the assertions below then report `maxInFlight: 1` and an
+// empty set rather than a bare "Test timed out".
+function batchedFetch(
+  expected: number,
+  isApproved: (key: string) => boolean = () => false,
+  deadlineMs = 2_000,
+) {
+  const started: string[] = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+
+  let open!: () => void;
+  const allStarted = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `only ${started.length} of ${expected} reads had been issued after ${deadlineMs}ms — ` +
+              'the reads are SERIAL',
+          ),
+        ),
+      deadlineMs,
+    );
+  });
+  // Losing a race is not an unhandled rejection.
+  deadline.catch(() => {});
+
+  const impl = (async (url: string) => {
+    const key = url.split('/work-items/')[1].split('/')[0];
+    started.push(key);
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    if (started.length === expected) {
+      clearTimeout(timer);
+      open();
+    }
+    // ⚠️ `finally`, and it is load-bearing. Decrementing after the `await`
+    // never runs when the deadline REJECTS, so a serial implementation left
+    // every read counted as in flight for ever and `maxInFlight` climbed to N
+    // — the instrument reported the property it was built to falsify. Measured:
+    // the serial control passed both `maxInFlight` assertions before this line.
+    try {
+      await Promise.race([allStarted, deadline]);
+    } finally {
+      inFlight -= 1;
+    }
+    return {
+      ok: true,
+      json: async () => ({ evidence: isApproved(key) ? { status: 'approved' } : null }),
+    };
+  }) as unknown as typeof fetch;
+
+  return {
+    impl,
+    get started() {
+      return started;
+    },
+    get maxInFlight() {
+      return maxInFlight;
+    },
+  };
+}
+
+const laneKeys = (n: number) => Array.from({ length: n }, (_, i) => `MOTIR-${5000 + i}`);
 
 describe('the guard itself', () => {
   it('FAILS a spec whose story is already approved, naming it and both remedies', () => {
@@ -241,6 +342,118 @@ describe('the guard itself', () => {
     // The message has to reach a developer who has never read this story.
     expect(read.message).toContain("GUARD'S OWN WIRING");
     expect(read.message).toContain('the route is not deployed on this origin');
+  });
+
+  // ── THE COST MODEL (MOTIR-4901) ───────────────────────────────────────────
+  //
+  // The guard read one story at a time, each `await`ed before the next began,
+  // against `https://app.motir.co` from a GitHub runner, under the root
+  // config's 15 s default. Its runtime was therefore `N × round-trip` with `N`
+  // = the number of acceptance specs — a number that only ever grows — and at
+  // fourteen members it timed out in the merge queue. A timeout is the WORST
+  // failure this guard has: it is the absence of a verdict wearing the same
+  // colour as a dirty lane, and it arrives exactly when the lane is largest.
+
+  it('issues every key in ONE batch — it cannot finish until all N reads have STARTED', async () => {
+    // The proof a serial implementation can never satisfy: this `fetchImpl`
+    // resolves nothing until all fourteen reads are in flight.
+    const keys = laneKeys(14);
+    const fetcher = batchedFetch(keys.length, (key) => key === 'MOTIR-5003');
+
+    const approved = await fetchApprovedStories(keys, SOURCE, fetcher.impl);
+
+    expect(fetcher.started).toHaveLength(keys.length);
+    expect(fetcher.maxInFlight).toBe(keys.length);
+    expect([...approved]).toEqual(['MOTIR-5003']);
+  });
+
+  it.each([14, 40])('is FLAT in N — %i members are still ONE batch, one round trip', async (n) => {
+    // The lane's SIZE cannot silently re-create the defect: whatever N is, the
+    // reads are issued together, so the cost is one round trip and the guard's
+    // budget stops being consumed by arrivals.
+    const fetcher = batchedFetch(n);
+
+    await fetchApprovedStories(laneKeys(n), SOURCE, fetcher.impl);
+
+    expect(fetcher.maxInFlight).toBe(n);
+  });
+
+  it('a rejecting key does NOT discard the batch — the trap `Promise.all` sets', async () => {
+    // The concurrent form's own hazard, and the reason the transport `catch`
+    // lives INSIDE the mapped read rather than around the aggregation: a bare
+    // `Promise.all` over throwing reads loses every sibling to one flaky hop.
+    // Survivors on BOTH sides of the rejection are kept, in input order.
+    const approved = await fetchApprovedStories(['MOTIR-1', 'MOTIR-2', 'MOTIR-3'], SOURCE, (async (
+      url: string,
+    ) => {
+      if (url.includes('MOTIR-2')) throw new Error('ECONNRESET');
+      return { ok: true, json: async () => ({ evidence: { status: 'approved' } }) };
+    }) as unknown as typeof fetch);
+
+    expect([...approved]).toEqual(['MOTIR-1', 'MOTIR-3']);
+  });
+
+  it('returns EXACTLY the approved keys out of a mixed batch', async () => {
+    // `approved` / a non-approved receipt / no receipt at all, answered in one
+    // batch — the set the caller judges the lane against is unchanged.
+    const approved = await fetchApprovedStories(
+      ['MOTIR-1', 'MOTIR-2', 'MOTIR-3', 'MOTIR-4'],
+      SOURCE,
+      (async (url: string) => ({
+        ok: true,
+        json: async () => ({
+          evidence: /MOTIR-(2|4)\//.test(url)
+            ? { status: 'approved' }
+            : url.includes('MOTIR-3')
+              ? { status: 'pending' }
+              : null,
+        }),
+      })) as unknown as typeof fetch,
+    );
+
+    expect([...approved].sort()).toEqual(['MOTIR-2', 'MOTIR-4']);
+  });
+
+  it('throws for the FIRST key in INPUT order, not the first response to land', async () => {
+    // The serial loop's own choice, preserved. Under a batch every key is
+    // requested, so WHICH failure surfaces would otherwise be decided by the
+    // network — and a guard whose error message changes run to run is a guard
+    // nobody can act on. `MOTIR-2` answers first here; `MOTIR-1` is reported.
+    let err: unknown;
+    try {
+      await fetchApprovedStories(['MOTIR-1', 'MOTIR-2'], SOURCE, (async (url: string) => {
+        if (url.includes('MOTIR-2')) return { ok: false, status: 403 };
+        await Promise.resolve();
+        return { ok: false, status: 405 };
+      }) as unknown as typeof fetch);
+    } catch (caught) {
+      err = caught;
+    }
+
+    expect(err).toBeInstanceOf(LaneGuardReadError);
+    expect((err as LaneGuardReadError).storyKey).toBe('MOTIR-1');
+    expect((err as LaneGuardReadError).status).toBe(405);
+  });
+
+  it('the network-bound case declares its OWN budget, and the GLOBAL default is untouched', () => {
+    // The knob this card exists to refuse. Raising `vitest.config.ts`'s
+    // `testTimeout` would have made today's red go away and hidden every other
+    // boundary-slow fixture in the suite behind the same number — so the budget
+    // is declared where the work is, the way `vitest.guards.config.ts` does it,
+    // and the global is asserted so a later edit cannot quietly take the other
+    // route.
+    const root = path.join(__dirname, '..');
+    expect(fs.readFileSync(path.join(root, 'vitest.config.ts'), 'utf8')).toContain(
+      'testTimeout: 15_000,',
+    );
+    expect(LANE_READ_BUDGET_MS).toBeGreaterThan(15_000);
+    // And the budget is actually PASSED to the network-bound case — a constant
+    // nobody hands to an `it()` is a comment. Whitespace-stripped so prettier
+    // may wrap the call either way (it has already wrapped it once).
+    const self = fs
+      .readFileSync(path.join(__dirname, 'e2e-acceptance-lane-membership.test.ts'), 'utf8')
+      .replace(/\s+/g, '');
+    expect(self).toContain('},LANE_READ_BUDGET_MS');
   });
 
   it('sends the OIDC marker on the keyless arm, and only there', async () => {
