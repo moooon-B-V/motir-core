@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
-import { signIn } from './_helpers/shell-session';
+import { signIn, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { signUp as apiSignUp, createProject, TEST_PASSWORD } from './_helpers/work-item-setup';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { watchersService } from '@/lib/services/watchersService';
@@ -397,5 +397,212 @@ test.describe('the Workbench journey', () => {
     // the product no longer offers a door to a room it can open only sometimes.
     await expect(page.getByRole('link', { name: 'Workbench', exact: true })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Boards', exact: true })).toHaveCount(0);
+  });
+});
+
+// ── THE PAGER AND THE KIND ORDER (Story MOTIR-4850 · MOTIR-4855) ────────────
+//
+// The story's `verification_recipe`, automated. Everything above this line is
+// MOTIR-4777's walk over the same surface; this is the paging half, seeded at
+// the SIZE the assertions need rather than at the smallest size that renders:
+// To do genuinely spans more than two pages, and Watching's `in_progress` group
+// genuinely overflows one page on its own. A fixture that fits on one page
+// would let every assertion below pass against a surface with no paging at all.
+//
+// ⚠️ NOTHING HERE WAITS AN INTERVAL. Every step waits on an authoritative
+// signal — a rendered row, a URL, a `disabled` attribute — per CLAUDE.md § E2E.
+
+/** The five kinds' lucide glyphs, in `READY_KIND_RANK` order. The icon is
+ *  `aria-hidden` (the identifier carries the accessible name), so the ORDER is
+ *  read off the rendered class rather than off the accessibility tree. */
+const GLYPH_RANK: Record<string, number> = {
+  'lucide-list-checks': 0, // subtask
+  'lucide-bug': 1,
+  'lucide-square-check-big': 2, // task
+  'lucide-book-open': 3, // story
+  'lucide-zap': 4, // epic
+};
+
+const PAGER_OWNER = 'pager-owner@example.com';
+const PAGER_EMPTY = 'pager-empty@example.com';
+
+/** The rendered rows' kind ranks, in DOM order. */
+async function kindRanks(page: import('@playwright/test').Page): Promise<number[]> {
+  const classes = await page
+    .locator('[data-testid^="workbench-row-"]')
+    .evaluateAll((rows) =>
+      rows.map((row) => row.querySelector('svg[class*="lucide-"]')?.getAttribute('class') ?? ''),
+    );
+  return classes.map((cls) => {
+    const hit = Object.keys(GLYPH_RANK).find((g) => cls.split(/\s+/).includes(g));
+    return hit === undefined ? -1 : GLYPH_RANK[hit]!;
+  });
+}
+
+async function seedPaging() {
+  const owner = await apiSignUp(PAGER_OWNER);
+  // ⚠️ THE EMPTY READER NEEDS A PROJECT OF THEIR OWN. Without one the page
+  // renders the NO-PROJECT branch — a different screen, and a different card's
+  // (MOTIR-4815 retires it) — so the empty-tab assertion would be passing on
+  // the wrong state entirely.
+  const emptyReader = await apiSignUp(PAGER_EMPTY);
+  await createProject(emptyReader, 'Nothing here', 'PGE');
+  const project = await createProject(owner, 'Motir', 'PGR');
+  const ctx = { userId: owner.userId, workspaceId: owner.workspaceId };
+
+  const kinds = ['epic', 'story', 'task', 'bug', 'subtask'] as const;
+  // 55 rows over three pages at HOME_PAGE_SIZE = 25 — and seeded in the WRONG
+  // order (epics first) so a read that had kept `updatedAt DESC` would return
+  // this sequence reversed rather than sorted.
+  const toDo: string[] = [];
+  let story: string | undefined;
+  for (const kind of kinds) {
+    for (let i = 0; i < 11; i += 1) {
+      // A subtask needs a parent (the kind-parent matrix); the stories seeded
+      // one loop earlier are the legal home.
+      const item = await workItemsService.createWorkItem(
+        {
+          projectId: project.id,
+          kind,
+          title: `${kind} ${i}`,
+          ...(kind === 'subtask' ? { parentId: story! } : {}),
+        },
+        ctx,
+      );
+      if (kind === 'story' && story === undefined) story = item.id;
+      toDo.push(item.id);
+    }
+  }
+  // 30 watched rows in the MOVING band — more than one page on its own — and 6
+  // waiting, so the boundary falls inside page 2.
+  //
+  // ⚠️ THE SIX WAITING ROWS ARE IN **To do** AS WELL, and that is the product
+  // rather than the fixture: Watching is a different AUDIENCE, not a partition
+  // of the work tabs, so a row the reader both owns and follows is returned by
+  // both reads (MOTIR-2655 asserts the overlap on purpose). So To do holds
+  // 55 + 6 = 61 and Watching holds 30 + 6 = 36.
+  const moving: string[] = [];
+  for (let i = 0; i < 30; i += 1) {
+    const item = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: `Watched moving ${i}` },
+      ctx,
+    );
+    moving.push(item.id);
+  }
+  await prisma.workItem.updateMany({
+    where: { id: { in: moving } },
+    data: { status: 'in_progress' },
+  });
+  const waiting: string[] = [];
+  for (let i = 0; i < 6; i += 1) {
+    const item = await workItemsService.createWorkItem(
+      { projectId: project.id, kind: 'task', title: `Watched waiting ${i}` },
+      ctx,
+    );
+    waiting.push(item.id);
+  }
+  // Everything the reader created is auto-watched; unwatch the To-do set so the
+  // Watching tab holds exactly the 36 this fixture is about.
+  for (const id of toDo) await watchersService.unwatch(id, ctx);
+  await prisma.workItem.updateMany({
+    where: { id: { in: [...toDo, ...moving, ...waiting] } },
+    data: { assigneeId: owner.userId, reporterId: owner.userId },
+  });
+  return { owner, project };
+}
+
+test.describe('the pager and the kind order', () => {
+  test('a reader walks their own work by page, in ready order, in both languages', async ({
+    page,
+  }) => {
+    await seedPaging();
+    await signIn(page, PAGER_OWNER, TEST_PASSWORD);
+
+    // 1 ── the footer reads the range and the REAL total, and the run is there.
+    const footer = page.getByRole('navigation', { name: 'Pagination' });
+    await expect(page.getByText(/Showing 1–25 of 61/)).toBeVisible();
+    await expect(footer).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Page 3' })).toBeVisible();
+
+    // 6a ── the order, WITHIN page one, before the boundary is crossed.
+    const pageOne = await kindRanks(page);
+    expect(pageOne).toHaveLength(25);
+    expect(pageOne, 'page 1 is not in kind order').toEqual([...pageOne].sort((a, b) => a - b));
+
+    // 2 ── click page 3. The authoritative signal is the RENDERED range line,
+    //      which only the server can produce for the third window.
+    await page.getByRole('button', { name: 'Page 3' }).click();
+    await expect(page.getByText(/Showing 51–61 of 61/)).toBeVisible();
+    await expect(page).toHaveURL(/\?page=3$/);
+    const pageThree = await kindRanks(page);
+    expect(pageThree).toHaveLength(11);
+
+    // 6b ── THE ORDER ACROSS A BOUNDARY, which a per-page assertion cannot see:
+    //      the last rank on page 1 is ≤ the first rank on page 3, and the
+    //      concatenation is non-decreasing.
+    expect(Math.max(...pageOne)).toBeLessThanOrEqual(Math.min(...pageThree));
+    const concatenated = [...pageOne, ...pageThree];
+    expect(concatenated, 'the pages are individually sorted and jointly not').toEqual(
+      [...concatenated].sort((a, b) => a - b),
+    );
+    // SENSITIVITY: the walk really did cross kinds, so the assertion above is
+    // not vacuously true of a single-kind run.
+    expect(new Set(concatenated).size).toBeGreaterThan(1);
+
+    // 3 ── the back chevron returns page two.
+    await page.getByRole('button', { name: 'Previous page' }).click();
+    await expect(page.getByText(/Showing 26–50 of 61/)).toBeVisible();
+    await expect(page).toHaveURL(/\?page=2$/);
+
+    // 4 ── page one carries NO param, and prev is inert there.
+    await page.getByRole('button', { name: 'Page 1' }).click();
+    await expect(page.getByText(/Showing 1–25 of 61/)).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
+    await expect(page.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+
+    // 5 ── every other tab carries the footer with its OWN total.
+    await page.getByTestId('workbench-tab-watching').click();
+    await expect(page.getByText(/Showing 1–25 of 36/)).toBeVisible();
+
+    // 7 ── Watching's bands. Page 1 is wholly under `In progress`, because the
+    //      moving group is larger than one page.
+    await expect(page.getByRole('rowheader')).toHaveCount(1);
+    await expect(page.getByRole('rowheader')).toHaveText('In progress');
+    // …and the page where the boundary falls shows In progress ABOVE To do.
+    await page.getByRole('button', { name: 'Page 2' }).click();
+    await expect(page.getByText(/Showing 26–36 of 36/)).toBeVisible();
+    await expect(page.getByRole('rowheader')).toHaveText(['In progress', 'To do']);
+
+    // 11 ── a hand-edited page: non-numeric, and past the end. Both land on a
+    //       real page rather than an error.
+    await page.goto('/workbench?tab=watching&page=not-a-number');
+    await expect(page.getByText(/Showing 1–25 of 36/)).toBeVisible();
+    await page.goto('/workbench?tab=watching&page=999');
+    await expect(page.getByText(/Showing 26–36 of 36/)).toBeVisible();
+
+    // 10 ── `zh`. The pager's range line and its controls' accessible names are
+    //       the Chinese strings, so an untranslated control fails the walk.
+    await page.context().addCookies([{ name: 'NEXT_LOCALE', value: 'zh', url: page.url() }]);
+    await page.goto('/workbench');
+    await expect(page.getByText(/显示第 1–25 项，共 61 项/)).toBeVisible();
+    await expect(page.getByRole('navigation', { name: '分页' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '下一页' })).toBeVisible();
+    // Asserted NEGATIVELY too: the English literals this story removed must not
+    // be reachable on a Chinese page.
+    await expect(page.getByRole('navigation', { name: 'Pagination' })).toHaveCount(0);
+  });
+
+  test('an EMPTY tab shows its drawn empty state and NO pager', async ({ page }) => {
+    await seedPaging();
+    // The second seeded reader owns nothing, so every tab is empty for them.
+    await signIn(page, PAGER_EMPTY, TEST_PASSWORD);
+
+    await expect(page.getByRole('heading', { name: 'Nothing to start' })).toBeVisible();
+    // ⚠️ THE ABSENCE IS THE ASSERTION. "A pager on every tab", read literally,
+    // would put `Showing 0–0 of 0` under an empty state — a second, quieter way
+    // of saying what the empty state has just said (`design/workbench/` Panel
+    // 10). Asserting only the empty state's presence would pass either way.
+    await expect(page.getByRole('navigation', { name: 'Pagination' })).toHaveCount(0);
+    await expect(page.getByText(/Showing/)).toHaveCount(0);
   });
 });
