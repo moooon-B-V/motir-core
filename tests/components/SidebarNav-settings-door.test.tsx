@@ -71,7 +71,12 @@ describe('the Project settings door (design panel 1)', () => {
     // The decided treatment: no disabled stand-in, no "ask an admin" row. The
     // footer is simply one row shorter, so the rows below close up.
     expect(screen.queryByText('Settings')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Job runs' })).toBeTruthy();
+    // ⚠️ AMENDED (MOTIR-4847): this used to also assert a `Job runs` row here.
+    // Both workspace rows left this section — the capability is a row in the
+    // workspace area's own rail above the reveal, and `JobRunsFoldInSection` on
+    // `/settings/organization` below it. `Git` is what survives beside the door,
+    // and it is organisation-scoped rather than workspace-scoped.
+    expect(screen.queryByRole('link', { name: 'Job runs' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Git' })).toBeTruthy();
   });
 
@@ -106,6 +111,42 @@ describe('the Project settings door (design panel 1)', () => {
   // workspace-tier reader reaches is unchanged and is still covered by the
   // org/workspace rows below; what this case tested was the branch, and the
   // branch is what the story removed.
+  //
+  // ⚠️ AND MOTIR-4843 RE-ADDED IT ON `main` WHILE THIS BRANCH WAS OPEN, in its
+  // MOTIR-3502 form — `renderRail(undefined, null, true)` asserting
+  // `/settings/workspace`, and `false` asserting `/settings/organization`. It is
+  // dropped again HERE rather than merged, for the reason above and not because
+  // of the conflict: `renderRail(..., null, ...)` passes `activeProject={null}`,
+  // which is the state MOTIR-4870 removed. Keeping it would have re-armed a case
+  // whose fixture the product can no longer produce. The section-absent guard
+  // MOTIR-4847 added beside it is unrelated and is kept in full.
+
+  it('⚠️ the section itself is ABSENT when its last row filters away (MOTIR-4847)', () => {
+    // The empty arm `design/shell/rail-bottom-section.mock.html` draws: no
+    // heading, no separator, no empty state — an empty CONTAINER is the failure
+    // this guards, because `Sidebar` draws a separator between sections and one
+    // above a row that is not there reads as a loading error rather than as
+    // policy.
+    //
+    // ⚠️ THE ARM IS NOT REACHABLE FROM THIS COMPONENT YET, and saying so is the
+    // point of this case. `Git` is still an unconditional member of the section,
+    // so `bottomItems` is never empty in the shipped rail. Its removal is
+    // MOTIR-4643's (the `Code` nav row), which MOTIR-4640 already amended the
+    // design asset for. So this asserts the CURRENT floor exactly — the section
+    // present with `Git` alone — which is the assertion that will FAIL, loudly
+    // and in the right file, on the day that row leaves and the guard in
+    // `SidebarNav` starts carrying the weight it was written for.
+    const { container } = renderRail(MEMBER);
+    // `Sidebar` wraps each section in its own div inside the scroll container
+    // and draws the separator INSIDE that wrapper, so an empty section is
+    // exactly "a wrapper with no rows" — which is what this walks for.
+    const wrappers = [...(container.querySelector('.overflow-y-auto')?.children ?? [])];
+    const rowsPerSection = wrappers.map((w) =>
+      [...w.querySelectorAll('a')].map((a) => (a.textContent ?? '').trim()),
+    );
+    expect(rowsPerSection.filter((rows) => rows.length === 0)).toEqual([]);
+    expect(rowsPerSection.at(-1)).toEqual(['Git']);
+  });
 });
 
 describe('the settings rail inside the area (design panel 2)', () => {
@@ -167,14 +208,30 @@ describe('the settings door yields to a more specific workspace sub-route', () =
   const currentRows = () =>
     screen.getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page');
 
-  it.each([
-    ['/settings', 'the settings home itself'],
-    ['/settings/workspace', "the workspace area's own page"],
-  ])('reads current at %s — %s', (path) => {
-    pathname = path;
+  it('reads current at /settings — the settings home itself', () => {
+    pathname = '/settings';
     renderRail(ADMIN, PROJECT, true);
     expect(current()).toBe('page');
     expect(currentRows()).toHaveLength(1);
+  });
+
+  it('⚠️ `/settings/workspace` no longer reaches this predicate AT ALL (MOTIR-4846)', () => {
+    // ⚠️ THIS CASE WAS LEFT RED BY MOTIR-4846 AND CAUGHT HERE, ONE CARD LATE.
+    // It was the second row of an `it.each` asserting the door reads CURRENT at
+    // `/settings/workspace`, which was true while that route had no rail of its
+    // own. MOTIR-4846 gave it one: `SidebarNav` now returns the workspace area's
+    // Sidebar for any `isWorkspaceSettingsPath`, before a bottom section is
+    // built — so there is no door here to read current, exactly as MOTIR-4710
+    // made true for `/settings/organization` in the case below.
+    //
+    // It is REPLACED by its negation rather than deleted, for the reason that
+    // case gives: "no bottom Settings row here" is the new contract, and
+    // deleting the line would leave the change recorded nowhere. The premise it
+    // lost is the same one the two `it.each` rows further down lost with
+    // MOTIR-4847, which is why all three now read the same way.
+    pathname = '/settings/workspace';
+    renderRail(ADMIN, PROJECT, true);
+    expect(settingsRow()).toBeNull();
   });
 
   it('⚠️ `/settings/organization` no longer reaches this predicate AT ALL (MOTIR-4710)', () => {
@@ -201,17 +258,42 @@ describe('the settings door yields to a more specific workspace sub-route', () =
   // REPLACED by the org one rather than kept alongside it: a clause that yields
   // at a path nothing can navigate to is not a passing test, it is an untested
   // clause that still looks covered.
-  it.each([
-    ['/settings/workspace/security', 'Security'],
-    ['/settings/workspace/jobs', 'Job runs'],
-    ['/settings/organization/git', 'Git'],
-  ])('yields at %s, and the %s row takes the highlight instead', (path, owner) => {
-    pathname = path;
-    renderRail(ADMIN, PROJECT, true);
-    expect(current()).toBeNull();
-    expect(currentRows()).toHaveLength(1);
-    expect(currentRows()[0]?.textContent).toContain(owner);
-  });
+  // ⚠️ TWO OF THE THREE ROWS THIS YIELDED TO ARE GONE (Story MOTIR-4843 ·
+  // MOTIR-4847). `Security` and `Job runs` left this section, and their two
+  // negation clauses left the predicate with them — deliberately, not as
+  // collateral: `/settings/workspace/*` now returns the workspace AREA's own
+  // Sidebar before this section is ever built (MOTIR-4846's fourth branch), so
+  // those clauses became doubly unreachable, and MOTIR-4368's whole finding
+  // about this predicate is that an unreachable clause still READS as covered.
+  //
+  // `Git` is the only sub-route row left, so it is the only clause left. The
+  // table is kept as a table rather than collapsed to one case, because the
+  // shape — "yield, and name who took the highlight" — is what a future row
+  // added here has to satisfy.
+  it.each([['/settings/organization/git', 'Git']])(
+    'yields at %s, and the %s row takes the highlight instead',
+    (path, owner) => {
+      pathname = path;
+      renderRail(ADMIN, PROJECT, true);
+      expect(current()).toBeNull();
+      expect(currentRows()).toHaveLength(1);
+      expect(currentRows()[0]?.textContent).toContain(owner);
+    },
+  );
+
+  it.each([['/settings/workspace/security'], ['/settings/workspace/jobs']])(
+    'renders no bottom section AT ALL on %s — the area branch answers first',
+    (path) => {
+      // The replacement for the two deleted rows of the table above, and a
+      // stronger claim than the one it replaces: not "the door stands down here"
+      // but "this block never runs here". Driving it is what stops the deleted
+      // clauses from being re-added later as a defensive extra.
+      pathname = path;
+      renderRail(ADMIN, PROJECT, true);
+      expect(settingsRow()).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Git' })).toBeNull();
+    },
+  );
 
   it('reads current nowhere outside the settings area — the first clause', () => {
     pathname = '/dashboard';

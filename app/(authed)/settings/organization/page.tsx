@@ -24,6 +24,7 @@ import { OrgGeneralCard } from './_components/OrgGeneralCard';
 import { AcceptanceVideoCard } from './_components/AcceptanceVideoCard';
 import { BillingCard } from './_components/BillingCard';
 import { WorkspaceFoldInSection } from './_components/WorkspaceFoldInSection';
+import { JobRunsFoldInSection } from './_components/JobRunsFoldInSection';
 import { DangerZoneCard } from './_components/DangerZoneCard';
 
 // Organization settings (Story 6.10.5, design/org-admin panel 2) — the
@@ -32,7 +33,15 @@ import { DangerZoneCard } from './_components/DangerZoneCard';
 // org cookie (the shell switcher sets it). NO billing/credit surface here —
 // that is 7.12.5 / Epic 8 (only a passive "Coming soon" placeholder).
 
-export default async function OrganizationSettingsPage() {
+export default async function OrganizationSettingsPage({
+  searchParams,
+}: {
+  /** ⚠️ READ ONLY BY THE `Job runs` FOLD-IN (Story MOTIR-4843 · MOTIR-4849).
+   *  Below the workspace-tier reveal this page hosts that dashboard, and a
+   *  dashboard whose tabs, filters and pages are URL-driven needs a URL on the
+   *  page that renders it. Every other section here ignores these. */
+  searchParams: Promise<{ tab?: string; status?: string; page?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -54,10 +63,11 @@ export default async function OrganizationSettingsPage() {
   //
   // `preferredOrganizationId` is the same helper the (authed) layout composes, so
   // the two cannot drift again.
-  const [ctx, myWorkspaces, cookieStore] = await Promise.all([
+  const [ctx, myWorkspaces, cookieStore, jobsParams] = await Promise.all([
     getWorkspaceContext(),
     workspacesService.listUserWorkspaces(session.user.id),
     cookies(),
+    searchParams,
   ]);
   const activeWorkspace = ctx ? (myWorkspaces.find((w) => w.id === ctx.workspaceId) ?? null) : null;
   const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
@@ -143,9 +153,11 @@ export default async function OrganizationSettingsPage() {
           role={current.role}
           isAdmin={isAdmin}
           actorUserId={session.user.id}
+          actorEmail={session.user.email}
           acceptanceVideoEnabled={org.acceptanceVideoEnabled}
           orgWorkspaceCount={orgWorkspaces.length}
           foldInWorkspace={foldInWorkspace}
+          jobsParams={jobsParams}
         />
       </Suspense>
     </div>
@@ -165,18 +177,22 @@ async function OrgPaneBody({
   role,
   isAdmin,
   actorUserId,
+  actorEmail,
   acceptanceVideoEnabled,
   orgWorkspaceCount,
   foldInWorkspace,
+  jobsParams,
 }: {
   orgId: string;
   orgName: string;
   role: React.ComponentProps<typeof OrgGeneralCard>['role'];
   isAdmin: boolean;
   actorUserId: string;
+  actorEmail: string;
   acceptanceVideoEnabled: boolean;
   orgWorkspaceCount: number;
   foldInWorkspace: { id: string } | null;
+  jobsParams: { tab?: string; status?: string; page?: string };
 }) {
   const t = await getTranslations('orgAdmin');
   const [{ total: memberCount }, aiAccess] = await allSettledOrThrow([
@@ -238,6 +254,25 @@ async function OrgPaneBody({
           workspaceId={foldInWorkspace.id}
           actorUserId={actorUserId}
           workspaceCount={orgWorkspaceCount}
+        />
+      ) : null}
+
+      {/* Story MOTIR-4843 · MOTIR-4861 — the FOURTH workspace-tier capability's
+          fold-in, and the last one to get one. Same condition as the block
+          above, so all four surfaces hide and reappear together; a SEPARATE
+          section rather than a card inside it, because this is an operator
+          surface rather than workspace CONFIG — which is also why the area rail
+          gives it a group of its own.
+
+          ⚠️ Gated on `foldInWorkspace` — a WORKSPACE MEMBERSHIP — and never on
+          `isAdmin`. §6d gates this page per SECTION, and the source surface
+          checks no role at all. */}
+      {foldInWorkspace ? (
+        <JobRunsFoldInSection
+          workspaceId={foldInWorkspace.id}
+          actorUserId={actorUserId}
+          actorEmail={actorEmail}
+          searchParams={jobsParams}
         />
       ) : null}
 

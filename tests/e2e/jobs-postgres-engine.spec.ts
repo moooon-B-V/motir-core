@@ -1,8 +1,9 @@
 // E2E: the story's operator journey ON THE POSTGRES ENGINE
 // (Story MOTIR-3414 · Subtask MOTIR-3427 — closes the Story).
 //
-// @smoke — the story's `verification_recipe`, automated: open
-// /settings/workspace/jobs, trigger the pilot job on the NEW engine, watch its
+// @smoke — the story's `verification_recipe`, automated: open the jobs
+// dashboard (see `gotoJobs` — the address moved for this fixture in
+// MOTIR-4861), trigger the pilot job on the NEW engine, watch its
 // run appear and succeed, force it to fail until it dead-letters, press Replay,
 // watch the replay succeed.
 //
@@ -114,8 +115,14 @@ async function sendInvite(page: Page, inviteeEmail: string): Promise<void> {
   ).toBeVisible();
 }
 
+// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
+// sign-up gets ONE auto-created workspace — the COLLAPSED state — and
+// `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
+// workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
+// settings home instead (`JobRunsFoldInSection`): same component, same reads,
+// same tabs and filters, with its links built from THIS address.
 async function gotoJobs(page: Page): Promise<void> {
-  await page.goto('/settings/workspace/jobs');
+  await page.goto('/settings/organization');
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 }
 

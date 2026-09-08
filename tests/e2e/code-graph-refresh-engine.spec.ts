@@ -286,7 +286,14 @@ test('the coalesced run is RENDERED on the operator dashboard @smoke', async ({
 
   // The only user-visible thing this story could have broken: the ledger DTOs the
   // jobs surface reads. Unchanged by the collapse, and this is what says so.
-  await page.goto('/settings/workspace/jobs');
+  //
+  // ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
+  // sign-up gets ONE auto-created workspace — the COLLAPSED state — and
+  // `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
+  // workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
+  // settings home instead (`JobRunsFoldInSection`): same component, same reads,
+  // same tabs and filters, with its links built from THIS address.
+  await page.goto('/settings/organization');
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
   const row = page.getByText(REFRESH_JOB, { exact: false }).first();
   await expect(row).toBeVisible();

@@ -138,7 +138,13 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // PANEL 1. The door is not there, and nothing marks the gap: no disabled row,
   // no tooltip, no "ask an admin" line. The rows below simply close up.
   await expect(settingsDoor(page)).toHaveCount(0);
-  await expect(rail(page).getByRole('link', { name: 'Job runs' })).toBeVisible();
+  // ⚠️ `Job runs` LEFT THIS SECTION (Story MOTIR-4843 · MOTIR-4847). It was a
+  // workspace-tier pane rendered as a loose row in the PROJECT's rail; it is a
+  // row in the workspace area's own rail above the reveal, and folded into
+  // `/settings/organization` below it. `Git` is what still stands beside the
+  // door — and it is the one this case needs, because the claim is that the
+  // rows below the missing door close up rather than the section vanishing.
+  await expect(rail(page).getByRole('link', { name: 'Job runs' })).toHaveCount(0);
   await expect(rail(page).getByRole('link', { name: 'Git' })).toBeVisible();
 
   // ⌘K offers no settings deep link either — the palette reads the same registry.

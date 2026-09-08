@@ -104,22 +104,32 @@ describe('the reads (MOTIR-3448)', () => {
     // "the role selects which list is fetched". Measured: it does not — the tab
     // is narrowed by `showSystemTab`, an env var compared against the session
     // email, with no read behind it. All three are independent.
-    const src = code(`${S}/workspace/jobs/page.tsx`);
+    // ⚠️ THE WAVE MOVED FILE, AND THE CLAIM DID NOT (Story MOTIR-4843 ·
+    // MOTIR-4849). It was inline in `workspace/jobs/page.tsx`; it is now
+    // `_components/JobsPane.tsx`, because this surface gained a SECOND door —
+    // the fold-in on `/settings/organization` — and the fold-in had its own copy
+    // of these reads, pinned to the default view, which is how it shipped with
+    // every link inside it pointing at a 404.
+    //
+    // So the read is shared rather than duplicated, and this case follows it
+    // rather than being deleted: MOTIR-3448 row 11's measurement — role, DLQ
+    // count and the list in ONE wave — is exactly as true and exactly as worth
+    // guarding at its new address, and it now covers both doors at once.
+    const src = code(`${S}/workspace/jobs/_components/JobsPane.tsx`);
     expect(src).toMatch(/const \[role, dlqCount, list\] = await allSettledOrThrow\(\[/);
     expect(src).toMatch(/workspacesService\.getMemberRole\(userId, workspaceId\)/);
     expect(src).toMatch(/jobsDashboardService\.countDLQ\(/);
-    // The tab is still chosen ABOVE the wave, from the query string and the env.
-    const tab = src.indexOf('let requestedTab');
-    expect(tab).toBeGreaterThan(-1);
-    expect(src.indexOf('allSettledOrThrow([')).toBeGreaterThan(tab);
+    // The tab is still chosen ABOVE the wave — by `parseJobsParams`, in the HOST,
+    // which is what makes it one answer for both doors instead of two.
+    expect(code(`${S}/workspace/jobs/page.tsx`)).toMatch(/parseJobsParams\(/);
     // Three CALL sites, and they are the three arms of ONE ternary — so exactly
     // one read is issued, not three. Matched on the call form `list…({` so the
     // two `typeof jobsDashboardService.listX` type positions below do not count.
     const calls = src.match(/jobsDashboardService\.list\w+\(\{/g) ?? [];
     expect(calls).toHaveLength(3);
-    expect(src).toMatch(/requestedTab === 'dlq'\s*\?\s*jobsDashboardService\.listDLQ\(/);
+    expect(src).toMatch(/tab === 'dlq'\s*\?\s*jobsDashboardService\.listDLQ\(/);
     // …and all three sit inside the wave, so none is a second, earlier read.
-    const wave = src.slice(src.indexOf('allSettledOrThrow(['), src.indexOf('const isOwner'));
+    const wave = src.slice(src.indexOf('allSettledOrThrow(['), src.indexOf('const dlq ='));
     expect(wave.match(/jobsDashboardService\.list\w+\(\{/g) ?? []).toHaveLength(3);
   });
 

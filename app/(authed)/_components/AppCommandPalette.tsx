@@ -352,11 +352,20 @@ export function AppCommandPalette({
     icon: <ShieldCheck />,
     onSelect: () => go('/settings/organization/security'),
   });
-  // The WORKSPACE half (MOTIR-3647), under the SAME condition as its rail row:
-  // below the tier-reveal threshold `/settings/workspace/security` 404s, so an
-  // entry here would offer a dead address. The control is still reachable at
-  // that count — through the org-settings fold-in, which the entry above lands
-  // beside.
+  // The WORKSPACE half (MOTIR-3647), under the same condition the route itself
+  // applies: below the tier-reveal threshold `/settings/workspace/security`
+  // 404s, so an entry here would offer a dead address. The control is still
+  // reachable at that count — through the org-settings fold-in, which the entry
+  // above lands beside.
+  //
+  // ⚠️ THIS USED TO SAY "the same condition as ITS RAIL ROW", and that row is
+  // gone (Story MOTIR-4843 · MOTIR-4847): `Security` left the project rail's
+  // bottom section for the workspace area's own rail. The ACTION stays, and the
+  // predicate is unchanged — a palette action is a second door, and that story
+  // removes a door only where another covers the same room at the same reveal
+  // arm, which the area rail does. Only the sentence pointing at the departed
+  // row is re-worded, so the condition is stated against the route rather than
+  // against a row that no longer exists.
   if (isWorkspaceTierRevealed(workspaces.length)) {
     navActions.push({
       id: 'nav-workspace-security',

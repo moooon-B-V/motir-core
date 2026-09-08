@@ -409,7 +409,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       buildingInPublic={buildingInPublic}
                       cloudBilling={cloudBilling}
                       showPlanWithAi={showPlanWithAi}
-                      workspaceTierRevealed={workspaceTierRevealed}
                     />
                   }
                   sidebar={
@@ -423,6 +422,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
                           : null
                       }
+                      workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
                       billingAvailable={cloudBilling}
                       workspaceTierRevealed={workspaceTierRevealed}
                       publicProjectsAvailable={publicProjectsAvailable}
@@ -525,6 +525,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
                         : null
                     }
+                    workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
                     billingAvailable={cloudBilling}
                     workspaceTierRevealed={workspaceTierRevealed}
                     publicProjectsAvailable={publicProjectsAvailable}
