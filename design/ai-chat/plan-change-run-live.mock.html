@@ -651,6 +651,18 @@
             --tw-ring-color: var(--focus-ring-color);
           }
         }
+        .focus-visible\:ring-offset-2 {
+          &:focus-visible {
+            --tw-ring-offset-width: 2px;
+            --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width)
+              var(--tw-ring-offset-color);
+          }
+        }
+        .focus-visible\:ring-offset-background {
+          &:focus-visible {
+            --tw-ring-offset-color: var(--color-background);
+          }
+        }
         .hover\:bg-\(--el-surface-soft\) {
           &:hover {
             @media (hover: hover) {
@@ -665,6 +677,13 @@
             }
           }
         }
+        .hover\:opacity-90 {
+          &:hover {
+            @media (hover: hover) {
+              opacity: 90%;
+            }
+          }
+        }
         .active\:scale-\(--active-scale\) {
           &:active {
             scale: var(--active-scale);
@@ -673,6 +692,21 @@
         .placeholder\:text-\(--el-text-secondary\) {
           &::placeholder {
             color: var(--el-text-secondary);
+          }
+        }
+        .disabled\:pointer-events-none {
+          &:disabled {
+            pointer-events: none;
+          }
+        }
+        .disabled\:opacity-50 {
+          &:disabled {
+            opacity: 50%;
+          }
+        }
+        .disabled\:opacity-60 {
+          &:disabled {
+            opacity: 60%;
           }
         }
       }
@@ -2987,6 +3021,11 @@
         inherits: false;
         initial-value: 0px;
       }
+      @property --tw-ring-offset-color {
+        syntax: '*';
+        inherits: false;
+        initial-value: #fff;
+      }
       @property --tw-ring-offset-shadow {
         syntax: '*';
         inherits: false;
@@ -3009,6 +3048,7 @@
             --tw-inset-ring-shadow: 0 0 #0000;
             --tw-ring-inset: initial;
             --tw-ring-offset-width: 0px;
+            --tw-ring-offset-color: #fff;
             --tw-ring-offset-shadow: 0 0 #0000;
           }
         }
