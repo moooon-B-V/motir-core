@@ -105,9 +105,23 @@ test('@smoke jobs dashboard: empty states + sidebar link', async ({ page }) => {
   // Still a navigation rather than a `goto`, because what this case is FOR is
   // that the surface is reachable without knowing a URL.
   await page.goto('/dashboard');
+  // ⚠️ THROUGH THE ORG MENU, NOT THE RAIL'S `Settings` ROW (MOTIR-4876). That
+  // row reached this surface only because it was RE-POINTED at the settings
+  // home for a reader with no active project — §6d's collapse below the
+  // workspace-tier reveal, which `org-admin.spec.ts` describes from the other
+  // side ("the href now matches TWO elements and strict mode refuses"). Every
+  // member is inside a project now (MOTIR-4870), so the rail's row deep-links to
+  // PROJECT settings and the two hrefs are no longer the same address.
+  //
+  // The org control is the door that survives at every workspace count, and it
+  // keeps what this case is FOR: the surface is reachable without knowing a URL.
+  // Scoped to the menu's own list rather than by href, for the reason that spec
+  // gives — the scope is what the assertion always meant.
+  await page.getByRole('button', { name: 'Organization menu' }).click();
   await page
-    .getByRole('navigation', { name: 'Primary' })
-    .getByRole('link', { name: 'Settings' })
+    .getByRole('list')
+    .filter({ has: page.locator('a[href="/settings/organization/members"]') })
+    .locator('a[href="/settings/organization"]')
     .click();
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 
