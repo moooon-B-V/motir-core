@@ -149,7 +149,15 @@ async function payForTheSecondWorkspace(email: string): Promise<void> {
  * MOTIR-4130's finding exactly ("a count carried in two places is a count
  * nobody re-takes").
  */
-const BOTTOM_SECTION = ['Settings', 'Git'];
+// ⚠️ RE-MEASURED AGAIN (MOTIR-4643). `Git` left this section — the connection
+// LIFECYCLE is an org-admin act at Settings → Organisation → Git, and a member's
+// own account connect is at Settings → Account → Git, so both actions moved off
+// a PROJECT rail rather than being removed. The list is down to the door alone.
+//
+// This is the second re-measure, by the rule the comment above states: the
+// identical list lives in MOTIR-4239's vitest gate and is re-measured in the
+// same commit, because a count carried in two places is a count nobody re-takes.
+const BOTTOM_SECTION = ['Settings'];
 
 /** The Help menu's rows, in the order `HelpMenu` renders them. */
 const HELP_ROWS = ['Docs', 'Keyboard shortcuts', 'Legal documents'];

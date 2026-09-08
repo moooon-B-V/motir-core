@@ -30,6 +30,7 @@
 // makes this a stronger receipt than it was written to be.
 
 import { test, expect } from './_helpers/acceptance-video';
+import type { Page } from '@playwright/test';
 import { resetDatabase, db, adminDb } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
@@ -44,6 +45,16 @@ import {
 const REPO = E2E_INDEX_REPOS[0]!;
 const REPO_REF = indexRepoRef(REPO);
 const EMAIL = 'acceptance-code-index@example.com';
+
+/**
+ * The planning workspace, by the locator the overlay's own acceptance spec uses.
+ *
+ * ⚠️ IT OPENS AS A DIALOG ON A HOST PAGE, which is why "planning proceeds" is
+ * asserted on this and not on a heading: `/planning` redirects to
+ * `<host>?plan=…` and the workspace mounts over it, so the page's own `h1`
+ * belongs to the host and says nothing about whether planning is available.
+ */
+const workspace = (page: Page) => page.getByRole('dialog', { name: /plan/i });
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -96,8 +107,15 @@ test('the code index speaks: connected → indexed → stale after a push → no
     // follows degrades what a session KNOWS; none of them may stop it planning.
     // A pause that silently withheld the graph would re-create the code-blind
     // failure this story exists to end.
+    //
+    // ⚠️ THE WORKSPACE DIALOG, NOT AN `h1`. `/planning` is a pure REDIRECT
+    // (MOTIR-4732's forward for old links) — it has no heading of its own and
+    // forwards to a host page with the planning overlay opened on it. Asserting
+    // a level-1 heading here passed by accident against whatever the forward
+    // landed on, and stopped passing the moment the project had a repository and
+    // the overlay had a verdict to resolve first.
     await page.goto('/planning');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(workspace(page)).toBeVisible();
     await beat();
   });
 
@@ -203,7 +221,7 @@ test('the code index speaks: connected → indexed → stale after a push → no
     // watched five warnings appear, and the thing to be convinced of is that not
     // one of them stopped the product working.
     await page.goto('/planning');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(workspace(page)).toBeVisible();
     await beat();
   });
 });
