@@ -1,6 +1,7 @@
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
 import { resolveDriftCount } from '@/lib/codeGraph/driftCount';
+import { deriveRefreshFailing } from '@/lib/codeGraph/refreshReason';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
@@ -35,6 +36,8 @@ async function readFacts(
   rows: Awaited<ReturnType<typeof projectRepoRepository.listByProject>>;
   indexedRefs: Set<string>;
   runningRunIds: Set<string>;
+  /** Runs that reached a TERMINAL failure — the refresh nobody is coming back to. */
+  terminalRunIds: Set<string>;
   hasImplementedWork: boolean;
 }> {
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
@@ -70,10 +73,24 @@ async function readFacts(
       select: { id: true },
     });
 
+    // ⚠️ AND WHICH CLAIMED RUNS ARE TERMINALLY DEAD (MOTIR-2105) — the same
+    // pointer, asked the other question. `indexingRunId` resolving to a `running`
+    // row means `indexing`; resolving to a `failed` or `abandoned` one means the
+    // graph is behind and NOTHING IS COMING, which until this card was
+    // indistinguishable from a refresh merely queued behind others.
+    //
+    // The incident this card was split out for is the argument: 35 dead-letters
+    // over 48 hours, nobody noticed, and three days later the rate was unchanged.
+    // A DLQ tab is technically a surface; at that volume it reads as background.
+    const terminalRunIds = new Set(
+      await jobRunRepository.listTerminalCodeGraphRunIds(ctx.workspaceId, tx),
+    );
+
     return {
       rows,
       indexedRefs,
       runningRunIds: new Set(running.map((r) => r.id)),
+      terminalRunIds,
       hasImplementedWork: implemented !== null,
     };
   });
@@ -93,7 +110,10 @@ export async function resolveCodeContextState(
   projectId: string,
   ctx: AccessActorContext,
 ): Promise<CodeContextDTO> {
-  const { rows, indexedRefs, runningRunIds, hasImplementedWork } = await readFacts(projectId, ctx);
+  const { rows, indexedRefs, runningRunIds, terminalRunIds, hasImplementedWork } = await readFacts(
+    projectId,
+    ctx,
+  );
 
   const repos: CodeContextRepoDTO[] = rows.flatMap((row) => {
     // A row whose `githubRepoId` is null is PROPOSED, not realized — a plan for a
@@ -124,6 +144,17 @@ export async function resolveCodeContextState(
         // the render path on purpose; the count is computed by the recompute job
         // and read from a column, exactly like the head it is compared against.
         commitsBehind: resolveDriftCount(repo),
+        // ⚠️ IS THE REFRESH DEAD? (MOTIR-2105.) The one fact that separates a
+        // graph which will catch up from one that will keep drifting until
+        // somebody acts — and the fact the DLQ held privately while every
+        // product surface said only `stale`.
+        //
+        // Derived, never inferred from drift: a repository can be far behind
+        // with a perfectly healthy pipeline that has simply not run yet.
+        refreshFailing: deriveRefreshFailing({
+          indexingRunId: repo.indexingRunId,
+          terminalRunIds,
+        }),
       },
     ];
   });

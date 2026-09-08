@@ -32,6 +32,10 @@ function repo(commitsBehind: number | null) {
     indexState: 'stale' as const,
     indexedAt: null,
     commitsBehind,
+    // MOTIR-2105's field. These cases are about the THRESHOLD and never about a
+    // dead refresh, so it is false throughout — the two are independent facts,
+    // and a repository can be badly behind with a perfectly healthy pipeline.
+    refreshFailing: false,
   };
 }
 
@@ -85,7 +89,9 @@ describe('codeBlindPauseReason — what makes Motir stop DECIDING', () => {
     const ancient = {
       ...repo(0),
       verdict: 'current' as const,
-      indexedAt: '2024-01-01T00:00:00.000Z',
+      // A DATE, which is what the DTO carries — the string form typechecked
+      // only because `tsc --noEmit` does not cover `tests/`.
+      indexedAt: new Date('2024-01-01T00:00:00.000Z'),
     };
     expect(codeBlindPauseReason(ctx({ repos: [ancient] }))).toBeNull();
   });

@@ -139,7 +139,21 @@ function mockSubmitJob() {
 describe('aiPlanEditsService.submitAugment', () => {
   it('submits an augment job with the prompt + tenant + code context', async () => {
     vi.mocked(resolvePlanningCodeContext).mockResolvedValue({
-      repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main', indexed: true }],
+      repos: [
+        {
+          provider: 'github',
+          repoRef: 'o/r',
+          defaultBranch: 'main',
+          indexed: true,
+          // The freshness fields `JobCodeRepoState` requires. This fixture
+          // predates them and typechecked only because `tsc --noEmit` does not
+          // cover `tests/` — `pnpm typecheck` (the solution build) does.
+          indexState: 'indexed',
+          refreshInFlight: false,
+          indexedAt: null,
+          commitsBehind: null,
+        },
+      ],
     });
     mockSubmitJob();
 
@@ -528,7 +542,21 @@ describe('aiPlanEditsService — the generateExplanations opt-in rides every pla
     // the field is added to the envelope, it does not replace what the caller
     // built (the `code` hole included).
     vi.mocked(resolvePlanningCodeContext).mockResolvedValue({
-      repos: [{ provider: 'github', repoRef: 'o/r', defaultBranch: 'main', indexed: true }],
+      repos: [
+        {
+          provider: 'github',
+          repoRef: 'o/r',
+          defaultBranch: 'main',
+          indexed: true,
+          // The freshness fields `JobCodeRepoState` requires. This fixture
+          // predates them and typechecked only because `tsc --noEmit` does not
+          // cover `tests/` — `pnpm typecheck` (the solution build) does.
+          indexState: 'indexed',
+          refreshInFlight: false,
+          indexedAt: null,
+          commitsBehind: null,
+        },
+      ],
     });
     await aiPlanEditsService.submitReplan('MOTIR-100', ctxWithExplanations);
 

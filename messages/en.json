@@ -7902,6 +7902,7 @@
       "emptyTitle": "No repositories yet",
       "emptyDescription": "This project has no repositories configured. Add one and Motir can read your code when it plans.",
       "manageLink": "Manage this project’s repositories",
+      "notUpdating": "This index is not updating.",
       "provider": {
         "github": "GitHub",
         "gitlab": "GitLab"

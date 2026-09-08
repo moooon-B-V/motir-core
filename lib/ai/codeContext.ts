@@ -7,6 +7,7 @@ import type { GitProviderId } from '@/lib/git/types';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
 import type { CodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import type { CodeRefreshReason } from '@/lib/codeGraph/refreshReason';
 
 // Resolve the CODE half of a planning-job context bag (Subtask 7.10.15 ·
 // MOTIR-1598) — the workspace's connected repo SET, read from the persisted
@@ -140,19 +141,12 @@ export async function resolveCodeContext(ctx: {
 // the fix's clothes.
 
 /** Why a repo's graph is not current. A TOTAL union — see the mapping below. */
-export type CodeRefreshReason =
-  /** A refresh was enqueued by THIS session start. */
-  | 'refresh_enqueued'
-  /** A refresh is already in flight (or held by the shipped debounce). */
-  | 'refresh_pending'
-  /** Connected, but no graph has ever been built. */
-  | 'never_indexed'
-  /** The host cannot be indexed at all — GitLab today (MOTIR-4609). */
-  | 'provider_unsupported'
-  /** Refreshes are failing. */
-  | 'refresh_failing'
-  /** Refreshes are paused. ⚠️ NEVER the internal cause (MOTIR-4541). */
-  | 'paused';
+// ⚠️ THE VOCABULARY MOVED TO `lib/codeGraph/refreshReason.ts` (MOTIR-2105) and is
+// RE-EXPORTED here so every existing import site is unchanged. It is a fact
+// about a code graph, and it now sits beside the other two derivations of the
+// same subject — the state (`indexState.ts`) and the drift (`driftCount.ts`) —
+// where the DTO a UI reads can import it without reaching into `lib/ai/`.
+export type { CodeRefreshReason } from '@/lib/codeGraph/refreshReason';
 
 /** One connected repo as it rides the job envelope, with its freshness. */
 export interface JobCodeRepoState extends JobCodeRepo {
@@ -295,7 +289,16 @@ export async function resolvePlanningCodeContext(ctx: {
       // throwing on the submit path.
       canIndex = false;
     }
-    const disposition = resolveRefreshDisposition({ indexState, canIndex });
+    // ⚠️ `refreshFailing` FINALLY HAS A PRODUCER (MOTIR-2105). The disposition
+    // has been able to SAY a refresh is failing since MOTIR-4604 and nothing
+    // ever told it — so the one explanation a session most needed, *the graph is
+    // behind and nothing is coming*, was structurally unreachable while the
+    // field sat in the signature looking covered.
+    const disposition = resolveRefreshDisposition({
+      indexState,
+      canIndex,
+      refreshFailing: joined?.refreshFailing ?? false,
+    });
 
     if (disposition.enqueue) {
       // Best-effort, exactly like the webhook's own enqueue: a queue failure must

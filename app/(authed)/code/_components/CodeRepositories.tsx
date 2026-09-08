@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { FolderGit2 } from 'lucide-react';
+import { FolderGit2, TriangleAlert } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { GithubMark } from '@/components/icons/GithubMark';
@@ -73,6 +73,33 @@ function driftLine(
   return t('drift.commits', { count: commitsBehind });
 }
 
+/**
+ * ⚠️ THE REFRESH IS DEAD, AND THE ROW SAYS SO (Story MOTIR-1754 · MOTIR-2105).
+ *
+ * `design/code-context` §10.1 settles the copy, and it is a rule about what may
+ * NOT be said: *panel D promises nothing*. No "catching up", no "shortly", no
+ * "check back", no "this will resolve" — because a refresh can be paused,
+ * failing, or impossible for the provider, and **a stale repository may sit
+ * stale for ever**. It states the drift, states the consequence, and says
+ * **"This index is not updating."**
+ *
+ * ⚠️ WITHOUT THIS LINE THE WHOLE STATE IS INDISTINGUISHABLE FROM A QUEUE. A
+ * graph whose refresh dead-lettered rendered exactly like one with a refresh
+ * pending: `Stale`, N commits behind, still answering every tool call. The only
+ * surface that knew was the job-runs tab, where 35 dead-letters over 48 hours
+ * read as background and nobody acted for three days.
+ *
+ * It renders for the reasons that will not resolve themselves and for no
+ * others — `refreshIsStuck` is the one place that judgement is made.
+ */
+function notUpdatingLine(repo: CodeContextRepoDTO, t: (k: string) => string): string | null {
+  // Only a graph that EXISTS can fail to update. `never` has its own chip and
+  // its own answer — the first index is the connect path's, not a refresh.
+  if (repo.indexState === 'never' || repo.indexState === 'indexing') return null;
+  if (!repo.refreshFailing) return null;
+  return t('notUpdating');
+}
+
 export async function CodeRepositories({ repos }: { repos: CodeContextRepoDTO[] }) {
   const t = await getTranslations('code.repositories');
   const labels = {
@@ -107,6 +134,7 @@ export async function CodeRepositories({ repos }: { repos: CodeContextRepoDTO[] 
       <ul className="flex flex-col gap-2" aria-label={t('listLabel')}>
         {repos.map((repo) => {
           const drift = driftLine(repo.indexState, repo.commitsBehind, t);
+          const notUpdating = notUpdatingLine(repo, t);
           return (
             <li
               key={repo.repoRef}
@@ -134,6 +162,20 @@ export async function CodeRepositories({ repos }: { repos: CodeContextRepoDTO[] 
               {drift !== null ? (
                 <span className="shrink-0 font-sans text-sm text-(--el-text-secondary)">
                   {drift}
+                </span>
+              ) : null}
+
+              {/* ⚠️ THE CONSEQUENCE, on the row it is about (MOTIR-2105). It is
+                  drawn in the WARNING ink rather than the secondary one because
+                  §10 puts this state one register up from the invitation
+                  grammar: it reports that plans are being produced against code
+                  that is not the code, which is a defect in the output rather
+                  than an optional improvement to it. Still not alarming — no
+                  red, no destructive family, no blocking. */}
+              {notUpdating !== null ? (
+                <span className="flex shrink-0 items-center gap-1.5 font-sans text-sm text-(--el-warning-text)">
+                  <TriangleAlert className="h-3.5 w-3.5 text-(--el-warning)" aria-hidden />
+                  {notUpdating}
                 </span>
               ) : null}
             </li>

@@ -37,10 +37,17 @@ export interface CodeContextRepoDTO {
   /**
    * How far the default branch has moved past the graph, IN COMMITS.
    *
-   * ⚠️ ALWAYS `null` TODAY, and that is a first-class answer rather than a gap.
-   * Telling `stale` from `indexed` needs only a sha inequality, which
-   * `indexState.ts` does; COUNTING the commits between two shas needs a
-   * commit-graph read neither repository holds. MOTIR-4644 is its producer.
+   * ⚠️ `null` IS A FIRST-CLASS ANSWER, not a gap: the pair was never counted, has
+   * since moved, or has no common ancestor. It is emphatically not `0`, which
+   * would say the graph MATCHES the code.
+   *
+   * ⚠️ THIS FIELD USED TO READ *"ALWAYS `null` TODAY"* and no longer is —
+   * MOTIR-4644 shipped its producer (`lib/codeGraph/driftCount.ts` plus the
+   * off-render-path sweep), so a counted pair now carries its number. The note
+   * is corrected rather than deleted because the REASON it was null is still the
+   * reason the count needs a producer at all: telling `stale` from `indexed`
+   * needs only a sha inequality, which `indexState.ts` does, while COUNTING the
+   * commits between two shas needs a commit-graph read neither column holds.
    *
    * It is carried rather than dropped because a CONSUMER already depends on the
    * distinction: `isBadlyStale` pauses the auto-cadence on a THRESHOLD, never on
@@ -50,6 +57,25 @@ export interface CodeContextRepoDTO {
    * work.
    */
   commitsBehind: number | null;
+  /**
+   * ⚠️ IS THE REFRESH DEAD? (Story MOTIR-1754 · MOTIR-2105.)
+   *
+   * `true` when the run that last claimed this repository reached a TERMINAL
+   * state — `failed` or `abandoned` — so the graph will keep drifting until
+   * somebody acts. `false` is *nothing says it is dead*, which covers a healthy
+   * pipeline that has simply not run yet as well as one that just succeeded.
+   *
+   * ⚠️ IT IS THE FACT THAT WAS ONLY EVER IN THE DLQ. A stale graph whose refresh
+   * dead-lettered and a stale graph with a refresh queued behind it were the
+   * same thing to every product surface: both `stale`, both still answering
+   * every tool call, and only one of them ever getting better. 35 dead-letters
+   * accumulated over 48 hours and nobody noticed, because the one surface that
+   * knew was a job-runs tab where that volume reads as background.
+   *
+   * ⚠️ NEVER INFERRED FROM DRIFT. Being far behind is not evidence that anything
+   * failed — an active repository is behind between every push.
+   */
+  refreshFailing: boolean;
 }
 
 /** The project's whole code-context answer. */

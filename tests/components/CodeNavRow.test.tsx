@@ -31,8 +31,8 @@ import { PROJECT_NAV_ACCESS, canOfferNavDestination } from '@/lib/settings/proje
 
 const MEMBER = new Set(['project:browse', 'ai:plan', 'item:write']);
 const VIEWER = new Set(['project:browse']);
-const ADMIN = new Set(
-  PROJECT_NAV_ACCESS.map((e) => e.requires).filter((r): r is string => r !== 'browse-only'),
+const ADMIN = new Set<string>(
+  PROJECT_NAV_ACCESS.map((e) => e.requires).filter((r) => r !== 'browse-only'),
 );
 
 afterEach(cleanup);
@@ -114,24 +114,24 @@ describe('the LABEL — and the hard ban it had to satisfy', () => {
     // FORBIDS IT. `Codebase` is the nearest label that names the same room and
     // survives the ban — it is what a person looking for their repositories
     // would recognise, and it is not a member of the closed type vocabulary.
-    const types = en.labels.workItemType as Record<string, string>;
-    const label = (en.shell.nav as Record<string, string>)['code'];
+    const types: Record<string, string> = en.labels.workItemType;
+    const label: string = en.shell.nav.code;
     expect(label).toBe('Codebase');
     expect(Object.values(types).map((v) => v.toLowerCase())).not.toContain(label.toLowerCase());
   });
 
   it('the page HEADING matches the row, so the door and the room agree', () => {
-    expect((en.code as Record<string, string>)['title']).toBe(en.shell.nav['code']);
+    expect(en.code.title).toBe(en.shell.nav.code);
   });
 
   it('the retired `codeHealth` row label is GONE, not orphaned in the catalogue', () => {
-    expect('codeHealth' in (en.shell.nav as Record<string, unknown>)).toBe(false);
+    expect('codeHealth' in en.shell.nav).toBe(false);
   });
 
   it('renders the row label a reader actually sees', () => {
     render(
       <NextIntlClientProvider locale="en" messages={en}>
-        <a href="/code">{en.shell.nav['code']}</a>
+        <a href="/code">{en.shell.nav.code}</a>
       </NextIntlClientProvider>,
     );
     expect(screen.getByRole('link', { name: 'Codebase' })).toBeTruthy();

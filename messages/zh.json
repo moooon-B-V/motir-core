@@ -7898,6 +7898,7 @@
       "emptyTitle": "尚未配置代码仓库",
       "emptyDescription": "本项目还没有配置任何代码仓库。添加一个之后，Motir 在规划时就能读取你的代码。",
       "manageLink": "管理本项目的代码仓库",
+      "notUpdating": "该索引没有在更新。",
       "provider": {
         "github": "GitHub",
         "gitlab": "GitLab"
