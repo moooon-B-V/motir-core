@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { parsePage, parseSort, parseView, serializeSort } from '@/lib/issues/issueListView';
 import { parseIssueFilter, type IssueFilterParams } from '@/lib/issues/issueListFilter';
 import { parseAdvancedFilterParam } from '@/lib/issues/issueListAdvancedFilter';
@@ -60,16 +59,10 @@ export default async function IssuesPage({
   const t = await getTranslations('issueViews');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="flex flex-col gap-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-        </header>
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectListDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // Story 6.4.6 — gate the issue list on canBrowse; a non-browsable active
   // project renders the no-access state, not the list. The same resolve also

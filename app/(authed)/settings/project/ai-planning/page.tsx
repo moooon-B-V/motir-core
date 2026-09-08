@@ -9,7 +9,6 @@ import { projectAiSettingsService } from '@/lib/services/projectAiSettingsServic
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { legalDocumentUrl } from '@/lib/legal/links';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { projectLessonsService } from '@/lib/services/projectLessonsService';
 import { LessonLibraryCard, LESSON_PREVIEW_COUNT } from './_components/LessonLibraryCard';
@@ -71,16 +70,10 @@ export default async function ProjectAiPlanningPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[42rem]">
-        <EmptyState
-          title={t('project.empty.title')}
-          description={t('aiPlanning.empty.description')}
-        />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

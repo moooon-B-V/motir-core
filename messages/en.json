@@ -1148,9 +1148,6 @@
     "epicPrivacyError": "Couldn’t update visibility. Try again.",
     "watchToggleFailedTitle": "Couldn’t update watching",
     "noProjectTitle": "No project selected",
-    "noProjectListDescription": "Pick or create a project from the switcher to track its work items.",
-    "noProjectDetailDescription": "Pick a project from the switcher to view its work items.",
-    "noProjectEditDescription": "Pick a project from the switcher to edit its work items.",
     "allIssuesIn": "All work items in {project}",
     "filter": "Filter",
     "filterComingSoon": "Filtering arrives in a later update",
@@ -4343,8 +4340,7 @@
       "resolutionTimeBody": "How long work items take to resolve — is the team speeding up?",
       "workloadTitle": "Workload",
       "workloadBody": "Open work per assignee — who's carrying how much.",
-      "noProjectTitle": "No project yet",
-      "noProjectBody": "Create a project to see its reports."
+      "noProjectTitle": "No project yet"
     },
     "period": {
       "day": "Daily",
@@ -5859,7 +5855,6 @@
         "buildItAll": "No — let's build the product straight away."
       },
       "noProjectTitle": "No active project",
-      "noProjectBody": "Pick or create a project first, then Motir can plan it with you.",
       "resuming": "Resuming…",
       "resumingBody": "Picking up where you left off.",
       "canvas": {

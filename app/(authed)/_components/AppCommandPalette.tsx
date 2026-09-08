@@ -14,7 +14,6 @@ import {
   LayoutList,
   LogOut,
   Plus,
-  Settings,
   ShieldCheck,
   Sparkles,
   SunMoon,

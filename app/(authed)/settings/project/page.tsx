@@ -5,7 +5,6 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { ProjectDetailsCard } from './_components/ProjectDetailsCard';
 import { BuildInPublicPromoCard } from './_components/BuildInPublicPromoCard';
@@ -32,15 +31,10 @@ export default async function ProjectSettingsPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    // Defensive — the area layout already renders the no-project empty state, but
-    // keep the route self-sufficient so it never 404s on its own.
-    return (
-      <div className="mx-auto max-w-[42rem]">
-        <EmptyState title={t('area.noProjectTitle')} description={t('area.noProjectDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

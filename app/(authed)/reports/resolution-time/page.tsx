@@ -4,7 +4,6 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { reportsService } from '@/lib/services/reportsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
-import { EmptyState } from '@/components/ui/EmptyState';
 import type { ReportScopeDto } from '@/lib/dto/reports';
 import { coercePeriod, coerceDaysBack, PERIOD_LABEL_KEY } from '@/lib/reports/reportPageView';
 import { ReportPageChrome } from '../_components/ReportPageChrome';
@@ -31,18 +30,10 @@ export default async function ResolutionTimePage({
 
   const t = await getTranslations('reports');
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <ReportPageChrome
-        backLabel={t('backToReports')}
-        crumb={t('hub.title')}
-        title={t('resolutionTime.title')}
-        subLine=""
-      >
-        <EmptyState title={t('hub.noProjectTitle')} description={t('hub.noProjectBody')} />
-      </ReportPageChrome>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const sp = await searchParams;
   const savedFilterId = sp.savedFilterId ?? null;

@@ -3,7 +3,6 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import { MotirAiError } from '@/lib/ai/errors';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { isDirectionDocKind } from '@/lib/onboarding/directionDoc';
 import { findTierDoc, producedTierKinds } from '@/lib/onboarding/preplanClient';
 import type { PreplanStateDTO } from '@/lib/dto/aiPreplan';
@@ -30,14 +29,10 @@ export default async function OnboardingDirectionDocPage({
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <EmptyState
-        title="No active project"
-        description="Pick a project to read its direction docs."
-      />
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   let state: PreplanStateDTO | null = null;
   let error = false;

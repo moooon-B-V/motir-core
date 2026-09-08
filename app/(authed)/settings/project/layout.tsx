@@ -4,7 +4,6 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 
 // The project-settings AREA layout (Story 6.5 · Subtask 6.5.2). The grouped
@@ -26,14 +25,10 @@ export default async function ProjectSettingsAreaLayout({ children }: { children
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    const t = await getTranslations('settings');
-    return (
-      <div className="mx-auto max-w-[42rem]">
-        <EmptyState title={t('area.noProjectTitle')} description={t('area.noProjectDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const { canBrowse } = await projectAccessService.getCapabilities(ctx.projectId, {
     userId: ctx.userId,
