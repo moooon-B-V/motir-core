@@ -13,6 +13,12 @@ import { startSignedOut } from './_helpers/shell-session';
 const PASSWORD = 'projects-flow-pass-123';
 const USER_EMAIL = 'e2e-projects@example.com';
 const SCREENSHOT_DIR = '/tmp/motir-smoke';
+/**
+ * The project the WORKSPACE seeds for itself (MOTIR-4870), named after it. It
+ * exists before step 2 — the first authed request makes it — so it is the
+ * OLDEST project here, which is what decides the archive fallback below.
+ */
+const SEEDED_PROJECT = `${USER_EMAIL.split('@')[0]}'s Workspace`;
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -199,15 +205,39 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await expect(page.getByText('Project archived', { exact: true }).first()).toBeVisible({
     timeout: 5_000,
   });
-  // Active project should fall back to Marketing Site. The project-settings AREA
-  // (Story 6.5.2) shows the back-to-project/identity header instead of the
-  // ProjectSwitcher, so the fallback surfaces in the settings rail itself (no
-  // extra navigation — this test is already near its time budget).
+  // ⚠️ THE FALLBACK IS THE SEEDED PROJECT, NOT 'Marketing Site' (MOTIR-4876).
+  // `getActiveProject` falls back to the workspace's FIRST non-archived project
+  // by creation, and this workspace now holds THREE: the seeded default, then
+  // Mobile App, then Marketing Site. The old expectation was exactly right when
+  // the only projects were the two this test makes — it named the survivor by
+  // assuming there was one other. The contract it was written for is unchanged;
+  // the population it counted is.
+  //
+  // The project-settings AREA (Story 6.5.2) shows the back-to-project/identity
+  // header instead of the ProjectSwitcher, so the fallback surfaces in the
+  // settings rail itself (no extra navigation — this test is already near its
+  // time budget).
   await expect(page.getByRole('navigation', { name: 'Project settings' })).toContainText(
+    SEEDED_PROJECT,
+  );
+
+  // 7) Archive Marketing Site too — the reader still lands in a project.
+  //
+  // ⚠️ IT HAS TO BE SWITCHED TO FIRST (MOTIR-4876). This step used to read
+  // "archive the remaining project" and go straight to `/settings/project`,
+  // because archiving Mobile App left Marketing Site active. The fallback above
+  // now lands on the seeded project instead, so that route would have opened
+  // the WRONG project's settings and typed MARKE into a confirm field asking
+  // for a different identifier. The switcher does not live in the settings
+  // area, so this goes out to `/items` for it.
+  await page.goto('/items');
+  await page.getByRole('button', { name: 'Switch project' }).click();
+  await page.getByRole('button', { name: /^Marketing Site/ }).click();
+  await page.waitForURL('**/items');
+  await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(
     'Marketing Site',
   );
 
-  // 7) Archive the remaining project — empty state should return
   await page.goto('/settings/project');
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await page.getByLabel(/Type MARKE to confirm/).fill('MARKE');
@@ -217,9 +247,14 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   });
 
   // ⚠️ INVERTED (MOTIR-4876). Archiving the last project used to return the
-  // reader to the empty state. It is now the THIRD door into the projectless
-  // state the story closed: the resolver seeds a fresh default rather than
-  // answering null (MOTIR-4870), so what comes back is a project, not a CTA.
+  // reader to the empty state, and this spec used to BE that reader — with both
+  // of its projects archived the workspace held none. It holds the seeded one,
+  // so the resolver does not even reach the heal here; what this now witnesses
+  // is the plainer half of the same invariant, that a member archiving their
+  // way down still lands in a project rather than on a CTA. The heal itself —
+  // archiving genuinely every project and getting a fresh one back — is
+  // asserted at the service tier, where it can be seen directly
+  // (`tests/default-project-per-workspace.test.ts`, door 3).
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
