@@ -270,10 +270,24 @@ test('⚠️ PLANNING IS NEVER GATED — the story ships a signal, not a lock', 
 
   await page.goto('/planning');
 
-  // The planning surface opens and offers its composer. Asserted by ROLE, which
-  // is immune to the hidden previous subtree a route boundary keeps mounted.
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByRole('button', { name: /plan|start|new/i }).first()).toBeEnabled();
+  // ⚠️ THE WORKSPACE DIALOG, NOT AN `h1` — the same correction its acceptance
+  // twin needed (`acceptance-code-index.spec.ts`, MOTIR-1771), which was made
+  // there and missed here. `/planning` is a pure REDIRECT (MOTIR-4732's forward
+  // for old links): it has no heading of its own and forwards to a HOST page
+  // with the planning overlay mounted over it. A level-1 heading therefore
+  // belongs to whatever the forward landed on and says nothing about whether
+  // planning is available — it passed by accident for as long as the host
+  // happened to paint one, and stopped the moment MOTIR-4815 changed which host
+  // a projectless reader gets.
+  //
+  // Asserted by ROLE, which is also immune to the hidden previous subtree a
+  // route boundary keeps mounted.
+  const workspace = page.getByRole('dialog', { name: /plan/i });
+  await expect(workspace).toBeVisible();
+  // The composer is offered, and it is scoped INSIDE the dialog: a page-wide
+  // `.first()` match could be satisfied by a button on the host underneath,
+  // which is exactly the surface this case must not accept as "planning works".
+  await expect(workspace.getByRole('button', { name: /plan|start|new/i }).first()).toBeEnabled();
 });
 
 test('the Health section keeps its own gate, and Repositories works beside it', async ({
