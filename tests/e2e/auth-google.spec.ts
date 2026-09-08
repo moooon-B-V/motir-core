@@ -125,7 +125,23 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
 
   await page.goto('/sign-up');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
-  await page.waitForURL('**/workbench', { timeout: 15_000 });
+  // ⚠️ THE GOOGLE BUTTON LANDS ON THE ENTRANCE FROM THIS PAGE (MOTIR-4871), and
+  // it does so for the same reason the credential button does: `SignUpCard`
+  // resolves ONE `callbackURL` with `isRegistration: true` and hands it to both.
+  // The `/sign-in` copies of this button below still land on `/workbench`, which
+  // is the assertion that keeps the arm registration-only rather than global.
+  //
+  // ⚠️ AND IT DOES NOT ASK WHETHER THE ACCOUNT IS NEW. OAuth signs a RETURNING
+  // user in silently, so somebody who already has an account and clicks Google
+  // on `/sign-up` also arrives at the entrance — the page's intent is taken as
+  // the answer, because the button is resolved before the provider replies and
+  // nothing on this side knows yet. It is a mild misroute into a surface that
+  // works for them (one navigation from the landing), not a broken flow, and
+  // narrowing it means resolving the destination AFTER the provider answers —
+  // which is a change to the auth callback, not to this card.
+  await page.waitForURL('**/onboarding', { timeout: 15_000 });
+  await page.goto('/workbench');
+  await page.waitForURL('**/workbench');
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
   // Exactly one user row + one google account row in the DB.
@@ -144,8 +160,11 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.goto('/sign-in');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
   // The Google button carries the HOST PAGE's `callbackURL`, so it lands
-  // wherever that page's default points — and since MOTIR-2921 both auth pages
-  // point at `/workbench`, so the same button has one destination from either.
+  // wherever that page's default points. ⚠️ That used to read "both auth pages
+  // point at `/workbench`, so the same button has one destination from either",
+  // and MOTIR-4871 falsified the second half: `/sign-up` resolves the entrance
+  // now, `/sign-in` still resolves the landing, so the same button has TWO
+  // destinations and which one it takes is a property of the page it sits on.
   await page.waitForURL('**/workbench', { timeout: 15_000 });
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 

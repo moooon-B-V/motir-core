@@ -50,7 +50,12 @@ async function seedIssueTree(page: Page, email: string) {
   const local = email.split('@')[0]!;
   const user = (await db.user.findFirst({ where: { email } }))!;
   const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
-  const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+  // ⚠️ BOUND TO THE PROJECT THE BROWSER IS IN (MOTIR-4876) — a default
+  // project is seeded per workspace now (MOTIR-4870), so an unordered
+  // read can return it instead of the one `createFirstProject` pinned.
+  const project = (await db.project.findFirst({
+    where: { workspaceId: ws.id, name: 'Mobile App' },
+  }))!;
   const ctx = { userId: user.id, workspaceId: ws.id };
   const epic = await workItemsService.createWorkItem(
     { projectId: project.id, kind: 'epic', title: 'Platform epic' },
@@ -141,7 +146,9 @@ test.describe('@a11y populated issue surfaces', () => {
     const user = (await db.user.findFirst({ where: { email } }))!;
     const local = email.split('@')[0]!;
     const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
-    const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+    const project = (await db.project.findFirst({
+      where: { workspaceId: ws.id, name: 'Mobile App' },
+    }))!;
     const ctx = { userId: user.id, workspaceId: ws.id };
     // A second member so the thread carries a real mention chip and the
     // picker has a non-self candidate.
@@ -248,7 +255,9 @@ test.describe('@a11y populated issue surfaces', () => {
     const user = (await db.user.findFirst({ where: { email } }))!;
     const local = email.split('@')[0]!;
     const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
-    const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+    const project = (await db.project.findFirst({
+      where: { workspaceId: ws.id, name: 'Mobile App' },
+    }))!;
     const ctx = { userId: user.id, workspaceId: ws.id };
     const issue = await workItemsService.createWorkItem(
       { projectId: project.id, kind: 'task', title: 'Audited task' },
@@ -373,7 +382,9 @@ test.describe('@a11y populated issue surfaces', () => {
     const user = (await db.user.findFirst({ where: { email } }))!;
     const local = email.split('@')[0]!;
     const ws = (await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } }))!;
-    const project = (await db.project.findFirst({ where: { workspaceId: ws.id } }))!;
+    const project = (await db.project.findFirst({
+      where: { workspaceId: ws.id, name: 'Mobile App' },
+    }))!;
     const issue = await workItemsService.createWorkItem(
       { projectId: project.id, kind: 'task', title: 'Attached task' },
       { userId: user.id, workspaceId: ws.id },

@@ -63,6 +63,23 @@ async function seedProject(page: Page): Promise<{ projectId: string }> {
     name: 'Public capability',
     identifier: KEY,
   });
+  // ⚠️ PIN IT ACTIVE (MOTIR-4876), the way the product's own create door does.
+  // This used to read "no active-project write is needed: `getActiveProject`
+  // falls back to the workspace's first non-archived project, and this
+  // workspace has exactly one". Both halves were true and the second one
+  // stopped being: a default project is SEEDED per workspace on the first
+  // authed request (MOTIR-4870), and `signUp` above makes that request — so by
+  // the time this runs the workspace holds the seeded project AND this one, the
+  // seeded one is already pinned, and the fallback never gets a say. Creating a
+  // project through the SERVICE skips the pin that `createProjectAction` and
+  // `startNewAiProjectAction` both perform, which is exactly the gap this
+  // closes; the browser is otherwise left in a project this fixture never
+  // wrote to.
+  await projectsService.setActiveProject({
+    userId: membership.userId,
+    workspaceId: workspace.id,
+    projectId: project.id,
+  });
   return { projectId: project.id };
 }
 

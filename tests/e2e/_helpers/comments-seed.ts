@@ -59,7 +59,16 @@ export async function seedCommentsFixture(
   const ws = await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
   expect(pm, 'PM user exists after sign-up').not.toBeNull();
   expect(ws, 'auto workspace exists').not.toBeNull();
-  const project = await db.project.findFirst({ where: { workspaceId: ws!.id } });
+  // ⚠️ BOUND TO THE PROJECT THE BROWSER IS IN (MOTIR-4876). This read was
+  // `findFirst({ where: { workspaceId } })` with no ordering, which was
+  // unambiguous only while a workspace held exactly one project. A default
+  // project is now SEEDED per workspace (MOTIR-4870), so an unordered read
+  // can return the seeded one while the browser is pinned to the one
+  // `createFirstProject` just made — and the fixture then writes its work
+  // items into a project the page never shows.
+  const project = await db.project.findFirst({
+    where: { workspaceId: ws!.id, name: 'Mobile App' },
+  });
   expect(project, 'first project exists').not.toBeNull();
 
   const bo = await usersService.createUser({

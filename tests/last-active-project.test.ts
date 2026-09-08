@@ -440,7 +440,17 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
       expect(row.lastActiveProjectId).toBe(projectB.id);
     });
 
-    it('is a silent no-op for a freshly-created workspace with no project yet', async () => {
+    it('records the project the resolver SEEDS for a freshly-created workspace', async () => {
+      // ⚠️ INVERTED (MOTIR-4870). It was 'is a silent no-op for a
+      // freshly-created workspace with no project yet', and its premise — a
+      // workspace a MEMBER can hold with no project — is the state the
+      // invariant removes. `getActiveProject` seeds one, so there is a project
+      // to record and the switch point lands the reader in it.
+      //
+      // The no-op contract this case was really about is not lost: the sibling
+      // below ('never throws and leaves the pointer intact for a workspace the
+      // user cannot access') covers it for the null that SURVIVES — a
+      // NON-MEMBER, which the resolver still refuses to heal.
       const owner = await createTestUser();
       const { workspace } = await workspacesService.createWorkspace({
         name: 'Empty',
@@ -449,8 +459,10 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
 
       await projectsService.recordLastActiveProjectForWorkspace(owner.id, workspace.id);
 
+      const seeded = await projectsService.getActiveProject(owner.id, workspace.id);
       const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
-      expect(row.lastActiveProjectId).toBeNull();
+      expect(row.lastActiveProjectId).toBe(seeded!.id);
+      expect(seeded!.name).toBe('Empty');
     });
 
     it('never throws and leaves the pointer intact for a workspace the user cannot access', async () => {

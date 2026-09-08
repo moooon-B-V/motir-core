@@ -157,11 +157,19 @@ async function addTeammate(
 
 /** A work item to be interrupted on the way to — the DEEP destination. */
 async function seedDeepDestination(userId: string, workspaceId: string): Promise<string> {
-  const project = await projectsService.createProject({
+  // ⚠️ THE ITEM GOES IN THE WORKSPACE'S OWN PROJECT, NOT A SECOND ONE
+  // (MOTIR-4876). This used to `createProject({ name: 'Enforcement' })`, which
+  // was the workspace's only project and therefore everybody's active one. A
+  // default project is now SEEDED per workspace (MOTIR-4870), so creating one
+  // here made two — and the person this fixture exists for is the MEMBER, who
+  // is added to the workspace AFTER this runs and resolves to the workspace's
+  // FIRST project, i.e. the seeded one. Pinning for `userId` would not have
+  // reached them: the active project is per MEMBERSHIP, and theirs did not
+  // exist yet. Putting the item where every member already resolves is what
+  // makes the deep destination openable by whoever is held on the way to it.
+  const project = await projectsService.ensureDefaultProject({
     workspaceId,
     actorUserId: userId,
-    name: 'Enforcement',
-    identifier: 'ENF',
   });
   const item = await workItemsService.createWorkItem(
     { projectId: project.id, kind: 'task', title: 'The page they were opening' },

@@ -29,6 +29,12 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
 
+  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871), not on the
+  // signed-in landing. This helper's contract is "leave the caller in the app",
+  // so it settles where the registration actually lands and navigates on — the
+  // same two-step the shared `signUp` and the other local ones use. The retry
+  // loop is about the RATE LIMIT and is unchanged; only the URL it waits for
+  // moved, because the wait is what tells a throttled click from a landed one.
   const createButton = page.getByRole('button', { name: /^(Create account|Creating account…)$/ });
   const rateLimitAlert = page.getByText('Something went wrong. Please try again.');
 
@@ -36,7 +42,7 @@ async function signUp(page: Page, email: string): Promise<void> {
     await createButton.click();
     const landed = await Promise.race([
       page
-        .waitForURL('**/workbench', { timeout: 9_000 })
+        .waitForURL('**/onboarding', { timeout: 9_000 })
         .then(() => true)
         .catch(() => false),
       rateLimitAlert
@@ -44,9 +50,15 @@ async function signUp(page: Page, email: string): Promise<void> {
         .then(() => false)
         .catch(() => false),
     ]);
-    if (landed || page.url().includes('/workbench')) return;
+    if (landed || page.url().includes('/onboarding')) {
+      await page.goto('/workbench');
+      await page.waitForURL('**/workbench');
+      return;
+    }
     await page.waitForTimeout(11_000);
   }
+  await page.waitForURL('**/onboarding');
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench');
 }
 
