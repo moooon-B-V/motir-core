@@ -166,7 +166,14 @@
     "save": "保存",
     "loading": "加载中…",
     "checked": "已勾选",
-    "notChecked": "未勾选"
+    "notChecked": "未勾选",
+    "pager": {
+      "showing": "显示第 <range>{from}–{to}</range> 项，共 <count>{total}</count> 项",
+      "previousPage": "上一页",
+      "nextPage": "下一页",
+      "page": "第 {page} 页",
+      "pagination": "分页"
+    }
   },
   "planReview": {
     "backToPlans": "返回计划列表",
@@ -968,7 +975,6 @@
       "reports": "报表",
       "code": "代码库",
       "settings": "设置",
-      "jobRuns": "任务运行",
       "git": "Git",
       "github": "GitHub",
       "backlog": "待办列表",
@@ -976,8 +982,7 @@
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
-      "resumeOnboardingInProgress": "继续引导，进行中",
-      "security": "安全"
+      "resumeOnboardingInProgress": "继续引导，进行中"
     },
     "topNav": {
       "global": "全局",
@@ -1005,6 +1010,7 @@
       "switch": "切换工作区",
       "select": "选择工作区",
       "heading": "工作区",
+      "settings": "工作区设置",
       "invite": "邀请团队成员",
       "nameLabel": "工作区名称",
       "namePlaceholder": "我的工作区",
@@ -1026,7 +1032,6 @@
     },
     "userMenu": {
       "account": "账户菜单",
-      "workspaceSettings": "工作区设置",
       "accountSettings": "账户设置",
       "signingOut": "正在退出登录…",
       "platformAdmin": "平台管理",
@@ -1729,6 +1734,18 @@
       "security": {
         "title": "安全",
         "subtitle": "{workspace} 中所有成员的登录要求。"
+      },
+      "eyebrow": "工作区设置",
+      "back": "返回 Motir",
+      "nav": {
+        "group": {
+          "general": "通用",
+          "access": "访问与权限",
+          "operations": "运维"
+        },
+        "workspace": "工作区",
+        "security": "安全",
+        "jobs": "任务运行"
       }
     },
     "name": {
@@ -3571,6 +3588,10 @@
         "security": "安全",
         "usage": "用量与费用",
         "billing": "账单与套餐"
+      },
+      "jobRunsFoldIn": {
+        "title": "任务运行",
+        "subtitle": "该工作区的后台任务——运行了什么、失败了什么，以及死信队列中还有什么在等待。"
       }
     },
     "gitAccounts": {
@@ -7338,11 +7359,6 @@
         "title": "没有等待你审批的工作",
         "body": "需要你签字确认才能继续的工作会显示在这里。"
       }
-    },
-    "pager": {
-      "next": "下一页",
-      "startOver": "回到顶部",
-      "end": "已经到底了。"
     }
   },
   "platformAdmin": {

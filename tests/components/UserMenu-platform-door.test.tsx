@@ -70,19 +70,25 @@ describe('the account menu for a PLATFORM-STAFF user', () => {
   });
 
   it('keeps the ordinary rows — the door is added, never a substitution', () => {
-    // `workspaceTierRevealed` is passed explicitly because the Workspace
-    // settings row became conditional in MOTIR-3502 and now defaults to hidden.
-    // This case is about the staff door not DISPLACING the ordinary rows, so it
-    // asks for the menu in the state where all of them exist; the tier rule
-    // itself is covered by `workspace-tier-entry-points.test.tsx`.
-    renderWithIntl(
-      <UserMenu name="Ops" email="ops@moooon.net" platformStaff workspaceTierRevealed />,
-    );
+    // ⚠️ AMENDED (Story MOTIR-4843 · MOTIR-4847). This case used to pass
+    // `workspaceTierRevealed` and assert a `Workspace settings` row beside the
+    // other two, because that row became conditional in MOTIR-3502. Both the row
+    // and the prop are GONE: the door moved to the workspace SWITCHER, the
+    // control that already carries the workspace's name, so the menu no longer
+    // varies by workspace count and `platformStaff` is its only branch.
+    //
+    // The case survives with the row dropped rather than being deleted, because
+    // what it is FOR is unchanged — the staff door must not displace the ordinary
+    // rows — and it is now the complete list of them.
+    renderWithIntl(<UserMenu name="Ops" email="ops@moooon.net" platformStaff />);
     openMenu();
 
     expect(screen.getByRole('link', { name: /account settings/i })).toBeTruthy();
-    expect(screen.getByRole('link', { name: /workspace settings/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /sign out/i })).toBeTruthy();
+    // The row's ABSENCE, by href — the arrival is asserted in
+    // `WorkspaceSwitcher-settings-door.test.tsx`, so the move is pinned at both
+    // ends and cannot half-land.
+    expect(document.body.innerHTML).not.toContain('href="/settings/workspace"');
   });
 
   it('opens the panel at the 336px the staff row is derived to need', () => {

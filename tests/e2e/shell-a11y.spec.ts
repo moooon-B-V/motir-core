@@ -82,6 +82,16 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     // 404s and its Name / Members / Danger-zone sections are hosted here
     // instead. So this entry sweeps strictly MORE markup than it used to: the
     // org-scoped cards plus the three folded-in workspace cards.
+    //
+    // ⚠️ AND THE OPERATOR DASHBOARD, since Story MOTIR-4843 · MOTIR-4861. There
+    // was a `/settings/workspace/jobs` entry of its own in this list until then;
+    // that route now `notFound()`s at this fixture's workspace count, and its
+    // dashboard is a section HERE. The entry is REMOVED rather than repaired
+    // with a second workspace, because the markup it swept is in this sweep
+    // already — tabs, status filter, run table and DLQ badge — and adding a
+    // workspace to keep a second entry alive would sweep the SAME component
+    // twice while changing the shell every other route in this list renders in
+    // (a workspace switcher appears in the top bar at two workspaces).
     path: '/settings/organization',
     ready: async (page) =>
       expect(page.getByRole('heading', { name: 'Organization settings' })).toBeVisible(),
@@ -109,16 +119,6 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     path: '/settings/project/fields',
     ready: async (page) =>
       expect(page.getByRole('heading', { name: 'Fields', exact: true })).toBeVisible(),
-  },
-  {
-    // Operator dashboard (Subtask 1.6.5). Swept in its EMPTY state (a fresh
-    // workspace has no job runs). Stays in the STRICT sweep with zero rule
-    // exclusions, like every other shell route — and now that the colored Pill
-    // tones meet WCAG AA (PRODECT_FINDINGS #35 resolved), the populated table's
-    // status pills (succeeded/failed/running) pass color-contrast too.
-    path: '/settings/workspace/jobs',
-    ready: async (page) =>
-      expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible(),
   },
 ];
 

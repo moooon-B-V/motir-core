@@ -16,9 +16,18 @@ import { SidebarNav } from '@/app/(authed)/_components/SidebarNav';
 // re-pointed row does not: it targets `/settings/organization`, the page that
 // hosts the folded-in sections.
 //
-// The Job runs and Git rows are asserted PRESENT at both counts, because they
-// are workspace-SCOPED but not workspace-NAMED and §6 reveals a tier rather than
-// relocating every page beneath it (the card's AC 5).
+// ⚠️ MOTIR-3502's AC 5 IS RETIRED (Story MOTIR-4843 · MOTIR-4847). This comment
+// used to read: "The Job runs and Git rows are asserted PRESENT at both counts,
+// because they are workspace-SCOPED but not workspace-NAMED and §6 reveals a
+// tier rather than relocating every page beneath it." Both of those rows have
+// LEFT this section — `Security` and `Job runs` with this card, `Git` a tier
+// earlier (MOTIR-4680) — so the claim is now about what the section does NOT
+// carry. §6d is satisfied by RELOCATION rather than by exemption: below the
+// reveal both capabilities are reached by scrolling `/settings/organization`,
+// where `WorkspaceFoldInSection` and `JobRunsFoldInSection` host them.
+//
+// The door itself is unchanged and still re-pointed rather than removed, which
+// is what the two describes below are for.
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
@@ -69,18 +78,28 @@ describe('the no-project settings door BELOW the reveal threshold', () => {
     expect(container.innerHTML).toContain('href="/settings/organization"');
   });
 
-  it('keeps the sub-routes beside it — §6 relocates neither', () => {
-    // ⚠️ GIT NOW NAMES THE ORGANISATION (Story MOTIR-4669 · MOTIR-4680), and
-    // that is a TIER move, not the §6 fold this file is about. Job runs is still
-    // workspace-scoped and still points at the workspace route; Git is
-    // organisation-scoped now and points at its own. Both rows are present at
-    // both counts, which is the claim — the gate is on Security, not on its
-    // neighbours.
+  it('⚠️ names NO workspace sub-route either — the exemption is gone (MOTIR-4847)', () => {
+    // AMENDED, and its assertion INVERTED. This case used to assert
+    // `/settings/workspace/jobs` PRESENT here, on the §6 "reveals a tier rather
+    // than relocating every page" reading. That reading was the defect: a
+    // workspace-tier surface answering 200 below the reveal, advertised from the
+    // PROJECT's rail, is what MOTIR-4861's fold-in and this card together
+    // repair. Below the threshold nothing in this rail names the workspace tier
+    // at all — not the area, not one of its rooms.
     const { container } = renderRail(false);
-    expect(container.innerHTML).toContain('/settings/workspace/jobs');
-    // ⚠️ `Git` LEFT this section entirely (MOTIR-4643), so it is no longer a
-    // witness for "the neighbours are unaffected" — `Job runs` above carries
-    // that. Asserted as an ABSENCE so the row cannot silently return.
+    expect(container.innerHTML).not.toContain('/settings/workspace');
+  });
+
+  it("keeps the Git row, which is organisation-scoped and not this rule's business", () => {
+    // ⚠️ GIT NOW NAMES THE ORGANISATION (Story MOTIR-4669 · MOTIR-4680), and
+    // that is a TIER move, not the §6 fold this file is about. It is present at
+    // both counts because an organisation always exists — which is exactly why
+    // it is NOT evidence for the exemption the case above retired.
+    const { container } = renderRail(false);
+    // ⚠️ NEITHER SUB-ROUTE IS HERE (MOTIR-4847 took `Job runs`, MOTIR-4643 took
+    // `Git`). Both are asserted ABSENT rather than the case being dropped: what
+    // it holds is that this section names the AREA and nothing beneath it.
+    expect(container.innerHTML).not.toContain('/settings/workspace/jobs');
     expect(container.innerHTML).not.toContain('/settings/organization/git');
   });
 });
@@ -91,10 +110,16 @@ describe('the no-project settings door AT the reveal threshold', () => {
     expect(namesTheWorkspaceArea(container.innerHTML)).toBe(true);
   });
 
-  it('keeps the sub-routes here too', () => {
+  it("names the area and NOTHING BENEATH IT — the sub-routes are the area rail's now", () => {
+    // The other half of the inversion above (MOTIR-4847). Above the reveal the
+    // door is here and its two rooms are rows in the workspace area's OWN rail
+    // (`lib/settings/workspaceSettingsNav.ts`), reached through it — so this
+    // section names the area's href and neither sub-route, at this count too.
     const { container } = renderRail(true);
-    expect(container.innerHTML).toContain('/settings/workspace/jobs');
-    // The twin of the case above — `Git` left with MOTIR-4643.
+    // ⚠️ NEITHER SUB-ROUTE IS HERE (MOTIR-4847 took `Job runs`, MOTIR-4643 took
+    // `Git`). Both are asserted ABSENT rather than the case being dropped: what
+    // it holds is that this section names the AREA and nothing beneath it.
+    expect(container.innerHTML).not.toContain('/settings/workspace/jobs');
     expect(container.innerHTML).not.toContain('/settings/organization/git');
   });
 });

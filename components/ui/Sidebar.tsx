@@ -278,9 +278,7 @@ function SidebarSectionFrame({
             className="h-3.5 w-3.5 text-(--el-icon-muted) transition-transform group-data-[state=closed]:-rotate-90"
           />
         </Collapsible.Trigger>
-        <Collapsible.Content className="overflow-hidden data-[state=closed]:animate-out data-[state=open]:animate-in">
-          {rows}
-        </Collapsible.Content>
+        <Collapsible.Content className="overflow-hidden">{rows}</Collapsible.Content>
       </Collapsible.Root>
     );
   }

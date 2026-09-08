@@ -7,14 +7,27 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // Story MOTIR-1215 · Subtask MOTIR-3647 — the two DOORS onto the workspace
 // Security pane, and the one condition both share.
 //
-// ⚠️ BOTH ARE GATED ON THE TIER REVEAL, AND THE ROWS BESIDE THEM ARE NOT.
-// `/settings/workspace/jobs`, `/github` and `/gitlab` must keep rendering at
-// every count — they are workspace-SCOPED but not workspace-NAMED, and §6
-// reveals a tier rather than relocating every page beneath it. This pane IS
-// workspace-named and `notFound()`s below the threshold, so a door to it there
-// would be a promise the product then refuses (`SidebarNav`'s own standing
-// rule). Below the threshold the control is reached through the org-settings
-// fold-in instead — so nothing is lost, only re-homed.
+// ⚠️ ONE OF THE TWO DOORS HAS MOVED (Story MOTIR-4843 · MOTIR-4847). The RAIL
+// door is gone: `Security` left the project rail's bottom section entirely, and
+// is now a row in the workspace area's OWN rail
+// (`lib/settings/workspaceSettingsNav.ts`, covered by
+// `SidebarNav-workspace-area.test.tsx`). The palette door below is UNCHANGED —
+// a palette action is a second door, and this story removes doors only where
+// another covers the same room at the same reveal arm.
+//
+// ⚠️ AND THE CARVE-OUT BESIDE IT IS RETIRED. This comment used to say
+// `/settings/workspace/jobs`, `/github` and `/gitlab` "must keep rendering at
+// every count — they are workspace-SCOPED but not workspace-NAMED". That was
+// MOTIR-3502's AC 6, and it was the tell rather than the exception: a surface
+// exempted from a hiding rule BECAUSE IT STILL ANSWERS is one that was never
+// given a relocation. Job runs has one now (MOTIR-4861's `JobRunsFoldInSection`)
+// and Git changed tier (MOTIR-4680), so all of them are gone from this section.
+//
+// What is unchanged is the REASON: this pane is workspace-named and
+// `notFound()`s below the threshold, so a door to it there would be a promise
+// the product then refuses (`SidebarNav`'s own standing rule). Below the
+// threshold the control is reached through the org-settings fold-in — nothing is
+// lost, only re-homed.
 
 let pathname = '/dashboard';
 const { navSearchParams } = vi.hoisted(() => ({ navSearchParams: new URLSearchParams() }));
@@ -71,44 +84,64 @@ function renderRail(workspaceTierRevealed: boolean) {
 }
 
 describe('the settings rail', () => {
-  it('renders a Security row when the workspace tier is REVEALED', () => {
-    const { container } = renderRail(true);
-    expect(container.innerHTML).toContain(`href="${HREF}"`);
-  });
+  // AMENDED, not deleted (MOTIR-4847). Three cases here asserted a rail row that
+  // no longer exists — its presence above the reveal, its absence below it, and
+  // the `active:` clause the door used to yield to it with. All three are
+  // REPLACED by their negations rather than removed: "there is no Security row
+  // in this section at any count" is the new contract, and a deleted case would
+  // leave it recorded nowhere while the file's name still promised it.
 
-  it('renders NO Security row below the threshold — a door to a 404 is worse than none', () => {
-    const { container } = renderRail(false);
-    expect(container.innerHTML).not.toContain(HREF);
-  });
-
-  it('the rows BESIDE it are unaffected at either count', () => {
-    // The whole point of the gate being on this row and not on its neighbours.
+  it('⚠️ renders NO Security row AT EITHER COUNT — the row moved to the area rail', () => {
     for (const revealed of [true, false]) {
       cleanup();
       const { container } = renderRail(revealed);
-      expect(container.innerHTML, `revealed=${revealed}`).toContain(
+      expect(container.innerHTML, `revealed=${revealed}`).not.toContain(HREF);
+    }
+  });
+
+  it('renders no Job runs row either — both workspace rows left together', () => {
+    for (const revealed of [true, false]) {
+      cleanup();
+      const { container } = renderRail(revealed);
+      expect(container.innerHTML, `revealed=${revealed}`).not.toContain('/settings/workspace/jobs');
+    }
+  });
+
+  it('⚠️ NEITHER neighbour is in this section any more, at either count', () => {
+    // This case was `the Git row is unaffected at either count` — Git had moved
+    // to the ORGANISATION tier (MOTIR-4680), which gave it no reveal arm and
+    // made it the section's only unconditional member.
+    //
+    // Both witnesses have since left: `Job runs` with MOTIR-4847 and `Git` with
+    // MOTIR-4643. So the case can no longer prove "the neighbours are
+    // unaffected" by naming a survivor — there is none to name. It asserts their
+    // ABSENCE at both counts instead, which is the claim that is now true and
+    // the one that fails if either row returns without anyone deciding it
+    // should.
+    for (const revealed of [true, false]) {
+      cleanup();
+      const { container } = renderRail(revealed);
+      expect(container.innerHTML, `revealed=${revealed}`).not.toContain(
         'href="/settings/workspace/jobs"',
       );
-      // ⚠️ THE `Git` WITNESS IS GONE (MOTIR-4643) — the row LEFT this section,
-      // so it can no longer stand for "the neighbours are unaffected". `Job runs`
-      // above is the surviving neighbour and carries the claim on its own; the
-      // ABSENCE is asserted here too, so this case fails if the row ever comes
-      // back without anyone deciding it should.
       expect(container.innerHTML, `revealed=${revealed}`).not.toContain(
         'href="/settings/organization/git"',
       );
     }
   });
 
-  it('the Settings row does not read as current while Security is the active route', () => {
-    // Only one row may read current; the parent door stands down for each of its
-    // more-specific sub-routes, and Security joins that list.
+  it('⚠️ the Settings row is not even BUILT on the Security route now', () => {
+    // This case used to assert that the door stood down for Security's own row.
+    // Both halves of that are gone: there is no Security row to yield to, and
+    // `/settings/workspace/security` is inside the workspace AREA, so
+    // `SidebarNav` returns that area's own Sidebar before it reaches this
+    // section at all (MOTIR-4846's fourth branch). The two clauses that used to
+    // negate this pathname were deleted with the rows — a clause that can never
+    // fire is not a safe extra, it is an untested branch that reads as covered
+    // (MOTIR-4368's finding about this very predicate).
     pathname = HREF;
-    const { container } = renderRail(true);
-    const current = [...container.querySelectorAll('[aria-current="page"]')].map((el) =>
-      el.getAttribute('href'),
-    );
-    expect(current).toEqual([HREF]);
+    renderRail(true);
+    expect(screen.queryByRole('link', { name: 'Git' })).toBeNull();
     pathname = '/dashboard';
   });
 });

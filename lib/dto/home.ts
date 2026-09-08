@@ -85,18 +85,32 @@ export interface HomeWorkItemRowDto {
 }
 
 /**
- * One cursor-paged window of a personal read (finding #57 — never a load-all).
- * `nextCursor` is an OPAQUE token to resume after, or `null` on the last page.
+ * One OFFSET-paged window of a personal read (finding #57 — never a load-all).
  *
- * It is opaque because it encodes a KEYSET — `(updatedAt, id)`, the exact pair
- * the reads order by — rather than an offset or a bare row id. A keyset is what
- * makes the page boundary stable while items keep being updated underneath the
- * reader, which is the property the dedupe has to survive: MOTIR-2655 asserts
- * that the union of two pages repeats no id and drops none.
+ * ⚠️ THIS WAS A KEYSET, AND THE TRADE IS DELIBERATE (MOTIR-4852). It carried an
+ * opaque `nextCursor` encoding `(updatedAt, id)` — the exact pair the reads
+ * order by — because a keyset keeps a page boundary stable while items are
+ * updated underneath the reader. It can only ever offer NEXT, though: a keyset
+ * has no notion of "page 7", so a reader could not see how far a tab went, jump,
+ * or step back. The Workbench is not a feed — it is a bounded personal list
+ * whose totals the tab strip already computes — so page numbers, a total and a
+ * back button are worth a small amount of drift risk. On something unbounded the
+ * trade would run the other way.
+ *
+ * The shape is `/items`' own (`PagedIssueListDto`), deliberately: one paging
+ * vocabulary across the product, and `IssueListPager` consumes it unchanged.
+ *
+ * `page` is 1-based and CLAMPED — see `homeService`'s note on why an
+ * out-of-range page lands on the last page rather than on an empty one.
  */
 export interface HomePageDto {
   items: HomeWorkItemRowDto[];
-  nextCursor: string | null;
+  /** The size of the whole SET this page is a window on — the pager's denominator. */
+  total: number;
+  /** The 1-based page actually served, after clamping. */
+  page: number;
+  /** The window size — `HOME_PAGE_SIZE` unless the caller narrowed it. */
+  pageSize: number;
 }
 
 /**

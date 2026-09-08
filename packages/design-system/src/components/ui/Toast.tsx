@@ -22,8 +22,6 @@ const toastVariants = cva(
     'rounded-(--radius-card) border bg-(--el-page-bg)',
     'px-(--spacing-md) py-(--spacing-sm)',
     'shadow-(--shadow-elevated)',
-    'data-[state=open]:animate-in data-[state=closed]:animate-out',
-    'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-80',
     'data-[swipe=move]:translate-x-(--radix-toast-swipe-move-x)',
     'data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-(--radix-toast-swipe-end-x)',
     'data-[swipe=cancel]:transition-transform data-[swipe=end]:transition-transform',

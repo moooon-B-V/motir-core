@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { pageItems } from '@/lib/issues/issueListView';
 
@@ -17,8 +18,27 @@ import { pageItems } from '@/lib/issues/issueListView';
 // (IssueListTable) navigates to the canonical ?page= href, so the Server
 // Component re-reads the next page. No new primitive — page buttons are the
 // shipped control affordance (--radius-control / --height-control), chevrons lucide.
-
-const N = new Intl.NumberFormat('en-US');
+//
+// ⚠️ TRANSLATED IN PLACE (MOTIR-4853), and its two existing consumers inherit
+// it. This control shipped for months with `Showing`, `Page N`, `Previous page`,
+// `Next page` and `Pagination` written into it as English literals, and its
+// number formatting pinned to `en-US` — invisible because `/items` and
+// `/items/archived` never forced the question. The Workbench does: it is the
+// surface that ships in both languages, and the whole point of composing the
+// shipped control rather than writing a second one is that there is exactly ONE
+// pager in the product. So the gap is paid IN the component, not around it.
+//
+// The strings live in `common.pager` — where a control is read from when no
+// single surface owns it — and `design/workbench/design-notes.md` § The pager →
+// The copy is where their `en` / `zh` values are named.
+//
+// ⚠️ THE RANGE LINE IS `t.rich`, NOT A CONCATENATION, and that is a translation
+// decision rather than a styling one. Its two numbers are bold, and Chinese puts
+// its measure words AROUND them (`显示第 X–Y 项，共 N 项`) — so a sentence
+// assembled from fragments in JSX would pin the English word order into the
+// markup. The tags are what let a translator move the emphasis with the words.
+// (`<count>`, not `<total>`: `total` is already a VALUE in the same message, and
+// next-intl resolves the two namespaces together.)
 
 export interface IssueListPagerProps {
   /** Count of the currently filtered set (the pager denominator). */
@@ -35,6 +55,11 @@ const PG_BTN =
   'inline-flex h-(--height-control) min-w-(--height-control) items-center justify-center rounded-(--radius-control) px-(--spacing-control-x) font-sans text-[13px] font-medium focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';
 
 export function IssueListPager({ total, page, pageSize, onPage }: IssueListPagerProps) {
+  const t = useTranslations('common.pager');
+  // ⚠️ The ACTIVE locale, not `en-US`. The grouping separator only shows on a
+  // four-figure total, which is exactly the number on this control a reader
+  // could misread if it were grouped by someone else's convention.
+  const N = new Intl.NumberFormat(useLocale());
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
@@ -48,18 +73,20 @@ export function IssueListPager({ total, page, pageSize, onPage }: IssueListPager
           muted is ~4.34:1 (below WCAG AA); secondary clears it (~6.5:1 light,
           ~6.9:1 dark). Surfaced by the 2.5.6 strict /items a11y sweep. */}
       <span className="text-[13px] text-(--el-text-secondary)">
-        Showing{' '}
-        <strong className="font-semibold text-(--el-text)">
-          {N.format(from)}–{N.format(to)}
-        </strong>{' '}
-        of <strong className="font-semibold text-(--el-text)">{N.format(total)}</strong>
+        {t.rich('showing', {
+          from: N.format(from),
+          to: N.format(to),
+          total: N.format(total),
+          range: (chunks) => <strong className="font-semibold text-(--el-text)">{chunks}</strong>,
+          count: (chunks) => <strong className="font-semibold text-(--el-text)">{chunks}</strong>,
+        })}
       </span>
 
       {totalPages > 1 ? (
-        <nav aria-label="Pagination" className="inline-flex items-center gap-1">
+        <nav aria-label={t('pagination')} className="inline-flex items-center gap-1">
           <button
             type="button"
-            aria-label="Previous page"
+            aria-label={t('previousPage')}
             aria-disabled={onFirst}
             disabled={onFirst}
             onClick={() => onPage(page - 1)}
@@ -87,7 +114,7 @@ export function IssueListPager({ total, page, pageSize, onPage }: IssueListPager
               <button
                 key={it}
                 type="button"
-                aria-label={`Page ${it}`}
+                aria-label={t('page', { page: it })}
                 aria-current="page"
                 className={cn(
                   PG_BTN,
@@ -100,7 +127,7 @@ export function IssueListPager({ total, page, pageSize, onPage }: IssueListPager
               <button
                 key={it}
                 type="button"
-                aria-label={`Page ${it}`}
+                aria-label={t('page', { page: it })}
                 onClick={() => onPage(it)}
                 className={cn(
                   PG_BTN,
@@ -114,7 +141,7 @@ export function IssueListPager({ total, page, pageSize, onPage }: IssueListPager
 
           <button
             type="button"
-            aria-label="Next page"
+            aria-label={t('nextPage')}
             aria-disabled={onLast}
             disabled={onLast}
             onClick={() => onPage(page + 1)}
