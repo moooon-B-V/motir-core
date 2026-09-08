@@ -204,6 +204,48 @@ export interface PlanItemProposedFields {
    */
   targetRepo?: string | null;
   /**
+   * EVERY repository this item ships in, ORDERED (bug MOTIR-4904) — the
+   * PROPOSAL-path twin of `create_work_item`'s `targetRepos`, and the field whose
+   * absence meant a repository SET could not be PROPOSED at all.
+   *
+   * ⚠️ IT IS AN OMISSION BEING CLOSED, NOT A BOUNDARY BEING WIDENED. A work
+   * item's repositories became a SET on the direct write path (Story MOTIR-2725 ·
+   * MOTIR-2727) and the proposal path was never in that story's scope; MOTIR-3540
+   * later gave the correction door the SINGULAR `targetRepo` because the singular
+   * was what it was asked for. Nothing anywhere recorded a decision that a
+   * proposal may not carry a set — and a planning pass may not use the direct door
+   * at all (`_shared.md`'s *A PLANNING PASS PROPOSES*), so for a planner the set
+   * was not merely awkward to express but INEXPRESSIBLE. The remedy on the record
+   * was *approve it, then patch it*: a field the approver never saw, written into
+   * a card they already approved, with a window in between where dispatch routes
+   * on the WRONG pin.
+   *
+   * Element 0 is the PRIMARY — the repository dispatch routes to — and the item
+   * does not complete until every element has a merged pull request of its own.
+   * Bare names or the `owner/name` ref form, validated at approve against the
+   * PROJECT's repository domain by the SAME resolver the direct path calls
+   * (`resolveAuthoredRepoPinsInProject`), so the two doors cannot disagree about
+   * what a pin means or which repositories exist.
+   *
+   * MUTUALLY EXCLUSIVE with {@link targetRepo} and {@link targetRepositories} —
+   * they are one field in three forms, and supplying two is rejected at the
+   * append rather than silently resolved (`assertSingleTargetRepoInput`, the
+   * direct door's own guard, shared). `[]` is the empty set.
+   */
+  targetRepos?: string[];
+  /**
+   * The same axis as {@link targetRepos}, given as `project_repository` ROW IDS
+   * (bug MOTIR-4904) — the reference-native form, ADR "Amendment 2026-08-18" §A4.
+   *
+   * Prefer it over names when the ids are in hand: a reference survives the
+   * repository being renamed, and it can name one of two rows that share a role,
+   * which a name cannot. Validated by `resolveAuthoredRepoRefsInProject`, the
+   * direct path's own resolver; an id outside this project rejects the whole set.
+   *
+   * MUTUALLY EXCLUSIVE with both fields above.
+   */
+  targetRepositories?: string[];
+  /**
    * WHICH ROLE of the project's repository set this item ships in (Story
    * MOTIR-1775 · MOTIR-1912) — the PORTABLE pin, and the one a fresh onboarding
    * generation can actually emit.
@@ -330,6 +372,26 @@ export interface PlanItemPatch {
    */
   targetRepo?: string | null;
   /**
+   * RE-PIN the target's whole repository SET (bug MOTIR-4904) — the `modify`
+   * mirror of the `add` path's {@link PlanItemProposedFields.targetRepos}, so a
+   * re-plan that discovers a card ships in two repositories can say so on the
+   * plan a person approves rather than in an `update_work_item` afterwards.
+   *
+   * Sparse at the KEY, like every key here: absent leaves the axis untouched, and
+   * an explicit `[]` UNPINS the card entirely. There is no `null` form — the empty
+   * set IS the cleared set, which is the same contract the direct door states.
+   *
+   * MUTUALLY EXCLUSIVE with {@link targetRepo} and {@link targetRepositories} on
+   * the SAME patch; the append refuses a patch describing the axis twice.
+   */
+  targetRepos?: string[];
+  /**
+   * The same axis as {@link targetRepos}, as `project_repository` ROW IDS (bug
+   * MOTIR-4904) — the reference-native form, and mutually exclusive with both
+   * fields above.
+   */
+  targetRepositories?: string[];
+  /**
    * RE-PIN the target's repo ROLE (MOTIR-1912) — the `modify` mirror of the `add`
    * path's {@link PlanItemProposedFields.targetRepoRole}, so a re-plan that moves
    * work from one role of the set to another (the API half becoming a shared
@@ -411,6 +473,8 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'storyPoints',
   'estimateMinutes',
   'targetRepo',
+  'targetRepos',
+  'targetRepositories',
   'targetRepoRole',
   'parentRef',
   'blockedByAdd',
@@ -681,6 +745,23 @@ export interface CorrectProposalInput extends UpdateProposalInput {
    *  repositories exactly as approve does; `null` unpins. */
   targetRepo?: string | null;
   /**
+   * `add` only — REPLACE the proposal's repository SET with these ordered NAMES
+   * (bug MOTIR-4904). `[]` unpins.
+   *
+   * ⚠️ SUPPLYING ONE FORM OF THE AXIS CLEARS THE OTHER TWO on the corrected
+   * proposal, rather than merging into a contradiction the append would have
+   * refused. A correction is sparse per KEY, but the three repository fields are
+   * one field in three spellings: leaving a stale `targetRepo` beside a new
+   * `targetRepos` would store exactly the state `assertSingleTargetRepoInput`
+   * exists to keep out, and approve would then have to invent a precedence rule.
+   */
+  targetRepos?: string[];
+  /**
+   * `add` only — the same axis as {@link targetRepos}, as `project_repository`
+   * ROW IDS (bug MOTIR-4904). Clears the other two forms, for the reason above.
+   */
+  targetRepositories?: string[];
+  /**
    * `add` only — RE-PIN the proposal's repo ROLE (MOTIR-3865), the portable half
    * of the pin beside {@link targetRepo}'s settled one. `null` unpins.
    *
@@ -745,6 +826,8 @@ export const CORRECT_PROPOSAL_KEYS = [
   'parentRef',
   'blockedByRefs',
   'targetRepo',
+  'targetRepos',
+  'targetRepositories',
   'targetRepoRole',
   'patch',
 ] as const;

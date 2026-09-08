@@ -676,9 +676,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // The line has to carry what SEPARATES it from the deepen above, because a
     // reader picking between two adjacent tools is choosing on exactly that.
     summary:
-      'Correct a proposal — including its parent, its dependency edges and its repo pin (name and role) — even after the plan is in review.',
+      'Correct a proposal — including its parent, its dependency edges and its whole repository axis (one repo, a set, or a role) — even after the plan is in review.',
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '3edbd458460d',
+    descriptionFingerprint: '6a4d08e62324',
   },
   withdraw_plan_proposal: {
     // The SUMMARY stands as written and MOTIR-4146 only re-pinned the

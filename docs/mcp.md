@@ -2314,7 +2314,21 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
 - **`op`** — `add` · `modify` · `remove`.
 - **`proposedFields`** (`add`, required) — `title` (required), `kind`,
   `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`,
-  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepoRole`, `todos`.
+  `storyPoints`, `estimateMinutes`, `targetRepo`, `targetRepos`,
+  `targetRepositories`, `targetRepoRole`, `todos`.
+- **`proposedFields.targetRepos` / `targetRepositories`** — the repository SET a
+  card ships in, ORDERED, element 0 the PRIMARY (bug MOTIR-4904). The same axis
+  and the same three spellings `create_work_item` takes, validated at approve
+  against the project's repository domain by the same resolvers, and **mutually
+  exclusive** with `targetRepo` and with each other — supplying two is
+  `CONFLICTING_TARGET_REPO_INPUT` at the append rather than a precedence rule at
+  approve. A `modify`'s `patch` takes both keys with the same meaning.
+  **Until this bug was fixed a repository set could not be PROPOSED at all**: a
+  planning pass may not use the direct write door, so a card that legitimately
+  spanned two repositories could only be given its set after approval, with
+  `update_work_item` — a field the approver never saw, written into a card they
+  had already approved. `update_plan_item` (the deepen turn) still refuses all
+  three, deliberately: a deepen may not change where a card SHIPS.
 - **`proposedFields.todos`** (`add` only, leaf kinds only) — the card's **ORDERED
   STEPS**, written as its to-do list. **Array order is list order**, and
   approving the plan writes one real to-do row per element, none ticked. A
@@ -2538,12 +2552,25 @@ remedy was to author a whole second plan and ask a person to decline the first.
 | `parentRef`                          | string \| null | no       | `add` only. Re-parent it; `null` makes it top-level.              |
 | `blockedByRefs`                      | string[]       | no       | **REPLACES** the set — a list has no sparse edit. `[]` clears it. |
 | `targetRepo`                         | string \| null | no       | `add` only. Re-pin the repo; `null` unpins.                       |
+| `targetRepos`                        | string[]       | no       | `add` only. **REPLACES** the repository SET by NAME; `[]` unpins. |
+| `targetRepositories`                 | string[]       | no       | `add` only. The same set as repository ROW IDS.                   |
 | `targetRepoRole`                     | string \| null | no       | `add` only. Re-pin the ROLE — the portable half; `null` unpins.   |
 | `patch`                              | object \| null | no       | `modify` only. **REPLACES** that proposal's patch.                |
 
 **It reaches the five things the deepen cannot, and that is the whole point.** The
 field that is wrong is very often `patch.blockedByAdd` on a `modify` — the op no
 door could touch at all — because that is where an intra-plan dependency edit rides.
+
+**The repository axis is REPLACED, never merged** (bug MOTIR-4904). `targetRepo`,
+`targetRepos` and `targetRepositories` are one field in three spellings — mutually
+exclusive on any one call, exactly as they are on `create_work_item` — so correcting
+one CLEARS the other two. Merging instead would store a proposal describing the axis
+twice, which the append refuses and which approve would then have to guess at. The
+set forms are what made a MULTI-REPOSITORY card proposable at all: until this bug was
+fixed every plan-authoring door took only the singular, so a story spanning two
+repositories could only be given its set with `update_work_item` AFTER approval —
+outside the plan, after the review, with a window in between where dispatch routes
+on the wrong pin.
 
 **`targetRepoRole` is the half an ONBOARDING plan actually carries** (MOTIR-3865). At
 generation the project's repositories do not exist yet — the set is derived from the

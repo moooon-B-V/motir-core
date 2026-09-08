@@ -449,6 +449,20 @@ export interface ProjectedRowDto {
   storyPoints: number | null;
   estimateMinutes: number | null;
   targetRepo: string | null;
+  /**
+   * EVERY repository the row ships in, ordered (bug MOTIR-4904) — the SET beside
+   * `targetRepo`'s primary, so the pre-close projection check can SEE a
+   * two-repository card the plan proposes. A proposal that pinned only the
+   * singular reports it as the one-element set it means.
+   */
+  targetRepos: string[];
+  /**
+   * The repository axis as `project_repository` ROW IDS, when a PROPOSAL authored
+   * it that way (bug MOTIR-4904) — never resolved to names here, because
+   * resolution is a read this projection deliberately does not make. Empty for a
+   * committed row, whose names `targetRepos` above already carries.
+   */
+  targetRepositories: string[];
   /** The parent, as the projection sees it: a real key, or a temp-ref when the
    *  parent is itself a proposal in this plan. */
   parent: string | null;
@@ -503,6 +517,7 @@ interface StoredColumns {
   storyPoints: number | null;
   estimateMinutes: number | null;
   targetRepo: string | null;
+  targetRepos: string[];
 }
 
 /**
@@ -521,12 +536,20 @@ const NO_STORED_ROW: StoredColumns = {
   storyPoints: null,
   estimateMinutes: null,
   targetRepo: null,
+  targetRepos: [],
 };
 
 function toStoredColumns(
   row: Pick<
     WorkItem,
-    'title' | 'kind' | 'type' | 'priority' | 'storyPoints' | 'estimateMinutes' | 'targetRepo'
+    | 'title'
+    | 'kind'
+    | 'type'
+    | 'priority'
+    | 'storyPoints'
+    | 'estimateMinutes'
+    | 'targetRepo'
+    | 'targetRepos'
   >,
 ): StoredColumns {
   return {
@@ -537,6 +560,7 @@ function toStoredColumns(
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     estimateMinutes: row.estimateMinutes,
     targetRepo: row.targetRepo,
+    targetRepos: row.targetRepos,
   };
 }
 
@@ -590,6 +614,11 @@ function rowOf(
       storyPoints: f.storyPoints ?? null,
       estimateMinutes: f.estimateMinutes ?? null,
       targetRepo: f.targetRepo ?? null,
+      // The proposed SET (bug MOTIR-4904). A proposal pinning only the singular
+      // reports the one-element set it means, so a reader never sees "no
+      // repositories" for a card that has one.
+      targetRepos: f.targetRepos ?? (f.targetRepo ? [f.targetRepo] : []),
+      targetRepositories: f.targetRepositories ?? [],
       parent,
       pendingPatch: null,
     };
@@ -612,6 +641,8 @@ function rowOf(
     storyPoints: stored.storyPoints,
     estimateMinutes: stored.estimateMinutes,
     targetRepo: stored.targetRepo,
+    targetRepos: stored.targetRepos,
+    targetRepositories: [],
     parent,
     pendingPatch: proj.patchByWorkItemId.get(id) ?? null,
   };
@@ -662,6 +693,8 @@ export async function projectedWorkItem(
         storyPoints: null,
         estimateMinutes: null,
         targetRepo: null,
+        targetRepos: [],
+        targetRepositories: [],
         parent: null,
         pendingPatch: null,
       },

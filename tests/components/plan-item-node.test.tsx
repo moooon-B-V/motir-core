@@ -41,6 +41,8 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     storyPoints: null,
     estimateMinutes: null,
     targetRepo: null,
+    targetRepos: [],
+    targetRepositories: null,
     targetRepoRole: null,
     executor: null,
     planningProvenance: null,

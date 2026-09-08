@@ -376,6 +376,10 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     parentRef: 'planItem.parentRef',
     blockedByRefs: 'planItem.blockedByRefs',
     targetRepo: 'proposedFields.targetRepo',
+    // The SET spellings (bug MOTIR-4904) — the same landing place, one field
+    // over, and the same transport: `correctionFrom` reads each when PRESENT.
+    targetRepos: 'proposedFields.targetRepos',
+    targetRepositories: 'proposedFields.targetRepositories',
     targetRepoRole: 'proposedFields.targetRepoRole',
     // `modify` ONLY, and mutually exclusive with an `add`'s content bag — the
     // service refuses the two together by design. Its own transport (the
