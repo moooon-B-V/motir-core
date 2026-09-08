@@ -166,7 +166,14 @@
     "save": "保存",
     "loading": "加载中…",
     "checked": "已勾选",
-    "notChecked": "未勾选"
+    "notChecked": "未勾选",
+    "pager": {
+      "showing": "显示第 <range>{from}–{to}</range> 项，共 <count>{total}</count> 项",
+      "previousPage": "上一页",
+      "nextPage": "下一页",
+      "page": "第 {page} 页",
+      "pagination": "分页"
+    }
   },
   "planReview": {
     "backToPlans": "返回计划列表",
@@ -5340,6 +5347,7 @@
       "balance": "额度余额",
       "credits": "{n} 额度",
       "tier": "{tier} 套餐",
+      "exemptPill": "不计费",
       "allotmentRemaining": "本月 {allotment} 额度配额还剩 {pct}%",
       "spentAllTime": "累计消耗",
       "since": "自组织创建以来",
@@ -5427,6 +5435,11 @@
       "title": "规划已暂停 —— 额度已用尽",
       "body": "{org} 组织已用完本月全部额度，新的规划运行已暂停。既有计划仍可完整编辑。",
       "passiveSlot": "购买更多额度与变更套餐将在后续版本随计费功能推出。该入口将出现在此处。"
+    },
+    "exempt": {
+      "title": "此组织的规划不计费",
+      "body": "{org} 组织不受额度限制，无论余额显示为多少，规划都会照常运行。下方数字仅用于记录内部成本。",
+      "balanceNote": "此处余额可能为负。那是该组织已产生的成本，而不是欠款——本页任何数字都不是账单。"
     },
     "states": {
       "emptyTitle": "暂无用量",
@@ -6157,7 +6170,6 @@
       "noMatchesHint": "仓库在“设置 → 工作区 → GitHub”中同步。",
       "linkedTo": "已关联到 {key}",
       "deliversN": "交付 {count} 个工作项",
-      "linkedManually": "手动关联",
       "linkAction": "关联",
       "notConnected": "此工作区尚未连接 GitHub。请在“设置 → 工作区 → GitHub”中进行连接。",
       "prNotFound": "找不到该拉取请求。",
@@ -7324,11 +7336,6 @@
         "title": "没有等待你审批的工作",
         "body": "需要你签字确认才能继续的工作会显示在这里。"
       }
-    },
-    "pager": {
-      "next": "下一页",
-      "startOver": "回到顶部",
-      "end": "已经到底了。"
     }
   },
   "platformAdmin": {

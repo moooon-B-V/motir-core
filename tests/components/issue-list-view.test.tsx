@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
-import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import { renderWithIntl as render, renderWithIntl } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 
 // The /items view-switcher + sortable List headers (Subtask 2.5.8) under
@@ -356,5 +357,48 @@ describe('IssueListTable — pagination footer (Subtask 2.5.12)', () => {
           el?.tagName === 'SPAN' && /^Showing\s*1.2\s*of\s*2$/.test(el?.textContent ?? ''),
       ),
     ).toBeTruthy();
+  });
+});
+
+describe("the /items pager INHERITS the shared control's translation (MOTIR-4853)", () => {
+  // ⚠️ THIS SURFACE IS NOT WHAT THE CARD IS ABOUT, AND THAT IS WHY IT IS HERE.
+  // MOTIR-4853 translated `IssueListPager` IN PLACE so the Workbench could mount
+  // one pager rather than a second copy — which means this surface's control
+  // changed underneath it without this suite asking for anything. A regression
+  // here would be invisible to every Workbench test.
+  it('renders its footer in `en` and in `zh`, from the same catalogue keys', () => {
+    render(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+        pagination={{ total: 1234, page: 13, pageSize: 50 }}
+      />,
+    );
+    expect(screen.getByRole('navigation', { name: 'Pagination' })).toBeTruthy();
+    expect(
+      screen
+        .getByText(/Showing/)
+        .textContent?.replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('Showing 601–650 of 1,234');
+    cleanup();
+
+    renderWithIntl(
+      <IssueListTable
+        rows={ROWS}
+        sort={{ column: 'key', direction: 'asc' }}
+        filter={EMPTY_FILTER}
+        pagination={{ total: 1234, page: 13, pageSize: 50 }}
+      />,
+      { locale: 'zh', messages: zhMessages },
+    );
+    expect(screen.getByRole('navigation', { name: '分页' })).toBeTruthy();
+    expect(
+      screen
+        .getByText(/显示第/)
+        .textContent?.replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('显示第 601–650 项，共 1,234 项');
   });
 });

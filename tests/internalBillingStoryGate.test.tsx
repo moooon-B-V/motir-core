@@ -444,11 +444,26 @@ describe('GUARD — no figure on the billing or usage client is derived from `is
     const ALLOWED_ISMETA_READS: Record<string, number> = {
       // `isBillingExempt` — the single predicate the exempt variants branch on.
       [BILLING_CLIENT]: 1,
-      // ⚠️ STILL ZERO, and deliberately so. The usage surface has the SAME
-      // defect (MOTIR-4806) and it is NOT fixed here — its re-take is
-      // MOTIR-4809's, against `design/ai-usage`. Whoever fixes it moves this
-      // number in that card, not this one.
-      [USAGE_CLIENT]: 0,
+      // ⚠️ MOVED 0 → 1 BY MOTIR-4806, which is the card the line above named:
+      // *"whoever fixes it moves this number in that card, not this one."*
+      // This is that card, and this is the why.
+      //
+      // The usage surface had the same defect twice over, and BOTH are
+      // presentational swaps that change no number — the shape MOTIR-4572
+      // already permits one of, and the `suppressions()` arm above still holds
+      // it (it passes unchanged: no branch here derives a FIGURE from the flag).
+      //   • panel 7b asserted *"planning is paused"* for the one org whose
+      //     planning is never gated — motir-ai exempts `isMeta` at BOTH
+      //     enforcement points, so the sentence has never been true for it.
+      //     `design/ai-usage/design-notes.md` § AMENDMENT 2026-09-07 replaces it
+      //     with a drawn exempt state (7c) for that org alone.
+      //   • the hero's tier pill read *"Free tier"* for an org with every cap
+      //     lifted. § AMENDMENT 2026-09-08 replaces it with an exempt pill.
+      //
+      // ONE read, in ONE named predicate (`planningIsCreditGated`), which both
+      // consumers resolve through — same shape as `isBillingExempt` above, and
+      // the same reason the number is 1 rather than "a few".
+      [USAGE_CLIENT]: 1,
     };
 
     for (const [path, allowed] of Object.entries(ALLOWED_ISMETA_READS)) {

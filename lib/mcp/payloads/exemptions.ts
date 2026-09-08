@@ -119,7 +119,7 @@ export const EXEMPT_TOOLS = {
     'to tell that from a fresh record without parsing the prose (MOTIR-3553).',
   link_pull_request:
     'Returns the DECLARED LINK — `{ key, created, pullRequest: { repo, number, url, ' +
-    'title, state, ci, linkedManually } }`. The row is a `LinkedPullRequestDto`, the shape the ' +
+    'title, state, ci } }`. The row is a `LinkedPullRequestDto`, the shape the ' +
     'item detail page’s Development section renders, and no `/api/v1` operation returns a ' +
     'change request at all — the linking table is reached only through the webhook, the ' +
     'detail-page picker and now this tool. `created` has no v1 counterpart either, and it is ' +

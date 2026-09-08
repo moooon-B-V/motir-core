@@ -10,19 +10,11 @@ import {
   type HomeCategorySlice,
   type HomeProjectScope,
   type HomeWorkItemRow,
-  type WatchingCursor,
-  type WatchingGroup,
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
-import {
-  decodeHomeCursor,
-  decodeWatchingCursor,
-  encodeHomeCursor,
-  encodeWatchingCursor,
-} from '@/lib/workbench/cursor';
 import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
 
 // The Home landing surface's read layer (Story MOTIR-2649 · Subtask
@@ -78,8 +70,17 @@ export interface HomeActorContext extends AccessActorContext {
 }
 
 export interface HomeListOptions {
-  /** The opaque token from a previous page's `nextCursor`; omit for page one. */
-  cursor?: string | null;
+  /**
+   * The 1-based page to serve; omit for page one. Clamped to the last page —
+   * see {@link windowFor} for why an out-of-range page is not an empty window.
+   */
+  page?: number;
+  /**
+   * The window SIZE, defaulting to {@link HOME_PAGE_SIZE} and clamped to
+   * {@link HOME_MAX_PAGE_SIZE}. Named `limit` rather than `pageSize` because it
+   * is what every caller of these reads already passes; the DTO reports it back
+   * as `pageSize`, which is `/items`' word for the same number.
+   */
   limit?: number;
 }
 
@@ -158,37 +159,40 @@ async function activeProjectScope(
 }
 
 /**
- * Shape one repository page into the wire DTO.
+ * Where a 1-based page starts, and which page is actually being served.
  *
- * The reads are asked for `limit + 1` rows: the extra row is the HAS-MORE
- * probe, dropped before mapping. A `nextCursor` minted from a row that is not
- * returned is what makes the boundary exact — the alternative (mint a cursor
- * whenever the page came back full) hands the caller a cursor to an empty page
- * on every list whose length is a multiple of the page size.
+ * ⚠️ AN OUT-OF-RANGE PAGE CLAMPS TO THE LAST ONE — it does not serve an empty
+ * window. That is `/items`' shipped contract
+ * (`workItemsService.getProjectIssuesList`, count-first for exactly this
+ * reason), and this read is deliberately shaped to match it: one paging
+ * vocabulary across the product, and `IssueListPager` fed a `page` it did not
+ * ask for would draw a current-page chip outside its own run. `total === 0`
+ * gives `page: 1` with an empty `items`, which is the honest answer for a tab
+ * with nothing in it.
+ *
+ * MOTIR-4852's own criterion said "a page past the end returns an empty `items`
+ * with the real `total`" — AMENDED on the card, with this evidence: the same
+ * criterion also names `getProjectIssuesList` as the contract to match, and the
+ * two cannot both hold. What the criterion was protecting — that an
+ * out-of-range page is never an ERROR — holds either way, and is asserted.
  */
-function toPage(rows: HomeWorkItemRow[], limit: number, viewerId: string): HomePageDto {
-  return pageWith(rows, limit, viewerId, (row) =>
-    encodeHomeCursor({ at: row.updatedAt, id: row.id }),
-  );
+function windowFor(total: number, page: number | undefined, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const clamped = Math.min(Math.max(1, Math.trunc(page ?? 1) || 1), totalPages);
+  return { page: clamped, skip: (clamped - 1) * pageSize };
 }
 
-/**
- * The same shaping, with the cursor MINTED BY THE CALLER — because each read
- * pages on its own axis and a cursor minted from a different pair than the read
- * orders by is a page boundary that drifts.
- */
-function pageWith(
+/** Shape one repository window into the wire DTO. */
+function toPage(
   rows: HomeWorkItemRow[],
-  limit: number,
   viewerId: string,
-  mint: (row: HomeWorkItemRow) => string,
+  window: { total: number; page: number; pageSize: number },
 ): HomePageDto {
-  const hasMore = rows.length > limit;
-  const page = hasMore ? rows.slice(0, limit) : rows;
-  const last = page.at(-1);
   return {
-    items: page.map((row) => toHomeWorkItemRowDto(row, viewerId)),
-    nextCursor: hasMore && last ? mint(last) : null,
+    items: rows.map((row) => toHomeWorkItemRowDto(row, viewerId)),
+    total: window.total,
+    page: window.page,
+    pageSize: window.pageSize,
   };
 }
 
@@ -220,18 +224,34 @@ export const homeService = {
     slice: HomeCategorySlice,
     options: HomeListOptions = {},
   ): Promise<HomePageDto> {
-    const limit = clampLimit(options.limit);
-    const cursor = decodeHomeCursor(options.cursor);
-    const rows = await withWorkspaceContext(ctx, async (tx) => {
+    const pageSize = clampLimit(options.limit);
+    // COUNT FIRST, then read the window — the same order `/items` uses, and for
+    // the same two reasons: the total is the pager's denominator, and knowing it
+    // is what lets an out-of-range page clamp to the last one instead of
+    // fetching an empty offset. The count and the list are ONE predicate: the
+    // repository's `count` twin takes the same `slice` and the same scopes.
+    const { rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await activeProjectScope(ctx, tx);
-      return workItemRepository.findByAssigneeOrReporterInWorkspace(
+      const found = await workItemRepository.countByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
-        { projectScopes, slice, take: limit + 1, cursor },
+        projectScopes,
+        { slice },
         tx,
       );
+      const window = windowFor(found, options.page, pageSize);
+      return {
+        total: found,
+        page: window.page,
+        rows: await workItemRepository.findByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          { projectScopes, slice, take: pageSize, skip: window.skip },
+          tx,
+        ),
+      };
     });
-    return toPage(rows, limit, ctx.userId);
+    return toPage(rows, ctx.userId, { total, page, pageSize });
   },
 
   /** TO DO — nothing has been started. */
@@ -271,42 +291,38 @@ export const homeService = {
     ctx: HomeActorContext,
     options: HomeListOptions = {},
   ): Promise<HomePageDto> {
-    const limit = clampLimit(options.limit);
-    const cursor = decodeHomeCursor(options.cursor);
-    const rows = await withWorkspaceContext(ctx, async (tx) => {
+    const pageSize = clampLimit(options.limit);
+    const since = finishedWindowStart();
+    // Count-first, like its siblings — and with the SAME `sortField` + `since`
+    // the list uses, because the window is part of the predicate here and a
+    // count taken without it would be a denominator for a different set.
+    const { rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await activeProjectScope(ctx, tx);
-      return workItemRepository.findByAssigneeOrReporterInWorkspace(
+      const countOptions = {
+        slice: HOME_SLICE_DONE,
+        sortField: 'completedAt' as const,
+        since,
+      };
+      const found = await workItemRepository.countByAssigneeOrReporterInWorkspace(
         ctx.userId,
         ctx.workspaceId,
-        {
-          projectScopes,
-          slice: HOME_SLICE_DONE,
-          take: limit + 1,
-          cursor,
-          sortField: 'completedAt',
-          since: finishedWindowStart(),
-        },
+        projectScopes,
+        countOptions,
         tx,
       );
+      const window = windowFor(found, options.page, pageSize);
+      return {
+        total: found,
+        page: window.page,
+        rows: await workItemRepository.findByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          { projectScopes, ...countOptions, take: pageSize, skip: window.skip },
+          tx,
+        ),
+      };
     });
-    return pageWith(
-      rows,
-      limit,
-      ctx.userId,
-      (row) =>
-        // The `?? row.updatedAt` arm is UNREACHABLE: this read filters on
-        // `completedAt >= <window>`, so a null could not have matched it. The
-        // fallback stays because a cursor is the one value that must not be null —
-        // an absent token breaks paging for everyone on the tab — and the type
-        // does not know what the predicate guarantees. The invariant is asserted
-        // against real Postgres by `tests/integration/workbench/story-gate.test.ts`
-        // — "no row this read returns can have a null completion time", which goes
-        // red the moment somebody widens the slice, at which point this directive
-        // stops being true at the same instant.
-        /* v8 ignore start */
-        encodeHomeCursor({ at: row.completedAt ?? row.updatedAt, id: row.id }),
-      /* v8 ignore stop */
-    );
+    return toPage(rows, ctx.userId, { total, page, pageSize });
   },
 
   /**
@@ -393,32 +409,71 @@ export const homeService = {
    * and MOTIR-2655 asserts the overlap explicitly so nobody "corrects" it later.
    *
    * ⚠️ MOTIR-4781 GAVE IT AN ORDER, NOT A FILTER. Membership is untouched and
-   * nothing is dropped. The cursor carries the GROUP as well as the position,
-   * because the read walks the two groups in sequence and a position alone
-   * would be ambiguous between them (`watcherRepository.listByUser`).
+   * nothing is dropped.
+   *
+   * ⚠️ AND THE GROUP IS A PREDICATE, NOT A SORT KEY — which is why this method
+   * issues two list reads rather than one (MOTIR-4852). `work_item.status` is a
+   * plain `String` with no relation to `workflow_status`, so the CATEGORY the
+   * band is defined by is not reachable from a Prisma `orderBy` at all. The
+   * alternatives were a hand-written `ORDER BY CASE` in raw SQL — which would
+   * have to RE-DECLARE the membership and scope predicate that
+   * `homeProjectScopeWhere` owns, the exact drift this file's own criterion
+   * forbids — or this: two reads over one predicate, ordered identically, with
+   * the page's offset split between them by the moving group's own count. Both
+   * reads and the count run in ONE transaction, so the split is computed against
+   * the set it is applied to.
    */
   async listWatching(ctx: HomeActorContext, options: HomeListOptions = {}): Promise<HomePageDto> {
-    const limit = clampLimit(options.limit);
-    const cursor = decodeWatchingCursor(options.cursor);
-    const { rows, inProgressKeys } = await withWorkspaceContext(ctx, async (tx) => {
+    const pageSize = clampLimit(options.limit);
+    const { rows, total, page } = await withWorkspaceContext(ctx, async (tx) => {
       const projectScopes = await activeProjectScope(ctx, tx);
-      const found = await watcherRepository.listByUser(
-        ctx.userId,
-        ctx.workspaceId,
-        { projectScopes, take: limit + 1, cursor },
-        tx,
-      );
-      return {
-        rows: found,
-        inProgressKeys: new Set(
-          projectScopes.flatMap((sc) => [...sc.statusKeysByCategory.in_progress]),
+      // The MOVING group's own size is what splits the window. Counted with the
+      // same predicate its list uses, in the same transaction as both reads —
+      // so the split cannot be computed against a set that has since moved.
+      const [found, movingTotal] = await Promise.all([
+        watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
+        watcherRepository.countByUserInGroup(
+          ctx.userId,
+          ctx.workspaceId,
+          projectScopes,
+          'in_progress',
+          tx,
         ),
-      };
+      ]);
+      const window = windowFor(found, options.page, pageSize);
+      // The window, split at the band boundary. A page entirely inside the
+      // moving group takes nothing from the waiting one; a page entirely past it
+      // skips the moving group's whole length; a page that STRADDLES the
+      // boundary takes the tail of one and the head of the other, in that order
+      // — which is the arrangement the offset made possible and the keyset never
+      // produced (`design/workbench/` Panel 11).
+      const takeMoving = Math.max(0, Math.min(pageSize, movingTotal - window.skip));
+      const [moving, waiting] = await Promise.all([
+        watcherRepository.listByUserInGroup(
+          ctx.userId,
+          ctx.workspaceId,
+          {
+            projectScopes,
+            group: 'in_progress',
+            take: takeMoving,
+            skip: Math.min(window.skip, movingTotal),
+          },
+          tx,
+        ),
+        watcherRepository.listByUserInGroup(
+          ctx.userId,
+          ctx.workspaceId,
+          {
+            projectScopes,
+            group: 'todo',
+            take: pageSize - takeMoving,
+            skip: Math.max(0, window.skip - movingTotal),
+          },
+          tx,
+        ),
+      ]);
+      return { rows: [...moving, ...waiting], total: found, page: window.page };
     });
-    return pageWith(rows, limit, ctx.userId, (row) => {
-      const group: WatchingGroup = inProgressKeys.has(row.status) ? 'in_progress' : 'todo';
-      const next: WatchingCursor = { at: row.updatedAt, id: row.id, group };
-      return encodeWatchingCursor(next);
-    });
+    return toPage(rows, ctx.userId, { total, page, pageSize });
   },
 };

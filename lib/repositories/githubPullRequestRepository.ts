@@ -32,13 +32,15 @@ export interface UpsertGithubPullRequestInput {
    *  only because rows written before it existed cannot know theirs. */
   baseRef: string;
   title: string | null;
-  /** Whether this pull request's association with a work item was DECLARED
-   *  (MOTIR-1596) rather than inferred. Nothing reads it for control flow — the
-   *  resolver it made sticky was retired by MOTIR-3674 and the column it
-   *  qualified by MOTIR-3757 — but it is the provenance of the rows already
-   *  written, so every writer still states it rather than letting the default
-   *  decide. The webhook passes the row's PRESERVED value. */
-  linkedManually: boolean;
+  /* ⚠️ `linkedManually` WAS A FIELD HERE and is removed by MOTIR-4894. It said
+   * the association was DECLARED rather than inferred by the MOTIR-892
+   * auto-resolver; MOTIR-3674 deleted that resolver, so the distinction had no
+   * other side and the flag was true of every live write. The COLUMN still
+   * exists and still has its `false` default — MOTIR-4894 is phase 1 of
+   * `docs/decisions/delivery-reader-migration.md` §6a, and phases 2 and 3 are
+   * what remove it — so an upsert that no longer names it writes the default on
+   * insert and leaves the stored value alone on update. That is deliberate: the
+   * rows already written keep whatever they say, and nothing new asserts it. */
 }
 
 /** One linked change request, reduced to the four facts the repository-SET
@@ -107,12 +109,18 @@ export const githubPullRequestRepository = {
   },
 
   /** Take a row lock on the `(repo, number)` PR (if it exists) so a read-derived
-   *  write serializes against a concurrent manual link (MOTIR-1596): the webhook
-   *  decides whether to PRESERVE an existing manual link, so it must lock the row
-   *  before reading `linkedManually` — otherwise a manual link committed between
-   *  the read and the upsert would be silently clobbered (the lock-before-read-
-   *  derived-update rule). A no-op when the row does not exist yet (a brand-new
-   *  PR; the upsert's P2002 catch still converges concurrent inserts). */
+   *  write serializes against a concurrent one (the lock-before-read-derived-
+   *  update rule). A no-op when the row does not exist yet (a brand-new PR; the
+   *  upsert's P2002 catch still converges concurrent inserts).
+   *
+   *  ⚠️ ITS ORIGINAL JUSTIFICATION IS GONE AND THE LOCK IS NOT (MOTIR-4894). It
+   *  was taken so the webhook could read `linked_manually` and decide whether to
+   *  preserve it (MOTIR-1596); that derivation is deleted. What still derives
+   *  from this read are `syncChangeRequestStatus`'s `mergeAlreadyRecorded` — a
+   *  decision made from the row's PRIOR `state` / `merged` — and
+   *  `linkPullRequestByCoordinates`'s create-or-touch branch, which asks whether
+   *  a row exists before writing the caller's stale `state: 'open'`. Both are
+   *  read-then-write and both clobber under a concurrent delivery without it. */
   async lockByRepoAndNumber(
     repoId: string,
     number: number,
@@ -382,27 +390,22 @@ export const githubPullRequestRepository = {
     });
   },
 
-  /** Stamp a PR row as DECLARED rather than inferred (MOTIR-1596). Returns the
-   *  row with its context for the DTO. Write path → `tx`.
+  /* ⚠️ `markLinkedManually` WAS HERE and is deleted by MOTIR-4894 — the LAST
+   * writer of `linked_manually`, and with it the last thing on either side of
+   * that column in application code.
    *
-   *  ⚠️ THIS IS WHAT IS LEFT OF `setWorkItemLink` (MOTIR-3757), and the half that
-   *  went is the half the name was about. That method wrote two columns:
-   *  `work_item_id`, which is GONE — the link is a `work_item_delivery` row, and
-   *  the caller writes it there — and `linked_manually`, which is NOT, because
-   *  the provenance of the rows already written outlives the scalar they
-   *  qualified. Dropping this write instead of narrowing it would leave every
-   *  link declared after this card carrying `false`, which is a worse state for
-   *  the surviving column than either keeping it or retiring it outright. */
-  async markLinkedManually(
-    id: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<GithubPullRequestWithInstallation> {
-    return tx.githubPullRequest.update({
-      where: { id },
-      data: { linkedManually: true },
-      include: { repo: { include: { installation: true } }, checkRuns: true },
-    });
-  },
+   * It was what remained of `setWorkItemLink` after MOTIR-3757 dropped
+   * `work_item_id`: a one-column update stamping a link as DECLARED rather than
+   * inferred, kept so a row written after the drop would mean what one written
+   * before it meant. That argument held only while something could tell the two
+   * apart, and nothing can — MOTIR-3674 deleted the inferring resolver, so every
+   * link is declared and the stamp asserted a universal.
+   *
+   * Its callers wanted the re-read as much as the write, and they still get it:
+   * `githubPullRequestService` now reads through `findByIdWithInstallation`,
+   * which returns the same `GithubPullRequestWithInstallation` the DTO is built
+   * from. Nothing about the row changes on a link any more, so there is nothing
+   * to re-read FOR — only the row itself. */
 
   /** Stamp a merged PR's capture facts onto its row (MOTIR-2922). `updateMany`
    *  rather than `update` deliberately: this runs POST-COMMIT and best-effort, so

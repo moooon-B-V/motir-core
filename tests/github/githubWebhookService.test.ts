@@ -532,6 +532,8 @@ describe('githubWebhookService — pull_request → status sync', () => {
     expect(await statusOf(s.item.id)).toBe('done');
     const after = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
     expect(await deliveredItemIds(after.id)).toEqual([s.item.id]);
+    // The delivery left the surviving provenance column exactly as the fixture
+    // wrote it: since MOTIR-4894 the sync names it in neither create nor update.
     expect(after.linkedManually).toBe(false);
   });
 

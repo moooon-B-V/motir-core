@@ -33,6 +33,31 @@ import {
 const RUN_LOG_PAGE_SIZE = 10;
 const LOW_BALANCE_FRACTION = 0.1; // a balance under 10% of the allotment is "low"
 
+/**
+ * Is planning on this org ACTUALLY gated by its credit balance?
+ *
+ * ⚠️ THE ONE `isMeta` READ THIS SURFACE MAKES. It is a function rather than a
+ * local so that both of its consumers — the exhausted-balance state below and
+ * the tier pill in `SummaryPanel` — resolve the same policy from one place, and
+ * so a grep for `isMeta` over `app/(authed)/settings/organization/` returns
+ * exactly this line (MOTIR-4806 criterion 9c).
+ *
+ * It MIRRORS motir-ai's policy and does not invent one. The credit gate is
+ * bypassed for `isMeta` at BOTH enforcement points there, and for `isMeta` only:
+ *   • `src/jobs/worker.ts` `assertHasCredits` — `if (isMeta) return;`
+ *   • `src/services/gatewaySyncService.ts` `getBalanceForOrg` —
+ *     `hasCredits = isMeta || balanceCredits > 0`
+ *
+ * ⚠️ NEVER WIDEN IT TO `internalBilling`. An org that is charged like a customer
+ * and then made whole genuinely HAS a tier and genuinely IS refused at a zero
+ * balance by both gates above — for it every line on this page is true, which is
+ * the asymmetry `design/ai-usage/design-notes.md` § AMENDMENT 2026-09-07
+ * recorded. Widening would hide a real refusal.
+ */
+function planningIsCreditGated(data: OrgUsageDTO): boolean {
+  return !data.isMeta;
+}
+
 interface FetchReq {
   scope?: UsageScope;
   workspaceId?: string | null;
@@ -180,10 +205,26 @@ export function OrgUsageClient({ orgId, orgName }: OrgUsageClientProps) {
   // its balance is real, it nets to zero, and these three computations are
   // simply true for it. Rendering out-of-credits gates nothing — the balance
   // never falls, so the state is reachable in a test and unreachable in life.
-  const outOfCredits = data.balance <= 0;
+  // ⚠️ AMENDED (MOTIR-4806). The block above deleted five `isMeta` reads and was
+  // right to: the FIGURES on this page are true for an internal org. What it also
+  // deleted was the one read that is not about a figure — whether the balance
+  // GATES anything — on the reasoning that "the balance never falls, so the state
+  // is reachable in a test and unreachable in life". That is about a FLOOR; the
+  // predicate is a THRESHOLD (`<= 0`, not `< 0`), and the floor IS the threshold:
+  // `motir-ai/scripts/reconcile-internal-balance.ts` pins a newly-classified org's
+  // ledger at exactly 0. So 7b is an exempt org's PERMANENT state, not its
+  // unreachable one — and its copy asserts a pause no gate performs.
+  //
+  // The split is EXHAUSTED (a fact about the number, true for every org) from
+  // GATED (a fact about policy). 7a is unchanged and still reads `!exhausted`,
+  // which is exactly what `!outOfCredits` meant before this change.
+  const balanceExhausted = data.balance <= 0;
+  const creditGated = planningIsCreditGated(data);
+  const outOfCredits = balanceExhausted && creditGated; // panel 7b
+  const balanceExempt = balanceExhausted && !creditGated; // panel 7c
   const allotment = data.tier?.monthlyCreditAllotment ?? 0;
   const lowBalance =
-    !outOfCredits && allotment > 0 && data.balance / allotment < LOW_BALANCE_FRACTION;
+    !balanceExhausted && allotment > 0 && data.balance / allotment < LOW_BALANCE_FRACTION;
   const remainingPct =
     allotment > 0 ? Math.max(0, Math.min(100, Math.round((data.balance / allotment) * 100))) : null;
 
@@ -192,6 +233,7 @@ export function OrgUsageClient({ orgId, orgName }: OrgUsageClientProps) {
       {live}
 
       {outOfCredits ? <OutOfCreditsCard orgName={orgName} t={t} /> : null}
+      {balanceExempt ? <ExemptBalanceCard orgName={orgName} t={t} /> : null}
       {lowBalance ? (
         <LowBalanceBanner balance={data.balance} pct={remainingPct ?? 0} t={t} />
       ) : null}
@@ -394,10 +436,27 @@ function SummaryPanel({
                 the classification sits BESIDE it rather than instead of it —
                 the chip says what kind of org this is and changes no figure on
                 the page. */}
+            {/* ⚠️ AMENDED (MOTIR-4886 → MOTIR-4806). The pill was unconditional,
+                so the one org for which every cap is lifted read "Free tier" —
+                `ensureBilling` assigns the free tier before the first debit, so
+                an exempt org that has ever planned HAS a tier row. The outer
+                `data.tier` guard is unchanged: an org that has genuinely never
+                transacted still renders no pill at all. The EXEMPT treatment is
+                deliberately UNTINTED and so parts company with
+                `design/billing`'s peach `.pill-exempt` — every tint on this
+                surface is already spent (peach is the `plan` job kind in the run
+                log below). Same word, different tint;
+                `design/ai-usage/design-notes.md` § AMENDMENT 2026-09-08. */}
             {data.tier ? (
-              <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
-                {t('summary.tier', { tier: data.tier.name })}
-              </Pill>
+              planningIsCreditGated(data) ? (
+                <Pill className="bg-(--el-tint-lavender) text-(--el-text-strong) border-transparent">
+                  {t('summary.tier', { tier: data.tier.name })}
+                </Pill>
+              ) : (
+                <Pill className="bg-(--el-surface) text-(--el-text-secondary) border-(--el-border)">
+                  {t('summary.exemptPill')}
+                </Pill>
+              )
             ) : null}
             {data.internalBilling ? (
               <Pill className="bg-(--el-tint-sky) text-(--el-text-strong) border-transparent">
@@ -1022,6 +1081,40 @@ function OutOfCreditsCard({ orgName, t }: { orgName: string; t: T }) {
       {/* PASSIVE Epic-8 slot — NO active buy/upgrade control here. */}
       <div className="w-full max-w-prose rounded-(--radius-card) border border-dashed border-(--el-border) p-(--spacing-card-padding) font-sans text-xs text-(--el-text-muted)">
         {t('outOfCredits.passiveSlot')}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Panel 7c — the EXEMPT org's exhausted balance.
+ *
+ * Built to `design/ai-usage/design-notes.md` § AMENDMENT 2026-09-07's element
+ * table. It is the SAME box as 7b and differs in exactly one role: the icon is
+ * INFORMATIONAL, not a warning — nothing is wrong and nothing is paused — so it
+ * takes `--el-tint-sky` + `--el-info` rather than 7b's yellow + warning, and an
+ * `Info` glyph rather than 7b's `Pause`, which states a stop there is not.
+ *
+ * The footnote reuses 7b's passive-slot SHAPE and the note's own tokens
+ * (`--el-surface-soft` + `--el-text-secondary`, 6.51:1 — `--el-text-muted` is
+ * 4.34:1 on that surface and would fail AA). It is not an Epic-8 purchase slot
+ * here: it carries the negative-balance explanation.
+ */
+function ExemptBalanceCard({ orgName, t }: { orgName: string; t: T }) {
+  return (
+    <Card className="flex flex-col items-center gap-3 text-center">
+      <span
+        className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-(--el-tint-sky)"
+        style={{ color: 'var(--el-info)' }}
+      >
+        <Info className="h-6 w-6" aria-hidden />
+      </span>
+      <h3 className="font-serif text-xl text-(--el-text)">{t('exempt.title')}</h3>
+      <p className="max-w-prose font-sans text-sm text-(--el-text-muted)">
+        {t('exempt.body', { org: orgName })}
+      </p>
+      <div className="w-full max-w-prose rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding) font-sans text-xs text-(--el-text-secondary)">
+        {t('exempt.balanceNote')}
       </div>
     </Card>
   );

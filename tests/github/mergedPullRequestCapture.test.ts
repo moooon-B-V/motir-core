@@ -548,8 +548,10 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
     // The mapper enumerates its fields, so a new column cannot leak into the wire
     // shape — this pins that, because "it enumerates" is a property of today's
     // mapper and the DTO is what a client parses.
+    // MOTIR-4894 took `linkedManually` OFF this list, which is the half of the
+    // retirement a client can observe: the wire shape lost a key.
     expect(Object.keys(dto).sort()).toEqual(
-      ['ci', 'linkedManually', 'number', 'repo', 'state', 'title', 'url'].sort(),
+      ['ci', 'number', 'repo', 'state', 'title', 'url'].sort(),
     );
     expect(dto).toMatchObject({ state: 'merged', number: 11, repo: 'moooon-B-V/motir-core' });
   });

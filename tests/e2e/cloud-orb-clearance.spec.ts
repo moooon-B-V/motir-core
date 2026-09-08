@@ -6,8 +6,11 @@
 // on. It participates in no page's flow, so nothing below it reserved the space
 // it takes: at the end of a scrolled page the last block's bottom edge landed
 // inside that band and the bottom-right control there stopped receiving its own
-// clicks. Reported on `/items` (the List pager's `Next page`) and `/workbench` (the
-// cursor pager's `Next`).
+// clicks. Reported on `/items` and `/workbench` — at the time, two DIFFERENT
+// controls (the List pager's `Next page` button and the Workbench's keyset
+// `Next` link). MOTIR-4853 gave the Workbench the same shipped pager, so both
+// cases now drive one control; the two surfaces are still both asserted,
+// because the orb mounts on each of them independently.
 //
 // ⚠️ WHY THIS RIDES THE CLOUD LANE AND NOT `home.spec.ts` /
 // `issue-list-flow.spec.ts`, WHERE THE CARD ASKED FOR IT.
@@ -209,7 +212,7 @@ test('the /items List pager clears the orb at the end of a scrolled page, and Ne
   await expect(page.getByRole('dialog', { name: 'Motir AI' })).toHaveCount(0);
 });
 
-test("the Workbench cursor pager's Next clears the orb at the end of a scrolled page", async ({
+test("the Workbench pager's Next clears the orb at the end of a scrolled page", async ({
   page,
 }) => {
   await seedPaginatedProject(page, `orb-clearance-home-${Date.now()}@example.com`);
@@ -217,13 +220,25 @@ test("the Workbench cursor pager's Next clears the orb at the end of a scrolled 
   await page.goto('/workbench');
   await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
 
-  // The seed puts all 65 items in "My work" (creator = reporter), so the
-  // 25-row cursor page has a `Next`.
-  const next = page.getByRole('link', { name: 'Next', exact: true });
-  await expectReceivesItsOwnClick(page, next, '/workbench pager Next');
+  // ⚠️ THIS CASE USED TO ASSERT A `Next` **LINK** — the keyset pager's one-way
+  // walk, which MOTIR-4853 replaced with the shipped `IssueListPager` the
+  // `/items` case above already drives. The two surfaces now mount the SAME
+  // control, so the two cases converge: same role, same accessible name, same
+  // `?page=` advance. What is asserted here is unchanged and is the only reason
+  // this file exists — that the floating orb does not intercept a click on the
+  // control at the very bottom of a scrolled page.
+  //
+  // The seed puts all 65 items in To do (creator = reporter) and the Workbench
+  // pages at 25, so page one ends in a live footer.
+  await expect(page.getByText(`Showing 1–25 of ${SEEDED_ITEMS}`)).toBeVisible();
+  const next = page.getByRole('button', { name: 'Next page' });
+  await expectReceivesItsOwnClick(page, next, '/workbench pager Next page');
 
+  // The click LANDS on the pager — the page advances and the AI callout does
+  // not open. (A click that reached the orb would open the dialog.)
   await next.click();
-  await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
+  await page.waitForURL((url) => url.searchParams.get('page') === '2');
+  await expect(page.getByText(`Showing 26–50 of ${SEEDED_ITEMS}`)).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Motir AI' })).toHaveCount(0);
 });
 

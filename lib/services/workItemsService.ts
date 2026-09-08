@@ -6276,7 +6276,7 @@ async function resolveSprintFacet(
  *  asc)`: `READY_KIND_RANK` (subtask first … epic last) is primary, priority
  *  (highest first) breaks the type tie, `key` breaks the rest. The ONE comparator
  *  the list slice and the cursor seek-after share, so they can't drift. */
-function compareReadyRows(
+export function compareReadyRows(
   a: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
   b: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
 ): number {
