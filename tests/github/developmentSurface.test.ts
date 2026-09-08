@@ -183,9 +183,6 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'open',
         ci: 'running',
         url: 'https://github.com/moooon/acme/pull/41',
-        // MOTIR-3674 — every link is explicit now, so this is what the surface
-        // shows for a linked pull request.
-        linkedManually: true,
       },
     ]);
 
@@ -238,9 +235,6 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         state: 'merged',
         ci: null, // no check rows → no CI pill
         url: 'https://github.com/moooon/acme/pull/7',
-        // MOTIR-3674 — every link is explicit now, so this is what the surface
-        // shows for a linked pull request.
-        linkedManually: true,
       },
     ]);
   });

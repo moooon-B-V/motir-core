@@ -105,15 +105,18 @@ function PullRequestRow({
               {t('development.intoBase', { base: strandedBase })}
             </>
           ) : null}
-          {pr.linkedManually ? (
-            // Provenance at a glance (design Panel 5a) — a manual link (set by
-            // the explicit affordance, not the auto-resolver) carries the quiet
-            // "linked manually" suffix.
-            <>
-              {' · '}
-              <span className="font-mono">{t('development.linkedManually')}</span>
-            </>
-          ) : null}
+          {/* ⚠️ THE "linked manually" SUFFIX WAS HERE, and it is deleted by
+              MOTIR-4894 rather than reworded. It was a CONTRAST — design Panel
+              5a specified it to distinguish a link a person declared from one
+              the MOTIR-892 auto-resolver inferred from a branch or title — and
+              MOTIR-3674 deleted the inferring half. `resolveChangeRequestWorkItemSet`
+              has two arms, a session branch and a stored delivery, and both are
+              declared, so every row on this surface qualified for the suffix and
+              it distinguished nothing. Worse, it fired on the ordinary case: a
+              run links its own pull request over `link_pull_request`, so the
+              label said "manually" about a coding agent. A reader who wants
+              provenance back needs a fact this row does not have — WHO declared
+              the link — and that is a new field, not this one. */}
         </div>
       </div>
       <span className="flex shrink-0 items-center gap-1.5">

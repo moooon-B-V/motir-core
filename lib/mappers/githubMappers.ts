@@ -70,7 +70,6 @@ export function toLinkedPullRequestDto(row: GithubPullRequestWithContext): Linke
     state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
     ci: derivePrCiState(row.checkRuns),
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.number}`,
-    linkedManually: row.linkedManually,
   };
 }
 

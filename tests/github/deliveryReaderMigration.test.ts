@@ -427,28 +427,39 @@ describe('the TENANT resolves from a delivery row, before any workspace is bound
   });
 });
 
-describe('the column IS dropped, and `linked_manually` is not (MOTIR-3757 AC 7)', () => {
-  // ⚠️ THE PREDECESSOR OF THIS BLOCK ASSERTED THE OPPOSITE — *"the column is NOT
-  // dropped, and both writers still write it (MOTIR-3721 AC 7)"* — and it was
-  // right for its card, whose whole argument was that the EXPAND step drops
-  // nothing so the rollback stays a code revert. This is the CONTRACT step: the
-  // column goes, both writers go with it, and the one thing that must NOT go is
-  // `linked_manually`, which qualified the link and outlives it as provenance.
-  it('a link stamps `linked_manually` and a later delivery preserves it', async () => {
+describe('the column IS dropped, and `linked_manually` is not (MOTIR-3757 AC 7 · MOTIR-4894)', () => {
+  // ⚠️ THIS BLOCK HAS NOW ASSERTED THREE DIFFERENT THINGS, and each was right for
+  // its card. MOTIR-3721 (EXPAND) said the column is NOT dropped and both writers
+  // still write it, because a rollback had to stay a code revert. MOTIR-3757
+  // (CONTRACT) said the column goes, both writers go with it, and
+  // `linked_manually` must NOT go — it qualified the link and outlived it as
+  // provenance. MOTIR-4894 retires that last claim: with the MOTIR-892 resolver
+  // deleted there is no inferred link for a declared one to be distinguished
+  // FROM, so the flag was true of every live write and read as "manual" about a
+  // coding agent's own `link_pull_request` call.
+  //
+  // What survives here is the shape of the assertion, inverted: nothing WRITES
+  // the column, and the column is still THERE. Both halves matter — the second is
+  // the phase-1 boundary of `docs/decisions/delivery-reader-migration.md` §6a,
+  // and dropping it in this release is what took `get_work_item` down on
+  // 2026-08-28.
+  it('a link stamps NOTHING on the mirror row, and a delivery still reaches no association', async () => {
     const s = await makeScenario('column@example.com');
-    const card = await makeCard(s, 'still stamped');
+    const card = await makeCard(s, 'no longer stamped');
     await pr(prPayload({ action: 'opened', number: 701, headRef: 'subtask/col' }));
     await link(s, card.id, { number: 701, headRef: 'subtask/col' });
 
-    // The declared-not-inferred stamp, which is all that is left of W1.
+    // The link wrote one delivery row and touched the mirror row not at all, so
+    // the surviving column holds its `false` default.
     const afterLink = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 701 } });
-    expect(afterLink.linkedManually).toBe(true);
+    expect(afterLink.linkedManually).toBe(false);
     expect(
       await adminDb.workItemDelivery.count({ where: { githubPullRequestId: afterLink.id } }),
     ).toBe(1);
 
-    // A later delivery upserts the row's state fields and PRESERVES the flag. It
-    // reaches no association at all now: the link lives in another table.
+    // A later delivery upserts the row's state fields and names the column in
+    // neither its create nor its update, so it stays as it stands. It reaches no
+    // association at all either: the link lives in another table.
     await pr(
       prPayload({
         action: 'closed',
@@ -461,7 +472,7 @@ describe('the column IS dropped, and `linked_manually` is not (MOTIR-3757 AC 7)'
     const afterDelivery = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { number: 701 },
     });
-    expect(afterDelivery.linkedManually).toBe(true);
+    expect(afterDelivery.linkedManually).toBe(false);
     expect(afterDelivery.merged).toBe(true);
     expect(
       await adminDb.workItemDelivery.count({ where: { githubPullRequestId: afterDelivery.id } }),
@@ -477,6 +488,12 @@ describe('the column IS dropped, and `linked_manually` is not (MOTIR-3757 AC 7)'
       WHERE table_name = 'github_pull_request'`;
     const names = columns.map((c) => c.column_name);
     expect(names).not.toContain('work_item_id');
+    // ⚠️ STILL PRESENT, and asserted so ON PURPOSE (MOTIR-4894 is phase 1 of the
+    // three-phase removal in `docs/decisions/delivery-reader-migration.md` §6a).
+    // `prisma/schema.prisma` still DECLARES the field, which makes the generated
+    // client select it on every unqualified read of this model; a `DROP COLUMN`
+    // shipped before a release that stops it selecting lands under the previous
+    // image. Phase 3 is what flips this line.
     expect(names).toContain('linked_manually');
   });
 });

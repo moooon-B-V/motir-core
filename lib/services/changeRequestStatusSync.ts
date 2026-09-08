@@ -259,20 +259,26 @@ export async function syncChangeRequestStatus(
     // drop the column without losing one of them. What was retired is the
     // INFERENCE, not the history it produced.
     //
-    // `linkedManually` survives on the row as the record of HOW a link was made,
-    // and is read by nothing here. Retiring it is its own decision.
+    // `linkedManually` survived that card as the record of HOW a link was made,
+    // read by nothing here, and this comment said retiring it was its own
+    // decision. MOTIR-4894 is that decision: with the inference gone every link
+    // is declared, so the flag was true of every live write and told a reader
+    // nothing — least of all on the Development row, where it labelled an agent's
+    // own `link_pull_request` call "linked manually". The COLUMN outlives this
+    // release by design (`docs/decisions/delivery-reader-migration.md` §6a); what
+    // is gone is every reader and writer of it in application code.
     await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
     const existingPr = await githubPullRequestRepository.findByRepoAndNumber(
       repo.id,
       cr.number,
       tx,
     );
-    // The manual-override flag is PRESERVED as it stands (MOTIR-1596), so an auto
-    // delivery never clears the record that a link was declared. It used to be
-    // re-derived from a successful resolve of the existing row's link column, and
-    // the derivation bought nothing even before that column was dropped: this flag
-    // is the record of HOW a link was made, read by nothing in this file.
-    const linkedManually = existingPr?.linkedManually ?? false;
+    // ⚠️ `existingPr` IS STILL READ, and the lock above is still taken, though
+    // the derivation they were written for is gone (MOTIR-4894 — the preserved
+    // manual-override flag). What derives from this read now is
+    // `mergeAlreadyRecorded` further down, which asks what the row said BEFORE
+    // this delivery; that is read-then-write on the same row and needs the lock
+    // exactly as the old one did.
 
     // Upsert the change-request row — the change-request→work-item link entity.
     // Idempotent under concurrent redelivery: a lost unique-`(repo,number)` race
@@ -296,8 +302,10 @@ export async function syncChangeRequestStatus(
       // (MOTIR-3721 stopped writing it, MOTIR-3757 dropped it). A delivery says
       // what a pull request IS; only `link_pull_request` says which cards it
       // delivers, and those rows live in `work_item_delivery`, which this upsert
-      // does not touch.
-      linkedManually,
+      // does not touch. Nor is any PROVENANCE written: `linkedManually` used to
+      // be carried through here so a delivery could not clear it, and MOTIR-4894
+      // retired the flag — an upsert that does not name the surviving column
+      // leaves whatever the row already holds.
     };
     let prId: string;
     try {
