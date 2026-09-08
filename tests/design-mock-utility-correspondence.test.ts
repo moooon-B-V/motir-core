@@ -715,69 +715,69 @@ export function misdeclaredUtilities(mock: MockSource): string[] {
  * cards names both, and the first of them to land DECREMENTS the row rather
  * than deleting it — which is what `design/shell/help-menu.mock.html` did here,
  * 34 → 6.
+ *
+ * ⚠️ EMPTY, AND THAT IS THE POINT OF THE TABLE RATHER THAN AN ABSENCE OF ONE.
+ * MOTIR-4810 took 636 → 104 (the structural `[&_…]:` half), MOTIR-4845 took
+ * 104 → 100 without meaning to, and MOTIR-4813 took 100 → 0 (the STATE half),
+ * so direction (A) is now at zero over the WHOLE tree in both halves and the
+ * exact-count arm below holds every mock there.
+ *
+ * The middle step is worth a line because it is the only one nobody planned:
+ * MOTIR-4845 removed the `Workspace settings` row from `account-menu`, which
+ * took that panel's whole conditional AXIS with it, so two of its four frames
+ * collapsed and 4 inert occurrences went with them. Four fewer defects and
+ * not one of them fixed — which is why the row was RE-MEASURED there rather
+ * than decremented by arithmetic.
+ * The table stays because it is the ratchet: an inert variant landing in any
+ * asset now fails with no row to hide behind, and a row added back has to
+ * carry a card that says why.
+ *
+ * ⚠️ ZERO HERE IS ZERO FOR `isArbitrary`, WHICH IS NARROWER THAN IT READS.
+ * 93 occurrences of 6 PLAIN inert variants survive in
+ * `design/ai-chat/plan-change-run-live.mock.html` — `disabled:opacity-50` 25,
+ * `hover:opacity-90` 11 and four more — because the filter above excludes a
+ * token carrying no `[` or `(`. Its stated reason is that a plain class may
+ * come from an inherited stylesheet, and a `*.mock.html` inherits none. That
+ * is MOTIR-4890, with the measurement and its command.
+ *
+ * What MOTIR-4813 disposed of, per utility rather than per class — the
+ * judgement the card exists for, since "a static mock is never hovered" is an
+ * answer that ends the enquiry and is false three ways here:
+ *
+ *   DECLARE (7 rules across 2 assets; the class is on a real element that
+ *   wants it) — `focus-visible:ring-(--focus-ring-color)` 34,
+ *   `hover:bg-(--el-surface-soft)` 18, `active:scale-(--active-scale)` 16,
+ *   `hover:text-(--el-text)` 11 and `placeholder:text-(--el-text-secondary)`
+ *   9 in `plan-change-run-live`, `active:bg-(--el-surface-soft)` 2 in
+ *   `peek-proposal-mode`. The placeholder one paints with no interaction at
+ *   all, so it moved that asset's `.png`; the rest fire in the browser a
+ *   reviewer opens the mock in. `focus-visible:ring-2` and
+ *   `focus-visible:outline-none` were declared alongside — they are not
+ *   arbitrary and so are invisible to this guard, but the ring COLOUR alone
+ *   paints nothing without the rule that composes the shadow, and a DECLARE
+ *   that still renders nothing is not a fix. The eight `@property --tw-*`
+ *   blocks that composition reads were copied verbatim from
+ *   `peek-proposal-mode`, which already carried them.
+ *
+ *   REMOVE (5 elements across 2 assets — 2 in `account-menu`, 3 in
+ *   `help-menu`; it was 7 before MOTIR-4845 deleted two of the four frames)
+ *   — `data-[state=open]:animate-in` and
+ *   `data-[state=closed]:animate-out` on the popover panels of `account-menu`
+ *   and `help-menu`, with `fade-in-0` / `fade-out-0` (not arbitrary, so not
+ *   counted here) in the same four-class group. Both are a verbatim
+ *   transcription of `packages/design-system/src/components/ui/Popover.tsx`
+ *   line 98 — and NOTHING in this repository generates them: there is no
+ *   `tailwindcss-animate` / `tw-animate-css` dependency, no `@keyframes enter`
+ *   or `exit`, and no `--tw-enter-*`, so they are inert in the SHIPPED
+ *   component too — filed as MOTIR-4889 against all four sites. There is
+ *   therefore no value in
+ *   `packages/design-system/theme.css` to declare them from, and inventing an
+ *   animation the product does not have is the opposite of designing against
+ *   shipped reality. `data-[state=closed]:` additionally selects nothing here
+ *   under any reading: every panel in both assets carries a literal
+ *   `data-state="open"`.
  */
-const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
-  // ⚠️ EMPTY, AND THAT IS THE POINT OF THE TABLE RATHER THAN AN ABSENCE OF ONE.
-  // MOTIR-4810 took 636 → 104 (the structural `[&_…]:` half), MOTIR-4845 took
-  // 104 → 100 without meaning to, and MOTIR-4813 took 100 → 0 (the STATE half),
-  // so direction (A) is now at zero over the WHOLE tree in both halves and the
-  // exact-count arm below holds every mock there.
-  //
-  // The middle step is worth a line because it is the only one nobody planned:
-  // MOTIR-4845 removed the `Workspace settings` row from `account-menu`, which
-  // took that panel's whole conditional AXIS with it, so two of its four frames
-  // collapsed and 4 inert occurrences went with them. Four fewer defects and
-  // not one of them fixed — which is why the row was RE-MEASURED there rather
-  // than decremented by arithmetic.
-  // The table stays because it is the ratchet: an inert variant landing in any
-  // asset now fails with no row to hide behind, and a row added back has to
-  // carry a card that says why.
-  //
-  // ⚠️ ZERO HERE IS ZERO FOR `isArbitrary`, WHICH IS NARROWER THAN IT READS.
-  // 93 occurrences of 6 PLAIN inert variants survive in
-  // `design/ai-chat/plan-change-run-live.mock.html` — `disabled:opacity-50` 25,
-  // `hover:opacity-90` 11 and four more — because the filter above excludes a
-  // token carrying no `[` or `(`. Its stated reason is that a plain class may
-  // come from an inherited stylesheet, and a `*.mock.html` inherits none. That
-  // is MOTIR-4890, with the measurement and its command.
-  //
-  // What MOTIR-4813 disposed of, per utility rather than per class — the
-  // judgement the card exists for, since "a static mock is never hovered" is an
-  // answer that ends the enquiry and is false three ways here:
-  //
-  //   DECLARE (7 rules across 2 assets; the class is on a real element that
-  //   wants it) — `focus-visible:ring-(--focus-ring-color)` 34,
-  //   `hover:bg-(--el-surface-soft)` 18, `active:scale-(--active-scale)` 16,
-  //   `hover:text-(--el-text)` 11 and `placeholder:text-(--el-text-secondary)`
-  //   9 in `plan-change-run-live`, `active:bg-(--el-surface-soft)` 2 in
-  //   `peek-proposal-mode`. The placeholder one paints with no interaction at
-  //   all, so it moved that asset's `.png`; the rest fire in the browser a
-  //   reviewer opens the mock in. `focus-visible:ring-2` and
-  //   `focus-visible:outline-none` were declared alongside — they are not
-  //   arbitrary and so are invisible to this guard, but the ring COLOUR alone
-  //   paints nothing without the rule that composes the shadow, and a DECLARE
-  //   that still renders nothing is not a fix. The eight `@property --tw-*`
-  //   blocks that composition reads were copied verbatim from
-  //   `peek-proposal-mode`, which already carried them.
-  //
-  //   REMOVE (5 elements across 2 assets — 2 in `account-menu`, 3 in
-  //   `help-menu`; it was 7 before MOTIR-4845 deleted two of the four frames)
-  //   — `data-[state=open]:animate-in` and
-  //   `data-[state=closed]:animate-out` on the popover panels of `account-menu`
-  //   and `help-menu`, with `fade-in-0` / `fade-out-0` (not arbitrary, so not
-  //   counted here) in the same four-class group. Both are a verbatim
-  //   transcription of `packages/design-system/src/components/ui/Popover.tsx`
-  //   line 98 — and NOTHING in this repository generates them: there is no
-  //   `tailwindcss-animate` / `tw-animate-css` dependency, no `@keyframes enter`
-  //   or `exit`, and no `--tw-enter-*`, so they are inert in the SHIPPED
-  //   component too — filed as MOTIR-4889 against all four sites. There is
-  //   therefore no value in
-  //   `packages/design-system/theme.css` to declare them from, and inventing an
-  //   animation the product does not have is the opposite of designing against
-  //   shipped reality. `data-[state=closed]:` additionally selects nothing here
-  //   under any reading: every panel in both assets carries a literal
-  //   `data-state="open"`.
-];
+const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [];
 
 /**
  * DIRECTION (B) — MOTIR-4814 (the two compiled builds). ⚠️ MOTIR-4811 SWEPT THE
