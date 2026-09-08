@@ -61,6 +61,12 @@ export async function replayDlqAction(dlqId: string): Promise<ActionResult> {
     throw err;
   }
 
+  // BOTH doors onto this surface (Story MOTIR-4843 · MOTIR-4849). Above the
+  // workspace-tier reveal the dashboard is its own route; below it, it is a
+  // section on `/settings/organization` — and a replay performed there must
+  // re-read the row it just stamped, or the DLQ table keeps showing the entry as
+  // un-replayed until something else happens to refresh the page.
   revalidatePath('/settings/workspace/jobs');
+  revalidatePath('/settings/organization');
   return { ok: true, alreadyReplayed: outcome === 'already-replayed' };
 }

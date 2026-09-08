@@ -1,9 +1,9 @@
 import { getTranslations } from 'next-intl/server';
-import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { jobsDashboardService, JOBS_PAGE_SIZE } from '@/lib/services/jobsDashboardService';
-import { isOwnerRole } from '@/lib/workspaces/roles';
-import { JobsDashboard } from '../../workspace/jobs/_components/JobsDashboard';
+import {
+  JobsPane,
+  parseJobsParams,
+  type JobsSearchParams,
+} from '../../workspace/jobs/_components/JobsPane';
 
 // The `Job runs` FOLD-IN (Story MOTIR-4843 · MOTIR-4861), drawn by
 // `design/settings/workspace-settings.mock.html` Panel 4 (MOTIR-4844).
@@ -48,10 +48,25 @@ export async function JobRunsFoldInSection({
   workspaceId,
   actorUserId,
   actorEmail,
+  searchParams,
 }: {
   workspaceId: string;
   actorUserId: string;
   actorEmail: string;
+  /**
+   * ⚠️ THE HOST PAGE'S OWN QUERY, and this section is URL-DRIVEN through it
+   * (Story MOTIR-4843 · MOTIR-4849).
+   *
+   * It shipped WITHOUT this and pinned `activeTab="runs"`, `page={1}`, no
+   * status — while `JobsDashboard` built every tab, filter and pagination link
+   * from a module-level `/settings/workspace/jobs`. So the section rendered, its
+   * DLQ badge showed a count, and every link inside it pointed at the route this
+   * same story had just made `notFound()` at this workspace count. The
+   * relocation §6d asks for was cosmetic: the dead-letter queue — the one thing
+   * a tenant actually comes here to do, replay a bounced invite — could not be
+   * opened at all.
+   */
+  searchParams: JobsSearchParams;
 }) {
   const t = await getTranslations('settings.organization');
 
@@ -61,20 +76,7 @@ export async function JobRunsFoldInSection({
   const adminEmail = process.env['PLATFORM_ADMIN_EMAIL'];
   const showSystemTab = Boolean(adminEmail) && actorEmail === adminEmail;
 
-  // `allSettledOrThrow`, never a bare `Promise.all`: every arm opens a
-  // transaction, so a rejection on one must not leave the others running
-  // unobserved (MOTIR-3066). The same two reads the standalone route's default
-  // view makes, in one wave.
-  const [role, dlqCount, runs] = await allSettledOrThrow([
-    workspacesService.getMemberRole(actorUserId, workspaceId),
-    jobsDashboardService.countDLQ({ workspaceId, userId: actorUserId }),
-    jobsDashboardService.listJobRuns({
-      workspaceId,
-      userId: actorUserId,
-      limit: JOBS_PAGE_SIZE + 1,
-      offset: 0,
-    }),
-  ]);
+  const params = parseJobsParams(searchParams, showSystemTab);
 
   return (
     <>
@@ -87,16 +89,15 @@ export async function JobRunsFoldInSection({
         </p>
       </div>
 
-      <JobsDashboard
-        activeTab="runs"
-        status={undefined}
-        page={1}
-        hasNext={runs.length > JOBS_PAGE_SIZE}
-        dlqCount={dlqCount}
-        isOwner={isOwnerRole(role)}
+      {/* ⚠️ `basePath` is THIS page, not the workspace route. That is the whole
+          of the fix above: the dashboard's links have to come back HERE, because
+          below the reveal this is the only door onto the surface. */}
+      <JobsPane
+        userId={actorUserId}
+        workspaceId={workspaceId}
+        {...params}
         showSystemTab={showSystemTab}
-        runs={runs.slice(0, JOBS_PAGE_SIZE)}
-        dlq={[]}
+        basePath="/settings/organization"
       />
     </>
   );

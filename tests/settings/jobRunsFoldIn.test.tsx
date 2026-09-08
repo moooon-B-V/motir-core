@@ -22,40 +22,45 @@ vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
 }));
 
-const getMemberRole = vi.fn();
-const countDLQ = vi.fn();
-const listJobRuns = vi.fn();
-
-vi.mock('@/lib/services/workspacesService', () => ({
-  workspacesService: { getMemberRole: (...a: unknown[]) => getMemberRole(...a) },
-}));
-vi.mock('@/lib/services/jobsDashboardService', () => ({
-  JOBS_PAGE_SIZE: 20,
-  jobsDashboardService: {
-    countDLQ: (...a: unknown[]) => countDLQ(...a),
-    listJobRuns: (...a: unknown[]) => listJobRuns(...a),
-  },
-}));
-
-// The dashboard is COMPOSED, not redrawn — so the test asserts the PROPS the
-// section hands it. Rendering the real one would test MOTIR-1.6.5's component,
-// not this card's gates.
-const dashboardProps = vi.fn();
-vi.mock('@/app/(authed)/settings/workspace/jobs/_components/JobsDashboard', () => ({
-  JobsDashboard: (props: Record<string, unknown>) => {
-    dashboardProps(props);
-    return <div data-testid="jobs-dashboard" />;
+// ⚠️ THE PANE IS MOCKED, NOT THE DASHBOARD — and the move is the point.
+//
+// MOTIR-4849 extracted `JobsPane`: the param parsing and the three reads, in ONE
+// place, because this surface has TWO doors and a second copy of "which tab did
+// they ask for, and may they have it" is a second answer waiting to disagree.
+// So the reads this file used to assert HERE now belong to the pane, are
+// asserted in `tests/settings/jobsPane.test.tsx`, and are thereby covered for
+// BOTH doors rather than only this one.
+//
+// What is left for this file is what the fold-in still decides for itself, and
+// it is exactly the part that was wrong: WHERE the dashboard's links point, and
+// WHICH view the host page's query selects.
+const paneProps = vi.fn();
+vi.mock('@/app/(authed)/settings/workspace/jobs/_components/JobsPane', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/app/(authed)/settings/workspace/jobs/_components/JobsPane')
+  >()),
+  JobsPane: (props: Record<string, unknown>) => {
+    paneProps(props);
+    return <div data-testid="jobs-pane" />;
   },
 }));
 
 import { JobRunsFoldInSection } from '@/app/(authed)/settings/organization/_components/JobRunsFoldInSection';
 
 const WORKSPACE_ID = 'ws1';
-const MEMBER = { workspaceId: WORKSPACE_ID, actorUserId: 'u1', actorEmail: 'member@example.com' };
+// `searchParams` is REQUIRED now (MOTIR-4849): the section is URL-driven,
+// because a dashboard whose tabs and filters are links needs them to point at
+// the page that renders it. `{}` is the default view every case below wants.
+const MEMBER = {
+  workspaceId: WORKSPACE_ID,
+  actorUserId: 'u1',
+  actorEmail: 'member@example.com',
+  searchParams: {},
+};
 
 async function renderSection(props: Parameters<typeof JobRunsFoldInSection>[0]) {
   render(await JobRunsFoldInSection(props));
-  return dashboardProps.mock.calls.at(-1)![0] as Record<string, unknown>;
+  return paneProps.mock.calls.at(-1)![0] as Record<string, unknown>;
 }
 
 afterEach(() => {
@@ -64,65 +69,43 @@ afterEach(() => {
   delete process.env['PLATFORM_ADMIN_EMAIL'];
 });
 
-function seed({ role = 'member', dlq = 0, runs = 0 } = {}) {
-  getMemberRole.mockResolvedValue(role);
-  countDLQ.mockResolvedValue(dlq);
-  listJobRuns.mockResolvedValue(Array.from({ length: runs }, (_, i) => ({ id: `r${i}` })));
-}
-
 describe('the Job runs fold-in — it renders for a WORKSPACE MEMBER', () => {
-  it('renders the dashboard for a plain member, with no org role anywhere in its inputs', async () => {
-    seed();
+  it('renders for a plain member, with no org role anywhere in its signature', async () => {
     await renderSection(MEMBER);
-    expect(screen.getByTestId('jobs-dashboard')).toBeTruthy();
-    // The section takes a workspace id, a user id and an email. There is no org
-    // role in its signature at all — which is the structural half of §6d here.
-    expect(getMemberRole).toHaveBeenCalledWith('u1', WORKSPACE_ID);
+    expect(screen.getByTestId('jobs-pane')).toBeTruthy();
+    // The structural half of §6d here: the section takes a workspace id, a user
+    // id and an email. There is no org role in its inputs at all, so it CANNOT
+    // inherit the host page's admin gate even by accident.
+    const props = paneProps.mock.calls.at(-1)![0] as Record<string, unknown>;
+    expect(props['workspaceId']).toBe(WORKSPACE_ID);
+    expect(props['userId']).toBe('u1');
   });
 
-  it('reads the WORKSPACE-scoped job runs, not an org-scoped list', async () => {
-    seed();
-    await renderSection(MEMBER);
-    expect(listJobRuns).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: WORKSPACE_ID, userId: 'u1' }),
-    );
-    expect(countDLQ).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, userId: 'u1' });
+  it('⚠️ the WORKSPACE-scoped reads moved to the pane, and are asserted there', async () => {
+    // Kept as a signpost rather than deleted (MOTIR-4849). This file used to
+    // assert `listJobRuns`/`countDLQ` were called with the workspace and the
+    // actor — the claim that the fold-in reads the WORKSPACE's runs and not an
+    // org-scoped list. That read is `JobsPane`'s now and is asserted in
+    // `tests/settings/jobsPane.test.tsx`, where it covers BOTH doors instead of
+    // this one. A reader who comes here looking for it should be told where it
+    // went, not find it missing.
+    const props = await renderSection(MEMBER);
+    expect(props['workspaceId']).toBe(WORKSPACE_ID);
   });
 });
 
-describe('the Job runs fold-in — each capability keeps the gate it asserts', () => {
-  it('the DLQ badge count travels', async () => {
-    seed({ dlq: 7 });
-    const props = await renderSection(MEMBER);
-    expect(props['dlqCount']).toBe(7);
-  });
-
-  it('the REPLAY control is present for a workspace OWNER', async () => {
-    seed({ role: 'owner' });
-    const props = await renderSection(MEMBER);
-    expect(props['isOwner']).toBe(true);
-  });
-
-  it('the REPLAY control is ABSENT for a non-owner — the gate is not widened by the move', async () => {
-    seed({ role: 'member' });
-    const props = await renderSection(MEMBER);
-    expect(props['isOwner']).toBe(false);
-  });
-
-  it('the SYSTEM tab is present only when the request email matches PLATFORM_ADMIN_EMAIL', async () => {
+describe('the Job runs fold-in — the SYSTEM tab gate, which it still owns', () => {
+  it('is present only when the request email matches PLATFORM_ADMIN_EMAIL', async () => {
     process.env['PLATFORM_ADMIN_EMAIL'] = 'staff@motir.co';
-    seed();
     const staff = await renderSection({ ...MEMBER, actorEmail: 'staff@motir.co' });
     expect(staff['showSystemTab']).toBe(true);
   });
 
-  it('the SYSTEM tab is ABSENT for everyone else, and when the env var is unset', async () => {
+  it('is ABSENT for everyone else, and when the env var is unset', async () => {
     process.env['PLATFORM_ADMIN_EMAIL'] = 'staff@motir.co';
-    seed();
     expect((await renderSection(MEMBER))['showSystemTab']).toBe(false);
     cleanup();
     delete process.env['PLATFORM_ADMIN_EMAIL'];
-    seed();
     // ⚠️ With no admin email configured NOBODY sees it — not everybody. An
     // `email === undefined` comparison would open it to any user whose email is
     // missing, which is why the source guards on `Boolean(adminEmail)` first.
@@ -130,29 +113,52 @@ describe('the Job runs fold-in — each capability keeps the gate it asserts', (
   });
 });
 
-describe('the Job runs fold-in — it composes the dashboard rather than redrawing it', () => {
-  it('hands it the default view: the first page of runs, and an empty DLQ list', async () => {
-    seed({ runs: 3 });
+// ═════════════════════════════════════════════════════════════════════════════
+// MOTIR-4849 — THE LINKS, which the cases above are structurally blind to
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ EVERY CASE ABOVE PASSED WHILE THIS SECTION WAS UNUSABLE, and that is worth
+// stating plainly rather than quietly fixing. They mock `JobsDashboard` and
+// assert the PROPS handed to it — the right instrument for "did the gates travel
+// with the surface", and structurally incapable of seeing whether the thing they
+// handed those props to works.
+//
+// It did not. `JobsDashboard` built every tab, status filter and pagination link
+// from a module-level `BASE = '/settings/workspace/jobs'`, and this story made
+// that route `notFound()` at exactly the workspace count where this fold-in is
+// the ONLY door. The section drew, the DLQ badge showed a count, and nothing in
+// it could be opened — including the dead-letter queue, which is the one thing a
+// tenant comes here to do.
+//
+// So this block asserts the ADDRESS the section hands down. The rendered-href
+// half lives in `tests/settings/jobsDashboardBasePath.test.tsx`, which mounts
+// the real component; between them the claim is closed at both ends.
+describe('the fold-in points its own links HOME', () => {
+  it('hands the dashboard THIS page as its link base, never the workspace route', async () => {
     const props = await renderSection(MEMBER);
+    expect(props['basePath']).toBe('/settings/organization');
+    // The route this fold-in exists BECAUSE it 404s. A link base naming it is
+    // the defect, so it is asserted absent rather than merely not-expected.
+    expect(props['basePath']).not.toBe('/settings/workspace/jobs');
+  });
+
+  it("is URL-DRIVEN — the host page's query selects the tab, status and page", async () => {
+    // Pinned `activeTab="runs"` / `page={1}` was the other half of the bug: even
+    // with a correct base, a section that ignores its own query cannot be
+    // navigated, so the tab links would change the URL and nothing on screen.
+    const props = await renderSection({
+      ...MEMBER,
+      searchParams: { tab: 'dlq', status: 'failed', page: '3' },
+    });
+    expect(props['activeTab']).toBe('dlq');
+    expect(props['page']).toBe(3);
+  });
+
+  it('falls back to `runs` for a non-admin arriving on `?tab=system`', async () => {
+    // The same coercion the standalone route applies, through the same parser —
+    // a shared URL must not refuse a reader, on either door.
+    const props = await renderSection({ ...MEMBER, searchParams: { tab: 'system' } });
     expect(props['activeTab']).toBe('runs');
-    expect(props['page']).toBe(1);
-    expect(props['dlq']).toEqual([]);
-    expect(props['runs']).toHaveLength(3);
-  });
-
-  it('reports hasNext off the LOOK-AHEAD row rather than a count query', async () => {
-    // JOBS_PAGE_SIZE + 1 rows fetched; the extra one is the signal, and it must
-    // not leak into the rendered page.
-    seed({ runs: 21 });
-    const props = await renderSection(MEMBER);
-    expect(props['hasNext']).toBe(true);
-    expect(props['runs']).toHaveLength(20);
-  });
-
-  it('reports hasNext false at exactly one page', async () => {
-    seed({ runs: 20 });
-    const props = await renderSection(MEMBER);
-    expect(props['hasNext']).toBe(false);
-    expect(props['runs']).toHaveLength(20);
+    expect(props['showSystemTab']).toBe(false);
   });
 });

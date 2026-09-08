@@ -33,7 +33,15 @@ import { DangerZoneCard } from './_components/DangerZoneCard';
 // org cookie (the shell switcher sets it). NO billing/credit surface here —
 // that is 7.12.5 / Epic 8 (only a passive "Coming soon" placeholder).
 
-export default async function OrganizationSettingsPage() {
+export default async function OrganizationSettingsPage({
+  searchParams,
+}: {
+  /** ⚠️ READ ONLY BY THE `Job runs` FOLD-IN (Story MOTIR-4843 · MOTIR-4849).
+   *  Below the workspace-tier reveal this page hosts that dashboard, and a
+   *  dashboard whose tabs, filters and pages are URL-driven needs a URL on the
+   *  page that renders it. Every other section here ignores these. */
+  searchParams: Promise<{ tab?: string; status?: string; page?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -55,10 +63,11 @@ export default async function OrganizationSettingsPage() {
   //
   // `preferredOrganizationId` is the same helper the (authed) layout composes, so
   // the two cannot drift again.
-  const [ctx, myWorkspaces, cookieStore] = await Promise.all([
+  const [ctx, myWorkspaces, cookieStore, jobsParams] = await Promise.all([
     getWorkspaceContext(),
     workspacesService.listUserWorkspaces(session.user.id),
     cookies(),
+    searchParams,
   ]);
   const activeWorkspace = ctx ? (myWorkspaces.find((w) => w.id === ctx.workspaceId) ?? null) : null;
   const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
@@ -148,6 +157,7 @@ export default async function OrganizationSettingsPage() {
           acceptanceVideoEnabled={org.acceptanceVideoEnabled}
           orgWorkspaceCount={orgWorkspaces.length}
           foldInWorkspace={foldInWorkspace}
+          jobsParams={jobsParams}
         />
       </Suspense>
     </div>
@@ -171,6 +181,7 @@ async function OrgPaneBody({
   acceptanceVideoEnabled,
   orgWorkspaceCount,
   foldInWorkspace,
+  jobsParams,
 }: {
   orgId: string;
   orgName: string;
@@ -181,6 +192,7 @@ async function OrgPaneBody({
   acceptanceVideoEnabled: boolean;
   orgWorkspaceCount: number;
   foldInWorkspace: { id: string } | null;
+  jobsParams: { tab?: string; status?: string; page?: string };
 }) {
   const t = await getTranslations('orgAdmin');
   const [{ total: memberCount }, aiAccess] = await allSettledOrThrow([
@@ -260,6 +272,7 @@ async function OrgPaneBody({
           workspaceId={foldInWorkspace.id}
           actorUserId={actorUserId}
           actorEmail={actorEmail}
+          searchParams={jobsParams}
         />
       ) : null}
 
