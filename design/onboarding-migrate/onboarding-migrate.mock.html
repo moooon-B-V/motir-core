@@ -963,14 +963,12 @@
         margin-top: 8px;
       }
       .repo-row .r-ic,
-      .idx-repo .r-ic,
-      .conv-repo .r-ic {
+      .idx-repo .r-ic {
         color: var(--el-icon-muted);
         flex: none;
       }
       .repo-row .r-ic svg,
-      .idx-repo .r-ic svg,
-      .conv-repo .r-ic svg {
+      .idx-repo .r-ic svg {
         width: 16px;
         height: 16px;
         display: block;
@@ -1077,65 +1075,7 @@
         color: var(--el-text-strong);
         line-height: 1;
       }
-      .grade .g-top {
-        display: block;
-        font-size: 14px;
-        font-weight: 700;
-        color: var(--el-text-strong);
-      }
-      .grade .g-sub {
-        display: block;
-        font-size: 12.5px;
-        color: var(--el-text-secondary);
-        margin-top: 2px;
-        line-height: 1.45;
-      }
       /* a per-repo convention row — conventions are PER REPO, not one per project */
-      .conv-repo {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 14px;
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-control);
-      }
-      .conv-repo + .conv-repo {
-        margin-top: 8px;
-      }
-      .conv-repo .cr-grade {
-        flex: none;
-        width: 30px;
-        height: 30px;
-        border-radius: var(--radius-control);
-        background: var(--el-success-surface);
-        color: var(--el-text-strong);
-        font-family: var(--font-serif);
-        font-weight: 700;
-        font-size: 15px;
-        display: grid;
-        place-items: center;
-      }
-      .conv-repo .cr-body {
-        flex: 1;
-        min-width: 0;
-      }
-      .conv-repo .cr-name {
-        display: block;
-        font-size: 13.5px;
-        font-weight: 600;
-      }
-      .conv-repo .cr-sub {
-        display: block;
-        font-size: 12px;
-        color: var(--el-text-muted);
-        margin-top: 2px;
-      }
-      .conv-repo .cr-actions {
-        flex: none;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
       .doc-section {
         border-top: 1px solid var(--el-border-soft);
         padding-top: 12px;
@@ -1176,34 +1116,6 @@
         color: var(--el-text-secondary);
         line-height: 1.5;
         max-width: 64ch;
-      }
-      .d-actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .d-note {
-        margin: 12px 0 0;
-        font-size: 12px;
-        color: var(--el-text-muted);
-        line-height: 1.7;
-      }
-      .d-note .ai-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        white-space: nowrap;
-        vertical-align: middle;
-        font-weight: 600;
-        color: var(--el-accent-text);
-        background: var(--el-accent);
-        border-radius: var(--radius-badge);
-        padding: 2px 9px;
-      }
-      .d-note .ai-pill svg {
-        width: 12px;
-        height: 12px;
       }
 
       /* ---- The chat / canvas / done-card rules that PANEL 0 used are GONE
