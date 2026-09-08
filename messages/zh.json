@@ -166,7 +166,14 @@
     "save": "保存",
     "loading": "加载中…",
     "checked": "已勾选",
-    "notChecked": "未勾选"
+    "notChecked": "未勾选",
+    "pager": {
+      "showing": "显示第 <range>{from}–{to}</range> 项，共 <count>{total}</count> 项",
+      "previousPage": "上一页",
+      "nextPage": "下一页",
+      "page": "第 {page} 页",
+      "pagination": "分页"
+    }
   },
   "planReview": {
     "backToPlans": "返回计划列表",
@@ -7336,11 +7343,6 @@
         "title": "没有等待你审批的工作",
         "body": "需要你签字确认才能继续的工作会显示在这里。"
       }
-    },
-    "pager": {
-      "next": "下一页",
-      "startOver": "回到顶部",
-      "end": "已经到底了。"
     }
   },
   "platformAdmin": {
