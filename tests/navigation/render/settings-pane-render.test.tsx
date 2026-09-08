@@ -66,7 +66,6 @@ vi.mock('@/lib/services/labelsService', () => ({
 
 import ProjectAutomationPage from '@/app/(authed)/settings/project/automation/page';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
-import { EmptyState } from '@/components/ui/EmptyState';
 
 const PROJECT = {
   userId: 'u1',
@@ -137,13 +136,17 @@ describe('/settings/project/automation — the branches no structural test reach
     expect(redirect).toHaveBeenCalledWith('/sign-in');
   });
 
-  it('renders the no-project empty state, and never reaches the guard', async () => {
+  it('REDIRECTS on a null active project, and never reaches the guard', async () => {
+    // ⚠️ INVERTED (MOTIR-4874). It asserted a rendered no-project `EmptyState`.
+    // Every member is inside a project (MOTIR-4870), so the only null left is a
+    // session-less request and the page redirects rather than rendering a
+    // screen for a state it cannot be in.
+    //
+    // The half this case exists for is unchanged: the gate runs BEFORE the
+    // permission read, so nothing downstream is reached.
     getActiveProject.mockResolvedValue(null);
 
-    const tree = await renderTree(ProjectAutomationPage);
-
-    expect(findFirst(tree, EmptyState)).toBeDefined();
-    expect(findFirst(tree, SettingsPaneFrame)).toBeUndefined();
+    await expect(renderTree(ProjectAutomationPage)).rejects.toThrow('REDIRECT:/sign-in');
     expect(getPermissions).not.toHaveBeenCalled();
   });
 

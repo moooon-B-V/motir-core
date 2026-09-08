@@ -46,6 +46,13 @@ async function firstWorkspaceOf(userId: string) {
 }
 
 describe('door 1 — REGISTRATION', () => {
+  // ⚠️ THE SEED IS THE RESOLVER'S, NOT A SIGN-UP HOOK'S — and the criterion is
+  // phrased for exactly that: "a newly registered account has exactly one
+  // project WHEN ITS FIRST AUTHED REQUEST IS SERVED". Seeding it in
+  // `user.create.after` would import `projectsService` into `lib/auth` and
+  // close an import cycle back through `lib/workspaces` (see that hook's own
+  // note), so the enforcement points are the create-workspace action and this
+  // resolver — which every authed request goes through.
   it('a newly registered account has exactly one project, named for its workspace', async () => {
     await auth.api.signUpEmail({
       body: { email: 'alice@example.com', password: 'hunter2hunter2', name: 'Alice' },
@@ -54,6 +61,9 @@ describe('door 1 — REGISTRATION', () => {
 
     const user = await adminDb.user.findUnique({ where: { email: 'alice@example.com' } });
     const workspace = await firstWorkspaceOf(user!.id);
+
+    // The first authed request — this IS the moment the criterion names.
+    await projectsService.getActiveProject(user!.id, workspace.id);
 
     const projects = await allProjects();
     expect(projects).toHaveLength(1);
@@ -70,6 +80,9 @@ describe('door 1 — REGISTRATION', () => {
       body: { email: 'seeded@example.com', password: 'hunter2hunter2', name: 'Seeded' },
       headers: { origin: BASE_URL },
     });
+    const user = await adminDb.user.findUnique({ where: { email: 'seeded@example.com' } });
+    const workspace = await firstWorkspaceOf(user!.id);
+    await projectsService.getActiveProject(user!.id, workspace.id);
 
     const project = (await allProjects())[0]!;
     expect(
