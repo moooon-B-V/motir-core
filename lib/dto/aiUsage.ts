@@ -105,9 +105,21 @@ export interface OrgUsageDTO {
   // only), and the projects in the active workspace (admin) or the member's own
   // accessible projects (non-admin).
   drill: { workspaces: UsageScopeOption[]; projects: UsageScopeOption[] };
-  // The META org (moooon B.V.) — internal, unlimited, never billed. When true the
-  // dashboard shows the balance as "Unlimited" instead of the numeric value (which
-  // still debits for internal cost visibility and can drift negative).
+  // The META org (moooon B.V.) — internal, never billed, every cap lifted. Its
+  // balance still debits for internal cost visibility and can drift negative.
+  //
+  // ⚠️ WHAT IT DRIVES, as of MOTIR-4806 — TWO reads on the usage dashboard, and
+  // both resolve through ONE predicate (`planningIsCreditGated`, in
+  // `OrgUsageClient.tsx`). It decides (1) whether an exhausted balance renders
+  // the out-of-credits card (panel 7b) or the exempt state (7c), and (2) whether
+  // the hero's pill names a commercial tier or reads "Not billed". It changes NO
+  // FIGURE: the balance, the allotment bar, the drill, the per-model breakdown,
+  // the run log and the search figures are computed identically for every org
+  // (`design/ai-usage/design-notes.md` §§ AMENDMENT 2026-09-07, 2026-09-08).
+  //
+  // It used to say the dashboard shows the balance as "Unlimited" instead of the
+  // number. That ternary was deleted by MOTIR-4572 and the sentence outlived it
+  // — which is how a reader arrives at the wrong fix.
   isMeta: boolean;
   // Whether the org is charged exactly like a CUSTOMER and then made whole —
   // every debit lands and is paired, in the same transaction, with an offsetting

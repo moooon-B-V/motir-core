@@ -120,7 +120,6 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           state: 'merged',
           ci: 'passing',
           url: 'https://github.com/moooon/motir-core/pull/131',
-          linkedManually: false,
         },
         {
           title: 'Throttle burst traffic on /v1',
@@ -129,7 +128,6 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           state: 'open',
           ci: 'running',
           url: 'https://github.com/moooon/motir-gateway/pull/57',
-          linkedManually: false,
         },
         {
           title: 'Spike: webhook signatures',
@@ -138,7 +136,6 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           state: 'closed',
           ci: null, // no CI recorded → NO CI pill
           url: 'https://github.com/moooon/motir-core/pull/119',
-          linkedManually: false,
         },
       ],
     };

@@ -129,7 +129,6 @@ interface TargetRow {
    *  would be indistinguishable from a pre-column row and read as UNKNOWN. */
   baseRef: string;
   title: string | null;
-  linkedManually: boolean;
 }
 
 function emptyRepoReport(repo: GithubRepo): HistoricalPrRepoReport {
@@ -275,10 +274,11 @@ async function applyOne(
 ): Promise<void> {
   const cr = pr.changeRequest;
 
-  // Lock before the read-derived write (the same lock the sync takes): the
-  // decision below depends on the row's current `linkedManually`, and a webhook
-  // delivery landing between the read and the write would otherwise be
-  // clobbered. Skipped on a dry run, which writes nothing to serialize against.
+  // Lock before the read-derived write (the same lock the sync takes): whether
+  // this sweep writes at all is decided from `existing` — the sticky-link return
+  // below and `rowMatches` — so a webhook delivery landing between the read and
+  // the write would otherwise be clobbered by a row derived from a stale read.
+  // Skipped on a dry run, which writes nothing to serialize against.
   if (!dryRun) await githubPullRequestRepository.lockByRepoAndNumber(repo.id, cr.number, tx);
   const existing = await githubPullRequestRepository.findByRepoAndNumber(repo.id, cr.number, tx);
 
@@ -291,11 +291,14 @@ async function applyOne(
   // (20260827094500) backfilled one delivery per non-null link and every writer
   // since has written both.
   //
-  // ⚠️ AND THE GUARD IS STILL LOAD-BEARING, for a DIFFERENT column than the one
-  // it was written for. The sweep can no longer clobber a link; what it CAN
-  // clobber is `linked_manually`, which `target` sets to `false` unconditionally.
-  // Delete the guard and every already-linked row this sweep re-reads loses its
-  // provenance stamp.
+  // ⚠️ AND THE GUARD IS STILL LOAD-BEARING, though what it protects has changed
+  // twice now. It could once clobber a LINK (the column MOTIR-3757 dropped), then
+  // `linked_manually` (which `target` set to `false` unconditionally until
+  // MOTIR-4894 stopped writing it). What is left is the whole mirror row: this
+  // sweep's facts come from the historical REST read, and an already-delivering
+  // pull request is one the WEBHOOK is maintaining, so re-writing its `state` /
+  // `merged` / `title` from a bulk scan is the sweep speaking over the
+  // authoritative source. It is also what makes `skippedLinked` mean anything.
   if (existing) {
     const deliveries = await workItemDeliveryRepository.listByPullRequest(existing.id, tx);
     if (deliveries.length > 0) {
@@ -320,7 +323,6 @@ async function applyOne(
     headRef: cr.headRef,
     baseRef: cr.baseRef,
     title: cr.title,
-    linkedManually: false,
   };
 
   if (existing && rowMatches(existing, target)) {
@@ -353,8 +355,11 @@ async function applyOne(
  * decided nothing.
  *
  * The column itself went with MOTIR-3757, and the early return OUTLIVES it: it is
- * a WRITE-path guard rather than a reader of a set, and what it now protects is
- * `linked_manually`, which this sweep writes `false` on every row it reaches.
+ * a WRITE-path guard rather than a reader of a set, and what it protects is the
+ * mirror row of a pull request the webhook is already maintaining. (It protected
+ * `linked_manually` in between; MOTIR-4894 stopped this sweep writing that field,
+ * so the comparison below no longer names it and a row differing only in it is
+ * `unchanged` — correct, since nothing decides on it any more.)
  */
 function rowMatches(
   existing: {
@@ -364,7 +369,6 @@ function rowMatches(
     headRef: string;
     baseRef: string | null;
     title: string | null;
-    linkedManually: boolean;
   },
   target: TargetRow,
 ): boolean {
@@ -378,8 +382,7 @@ function rowMatches(
     // and counting it `unchanged` would leave the completion gate reading UNKNOWN
     // for a merge this sweep can prove landed on the trunk.
     existing.baseRef === target.baseRef &&
-    existing.title === target.title &&
-    existing.linkedManually === target.linkedManually
+    existing.title === target.title
   );
 }
 
