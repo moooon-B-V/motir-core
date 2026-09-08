@@ -83,6 +83,10 @@ import type { MetadataRoute } from 'next';
 export const SIGNED_IN_SEGMENTS = [
   'backlog',
   'boards',
+  // The Codebase room (MOTIR-1768). `code-health` stays beside it: that address
+  // still resolves — it permanently redirects here — and a crawler that reaches
+  // the old one should be told not to, exactly as before.
+  'code',
   'code-health',
   'dashboard',
   'direction',

@@ -13,6 +13,7 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
+import { withSystemContext } from '@/lib/workspaces/context';
 
 // THE STORY'S motir-core GATE (Story MOTIR-1754 · MOTIR-1770).
 //
@@ -166,9 +167,16 @@ describe('PUSH → HEAD → VERDICT, end to end — the story’s core behaviour
 
     // The push writer's own effect, through its repository method — the one
     // writer of this column.
-    await db.$transaction((tx) =>
+    //
+    // ⚠️ BOUND, and asserted on the COUNT. `db.$transaction` alone is UNBOUND:
+    // `github_repo`'s RLS policy sees no workspace, `updateMany` matches zero
+    // rows, and the method returns `0` while the test reads on and blames the
+    // derivation. The webhook itself writes under `withSystemContext` — the
+    // trusted-writer escape — which is what this mirrors.
+    const written = await withSystemContext((tx) =>
       githubRepoRepository.setDefaultBranchHeadSha(repo.id, 'head2', tx),
     );
+    expect(written, 'the head write must actually land').toBe(1);
 
     expect((await readRow())?.indexState).toBe('stale');
   });
