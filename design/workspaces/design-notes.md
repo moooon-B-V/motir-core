@@ -67,7 +67,36 @@ two primitives feel consistent. No new tokens needed — use existing
   - Active membership uses lucide `Check` icon (`--color-primary` fill) + bold name + `--color-surface` background.
   - Divider: `<div className="h-px bg-(--color-hairline)" />`.
   - "Create workspace" entry: bare button with lucide `Plus` icon + label.
-  - "Invite teammates" entry: bare button with lucide `Mail` icon + label.
+  - **"Workspace settings" entry: bare anchor with lucide `Settings` icon + label**, targeting
+    `/settings/workspace` — **added by MOTIR-4845** (Story MOTIR-4843), which RECORDS the row; it is
+    DRAWN by `design/settings/workspace-settings.mock.html` **panel 5** (MOTIR-4844), which is its
+    design of record, and BUILT by MOTIR-4847.
+  - "Invite teammates" entry: bare anchor with lucide `Mail` icon + label, targeting
+    `/settings/workspace#members`.
+
+> ### ⚠️ Where the `Workspace settings` row CAME FROM, and why it sits where it does
+>
+> It comes from the **account menu**, where it had been filed under the user tier — one line under
+> `Account settings` and one above `Sign out` — while naming a workspace-tier destination. The
+> account menu's own asset (`design/shell/account-menu.mock.html`) loses it in the same amendment,
+> and `design/shell/design-notes.md` § _The account menu_ carries the departure.
+>
+> **It sits in the LAST group, ABOVE `Invite teammates`.** The popover's three groups answer three
+> different questions — _which workspace am I in_, _make a new one_, and _act on THIS one_ — and
+> both of the last group's rows are about the active workspace. Settings goes first because
+> `Invite teammates` already points **into** it (`/settings/workspace#members`): the general door
+> above the shortcut through it.
+>
+> **The glyph is the `Settings` gear**, which is the one the account-menu row carried, so the
+> departure and the arrival read as one move rather than as two rows.
+>
+> **Below the reveal this row does not exist, because the SWITCHER does not.** At one workspace
+> there is no switcher in the top bar at all, and **all three** `/settings/workspace/*` routes
+> `notFound()` there — so nothing is stranded on the other side of the threshold by the move. Every
+> one of those surfaces' capabilities is hosted on `/settings/organization`, gated per SECTION:
+> Name / Members / Danger zone / require-2FA in the existing `WorkspaceFoldInSection`, and the
+> job-runs dashboard in the `Job runs` fold-in MOTIR-4861 adds
+> (`docs/decisions/organization-tier.md` §6d — the capability is RELOCATED, not exempted).
 
 ### Settings page (`settings.pen`)
 
