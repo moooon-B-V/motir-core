@@ -247,6 +247,42 @@ describe('the retired keyset path stays retired', () => {
     ).toEqual([]);
   });
 
+  it('sweeps `tests/e2e/` too — for the names that are UNIQUE to the retired module', () => {
+    // ⚠️ ADDED AFTER THE MERGE QUEUE CAUGHT WHAT THIS FILE MISSED.
+    // `cloud-orb-clearance.spec.ts` drove the Workbench's retired `Next` LINK
+    // and nothing here saw it, because the scan above never read `tests/e2e/`.
+    //
+    // ⚠️ AND IT IS A NARROWER LIST ON PURPOSE. Widening the scan above to the
+    // whole E2E tree flags `board-scrum-at-scale-interaction.spec.ts`, which
+    // uses `nextCursor` for the BOARD's own cursor — a legitimate, unrelated
+    // paging mechanism. `nextCursor` is a generic word; the six names below are
+    // not, so they are safe to sweep the whole tree for and `nextCursor` is not.
+    //
+    // ⚠️ AND THE HONEST LIMIT, stated because it is what actually bit: the spec
+    // that broke named the control's RENDERED STRING (`Next`), not any symbol.
+    // No grep of this shape can find that. The E2E lane is the only instrument
+    // that catches it — which is why a Workbench UI change should carry the
+    // `e2e-at-scale` label, so the lane runs on the PULL REQUEST rather than
+    // first in the merge queue.
+    const UNIQUE = [
+      'workbench/cursor',
+      'homeKeysetWhere',
+      'HomeCursor',
+      'WatchingCursor',
+      'encodeHomeCursor',
+      'decodeHomeCursor',
+      'encodeWatchingCursor',
+      'decodeWatchingCursor',
+    ] as const;
+    const hits: string[] = [];
+    for (const file of walk('tests/e2e')) {
+      if (file.endsWith('kind-order-guard.test.ts')) continue;
+      const text = code(readFileSync(path.join(ROOT, file), 'utf8'));
+      for (const name of UNIQUE) if (text.includes(name)) hits.push(`${file}: ${name}`);
+    }
+    expect(hits, 'An E2E spec still drives the retired Workbench keyset.').toEqual([]);
+  });
+
   it('fires on a synthetic reference — the scan is not vacuous', () => {
     // SENSITIVITY, on the scan's own predicate rather than on the tree.
     const sample = "import { decodeHomeCursor } from '@/lib/workbench/cursor';";
