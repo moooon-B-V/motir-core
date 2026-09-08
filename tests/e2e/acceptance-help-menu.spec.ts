@@ -1,12 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
-import {
-  createFirstProject,
-  createWorkspace,
-  signUp,
-  POST_AUTH_LANDING,
-} from './_helpers/shell-session';
+import { createWorkspace, signUp, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { readDocsUrl, setDocsUrl } from './_helpers/docs-url';
 import {
   E2E_LEGAL_BASE,
@@ -76,7 +71,6 @@ import {
 test.describe.configure({ timeout: 300_000 });
 
 const EMAIL = 'acceptance-help-menu@example.com';
-const PROJECT = 'Help menu';
 /**
  * A SECOND workspace, and it is load-bearing rather than scenery.
  *
@@ -308,12 +302,18 @@ test('the rail is for daily work — Docs, Keyboard shortcuts and Legal document
     // `payForTheSecondWorkspace`.
     await payForTheSecondWorkspace(EMAIL);
     await createWorkspace(page, SECOND_WORKSPACE);
-    // Back to the landing surface explicitly: the switch lands the new (empty)
-    // workspace wherever the shell decides, and `createFirstProject` drives the
-    // no-project CTA, so the spec says where it is rather than inheriting it.
+    // Back to the landing surface explicitly, so the spec says where it is
+    // rather than inheriting wherever the switch happens to land.
+    //
+    // ⚠️ NO `createFirstProject` HERE ANY MORE (MOTIR-4876). This used to read
+    // "the switch lands the new (EMPTY) workspace … and `createFirstProject`
+    // drives the no-project CTA": the new workspace had no project, so one had
+    // to be made before the rail could show a primary section. A workspace
+    // seeds its own project now (MOTIR-4870), so the rail is already REAL — the
+    // condition this chapter needs — and the call had become a request for a
+    // SECOND project, driving a CTA that no longer exists.
     await page.goto(POST_AUTH_LANDING);
     await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 60_000 });
-    await createFirstProject(page, PROJECT);
     await expect(rail).toBeVisible();
 
     await expectRailBottomSection(rail);
