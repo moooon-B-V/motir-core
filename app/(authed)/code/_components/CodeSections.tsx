@@ -4,6 +4,10 @@ import { useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Segmented } from '@/components/ui/Segmented';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
+// ⚠️ The parser lives OUTSIDE this file, in a module with no `'use client'`, so
+// the SERVER page can import it too — see `../_section.ts` for why that is not
+// colocation pedantry but the difference between a working page and a 500.
+import type { CodeSection } from '../_section';
 
 // THE TWO SECTIONS, AND THE SWITCH BETWEEN THEM (Story MOTIR-1754 · MOTIR-1768).
 //
@@ -27,22 +31,34 @@ import { shallowPush } from '@/lib/navigation/shallowUrl';
 // same rule's second half. There is nothing to wait for, and drawing a wait
 // manufactures one.
 
-export type CodeSection = 'repositories' | 'health';
-
-const SECTIONS: readonly CodeSection[] = ['repositories', 'health'];
-
-/** The tab a URL asks for, or the default. Unknown values fall back rather than throw. */
-export function sectionFromParam(raw: string | null | undefined): CodeSection {
-  return SECTIONS.includes(raw as CodeSection) ? (raw as CodeSection) : 'repositories';
-}
-
 export function CodeSections({
+  initialSection,
   label,
   repositoriesLabel,
   healthLabel,
   repositories,
   health,
 }: {
+  /**
+   * The section this page load opens on, RESOLVED BY THE SERVER from
+   * `?section=`.
+   *
+   * ⚠️ IT IS A PROP AND NOT A HOOK READ, and that is the whole fix. This
+   * component seeded itself with `useState(() => sectionFromParam(params.get('section')))`,
+   * which looks equivalent and is not: a `useState` initialiser runs during the
+   * SERVER render too, and `useSearchParams()` yields an EMPTY set there. So the
+   * server painted `repositories` for every request, hydration reused that
+   * initial state rather than re-deriving it, and a deep link to
+   * `/code?section=health` opened the repository list.
+   *
+   * It failed silently in exactly the way that is hardest to see: the Health
+   * body is rendered and present in the DOM, just `hidden` — so a test asserting
+   * presence passes and only one asserting VISIBILITY catches it. That is why it
+   * survived the PR lane and died in the merge queue, where
+   * `cloud-audit-coverage.spec.ts` is the one spec that follows the planning
+   * banner's link rather than clicking the segmented control.
+   */
+  initialSection: CodeSection;
   label: string;
   repositoriesLabel: string;
   healthLabel: string;
@@ -50,9 +66,7 @@ export function CodeSections({
   health: ReactNode;
 }) {
   const params = useSearchParams();
-  const [section, setSection] = useState<CodeSection>(() =>
-    sectionFromParam(params.get('section')),
-  );
+  const [section, setSection] = useState<CodeSection>(initialSection);
 
   const select = (next: CodeSection): void => {
     setSection(next);

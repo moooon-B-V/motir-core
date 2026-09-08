@@ -15,6 +15,7 @@ import { loadCodeHealthSurfaces } from './_health';
 import { CodeHealthClient } from './_components/CodeHealthClient';
 import { CodeRepositories } from './_components/CodeRepositories';
 import { CodeSections } from './_components/CodeSections';
+import { sectionFromParam } from './_section';
 
 // THE CODE PAGE (Story MOTIR-1754 · MOTIR-1768) — one room, two sections.
 //
@@ -85,7 +86,19 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
   );
 }
 
-export default async function CodePage() {
+export default async function CodePage({
+  searchParams,
+}: {
+  // ⚠️ THE SECTION IS RESOLVED ON THE SERVER, AND IT HAS TO BE (MOTIR-1754).
+  // `CodeSections` used to seed itself from `useSearchParams()` inside a
+  // `useState` initialiser. That initialiser runs during the SERVER render,
+  // where the hook yields an EMPTY set — so the server always painted
+  // Repositories, hydration reused that state, and `/code?section=health` never
+  // opened Health. The whole point of the planning banner's deep link ("Review
+  // code health", in ONE click) died there, and it is invisible from inside the
+  // page: the Health body IS in the DOM, just `hidden`.
+  searchParams: Promise<{ section?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
 
@@ -146,6 +159,7 @@ export default async function CodePage() {
     <div className="flex flex-col gap-6">
       <Header title={t('title')} subtitle={t('subtitle')} />
       <CodeSections
+        initialSection={sectionFromParam((await searchParams).section)}
         label={t('sectionsLabel')}
         repositoriesLabel={t('tabs.repositories')}
         healthLabel={t('tabs.health')}

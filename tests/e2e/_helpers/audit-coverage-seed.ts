@@ -3,6 +3,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 
 // Seed for the audit-coverage E2E (MOTIR-2253): one workspace with a project
 // ADMIN and a plain MEMBER, an onboarded project, and a THREE-repo installation.
@@ -83,6 +84,40 @@ export async function seedAuditCoverage(prefix: string): Promise<AuditCoverageSe
       };
     }),
   });
+
+  // ── AND BOUND TO THE PROJECT — the grant alone is no longer enough ───────
+  //
+  // ⚠️ TWO TIERS, AND THIS SEED ONLY EVER SATISFIED THE FIRST (Story MOTIR-1754
+  // · MOTIR-1768). `persistInstallation` above records the WORKSPACE's grant —
+  // which repositories the organisation connected. The Health section now reads
+  // `resolveCodeContextState`, which resolves the PROJECT's repository SET
+  // (`project_repository`), because a workspace's grant list and a project's
+  // chosen repositories are different questions and the old `/code-health` page
+  // answered the wrong one.
+  //
+  // Without these rows the project's set is EMPTY, the audit has nothing to
+  // list, and the section renders "No codebase to analyze yet" — a correct empty
+  // state for a fixture that connected nothing to this project. The spec then
+  // fails on a locator, three chapters from the thing that is actually missing.
+  const connected = await db.githubRepo.findMany({
+    where: { workspaceId: workspace.id },
+    select: { id: true, name: true },
+  });
+  for (const [i, repo] of connected.entries()) {
+    const row = await projectRepoSetService.addRow(
+      project.id,
+      // The role is a CLOSED enum (`ProjectRepoRoleDto`), so the rows take three
+      // real values rather than a generated string. Which one a repo gets does
+      // not matter here — this seed is about which repositories the project
+      // HOLDS, not about their roles — only that the three rows differ.
+      { role: (['web', 'api', 'shared'] as const)[i] ?? 'other', name: repo.name },
+      { userId: admin.id, workspaceId: workspace.id },
+    );
+    await db.projectRepo.update({
+      where: { id: row.id },
+      data: { githubRepoId: repo.id },
+    });
+  }
 
   // `/planning` forwards a never-onboarded project to /onboarding; this story's
   // surface is the ESTABLISHED-project workspace.

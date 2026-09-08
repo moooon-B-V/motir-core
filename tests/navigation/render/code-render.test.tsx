@@ -54,6 +54,7 @@ vi.mock('@/lib/services/aiConventionService', () => ({
 
 import CodePage from '@/app/(authed)/code/page';
 import { CodeRepositories } from '@/app/(authed)/code/_components/CodeRepositories';
+import { CodeSections } from '@/app/(authed)/code/_components/CodeSections';
 import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClient';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
@@ -65,6 +66,20 @@ const PROJECT = {
   projectId: 'p1',
   project: { identifier: 'ACME', name: 'Acme', accessLevel: 'open' },
 };
+
+/**
+ * Render `/code` AT A URL — the page takes `searchParams`, so every call has to
+ * say which one it is rendering.
+ *
+ * ⚠️ THE ARGUMENT IS THE POINT (MOTIR-1754). The section used to be read by the
+ * client island out of `useSearchParams()` inside a `useState` initialiser,
+ * which yields an EMPTY set during the server render — so the server always
+ * painted Repositories and `/code?section=health` silently opened the wrong
+ * section. It is resolved on the server now, and this harness makes the URL an
+ * explicit input rather than an ambient one.
+ */
+const renderAt = (section?: string) =>
+  renderTree(CodePage, { searchParams: Promise.resolve(section ? { section } : {}) });
 
 beforeEach(() => {
   getSession.mockResolvedValue({ user: { id: 'u1' } });
@@ -92,7 +107,7 @@ afterEach(() => {
 
 describe('/code — the page’s own branches', () => {
   it('seeds the island from the resolved repo set', async () => {
-    const tree = await renderTree(CodePage);
+    const tree = await renderAt();
     const island = findFirst(tree, CodeHealthClient)!;
 
     expect(island).toBeDefined();
@@ -109,7 +124,7 @@ describe('/code — the page’s own branches', () => {
       repos: [],
     });
 
-    const tree = await renderTree(CodePage);
+    const tree = await renderAt();
     const island = findFirst(tree, CodeHealthClient)!;
 
     expect(island.props['repoRefs']).toEqual([]);
@@ -125,7 +140,7 @@ describe('/code — the page’s own branches', () => {
     // calls `resolveCodeContextState(projectId, ctx)` \u2014 which resolves
     // `project_repository` \u2014 and hands its rows straight to the section, so
     // two projects in one workspace with different sets render different lists.
-    await renderTree(CodePage);
+    await renderAt();
 
     expect(resolveCodeContextState).toHaveBeenCalledWith('p1', {
       userId: 'u1',
@@ -144,7 +159,7 @@ describe('/code — the page’s own branches', () => {
     getAudit.mockRejectedValue(new NotProjectAdminError('p1'));
     getConvention.mockRejectedValue(new NotProjectAdminError('p1'));
 
-    const tree = await renderTree(CodePage);
+    const tree = await renderAt();
 
     // Health is denied\u2026
     expect(findFirst(tree, CodeHealthClient)).toBeUndefined();
@@ -162,7 +177,7 @@ describe('/code — the page’s own branches', () => {
     getConvention.mockRejectedValue(new MotirAiUnavailableError('upstream down'));
     getAudit.mockRejectedValue(new MotirAiUnavailableError('upstream down'));
 
-    const tree = await renderTree(CodePage);
+    const tree = await renderAt();
     const island = findFirst(tree, CodeHealthClient)!;
 
     // Containment, per MOTIR-2207: one repo's failure is that row's own state.
@@ -188,7 +203,7 @@ describe('/code — the page’s own branches', () => {
     // it into a degraded surface that says the code analysis is unavailable.
     getAudit.mockRejectedValue(new TypeError('reading `id` of undefined'));
 
-    await expect(renderTree(CodePage)).rejects.toThrow('reading `id` of undefined');
+    await expect(renderAt()).rejects.toThrow('reading `id` of undefined');
   });
 
   it('REDIRECTS rather than rendering when there is no active project', async () => {
@@ -201,14 +216,48 @@ describe('/code — the page’s own branches', () => {
     // keeping: the gate runs BEFORE any code context is resolved.
     getActiveProject.mockResolvedValue(null);
 
-    await expect(renderTree(CodePage)).rejects.toThrow('REDIRECT:/sign-in');
+    await expect(renderAt()).rejects.toThrow('REDIRECT:/sign-in');
     expect(resolveCodeContextState).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ opens the section the URL asks for — `?section=health` is resolved on the SERVER', async () => {
+    // THE DEEP LINK, AND THE DEFECT IT SHIPPED WITH. The planning banner's
+    // "Review code health" link promises the audit in ONE click by deep-linking
+    // to `/code?section=health`. `CodeSections` seeded itself with
+    // `useState(() => sectionFromParam(useSearchParams().get('section')))`,
+    // which reads as equivalent to this and is not: a `useState` initialiser
+    // also runs during the SERVER render, where the hook yields an EMPTY set. So
+    // the server painted `repositories` for every request and hydration reused
+    // that state, and the link opened the repository list.
+    //
+    // ⚠️ IT FAILED IN THE SHAPE THAT HIDES BEST: both bodies stay MOUNTED and
+    // the inactive one is `hidden`, so the Health section was in the DOM the
+    // whole time. Every presence assertion passed. Only a VISIBILITY assertion
+    // could see it, which is why it survived the PR lane and died in the merge
+    // queue's cloud leg — `cloud-audit-coverage.spec.ts` is the one spec that
+    // follows the banner's link rather than clicking the segmented control.
+    //
+    // Asserted on the PROP, which is the seam the server owns. The island's own
+    // `hidden` switching is its business; what the page must get right is
+    // handing it the section the URL named.
+    const sections = findFirst(await renderAt('health'), CodeSections)!;
+    expect(sections).toBeDefined();
+    expect(sections.props['initialSection']).toBe('health');
+  });
+
+  it('falls back to the repository list for a missing or unknown section', async () => {
+    // The other half of `sectionFromParam`: absent and garbage both land on the
+    // default rather than throwing, so a hand-edited URL cannot 500 the room.
+    expect(findFirst(await renderAt(), CodeSections)!.props['initialSection']).toBe('repositories');
+    expect(findFirst(await renderAt('nope'), CodeSections)!.props['initialSection']).toBe(
+      'repositories',
+    );
   });
 
   it('bounces a signed-out reader before anything else', async () => {
     getSession.mockResolvedValue(null);
 
-    await expect(renderTree(CodePage)).rejects.toThrow('REDIRECT:/sign-in');
+    await expect(renderAt()).rejects.toThrow('REDIRECT:/sign-in');
     expect(getActiveProject).not.toHaveBeenCalled();
   });
 });

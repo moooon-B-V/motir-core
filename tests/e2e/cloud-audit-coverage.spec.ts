@@ -26,7 +26,8 @@ import {
 // Story MOTIR-2244 — audit coverage, end to end (MOTIR-2253).
 //
 // The `verification_recipe`, automated: an ADMIN learns from /planning that
-// repositories have never been assessed, reaches /code-health in one click, and
+// repositories have never been assessed, reaches the Codebase room's Health section in
+// one click, and
 // derives an audit for one repo alone — then for the un-audited SET. And the
 // negative case, which is half the story: a MEMBER sees no banner at all,
 // asserted with a real member session rather than by omitting an assertion.
@@ -48,7 +49,7 @@ let refreshBodies: { repoKeys?: string[] }[] = [];
 
 // ── The SERVER-side boundary fixture (MOTIR-2253) ────────────────────────────
 //
-// `/code-health` is server rendered: `loadCodeHealthSurfaces` calls motir-ai
+// The Health section is server rendered: `loadCodeHealthSurfaces` calls motir-ai
 // INSIDE the Next process, where `page.route` cannot reach. `lib/test-code-health-mock`
 // (E2E_TEST_CODE_HEALTH=1, wired in this lane's webServer env) answers those
 // reads from this file. Rewriting it between steps is how a repo changes state.
@@ -147,7 +148,7 @@ test.afterAll(async () => {
   await db.$disconnect();
 });
 
-test('an admin is told, reaches /code-health, and audits one repo then the rest', async ({
+test('an admin is told, reaches the Health section, and audits one repo then the rest', async ({
   page,
   chapter,
   beat,
@@ -169,7 +170,13 @@ test('an admin is told, reaches /code-health, and audits one repo then the rest'
     await beat();
   });
 
-  await chapter('Its link reaches the code-health audit tab in one click', async () => {
+  // ⚠️ THE NAMES IN THIS FILE MOVED WITH THE SURFACE (Story MOTIR-1754 ·
+  // MOTIR-1768). `/code-health` is a 308 to `/code` and the audit is the Health
+  // SECTION of the Codebase room, so the prose above and this chapter's title
+  // were re-pointed. The assertions were already correct — only the words
+  // describing them were a route behind, which is the shape that sends the next
+  // reader to a redirect and lets them think the test is stale when it is not.
+  await chapter('Its link reaches the Health section in one click', async () => {
     await page.getByRole('link', { name: 'Review code health' }).click();
     // ⚠️ `/code`, and the SECTION is named (MOTIR-1768). The audit is no longer a
     // page — it is the second section of the Code room — so the banner

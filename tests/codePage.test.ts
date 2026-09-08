@@ -7,7 +7,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from './fixtures/workItemFi
 import { createTestProject } from './fixtures/projectFixtures';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
-import { sectionFromParam } from '@/app/(authed)/code/_components/CodeSections';
+import { sectionFromParam } from '@/app/(authed)/code/_section';
 
 // THE `/code` PAGE (Story MOTIR-1754 · MOTIR-1768) — one room, two sections.
 //
