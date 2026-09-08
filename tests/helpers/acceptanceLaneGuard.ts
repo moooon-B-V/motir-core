@@ -365,11 +365,16 @@ export async function fetchApprovedStories(
   source: StatusSource,
   fetchImpl: typeof fetch = fetch,
 ): Promise<Set<string>> {
-  type Read =
+  // Each read carries its OWN key back rather than being re-paired with
+  // `storyKeys` by index below: the array is `readonly string[]`, so an index
+  // into it is `string | undefined` and the reduce would owe a non-null
+  // assertion for a pairing `Promise.all` already guarantees.
+  type Read = { key: string } & (
     | { outcome: 'approved' }
     | { outcome: 'not-approved' }
     | { outcome: 'unreachable' }
-    | { outcome: 'unreadable'; error: unknown };
+    | { outcome: 'unreadable'; error: unknown }
+  );
 
   const reads = await Promise.all(
     storyKeys.map(async (key): Promise<Read> => {
@@ -379,27 +384,29 @@ export async function fetchApprovedStories(
         res = await fetchImpl(url, { headers: authHeaders(source) });
       } catch {
         // Unreachable for this key: not evidence of anything. Skip it.
-        return { outcome: 'unreachable' };
+        return { key, outcome: 'unreachable' };
       }
       if (!res.ok)
-        return { outcome: 'unreadable', error: new LaneGuardReadError(key, res.status, url) };
+        return { key, outcome: 'unreadable', error: new LaneGuardReadError(key, res.status, url) };
       try {
         const body = (await res.json()) as { evidence?: { status?: string } | null };
         return body?.evidence?.status === 'approved'
-          ? { outcome: 'approved' }
-          : { outcome: 'not-approved' };
+          ? { key, outcome: 'approved' }
+          : { key, outcome: 'not-approved' };
       } catch (error) {
         // A 2xx whose body will not parse is the same class of wiring defect as
         // a route-level status, and the serial loop propagated it too.
-        return { outcome: 'unreadable', error };
+        return { key, outcome: 'unreadable', error };
       }
     }),
   );
 
+  // `Promise.all` preserves input order, so this walk IS `storyKeys` order —
+  // which is what makes the throw the serial loop's own choice.
   const approved = new Set<string>();
-  for (const [i, read] of reads.entries()) {
+  for (const read of reads) {
     if (read.outcome === 'unreadable') throw read.error;
-    if (read.outcome === 'approved') approved.add(storyKeys[i]);
+    if (read.outcome === 'approved') approved.add(read.key);
   }
   return approved;
 }

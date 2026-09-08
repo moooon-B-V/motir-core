@@ -192,7 +192,8 @@ function batchedFetch(
   deadline.catch(() => {});
 
   const impl = (async (url: string) => {
-    const key = url.split('/work-items/')[1].split('/')[0];
+    const key = /\/work-items\/([^/]+)\//.exec(url)?.[1];
+    if (!key) throw new Error(`the batch stub could not read a story key out of ${url}`);
     started.push(key);
     inFlight += 1;
     maxInFlight = Math.max(maxInFlight, inFlight);
