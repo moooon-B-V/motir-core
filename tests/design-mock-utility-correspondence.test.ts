@@ -537,7 +537,10 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/projects/public-page.mock.html', count: 60, card: 'MOTIR-4810' },
   { file: 'design/settings/arrival.mock.html', count: 48, card: 'MOTIR-4810' },
   { file: 'design/shell/3d-immersive-shell.mock.html', count: 84, card: 'MOTIR-4810' },
-  { file: 'design/shell/account-menu.mock.html', count: 8, card: 'MOTIR-4813' },
+  // 8 → 4 (MOTIR-4845): the `Workspace settings` row left this menu and took its
+  // whole conditional AXIS with it, so Panel B's four state frames collapsed to two
+  // — the inert variants went with the two deleted frames rather than being fixed.
+  { file: 'design/shell/account-menu.mock.html', count: 4, card: 'MOTIR-4813' },
   { file: 'design/shell/help-menu.mock.html', count: 34, card: 'MOTIR-4810 / MOTIR-4813' }, // structural 28, state 6
   { file: 'design/shell/navigation-pending.mock.html', count: 96, card: 'MOTIR-4810' },
   { file: 'design/shell/top-bar.mock.html', count: 28, card: 'MOTIR-4810' },

@@ -91,10 +91,12 @@ two primitives feel consistent. No new tokens needed — use existing
 > departure and the arrival read as one move rather than as two rows.
 >
 > **Below the reveal this row does not exist, because the SWITCHER does not.** At one workspace
-> there is no switcher in the top bar at all, and the two routes this row opens onto `notFound()`
-> there — so nothing is stranded on the other side of the threshold by the move.
-> `/settings/workspace/jobs`, which answers at every count, keeps its door in the rail's bottom
-> section instead (`docs/decisions/organization-tier.md` §6d).
+> there is no switcher in the top bar at all, and **all three** `/settings/workspace/*` routes
+> `notFound()` there — so nothing is stranded on the other side of the threshold by the move. Every
+> one of those surfaces' capabilities is hosted on `/settings/organization`, gated per SECTION:
+> Name / Members / Danger zone / require-2FA in the existing `WorkspaceFoldInSection`, and the
+> job-runs dashboard in the `Job runs` fold-in MOTIR-4861 adds
+> (`docs/decisions/organization-tier.md` §6d — the capability is RELOCATED, not exempted).
 
 ### Settings page (`settings.pen`)
 

@@ -981,46 +981,70 @@ frame shares one document, the compiled `@media (width >= …)` blocks are re-em
 section**: the three rows it carries, at all three widths the shell draws, in both arms of every
 conditional row.
 
-> ### ⚠️ AMENDED by MOTIR-4845 — the `Security` row LEAVES, and the FLOOR DOES NOT MOVE
+> ### ⚠️ AMENDED by MOTIR-4845 — BOTH workspace rows LEAVE, and the FLOOR NARROWS AGAIN
 >
-> The section is **two rows**: Settings · Job runs. **Its floor is `Job runs`, alone** — unchanged,
-> because the departing row was CONDITIONAL and so was never in it.
+> The section is **ONE row**: `Settings`. **It is itself conditional on `showSettingsDoor`, so the
+> section can render NOTHING** — no heading, no separator, no empty state. That is the first empty
+> arm this section has ever had, and `rail-bottom-section.mock.html` DRAWS it at all three widths
+> rather than describing it.
 >
-> **⚠️ This is the MOTIR-4254 arithmetic, not the MOTIR-4640 one directly below, and the two must
-> not share a sentence in either direction.** `Security` is gated on `workspaceTierRevealed`, so a
-> deployment below the reveal saw one row here before this change and sees one after; what shortens
-> is the COMPLETE arm, three rows to two.
+> **⚠️ This is the MOTIR-4640 arithmetic directly below, NOT MOTIR-4254's, and the two must not
+> share a sentence.** `Job runs` was **unconditional** and it **WAS the floor**, so the floor goes
+> from one row to zero and **every** deployment loses a row here — not only a configured one.
+> `Security` was already conditional and was never in the floor, so it costs the complete arm alone.
+> One amendment, two different arithmetics; say which applies to which row.
 >
-> **It leaves because it is DUPLICATED, not because it moved.**
-> `/settings/workspace/security` becomes a row in the workspace-settings AREA rail
-> (`design/settings/workspace-settings.mock.html`, MOTIR-4844), which renders under **exactly the
-> same condition** — so the two doors would otherwise sit side by side at the same reveal arm. This
-> is the opposite of the `Git` case below, where the surface changed TIER and the row was re-pointed
-> before it was removed.
+> **Both rows leave for ONE reason, and it is a TENANCY one.** They are workspace-tier destinations
+> sitting in the PROJECT's rail — exactly the mismatch MOTIR-4640 removed for the `Git` row a week
+> earlier. At the reveal both live in the workspace-settings AREA rail
+> (`design/settings/workspace-settings.mock.html`, MOTIR-4844).
 >
-> **⚠️ `Job runs` STAYS, and this is the clause a later tidy-up must not finish.**
-> `/settings/workspace/jobs` answers **200 at every workspace count** — it is workspace-SCOPED but
-> not workspace-NAMED, so `docs/decisions/organization-tier.md` §6's reveal leaves it alone
-> (MOTIR-3502 AC 6, and `SidebarNav.tsx`'s own comment says so). Below the reveal the area rail
-> draws `Job runs` ALONE and neither of its siblings at all, so **this section is that route's only
-> door for anyone arriving without an active project.** §6d: _a hidden tier may not remove a
-> capability._ Removing the row would take one from exactly the customers the disclosure rule
-> protects — reproducing MOTIR-3500's original defect one surface over.
+> **⚠️ `Job runs` NO LONGER NEEDS A ROW HERE — a change of FACT, not a change of mind.** An earlier
+> revision of this amendment KEPT it, on §6d grounds: `/settings/workspace/jobs` answered **200 at
+> every workspace count** (MOTIR-3502 AC 6) while its siblings 404'd, so this section really was its
+> only door below the reveal. **That was true, and it was the wrong repair.** The route answered at
+> every count because it was the one workspace-tier surface with **no fold-in** — an unfinished
+> collapse rather than a decision. MOTIR-4861 builds it one on `/settings/organization`, so the
+> route becomes reveal-gated like its siblings and `docs/decisions/organization-tier.md` §6d — _a
+> hidden tier may not remove a capability … relocating a surface preserves its gate_ — is satisfied
+> by **RELOCATION**, which is what the rule asks for. MOTIR-4859 is the planning bug; the general
+> form is a global lesson: _a hiding rule owes every capability a RELOCATION, and a surface exempted
+> from it because it still answers is the tell that one is missing._
 >
 > **What each departing row's capability is reached by afterwards:**
 >
-> | the capability                         | where it lives now                                                                    | tier      |
-> | -------------------------------------- | ------------------------------------------------------------------------------------- | --------- |
-> | the workspace's require-2FA policy     | **Settings → Workspace → Security**, in the area rail                                 | workspace |
-> | workspace name / members / danger zone | **Settings → Workspace**, in the area rail                                            | workspace |
-> | the workspace's background-job runs    | **Settings → Workspace → Job runs** in the area rail, **and this section, unchanged** | workspace |
+> | the capability                         | where it lives now                                                                           | tier      |
+> | -------------------------------------- | -------------------------------------------------------------------------------------------- | --------- |
+> | the workspace's require-2FA policy     | **Settings → Workspace → Security** at the reveal; the org page's fold-in below it           | workspace |
+> | workspace name / members / danger zone | **Settings → Workspace** at the reveal; the org page's fold-in below it                      | workspace |
+> | the workspace's background-job runs    | **Settings → Workspace → Job runs** at the reveal; the org page's **NEW** `Job runs` fold-in | workspace |
 >
-> The middle row never had a door in this section and is tabled anyway, because the question §6d
-> asks is _what is reachable_, not _what left this file_ — and the area rail is where all three land.
+> The middle row never had a door in this section and is tabled anyway, because the question §6d asks
+> is _what is reachable_, not _what left this file_ — and the area rail is where all three land.
 >
 > ⚠️ **Shipped code is mid-move and that is expected, not a contradiction.** `SidebarNav.tsx` still
-> renders the `Security` row, gated on `workspaceTierRevealed`. **MOTIR-4847 removes it**, and this
-> amendment is the design it removes it to.
+> renders both rows. **MOTIR-4847 removes them**, and this amendment is the design it removes them
+> to. It is `blocked_by` MOTIR-4861, so the fold-in exists before the row does not.
+
+> ### GIVES / TAKES — MOTIR-4845
+>
+> Every `MOTIR-<n>` the two amended assets name, swept with
+> `grep -o 'MOTIR-[0-9]\+'` over each and de-duplicated.
+>
+> | card                                                                                                | gives / takes                                   | what                                                                                                                                                                                                                                                                          |
+> | --------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **MOTIR-4847**                                                                                      | **TAKES two rows, and that IS its deliverable** | It builds the removals this amendment draws: the account menu's `Workspace settings` row and BOTH bottom-section rows. Stated as a give in substance — the card exists to perform exactly this, and its criteria already name both rows since the re-plan. No amendment owed. |
+> | **MOTIR-4861**                                                                                      | neither                                         | Named as the fold-in that makes `Job runs`' departure §6d-conforming. This amendment draws no part of that section — MOTIR-4844's Panel 4 does.                                                                                                                               |
+> | **MOTIR-4844**                                                                                      | neither                                         | The sibling design card. Cited as where both departing rows live at the reveal; its asset is not touched here.                                                                                                                                                                |
+> | **MOTIR-4640**                                                                                      | neither                                         | The precedent: the same section, the same narrowing-floor arithmetic, one row earlier. Lifted as reasoning, re-specified nowhere.                                                                                                                                             |
+> | **MOTIR-4254** · **MOTIR-4167** · **MOTIR-4130** · **MOTIR-4238** · **MOTIR-4248** · **MOTIR-4237** | neither                                         | This asset's own revision history and the Help-menu / account-menu owners. Records, not scopes.                                                                                                                                                                               |
+> | **MOTIR-3502**                                                                                      | neither here                                    | Its AC 6 is retired by this story, but MOTIR-4844's asset is where that is drawn and recorded; this amendment only cites it as the reason the row used to stay.                                                                                                               |
+> | **MOTIR-3909** · **MOTIR-3932** · **MOTIR-2374**                                                    | neither                                         | Point-in-time citations in the head comment's revision log.                                                                                                                                                                                                                   |
+> | **MOTIR-4843** · **MOTIR-4845** · **MOTIR-4859**                                                    | —                                               | The story, this card, and the planning bug — provenance.                                                                                                                                                                                                                      |
+>
+> **No TAKES beyond MOTIR-4847's own deliverable**, and that was checked against its criteria: since
+> the re-plan they name both rows, the empty arm and the `blocked_by` on MOTIR-4861. Nothing is owed
+> an `update_work_item`.
 
 > ### ⚠️ AMENDED by MOTIR-4640 — the `Git` row LEAVES, and this time the FLOOR NARROWS
 >
@@ -1153,7 +1177,7 @@ floor untouched; the `Git` move did not, and the three are not described with th
 
 | 5 | **This asset's own previous revision** drew `Git` as an unconditional row, and put it in the floor | **The row is GONE from this section**, and its three destinations are named above rather than described. The floor is `Job runs` alone — this move NARROWED it, which the MOTIR-4254 move did not, and the two must not share a sentence. The door survives at the organisation tier's own rail. | MOTIR-4640 |
 
-| 6 | **This asset's own previous revision** drew `Security` as a `workspaceTierRevealed`-gated row | **The row is GONE from this section.** It leaves because it is DUPLICATED rather than relocated: the workspace-settings AREA rail (`design/settings/workspace-settings.mock.html`, MOTIR-4844) renders a `Security` row under _exactly the same condition_. **The floor is UNCHANGED** — the departing row was conditional and never in it, so this is the MOTIR-4254 arithmetic and not row 5's. **`Job runs` STAYS** and its reason is §6d, stated in the amendment above. | MOTIR-4845 |
+| 6 | **This asset's own previous revision** drew `Security` (reveal-gated) and `Job runs` (unconditional) | **BOTH rows are GONE from this section**, and they leave under DIFFERENT arithmetics: `Security` was conditional and never in the floor (the MOTIR-4254 shape), `Job runs` was unconditional and WAS the floor (row 5's shape), so the floor goes from one row to **zero** and the section gains its first empty arm. Both are workspace-tier destinations sitting in a PROJECT rail — the tenancy mismatch row 5 removed for `Git`. `Job runs` needed no exception once MOTIR-4861 gave it a fold-in; see the amendment above. | MOTIR-4845 |
 
 ### The six assets that draw this section — a disposition each (re-measured for MOTIR-4640)
 
@@ -1184,33 +1208,36 @@ rename landed.
 
 ### The same six assets, re-measured for MOTIR-4845 — a disposition each
 
-The method is the one directly above, re-run rather than copied: the three `.pen` sources parsed as
-JSON and walked to their `Nav Section Bottom` frame, the three `.mock.html` assets grepped for the
-row. **The question this time is `Security`, and the answer is that ONLY THIS ASSET DRAWS IT** —
-which is why the shortfall the MOTIR-4130 measurement recorded is still the fact about this section.
+The method is the one directly above, re-run rather than copied. The question this time is **two**
+rows, `Security` and `Job runs`, and the answer is that **only this asset draws either as a
+specification** — which is why the shortfall the MOTIR-4130 measurement recorded is still the fact
+about this section.
 
-**Measured with `grep -rc 'Security' design/shell/` at `11d4c8541`**, whose output is on
-MOTIR-4845's pull request in full. Four files hit; two of them are this amendment's subject and two
-are not:
+**Measured with `grep -rc 'Security' design/shell/` and `grep -rc 'Job runs' design/shell/` at
+`11d4c8541`**, with both outputs on MOTIR-4845's pull request in full:
 
-| File                                                                                                                                                                                                      | `Security` hits | What they are                                                                                                    | Disposition                                                                                                                          |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `rail-bottom-section.mock.html`                                                                                                                                                                           | 5               | the row itself, in the two labelled arms and the icon-only one, plus its caption and its Panel-D table entry     | **REDRAWN — this amendment**                                                                                                         |
-| `design-notes.md`                                                                                                                                                                                         | 4               | this block's own prose                                                                                           | **AMENDED — this amendment**                                                                                                         |
-| `3d-immersive-shell.mock.html`                                                                                                                                                                            | 6               | six rails LIFTED as context for a spatial exploration whose subject is the plane                                 | **recorded, not amended** — ledger row 2 of that asset's own block already says this asset WINS for the section                      |
-| `help-menu.mock.html`                                                                                                                                                                                     | 3               | one prose sentence recording what the section held _after_ MOTIR-4238's own story, plus two lifted context rails | **recorded, not amended** — a point-in-time record of its own moment, already one generation stale since MOTIR-4640 and correctly so |
-| `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen` · `context-row.mock.html` · `navigation-pending.mock.html` · `top-bar.mock.html` · `cmd-k.pen` · `shortcuts.pen` · `account-menu.mock.html` | **0**           | —                                                                                                                | nothing to amend                                                                                                                     |
+| File                                                                                          | draws `Security` | draws `Job runs` | Disposition                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------- | ---------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rail-bottom-section.mock.html`                                                               | yes              | yes              | **REDRAWN — this amendment**, both rows out of every arm and the section itself out of the floor arms                                                                              |
+| `design-notes.md`                                                                             | yes              | yes              | **AMENDED — this amendment**                                                                                                                                                       |
+| `3d-immersive-shell.mock.html`                                                                | yes ×6           | yes              | **recorded, not amended** — six rails LIFTED as context for a spatial exploration whose subject is the plane; that asset's own ledger already says this asset WINS for the section |
+| `help-menu.mock.html`                                                                         | yes ×3           | yes              | **recorded, not amended** — a point-in-time record of its own moment, already one generation stale since MOTIR-4640 and correctly so                                               |
+| `navigation-pending.mock.html` · `top-bar.mock.html` · `design/workbench/workbench.mock.html` | —                | yes              | **recorded, not amended** — ledger row 3: context for a pending grammar, a control budget and a landing surface, not the source for this section                                   |
+| `desktop.pen` · `desktop-collapsed.pen` · `mobile-drawer.pen`                                 | no               | no               | nothing to amend, and they cannot be edited in this tree (ledger row 2)                                                                                                            |
 
-**The three `.pen` sources need nothing here for a stronger reason than they needed nothing for
-`Git`:** they never drew `Security` either, and they cannot be edited in this tree in any case
-(ledger row 2). **`account-menu.mock.html` is 0 for `Security` and is amended by this card anyway**,
-for the OTHER row — see § _The account menu_ below.
+**⚠️ AND THE TWO-WORD LABEL NEEDS A WHITESPACE-TOLERANT PATTERN.** `prettier` wraps
+`Workspace settings` across a line inside a mock, so `grep -rl 'Workspace settings' design/` returns
+**five files where six hit** — `design/cli-connect/cli-connect.mock.html` is the one it misses.
+`grep -rlzP 'Workspace\s+settings' design/` finds all six. A single-word label (`Security`, `Git`)
+is unaffected, which is why this had not bitten before. **Any future sweep for a multi-word row
+label in this tree owes the tolerant form.**
 
-**Why `recorded, not amended` is the right disposition twice.** Both hitting assets draw the section
-as CONTEXT for a subject that is not this section, and both are named in a divergence ledger that
-already says this asset wins for it. Amending them would make three files claim the same element and
-give the next reader no way to tell which is current — which is the divergence this area's ledger
-exists to prevent, and the exact call MOTIR-4640 made for the same assets one row earlier.
+**Why `recorded, not amended` is the right disposition every time it appears above.** Each of those
+assets draws the section as CONTEXT for a subject that is not this section, and each is named in a
+divergence ledger that already says this asset wins for it. Amending them would make several files
+claim the same element and give the next reader no way to tell which is current — the divergence
+this area's ledger exists to prevent, and the exact call MOTIR-4640 made for the same assets one row
+earlier.
 
 **Why the three `.pen` sources need nothing.** They never drew `Git` — that is the four-row shortfall
 the MOTIR-4130 measurement recorded, and it is unchanged by a row leaving. Ledger row 2 already
