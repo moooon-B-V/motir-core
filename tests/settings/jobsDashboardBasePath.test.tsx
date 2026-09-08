@@ -99,9 +99,13 @@ describe('the dashboard addresses the host that renders it', () => {
     expect(hrefs(container).every((h) => h.startsWith(WORKSPACE_ROUTE))).toBe(true);
   });
 
-  it('carries the tab, the status and the page together, on either host', () => {
-    // The query is built from the same three inputs on both doors, so a deep
-    // link shared from one is a deep link on the other.
+  it('builds the same query on either host — a deep link is portable between them', () => {
+    // ⚠️ A TAB LINK CARRIES ONLY THE TAB, deliberately: `TabStrip` calls
+    // `buildHref(base, { tab })` and drops the active status, because switching
+    // tabs should not smuggle the runs filter onto the dead-letter queue. The
+    // STATUS filter's own links carry it. Asserting a combined
+    // `?tab=dlq&status=failed` here was wrong about the product, not about the
+    // base path.
     for (const base of [ORG_ROUTE, WORKSPACE_ROUTE]) {
       cleanup();
       const { container } = renderWithIntl(
@@ -118,7 +122,8 @@ describe('the dashboard addresses the host that renders it', () => {
           dlq={[]}
         />,
       );
-      expect(hrefs(container), base).toContain(`${base}?tab=dlq&status=failed`);
+      expect(hrefs(container), base).toContain(`${base}?tab=dlq`);
+      expect(hrefs(container), base).toContain(`${base}?status=succeeded`);
     }
   });
 });

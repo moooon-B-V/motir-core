@@ -150,7 +150,11 @@ describe('the fold-in points its own links HOME', () => {
       ...MEMBER,
       searchParams: { tab: 'dlq', status: 'failed', page: '3' },
     });
-    expect(props['activeTab']).toBe('dlq');
+    // The pane's prop is `tab` — `activeTab` is what it hands the DASHBOARD,
+    // one layer further down. Asserting the wrong name here read as "the query
+    // is ignored", which is the very defect this case exists to catch.
+    expect(props['tab']).toBe('dlq');
+    expect(props['status']).toBe('failed');
     expect(props['page']).toBe(3);
   });
 
@@ -158,7 +162,7 @@ describe('the fold-in points its own links HOME', () => {
     // The same coercion the standalone route applies, through the same parser —
     // a shared URL must not refuse a reader, on either door.
     const props = await renderSection({ ...MEMBER, searchParams: { tab: 'system' } });
-    expect(props['activeTab']).toBe('runs');
+    expect(props['tab']).toBe('runs');
     expect(props['showSystemTab']).toBe(false);
   });
 });
