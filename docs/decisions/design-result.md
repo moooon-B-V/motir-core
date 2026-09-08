@@ -689,10 +689,36 @@ is still unfinished until the evidence id is on it.
 
 ### 7. Relationship to the runtime design-approval gate (Story MOTIR-693 / 9.2)
 
-**This record ships the ARTIFACT, not the GATE.** Story 9.2 keeps the runtime
-human-in-the-loop semantics in full: the "for review" state, HOLDING the
-`depends_on` dependents, the revise-chat re-dispatch, Approve, and the
-per-project toggle.
+**This record ships the ARTIFACT, not the GATE.**
+
+> **⚠️ AMENDED (MOTIR-4786, 2026-09-08) — THE DECISION HALF NO LONGER POINTS
+> HERE AT 9.2. Read `approval-gates.md`.** The paragraph below said 9.2 keeps
+> the human-in-the-loop semantics "in full", and that is no longer true: the
+> **DECISION, its record and its status effect** moved to Epic MOTIR-4878, whose
+> authority is **`docs/decisions/approval-gates.md`**. What 9.2 keeps is listed
+> in that record's §5 — the ephemeral hosted preview and its teardown, the
+> **revise-chat re-dispatch**, `Project.designApprovalGate`, and the HOLD it
+> applies to the `motir auto` loop.
+>
+> **Why it moved:** 9.2 is `blocked_by` MOTIR-683, hosted agent execution — so
+> leaving design approval there meant nobody could approve a design until an
+> entire epic landed, while the artefact it would approve has been shipping to
+> cards since MOTIR-2664.
+>
+> **Two clauses of `approval-gates.md` bear directly on THIS record** and are
+> named here so a reader of §4 finds them: its **§6c** amends §4's
+> supersede/retention — an APPROVED `DesignEvidence` row's attachments are
+> PINNED and must NOT be unlinked on supersede, because the orphan-GC would
+> otherwise reclaim the very bytes an approval was given on (the same failure
+> `acceptance-receipt-lifecycle.md` records as MOTIR-2764). Its **§6b** adds a
+> product-written `superseded` gate state, so a gate whose subject this record's
+> supersede path retires is retired with it.
+
+~~Story 9.2 keeps the runtime human-in-the-loop semantics in full: the "for
+review" state, HOLDING the `depends_on` dependents, the revise-chat re-dispatch,
+Approve, and the per-project toggle.~~ **Superseded by the amendment above** —
+kept struck rather than deleted, because a reader arriving from an old citation
+needs to land on where the decision went rather than on nothing.
 
 **What 9.2 no longer needs is somewhere to point an iframe.** Its planned
 mechanism — deploy the `*.mock.html` (+ rendered notes) to an **ephemeral,
