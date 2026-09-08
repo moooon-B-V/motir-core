@@ -86,14 +86,26 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
   await applyTheme(page, 'light');
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-empty-state-light.png`, fullPage: true });
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-fresh-account-light.png`, fullPage: true });
 
-  // 1b) Empty-state surface — dark
+  // 1b) The same fresh-account surface — dark
   await applyTheme(page, 'dark');
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-empty-state-dark.png`, fullPage: true });
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-fresh-account-dark.png`, fullPage: true });
   await applyTheme(page, 'light');
 
-  // 2) Open create modal from the empty-state CTA
+  // 2) Open the create modal from THE SWITCHER (MOTIR-4876).
+  //
+  // ⚠️ This used to read "open create modal from the empty-state CTA", and the
+  // click below went straight to a `Create project` button that the projectless
+  // `/dashboard` rendered inline. That surface is deleted, not merely unrouted —
+  // creating a project is a workspace-tier act, and the switcher is the door
+  // that owns it (`tests/navigation/no-create-project-screen-guard.test.ts`).
+  // Step 1 above was inverted in the same pass this comment belongs to; the
+  // click was not, so the spec asserted the new world and then drove the old
+  // one. It is the two-step `createFirstProject` performs — open the switcher,
+  // then the create door — spelled out here because this test screenshots the
+  // modal between the steps.
+  await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
   await page.getByLabel('Project name').fill('Mobile App');

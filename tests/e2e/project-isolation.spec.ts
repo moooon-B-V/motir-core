@@ -89,34 +89,27 @@ async function signUp(page: Page, email: string): Promise<void> {
 
 // Drive the production create-project modal end-to-end so we exercise
 // the same Server Action path (createProjectAction →
-// projectsService.createProject) the UI normally takes. Opens the modal
-// from whichever entry point the current surface state offers:
-//   - empty-state CTA (first project: /dashboard has the "Create your
-//     first project" empty state + a top-level "Create project" button)
-//   - switcher's "Create project" entry (subsequent projects: the
-//     empty-state CTA is gone once the workspace has any project)
+// projectsService.createProject) the UI normally takes.
+//
+// ⚠️ THERE IS ONE ENTRY POINT NOW — the switcher (MOTIR-4876). This helper used
+// to branch on "whichever entry point the current surface state offers": an
+// empty-state CTA for the FIRST project, because `/dashboard` rendered "Create
+// your first project" inline, and the switcher for every later one. Every
+// workspace holds a project from its first authed request (MOTIR-4870), so the
+// CTA branch could no longer be reached — and a dead branch guarded by
+// `isVisible()` fails silently INTO the other one, which is why this kept
+// passing while describing a surface that does not exist. The `.or()` sync went
+// with it: "Switch project" is now always the thing to wait for.
 async function createProject(page: Page, name: string, identifier: string): Promise<void> {
   await page.goto('/dashboard');
-  const emptyStateCta = page.getByRole('button', { name: 'Create project' }).first();
-  // Sync on either the empty-state CTA or the sidebar switcher being ready —
-  // whichever the workspace state renders. (Post-1.5.3 the switcher lives in
-  // the sidebar; an empty workspace shows the CTA card instead, so we can't
-  // assume "Switch project" is present here.)
-  await expect(
-    emptyStateCta.or(page.getByRole('button', { name: 'Switch project' })),
-  ).toBeVisible();
-  if (await emptyStateCta.isVisible().catch(() => false)) {
-    await emptyStateCta.click();
-  } else {
-    // Open the switcher and click its "Create project" entry. The
-    // switcher itself also has a "Create project" item, distinct from
-    // the disabled "Switch project" trigger.
-    await page.getByRole('button', { name: 'Switch project' }).click();
-    await page
-      .getByRole('button', { name: /^Create project/ })
-      .last()
-      .click();
-  }
+  const switcher = page.getByRole('button', { name: 'Switch project' });
+  await expect(switcher).toBeVisible();
+  await switcher.click();
+  // The switcher's own "Create project" entry, distinct from the trigger above.
+  await page
+    .getByRole('button', { name: /^Create project/ })
+    .last()
+    .click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
   await page.getByLabel('Project name').fill(name);
   // Identifier auto-derives from the name; replace it with our explicit
