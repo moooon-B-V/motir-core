@@ -1,9 +1,10 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
+import { resolveWorkspaceTierDisclosure } from '@/lib/workspaces/tierDisclosure.server';
 import { isOwnerRole } from '@/lib/workspaces/roles';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { jobsDashboardService, JOBS_PAGE_SIZE } from '@/lib/services/jobsDashboardService';
@@ -37,6 +38,35 @@ interface JobsPageProps {
 export default async function WorkspaceJobsPage({ searchParams }: JobsPageProps) {
   const session = await getSession();
   if (!session) redirect('/sign-in');
+
+  // ⚠️ THE TIER GATE (Story MOTIR-4843 · MOTIR-4861) — and this route was the
+  // LAST of the four workspace-tier surfaces to get one.
+  //
+  // It answered 200 at EVERY workspace count while its three siblings 404'd,
+  // and the reason recorded on `SidebarNav.tsx` and on `workspace/security/
+  // page.tsx` was that it is workspace-SCOPED but not workspace-NAMED, so §6's
+  // reveal left it alone (MOTIR-3502 AC 6). **That was an UNFINISHED COLLAPSE
+  // rather than a decision**: it was the only one of the four with no fold-in,
+  // so hiding it would have stranded its capability and it kept answering for
+  // want of anywhere to go. `JobRunsFoldInSection` on `/settings/organization`
+  // is that home; with it, all four surfaces hide together and
+  // `docs/decisions/organization-tier.md` §6d — *a hidden tier may not remove a
+  // capability … relocating a surface preserves its gate* — is satisfied by
+  // RELOCATION, which is what the rule asks for. MOTIR-4859 is the planning bug.
+  //
+  // 404 rather than a redirect, for the reason `workspace/page.tsx` gives: the
+  // surface is hidden, not moved, and a redirect would teach the concept by
+  // putting the route in history.
+  //
+  // ⚠️ IN THE PAGE, never in a layout, and NO `loading.tsx` at or above this
+  // segment. This page DECIDES EXISTENCE, and a boundary above it flushes the
+  // response head before this function runs — pinning the status at 200 and
+  // turning the `notFound()` into a 200-with-a-404-body. Hoisting the gate into
+  // a layout does not recover it. `CLAUDE.md` § *A `loading.tsx` may NOT sit
+  // above a route that decides existence*;
+  // `tests/navigation/loading-boundary-guard.test.ts` enforces it.
+  const { revealed } = await resolveWorkspaceTierDisclosure(session.user.id);
+  if (!revealed) notFound();
 
   const t = await getTranslations('settings');
 
