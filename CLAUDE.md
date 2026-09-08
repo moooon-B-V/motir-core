@@ -748,6 +748,20 @@ now takes the HEIGHT-NEAREST candidate, and reports `REFLOW` instead of writing
 when even that one is more than 25% from the committed height. If the delta is
 genuinely real, re-run with `--width <the viewport it was exported at>`.
 
+**⚠️ A surface that ships a `<name>.dark.png` has FOUR files, and the exporter
+now writes BOTH boards (MOTIR-4868).** The dark board is the same board with
+`data-theme="dark"` on the root — the only asset-side evidence for the dark half
+of the palette, where `--el-text-inverted` flips. Until this card the script
+exported the light board only and said nothing about the other, so a mock edit
+re-exported with the shipped tool left the dark PNG drawing the OLD design at
+full fidelity under an `EXACT` verdict for the half it did do. It is now keyed on
+the file's EXISTENCE — no flag to remember — and prints one verdict line per
+board, each against its own committed export, each written or refused on its own.
+`--dark` is only for CREATING a first dark board, and takes `--width` like any
+new asset. `tests/design-dark-board-parity.test.ts` is the standing guard: both
+boards of a surface must agree on dimensions, because a theme flip changes ink
+and never layout.
+
 **⚠️ The ink rules apply to a mock's OWN `<style>` block and its board chrome,
 not only to its utility classes.** `--el-text-muted` fails AA on `--el-surface` /
 `--el-surface-soft` / `--el-muted` (4.12–4.34:1), and that is true of a
