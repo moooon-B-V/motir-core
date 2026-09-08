@@ -1,18 +1,18 @@
 // The dashboards home (Story 6.3 · Subtask 6.3.5) — replaces the 1.1.2 smoke
-// landing at /dashboard. The projects-empty branch moves with it (the
-// page-comment contract): a workspace with zero projects still onboards to
-// "Create your first project" first, since a widget's data source is always a
-// project or a project-contained saved filter. With projects, this renders the
-// workspace-scoped dashboards list (mine + workspace-shared); the grid lives at
-// /dashboard/[dashboardId].
+// landing at /dashboard. It renders the workspace-scoped dashboards list (mine
+// + workspace-shared); the grid lives at /dashboard/[dashboardId].
+//
+// ⚠️ THE PROJECTS-EMPTY BRANCH IS GONE (MOTIR-4872). This comment used to say
+// "a workspace with zero projects still onboards to 'Create your first
+// project' first", which was true and is now unreachable: every member is
+// inside a project (MOTIR-4870), so a widget's data source — always a project
+// or a project-contained saved filter — always exists.
 
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { getActiveProject } from '@/lib/projects';
-import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { dashboardsService } from '@/lib/services/dashboardsService';
-import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
 import { DashboardsHome } from './_components/DashboardsHome';
 
 // The "the dashboards page has rendered" marker, on BOTH branches — a bare
@@ -36,16 +36,11 @@ export default async function DashboardPage() {
   const ctx = await getWorkspaceContext();
   if (!ctx) redirect('/sign-in');
 
-  // getActiveProject returns null when the workspace has zero projects — the
-  // preserved empty-state cue (1.3.4).
+  // UNREACHABLE for a signed-in reader (MOTIR-4870). The guard stays because
+  // the type does — the only null left is a session-less request, already
+  // answered above — and it redirects rather than rendering.
   const project = await getActiveProject();
-  if (!project) {
-    return (
-      <div data-testid={DASHBOARD_TESTID}>
-        <ProjectsEmptyState aiConfigured={isMotirAiConfigured()} />
-      </div>
-    );
-  }
+  if (!project) redirect('/sign-in');
 
   const dashboards = await dashboardsService.listDashboards(ctx);
   return (

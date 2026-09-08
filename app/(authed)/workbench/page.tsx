@@ -5,7 +5,6 @@ import { Circle, CircleCheck, CircleDot, Inbox, Star } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { HOME_FINISHED_WINDOW_DAYS, homeService } from '@/lib/services/homeService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -15,7 +14,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
 import { parseWorkbenchTab, workbenchTabHref } from '@/lib/workbench/tab';
-import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { WorkbenchTabs } from './_components/WorkbenchTabs';
 import { WorkbenchList } from './_components/WorkbenchList';
@@ -179,18 +177,17 @@ export default async function WorkbenchPage({
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  // NO ACTIVE PROJECT — carried from the shipped page UNCHANGED and built on by
-  // nothing. The Workbench has no no-project state and the design draws none;
-  // MOTIR-4815 RETIRES this branch by seeding a default project at
-  // registration, so `getActiveProject()` stops being able to return null. It
-  // survives here only so the two cards can land in either order.
-  if (!ctx) {
-    return (
-      <div data-testid={WORKBENCH_TESTID}>
-        <ProjectsEmptyState aiConfigured={isMotirAiConfigured()} />
-      </div>
-    );
-  }
+  // NO ACTIVE PROJECT — UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a
+  // default project at the WORKSPACE tier, so `getActiveProject()` returns null
+  // on no path a member can take). This used to render `ProjectsEmptyState` — a
+  // Create-project screen inside project chrome — which is the defect MOTIR-4815
+  // removes: the Workbench has ONE empty state, *no work*, and the design draws
+  // no other (`design/workbench/design-notes.md`).
+  //
+  // The guard STAYS because the type does: the only null left is a request with
+  // no session, which the redirect above has already answered. So what remains
+  // for the unreachable case is a redirect, never a rendered screen.
+  if (!ctx) redirect('/sign-in');
 
   const params = await searchParams;
   const tab = parseWorkbenchTab(params['tab']);

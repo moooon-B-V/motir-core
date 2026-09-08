@@ -90,13 +90,11 @@ function SignUpForm({ legal }: { legal: LegalLinks }) {
   // reasoning was correct, and it named its own expiry: *"if Home ever learns
   // the no-project case, this is the line to revisit."*
   //
-  // It has. MOTIR-2761 narrowed `/home` to the ACTIVE PROJECT and gave its
-  // no-project branch the shipped `ProjectsEmptyState` — the very component
-  // `/dashboard` renders there — so the create-first door is what a
-  // project-less actor now sees on Home. `docs/decisions/home-scope.md` §2.2
-  // writes down the discriminator (a route a reader is LANDED on gets the
-  // create-first door) and §2.3 decides post-auth lands on `/home`
-  // unconditionally, naming this line's split as the defect to close.
+  // It has, twice. MOTIR-2761 narrowed `/home` to the ACTIVE PROJECT and gave
+  // its no-project branch the shipped create-first door, which
+  // `docs/decisions/home-scope.md` §2.2 recorded as the discriminator (a route
+  // a reader is LANDED on gets an actionable door, not an actionless notice)
+  // and §2.3 used to land post-auth there unconditionally.
   //
   // An explicit `?next=` still WINS, exactly as on sign-in.
   //

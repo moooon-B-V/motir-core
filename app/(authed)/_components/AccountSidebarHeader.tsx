@@ -19,11 +19,16 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 // correction, and the same stale sentence, as the sibling SettingsSidebarHeader;
 // the two rail heads are written from one pattern and go stale as a pair.
 // MOTIR-2654 moved the signed-in landing to `/home`; MOTIR-2761 narrowed it to
-// the ACTIVE project. That narrowing is what makes `/home` safe from THIS area,
-// which is personal and carries no project context: with no active project
-// `/home` renders `ProjectsEmptyState`, the create-first door
-// (`docs/decisions/home-scope.md` §2.2). `tests/components/rail-head-back-link.test.tsx`
-// is the guard on the rendered `href`, in both rail variants.
+// the ACTIVE project. That narrowing is what makes the landing safe from THIS
+// area, which is personal and carries no project context.
+//
+// ⚠️ AMENDED (MOTIR-4872). This used to finish "with no active project `/home`
+// renders `ProjectsEmptyState`, the create-first door
+// (`docs/decisions/home-scope.md` §2.2)" — a comment asserting as fact a state
+// the product no longer has. Every member is inside a project (MOTIR-4870), so
+// what makes the back link safe is simply that there is always an active
+// project to land in. `tests/components/rail-head-back-link.test.tsx` is the
+// guard on the rendered `href`, in both rail variants.
 
 // The constant is IMPORTED, not retyped (MOTIR-3373) — this file is one of
 // the three that carried the stale `/dashboard` this comment is about.
