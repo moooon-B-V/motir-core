@@ -535,11 +535,18 @@ function bottomSectionRowNames(): string[] {
   const separators = [...nav.querySelectorAll('[role="separator"]')];
   const last = separators.at(-1) ?? null;
   const links = [...nav.querySelectorAll('a')];
+  // ⚠️ NO SEPARATOR MEANS NO BOTTOM SECTION, NOT "EVERY ROW IS THE BOTTOM
+  // SECTION" (MOTIR-4643). This fallback returned `links` — the WHOLE rail —
+  // and was dead code for as long as the section always had a row. It is
+  // reachable now: with `Security`, `Job runs` and `Git` all gone, a member
+  // holding no settings door gets no section at all, and `Sidebar` draws the
+  // separator only BETWEEN sections. Returning the primary rows there reports
+  // twelve rows where there are none, which is the opposite of the answer.
   const afterLast = last
     ? links.filter(
         (a) => (last.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
       )
-    : links;
+    : [];
   // Collapsed rows carry the label as `aria-label`; expanded rows carry it as
   // text. Read whichever is there, so one helper serves both widths.
   return afterLast.map((a) => (a.getAttribute('aria-label') ?? a.textContent ?? '').trim());

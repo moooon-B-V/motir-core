@@ -114,14 +114,18 @@ describe('the Project settings door (design panel 1)', () => {
     // above a row that is not there reads as a loading error rather than as
     // policy.
     //
-    // ⚠️ THE ARM IS NOT REACHABLE FROM THIS COMPONENT YET, and saying so is the
-    // point of this case. `Git` is still an unconditional member of the section,
-    // so `bottomItems` is never empty in the shipped rail. Its removal is
-    // MOTIR-4643's (the `Code` nav row), which MOTIR-4640 already amended the
-    // design asset for. So this asserts the CURRENT floor exactly — the section
-    // present with `Git` alone — which is the assertion that will FAIL, loudly
-    // and in the right file, on the day that row leaves and the guard in
-    // `SidebarNav` starts carrying the weight it was written for.
+    // ⚠️ AND THE ARM IS REACHABLE NOW — this case predicted its own failure and
+    // was right. MOTIR-4847 left it saying: *`Git` is still an unconditional
+    // member, so `bottomItems` is never empty; its removal is MOTIR-4643's, and
+    // this asserts the CURRENT floor — the section present with `Git` alone —
+    // which will FAIL, loudly and in the right file, on the day that row leaves
+    // and the guard in `SidebarNav` starts carrying the weight it was written
+    // for.*
+    //
+    // That day is this commit. `Git` left, a MEMBER holds no settings door, and
+    // `bottomItems` is empty — so the guard fires and there is NO bottom
+    // section. Re-measured to the arm the design draws, which is what the case
+    // was for all along.
     const { container } = renderRail(MEMBER);
     // `Sidebar` wraps each section in its own div inside the scroll container
     // and draws the separator INSIDE that wrapper, so an empty section is
@@ -130,8 +134,12 @@ describe('the Project settings door (design panel 1)', () => {
     const rowsPerSection = wrappers.map((w) =>
       [...w.querySelectorAll('a')].map((a) => (a.textContent ?? '').trim()),
     );
+    // No wrapper is EMPTY — the failure this guards is a container with a
+    // separator and no rows…
     expect(rowsPerSection.filter((rows) => rows.length === 0)).toEqual([]);
-    expect(rowsPerSection.at(-1)).toEqual(['Git']);
+    // …and the last section is the PRIMARY one, because the bottom section is
+    // not rendered at all. `Codebase` is its final row (MOTIR-1768).
+    expect(rowsPerSection.at(-1)?.at(-1)).toBe('Codebase');
   });
 
   it('with NO active project the row survives and targets the settings HOME', () => {

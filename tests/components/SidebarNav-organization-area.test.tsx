@@ -167,9 +167,14 @@ describe('the branch does not fire outside the area', () => {
   //     evidence that the ORGANISATION branch was not taken, and is what this
   //     describe is actually about.
   it('renders the ordinary rail at /dashboard', () => {
+    // ⚠️ `Codebase`, NOT `Git` (MOTIR-4643). `Git` left the bottom section with
+    // that card, so it can no longer be the cheapest proof that the ORGANISATION
+    // branch was not taken — this is the third witness this case has had, after
+    // `Job runs` (gone with MOTIR-4847) and `Git`. `Codebase` is a PRIMARY row
+    // and is browse-reachable, which makes it a steadier one than either.
     pathname = '/dashboard';
     renderRail(ADMIN_ORG);
-    expect(screen.queryByRole('link', { name: 'Git' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Codebase' })).toBeTruthy();
     expect(screen.queryByText('Organisation settings')).toBeNull();
   });
 
