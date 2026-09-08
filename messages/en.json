@@ -7883,5 +7883,38 @@
       "confirm": "Remove",
       "cancel": "Cancel"
     }
+  },
+  "code": {
+    "title": "Code",
+    "subtitle": "The repositories this project works on, and what Motir has read of them.",
+    "noProjectTitle": "No active project",
+    "noProjectDescription": "Select or create a project to see its code health.",
+    "adminOnlyTitle": "Project admins only",
+    "adminOnlyDescription": "The coding standard drives every prompt Motir dispatches. Only a project admin can view it. Ask a project admin for access.",
+    "sectionsLabel": "Code sections",
+    "tabs": {
+      "repositories": "Repositories",
+      "health": "Health"
+    },
+    "repositories": {
+      "listLabel": "Repositories this project works on",
+      "emptyTitle": "No repositories yet",
+      "emptyDescription": "This project has no repositories configured. Add one and Motir can read your code when it plans.",
+      "manageLink": "Manage this project’s repositories",
+      "provider": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      },
+      "index": {
+        "indexed": "Indexed",
+        "stale": "Stale",
+        "indexing": "Indexing…",
+        "never": "Never indexed"
+      },
+      "drift": {
+        "commits": "{count, plural, one {# commit behind} other {# commits behind}}",
+        "unknown": "Behind by an unknown number of commits"
+      }
+    }
   }
 }

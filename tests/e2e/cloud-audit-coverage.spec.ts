@@ -171,7 +171,12 @@ test('an admin is told, reaches /code-health, and audits one repo then the rest'
 
   await chapter('Its link reaches the code-health audit tab in one click', async () => {
     await page.getByRole('link', { name: 'Review code health' }).click();
-    await page.waitForURL('**/code-health');
+    // ⚠️ `/code`, and the SECTION is named (MOTIR-1768). The audit is no longer a
+    // page — it is the second section of the Code room — so the banner
+    // deep-links to it. "In one click" is still literally true, which is the
+    // whole reason the link carries the parameter rather than landing on the
+    // repository list.
+    await page.waitForURL(/\/code\?.*section=health/);
 
     // The repo list is the arrival state: every connected repo, with the
     // un-audited ones carrying their own trigger.

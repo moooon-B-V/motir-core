@@ -330,7 +330,7 @@ function joinHref(path: string, query: URLSearchParams, hash: string): string {
  */
 export function planningHostPathFor(context: PlanningLaunchContext): string {
   if (context.kind === 'work-item') return `/items/${encodeURIComponent(context.itemKey)}`;
-  if (context.kind === 'convention-refine') return '/code-health';
+  if (context.kind === 'convention-refine') return '/code';
   return '/roadmap';
 }
 

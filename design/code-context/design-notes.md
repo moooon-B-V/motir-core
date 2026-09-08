@@ -399,7 +399,7 @@ Two rules follow, and they are what stops this becoming a fork:
 ## 8. The connect aside — INHERITED vs NEW
 
 Source of the pattern: `design/coding-convention/design-notes.md` (its §10.3 block and Panel 6 state
-gallery), built in `app/(authed)/code-health/_components/DeepenAuditCard.tsx`.
+gallery), built in `app/(authed)/code/_components/DeepenAuditCard.tsx`.
 
 **Inherited wholesale — do not re-decide any of it:**
 
@@ -434,7 +434,7 @@ the correction is recorded here rather than quietly designed around.**
 
 The shipped precedent persists the flag in **`localStorage`, keyed per project**:
 
-- `app/(authed)/code-health/_components/CodeHealthClient.tsx` defines
+- `app/(authed)/code/_components/CodeHealthClient.tsx` defines
   `dismissKey(projectId) => 'motir:code-health:deepen-dismissed:' + projectId`, reads it through
   `useSyncExternalStore`, and writes `'1'` / removes it on dismiss and re-open.
 - `DeepenAuditCard.tsx` holds `useState` only for `copied` and `expanded`. The **dismissal is the

@@ -340,7 +340,10 @@ describe('seam · an OLD /planning link still lands in the workspace (the forwar
       planningForwardTarget(legacySearchParams({ kind: 'convention-refine', repoKey: 'r' })),
       BASE,
     );
-    expect(url.pathname).toBe('/code-health');
+    // ⚠️ `/code` (MOTIR-1768) — the convention-refine host moved. The audit is a
+    // SECTION of the Code room now, and `/code-health` permanently redirects
+    // into it, so the forward names the real address rather than one that 308s.
+    expect(url.pathname).toBe('/code');
     expect(parsePlanningOverlay(url.searchParams)?.repoKey).toBe('r');
   });
 

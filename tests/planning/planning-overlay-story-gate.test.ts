@@ -110,7 +110,9 @@ describe('seam · an old /planning link still means what it meant', () => {
     },
     {
       q: { mode: 'contextual', from: 'convention-refine', repo: 'motir-core' },
-      path: '/code-health',
+      // The convention-refine host is `/code` since MOTIR-1768 — the audit is a
+      // section of the Code room, and the old address redirects into it.
+      path: '/code',
       mode: 'contextual',
       repoKey: 'motir-core',
     },

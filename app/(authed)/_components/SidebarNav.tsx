@@ -465,12 +465,19 @@ export function SidebarNav({
         active: isActive(pathname, '/reports'),
       },
       {
-        // Code health (7.14.5) — the code-health audit + coding-convention
-        // review/approve surface; sits after Reports (a top-level project page).
+        // Code (MOTIR-1768) — the project's repository set and its index
+        // freshness, with the shipped code-health audit as its second section.
+        // Sits after Reports (a top-level project page).
+        //
+        // ⚠️ THE ADDRESS MOVED AND SO MUST `isActive` (MOTIR-1768). `/code-health`
+        // permanently redirects into `/code`, so a row still testing the old
+        // pathname could never match: a reader standing on the page would see no
+        // row highlighted. MOTIR-4643 owns the rest of this row — collapsing the
+        // rail's `Git` row into it — and is not done here.
         icon: <Activity />,
         label: t('nav.codeHealth'),
-        href: '/code-health',
-        active: isActive(pathname, '/code-health'),
+        href: '/code',
+        active: isActive(pathname, '/code'),
       },
     ];
     // The labeled "Resume onboarding" re-entry door (MOTIR-1533; design

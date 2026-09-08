@@ -62,6 +62,20 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     ready: async (page) => expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible(),
   },
   {
+    // The Code room (MOTIR-1768) — the project's repository set and its index
+    // freshness, with the shipped code-health audit as its second section.
+    //
+    // ⚠️ SWEPT AS A MEMBER-REACHABLE ROOM, which is the property that makes the
+    // collapse legal (design/code-context §2.1). This sweep's user is browsing a
+    // fresh project, so what axe analyses is the Repositories section's empty
+    // state and the section switch — the two things every reader meets first,
+    // and the two the old `/code-health` route never rendered for them at all,
+    // because it refused them outright.
+    path: '/code',
+    ready: async (page) =>
+      expect(page.getByRole('heading', { name: 'Code', level: 1 })).toBeVisible(),
+  },
+  {
     // ⚠️ `/settings/organization`, not `/settings/workspace` (MOTIR-3502 ·
     // organization-tier.md §6d). This sweep signs up a fresh user, who gets ONE
     // auto-created workspace — the COLLAPSED state, in which the workspace area

@@ -353,6 +353,15 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // change to the closed type-label set.
     'issueViews.provenanceSourceManual':
       'provenance ORIGIN chip on the item detail rail — framed by FieldCard label "Planning"/"Implementation"',
+    // A ROOM NAME in the primary nav, and the page `<h1>` that matches it
+    // (MOTIR-1768). It is the shape this list exists to permit: the surface
+    // renders no work-item type chip at all — its two sections are a repository
+    // list and a code-health audit — so nothing on it could read "Code" as a
+    // work-item type. It is also a NOUN naming a thing the project has, where
+    // the type label names a KIND of work; the nav's own siblings (Reports,
+    // Boards, Backlog) fix that sense the way the type set's siblings fix the
+    // other one.
+    'code.title': 'nav ROOM name + page h1 — the Code page renders no type chip',
   },
   zh: {
     // `验证` is the verification TYPE noun and also the ordinary button verb; en
@@ -365,6 +374,9 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     'codeHealth.convention.defaultRepo': 'repo fallback name on Code health',
     'onboarding.generation.designLabel': 'field label in the onboarding baseline card',
     'issueViews.provenanceSourceManual': 'provenance ORIGIN chip, framed by its FieldCard label',
+    // The en twin above, same reason: `代码` is the room's name in the nav and
+    // the page heading, on a surface with no type chip.
+    'code.title': 'nav ROOM name + page h1 — the Code page renders no type chip',
   },
 };
 

@@ -7879,5 +7879,38 @@
       "confirm": "移除",
       "cancel": "取消"
     }
+  },
+  "code": {
+    "title": "代码",
+    "subtitle": "本项目所使用的代码仓库，以及 Motir 已读取到的内容。",
+    "noProjectTitle": "没有活动项目",
+    "noProjectDescription": "选择或创建一个项目以查看其代码。",
+    "adminOnlyTitle": "仅限项目管理员",
+    "adminOnlyDescription": "编码标准会驱动 Motir 派发的每一条提示词。只有项目管理员才能查看。请向项目管理员申请权限。",
+    "sectionsLabel": "代码视图",
+    "tabs": {
+      "repositories": "代码仓库",
+      "health": "健康度"
+    },
+    "repositories": {
+      "listLabel": "本项目所使用的代码仓库",
+      "emptyTitle": "尚未配置代码仓库",
+      "emptyDescription": "本项目还没有配置任何代码仓库。添加一个之后，Motir 在规划时就能读取你的代码。",
+      "manageLink": "管理本项目的代码仓库",
+      "provider": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      },
+      "index": {
+        "indexed": "已建立索引",
+        "stale": "已过期",
+        "indexing": "正在建立索引…",
+        "never": "从未建立索引"
+      },
+      "drift": {
+        "commits": "落后 {count} 个提交",
+        "unknown": "落后的提交数未知"
+      }
+    }
   }
 }

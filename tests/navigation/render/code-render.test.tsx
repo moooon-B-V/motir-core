@@ -27,7 +27,7 @@ import { findFirst, renderTree, textOf } from '../../helpers/serverPageHarness';
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
 const { getActiveProject } = vi.hoisted(() => ({ getActiveProject: vi.fn() }));
-const { resolveCodeContext } = vi.hoisted(() => ({ resolveCodeContext: vi.fn() }));
+const { resolveCodeContextState } = vi.hoisted(() => ({ resolveCodeContextState: vi.fn() }));
 const { getAudit, getConvention } = vi.hoisted(() => ({
   getAudit: vi.fn(),
   getConvention: vi.fn(),
@@ -47,13 +47,14 @@ vi.mock('next-intl/server', async () => ({
 }));
 vi.mock('@/lib/auth', () => ({ getSession }));
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
-vi.mock('@/lib/ai/codeContext', () => ({ resolveCodeContext }));
+vi.mock('@/lib/services/codeContextService', () => ({ resolveCodeContextState }));
 vi.mock('@/lib/services/aiConventionService', () => ({
   aiConventionService: { getAudit, getConvention },
 }));
 
-import CodeHealthPage from '@/app/(authed)/code-health/page';
-import { CodeHealthClient } from '@/app/(authed)/code-health/_components/CodeHealthClient';
+import CodePage from '@/app/(authed)/code/page';
+import { CodeRepositories } from '@/app/(authed)/code/_components/CodeRepositories';
+import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClient';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
 import { NotProjectAdminError } from '@/lib/projects/errors';
@@ -68,7 +69,19 @@ const PROJECT = {
 beforeEach(() => {
   getSession.mockResolvedValue({ user: { id: 'u1' } });
   getActiveProject.mockResolvedValue(PROJECT);
-  resolveCodeContext.mockResolvedValue({ repos: [{ repoRef: 'moooon/motir-core' }] });
+  resolveCodeContextState.mockResolvedValue({
+    hasCodeContext: true,
+    hasImplementedWork: true,
+    repos: [
+      {
+        repoRef: 'moooon/motir-core',
+        provider: 'github',
+        indexState: 'indexed',
+        indexedAt: null,
+        commitsBehind: null,
+      },
+    ],
+  });
   getAudit.mockResolvedValue({ audit: null });
   getConvention.mockResolvedValue({ convention: null });
 });
@@ -77,9 +90,9 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('/code-health — the page’s own branches', () => {
+describe('/code — the page’s own branches', () => {
   it('seeds the island from the resolved repo set', async () => {
-    const tree = await renderTree(CodeHealthPage);
+    const tree = await renderTree(CodePage);
     const island = findFirst(tree, CodeHealthClient)!;
 
     expect(island).toBeDefined();
@@ -90,9 +103,13 @@ describe('/code-health — the page’s own branches', () => {
   });
 
   it('renders the header and an island with NO reads when no repo is connected', async () => {
-    resolveCodeContext.mockResolvedValue({ repos: [] });
+    resolveCodeContextState.mockResolvedValue({
+      hasCodeContext: false,
+      hasImplementedWork: false,
+      repos: [],
+    });
 
-    const tree = await renderTree(CodeHealthPage);
+    const tree = await renderTree(CodePage);
     const island = findFirst(tree, CodeHealthClient)!;
 
     expect(island.props['repoRefs']).toEqual([]);
@@ -103,28 +120,39 @@ describe('/code-health — the page’s own branches', () => {
     expect(textOf(tree)).toContain('title');
   });
 
-  it('tolerates a null code context, which is not the same as an empty one', async () => {
-    // `resolveCodeContext` returns null for a project with no code context at
-    // all; the page reads `code?.repos ?? []`. A regression to `code.repos`
-    // throws here and nowhere else.
-    resolveCodeContext.mockResolvedValue(null);
+  it('reads the PROJECT\u2019s set, not the workspace\u2019s grant list', async () => {
+    // The leak \u00a71 names, asserted at the seam rather than argued. The page
+    // calls `resolveCodeContextState(projectId, ctx)` \u2014 which resolves
+    // `project_repository` \u2014 and hands its rows straight to the section, so
+    // two projects in one workspace with different sets render different lists.
+    await renderTree(CodePage);
 
-    const tree = await renderTree(CodeHealthPage);
-
-    expect(findFirst(tree, CodeHealthClient)!.props['repoRefs']).toEqual([]);
+    expect(resolveCodeContextState).toHaveBeenCalledWith('p1', {
+      userId: 'u1',
+      workspaceId: 'ws1',
+    });
   });
 
-  it('renders the ADMIN-ONLY state, not the island, for a non-admin', async () => {
-    // A project-gate error is a statement about the CALLER, so it replaces the
-    // whole surface rather than degrading one repo's row.
+  it('\u26a0\ufe0f renders the admin-only state INSIDE Health \u2014 and Repositories still works', async () => {
+    // The criterion the whole collapse rests on (\u00a72.1). `/code-health` asserted
+    // `ai:configure` and the old `Git` row was ungated on purpose, so a naive
+    // collapse either takes a capability off every member or widens an
+    // admin-only audit to everyone. The resolution is that the ROW is
+    // browse-reachable and each SECTION keeps its own gate \u2014 which means the
+    // project-gate error may NOT replace the page, as it did on the surface this
+    // absorbed.
     getAudit.mockRejectedValue(new NotProjectAdminError('p1'));
     getConvention.mockRejectedValue(new NotProjectAdminError('p1'));
 
-    const tree = await renderTree(CodeHealthPage);
+    const tree = await renderTree(CodePage);
 
+    // Health is denied\u2026
     expect(findFirst(tree, CodeHealthClient)).toBeUndefined();
     expect(findFirst(tree, EmptyState)).toBeDefined();
     expect(textOf(tree)).toContain('adminOnlyTitle');
+    // \u2026and Repositories is rendered anyway, on the same page load. This is the
+    // assertion that fails if the gate ever moves back up to the page.
+    expect(findFirst(tree, CodeRepositories)).toBeDefined();
   });
 
   it('contains an unreachable motir-ai PER ROW, and still renders the island', async () => {
@@ -134,7 +162,7 @@ describe('/code-health — the page’s own branches', () => {
     getConvention.mockRejectedValue(new MotirAiUnavailableError('upstream down'));
     getAudit.mockRejectedValue(new MotirAiUnavailableError('upstream down'));
 
-    const tree = await renderTree(CodeHealthPage);
+    const tree = await renderTree(CodePage);
     const island = findFirst(tree, CodeHealthClient)!;
 
     // Containment, per MOTIR-2207: one repo's failure is that row's own state.
@@ -160,23 +188,23 @@ describe('/code-health — the page’s own branches', () => {
     // it into a degraded surface that says the code analysis is unavailable.
     getAudit.mockRejectedValue(new TypeError('reading `id` of undefined'));
 
-    await expect(renderTree(CodeHealthPage)).rejects.toThrow('reading `id` of undefined');
+    await expect(renderTree(CodePage)).rejects.toThrow('reading `id` of undefined');
   });
 
   it('renders the no-project state before it resolves any code context', async () => {
     getActiveProject.mockResolvedValue(null);
 
-    const tree = await renderTree(CodeHealthPage);
+    const tree = await renderTree(CodePage);
 
     expect(findFirst(tree, EmptyState)).toBeDefined();
     expect(textOf(tree)).toContain('noProjectTitle');
-    expect(resolveCodeContext).not.toHaveBeenCalled();
+    expect(resolveCodeContextState).not.toHaveBeenCalled();
   });
 
   it('bounces a signed-out reader before anything else', async () => {
     getSession.mockResolvedValue(null);
 
-    await expect(renderTree(CodeHealthPage)).rejects.toThrow('REDIRECT:/sign-in');
+    await expect(renderTree(CodePage)).rejects.toThrow('REDIRECT:/sign-in');
     expect(getActiveProject).not.toHaveBeenCalled();
   });
 });

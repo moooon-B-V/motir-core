@@ -74,7 +74,11 @@ const EXPECTED_PRIMARY_ORDER = [
   '/dashboard',
   '/triage',
   '/reports',
-  '/code-health',
+  // ⚠️ `/code`, not `/code-health` (MOTIR-1768). The row's ADDRESS moved — the
+  // audit is one section of the Code room now — while its POSITION in the order
+  // did not. MOTIR-4643 owns the rest of this row: collapsing the rail's `Git`
+  // row into it.
+  '/code',
 ];
 
 afterEach(() => {

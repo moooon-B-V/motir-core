@@ -130,20 +130,41 @@ describe('a seeded role renders exactly what it holds', () => {
     expect(shell.settingsGroups).toEqual([]);
     expect(shell.areaDoor).toBe(false);
 
-    expect(shell.navRows).not.toContain('/code-health');
-    for (const href of ['/dashboard', '/items', '/boards', '/backlog', '/reports', '/triage']) {
+    // ⚠️ THE ONE ROW A MEMBER USED TO LOSE IS BACK (MOTIR-1768). This asserted
+    // `not.toContain('/code-health')` — true of a destination that no longer
+    // exists. `/code` is a room whose FIRST section is the project's repository
+    // set and asserts nothing past browse; the `ai:configure` gate moved INSIDE
+    // its Health section, which renders its own admin-only state. Gating the row
+    // on the stricter of its two sections would hide the browse-reachable one
+    // behind the admin-only one (`design/code-context` §2.1, §3.1).
+    //
+    // Nothing was widened: `aiConventionService` still asserts `ai:configure`,
+    // and no member can read an audit.
+    for (const href of [
+      '/dashboard',
+      '/items',
+      '/boards',
+      '/backlog',
+      '/reports',
+      '/triage',
+      '/code',
+    ]) {
       expect(shell.navRows, href).toContain(href);
     }
   });
 
-  it('a project VIEWER loses the three destinations that refuse them outright', async () => {
+  it('a project VIEWER loses the TWO destinations that refuse them outright', async () => {
     const s = await seed('viewer-path');
     const shell = await renderFor(s.projectId, s.ctxs.viewer);
 
     expect(shell.areaDoor).toBe(false);
-    for (const gone of ['/plans', '/triage', '/code-health']) {
+    // Three became two for the reason above: `/code` is browse-reachable, so a
+    // viewer is offered the room and meets Health's own admin-only state inside
+    // it rather than being denied the door (MOTIR-1768).
+    for (const gone of ['/plans', '/triage']) {
       expect(shell.navRows, gone).not.toContain(gone);
     }
+    expect(shell.navRows).toContain('/code');
     // …and keeps every read surface. The primary nav never renders empty for an
     // actor who reached this shell at all.
     expect(shell.navRows.length).toBeGreaterThan(5);
