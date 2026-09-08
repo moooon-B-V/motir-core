@@ -198,7 +198,7 @@ afterAll(async () => {
 
 // ── BLOCK 1 ───────────────────────────────────────────────────────────────
 describe('block 1 — the PRE-DELIVERY link: the row can be created by the call itself', () => {
-  it('creates the (repo_id, number) row with the caller’s fields and linked_manually = true when no delivery has arrived', async () => {
+  it('creates the (repo_id, number) row with the caller’s fields when no delivery has arrived', async () => {
     const s = await makeScenario({
       email: 'pre-delivery@example.com',
       identifier: 'PRE',
@@ -231,7 +231,13 @@ describe('block 1 — the PRE-DELIVERY link: the row can be created by the call 
       where: { repoId: s.repoRowId, number: 42 },
     });
     expect(await deliveredItemIds(row.id)).toEqual([item.id]);
-    expect(row.linkedManually).toBe(true);
+    // ⚠️ AND THE MIRROR ROW CARRIES NO PROVENANCE (MOTIR-4894). This asserted
+    // `linkedManually === true` — the stamp that once said a link was DECLARED
+    // rather than inferred by the MOTIR-892 resolver. With that resolver gone
+    // (MOTIR-3674) every link is declared, so the flag distinguished nothing and
+    // its writers are retired; the column survives one more release, holding its
+    // default. The DELIVERY above is the whole record of this call.
+    expect(row.linkedManually).toBe(false);
     expect(row.state).toBe('open');
     expect(row.merged).toBe(false);
     expect(row.headRef).toBe('subtask/MOTIR-3526-link');
@@ -255,9 +261,7 @@ describe('block 1 — the PRE-DELIVERY link: the row can be created by the call 
       where: { identifier: item.identifier },
     });
     const rendered = await workItemsService.listLinkedPullRequests(created.id, s.ctx);
-    expect(rendered).toEqual([
-      expect.objectContaining({ number: 7, repo: s.repo, linkedManually: true }),
-    ]);
+    expect(rendered).toEqual([expect.objectContaining({ number: 7, repo: s.repo })]);
   });
 
   it('the URL `gh pr create` prints is accepted verbatim, and disagreeing addresses are REFUSED rather than ranked', async () => {
@@ -373,7 +377,6 @@ describe('block 2 — the webhook CONVERGES on the declared link rather than fig
     expect(row.merged).toBe(false);
     // …and the LINK did not.
     expect(await deliveredItemIds(row.id)).toEqual([item.id]);
-    expect(row.linkedManually).toBe(true);
   });
 
   it('a merge whose branch and title name NO key still moves the card — the point of the story', async () => {
@@ -420,7 +423,6 @@ describe('block 2 — the webhook CONVERGES on the declared link rather than fig
     });
     expect(row.merged).toBe(true);
     expect(await deliveredItemIds(row.id)).toEqual([item.id]);
-    expect(row.linkedManually).toBe(true);
   });
 });
 
@@ -461,7 +463,6 @@ describe('block 3 — there is NO branch/title parse; an unlinked pull request l
     // The row is mirrored — the pull request is a fact about the repository — and
     // it delivers no card. The key in the branch and the title is a LABEL.
     expect(await deliveredItemIds(row.id)).toEqual([]);
-    expect(row.linkedManually).toBe(false);
     // And the card is untouched: a pull request that merely MENTIONS a key is
     // exactly the case the retirement is about.
     const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
@@ -522,7 +523,6 @@ describe('block 4 — idempotency, the move, and the (repo_id, number) race', ()
       where: { repoId: s.repoRowId, number: 4 },
     });
     expect(await deliveredItemIds(row.id)).toEqual([a.id, b.id]);
-    expect(row.linkedManually).toBe(true);
   });
 
   it('two CONCURRENT calls for the same (repo, number) converge on one row', async () => {
@@ -547,7 +547,6 @@ describe('block 4 — idempotency, the move, and the (repo_id, number) race', ()
       where: { repoId: s.repoRowId, number: 6 },
     });
     expect(await deliveredItemIds(row.id)).toEqual([item.id]);
-    expect(row.linkedManually).toBe(true);
   });
 });
 
@@ -692,7 +691,7 @@ describe('githubPullRequestService.linkPullRequestByCoordinates — the picker i
     });
 
     const dto = await githubPullRequestService.linkPullRequest(item.id, row.id, s.ctx);
-    expect(dto).toMatchObject({ number: 70, repo: s.repo, linkedManually: true });
+    expect(dto).toMatchObject({ number: 70, repo: s.repo });
   });
 });
 

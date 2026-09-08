@@ -123,7 +123,7 @@ afterAll(async () => {
 });
 
 describe('githubPullRequestService.linkPullRequest — the explicit override (MOTIR-1596)', () => {
-  it('links an unresolved PR to the item (sets workItemId + linkedManually), returns the DTO', async () => {
+  it('links an unlinked PR to the item (writes ONE delivery row), returns the DTO', async () => {
     const s = await makeScenario({
       email: 'link-happy@example.com',
       installationId: INST_A,
@@ -144,11 +144,16 @@ describe('githubPullRequestService.linkPullRequest — the explicit override (MO
     expect(await deliveredItemIds(prId)).toEqual([]);
 
     const dto = await githubPullRequestService.linkPullRequest(item.id, prId, s.ctx);
-    expect(dto).toMatchObject({ number: 12, repo: 'moooon/acme', linkedManually: true });
+    expect(dto).toMatchObject({ number: 12, repo: 'moooon/acme' });
+    // The DTO no longer carries provenance at all (MOTIR-4894) — a client that
+    // parsed `linkedManually` off this shape has nothing to read.
+    expect(dto).not.toHaveProperty('linkedManually');
 
     expect(await deliveredItemIds(prId)).toEqual([item.id]);
+    // …and the MIRROR ROW is untouched by the link. The picker used to stamp
+    // `linked_manually` here; the delivery above is now the whole write.
     const after = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
-    expect(after.linkedManually).toBe(true);
+    expect(after.linkedManually).toBe(false);
   });
 
   // ⚠️ THE ASSERTION IS INVERTED FROM WHAT THIS TEST USED TO PIN, and the
@@ -183,8 +188,6 @@ describe('githubPullRequestService.linkPullRequest — the explicit override (MO
     await githubPullRequestService.linkPullRequest(itemB.id, prId, s.ctx);
 
     expect(await deliveredItemIds(prId)).toEqual([itemA.id, itemB.id]);
-    const row = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
-    expect(row.linkedManually).toBe(true);
   });
 
   it('a cross-workspace PR is rejected (no existence leak)', async () => {
@@ -454,11 +457,9 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
       }),
     );
     expect(await deliveredItemIds(prId)).toEqual([item.id]);
-    const row = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
-    expect(row.linkedManually).toBe(true);
   });
 
-  it('drives the status sync on merge (merged → Done via the manual link)', async () => {
+  it('drives the status sync on merge (merged → Done via the declared link)', async () => {
     const s = await makeScenario({
       email: 'sticky-merge@example.com',
       installationId: INST_A,
@@ -495,9 +496,9 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
     );
     const moved = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(moved?.status).toBe('done');
-    // The link stays manual after the merge delivery.
-    const row = await adminDb.githubPullRequest.findUniqueOrThrow({ where: { id: prId } });
-    expect(row.linkedManually).toBe(true);
+    // The link survives the merge delivery — as a delivery ROW, which is the
+    // only place it has lived since MOTIR-3757 and the only place it is recorded
+    // at all since MOTIR-4894 retired the flag beside it.
     expect(await deliveredItemIds(prId)).toEqual([item.id]);
   });
 });

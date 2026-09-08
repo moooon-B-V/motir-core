@@ -362,11 +362,10 @@ describe('block 3 — the pull-request row, and the cards that are not this one'
     const after = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: s.repoRowId, number: 950 },
     });
-    // The delivery is gone and the MIRROR ROW is not — `linked_manually` included,
-    // which is the record that a link was once DECLARED here and survives the
-    // link's removal exactly as it survived the column's drop.
+    // The delivery is gone and the MIRROR ROW is not. It carries no provenance
+    // to survive any more — MOTIR-4894 retired `linked_manually`'s last writer,
+    // so this row was never stamped and unlinking leaves it exactly as it was.
     expect(await deliveredCards(s, 950)).toEqual([]);
-    expect(after.linkedManually).toBe(true);
     // The pull request itself is the webhook's to describe, not the caller's.
     expect(after.state).toBe(before.state);
     expect(after.merged).toBe(before.merged);

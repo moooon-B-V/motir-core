@@ -94,7 +94,7 @@ export function DevelopmentLinkProvider({
       if (res.ok) {
         cancel();
         // The Development card is server-rendered — re-run the server read so
-        // the new/moved row (and its "linked manually" suffix) appears.
+        // the newly linked row appears.
         router.refresh();
       } else {
         setError(res.error);

@@ -159,8 +159,10 @@ function readRow(repoId: string, number: number) {
 
 /** A merged mirror row that already DELIVERS a card — the state the sweep must not
  *  disturb. The link is a `work_item_delivery` row since MOTIR-3757 dropped
- *  `github_pull_request.work_item_id`; `linkedManually` says only HOW it was made,
- *  and both values of it are exercised above. */
+ *  `github_pull_request.work_item_id`. `linkedManually` said only HOW the link was
+ *  made and is retired by MOTIR-4894 — the fixture still SETS it, because the
+ *  column outlives that card by one release and a row carrying either value is
+ *  exactly what the sweep has to leave alone. */
 async function deliveredRow(
   fx: WorkItemFixture,
   repoId: string,
@@ -330,8 +332,15 @@ describe('historicalPullRequestBackfillService — mirroring merged history', ()
     // The production population this protects: 1026 rows the parse linked, all
     // carrying `linked_manually: false`. Gating the skip on that flag would have
     // the sweep overwrite every one of them — and since MOTIR-3757 what it would
-    // overwrite is the FLAG, because the link itself is a delivery row this sweep
+    // overwrite is the ROW, because the link itself is a delivery row this sweep
     // never touches. The guard's condition moved to the delivery set with it.
+    //
+    // ⚠️ WHAT THE GUARD PROTECTS HAS MOVED AGAIN (MOTIR-4894). It was the flag
+    // for a while, since `target` set it to `false` unconditionally; the sweep no
+    // longer writes it at all, so what the early return now protects is the
+    // mirror row of a pull request the WEBHOOK is maintaining. The assertion
+    // below is unchanged and still worth making — a skipped row is byte-identical
+    // to how it was found, and reading one surviving column proves the skip.
     const { fx, repoId } = await makeConnectedRepo();
     const parseLinked = await createTestWorkItem(fx, {
       kind: 'task',

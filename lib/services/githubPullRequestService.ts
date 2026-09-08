@@ -19,16 +19,17 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { LinkedPullRequestDto, PullRequestLinkCandidateDto } from '@/lib/dto/github';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
-// Explicit item→PR link (Story 7.10 · MOTIR-1596, design/github Panel 5) — the
-// MANUAL override of the MOTIR-892 auto-resolver. Two operations back the
-// detail-page "+ Link pull request" affordance:
+// Explicit item→PR link (Story 7.10 · MOTIR-1596, design/github Panel 5) — once
+// the MANUAL override of the MOTIR-892 auto-resolver, and since MOTIR-3674
+// deleted that resolver simply THE way a pull request reaches a card from this
+// surface. Two operations back the detail-page "+ Link pull request" affordance:
 //   * searchLinkCandidates — the query-driven picker's server search over the
 //     workspace's ingested PRs (installation → repo → PR), annotating any PR
-//     already linked elsewhere (the takeover chip).
-//   * linkPullRequest — set the picked PR's `workItemId` (a re-link/takeover is
-//     allowed, no confirm; the repo write also stamps `linkedManually`, which
-//     keeps the link sticky against the webhook resolver — see
-//     githubWebhookService.handlePullRequest).
+//     already delivering another item (the takeover chip).
+//   * linkPullRequest — write the `work_item_delivery` row (a re-link/takeover is
+//     allowed, no confirm). It used to stamp `linkedManually` alongside, to keep
+//     the link sticky against the webhook resolver; there is no resolver to be
+//     sticky against and MOTIR-4894 removed the stamp.
 // 4-layer: this owns the workspace validation + the one transaction and returns
 // DTOs; the Server Action is transport-only.
 
@@ -131,12 +132,15 @@ export const githubPullRequestService = {
   },
 
   /**
-   * Link an ingested PR to the current item — the explicit override that sets
-   * `GithubPullRequest.workItemId` (+ `linkedManually`). Gates the current item
-   * AND the PR to the caller's workspace in ONE transaction (a cross-workspace or
+   * Link an ingested PR to the current item — the explicit declaration, written
+   * as a `work_item_delivery` row and nowhere else. Gates the current item AND
+   * the PR to the caller's workspace in ONE transaction (a cross-workspace or
    * unknown PR → {@link GithubPullRequestNotFoundError}, no existence leak). A
-   * re-link (takeover from another item) is allowed with no confirm — the single
-   * FK moves. Returns the linked-row DTO for the caller to reflect optimistically.
+   * re-link (takeover from another item) is allowed with no confirm — and it ADDS
+   * a delivery rather than moving one, since MOTIR-3757 dropped the scalar that
+   * could only name one item. Returns the linked-row DTO for the caller to
+   * reflect optimistically; the mirror row is UNCHANGED by a link, so that DTO is
+   * built from the row this method already read.
    */
   async linkPullRequest(
     currentItemId: string,
@@ -159,12 +163,12 @@ export const githubPullRequestService = {
       if (!pr || pr.repo.workspaceId !== ctx.workspaceId)
         throw new GithubPullRequestNotFoundError(pullRequestId);
 
-      // The DECLARED-not-inferred stamp. It no longer records a link — the FK it
-      // qualified is gone (MOTIR-3757) — and it is written for its own sake, so
-      // that the surviving `linked_manually` column keeps meaning the same thing
-      // for a row written today as for one written before the drop. The re-read
-      // it returns is what the DTO is built from.
-      const updated = await githubPullRequestRepository.markLinkedManually(pullRequestId, tx);
+      // ⚠️ NO WRITE TO THE MIRROR ROW AT ALL (MOTIR-4894). A stamp used to go
+      // here — `markLinkedManually`, the DECLARED-not-inferred flag — and it was
+      // already writing for its own sake once MOTIR-3757 took away the FK it
+      // qualified. It is gone, so a link now touches exactly one table, and `pr`
+      // (read above, with its repo and check rows) IS the row the DTO is built
+      // from: nothing between that read and here changes it.
       // THE LINK (Story MOTIR-3655 · MOTIR-3658, ADR
       // `docs/decisions/work-item-delivery-links.md`), and since MOTIR-3757 the
       // ONLY one: a pull request's association with a work item is a row in this
@@ -184,7 +188,7 @@ export const githubPullRequestService = {
         },
         tx,
       );
-      return toLinkedPullRequestDto(updated);
+      return toLinkedPullRequestDto(pr);
     }).then(async (dto) => {
       // MOTIR-3675 — turn the unlinked-pull-request check GREEN, now rather than
       // on the next push. That immediacy is what makes "link it" an escape hatch
@@ -218,11 +222,12 @@ export const githubPullRequestService = {
    * The caller is authoritative about the LINK and about nothing else; the
    * webhook is authoritative about STATE and about nothing else. That used to
    * need a boundary marker, because both wrote the same column: `linkedManually`
-   * made a declared link STICKY against the sync's branch/title parse. Neither
-   * side of that is left — the parse went with MOTIR-3674 and the column with
-   * MOTIR-3757 — so the two claims now live in two different tables and cannot
-   * collide. A delivery refreshes `state` / `merged` / `headRef` / `baseRef` /
-   * `title` on the mirror row and reaches no association at all.
+   * made a declared link STICKY against the sync's branch/title parse. Nothing
+   * of that is left — the parse went with MOTIR-3674, the association column with
+   * MOTIR-3757, and the flag's last writer with MOTIR-4894 — so the two claims
+   * now live in two different tables and cannot collide. A delivery refreshes
+   * `state` / `merged` / `headRef` / `baseRef` / `title` on the mirror row and
+   * reaches no association at all.
    *
    * That is why the two arms below are asymmetric, and the asymmetry is the
    * whole behaviour rather than an optimisation:
@@ -320,7 +325,6 @@ export const githubPullRequestService = {
           headRef: input.headRef,
           baseRef: input.baseRef,
           title: input.title,
-          linkedManually: true,
         };
         try {
           prId = (await githubPullRequestRepository.upsert(row, tx)).id;
@@ -333,10 +337,18 @@ export const githubPullRequestService = {
         }
       }
 
-      // ONE write for both arms, and it is the narrow one: `markLinkedManually`
-      // touches `linked_manually` and nothing else, so the already-ingested case
-      // cannot clobber a delivery's state fields.
-      const updated = await githubPullRequestRepository.markLinkedManually(prId, tx);
+      // A READ, where a write used to be (MOTIR-4894). `markLinkedManually` was
+      // the one narrow write both arms shared — `linked_manually` and nothing
+      // else, so the already-ingested case could not clobber a delivery's state
+      // fields — and with the flag retired there is no column left for a link to
+      // touch on the mirror row. What the arms actually needed from it was the
+      // row WITH its context, which this returns without writing anything.
+      //
+      // Non-null by construction: `prId` names a row this transaction either
+      // read or wrote, and the read is inside it. The throw is the type's, not a
+      // case — it reports a row that vanished under a lock we hold.
+      const updated = await githubPullRequestRepository.findByIdWithInstallation(prId, tx);
+      if (!updated) throw new GithubPullRequestNotFoundError(prId);
       // THE LINK — see the note on the sibling arm. `repo.id` rather than a
       // re-read: this arm already resolved the repository row, and the gate
       // compares each member's merge against THAT repository's own default
@@ -387,7 +399,8 @@ export const githubPullRequestService = {
    * The pull-request MIRROR row. It holds no association to remove — the scalar
    * that used to sit beside this table was dropped by MOTIR-3757 — so this door
    * deletes one delivery row and leaves `github_pull_request` exactly as the
-   * webhook last wrote it, `linked_manually` included.
+   * webhook last wrote it. There is no provenance flag left to reason about
+   * either: MOTIR-4894 retired the one an unlink used to leave standing.
    *
    * Returns whether a row was actually removed, so a caller can say "nothing to
    * unlink" rather than reporting a success that did nothing.
