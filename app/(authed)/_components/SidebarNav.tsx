@@ -53,8 +53,15 @@ import {
   visibleOrganizationSettingsNav,
 } from '@/lib/settings/organizationSettingsNav';
 import { SettingsSidebarHeader } from './SettingsSidebarHeader';
+import {
+  groupWorkspaceSettingsNav,
+  isWorkspaceSettingsEntryActive,
+  isWorkspaceSettingsPath,
+  visibleWorkspaceSettingsNav,
+} from '@/lib/settings/workspaceSettingsNav';
 import { AccountSidebarHeader } from './AccountSidebarHeader';
 import { OrganizationSidebarHeader } from './OrganizationSidebarHeader';
+import { WorkspaceSidebarHeader } from './WorkspaceSidebarHeader';
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with the
@@ -123,6 +130,16 @@ export interface SidebarNavProps {
    * revealing four admin rows to a caller that forgot to thread the prop.
    */
   organization?: { name: string; isOrgAdmin: boolean } | null;
+  /**
+   * The ACTIVE workspace (Story MOTIR-4843 · MOTIR-4846) — drives the
+   * workspace-settings area's rail header, which names the tenant that area
+   * configures, exactly as `organization` drives the organisation area's.
+   *
+   * Optional and nullable for the same reason `organization` is: the rail
+   * renders with no workspace context on the cold-start paths, and the branch
+   * below simply omits the header rather than refusing to render the rail.
+   */
+  workspace?: { name: string } | null;
   /**
    * Whether this build has the commercial surface (`isCloudBilling()`) — gates
    * the organisation nav's `Billing & plans` row, which `notFound()`s off cloud.
@@ -194,6 +211,7 @@ export function SidebarNav({
   user,
   organization = null,
   billingAvailable = false,
+  workspace = null,
   workspaceTierRevealed = false,
   publicProjectsAvailable = false,
   helpMenu,
@@ -236,6 +254,45 @@ export function SidebarNav({
   // this actor holds. Built here with `held`, for the same reason: the rail and
   // the area door must filter on one answer, not two.
   const availability = { publicProjectsAvailable };
+
+  // WORKSPACE-settings AREA (Story MOTIR-4843 · MOTIR-4846): the FOURTH and last
+  // settings tier to become an area. Like the account and organisation branches
+  // it does NOT gate on an active project — a workspace is configured with no
+  // project selected — and the header names the WORKSPACE.
+  //
+  // ⚠️ ITS ONE FILTER AXIS IS THE REVEAL, AND BELOW IT THE RAIL IS EMPTY. All
+  // three routes `notFound()` below the threshold and their capabilities are
+  // hosted on `/settings/organization`, gated per SECTION (§6d) — so the honest
+  // rendering here is NO rows, not fewer. `visibleWorkspaceSettingsNav` returns
+  // an empty list and `groupWorkspaceSettingsNav` drops every group with it, so
+  // nothing marks the gap: no empty heading, no disabled row.
+  if (isWorkspaceSettingsPath(pathname)) {
+    const workspaceSections: SidebarSection[] = groupWorkspaceSettingsNav(
+      visibleWorkspaceSettingsNav(workspaceTierRevealed),
+    ).map(({ group, entries }) => ({
+      id: `workspace-settings-${group}`,
+      label: ts(`workspace.nav.group.${group}`),
+      items: entries.map((entry) => ({
+        icon: <entry.icon />,
+        label: ts(`workspace.nav.${entry.labelKey}`),
+        href: entry.href,
+        active: isWorkspaceSettingsEntryActive(entry, pathname),
+      })),
+    }));
+    return (
+      <Sidebar
+        aria-label={ts('workspace.eyebrow')}
+        header={
+          workspace ? (
+            <WorkspaceSidebarHeader workspace={workspace} collapsed={collapsed} />
+          ) : undefined
+        }
+        sections={workspaceSections}
+        footer={footer}
+        collapsed={isDrawer ? false : undefined}
+      />
+    );
+  }
 
   // ORGANISATION-settings AREA (Story MOTIR-4669 · MOTIR-4710): the third and
   // last settings tier to become an area. Like the account branch it does NOT

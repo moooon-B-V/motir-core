@@ -1728,6 +1728,18 @@
       "security": {
         "title": "安全",
         "subtitle": "{workspace} 中所有成员的登录要求。"
+      },
+      "eyebrow": "工作区设置",
+      "back": "返回 Motir",
+      "nav": {
+        "group": {
+          "general": "通用",
+          "access": "访问与权限",
+          "operations": "运维"
+        },
+        "workspace": "工作区",
+        "security": "安全",
+        "jobs": "任务运行"
       }
     },
     "name": {

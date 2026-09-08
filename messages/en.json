@@ -1728,6 +1728,18 @@
       "security": {
         "title": "Security",
         "subtitle": "Sign-in requirements for everyone in {workspace}."
+      },
+      "eyebrow": "Workspace settings",
+      "back": "Back to Motir",
+      "nav": {
+        "group": {
+          "general": "General",
+          "access": "Access",
+          "operations": "Operations"
+        },
+        "workspace": "Workspace",
+        "security": "Security",
+        "jobs": "Job runs"
       }
     },
     "name": {
