@@ -660,6 +660,30 @@
         background: var(--el-tint-lavender);
         color: var(--el-text-strong);
       }
+      /* MOTIR-4886 (2026-09-08) — the EXEMPT org's pill, where `.pill-tier`
+         would otherwise name a commercial tier the org does not have. It is
+         DELIBERATELY untinted, and that is where it parts company with
+         `design/billing`'s `.pill-exempt` (peach): peach was "that area's one
+         unspent tint", and on THIS surface all six tints are spent —
+         lavender=tier/generate, sky=expand + the internal-billing chip,
+         mint=augment, peach=`.pill-plan` (MOTIR-4303), yellow=warn,
+         rose=error. A seventh meaning on a spent tint is worse than no tint,
+         and an exempt org has no commercial STATE to signal — "Not billed" is
+         a factual label, which is the role this surface already gives
+         `.pill-neutral`. The WORD is shared with billing; the tint is not, and
+         the reason is recorded in design-notes.md § AMENDMENT 2026-09-08. */
+      .pill-exempt {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      /* The classification chip the shipped hero renders beside the tier pill
+         (`OrgUsageClient.tsx:402`, `--el-tint-sky`). It was never drawn here —
+         MOTIR-4572 added it to the component and the asset did not follow. */
+      .pill-internal {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
       .pill-generate {
         background: var(--el-tint-lavender);
         color: var(--el-text-strong);
@@ -1193,6 +1217,8 @@
       2 · Org cost summary (populated — the PRIMARY view) — the org credit balance as the hero, the
       org name + tier, total + this-month spend, and a month-over-month trend. Credits are an
       internal allotment, NOT a bill (a quiet affordance says so). The org admin’s home for cost.
+      The hero’s meta line branches on classification, so it is drawn for all THREE: paying (the
+      hero), EXEMPT and INTERNAL BILLING (the pair beneath the trend’s label) — MOTIR-4886.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1213,7 +1239,12 @@
                   ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Credit balance</span
                 >
                 <div class="big">12,480<span class="unit"> credits</span></div>
-                <div class="sub2">moooon · <span class="pill pill-tier">Basic tier</span></div>
+                <!-- No separator between the name and the pill: the shipped hero
+                     is a `flex … gap-2` row (OrgUsageClient.tsx:392), and the
+                     `·` this line used to carry was the asset's own invention.
+                     Corrected with the variants below, which is the render this
+                     card measured against (MOTIR-4886). -->
+                <div class="sub2">moooon <span class="pill pill-tier">Basic tier</span></div>
                 <div class="meter" title="62% of this month’s allotment remaining">
                   <span style="width: 62%"></span>
                 </div>
@@ -1235,6 +1266,52 @@
                 <div class="med">7,520 credits</div>
                 <div class="delta up">
                   <svg viewBox="0 0 24 24"><use href="#i-arrow-up" /></svg>+18% vs May
+                </div>
+              </div>
+            </div>
+
+            <!-- ── The hero's THREE classifications (MOTIR-4886) ──────────────
+                 The hero above draws a PAYING org. The two cards below draw the
+                 SAME card for the other two classifications, because the meta
+                 line beside the org name is the one part of it that branches.
+                 Predicate: `isMeta` decides the pill, `internalBilling` decides
+                 the chip, and they are independent. -->
+            <div class="sub2" style="margin-top: 4px">
+              The same hero for the other two classifications — the meta line is the only part that
+              branches.
+            </div>
+            <div class="stat-grid">
+              <!-- EXEMPT — isMeta: true. The live `moooon` shape. -->
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Credit balance</span
+                >
+                <div class="big">−4,210<span class="unit"> credits</span></div>
+                <div class="sub2">moooon <span class="pill pill-exempt">Not billed</span></div>
+                <!-- No meter: an exempt org's allotment is 0, so `remainingPct`
+                     is null and the shipped hero renders no bar (verified in a
+                     render of the real component at this DTO shape). -->
+                <div class="sub2">
+                  Every cap is lifted for this organization, so there is no allotment to spend
+                  against.
+                </div>
+              </div>
+              <!-- INTERNAL BILLING — isMeta: false. Charged like a customer, then made whole. -->
+              <div class="card stat">
+                <span class="lbl"
+                  ><svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Credit balance</span
+                >
+                <div class="big">0<span class="unit"> credits</span></div>
+                <div class="sub2">
+                  Northwind <span class="pill pill-tier">Basic tier</span>
+                  <span class="pill pill-internal">Internal billing</span>
+                </div>
+                <div class="meter" title="0% of this month’s allotment remaining">
+                  <span style="width: 0%"></span>
+                </div>
+                <div class="sub2">
+                  0% of this month’s 20,000-credit allotment remaining — and this org IS refused at
+                  zero, so it keeps the tier pill.
                 </div>
               </div>
             </div>
