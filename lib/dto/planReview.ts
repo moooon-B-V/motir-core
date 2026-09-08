@@ -106,6 +106,12 @@ const PATCH_KEY_RAIL_ROW = {
   storyPoints: 'storyPoints',
   estimateMinutes: 'estimateMinutes',
   targetRepo: 'targetRepo',
+  // The SET forms (bug MOTIR-4904) join the same row: `Repositories` is one rail
+  // row about one axis, and `targetRepo` / `targetRepos` / `targetRepositories`
+  // are that axis in three spellings — mutually exclusive at the boundary, so at
+  // most one of them can move the row on any given patch.
+  targetRepos: 'targetRepo',
+  targetRepositories: 'targetRepo',
   targetRepoRole: 'targetRepo',
   parentRef: 'parent',
 } satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
@@ -427,6 +433,28 @@ export interface PlanReviewItemDto {
   storyPoints: number | null;
   estimateMinutes: number | null;
   targetRepo: string | null;
+  /**
+   * EVERY repository the card will ship in (bug MOTIR-4904) — the SET beside
+   * `targetRepo`'s primary, so a reviewer approving a two-repository card can
+   * see the second one.
+   *
+   * Patch-or-target on every op, exactly as `targetRepo` is: the quick view has
+   * no diff to read the change out of, so the rail answers *what the card will
+   * BE*. Empty for a proposal that pins nothing.
+   */
+  targetRepos: string[] | null;
+  /**
+   * The repository axis as `project_repository` ROW IDS, when the proposal
+   * authored it that way (bug MOTIR-4904).
+   *
+   * ⚠️ `add`-ONLY, on purpose, and it is the one repository field that is. These
+   * are cuids: they are an AUTHORING form, not a value a reviewer reads, and the
+   * names they resolve to are what `targetRepos` above already carries. On a
+   * `modify` the committed side would be a second read producing the same names
+   * under different strings — so the honest answer for every other op is that
+   * this field has nothing to say, and the rail draws the names.
+   */
+  targetRepositories: string[] | null;
   targetRepoRole: string | null;
   executor: string | null;
   planningProvenance: { source?: string; harness?: string | null; model?: string | null } | null;

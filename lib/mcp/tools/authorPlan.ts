@@ -295,6 +295,25 @@ const proposedFieldsSchema = z
       .string()
       .optional()
       .describe('WHICH REPO the item ships in — validated against the project’s set at approve.'),
+    targetRepos: z
+      .array(z.string())
+      .optional()
+      .describe(
+        'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch ' +
+          'routes to, and the item does not complete until every one of them has a merged pull ' +
+          'request. Bare names or the `owner/name` form, validated against the PROJECT’s repository ' +
+          'domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with ' +
+          '`targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is ' +
+          'rejected here rather than silently resolved. `[]` is the empty set.',
+      ),
+    targetRepositories: z
+      .array(z.string())
+      .optional()
+      .describe(
+        'The same axis as `targetRepos`, as the project’s repository ROW IDS, ORDERED. Prefer it ' +
+          'when you have the ids: a reference survives a rename and can name one of two rows that ' +
+          'share a role, which a name cannot. Mutually exclusive with the two fields above.',
+      ),
     targetRepoRole: z
       .string()
       .optional()
@@ -363,6 +382,21 @@ const patchSchema = z
       .nullable()
       .optional()
       .describe('RE-PIN which repo the item ships in. An explicit `null` unpins it.'),
+    targetRepos: z
+      .array(z.string())
+      .optional()
+      .describe(
+        'RE-PIN the target’s WHOLE repository set, ordered, first element primary. Omit the key ' +
+          'to leave it alone; `[]` unpins the card entirely. Mutually exclusive with `targetRepo` ' +
+          'and `targetRepositories` on the same patch.',
+      ),
+    targetRepositories: z
+      .array(z.string())
+      .optional()
+      .describe(
+        'The same re-pin, as the project’s repository ROW IDS. Mutually exclusive with the two ' +
+          'fields above.',
+      ),
     targetRepoRole: z
       .string()
       .nullable()
@@ -665,6 +699,23 @@ const updatePlanProposalInputSchema = {
       '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s ' +
         'connected repositories; `null` unpins it.',
     ),
+  targetRepos: z
+    .array(z.string())
+    .optional()
+    .describe(
+      '`add` only: REPLACE this proposal’s repository set with these ordered names; `[]` unpins ' +
+        'it. ⚠️ The repository axis is REPLACED rather than merged — correcting one of ' +
+        '`targetRepo` / `targetRepos` / `targetRepositories` CLEARS the other two, because they ' +
+        'are one field in three spellings and a proposal carrying two would be a contradiction ' +
+        'approve had to guess at.',
+    ),
+  targetRepositories: z
+    .array(z.string())
+    .optional()
+    .describe(
+      '`add` only: the same replacement, as the project’s repository ROW IDS. Clears the other ' +
+        'two spellings, for the reason above.',
+    ),
   targetRepoRole: z
     .string()
     .nullable()
@@ -749,6 +800,8 @@ interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
   parentRef?: string | null;
   blockedByRefs?: string[];
   targetRepo?: string | null;
+  targetRepos?: string[];
+  targetRepositories?: string[];
   targetRepoRole?: string | null;
   patch?: Record<string, unknown> | null;
 }
@@ -949,7 +1002,15 @@ function summarizeCorrection(
   changed: readonly string[],
 ): string {
   const structural = changed.filter((f) =>
-    ['parentRef', 'blockedByRefs', 'targetRepo', 'targetRepoRole', 'patch'].includes(f),
+    [
+      'parentRef',
+      'blockedByRefs',
+      'targetRepo',
+      'targetRepos',
+      'targetRepositories',
+      'targetRepoRole',
+      'patch',
+    ].includes(f),
   );
   return [
     `Corrected proposal ${planItemId} on plan ${plan.id} — ${plan.status}, ` +
@@ -1418,6 +1479,8 @@ export async function runUpdatePlanProposal(
     'parentRef',
     'blockedByRefs',
     'targetRepo',
+    'targetRepos',
+    'targetRepositories',
     'targetRepoRole',
     'patch',
   ] as const satisfies readonly CorrectProposalKey[];
@@ -1638,7 +1701,8 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
       description:
         'Correct a proposal you already appended — the repair for a mistake you can see but ' +
         `could not fix. Unlike \`${UPDATE_PLAN_ITEM_TOOL_NAME}\`, this reaches the STRUCTURAL ` +
-        'fields: `parentRef`, `blockedByRefs`, `targetRepo`, `targetRepoRole`, and a `modify` ' +
+        'fields: `parentRef`, `blockedByRefs`, the repository axis (`targetRepo`, `targetRepos`, ' +
+        '`targetRepositories`, `targetRepoRole`), and a `modify` ' +
         'proposal’s `patch` — which is where a mistyped dependency edge usually sits. Legal ' +
         'while the plan is ' +
         '`generating` AND after you have closed it with `final: true`, while it is `planned` ' +

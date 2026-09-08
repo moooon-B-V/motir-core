@@ -170,6 +170,13 @@ function proposedValue<T>(key: PatchedFieldKey, item: PlanItemDto, addValue: T, 
   return targetValue;
 }
 
+/** An ordered repository set as ONE diff cell — `null` for the empty set, which
+ *  is what an unpinned card looks like on either side of a re-pin. */
+function repoSetCell(repos: readonly string[]): string | null {
+  const named = repos.map((r) => r.trim()).filter((r) => r.length > 0);
+  return named.length === 0 ? null : named.join(', ');
+}
+
 /** The patch keys that name a value a reviewer reads back off the proposal. */
 type PatchedFieldKey = Extract<
   keyof PlanItemPatch,
@@ -180,6 +187,7 @@ type PatchedFieldKey = Extract<
   | 'storyPoints'
   | 'estimateMinutes'
   | 'targetRepo'
+  | 'targetRepos'
   | 'targetRepoRole'
 >;
 
@@ -294,6 +302,28 @@ function buildChanges(
     const from = blankToNull(target?.targetRepo ?? null);
     const to = blankToNull(patch.targetRepo);
     if (from !== to) changes.push({ field: 'targetRepo', from, to });
+  }
+  // …and the SET forms of the same axis (bug MOTIR-4904), on the SAME row. They
+  // are one field in three spellings, mutually exclusive at the append, so at
+  // most one of these three blocks can fire for any one patch.
+  //
+  // Rendered as the joined list rather than as a count: a reviewer approving a
+  // re-pin needs to read WHICH repositories, and "2 repositories" is MOTIR-3191's
+  // `— → updated` with a number in it. `targetRepositories` names ROWS, whose
+  // names this producer cannot resolve without a read it does not make — so the
+  // cell shows the ids and says so, which is worse to read and better than
+  // silence, the failure MOTIR-3868 was filed about.
+  if (patch.targetRepos !== undefined) {
+    const from = repoSetCell(target?.targetRepos ?? []);
+    const to = repoSetCell(patch.targetRepos);
+    if (from !== to) changes.push({ field: 'targetRepo', from, to });
+  }
+  if (patch.targetRepositories !== undefined) {
+    changes.push({
+      field: 'targetRepo',
+      from: repoSetCell(target?.targetRepos ?? []),
+      to: repoSetCell(patch.targetRepositories.map((id) => `row ${id}`)),
+    });
   }
   // …and the ROLE, which is emitted on KEY PRESENCE rather than on a difference,
   // because there is NO OLD SIDE TO COMPARE AGAINST.
@@ -823,6 +853,21 @@ export const planReviewService = {
           proposed?.targetRepo ?? null,
           target?.targetRepo ?? null,
         ),
+        // THE SET (bug MOTIR-4904) — patch-or-target on every op, the same rule
+        // `targetRepo` above follows and for the same reason: the quick view has
+        // no diff, so the rail answers what the card WILL BE. A proposal that
+        // pinned the singular reports it as the one-element set it means, so the
+        // row never reads "no repositories" for a card that has one.
+        targetRepos: proposedValue(
+          'targetRepos',
+          item,
+          proposed?.targetRepos ?? (proposed?.targetRepo ? [proposed.targetRepo] : []),
+          target?.targetRepos ?? [],
+        ),
+        // ⚠️ `add`-ONLY, and the reason is at the field on the DTO: these are row
+        // cuids, an authoring form rather than a value a reviewer reads, and the
+        // names they resolve to are what `targetRepos` directly above carries.
+        targetRepositories: item.op === 'add' ? (proposed?.targetRepositories ?? null) : null,
         // ⚠️ NO TARGET FALLBACK, and that is not an omission: `work_item.
         // targetRepoRole` is RETIRED (Story MOTIR-2732 · MOTIR-3040), so a
         // committed card HAS no role to report. A `modify` shows the role only

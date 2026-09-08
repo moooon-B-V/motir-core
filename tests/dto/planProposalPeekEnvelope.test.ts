@@ -38,6 +38,11 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   storyPoints: null,
   estimateMinutes: null,
   targetRepo: null,
+  // The SET spellings of the same axis (bug MOTIR-4904) — they move the SAME
+  // `targetRepo` rail row, so the denominator below is unchanged by their
+  // arrival, which is exactly what this file exists to make visible.
+  targetRepos: [],
+  targetRepositories: [],
   targetRepoRole: null,
   parentRef: null,
   blockedByAdd: [],

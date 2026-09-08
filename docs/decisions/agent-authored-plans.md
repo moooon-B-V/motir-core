@@ -2774,3 +2774,73 @@ it, in the one place a `manual` card is authored.
 | **`type-manual.md` teaches the runbook planner** (MOTIR-4617) | the same sentences in `motir-meta`'s pack — the other of the two rule homes                                                                                                        |
 | **The two test gates** (MOTIR-4624 · MOTIR-4626)              | every refusal D4 names, the round trip D5 describes, and the `modify`-carries-no-steps rule D2 decides                                                                             |
 | **The Playwright acceptance E2E** (MOTIR-4625)                | the story's own verification recipe, which is D6 and D5 read end to end by a person                                                                                                |
+
+---
+
+## AMENDMENT 15 — a proposal carries the whole REPOSITORY AXIS, not only its singular spelling (bug MOTIR-4904, 2026-09-08)
+
+**The gap.** A work item's repositories are a SET (`work-item-repository-set.md`, Story MOTIR-2725 ·
+MOTIR-2727) and `create_work_item` / `update_work_item` have taken that set in both its spellings —
+ordered NAMES (`targetRepos`) and ordered `project_repository` ROW IDS (`targetRepositories`) — since
+MOTIR-3039. **No plan-authoring door took either.** `proposedFields`, a `modify`'s `patch` and
+AMENDMENT 8's correction door all took the singular `targetRepo` alone.
+
+**Why that is a defect and not a boundary.** Nothing anywhere recorded a decision to exclude the set
+from a proposal: the repository-set epic finished on the work-item surface, and the correction door was
+built later and was given the singular because the singular was what it was asked for. Two correct
+passes, neither holding the other in scope. And the cost is not an awkward API — **a planning pass may
+not use the direct door at all** (the only work item any pass creates directly is a `bug`), so for a
+planner a repository set was INEXPRESSIBLE. The remedy on the record was _approve it, then patch it_,
+which writes a field the approver never saw into a card they have already approved, and leaves a window
+in which the card is claimable while dispatch routes on the WRONG pin — the same family as MOTIR-3604,
+one field over.
+
+### D1 — the axis is one field in THREE spellings, on every door that carries any of them
+
+`targetRepo`, `targetRepos` and `targetRepositories` are added to `PlanItemProposedFields`,
+`PlanItemPatch` and `CorrectProposalInput`, validated at the append and at approve by the DIRECT path's
+own resolvers (`resolveAuthoredRepoPinsInProject` / `resolveAuthoredRepoRefsInProject`) against the same
+project-scoped domain. **Mutual exclusivity is the direct door's own guard, imported rather than
+re-implemented** — `assertSingleTargetRepoInput` moved from `workItemsService` to
+`lib/workItems/targetRepo.ts` — so the two doors cannot come to disagree about what a contradiction is.
+
+### D2 — the DEEPEN turn still refuses all three, and AMENDMENT 3 D3 is unamended
+
+_A deepen may change what a card SAYS and who ACTS on it, never where it SITS or SHIPS._ The repository
+axis is SHIPS. The widening lands on `CorrectProposalInput`, which AMENDMENT 7 already opened for a
+DIFFERENT act with a different trigger; `UpdateProposalInput` is untouched, and
+`tests/mcp/proposal-repository-axis-parity.test.ts` pins that refusal so the boundary cannot erode by
+somebody adding the field to the shared parent type.
+
+### D3 — a CORRECTION REPLACES the axis rather than merging it
+
+Every other key on the correction door is sparse per KEY. These three are one field, so correcting any
+one of them CLEARS the other two. Merging would store the exact state the append refuses — a stale
+`targetRepo` beside a new `targetRepos` — and approve would then have to invent a precedence rule over
+something nobody authored.
+
+### D4 — the TOCTOU re-check covers the set, on the same terms as the pin
+
+AMENDMENT 9 D4 / MOTIR-3604 makes the pre-transaction resolution safe by re-comparing the AUTHORED value
+under the plan lock. A set resolved outside the transaction and never re-compared would re-open that hole
+one field over, so `assertRepoPinsUnmoved` takes the set's canonical signature too — and its parameter is
+REQUIRED, with no default, because a default is how a future caller skips half a check by omission.
+
+### What this amendment does NOT change
+
+- **`work-item-repository-set.md` is not amended.** The set's meaning, its ordering, its primary and its
+  completion gate are quoted here, never re-decided.
+- **No migration, no new column.** Both fields ride the existing `proposedFields` / `patch` JSON.
+- **`CLI_TOKEN_GRANT` is NOT widened.** A sandboxed run can no more propose a repository set than it can
+  propose a card — `add_plan_items` still asserts `ai:view_plan`.
+- **The ROLE stays plan-only.** `work_item.targetRepoRole` is retired (§A3), so the parity between the two
+  doors is one-directional by construction: everything `create_work_item` takes for this axis, a proposal
+  takes; the proposal additionally takes the role, which the direct door has no column for.
+
+### One thing it FIXES on the way past, named because it is a behaviour change
+
+`materialize` wrote `work_item.targetRepo` and the reference and left `work_item.targetRepos` at its `[]`
+default, while the direct path has always written the names array beside the scalar. `resolveExpectedRepos`
+returns EARLY on an empty names array, so the completion gate had nothing to hold a plan-materialized card
+open on. Materialize now writes the pair together for BOTH spellings — the singular as the one-element set
+it means — so a card's shape no longer depends on which door created it.

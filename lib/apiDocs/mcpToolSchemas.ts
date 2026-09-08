@@ -197,6 +197,18 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'WHICH REPO the item ships in — validated against the project’s set at approve.',
                 },
+                targetRepos: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch routes to, and the item does not complete until every one of them has a merged pull request. Bare names or the `owner/name` form, validated against the PROJECT’s repository domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with `targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is rejected here rather than silently resolved. `[]` is the empty set.',
+                },
+                targetRepositories: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'The same axis as `targetRepos`, as the project’s repository ROW IDS, ORDERED. Prefer it when you have the ids: a reference survives a rename and can name one of two rows that share a role, which a name cannot. Mutually exclusive with the two fields above.',
+                },
                 targetRepoRole: {
                   type: 'string',
                   description: 'The PORTABLE repo pin — a role of the project’s repository set.',
@@ -297,6 +309,18 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 targetRepo: {
                   type: ['string', 'null'],
                   description: 'RE-PIN which repo the item ships in. An explicit `null` unpins it.',
+                },
+                targetRepos: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'RE-PIN the target’s WHOLE repository set, ordered, first element primary. Omit the key to leave it alone; `[]` unpins the card entirely. Mutually exclusive with `targetRepo` and `targetRepositories` on the same patch.',
+                },
+                targetRepositories: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'The same re-pin, as the project’s repository ROW IDS. Mutually exclusive with the two fields above.',
                 },
                 targetRepoRole: {
                   type: ['string', 'null'],
@@ -2007,6 +2031,18 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           '`add` only: re-pin WHICH REPO this proposal ships in, validated against the project’s connected repositories; `null` unpins it.',
       },
+      targetRepos: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          '`add` only: REPLACE this proposal’s repository set with these ordered names; `[]` unpins it. ⚠️ The repository axis is REPLACED rather than merged — correcting one of `targetRepo` / `targetRepos` / `targetRepositories` CLEARS the other two, because they are one field in three spellings and a proposal carrying two would be a contradiction approve had to guess at.',
+      },
+      targetRepositories: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          '`add` only: the same replacement, as the project’s repository ROW IDS. Clears the other two spellings, for the reason above.',
+      },
       targetRepoRole: {
         type: ['string', 'null'],
         description:
@@ -2070,6 +2106,18 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               targetRepo: {
                 type: ['string', 'null'],
                 description: 'RE-PIN which repo the item ships in. An explicit `null` unpins it.',
+              },
+              targetRepos: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'RE-PIN the target’s WHOLE repository set, ordered, first element primary. Omit the key to leave it alone; `[]` unpins the card entirely. Mutually exclusive with `targetRepo` and `targetRepositories` on the same patch.',
+              },
+              targetRepositories: {
+                type: 'array',
+                items: { type: 'string' },
+                description:
+                  'The same re-pin, as the project’s repository ROW IDS. Mutually exclusive with the two fields above.',
               },
               targetRepoRole: {
                 type: ['string', 'null'],

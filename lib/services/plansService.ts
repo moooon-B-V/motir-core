@@ -101,8 +101,17 @@ import {
   REVISION_STARTED_KIND,
   REVISION_ENDED_KIND,
 } from '@/lib/planChange/revisionLease';
-import { resolveAuthoredTargetRepoInProject } from '@/lib/workItems/dispatchRepo';
-import { UnknownTargetRepoError } from '@/lib/workItems/errors';
+import {
+  resolveAuthoredRepoPinsInProject,
+  resolveAuthoredRepoRefsInProject,
+  resolveAuthoredTargetRepoInProject,
+  // ⚠️ ALIASED: this file already owns a `ResolvedRepoPins` — the map of each
+  // proposal's SINGULAR pin — and the imported one is the direct write path's
+  // `{ refs, names, scope }` for ONE item. Two different things, one good name.
+  type ResolvedRepoPins as ResolvedRepoSet,
+} from '@/lib/workItems/dispatchRepo';
+import { UnknownProjectRepoRefError, UnknownTargetRepoError } from '@/lib/workItems/errors';
+import { assertSingleTargetRepoInput, primaryTargetRepo } from '@/lib/workItems/targetRepo';
 import { PROJECT_REPO_ROLES, isProjectRepoRole } from '@/lib/projectRepos/vocabulary';
 
 import type { ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
@@ -268,6 +277,16 @@ function validateProposal(p: ProposalInput): void {
       null,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
+    // The repository AXIS may be described ONCE (bug MOTIR-4904) — through the
+    // direct door's OWN guard, imported rather than re-implemented, so the two
+    // doors cannot come to disagree about what a contradiction is. Checked at the
+    // append for the same reason the role is: the answer needs no read, and an
+    // author writing a plan is the right person to hear it.
+    assertSingleTargetRepoInput(
+      p.proposedFields.targetRepo,
+      p.proposedFields.targetRepos,
+      p.proposedFields.targetRepositories,
+    );
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
     if (!p.patch) throw new InvalidProposalError('A `modify` proposal requires a patch.');
@@ -285,6 +304,13 @@ function validateProposal(p: ProposalInput): void {
       p.patch.targetRepoRole,
       null,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
+    // A `modify` may RE-PIN the whole SET (bug MOTIR-4904) — and, exactly as on
+    // the `add` path above, may describe the axis only once.
+    assertSingleTargetRepoInput(
+      p.patch.targetRepo,
+      p.patch.targetRepos,
+      p.patch.targetRepositories,
     );
     // A `modify` may RE-PARENT the target (MOTIR-3859) — and the ONE form of
     // that key which is refused at the boundary rather than validated is an
@@ -393,8 +419,9 @@ function claimedTargets(items: readonly PlanItem[]): Map<string, PlanTargetOp> {
  * null executor and nothing on the way there said so. The ADR rejects the
  * alternative repair (seeding the default inside `materialize`) on the record.
  *
- * ⚠️ STILL NOT in the set, and deliberately: `targetRepo` / `targetRepoRole` (the
- * repo pin is part of a leaf's identity and is settled at append; widening here
+ * ⚠️ STILL NOT in the set, and deliberately: `targetRepo` / `targetRepos` /
+ * `targetRepositories` / `targetRepoRole` (the repo pin is part of a leaf's
+ * identity and is settled at append; widening here
  * would give an agent a re-pin the human review surface does not have) and the
  * ref graph `parentRef` / `blockedByRefs` (which live on the PlanItem row, not in
  * `proposedFields`, and whose mutability would let a cycle be built inside a
@@ -959,6 +986,97 @@ function authoredTargetRepo(item: PlanItem): string | null | undefined {
   return undefined;
 }
 
+// ── The proposed REPOSITORY SET (bug MOTIR-4904) ──────────────────────────────
+//
+// The pin above is the axis's SINGULAR spelling and is left exactly as it was. A
+// proposal may now describe the same axis as an ordered SET, by NAME
+// (`targetRepos`) or by `project_repository` ROW ID (`targetRepositories`) — the
+// two forms `create_work_item` has accepted since Story MOTIR-2725 and that no
+// plan-authoring door carried, so a card that legitimately ships in two
+// repositories could not be PROPOSED at all.
+//
+// The three spellings are MUTUALLY EXCLUSIVE at the append, which is what makes
+// this a second, disjoint branch rather than a precedence rule: for any one
+// proposal at most one of the three resolvers below runs.
+//
+// Resolved OUTSIDE the approve transaction, for the same three reasons the
+// singular pin is (the domain read opens its own workspace context, Prisma cannot
+// nest interactive transactions, and an unknown repository is better refused while
+// the tree is still byte-identical) — and through the DIRECT PATH'S OWN
+// resolvers, so a set proposed here and a set written by `create_work_item` are
+// validated by the same code against the same domain.
+
+/** The SET spelling a proposal authors, or `undefined` when it authors none. */
+type AuthoredRepoSet =
+  | { form: 'targetRepos'; value: readonly string[] }
+  | { form: 'targetRepositories'; value: readonly string[] };
+
+function authoredRepoSet(item: PlanItem): AuthoredRepoSet | undefined {
+  const fields =
+    item.op === 'add'
+      ? ((item.proposedFields ?? null) as PlanItemProposedFields | null)
+      : item.op === 'modify'
+        ? ((item.patch ?? null) as PlanItemPatch | null)
+        : null;
+  if (fields === null) return undefined;
+  if (fields.targetRepositories !== undefined) {
+    return { form: 'targetRepositories', value: fields.targetRepositories };
+  }
+  if (fields.targetRepos !== undefined) return { form: 'targetRepos', value: fields.targetRepos };
+  return undefined;
+}
+
+/** Each proposal's RESOLVED repository set — the `{ refs, names }` pair the
+ *  direct write path produces — keyed by plan-item id, and present ONLY for a
+ *  proposal that authored one of the two SET forms. */
+type ResolvedRepoSets = ReadonlyMap<string, ResolvedRepoSet>;
+
+/**
+ * Normalize + VALIDATE every proposed repository SET against the PROJECT's
+ * repository domain, BEFORE the approve transaction opens — the SET twin of
+ * {@link resolveProposedTargetRepos}.
+ *
+ * Both resolvers are the direct path's (`resolveAuthoredRepoPinsInProject` for
+ * names, `resolveAuthoredRepoRefsInProject` for row ids), so the `owner/name`
+ * form, the case-insensitive match, the stored casing, the duplicate collapse,
+ * the all-or-nothing refusal and the project-vs-workspace scope ladder behave
+ * identically however the set arrived. An unknown member becomes a
+ * `PlanItemUnknownTargetRepoError` naming the offending PROPOSAL — a reviewer of
+ * a hundred-item plan needs to know which one.
+ *
+ * NOT memoized, unlike the singular resolver: a set is a list, two proposals
+ * rarely author the same one, and the key would be the whole list.
+ */
+async function resolveProposedRepoSets(
+  items: PlanItem[],
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<ResolvedRepoSets> {
+  const resolved = new Map<string, ResolvedRepoSet>();
+  for (const item of items) {
+    const authored = authoredRepoSet(item);
+    if (authored === undefined) continue;
+    try {
+      resolved.set(
+        item.id,
+        authored.form === 'targetRepositories'
+          ? await resolveAuthoredRepoRefsInProject(authored.value, projectId, ctx)
+          : await resolveAuthoredRepoPinsInProject(authored.value, projectId, ctx),
+      );
+    } catch (err) {
+      if (err instanceof UnknownTargetRepoError || err instanceof UnknownProjectRepoRefError) {
+        throw new PlanItemUnknownTargetRepoError(
+          item.id,
+          authored.value.join(', '),
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+      throw err;
+    }
+  }
+  return resolved;
+}
+
 /**
  * Normalize + VALIDATE every proposed pin against the PROJECT's repository set,
  * BEFORE the approve transaction opens. Returns the value each proposal
@@ -1027,6 +1145,49 @@ function collectAuthoredTargetRepos(items: PlanItem[]): Map<string, string | nul
   return authored;
 }
 
+/** A single resolved reference as the one-element list it means — `null` (the
+ *  proposal named nothing this project has) is the EMPTY set, not a member. */
+function refsOf(ref: string | null): string[] {
+  return ref === null ? [] : [ref];
+}
+
+/** Two ordered repository-name sets, compared as the ORDERED things they are —
+ *  element 0 is the primary, so a re-order is a change and not a no-op. The same
+ *  predicate `workItemsService` applies to the same column. */
+function sameRepoNameSet(next: readonly string[], current: readonly string[]): boolean {
+  return next.length === current.length && next.every((r, i) => r === current[i]);
+}
+
+/**
+ * The SET spelling each proposal AUTHORS, as one comparable string (bug
+ * MOTIR-4904) — the twin of {@link collectAuthoredTargetRepos}, and it exists for
+ * exactly the same reason.
+ *
+ * MOTIR-3604's guard makes the pre-transaction resolution safe by re-comparing
+ * the AUTHORED value under the plan lock. A set resolved before the transaction
+ * and never re-compared would re-open that hole one field over: a correction
+ * landing in the window would materialize the repositories the approve READ
+ * rather than the ones the plan now says. So the set joins the same check.
+ *
+ * Canonicalised the way its resolver matches — names trimmed and lower-cased,
+ * row ids trimmed — so whitespace and casing are not read as a move, while the
+ * FORM is part of the signature: switching a proposal from names to row ids is a
+ * change to what the plan says, whatever the two happen to resolve to.
+ */
+function collectAuthoredRepoSets(items: PlanItem[]): Map<string, string> {
+  const authored = new Map<string, string>();
+  for (const item of items) {
+    const set = authoredRepoSet(item);
+    if (set === undefined) continue;
+    const members =
+      set.form === 'targetRepositories'
+        ? set.value.map((v) => v.trim())
+        : set.value.map((v) => v.trim().toLowerCase());
+    authored.set(item.id, `${set.form}:${members.join(',')}`);
+  }
+  return authored;
+}
+
 /** Compare two authored spellings the way the resolvers match them, so trailing
  *  whitespace and casing are not read as a move. `undefined` (no pin at all)
  *  stays distinct from `null` (an explicit unpin). */
@@ -1060,7 +1221,34 @@ function sameAuthoredPin(a: string | null | undefined, b: string | null | undefi
 function assertRepoPinsUnmoved(
   snapshot: ReadonlyMap<string, string | null>,
   fresh: PlanItem[],
+  // REQUIRED, deliberately, with no `= new Map()` default: a default would let a
+  // future caller skip the SET half of the check by omission, silently, which is
+  // exactly the hole MOTIR-3604 closed for the singular pin.
+  setSnapshot: ReadonlyMap<string, string>,
 ): void {
+  // The SET half (bug MOTIR-4904), checked first and by the same rule: a
+  // signature that arrived, moved or was cleared in the window is a plan that no
+  // longer says what the approve resolved.
+  for (const item of fresh) {
+    const before = setSnapshot.get(item.id);
+    const after = collectAuthoredRepoSets([item]).get(item.id);
+    if (before === after) continue;
+    const label = proposalLabel({
+      op: item.op,
+      workItemId: item.workItemId,
+      title: ((item.proposedFields ?? null) as PlanItemProposedFields | null)?.title,
+    });
+    const printed = (v: string | undefined) => (v === undefined ? 'no repository set' : `\`${v}\``);
+    throw new PlanProposalRepoPinMovedError(
+      item.id,
+      label,
+      before ?? null,
+      after ?? null,
+      `Proposal ${label} changed its repository set while this plan was being approved: ` +
+        `${printed(before)} when the approve read it, ${printed(after)} now. Nothing was ` +
+        `materialized — re-read the plan and approve it again to apply the current set.`,
+    );
+  }
   for (const item of fresh) {
     const before = snapshot.has(item.id) ? snapshot.get(item.id) : undefined;
     const after = authoredTargetRepo(item);
@@ -1298,6 +1486,7 @@ async function materialize(
   tx: Prisma.TransactionClient,
   repoPins: ResolvedRepoPins,
   repoRefs: ProposalRepoRefs,
+  repoSets: ResolvedRepoSets,
 ): Promise<MaterializeResult> {
   const project = await projectRepository.findById(plan.projectId, tx);
   if (!project) throw new ProjectNotFoundError(plan.projectId);
@@ -1447,7 +1636,28 @@ async function materialize(
       // opened. Absent from the map = the proposal carried no pin, which stores
       // `null` exactly as it did before the field existed (the shipped resolver's
       // single-repo fallback still serves those projects unchanged).
-      targetRepo: repoPins.get(item.id) ?? null,
+      // ⚠️ AND THE SET SPELLING WINS WHERE IT IS PRESENT (bug MOTIR-4904). The
+      // three spellings are mutually exclusive at the append, so `repoSets` and
+      // `repoPins` can never both hold this proposal — the `??` chain is a
+      // disjoint choice, not a precedence rule.
+      targetRepo: repoSets.has(item.id)
+        ? primaryTargetRepo(repoSets.get(item.id)!.names)
+        : (repoPins.get(item.id) ?? null),
+      // …and the NAMES ARRAY beside it. ⚠️ `materialize` never wrote this column
+      // at all before MOTIR-4904 — it wrote the scalar and the reference and left
+      // `work_item.targetRepos` at its `[]` default — which is a hole one level
+      // deeper than the bug this card is about: `resolveExpectedRepos` returns
+      // EARLY on an empty `targetRepos`, so the completion gate had nothing to
+      // hold a plan-materialized card open on, however many repositories it
+      // shipped in. The direct path has always written the pair together
+      // (`{ targetRepos: names, targetRepo: primaryTargetRepo(names) }`), and the
+      // singular arm writes the one-element set it means, so both doors now agree
+      // about what a pinned card looks like.
+      targetRepos: repoSets.has(item.id)
+        ? repoSets.get(item.id)!.names
+        : repoPins.get(item.id)
+          ? [repoPins.get(item.id)!]
+          : [],
       // ⚠️ `targetRepoRole` IS GONE FROM `work_item` (Story MOTIR-2732 ·
       // MOTIR-3040, ADR "Amendment 2026-08-18" §A3's RETIRE branch). The role was
       // the PORTABLE stand-in a plan recorded because a NAME is meaningless before
@@ -1475,21 +1685,24 @@ async function materialize(
     // planned before its repositories existed points at one from birth. A proposal
     // naming nothing this project has resolves to `null` and the item lands with
     // no reference — unrouted and honest, never a guess.
-    const createdRef = proposalRepoRef(
-      repoPins.get(item.id) ?? null,
-      pf.targetRepoRole ?? null,
-      repoRefs,
-    );
-    if (createdRef !== null) {
+    //
+    // ⚠️ A PROPOSED SET writes N references, in the order it authored them (bug
+    // MOTIR-4904). Element 0 is the primary every dispatch surface routes on, so
+    // `position` is the authored index and not an arbitrary ordinal. A set whose
+    // members matched by NAME but have no `project_repository` row lands with
+    // names and no references — §A7's compatibility rung, the same all-or-nothing
+    // answer `resolveAuthoredRepoPinsInProject` gives the direct door.
+    const createdRefs = repoSets.has(item.id)
+      ? repoSets.get(item.id)!.refs
+      : refsOf(proposalRepoRef(repoPins.get(item.id) ?? null, pf.targetRepoRole ?? null, repoRefs));
+    if (createdRefs.length > 0) {
       await workItemRepoRepository.createMany(
-        [
-          {
-            workspaceId: ctx.workspaceId,
-            workItemId: created.id,
-            projectRepoId: createdRef,
-            position: 0,
-          },
-        ],
+        createdRefs.map((projectRepoId, position) => ({
+          workspaceId: ctx.workspaceId,
+          workItemId: created.id,
+          projectRepoId,
+          position,
+        })),
         tx,
       );
     }
@@ -1766,6 +1979,7 @@ async function materialize(
         tx,
         repoPins,
         repoRefs,
+        repoSets,
         planItemToWorkItem,
         plan.id,
       );
@@ -1912,6 +2126,7 @@ async function applyModify(
   tx: Prisma.TransactionClient,
   repoPins: ResolvedRepoPins,
   repoRefs: ProposalRepoRefs,
+  repoSets: ResolvedRepoSets,
   // The SAME temp-ref → work-item map Pass 3 rewrites the `add` bodies with
   // (MOTIR-3804). The modify loop runs AFTER Pass 3, so every `add` on this plan
   // already has its row and the map is complete by the time we are called.
@@ -2039,6 +2254,30 @@ async function applyModify(
       update.targetRepo = nextTargetRepo;
       diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
     }
+    // The NAMES ARRAY moves with the scalar (bug MOTIR-4904) — see the `add`
+    // path's note: the pair was written together on the direct door and only the
+    // scalar here, so a re-pinned card kept whatever `targetRepos` it was created
+    // with, or none at all.
+    const nextSet = nextTargetRepo === null ? [] : [nextTargetRepo];
+    if (!sameRepoNameSet(nextSet, current.targetRepos)) {
+      update.targetRepos = nextSet;
+      diff.targetRepos = { from: current.targetRepos, to: nextSet };
+    }
+  }
+  // …and the SET spellings of the same axis (bug MOTIR-4904). Disjoint from the
+  // block above — the three spellings are mutually exclusive at the append — so a
+  // `modify` re-pins through exactly one of them.
+  if (repoSets.has(item.id)) {
+    const resolved = repoSets.get(item.id)!;
+    const nextTargetRepo = primaryTargetRepo(resolved.names);
+    if (nextTargetRepo !== current.targetRepo) {
+      update.targetRepo = nextTargetRepo;
+      diff.targetRepo = { from: current.targetRepo, to: nextTargetRepo };
+    }
+    if (!sameRepoNameSet(resolved.names, current.targetRepos)) {
+      update.targetRepos = resolved.names;
+      diff.targetRepos = { from: current.targetRepos, to: resolved.names };
+    }
   }
 
   // …and the REFERENCE moves with it (MOTIR-3033). A `modify` that re-pins an
@@ -2052,24 +2291,30 @@ async function applyModify(
   // a reference for the first time here, with `targetRepo` identical on both
   // sides — the same case the service path's update handles ahead of its own
   // empty-diff return.
-  if (repoPins.has(item.id) || (item.patch as PlanItemPatch | null)?.targetRepoRole !== undefined) {
+  if (
+    repoSets.has(item.id) ||
+    repoPins.has(item.id) ||
+    (item.patch as PlanItemPatch | null)?.targetRepoRole !== undefined
+  ) {
     const patched = (item.patch as PlanItemPatch | null) ?? null;
-    const nextRef = proposalRepoRef(
-      repoPins.get(item.id) ?? null,
-      patched?.targetRepoRole ?? null,
-      repoRefs,
-    );
+    // A proposed SET replaces the references WHOLE, in its authored order — the
+    // same delete-then-insert `workItemsService.writeRepoRefs` performs, and for
+    // the same reason: element 0 is the primary, so `[a, b]` → `[b, a]` is a
+    // different decision rather than two no-ops.
+    const nextRefs = repoSets.has(item.id)
+      ? repoSets.get(item.id)!.refs
+      : refsOf(
+          proposalRepoRef(repoPins.get(item.id) ?? null, patched?.targetRepoRole ?? null, repoRefs),
+        );
     await workItemRepoRepository.deleteByWorkItem(current.id, tx);
-    if (nextRef !== null) {
+    if (nextRefs.length > 0) {
       await workItemRepoRepository.createMany(
-        [
-          {
-            workspaceId: ctx.workspaceId,
-            workItemId: current.id,
-            projectRepoId: nextRef,
-            position: 0,
-          },
-        ],
+        nextRefs.map((projectRepoId, position) => ({
+          workspaceId: ctx.workspaceId,
+          workItemId: current.id,
+          projectRepoId,
+          position,
+        })),
         tx,
       );
     }
@@ -3579,6 +3824,11 @@ export const plansService = {
 
     // Resolved BEFORE the transaction, because it reads the project's repository
     // domain and that is a read the write lock has no business holding.
+    //
+    // ⚠️ AND THE AXIS MAY BE DESCRIBED ONCE (bug MOTIR-4904), through the direct
+    // door's own guard — before either resolver runs, so a contradictory
+    // correction is refused rather than half-resolved.
+    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos, input.targetRepositories);
     let resolvedTargetRepo: string | null | undefined;
     if (input.targetRepo !== undefined) {
       try {
@@ -3590,6 +3840,29 @@ export const plansService = {
       } catch (err) {
         if (err instanceof UnknownTargetRepoError) {
           throw new PlanItemUnknownTargetRepoError(planItemId, input.targetRepo ?? '', err.message);
+        }
+        throw err;
+      }
+    }
+    // The SET forms, validated the same way and in the same slot (bug
+    // MOTIR-4904). The RESOLVED names are what the proposal stores — approve
+    // re-resolves them against the project domain either way, and storing the
+    // resolved spelling is what makes a corrected set read back the way the
+    // reviewer will see it, exactly as the singular pin above does.
+    let resolvedRepoSet: ResolvedRepoSet | undefined;
+    if (input.targetRepos !== undefined || input.targetRepositories !== undefined) {
+      try {
+        resolvedRepoSet =
+          input.targetRepositories !== undefined
+            ? await resolveAuthoredRepoRefsInProject(input.targetRepositories, plan.projectId, ctx)
+            : await resolveAuthoredRepoPinsInProject(input.targetRepos!, plan.projectId, ctx);
+      } catch (err) {
+        if (err instanceof UnknownTargetRepoError || err instanceof UnknownProjectRepoRefError) {
+          throw new PlanItemUnknownTargetRepoError(
+            planItemId,
+            (input.targetRepositories ?? input.targetRepos ?? []).join(', '),
+            err instanceof Error ? err.message : String(err),
+          );
         }
         throw err;
       }
@@ -3628,7 +3901,34 @@ export const plansService = {
           }
           const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
           const next = mergeProposedFields(current, input);
+          // ⚠️ THE REPOSITORY AXIS IS REPLACED, NOT MERGED (bug MOTIR-4904).
+          // Every other key here is sparse per KEY; these three are one field in
+          // three spellings, so correcting one CLEARS the other two. Merging
+          // instead would store the exact contradiction
+          // `assertSingleTargetRepoInput` refuses at the append — a stale
+          // `targetRepo` beside a new `targetRepos` — and approve would then have
+          // to invent a precedence rule over a state nobody authored.
+          if (
+            resolvedTargetRepo !== undefined ||
+            resolvedRepoSet !== undefined ||
+            input.targetRepo !== undefined
+          ) {
+            delete next.targetRepo;
+            delete next.targetRepos;
+            delete next.targetRepositories;
+          }
           if (resolvedTargetRepo !== undefined) next.targetRepo = resolvedTargetRepo;
+          if (resolvedRepoSet !== undefined) {
+            // Stored under the spelling the correction used, so a later reader of
+            // the proposal sees which form its author chose — and, for the row-id
+            // form, so the ids the author pinned survive rather than being
+            // silently rewritten to the names they happen to resolve to today.
+            if (input.targetRepositories !== undefined) {
+              next.targetRepositories = input.targetRepositories;
+            } else {
+              next.targetRepos = resolvedRepoSet.names;
+            }
+          }
           // The ROLE half of the pin (MOTIR-3865), applied HERE rather than in
           // `mergeProposedFields` for the same reason its NAME twin is: that
           // helper is the DEEPEN turn's merge and the repo pin is deliberately
@@ -3688,6 +3988,15 @@ export const plansService = {
               input.patch?.targetRepoRole,
               item.id,
               proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
+            // The replacement patch clears the append's boundary checks with it
+            // (bug MOTIR-4904): a correction REPLACES the patch, so a patch that
+            // describes the repository axis twice must be refused here exactly as
+            // `validateProposal` refuses one at the append.
+            assertSingleTargetRepoInput(
+              input.patch?.targetRepo,
+              input.patch?.targetRepos,
+              input.patch?.targetRepositories,
             );
             data.patch = (input.patch ?? Prisma.JsonNull) as Prisma.InputJsonValue;
             touched.push('patch');
@@ -4263,6 +4572,14 @@ export const plansService = {
       // a re-check does not.
       const repoPins = await resolveProposedTargetRepos(preItems, plan.projectId, ctx);
       const snapshotPins = collectAuthoredTargetRepos(preItems);
+      // …and the proposed repository SETS (bug MOTIR-4904), under exactly the
+      // same contract: resolved out here against the same project domain by the
+      // direct path's own resolvers, re-checked under the plan lock by the same
+      // `assertRepoPinsUnmoved`. The two maps are disjoint by construction —
+      // `assertSingleTargetRepoInput` refuses a proposal describing the axis more
+      // than once — so no proposal appears in both.
+      const repoSets = await resolveProposedRepoSets(preItems, plan.projectId, ctx);
+      const snapshotRepoSets = collectAuthoredRepoSets(preItems);
 
       // The proposed repo ROLES (MOTIR-1912) — validated against the vocabulary and
       // collected from the SAME pre-transaction snapshot, so an unknown role is
@@ -4372,7 +4689,7 @@ export const plansService = {
             // …AND THE PINS THE SNAPSHOT RESOLVED ARE STILL THE PINS THESE ROWS
             // AUTHOR (MOTIR-3604). Same placement, same reason: on the fresh set,
             // under the lock, before a single row is materialized.
-            assertRepoPinsUnmoved(snapshotPins, proposals);
+            assertRepoPinsUnmoved(snapshotPins, proposals, snapshotRepoSets);
             const { touchedWorkItemIds, reparented } = await materialize(
               proposals,
               fresh,
@@ -4380,6 +4697,7 @@ export const plansService = {
               tx,
               repoPins,
               repoRefs,
+              repoSets,
             );
             // Read the project ONCE, before `markOnboardingRan` writes: its
             // pre-write `onboardingRanAt` gates the rename below, and its
