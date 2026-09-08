@@ -140,16 +140,25 @@ export function installCodeGraphBoundaryMock(agent: MockAgent): void {
     agent
       .get(aiOrigin)
       .intercept({ path: '/v1/code-graph/run-credential', method: 'POST' })
-      .reply(() => {
+      .reply((opts) => {
         record('POST', '/v1/code-graph/run-credential');
+        // ⚠️ THE EXPIRY IS COMPUTED FROM THE REQUESTED `ttlSeconds`, not fixed
+        // (MOTIR-4923). This mock stands in for motir-ai's mint, and the ONE
+        // thing that mint does with the field is `clampTtlSeconds` — default
+        // fifteen minutes, bounded to [60, 3600]. A fixed ten minutes made the
+        // seam disagree with the service it mocks the moment the dispatch began
+        // deriving the TTL from its own container deadline, and it is the exact
+        // disagreement that cost production two 20-minute index runs: a
+        // credential shorter than the run it authorizes.
+        const expiresAt = new Date(Date.now() + mintTtlSeconds(opts.body) * 1000).toISOString();
         // ONE return shape, because undici infers the reply type from the first
         // branch it sees and two literal shapes make it unassignable.
         const data: Record<string, unknown> = mintOmitsCredential
           ? // A 200 that PARSES and carries no credential — the shape the
             // client's validator exists for. Not a 500: a transport failure is a
             // different arm and already has its own error type.
-            { expiresAt: inTenMinutes() }
-          : { credential: E2E_INDEX_RUN_CREDENTIAL, expiresAt: inTenMinutes() };
+            { expiresAt }
+          : { credential: E2E_INDEX_RUN_CREDENTIAL, expiresAt };
         return { statusCode: 200, data, responseOptions: json };
       })
       .persist();
@@ -226,8 +235,25 @@ export function installCodeGraphBoundaryMock(agent: MockAgent): void {
     .persist();
 }
 
-function inTenMinutes(): string {
-  return new Date(Date.now() + 600_000).toISOString();
+/**
+ * motir-ai's `clampTtlSeconds`, transcribed (`src/codegraph/runCredential.ts`).
+ *
+ * An absent or unreadable field takes the DEFAULT — fifteen minutes — which is
+ * the behaviour that produced MOTIR-4923 in production, so it is the behaviour a
+ * caller that forgets the field must meet here too.
+ */
+function mintTtlSeconds(body: unknown): number {
+  const raw = typeof body === 'string' ? body : null;
+  let requested: unknown;
+  if (raw) {
+    try {
+      requested = (JSON.parse(raw) as { ttlSeconds?: unknown }).ttlSeconds;
+    } catch {
+      requested = undefined;
+    }
+  }
+  if (typeof requested !== 'number' || !Number.isFinite(requested)) return 15 * 60;
+  return Math.min(60 * 60, Math.max(60, Math.floor(requested)));
 }
 
 function inOneHour(): string {

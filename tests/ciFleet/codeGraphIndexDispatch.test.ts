@@ -10,6 +10,7 @@ import {
   INDEX_ADMISSION_BUDGETS,
   INDEX_FLEET_TIME_BUDGETS,
   INITIAL_INDEX_POLL_STATE,
+  runCredentialTtlSeconds,
   type IndexDispatchInput,
   type IndexSession,
 } from '@/lib/services/codeGraphIndexDispatchService';
@@ -29,7 +30,7 @@ import {
 import { RepoTarballUrlNotRedirectedError, RepoTarballUrlUnsupportedError } from '@/lib/git';
 import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
 import { isJobRunDefer } from '@/lib/jobs/engine/defer';
-import { MotirAiUnavailableError } from '@/lib/ai/errors';
+import { CodeGraphRunCredentialTooShortError, MotirAiUnavailableError } from '@/lib/ai/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -138,7 +139,7 @@ interface Call {
 }
 
 let calls: Call[] = [];
-let credentialResponder: () => Response;
+let credentialResponder: (body: unknown) => Response;
 let tarballResponder: () => Response;
 let tarballBodyTouched = false;
 
@@ -163,10 +164,30 @@ function redirectResponse(): Response {
   return res;
 }
 
-function credentialResponse(): Response {
+/**
+ * motir-ai's mint, INCLUDING ITS CLAMP (MOTIR-4923).
+ *
+ * ⚠️ IT HONOURS `ttlSeconds`, and it defaults to FIFTEEN MINUTES when the field
+ * is absent — `motir-ai` `src/codegraph/runCredential.ts`'s
+ * `DEFAULT_TTL_SECONDS` / `clampTtlSeconds`, transcribed. Until this card the
+ * fixture returned a flat fifteen minutes whatever it was asked for, which is
+ * exactly the shape that made the production defect untestable here: the
+ * dispatch sent no TTL, the fixture answered with the default, and both halves
+ * of a mismatch that only bites past fifteen minutes looked identical.
+ */
+const AI_DEFAULT_TTL_SECONDS = 15 * 60;
+const AI_MIN_TTL_SECONDS = 60;
+const AI_MAX_TTL_SECONDS = 60 * 60;
+
+function credentialResponse(body: unknown): Response {
+  const requested = (body as { ttlSeconds?: unknown } | null)?.ttlSeconds;
+  const ttl =
+    typeof requested === 'number' && Number.isFinite(requested)
+      ? Math.min(AI_MAX_TTL_SECONDS, Math.max(AI_MIN_TTL_SECONDS, Math.floor(requested)))
+      : AI_DEFAULT_TTL_SECONDS;
   return json(201, {
     credential: RUN_CREDENTIAL,
-    expiresAt: new Date(Date.now() + 900_000).toISOString(),
+    expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
   });
 }
 
@@ -234,7 +255,7 @@ beforeEach(() => {
       // Matched on the parsed URL, never `includes()` — a substring host check is
       // a HIGH CodeQL alert in this repo, test fixtures included.
       const parsed = new URL(call.url);
-      if (parsed.host === new URL(AI_URL).host) return credentialResponder();
+      if (parsed.host === new URL(AI_URL).host) return credentialResponder(call.body);
       if (parsed.pathname.endsWith('/access_tokens')) {
         return json(201, {
           token: INSTALLATION_TOKEN,
@@ -451,6 +472,9 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
       coreProjectId: 'proj-1',
       repoRef: 'moooon-B-V/motir-core',
       runId: 'run-abc',
+      // Derived from THIS dispatch's own container deadline (MOTIR-4923), never
+      // left to motir-ai's default.
+      ttlSeconds: runCredentialTtlSeconds(FAST.indexTimeoutMs),
     });
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
 
@@ -520,6 +544,80 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
       ),
     ).rejects.toThrow(RepoTarballUrlUnsupportedError);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
+  });
+
+  // ── The two deadlines are ONE decision (Bug MOTIR-4923) ──────────────────
+  //
+  // The container's hard kill and the credential's expiry are set in two
+  // different repositories, and until this card nothing joined them: the mint
+  // carried no `ttlSeconds`, so motir-ai's fifteen-minute default applied to a
+  // container this side permits thirty minutes. The failure is DETERMINISTIC BY
+  // REPOSITORY SIZE, which is why it survived 830 runs and every test here — a
+  // repo that indexes in two minutes cannot exhibit it.
+
+  it('asks for a credential that OUTLIVES the container deadline it is about to grant', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+
+    // The derivation, not a number typed twice: the request is the container's
+    // own timeout plus the grace, and it is the SAME function the service uses.
+    expect((motirAiCalls()[0]!.body as { ttlSeconds: number }).ttlSeconds).toBe(
+      runCredentialTtlSeconds(FAST.indexTimeoutMs),
+    );
+
+    // And the property that actually matters, asserted against the session the
+    // supervision loop will run on: the credential is still valid at the last
+    // second the container is allowed to work.
+    const deadline = Date.parse(booted.session.bootedAt) + FAST.indexTimeoutMs;
+    expect(Date.parse(booted.session.credentialExpiresAt)).toBeGreaterThan(deadline);
+  });
+
+  it('derives the TTL from the REAL budget too — 30 minutes of container needs more than motir-ai default', () => {
+    // The production fixture as arithmetic. `moooon-B-V/motir-core` ran 19 m 52 s
+    // against a credential minted for 15 m 00 s (2026-09-08T22:31:33Z), and the
+    // ONLY reason it was 15 minutes is that nobody asked for anything else.
+    const ttl = runCredentialTtlSeconds(INDEX_FLEET_TIME_BUDGETS.indexTimeoutMs);
+    expect(ttl * 1000).toBeGreaterThan(INDEX_FLEET_TIME_BUDGETS.indexTimeoutMs);
+    expect(ttl).toBeGreaterThan(AI_DEFAULT_TTL_SECONDS);
+    // Still inside motir-ai's own ceiling, so the clamp cannot silently shorten
+    // it — the case the assertion below exists to catch if that ever changes.
+    expect(ttl).toBeLessThanOrEqual(AI_MAX_TTL_SECONDS);
+  });
+
+  it('REFUSES to boot when the minted credential expires before the container deadline', async () => {
+    // A motir-ai that ignores `ttlSeconds` — an older deploy, or one whose
+    // ceiling has fallen below our timeout. This is the production defect
+    // exactly, and the point of the test is WHEN it is caught: before a machine
+    // exists, rather than 20 minutes and 1 193 billable seconds later as an
+    // exit-`50` `credential_refused` nobody can tell from a scope refusal.
+    credentialResponder = () =>
+      json(201, {
+        credential: RUN_CREDENTIAL,
+        expiresAt: new Date(Date.now() + AI_DEFAULT_TTL_SECONDS * 1000).toISOString(),
+      });
+
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, {
+        ...FAST,
+        indexTimeoutMs: INDEX_FLEET_TIME_BUDGETS.indexTimeoutMs,
+      }),
+    ).rejects.toThrow(CodeGraphRunCredentialTooShortError);
+
+    // Nothing was booted, and the slot went back — the invariant every failure
+    // path in this function owes.
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(fakeOrchestrator.specs).toHaveLength(0);
+    expect(released).toEqual([ADMISSION.slotRef]);
+  });
+
+  it('REFUSES an unparseable expiry rather than treating it as unlimited', async () => {
+    credentialResponder = () => json(201, { credential: RUN_CREDENTIAL, expiresAt: 'soon' });
+
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST),
+    ).rejects.toThrow(CodeGraphRunCredentialTooShortError);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(released).toEqual([ADMISSION.slotRef]);
   });
 
   it('reports a terminal outcome when the provider refuses, leaving no container', async () => {

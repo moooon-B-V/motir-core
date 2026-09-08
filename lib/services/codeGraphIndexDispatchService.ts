@@ -1,4 +1,5 @@
 import { mintCodeGraphRunCredential, motirAiContainerBaseUrl } from '@/lib/ai/motirAiClient';
+import { CodeGraphRunCredentialTooShortError } from '@/lib/ai/errors';
 import {
   codeGraphIndexAdmissionService,
   type IndexAdmission,
@@ -217,6 +218,54 @@ const DEFAULT_BOOT_DEADLINE_MS = 120_000;
  * counter in front of the invoice.
  */
 const DEFAULT_INDEX_TIMEOUT_MS = 1_800_000;
+
+/**
+ * How much longer than the container's own hard kill its motir-ai credential
+ * must live (Bug MOTIR-4923).
+ *
+ * ⚠️ THE CREDENTIAL'S LIFETIME IS DERIVED FROM {@link DEFAULT_INDEX_TIMEOUT_MS},
+ * NOT SET BESIDE IT. Until this card the mint carried no `ttlSeconds` at all, so
+ * motir-ai's own default applied — FIFTEEN MINUTES, against a container this
+ * side permits THIRTY. That is a mismatch that fails BY REPOSITORY SIZE and
+ * therefore only on the big repos: every run that finishes inside fifteen
+ * minutes succeeds, every run that does not builds its whole graph and is
+ * refused at the upload with exit `50`. Measured, twice, on 2026-09-08:
+ * `moooon-B-V/motir-core` ran 19 m 52 s and 19 m 56 s against credentials that
+ * expired at 15 m 00 s, while `moooon-B-V/motir-ai` — 2 m 07 s on the same
+ * deployment, the same public ingress and the same credential scope — uploaded
+ * and recorded its pointer. The two numbers were never one decision, so nobody
+ * had to change one to break the other.
+ *
+ * The grace covers what happens OUTSIDE the container's own clock and after its
+ * last second of work: the mint precedes `bootedAt`, the machine takes seconds
+ * to start, and the upload grant plus the pointer record are two round trips a
+ * container makes at the very END of a run it may have spent the full timeout
+ * on. Five minutes is generous against every one of those and still leaves the
+ * total (35 min) far inside motir-ai's own hour-long ceiling.
+ *
+ * ⚠️ RENEWAL WAS THE OTHER ANSWER AND IS THE WRONG ONE HERE. MOTIR-3288 repaired
+ * the planning job token by RENEWING it while the work runs (`refreshJobToken`),
+ * deliberately not by raising it, because a short blast radius is what a leaked
+ * token's lifetime is for. That answer does not transfer: the holder is a
+ * container that ingests UNTRUSTED SOURCE, and handing it a renewal endpoint
+ * would give it the one thing a fixed expiry denies it — the ability to extend
+ * its own grant. Here the blast radius is bounded by SCOPE instead (one project,
+ * one repo, one run, two operations — `docs/decisions/code-graph-index-fleet.md`
+ * §4), and the deadline to cover is a number this side already owns.
+ */
+const CREDENTIAL_GRACE_MS = 300_000;
+
+/**
+ * The credential lifetime ONE index run needs, derived from the deadline that
+ * run is actually given.
+ *
+ * Exported so the assertion below, the mint and the suite all read the same
+ * derivation — the point of the card is that these numbers stop being written
+ * down twice.
+ */
+export function runCredentialTtlSeconds(indexTimeoutMs: number): number {
+  return Math.ceil((indexTimeoutMs + CREDENTIAL_GRACE_MS) / 1000);
+}
 
 /** How soon after boot supervision first asks the provider what the container is
  *  doing. */
@@ -1017,14 +1066,36 @@ export const codeGraphIndexDispatchService = {
 
       // ── 1 · Mint THIS run's motir-ai credential ────────────────────────────
       // Scoped to one (project, repo, run) for minutes, and the only motir-ai
-      // credential the container is given.
+      // credential the container is given. Its LIFETIME is derived from the
+      // deadline this same call is about to give the container — see
+      // {@link CREDENTIAL_GRACE_MS} for why that derivation exists and why
+      // renewal is not the answer for this holder.
       credential = await mintCodeGraphRunCredential({
         coreOrganizationId: input.organizationId,
         coreWorkspaceId: input.workspaceId,
         coreProjectId: input.projectId,
         repoRef: input.repoRef,
         runId: input.runId,
+        ttlSeconds: runCredentialTtlSeconds(indexTimeoutMs),
       });
+
+      // ⚠️ ASKING IS NOT AGREEING — CHECK WHAT CAME BACK (MOTIR-4923). The TTL
+      // above is a REQUEST: motir-ai clamps it to its own [60, 3600] window and
+      // an older motir-ai ignores the field entirely, so the only thing that
+      // makes the two deadlines one decision is reading the answer against ours.
+      // A shortfall here is the whole defect, twenty minutes earlier and for
+      // nothing: the alternative is a container that builds a graph it will not
+      // be allowed to hand back, and a `credential_refused` an operator cannot
+      // tell from a scope refusal. Nothing is provisioned yet, and the catch
+      // below returns the admission slot.
+      const requiredUntil = now().getTime() + indexTimeoutMs;
+      const grantedUntil = Date.parse(credential.expiresAt);
+      if (!Number.isFinite(grantedUntil) || grantedUntil < requiredUntil) {
+        throw new CodeGraphRunCredentialTooShortError(
+          credential.expiresAt,
+          new Date(requiredUntil).toISOString(),
+        );
+      }
 
       // ── 2 · Resolve the pre-signed tarball URL ─────────────────────────────
       // AFTER the mint, deliberately: the URL is the shorter-lived of the two
