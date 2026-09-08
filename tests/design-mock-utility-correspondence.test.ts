@@ -719,7 +719,13 @@ export function misdeclaredUtilities(mock: MockSource): string[] {
 const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/plan-change-run-live.mock.html', count: 88, card: 'MOTIR-4813' },
   { file: 'design/ai-planning/peek-proposal-mode.mock.html', count: 2, card: 'MOTIR-4813' },
-  { file: 'design/shell/account-menu.mock.html', count: 8, card: 'MOTIR-4813' },
+  // 8 → 4 (MOTIR-4845): the `Workspace settings` row left this menu and took its
+  // whole conditional AXIS with it, so Panel B's four state frames collapsed to
+  // two — the inert variants went with the two deleted frames rather than being
+  // fixed. Re-measured after MOTIR-4810's structural sweep landed, not carried
+  // over: that sweep touched this file's structural half and left its variant
+  // half at 4, which is what this row now pins.
+  { file: 'design/shell/account-menu.mock.html', count: 4, card: 'MOTIR-4813' },
   { file: 'design/shell/help-menu.mock.html', count: 6, card: 'MOTIR-4813' }, // was 34; 28 structural landed with MOTIR-4810
 ];
 
