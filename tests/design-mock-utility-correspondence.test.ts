@@ -547,6 +547,13 @@ const BARE_VAR = /^var\(\s*(--[a-z0-9-]+)\s*\)$/;
  * (`box-shadow: var(--tw-inset-shadow), …, var(--tw-shadow)`), so the
  * declaration that carries the promise is the custom property, and the composed
  * one is not a bare `var()` at all.
+ *
+ * ⚠️ TEN PREFIXES LEFT THIS MAP WITH MOTIR-4814, and the map is derived rather
+ * than curated precisely so that they had to: `gap`, `inset-ring`, `min-h`, `mx`,
+ * `outline`, `pb`, `pt`, `rounded-b`, `rounded-t` and `space-y` occurred in the
+ * tree ONLY inside the two swept assets' dead rules, so a sweep that emptied
+ * `DEAD_UTILITY_DEBT` also took the last rule each of them had. The totality arm
+ * caught every one — which is what a map that may only grow could never do.
  */
 export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   bg: ['background-color'],
@@ -555,30 +562,20 @@ export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   divide: ['border-color'],
   duration: ['transition-duration', '--tw-duration'],
   fill: ['fill'],
-  gap: ['gap'],
   h: ['height'],
-  'inset-ring': ['--tw-inset-ring-color'],
   mb: ['margin-bottom'],
-  'min-h': ['min-height'],
   'min-w': ['min-width'],
   mt: ['margin-top'],
-  mx: ['margin-inline'],
-  outline: ['outline-color'],
   p: ['padding'],
-  pb: ['padding-bottom'],
   pl: ['padding-left'],
   pr: ['padding-right'],
-  pt: ['padding-top'],
   px: ['padding-inline', 'padding-left', 'padding-right'],
   py: ['padding-block', 'padding-bottom', 'padding-top'],
   ring: ['--tw-ring-color'],
   'ring-offset': ['--tw-ring-offset-color'],
   rounded: ['border-radius'],
-  'rounded-b': ['border-bottom-left-radius', 'border-bottom-right-radius'],
-  'rounded-t': ['border-top-left-radius', 'border-top-right-radius'],
   shadow: ['--tw-shadow'],
   size: ['width', 'height'],
-  'space-y': ['margin-block-start', 'margin-block-end'],
   stroke: ['stroke'],
   text: ['color'],
   w: ['width'],
@@ -730,65 +727,73 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
 ];
 
 /**
- * DIRECTION (B) — MOTIR-4814 (the two compiled builds). ⚠️ MOTIR-4811 SWEPT THE
- * HAND-WRITTEN HALF AND ITS 87 ROWS ARE GONE; what stands below is the residue
- * this table was always meant to shrink to.
+ * DIRECTION (B) — EMPTY, and it is meant to stay that way. MOTIR-4811 swept the
+ * hand-written half; MOTIR-4814 swept the 1116 rules its two remaining rows
+ * pinned, and the direction is now enforced at ZERO over every mock in the tree.
  *
- * ⚠️ AND THE POPULATION IT SWEPT WAS SMALLER THAN THE ONE PINNED HERE, because
- * 66 of the 365 hand-written rows were not rules a sweep could dispose of. They
- * are recorded at the three readers that produced them — `uncommented`
- * (34 rows of banner PROSE, read as selectors because a mock says `<style>` in
- * its own header), `scriptCarriedClasses` (27 rows of LIVE classes a script puts
- * on an element at runtime) and `cssStructureFindings` (5 rows behind a
- * broken CSS comment, in FIVE assets where the browser was silently dropping a
- * whole rule). The remaining 299 were vestigial and were deleted; the two
- * compiled rows below moved 255 → 249 and stayed at 873 for the same reason.
+ * ⚠️ MOTIR-4814 WAS FILED TO DECIDE WHETHER MACHINE OUTPUT SHOULD BE EXCUSED BY A
+ * PREDICATE INSTEAD, AND THE MEASUREMENT ANSWERED IT NO. The premise was that the
+ * two rows were the tree's two COMPILED Tailwind builds, for which unused rules
+ * are the normal state of machine output. Both halves of that failed:
  *
- * **A pinned count is a measurement, not a fact**, and the cheapest thing a
- * sweep can do is re-derive it before acting on it — the count agreed exactly
- * with `origin/main` and 17% of what it counted still could not be deleted.
+ *   • The proposed fingerprint does not separate anything, and it fails in BOTH
+ *     directions. `--tw-` appears in 24 of the 176 mocks, three of them
+ *     hand-written (`shell/navigation-pending`, `work-items/detail-arrival`,
+ *     `work-items/pending-plan-indicator`) — a shim block that copies Tailwind's
+ *     own two-property output for `.shadow-\(--shadow-card\)` carries the
+ *     namespace — and it appears NOT ONCE in `design/ai-chat/onboarding.mock.html`,
+ *     one of the two assets the predicate existed to excuse.
+ *   • The real fingerprint, the build's own `tailwindcss v4.3.0` banner, matches
+ *     TWENTY-ONE assets, TWENTY of which this guard already held at zero — and
+ *     EIGHTEEN of the twenty-one were swept by hand in MOTIR-4811, an hour before
+ *     this card was claimed. Excusing compiled builds would therefore un-ratchet
+ *     twenty assets to buy an exemption for one, which is the
+ *     exemption-wider-than-it-reads shape a debt table exists to prevent — and it
+ *     would excuse a class of file the tree has already decided it sweeps.
  *
- * The two mocks that embed a COMPILED Tailwind build
- * (`design/shell/context-row.mock.html` 867, `design/ai-chat/onboarding.mock.html`
- * 249) are what is left. For those two, unused rules
- * are the normal and correct state of machine output — nobody chose them and no
- * sweep can remove them without hand-editing generated CSS. They are held here
- * rather than excused by a rule so the count still cannot grow, and MOTIR-4814
- * is the card that decides between a predicate keyed on the build's own
- * fingerprint and a sweep. That judgement is deliberately NOT made here: this
- * card measured the population, and choosing how a guard treats generated CSS
- * is a decision somebody should make on the record.
+ * And `onboarding` is not a compiled build at all: no banner, no `--tw-`, no
+ * `@layer`, and its 249 dead rules were the mock's OWN semantic classes
+ * (`.adv-knob`, `.dwz-step`, `.diff-add`) left behind by panels that no longer
+ * exist — MOTIR-4811's population exactly, split off by a premise that did not hold.
+ * So both were swept, which is what the rest of the tree already does.
  *
- * ⚠️ THIS TABLE IS A COUNT AND NOT A NAME LIST, and the weakness is worth
- * stating: swapping one dead rule for another inside a file passes. The name
- * list was 1276 rows, and a 1300-line data block in a spec is read by nobody,
- * which is a worse guard than a count somebody maintains. What the count DOES
- * buy is the ratchet the pair of cards was filed for: no asset can gain a dead
- * rule, and the 172 mocks absent from this table are held at zero outright.
+ * ⚠️ A SWEPT RULE IS RENDER-NEUTRAL BY CONSTRUCTION, and that is the whole warrant:
+ * a rule is removed only when its selector REQUIRES a class no element in any mock
+ * carries, so it matched nothing before the edit. In `onboarding` that also took 17
+ * rules whose selector paired a live class with a dead one (`.dfield .dlabel`) —
+ * every one of those still declared in another mock, and none of them reachable
+ * here, since nothing carries the ancestor. Both files' markup and scripts are
+ * byte-identical to what they were, so no `.png` moves.
+ *
+ * ⚠️ THIS TABLE WAS A COUNT AND NOT A NAME LIST, and that is why it is empty rather
+ * than pinned: swapping one dead rule for another inside a file passed. The name
+ * list was 1276 rows, and a 1300-line data block in a spec is read by nobody. What
+ * the count bought was the ratchet, and the ratchet has now reached its floor —
+ * every mock is held at zero outright, which is a stronger statement than any
+ * budget. A row added here is a regression to explain, not a debt to schedule.
  *
  * ⚠️ THE PREDICATE IS TREE-WIDE, WHICH CUTS BOTH WAYS, AND MOTIR-4851 IS THE
  * WORKED EXAMPLE. A rule is dead when NO element in ANY mock carries its class,
  * so a mock that starts CARRYING one changes the answer for every OTHER file
  * that declares it: `design/workbench/`'s pager panels picked up
  * `cursor-not-allowed`, `cursor-default`, `opacity-55`, `select-none`, `min-w-6`
- * and `text-[13px]`, and six rows in this table dropped by one. The table
- * asserts equality in BOTH directions, so a count going DOWN failed exactly as
- * one going up would — the ratchet working, and the number staying a
- * measurement somebody maintains rather than a ceiling that quietly drifts.
+ * and `text-[13px]`, and six rows in this table dropped by one.
  *
- * ⚠️ AFTER MOTIR-4811 THAT SAME MOVE LANDS ON DIRECTION (A) INSTEAD, which is a
- * sharper failure and the reason to say this here. The hand-written half is now
- * swept, so there is no dead rule left for a new element to revive: a mock that
- * begins carrying a class whose declaration this sweep removed is an INERT
- * class, and direction (A) is enforced at ZERO. **So a sweep of this kind is
- * re-derived against the tree it will land on, never against the tree it was
- * planned on** — MOTIR-4811's own population had to be recomputed after
- * MOTIR-4851, MOTIR-4812 and MOTIR-4810 merged under it.
+ * ⚠️ WITH BOTH HALVES SWEPT, THAT SAME MOVE NOW LANDS ON DIRECTION (A), which is a
+ * sharper failure and the reason to keep saying it. There is no dead rule left for
+ * a new element to revive: a mock that begins carrying a class whose declaration
+ * one of these sweeps removed is an INERT class, and direction (A) is enforced at
+ * ZERO. **So a sweep of this kind is re-derived against the tree it will land on,
+ * never against the tree it was planned on** — MOTIR-4811's population had to be
+ * recomputed after MOTIR-4851, MOTIR-4812 and MOTIR-4810 merged under it, and this
+ * card's two rows had moved 873 → 867 and 255 → 249 under MOTIR-4811 in the eleven
+ * minutes between its merge and this card's claim.
+ *
+ * The type and the hold-it-tight arm below survive an empty table so a future row
+ * stays expressible — with a card, a count and a reason — rather than inviting a
+ * `deadBudget` bypass written some other way.
  */
-const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
-  { file: 'design/ai-chat/onboarding.mock.html', count: 249, card: 'MOTIR-4814' },
-  { file: 'design/shell/context-row.mock.html', count: 867, card: 'MOTIR-4814' },
-];
+const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [];
 
 // ── The real tree ───────────────────────────────────────────────────────────
 
@@ -1018,7 +1023,17 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(findings).toEqual([]);
   });
 
-  it('holds `DEAD_UTILITY_DEBT` tight — a row that no longer fires fails', () => {
+  it('holds `DEAD_UTILITY_DEBT` tight — and it is EMPTY, which is the point', () => {
+    // The emptiness is asserted FIRST because the loop below says nothing about an
+    // empty table: with no rows it passes whatever the tree looks like, so a spec
+    // that only looped would report green on a table somebody had refilled. The
+    // direction-(B) arm above is what holds every mock at zero; this is what stops
+    // a row being added back without a card, a count and a reason beside it.
+    expect(
+      DEAD_UTILITY_DEBT,
+      'direction (B) is at zero over the whole tree (MOTIR-4811 + MOTIR-4814) — a ' +
+        'new row is a regression to explain, not a debt to schedule',
+    ).toEqual([]);
     const paths = new Set(MOCKS.map(({ path }) => path));
     for (const row of DEAD_UTILITY_DEBT) {
       expect(paths.has(row.file), `${row.file} is gone — drop its row`).toBe(true);
@@ -1111,12 +1126,13 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     // which is what the ratchet is for — the ceiling comes DOWN with the fix and
     // cannot go back up.
     expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(104);
-    // Direction (B)'s comes down the same way. MOTIR-4851 and MOTIR-4810 each
-    // took rows off the table WITHOUT lowering it, correctly — the per-file rows
-    // are the real ratchet there, each asserted EXACT, so the ceiling is a
-    // backstop rather than the instrument. MOTIR-4811 is the case that does
-    // lower it: the hand-written half is gone, so what remains is the two
-    // compiled builds and nothing can be measured against 1493 again.
-    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1116);
+    // Direction (B)'s came down the same way and has now reached its floor.
+    // MOTIR-4851 and MOTIR-4810 each took rows off the table WITHOUT lowering it,
+    // correctly — the per-file rows were the real ratchet there, each asserted
+    // EXACT, so the ceiling was a backstop rather than the instrument. MOTIR-4811
+    // took the hand-written half (1493 -> 1116) and MOTIR-4814 the two rows left,
+    // so the ceiling is 0 and the per-file arm now holds all 176 mocks at zero
+    // outright rather than 174 of them.
+    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBe(0);
   });
 });
