@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { LogOut, Settings, Shield, UserCog } from 'lucide-react';
+import { LogOut, Shield, UserCog } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils/cn';
@@ -28,34 +28,20 @@ export interface UserMenuProps {
    * flipped it would see a menu row leading to a route that 404s them.
    */
   platformStaff?: boolean;
-  /**
-   * The active org reveals the WORKSPACE tier (≥2 workspaces the viewer belongs
-   * to — `lib/workspaces/tierDisclosure.ts`). Gates the "Workspace settings"
-   * row, which is the one entry point in this menu that NAMES the tier.
-   *
-   * ⚠️ ABSENT below the threshold, not disabled — the same posture as
-   * `platformStaff` above, for the same reason: no markup anywhere may name
-   * `/settings/workspace` while the product is telling the user that tier does
-   * not exist yet (`docs/decisions/organization-tier.md` §6d). A row that is
-   * present-but-dimmed still teaches the concept, which is exactly what the
-   * collapsed state is for.
-   *
-   * Settings stay reachable at every count: this menu keeps its Account row, the
-   * org control's first row is `/settings/organization`, and at one workspace
-   * that page HOSTS the folded-in workspace sections.
-   *
-   * Defaults FALSE — an omitted prop hides the row rather than leaking it, so a
-   * caller that forgets to thread the count fails closed.
-   */
-  workspaceTierRevealed?: boolean;
 }
 
-export function UserMenu({
-  name,
-  email,
-  platformStaff = false,
-  workspaceTierRevealed = false,
-}: UserMenuProps) {
+// ⚠️ `workspaceTierRevealed` USED TO BE A PROP HERE, and it is GONE (Story
+// MOTIR-4843 · MOTIR-4847). It gated the `Workspace settings` row — the one
+// entry point in this menu that NAMED the workspace tier — and that row has
+// moved to the workspace SWITCHER, the control that already carries the tier's
+// name. With it goes this menu's ONLY reader of the reveal, so the prop is
+// removed rather than left threaded and unread: `platformStaff` is the only
+// conditional left, and the menu no longer varies by workspace count at all.
+//
+// The design of record is `design/shell/account-menu.mock.html`, whose Panel B
+// drew FOUR state frames and now draws TWO for exactly this reason.
+
+export function UserMenu({ name, email, platformStaff = false }: UserMenuProps) {
   const t = useTranslations('shell');
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -125,16 +111,6 @@ export function UserMenu({
             <UserCog className="text-(--el-text-muted) h-4 w-4" aria-hidden />
             {t('userMenu.accountSettings')}
           </a>
-          {workspaceTierRevealed ? (
-            <a
-              href="/settings/workspace"
-              onClick={() => setOpen(false)}
-              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
-            >
-              <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
-              {t('userMenu.workspaceSettings')}
-            </a>
-          ) : null}
           {platformStaff ? (
             <>
               <div role="separator" className="my-1 border-t border-(--el-border)" />

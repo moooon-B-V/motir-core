@@ -545,25 +545,48 @@ function bottomSectionRowNames(): string[] {
   return afterLast.map((a) => (a.getAttribute('aria-label') ?? a.textContent ?? '').trim());
 }
 
-describe('SEAM — the rail keeps exactly the four rows the two departures left', () => {
-  it('is exactly Settings · Security · Job runs · Git, in that order', () => {
+describe('SEAM — the rail keeps exactly the rows the departures left', () => {
+  // ⚠️ THE COUNT IS TWO NOW, NOT FOUR (Story MOTIR-4843 · MOTIR-4847). These
+  // cases were written for MOTIR-4239's departures (`Docs` and `Legal`) and
+  // pinned the survivors as Settings · Security · Job runs · Git. `Security` and
+  // `Job runs` have since left this section too — relocated, not removed: above
+  // the reveal they are rows in the workspace area's own rail, and below it they
+  // are folded into `/settings/organization`.
+  //
+  // The cases are RE-MEASURED rather than deleted, because what they are for is
+  // unchanged and is the reason MOTIR-4130 exists: a count carried in a test
+  // that nobody re-takes is how a rail's design and its code drift apart for a
+  // month without anything going red.
+
+  it('is exactly Settings · Git, in that order', () => {
     renderRail({ workspaceTierRevealed: true });
 
-    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs', 'Git']);
+    expect(bottomSectionRowNames()).toEqual(['Settings', 'Git']);
   });
 
-  it('its FLOOR is exactly Job runs · Git — unchanged by the two departures', () => {
-    // Both departing rows were already conditional, which is why this move costs
-    // an unconfigured deployment nothing: the floor is what it was before.
+  it('⚠️ its FLOOR is exactly Git — and the reveal no longer moves this section at all', () => {
+    // The floor USED to be `Job runs · Git`, and the departures before this one
+    // cost an unconfigured deployment nothing because both departing rows were
+    // already conditional. This time the floor genuinely shrank, and the
+    // capability it lost has a fold-in instead (MOTIR-4861) — which is what makes
+    // the shrink a relocation rather than a removal.
+    //
+    // Note the second assertion: with `Security` gone this section has NO
+    // reveal-gated member left, so both counts render the same rows. That is the
+    // property the story was after — the tier stopped leaking into the project's
+    // rail — and it is worth asserting rather than inferring.
     renderRail({ permissions: MEMBER, workspaceTierRevealed: false });
+    expect(bottomSectionRowNames()).toEqual(['Git']);
 
-    expect(bottomSectionRowNames()).toEqual(['Job runs', 'Git']);
+    cleanup();
+    renderRail({ permissions: MEMBER, workspaceTierRevealed: true });
+    expect(bottomSectionRowNames()).toEqual(['Git']);
   });
 
-  it('the section is FOUR rows at most — nothing re-appeared beside them', () => {
+  it('the section is TWO rows at most — nothing re-appeared beside them', () => {
     renderRail({ workspaceTierRevealed: true });
 
-    expect(bottomSectionRowNames()).toHaveLength(4);
+    expect(bottomSectionRowNames()).toHaveLength(2);
   });
 
   // ⚠️ THE SWEEP. `SidebarNav-docs-door.test.tsx` and
@@ -735,7 +758,9 @@ describe('CONTRACT — `SidebarNav` carries neither departed prop', () => {
       />,
     );
 
-    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs', 'Git']);
+    // Re-measured with the section (MOTIR-4847) — the claim is about the stale
+    // props reaching no markup, and the row list is how it is read.
+    expect(bottomSectionRowNames()).toEqual(['Settings', 'Git']);
     expect(screen.getByRole('navigation').textContent).not.toMatch(/\b(docs|legal)\b/i);
   });
 });

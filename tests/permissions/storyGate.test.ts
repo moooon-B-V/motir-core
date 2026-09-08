@@ -187,7 +187,16 @@ const UI_AFFORDANCE_DERIVATIONS = [
   // Workspace-level, so no project permission could govern it either way — the
   // same argument MOTIR-2294 made about `repository:connect`. It is the only
   // survivor, and it is not MOTIR-2258's to remove.
-  'app/(authed)/settings/workspace/jobs/page.tsx',
+  //
+  // ⚠️ IT MOVED FILE, AND DID NOT MULTIPLY (Story MOTIR-4843 · MOTIR-4849). The
+  // derivation was `jobs/page.tsx`'s; the jobs dashboard now has TWO doors — its
+  // own route above the workspace-tier reveal, and `JobRunsFoldInSection` on
+  // `/settings/organization` below it — and the reads that feed it, this
+  // `isOwnerRole` among them, are SHARED in `JobsPane` rather than copied. So
+  // the pin follows the derivation to its new home and the list stays at three:
+  // had the fold-in grown a second copy instead, this guard would have caught
+  // it, which is the worklist behaviour its author intended.
+  'app/(authed)/settings/workspace/jobs/_components/JobsPane.tsx',
   // ⚠️ Story MOTIR-1215 · Subtask MOTIR-3647 — the require-2FA switch, at the
   // workspace tier and in its organization-tier fold-in. Both derive
   // `isWorkspaceManager` for the SAME reason the jobs page above does, and the
