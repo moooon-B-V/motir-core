@@ -13,7 +13,10 @@ import { describe, expect, it } from 'vitest';
 // inverses:
 //
 //   (A) INERT — an element carries a class that no rule declares. The class
-//       does nothing and the element renders at whatever it inherits.
+//       does nothing and the element renders at whatever it inherits. The
+//       predicate is ARBITRARY-VALUE **or** VARIANT-PREFIXED (MOTIR-4890
+//       widened it from the first alone; `isArbitrary`'s note carries why, and
+//       where the widening stops).
 //       MOTIR-4687's own population: 115 occurrences of 12 un-prefixed
 //       arbitrary-value utilities across 8 assets on `origin/main` `cd77d0225`,
 //       among them a section heading asking for `text-[19px]` and getting the
@@ -387,15 +390,54 @@ export function cssStructureFindings(html: string): { kind: string; at: number }
 /**
  * An ARBITRARY-VALUE utility — one carrying `[…]` or `(…)`.
  *
- * These are the ones the shim block has to spell out. A plain `.flex` may
- * legitimately be missing from a mock that inherits a stylesheet; an
- * arbitrary-value utility has no such fallback, because nothing generates it.
+ * ⚠️ THE REASON THIS PREDICATE WAS GIVEN IS FALSE HERE, AND IT IS CORRECTED
+ * RATHER THAN DELETED BECAUSE IT IS THE KIND OF SENTENCE A READER RE-DERIVES
+ * (MOTIR-4890). It used to read: *"a plain `.flex` may legitimately be missing
+ * from a mock that inherits a stylesheet; an arbitrary-value utility has no
+ * such fallback, because nothing generates it."* That is true of APPLICATION
+ * code, where a plain utility does come from a shared Tailwind build. **A
+ * `*.mock.html` inherits no stylesheet** — it is a single self-contained
+ * document whose only CSS is its own hand-written shim block, which is the
+ * premise this whole guard is built on, stated at the top of this file. So the
+ * exemption had no referent, and a plain class an asset carries and never
+ * declares is exactly as inert as an arbitrary-value one.
+ *
+ * ⚠️ SO DIRECTION (A) NO LONGER FILTERS ON IT — `inertUtilities` reports a
+ * token that is arbitrary OR variant-prefixed. What the predicate still does is
+ * SPLIT the two arms below, which are different sized problems, and it is the
+ * measurement rather than the argument that decides where the guard stops. Over
+ * `git ls-tree -r origin/main design/` at `a5b443e00`, 176 mocks:
+ *
+ *   • `isVariant` (arbitrary or plain) — **93 occurrences, 6 distinct, 1
+ *     asset**, all of them plain, because the arbitrary half is already at
+ *     zero. Tractable, and dispositioned by MOTIR-4890 (see
+ *     `INERT_VARIANT_DEBT`).
+ *   • EVERY undeclared class — **4512 occurrences, 167 distinct, 46 assets**,
+ *     of which **4116 are `lucide` / `lucide-*`**: the class names Lucide's own
+ *     SVG output stamps on an icon (`class="lucide lucide-menu h-5 w-5"`). They
+ *     are an identity marker, not a utility, and no shim block should ever
+ *     declare one. The residue is **303 occurrences of 50 across 36 assets**
+ *     and does not resolve to a single disposition either — it mixes genuinely
+ *     inert Tailwind utilities (`underline` 24, `underline-offset-2` 24,
+ *     `size-3` 8, `items-stretch` 9) with more hook names (`nl` 21, `ic` 20,
+ *     `seg-ic` 20, `brand-glyph` 19, `ProseMirror` 7, `tiptap` 7).
+ *
+ * **A predicate whose population is 91% one library's identity namespace is not
+ * a widening this guard can hold at zero**, and the honest form of the
+ * remainder is a class test that separates a STYLE utility from a HOOK — which
+ * is its own card, not a filter to guess at here. That is MOTIR-4921, with this
+ * measurement and its command.
  */
 export const isArbitrary = (token: string): boolean => token.includes('[') || token.includes('(');
 
 /**
  * A VARIANT-prefixed token — `hover:`, `focus-visible:`, `data-[state=…]:`,
  * `[&_svg]:`.
+ *
+ * ⚠️ SINCE MOTIR-4890 THIS IS THE PREDICATE DIRECTION (A) IS ABOUT, not a
+ * sub-filter of `isArbitrary`: a variant is reported whether or not it carries
+ * `[` or `(`, so `disabled:opacity-50` is a finding on the same terms as
+ * `hover:text-(--el-text)`.
  *
  * Split out because the two halves are DIFFERENT SIZED problems and MOTIR-4687
  * fixed one of them (see `INERT_VARIANT_DEBT`), not because a variant is less
@@ -407,11 +449,21 @@ export const isArbitrary = (token: string): boolean => token.includes('[') || to
  */
 export const isVariant = (token: string): boolean => token.includes(':') || token.includes('&');
 
-/** DIRECTION (A): arbitrary-value classes an asset carries and does not declare. */
+/**
+ * DIRECTION (A): arbitrary-value OR variant-prefixed classes an asset carries
+ * and does not declare.
+ *
+ * ⚠️ THE `||` IS MOTIR-4890's WIDENING. It was `isArbitrary(token)` alone, and
+ * that filter could not see a PLAIN inert variant at all — 93 occurrences of 6
+ * survived the arbitrary half reaching zero, on the argument corrected at
+ * `isArbitrary` above. The two arms below then split this set on `isVariant`,
+ * so the un-prefixed arm is unchanged (`isArbitrary && !isVariant`) and the
+ * variant arm is every variant.
+ */
 export function inertUtilities(mock: MockSource): { token: string; count: number }[] {
   const declared = declaredClasses(mock.source);
   return [...usedClasses(mock.source)]
-    .filter(([token]) => isArbitrary(token) && !declared.has(token))
+    .filter(([token]) => (isArbitrary(token) || isVariant(token)) && !declared.has(token))
     .map(([token, count]) => ({ token, count }))
     .sort((a, b) => b.count - a.count || a.token.localeCompare(b.token));
 }
@@ -729,13 +781,43 @@ export function misdeclaredUtilities(mock: MockSource): string[] {
  * asset now fails with no row to hide behind, and a row added back has to
  * carry a card that says why.
  *
- * ⚠️ ZERO HERE IS ZERO FOR `isArbitrary`, WHICH IS NARROWER THAN IT READS.
- * 93 occurrences of 6 PLAIN inert variants survive in
- * `design/ai-chat/plan-change-run-live.mock.html` — `disabled:opacity-50` 25,
- * `hover:opacity-90` 11 and four more — because the filter above excludes a
- * token carrying no `[` or `(`. Its stated reason is that a plain class may
- * come from an inherited stylesheet, and a `*.mock.html` inherits none. That
- * is MOTIR-4890, with the measurement and its command.
+ * ⚠️ ZERO USED TO BE ZERO FOR `isArbitrary` ONLY, WHICH WAS NARROWER THAN IT
+ * READ — MOTIR-4890 WIDENED IT AND TOOK THE REMAINDER TO ZERO. 93 occurrences
+ * of 6 PLAIN inert variants survived the arm reaching zero, all in
+ * `design/ai-chat/plan-change-run-live.mock.html`, because `inertUtilities`
+ * filtered on `isArbitrary` and a plain token carries no `[` or `(`. The
+ * exemption's stated reason was that a plain class may come from an inherited
+ * stylesheet, and a `*.mock.html` inherits none — the correction is at
+ * `isArbitrary`, with the measurement that chose the widening's ceiling.
+ *
+ * What MOTIR-4890 disposed of, per utility, on MOTIR-4813's terms — all six
+ * DECLARE, and the discriminator is that every one is a verbatim transcription
+ * of a class list the SHIPPED component carries, so the rule to copy already
+ * existed rather than being authored here:
+ *
+ *   `disabled:opacity-50` 25 · `disabled:pointer-events-none` 16
+ *   (`packages/design-system/src/components/ui/Button.tsx:34`),
+ *   `focus-visible:ring-offset-2` 16 · `focus-visible:ring-offset-background`
+ *   16 (`Button.tsx:33`), `hover:opacity-90` 11 (`Button.tsx:39`, the primary
+ *   variant), `disabled:opacity-60` 9
+ *   (`components/planning/PlanChangeComposer.tsx:432`, the composer input the
+ *   asset draws). Every rule was copied verbatim from
+ *   `design/shell/context-row.mock.html`, which declares all six — the control
+ *   that rules out "the mocks intend otherwise", the same move MOTIR-4810 made
+ *   with `rail-bottom-section`. The `@property --tw-ring-offset-color` block
+ *   and its `@layer properties` fallback were copied with them, because
+ *   `.focus-visible\:ring-offset-2` writes a shadow that reads that property
+ *   and MOTIR-4813 declared only the ring's width and colour — a DECLARE that
+ *   still renders nothing is not a fix.
+ *
+ * ⚠️ ONE of the six PAINTS AT REST and moved the `.png`: the asset has exactly
+ * one `disabled=""` element, the secondary *Stop* button in the run-live
+ * footer, and declaring `disabled:opacity-50` dims it to 50% — which is what
+ * the shipped Button does and what every reader of the export should see. The
+ * other five are state-conditional and fire in the browser a reviewer opens the
+ * mock in. REMOVE was not available for any of them: a REMOVE is honest only
+ * where the selector matches no element, and every one of these sits on a real
+ * button or input.
  *
  * What MOTIR-4813 disposed of, per utility rather than per class — the
  * judgement the card exists for, since "a static mock is never hovered" is an
@@ -936,6 +1018,26 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(inertUtilities({ path: 'fixture', source: broken })).toEqual([
       { token: 'text-[15px]', count: 1 },
     ]);
+  });
+
+  it('reports a PLAIN inert variant, and stops at a plain un-prefixed class', () => {
+    // MOTIR-4890's widening, pinned in both directions on a fixture — the real
+    // tree is at zero for direction (A), so nothing else here exercises the new
+    // reporting branch, and nothing else pins where it STOPS.
+    const fixture = [
+      '<style>.opacity-80 { opacity: 80%; }</style>',
+      '<button class="disabled:opacity-50 opacity-80 lucide lucide-menu"></button>',
+    ].join('\n');
+    // The variant is reported though it carries neither `[` nor `(` — the case
+    // `isArbitrary` alone could not see.
+    expect(inertUtilities({ path: 'fixture', source: fixture })).toEqual([
+      { token: 'disabled:opacity-50', count: 1 },
+    ]);
+    // And the icon library's own identity classes are NOT: they are a hook
+    // rather than a utility, and 4116 of the 4419 occurrences an
+    // every-plain-class predicate would report are exactly these.
+    expect(isVariant('lucide-menu')).toBe(false);
+    expect(isArbitrary('lucide-menu')).toBe(false);
   });
 
   it('reads a mock that names `<style>` in its own HTML comment banner', () => {
