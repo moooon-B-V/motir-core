@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The shared APPROVAL CONTROL (8 states) + the design-result subject body —
+      MOTIR-4778 · MOTIR-4789
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the SHARED APPROVAL CONTROL — Subtask
+      MOTIR-4789, the design that blocks the code Subtask MOTIR-4792 (the
+      control) and, through it, every consumer.
+
+      SCOPE — narrowed 2026-09-08 when MOTIR-4778 was split into one-feature
+      stories. This asset draws THE CONTROL, once, with a panel per state, and
+      the DESIGN-RESULT subject body beside it. It does NOT draw the Approvals
+      TAB (MOTIR-4879) or the PULL-REQUEST MERGE subject body and its six
+      refusals (MOTIR-4882) — both moved to sibling stories, and drawing them
+      here would TAKE scope those cards claim.
+
+      GROUNDED IN (read at design time, not invented):
+        · docs/decisions/approval-gates.md — MERGED on main at 9840d00ea.
+          Sections 1 (what a gate is), 2 (routing assigneeId ?? reporterId;
+          authority on two permission keys), 3 (approve flips the design subtask
+          done), 6a (the AUDIT record), 6b (the FOUR states incl. the
+          product-written `superseded`), 6c (approval PINS the version's bytes),
+          6d (the reopen lifecycle). Where this mock and that record disagree,
+          the record wins.
+        · design/work-items/acceptance-panel.mock.html — the SHIPPED approval
+          gesture this generalises. Read first; what is carried and what is
+          deliberately different is stated in design-notes.md.
+        · design/work-items/design-result.mock.html — the design-result subject
+          body. COMPOSED here, NOT redrawn: this asset draws only what the gate
+          ADDS around it, and cites that file for the note / frame / screenshot.
+
+      COMPOSES ONLY SHIPPED PRIMITIVES — ContentSectionCard (.card), Button
+      variants (.btn-*), Pill (tint bg + --el-text-strong, finding #35), and the
+      avatar/meta grammar the acceptance panel already uses. No new visual
+      primitive is invented. Tokens copied 1:1 from the design system
+      (packages/design-system/theme.css); colour ONLY via Tier-3 --el-*, shape
+      via the element-semantic radius/spacing/height/shadow tokens.
+
+      INK — every caption on a TINTED surface uses --el-text-secondary
+      (6.18-6.80:1 on all four surfaces, both themes), never --el-text-muted
+      (4.12-4.34:1 off-white, AA-failing). --el-text-faint appears only on
+      aria-hidden decoration. Danger text on a surface is
+      --el-danger-on-surface; --el-danger-text appears ONLY on a
+      bg-(--el-danger) fill, per CLAUDE.md.
+
+      PANELS (multi-panel board — review EACH):
+        0  · Placement / access path — where the control sits on the item page.
+        A  · awaiting, YOURS — the two verbs + the confirm affordance.
+        B  · awaiting, NOT yours — the state, who it waits on, no controls.
+        C  · confirming — what pressing Approve is about to DO, in words.
+        D  · in flight — the decision is being recorded.
+        E  · approved — who, when, the note, and that the version is PINNED.
+        F  · changes requested — the note foregrounded, and what happens next.
+        G  · superseded — the question was WITHDRAWN. No actor, no verbs.
+        H  · refused — the decision could not be carried out, and why, in place.
+        S  · The subject body — the design result, COMPOSED not redrawn.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bb1;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-success: var(--color-success);
+        --el-info: var(--color-info);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+        /* newer than the mock this block was lifted from — packages/design-system/theme.css */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-text-identifier: var(--color-slate);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-green: #2fc94f;
+        --color-success: #2fc94f;
+        --color-warning: #f08c00;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #4088cc;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --el-switch-knob: #d4d4d4;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .board {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+      .boardTitle {
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      .boardLead {
+        margin: 0;
+        color: var(--el-text-secondary);
+        max-width: 76ch;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .panelLabel {
+        font-size: 12px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .panelNote {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        max-width: 82ch;
+      }
+
+      /* ── ContentSectionCard — the detail-page section-card grammar ───────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        box-shadow: var(--shadow-subtle);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .cardHead {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .cardTitle {
+        font-size: 14px;
+        font-weight: 650;
+        margin: 0;
+      }
+
+      /* ── THE APPROVAL CONTROL — the one element this asset exists to fix ─── */
+      .gate {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .gateTop {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+        /* the verbs WRAP below the subject rather than compressing it — at the
+           item page's column width they sit inline; in a narrow consumer (the
+           Approvals row) they drop, and the subject never truncates to fit them */
+        flex-wrap: wrap;
+      }
+      .gateWhat {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+      }
+      .gateKind {
+        font-size: 13px;
+        font-weight: 640;
+        color: var(--el-text);
+      }
+      .gateSub {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .gateKey {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .gateActions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+
+      /* Pill — tint background + --el-text-strong ink (finding #35) */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+      }
+      .pill-await {
+        background: var(--el-tint-yellow);
+      }
+      .pill-ok {
+        background: var(--el-tint-mint);
+      }
+      .pill-changes {
+        background: var(--el-tint-peach);
+      }
+      .pill-gone {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .pill-live {
+        background: var(--el-tint-sky);
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+      }
+
+      /* Button variants — heights/padding from the shape tokens */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-quiet {
+        background: transparent;
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .btn[disabled] {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      /* The decided/record strip — the AUDIT face of a gate (ADR 6a) */
+      .record {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding-top: 10px;
+        border-top: 1px dashed var(--el-border-soft);
+      }
+      .recordItem {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .recordItem b {
+        font-weight: 620;
+        color: var(--el-text);
+      }
+      .avatar {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .note {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-soft);
+        border-left: 3px solid var(--el-warning);
+        border-radius: var(--radius-input);
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .noteLabel {
+        display: block;
+        font-size: 11.5px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        margin-bottom: 3px;
+      }
+
+      /* Confirm step — an INLINE two-step, not a modal (see design-notes) */
+      .confirm {
+        background: var(--el-tint-lavender);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .confirmSays {
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .confirmSays ul {
+        margin: 6px 0 0;
+        padding-left: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      /* Refusal — ink is --el-danger-on-surface, NEVER --el-danger-text */
+      .refusal {
+        background: var(--el-danger-surface, var(--el-tint-rose));
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--el-danger-on-surface);
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .refusal b {
+        color: var(--el-danger-on-surface);
+      }
+      .refusalNext {
+        color: var(--el-text-secondary);
+      }
+
+      /* Superseded — deliberately COLOURLESS. It is not a decision. */
+      .gate-gone {
+        background: var(--el-muted);
+        border-style: solid;
+        opacity: 1;
+      }
+      .gate-gone .gateKind {
+        color: var(--el-text-secondary);
+      }
+
+      /* Pinned marker — a reader-visible fact, ADR 6c */
+      .pinned {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-tint-mint);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+
+      /* Spinner — decorative, aria-hidden */
+      .spin {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+        flex: none;
+      }
+
+      /* The COMPOSED subject body — cited, not redrawn */
+      .subject {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 14px 16px;
+        background: var(--el-page-bg);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .subjectCite {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .subjectCite code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        background: var(--el-surface);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+        color: var(--el-text-identifier);
+      }
+      .frameStub {
+        height: 132px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background:
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 9px,
+            rgba(0, 0, 0, 0.025) 9px,
+            rgba(0, 0, 0, 0.025) 18px
+          ),
+          var(--el-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        text-align: center;
+        padding: 0 18px;
+        line-height: 1.7;
+      }
+      .frameStubCite {
+        display: inline-block;
+        margin-top: 2px;
+      }
+
+      /* Placement panel — the access path */
+      .page {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .pageBar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .ghost {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .ghost--here {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 2px var(--el-tint-lavender);
+        color: var(--el-text);
+      }
+      .stateGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(345px, 1fr));
+        gap: 18px;
+        /* start, not stretch — a state panel is as tall as its own content, so
+           the board reads as eight specimens rather than eight ragged boxes */
+        align-items: start;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <header class="panel">
+        <h1 class="boardTitle">The shared approval control — one element, eight states</h1>
+        <p class="boardLead">
+          MOTIR-4789. The control is drawn ONCE here and composed by three consumers: the
+          design-result panel on the item page, the Development section, and the Approvals tab. The
+          two subjects it sits beside look completely different; the DECISION does not. Its state
+          set, its routing and its record are settled by
+          <code>docs/decisions/approval-gates.md</code> (merged, <code>9840d00ea</code>) — where
+          that record and this asset disagree, the record wins.
+        </p>
+        <p class="panelNote">
+          <strong>Not drawn here, deliberately:</strong> the Approvals tab's rows and empty state
+          (MOTIR-4879) and the pull-request-merge subject body with its six refusals (MOTIR-4882).
+          Both moved to sibling stories when MOTIR-4778 was split; drawing them here would take
+          scope those cards claim.
+        </p>
+      </header>
+
+      <!-- ── 0 · PLACEMENT / ACCESS PATH ─────────────────────────────────── -->
+      <section class="panel">
+        <div class="panelLabel">0 · Placement — where the reader meets it</div>
+        <p class="panelNote">
+          The control renders INSIDE the section that owns its subject — it is never a page of its
+          own. On the item page that is the <em>Design result</em> section, after Development. The
+          reader arrives by opening the work item; no new navigation is introduced by this asset.
+        </p>
+        <div class="page">
+          <div class="pageBar">
+            <span class="gateKey">MOTIR-4321</span>
+            <span aria-hidden="true">·</span>
+            <span>Design the approvals row treatment</span>
+          </div>
+          <div class="ghost">Description · Acceptance criteria · Context refs</div>
+          <div class="ghost">Development — branch, pull request, checks</div>
+          <div class="ghost ghost--here">
+            <strong>Design result</strong> — the subject body, with the approval control at its head
+            <em>(this asset)</em>
+          </div>
+          <div class="ghost">Attachments · Activity</div>
+        </div>
+      </section>
+
+      <!-- ── THE EIGHT STATES ─────────────────────────────────────────────── -->
+      <section class="panel">
+        <div class="panelLabel">The control — one element, eight states</div>
+        <p class="panelNote">
+          Every panel below is the SAME component with different props. The test MOTIR-4796 asserts
+          that — the shared component, not two look-alikes.
+        </p>
+
+        <div class="stateGrid">
+          <!-- A · awaiting, yours -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">A · awaiting — yours to decide</h2>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="gate">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub"
+                    >Published 12 minutes ago from <span class="gateKey">9840d00e</span></span
+                  >
+                </div>
+                <div class="gateActions">
+                  <button class="btn btn-secondary" type="button">Request changes</button>
+                  <button class="btn btn-primary" type="button">Approve</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- B · awaiting, not yours -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">B · awaiting — not yours</h2>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting</span
+              >
+            </div>
+            <div class="gate">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub"
+                    >Waiting on <strong>Mara S.</strong> — the work item's assignee</span
+                  >
+                </div>
+              </div>
+              <div class="record">
+                <span class="recordItem"
+                  >A reader who may see this gate but not decide it sees its state and no
+                  controls.</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- C · confirming -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">C · confirming</h2>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="gate">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub">Published 12 minutes ago</span>
+                </div>
+              </div>
+              <div class="confirm">
+                <div class="confirmSays">
+                  <strong>Approving this design will:</strong>
+                  <ul>
+                    <li>record that you approved it, with the time and this version;</li>
+                    <li>keep this version's files so the decision stays checkable;</li>
+                    <li>
+                      move <span class="gateKey">MOTIR-4321</span> to Done, which starts 3 work
+                      items waiting on it.
+                    </li>
+                  </ul>
+                </div>
+                <div class="gateActions">
+                  <button class="btn btn-quiet" type="button">Cancel</button>
+                  <button class="btn btn-primary" type="button">Yes, approve</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- D · in flight -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">D · in flight</h2>
+              <span class="pill pill-live"
+                ><span class="dot" aria-hidden="true"></span>Recording</span
+              >
+            </div>
+            <div class="gate">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub">Recording your decision…</span>
+                </div>
+                <div class="gateActions">
+                  <span class="spin" aria-hidden="true"></span>
+                  <button class="btn btn-primary" type="button" disabled>Approve</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- E · approved -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">E · approved</h2>
+              <span class="pill pill-ok"><span class="dot" aria-hidden="true"></span>Approved</span>
+            </div>
+            <div class="gate">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub">This version was approved and is kept.</span>
+                </div>
+                <span class="pinned">Files kept</span>
+              </div>
+              <div class="record">
+                <span class="recordItem"
+                  ><span class="avatar" aria-hidden="true">YZ</span><b>Zhu Yue</b></span
+                >
+                <span class="recordItem">8 Sep 2026, 04:12</span>
+                <span class="recordItem">version <span class="gateKey">9840d00e</span></span>
+                <span class="recordItem"
+                  >moved <span class="gateKey">MOTIR-4321</span> to Done</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- F · changes requested -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">F · changes requested</h2>
+              <span class="pill pill-changes"
+                ><span class="dot" aria-hidden="true"></span>Changes requested</span
+              >
+            </div>
+            <div class="gate">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub">Sent back — the agent will publish a new version.</span>
+                </div>
+              </div>
+              <div class="note">
+                <span class="noteLabel">What was asked for</span>
+                The confirm step should say what approving does, not just ask twice.
+              </div>
+              <div class="record">
+                <span class="recordItem"
+                  ><span class="avatar" aria-hidden="true">YZ</span><b>Zhu Yue</b></span
+                >
+                <span class="recordItem">8 Sep 2026, 03:58</span>
+                <span class="recordItem">this version's files are not kept</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- G · superseded -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">G · superseded</h2>
+              <span class="pill pill-gone"
+                ><span class="dot" aria-hidden="true"></span>Withdrawn</span
+              >
+            </div>
+            <div class="gate gate-gone">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub">
+                    A newer design was published, so this question was withdrawn. Nobody decided it.
+                  </span>
+                </div>
+              </div>
+              <div class="record">
+                <span class="recordItem"
+                  >No decision · no one to attribute · 8 Sep 2026, 04:20</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- H · refused -->
+          <div class="card">
+            <div class="cardHead">
+              <h2 class="cardTitle">H · refused</h2>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="gate">
+              <div class="gateTop">
+                <div class="gateWhat">
+                  <span class="gateKind">Design result</span>
+                  <span class="gateSub">Published 12 minutes ago</span>
+                </div>
+                <div class="gateActions">
+                  <button class="btn btn-secondary" type="button">Request changes</button>
+                  <button class="btn btn-primary" type="button">Approve</button>
+                </div>
+              </div>
+              <div class="refusal">
+                <span aria-hidden="true">⚠</span>
+                <span>
+                  <b>Mara S. approved this a moment ago.</b>
+                  <span class="refusalNext">
+                    Your decision was not recorded. Reload to see theirs.
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── S · THE SUBJECT BODY, COMPOSED ───────────────────────────────── -->
+      <section class="panel">
+        <div class="panelLabel">S · The subject body — composed, not redrawn</div>
+        <p class="panelNote">
+          The control is identical whatever it sits beside; the subject is not. For the design kind
+          the body is the SHIPPED design-result panel — this asset draws only what the gate ADDS
+          around it, and cites the existing file for everything inside.
+        </p>
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Design result</h2>
+            <span class="pill pill-await"
+              ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+            >
+          </div>
+          <div class="gate">
+            <div class="gateTop">
+              <div class="gateWhat">
+                <span class="gateKind">Design result</span>
+                <span class="gateSub"
+                  >Published 12 minutes ago from <span class="gateKey">9840d00e</span></span
+                >
+              </div>
+              <div class="gateActions">
+                <button class="btn btn-secondary" type="button">Request changes</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </div>
+            </div>
+          </div>
+          <div class="subject">
+            <p class="subjectCite">
+              <strong>Composed from</strong>
+              <code>design/work-items/design-result.mock.html</code> — the note, the sandboxed mock
+              frame at its 32rem height, the screenshot and the superseded treatment are all
+              specified there and are NOT redrawn by this asset.
+            </p>
+            <div class="frameStub">
+              <span>
+                the shipped design-result body — note · sandboxed mock frame · screenshot
+                <br />
+                <span class="frameStubCite">specified in <code>design-result.mock.html</code></span>
+              </span>
+            </div>
+            <p class="subjectCite">
+              What this asset adds is the control ABOVE it, and one rule: the control sits at the
+              HEAD of the section, never below the artefact, so a reader who has to scroll a 32rem
+              frame is not scrolling to find out whether a decision is owed.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
