@@ -66,7 +66,6 @@ function renderPalette() {
       activeWorkspaceId="ws_1"
       projects={[ACME, BETA]}
       activeProjectId={ACME.id}
-      hasProject
     />,
   );
 }

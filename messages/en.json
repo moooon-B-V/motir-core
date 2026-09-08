@@ -985,8 +985,6 @@
     },
     "pageLoading": "Loading page",
     "project": {
-      "createFirst": "Create your first project",
-      "emptyDescription": "Projects group your work items and give them a key like ACME-1. Create one to start planning.",
       "create": "Create project",
       "planWithAi": "Plan a new project with AI",
       "untitled": "Untitled project",

@@ -98,7 +98,7 @@ function wrap(node: React.ReactNode) {
     <ThemeProvider>
       <ToastProvider>
         <CommandPaletteProvider>
-          <CreateIssueProvider hasProject canEdit>
+          <CreateIssueProvider canEdit>
             <ProjectAccessProvider permissions={['work_item:edit', 'project:administer']}>
               <ReportProvider projectKey="MOTIR" canEdit>
                 {node}
@@ -128,15 +128,25 @@ describe('the context path, from the layout’s props to both hosts (MOTIR-2558)
       );
     });
 
-    it('shows the create-first door when the layout resolved no project', async () => {
+    it('offers NOTHING in the project tier when the layout resolved no project', async () => {
+      // ⚠️ INVERTED (MOTIR-4873), not deleted. This used to assert the
+      // create-first door — an accent `+` square opening `CreateProjectModal`,
+      // in the project tier. Every member is now inside a project
+      // (MOTIR-4870), so the door serves nobody, and a tier that draws
+      // something for a state the product cannot produce is a tier teaching
+      // that it can happen.
+      //
+      // The state is unreachable rather than impossible to construct, so the
+      // assertion is about what the tier does with it: nothing. Creating an
+      // ADDITIONAL project is untouched and lives on the switcher.
       const bar = await TopNav(layoutProps({ activeProject: null, projects: [] }));
       const { container } = renderWithIntl(wrap(bar));
       const header = container.querySelector('header')!;
 
       expect(within(header).queryByRole('button', { name: 'Switch project' })).toBeNull();
       expect(
-        within(header).getByRole('button', { name: 'Create your first project' }),
-      ).toBeTruthy();
+        within(header).queryByRole('button', { name: 'Create your first project' }),
+      ).toBeNull();
     });
 
     it('keeps the brand tile ahead of the path', async () => {
@@ -169,18 +179,13 @@ describe('the context path, from the layout’s props to both hosts (MOTIR-2558)
     });
   });
 
-  describe('the create-first door opens the SAME modal the rail head opened', () => {
-    it('mounts CreateProjectModal on click', async () => {
-      const bar = await TopNav(layoutProps({ activeProject: null, projects: [] }));
-      renderWithIntl(wrap(bar));
-
-      expect(screen.queryByRole('dialog')).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: 'Create your first project' }));
-      // the shipped modal, unchanged — the door moved, the room did not
-      expect(screen.getByRole('dialog')).toBeTruthy();
-      expect(screen.getByRole('dialog').textContent).toContain('Create project');
-    });
-  });
+  // ⚠️ REMOVED (MOTIR-4873): 'the create-first door opens the SAME modal the
+  // rail head opened'. It clicked the tier's create-first button and asserted
+  // `CreateProjectModal` mounted — "the door moved, the room did not". The DOOR
+  // is now gone from this tier; the ROOM is not, and the switcher's own specs
+  // are where it is covered. Re-pointing this spec at the switcher would have
+  // duplicated those rather than preserved anything this file is about (the
+  // context path's own seam).
 
   describe('the WIRING — what a render cannot see', () => {
     it('feeds the bar’s instance the project half of the path', () => {

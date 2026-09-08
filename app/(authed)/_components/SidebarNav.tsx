@@ -226,7 +226,6 @@ export function SidebarNav({
     </div>
   );
 
-  const hasProject = Boolean(activeProject);
   // The actor's keys in membership-test form, used by BOTH the settings-area
   // rail below and the bottom nav's Project settings door. Built once, before
   // the two early returns, so the door and the rows it opens onto can never
@@ -336,7 +335,10 @@ export function SidebarNav({
 
   const sections: SidebarSection[] = [];
 
-  if (hasProject) {
+  // ⚠️ NO LONGER GATED (MOTIR-4873). This was `if (hasProject)`; every member is
+  // inside a project (MOTIR-4870), so the primary section always renders and
+  // the rail never collapses to its bottom section.
+  {
     const primaryItems: SidebarItem[] = [
       {
         // The signed-in landing surface (Story MOTIR-2649 · MOTIR-2654,
@@ -520,11 +522,11 @@ export function SidebarNav({
   // tooltip — an entry point is a promise about a room, and a disabled row is a
   // promise the product then refuses).
   //
-  // With NO active project the row still targets workspace settings and is
-  // ALWAYS rendered: workspace settings are governed by the workspace role,
-  // which this epic does not change, and `held` is empty in that state anyway —
-  // gating on it would hide a door this story has no business touching.
-  const showSettingsDoor = hasProject ? hasVisibleSettingsArea(held, availability) : true;
+  // ⚠️ THE NO-PROJECT ARM IS GONE (MOTIR-4873). It read: "With NO active project
+  // the row still targets workspace settings and is ALWAYS rendered", which was
+  // right for a state the product no longer has. What survives is the arm that
+  // was always taken for a reader with a project.
+  const showSettingsDoor = hasVisibleSettingsArea(held, availability);
 
   sections.push({
     id: 'bottom',
@@ -534,19 +536,17 @@ export function SidebarNav({
             {
               icon: <Settings />,
               label: t('nav.settings'),
-              // Deep-link to project settings when a project is active;
-              // otherwise there's nothing project-scoped to configure, so go to
-              // the settings HOME — which one depends on progressive disclosure
-              // (MOTIR-3502 · organization-tier §6d). Below the reveal threshold
-              // the workspace tier is hidden and its sections are folded into
-              // `/settings/organization`, so the door points there. Re-pointed,
-              // not removed: this is the rail's only settings entry with no
-              // active project, and a settings home exists at every count.
-              href: hasProject
-                ? PROJECT_SETTINGS_ROOT
-                : workspaceTierRevealed
-                  ? '/settings/workspace'
-                  : '/settings/organization',
+              // Deep-links to project settings, unconditionally.
+              //
+              // ⚠️ IT USED TO BRANCH (MOTIR-4873). With no active project there
+              // was nothing project-scoped to configure, so the door was
+              // re-pointed at the settings HOME — the workspace tier, or
+              // `/settings/organization` below the reveal threshold
+              // (MOTIR-3502 · organization-tier §6d). That branch served a
+              // reader who no longer exists, and `workspaceTierRevealed` is
+              // still read by the org/workspace rows below, so nothing else
+              // moves.
+              href: PROJECT_SETTINGS_ROOT,
               // Stay un-highlighted when a more-specific workspace-settings
               // sub-link (Job runs / GitHub) is the active route, so only one
               // row reads current.
