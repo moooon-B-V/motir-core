@@ -1,9 +1,11 @@
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn, POST_AUTH_LANDING } from './_helpers/shell-session';
-import { signUp as apiSignUp, createProject, TEST_PASSWORD } from './_helpers/work-item-setup';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { watchersService } from '@/lib/services/watchersService';
+import { usersService } from '@/lib/services/usersService';
+import { workspacesService } from '@/lib/services/workspacesService';
+import { projectsService } from '@/lib/services/projectsService';
 import { db as prisma } from '@/lib/db';
 
 // THE ACCEPTANCE RECEIPT FOR THE PAGER AND THE KIND ORDER
@@ -44,6 +46,7 @@ import { db as prisma } from '@/lib/db';
 // takes a moment to see.
 
 const OWNER = 'accept-pager@example.com';
+const PASSWORD = 'workbench-paging-acceptance-pass-123';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -59,9 +62,30 @@ test.beforeEach(async () => {
  * produce.
  */
 async function seed() {
-  const owner = await apiSignUp(OWNER);
-  const project = await createProject(owner, 'Motir', 'ACP');
-  const ctx = { userId: owner.userId, workspaceId: owner.workspaceId };
+  // ⚠️ SEEDED THROUGH THE SERVICES, NOT THROUGH THE HTTP API, and the
+  // distinction is not stylistic. `_helpers/work-item-setup`'s `signUp` posts to
+  // the app over HTTP and resolves its own base URL; in THIS lane that resolved
+  // to `::1:3000` on CI and the seed died with `ECONNREFUSED` — while passing
+  // locally, where the port happened to match. `acceptance-workbench.spec.ts`
+  // seeds through `usersService` / `workspacesService` / `projectsService` for
+  // exactly this reason, and composing its shape is what the card meant by
+  // reusing the existing seeding helper.
+  const owner = await usersService.createUser({
+    email: OWNER,
+    password: PASSWORD,
+    name: 'Zhu Yue',
+  });
+  const { workspace } = await workspacesService.createWorkspace({
+    name: 'Acme',
+    ownerUserId: owner.id,
+  });
+  const project = await projectsService.createProject({
+    name: 'Motir',
+    identifier: 'ACP',
+    workspaceId: workspace.id,
+    actorUserId: owner.id,
+  });
+  const ctx = { userId: owner.id, workspaceId: workspace.id };
 
   const created: string[] = [];
   let story: string | undefined;
@@ -95,7 +119,12 @@ async function seed() {
   for (const id of created) await watchersService.unwatch(id, ctx);
   await prisma.workItem.updateMany({
     where: { id: { in: [...created, ...watched] } },
-    data: { assigneeId: owner.userId, reporterId: owner.userId },
+    data: { assigneeId: owner.id, reporterId: owner.id },
+  });
+  await projectsService.setActiveProject({
+    userId: owner.id,
+    workspaceId: workspace.id,
+    projectId: project.id,
   });
   return { owner, project };
 }
@@ -114,7 +143,7 @@ test('a person walks their own Workbench by page, and the top of the list is wha
   await chapter(
     'Signing in lands on the Workbench, with a footer that says how much there is',
     async () => {
-      await signIn(page, OWNER, TEST_PASSWORD);
+      await signIn(page, OWNER, PASSWORD);
       await expect(page).toHaveURL(new RegExp(`${POST_AUTH_LANDING}$`));
       await expect(page.getByRole('heading', { name: 'Workbench', level: 1 })).toBeVisible();
       // The change a reader notices first: the list now says how far it goes.
