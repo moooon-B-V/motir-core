@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 // MOTIR-3435 — `/items/[key]`'s GATE and its read SHAPE.
@@ -202,6 +202,38 @@ const detailFor = (over: Record<string, unknown> = {}) => ({
   readiness: {},
 });
 
+// ── WHY THE PAGE IS IMPORTED IN A HOOK, AND WHY EVERY CALL IS TRACKED (MOTIR-4902)
+//
+// `import('@/app/(authed)/items/[key]/page')` pulls a 30+ module graph, of which
+// only about half is mocked above. Transforming and evaluating it took **6.0 s**
+// on this box — and when that import sat inside `callPage`, Vitest billed the
+// whole of it to whichever `it()` happened to call first. That case ran at 6.0 s
+// of a 15 s `testTimeout` while the other twelve ran at 0–3 ms, so exactly one
+// case in the file could lose a race against a loaded machine, and it was the
+// most load-bearing one (the gate is in front of EVERY read). A guard whose red
+// might mean "the box was busy" has stopped being evidence.
+//
+// A `beforeAll` is billed against `hookTimeout` (30 s), which is where a
+// module-graph load belongs. `callPage` then reuses the reference.
+//
+// The tracking is the second half, and it is about what a TIMEOUT leaves behind.
+// Vitest fails a timed-out case and moves on; the page invocation that case was
+// awaiting keeps running, reaches its next mock some time later, and consumes a
+// `mockResolvedValueOnce` the NEXT case had queued. The next case then fails
+// with an assertion error about a product surface it never executed
+// (`expected NEXT_PERMANENT_REDIRECT … got NEXT_NOT_FOUND`), which reads as a
+// regression and is not one. `afterEach` runs even for a timed-out case, so
+// draining there is what keeps one case's abandoned work out of the next.
+type PageModule = typeof import('@/app/(authed)/items/[key]/page');
+let pageModule: PageModule;
+
+/** Every page invocation this case started, drained in `afterEach`. */
+const inFlight: Promise<unknown>[] = [];
+
+beforeAll(async () => {
+  pageModule = await import('@/app/(authed)/items/[key]/page');
+});
+
 beforeEach(() => {
   started.length = 0;
   redirected.mockClear();
@@ -214,19 +246,32 @@ beforeEach(() => {
   acceptanceResolve.mockClear();
   acceptanceEvidence.mockClear();
   pendingPlans.mockClear();
+  // One-shot: a queued `mockResolvedValueOnce` that a previous case did not
+  // consume must not be waiting for this one. `mockReset` restores the
+  // implementation `vi.fn()` was constructed with.
+  resolveAliasedIssueKey.mockReset();
 });
-afterEach(() => {
+afterEach(async () => {
   release?.();
+  // Settle every invocation started by this case — including one Vitest
+  // abandoned on a timeout — BEFORE the next case queues a one-shot mock.
+  await Promise.allSettled(inFlight.splice(0));
   cleanup();
 });
 
-const callPage = async (over: Record<string, unknown> = {}) => {
-  const { default: IssueDetailPage } = await import('@/app/(authed)/items/[key]/page');
-  return IssueDetailPage({
-    params: Promise.resolve({ key: 'MOTIR-1' }),
-    searchParams: Promise.resolve({}),
-    ...over,
-  } as never);
+const callPage = (over: Record<string, unknown> = {}) => {
+  const pending = Promise.resolve(
+    pageModule.default({
+      params: Promise.resolve({ key: 'MOTIR-1' }),
+      searchParams: Promise.resolve({}),
+      ...over,
+    } as never),
+  );
+  inFlight.push(pending);
+  // The case's own assertion still reads `pending`; this only keeps a rejection
+  // the case abandons from surfacing as an unhandled rejection.
+  void pending.catch(() => undefined);
+  return pending;
 };
 
 // ── WHICH READS MAY PRECEDE THE GATE, AND WHY (MOTIR-4898) ──────────────────
