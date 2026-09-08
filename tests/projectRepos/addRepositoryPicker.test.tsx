@@ -183,6 +183,10 @@ const CONNECTED = (
   defaultBranch: branch,
 });
 
+/** The provisioning organisation. Neither case here layers anything, so it only
+ *  satisfies the required argument (bug MOTIR-4867). */
+const HOST_OWNER = 'motir-projects';
+
 /** The two halves of the org section, as `splitRoomSections` hands them over. */
 const LINK = (row: ProjectRepoDto): OrgSectionEntry => ({ kind: 'link', id: row.id, row });
 const DOMAIN = (repo: ProjectRepoConnectedDto): OrgSectionEntry => ({
@@ -210,7 +214,12 @@ describe('⚠️ THE SECTION SPLIT — a picked repository is not Motir-hosted',
   it('splits on the row`s own seedSource, and the split is TOTAL', () => {
     const picked = ROW('a', SEED_SOURCE_ORGANIZATION);
     const hosted = ROW('b', defaultSeedSourceForRole('api'), 'acme-api');
-    const { fromOrganization, motirHosted } = splitRoomSections([picked, hosted], [], false);
+    const { fromOrganization, motirHosted } = splitRoomSections(
+      [picked, hosted],
+      [],
+      false,
+      HOST_OWNER,
+    );
 
     expect(fromOrganization.map((e) => e.id)).toEqual(['a']);
     expect(motirHosted.map((r) => r.id)).toEqual(['b']);
@@ -224,7 +233,9 @@ describe('⚠️ THE SECTION SPLIT — a picked repository is not Motir-hosted',
     // seed source from every other role, so a split that keyed on "not
     // initialised" would put it on the wrong side.
     const web = ROW('c', defaultSeedSourceForRole('web'), 'acme');
-    expect(splitRoomSections([web], [], false).motirHosted.map((r) => r.id)).toEqual(['c']);
+    expect(splitRoomSections([web], [], false, HOST_OWNER).motirHosted.map((r) => r.id)).toEqual([
+      'c',
+    ]);
   });
 });
 
