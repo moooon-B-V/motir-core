@@ -5346,6 +5346,7 @@
       "balance": "Credit balance",
       "credits": "{n} credits",
       "tier": "{tier} tier",
+      "exemptPill": "Not billed",
       "allotmentRemaining": "{pct}% of this month's {allotment}-credit allotment remaining",
       "spentAllTime": "Spent all time",
       "since": "Since the org was created",
@@ -5433,6 +5434,11 @@
       "title": "Planning is paused — you're out of credits",
       "body": "The {org} organization has used all of this month's credits, so new planning runs are paused. Existing plans stay fully editable.",
       "passiveSlot": "Buying more credits and changing your plan arrive with billing in a later release. This is where that option will appear."
+    },
+    "exempt": {
+      "title": "This organization isn’t charged for planning",
+      "body": "The {org} organization is exempt from the credit gate, so planning runs whatever the balance reads. The figures below are recorded for internal cost visibility.",
+      "balanceNote": "The balance can be negative here. That is the cost this organization has incurred, not an amount owed — nothing on this page is a bill."
     },
     "states": {
       "emptyTitle": "No usage yet",
