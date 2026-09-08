@@ -53,7 +53,12 @@ export interface NormalizedBranch {
 export type ChangeRequestState = 'open' | 'closed';
 
 /** A change request (pull / merge request), normalized across providers. Carries
- *  no Motir-side link — the consumer resolves the work item from `headRef`. */
+ *  no Motir-side link, and the consumer does not derive one from this payload:
+ *  `resolveChangeRequestWorkItemSet` reads either the SESSION BRANCH `headRef`
+ *  names (`work_item.session_branch`, written by `mark_integrated`) or the STORED
+ *  deliveries the pull request carries (`work_item_delivery`, written by
+ *  `link_pull_request`). Both are declared. The head-ref / title PARSE that used
+ *  to sit behind this sentence was deleted by MOTIR-3674. */
 export interface NormalizedChangeRequest {
   providerRepoId: string;
   number: number;

@@ -212,7 +212,10 @@ describe('block 6 — GRANTED: the sandboxed-run grant CAN call it', () => {
     const row = await adminDb.githubPullRequest.findFirstOrThrow({
       where: { repoId: repoRowId, number: 2291 },
     });
-    expect(row.linkedManually).toBe(true);
+    // MOTIR-4894: linking writes NOTHING on the mirror row, so the column keeps
+    // its `false` default even though this row was created by the link itself.
+    // The delivery below is the whole of what the call recorded.
+    expect(row.linkedManually).toBe(false);
     expect(await adminDb.workItemDelivery.count({ where: { githubPullRequestId: row.id } })).toBe(
       1,
     );

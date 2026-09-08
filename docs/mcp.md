@@ -811,7 +811,7 @@ by one branch or by several, and whether the others are green.
     "pullRequest": {
       "title": "feat(api): the delivery set", "repo": "acme/web", "number": 2291,
       "state": "open", "ci": "passing",
-      "url": "https://github.com/acme/web/pull/2291", "linkedManually": true
+      "url": "https://github.com/acme/web/pull/2291"
     },
     "baseRef": "main", "defaultBranch": "main"
   }

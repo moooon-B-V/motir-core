@@ -6031,17 +6031,30 @@ model GithubPullRequest {
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///
-  /// ⚠️ KEPT, and deliberately, while the scalar it used to qualify is GONE
-  /// (MOTIR-3757). It qualified `work_item_id`: a manual link was the STICKY
-  /// override of the MOTIR-892 branch/title resolver, so the webhook never
-  /// overwrote one. That resolver was retired by MOTIR-3674 — an explicit
-  /// `work_item_delivery` row is now the ONLY association a pull request has, so
-  /// there is nothing left to be sticky AGAINST. What still reads it is stated
-  /// exactly, because "nothing reads it" would be false: the Development section
-  /// RENDERS it, the sync PRESERVES it across a delivery, and the historical
-  /// sweep COMPARES it for idempotence. No gate branches on it. It survives as
-  /// the provenance of the rows already written; retiring it is its own decision,
-  /// which nobody has made.
+  /// ⚠️ RETIRED, AND STILL DECLARED — this is PHASE 1 of a three-phase column
+  /// removal (MOTIR-4894; `docs/decisions/delivery-reader-migration.md` §6a), and
+  /// the declaration is the whole point of the phase, not an oversight.
+  ///
+  /// It qualified `work_item_id`: a manual link was the STICKY override of the
+  /// MOTIR-892 branch/title resolver, so the webhook never overwrote one. That
+  /// resolver was retired by MOTIR-3674 and the scalar dropped by MOTIR-3757, so
+  /// there was nothing left to be sticky AGAINST — yet the flag kept being
+  /// written, and the Development section kept rendering it as a "linked
+  /// manually" suffix on rows a coding agent had linked over `link_pull_request`.
+  /// MOTIR-4894 removed every reader and writer in application code: the DTO
+  /// field, the mapper line, `markLinkedManually`, the sync's preserve arm, the
+  /// historical sweep's write and comparison, and the suffix itself.
+  ///
+  /// ⚠️ DO NOT DELETE THIS FIELD AND THE COLUMN IN ONE CHANGE. A Prisma read with
+  /// no explicit `select` emits every scalar the model DECLARES, so this line is
+  /// itself a reader — the last one, and the one no grep for the name can find.
+  /// `fly.toml`'s `release_command` migrates before any new machine takes
+  /// traffic, so a `DROP COLUMN` shipped alongside this line's deletion lands
+  /// under the PREVIOUS image and every read of this model 500s for the length of
+  /// the rollout (that is exactly what took `get_work_item` down tenant-wide on
+  /// 2026-08-28). Phase 2 `@ignore`s the field and RELEASES; phase 3 drops the
+  /// column with the `-- @client-stopped-selecting:` marker
+  /// `tests/contract-phase-guard.test.ts` requires.
   linkedManually        Boolean   @default(false) @map("linked_manually")
   /// WHEN the merge landed, stamped from the delivery's `pull_request.merged_at`
   /// (MOTIR-2922). Null on every row that has not merged — and on merged rows

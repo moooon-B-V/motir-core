@@ -80,9 +80,18 @@ export interface MotirAiBillingDTO {
 export interface BillingStatusDTO {
   organizationId: string;
   access: BillingAccessDTO;
-  /** The META org (moooon B.V.) — internal, unlimited, never billed. When true the
-   *  page renders the "Internal plan" state instead of the storefront (no upgrade
-   *  / checkout CTAs); the two billed lines below are not meaningful for it. */
+  /** The META org (moooon B.V.) — internal, never billed, every cap lifted.
+   *
+   *  ⚠️ WHAT IT DRIVES, as of MOTIR-4818: the EXEMPT variant of each of panel 2's
+   *  two lines — the `.pill-exempt` chip and its banner in place of the tier
+   *  chip, the caps block, the seat calculator and both checkout CTAs. It does
+   *  NOT suppress the page: an org with `isMeta: false` — paying, free, OR
+   *  `internalBilling` — renders the storefront unchanged
+   *  (`design/billing/design-notes.md` § AMENDMENT 2026-09-07).
+   *
+   *  It used to say the page renders an "Internal plan" state INSTEAD of the
+   *  storefront. That early return was deleted by MOTIR-4572 and the sentence
+   *  outlived it — which is how a reader arrives at the wrong fix. */
   isMeta: boolean;
   /** Whether the org is charged exactly like a CUSTOMER and then made whole —
    *  every debit lands and is paired, in the same transaction, with an

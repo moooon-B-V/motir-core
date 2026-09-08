@@ -59,10 +59,15 @@ export interface LinkedPullRequestDto {
   ci: 'passing' | 'failing' | 'running' | null;
   /** The GitHub link-out (`https://github.com/<owner>/<name>/pull/<n>`). */
   url: string;
-  /** Provenance (MOTIR-1596): true when the link was set by the explicit item→PR
-   *  affordance rather than the MOTIR-892 auto-resolver — the detail row shows the
-   *  quiet "linked manually" meta suffix (design/github Panel 5a). */
-  linkedManually: boolean;
+  /* ⚠️ `linkedManually` WAS HERE and is removed by MOTIR-4894, along with the
+   * "linked manually" suffix it fed. It said the link was DECLARED rather than
+   * inferred by the MOTIR-892 auto-resolver, and MOTIR-3674 deleted that
+   * resolver: every association a pull request has is declared now, so the flag
+   * was true of every row and told a reader nothing. The column survives one
+   * more release (MOTIR-4894 is phase 1 of
+   * `docs/decisions/delivery-reader-migration.md` §6a) but nothing in
+   * application code reads or writes it, and this DTO is the surface it reached
+   * the client through. */
 }
 
 /**

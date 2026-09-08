@@ -246,9 +246,21 @@ this also avoids the combobox-in-dialog clipping class entirely):
   **sm ghost "Cancel"** (collapses the form) — `LinkAddForm`'s exact button row.
 - **After Link:** the form collapses and the row appears in the card
   (`router.refresh()` — the detail page's sections are server-rendered, the
-  same mechanism `AddLinkControl` uses). The manually-linked row carries a
-  quiet **"linked manually"** suffix in its `pr-meta` (provenance at a glance;
-  the section caption gains "— or linked by hand from here").
+  same mechanism `AddLinkControl` uses). The new row is drawn exactly like every
+  other: `repo · #number`, and nothing else.
+
+  > **⚠️ AMENDED BY MOTIR-4894 — the pr-meta line carries NO provenance suffix.**
+  > This entry specified a quiet **"linked manually"** suffix on a hand-linked
+  > row, and the section caption gaining "— or linked by hand from here". Both
+  > are gone. The suffix was a CONTRAST with the MOTIR-892 auto-resolver, and
+  > MOTIR-3674 deleted that resolver: `resolveChangeRequestWorkItemSet` has two
+  > arms — a session branch and a stored delivery — and both are declared, so
+  > every row on this surface qualified for the suffix and it separated nothing.
+  > It also read backwards, because the ordinary linker is now an AGENT calling
+  > `link_pull_request`, and the label said "manually" about it. (MOTIR-4064 had
+  > already rewritten the captions for the same reason; this is the row.) Drawing
+  > provenance again needs a fact the row does not carry — WHO declared the link
+  > — which is a new field and a new decision, not this one restored.
 
 **States (5c):**
 
@@ -272,8 +284,8 @@ live PR and CI status" · `development.linkPr` "Link pull request" ·
 "Search pull requests…" · `development.typeToSearch` "Type to search pull
 requests" · `development.noMatches` "No matching pull requests" ·
 `development.noMatchesHint` "Repositories are connected in Settings →
-Organisation → Git." · `development.linkedTo` "Linked to {key}" · `development.linkedManually`
-"linked manually" · `development.linkAction` "Link" · `development.notConnected`
+Organisation → Git." · `development.linkedTo` "Linked to {key}" ·
+`development.linkAction` "Link" · `development.notConnected`
 "GitHub isn't connected for this organisation. Connect it in Settings →
 Organisation → Git." · `development.autoLinkCaption` "Link with + Link pull request here, or
 with `link_pull_request` over the MCP." (cancel = the shared

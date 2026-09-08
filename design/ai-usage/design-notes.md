@@ -777,3 +777,206 @@ whichever way the decision had gone.
 - **MOTIR-4576** — the manual step that classifies `moooon` and reconciles its
   ledger to `--target=0`. That reconciliation is what turns today's drifted
   negative into a permanent `balance <= 0`, so it is the reason 7c cannot wait.
+
+---
+
+# AMENDMENT 2026-09-08 — the _"nothing else branches"_ clause was settled on a fixture that cannot occur, and the TIER PILL is one of the things it branches
+
+**Card MOTIR-4886, filed from dogfooding.** This amends the 2026-09-07 entry
+directly above. Its DECISION — panel 7c, a drawn exempt state keyed on `isMeta`
+alone — **stands and is not disturbed.** One of its supporting clauses does not
+survive, and it is withdrawn.
+
+## The clause withdrawn
+
+> ~~Nothing else on the page branches: the balance figure, **the tier pill**,
+> the allotment bar, the drill, the per-model breakdown, the run log and the
+> search figures all stay exactly as MOTIR-4572 left them, for every org.~~
+
+## Why — `balance: -4210` and `tier: null` cannot both be true
+
+The 2026-09-07 entry reached that clause from its own rendered fixture:
+
+> `OrgUsageClient` was bundled and screenshotted at the live shape (`isMeta:
+true`, `internalBilling: false`, `balance: -4210`, `tier: null`) … because
+> `tier` is `null` for an org that never transacted — **no tier pill and no
+> classification chip render at all.**
+
+Those two field values are jointly impossible. Verified on `origin/main`
+(motir-ai), not on a stale checkout:
+
+- `motir-ai/src/services/gatewaySyncService.ts:199` — the only path that moves a balance
+  calls `await ensureBilling(tenant.aiOrganizationId, db)` **before** the debit,
+  under the comment _"The org must have a ledger before we can lock it …
+  ensureBilling is idempotent."_
+- `motir-ai/src/services/creditService.ts:69–76` — `ensureBilling` reads `findOrgTier`
+  and, when it is null, `setOrgTier(…, free.id)`, with
+  `FREE_TIER_KEY = 'free'` at `motir-ai/src/services/creditService.ts:26`.
+- `motir-ai/prisma/schema.prisma:65–69` — the schema states the same rule in prose:
+  _"`planTierId` is nullable — the org is created before billing is
+  provisioned; **creditService assigns the `free` tier when it first provisions
+  the ledger**."_
+
+So the very call that produced the −4,210 assigned the `free` tier first. The
+org the entry describes as _"never transacted"_ is the org whose
+drifted-negative balance is that same entry's headline evidence — both halves
+stated, correctly cited, four lines apart. An org that has never transacted has
+no balance to be negative.
+
+**Rendered rather than reasoned, again — and this time at a shape that can
+exist.** `OrgUsageClient` was bundled (esbuild + the real `app/globals.css`
+through `@tailwindcss/postcss` + a `next-intl` provider + a stubbed usage
+route) and screenshotted at three DTO shapes. Verbatim, what each renders in
+the balance hero's meta line:
+
+| fixture                                                         | meta line renders                                                      |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `isMeta: true`, `internalBilling: false`, `-4210`, `tier: Free` | `moooon` + **`Free tier`** on `--el-tint-lavender`                     |
+| `isMeta: false`, `internalBilling: false`, `12480`, `Basic`     | `Acme` + `Basic tier` on `--el-tint-lavender`                          |
+| `isMeta: false`, `internalBilling: true`, `0`, `Basic`          | `Northwind` + `Basic tier` + **`Internal billing`** on `--el-tint-sky` |
+
+The first row is the defect: **"Free tier"**, beside the one organization for
+which every cap is lifted (`entitlementsService`: the META org _"short-circuits
+to the internal `meta` tier (every cap lifted)"_) and no invoice exists.
+
+## The decision — (b), an EXEMPT pill in the tier pill's place
+
+Three answers were weighed.
+
+- **(a) Suppress the pill for an exempt org.** REJECTED. It is the move the
+  2026-09-05 amendment exists to refuse, and it is the same option 2026-09-07
+  rejected for panel 7b: it leaves the reader with no statement at all about
+  what kind of organization they are in, on the page where that is the question
+  a negative balance raises.
+- **(b) An EXEMPT pill in its place.** **CHOSEN.** It performs (a)'s
+  subtraction and then says what the org's relationship to the product actually
+  is — the same move `design/billing` made at its own 2026-09-07 amendment, so
+  the two settings pages read as one system.
+- **(c) Keep the pill and change what it NAMES** (e.g. _"Internal tier"_).
+  REJECTED. The org does resolve to a tier row, but naming it leaks an internal
+  classification onto a customer-shaped surface AND still reads as a commercial
+  plan — it renames the false statement instead of removing it.
+
+## The pill — and why its TINT parts company with `design/billing`
+
+**The WORD is shared with billing, verbatim: `Not billed`.** A reader moving
+between "Billing & plans" and "Usage & cost" reads the same label for the same
+fact, which is the whole of what makes the two pages one system.
+
+**The TINT is not shared, and that is deliberate.** `design/billing`'s
+`.pill-exempt` is `--el-tint-peach` + `--el-text-strong`, chosen on the stated
+ground that _"peach is this area's one unspent tint"_. That reasoning does not
+port, because on THIS surface every tint is spent:
+
+| tint                 | what it already means here                                                         |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| `--el-tint-lavender` | the tier chip, the `generate` job kind, prior-month bars, the active scope segment |
+| `--el-tint-sky`      | the `expand` job kind, panel 7c's info glyph, **and the internal-billing chip**    |
+| `--el-tint-mint`     | the `augment` job kind                                                             |
+| `--el-tint-peach`    | **`.pill-plan`** — the ONE planning job kind (MOTIR-4303)                          |
+| `--el-tint-yellow`   | `.pill-warn` — panel 7b                                                            |
+| `--el-tint-rose`     | the error state's icon                                                             |
+
+The design system ships exactly those six (`packages/design-system/theme.css`),
+so there is no seventh to reach for and inventing one is forbidden. Peach here
+would put one tint on two unrelated meanings **on the same page** — a "Not
+billed" pill in the hero and a "Planning" pill in the run log below it.
+
+So `.pill-exempt` on this surface is the UNTINTED treatment:
+`--el-surface` + `--el-text-secondary` + `--el-border` (6.24:1, AA on every
+surface it can land on). That is the role this page already gives
+`.pill-neutral` — a factual label rather than a state — and an exempt org has
+no commercial state to signal. It keeps its own class name so the role has one
+home if a future palette adds a tint worth spending on it.
+
+## The predicate, in the terms the code reads
+
+| org                                                  | meta line renders                                      |
+| ---------------------------------------------------- | ------------------------------------------------------ |
+| `isMeta: false` — paying, free, or `internalBilling` | `{tier} tier` on `--el-tint-lavender`, **unchanged**   |
+| `isMeta: true` (with or without `internalBilling`)   | **`Not billed`** on `.pill-exempt`, and never the tier |
+| `tier: null` (an org that has genuinely never run)   | no pill, unchanged                                     |
+
+**It is `isMeta` and never `internalBilling`** — the same asymmetry 2026-09-07
+recorded for panel 7b. An `internalBilling`-but-not-`isMeta` org is charged
+exactly like a customer and made whole afterwards: it genuinely has a tier, it
+is genuinely refused at a zero balance by both motir-ai gates, and it keeps the
+tier pill. The classification chip (`internalBilling`) is a SECOND, independent
+branch and is unchanged.
+
+**One flag, read once.** MOTIR-4806 already introduces a named predicate for
+panel 7b/7c on the same component; this reads that same predicate rather than
+adding a second `isMeta` site.
+
+## PER ELEMENT — what an `isMeta` org sees, for everything the withdrawn clause covered
+
+The clause named seven elements and the classification chip. Answering only the
+pill would leave the rest re-openable one at a time, which is how this became
+the third re-take. So, each:
+
+| element                    | an `isMeta` org sees                                                                                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **balance figure**         | **UNCHANGED** — the real number, negative included. MOTIR-4572's point stands: a word where a figure belongs is the defect it removed.                                                                                   |
+| **tier pill**              | **CHANGES** — `Not billed` on `.pill-exempt`. This amendment.                                                                                                                                                            |
+| **allotment bar**          | **UNCHANGED, and it does not render** — an exempt org's allotment is 0, so `remainingPct` is null and the bar is absent by the existing code path. Confirmed in the render above. No branch is owed.                     |
+| **drill / scope control**  | **UNCHANGED** — scope is about which workspaces and projects are summed, and that is identical for every org.                                                                                                            |
+| **per-model breakdown**    | **UNCHANGED** — real tokens against real models.                                                                                                                                                                         |
+| **run log**                | **UNCHANGED** — real runs. The job-kind pills keep their tints, which is the constraint that decided `.pill-exempt`'s.                                                                                                   |
+| **search figures**         | **UNCHANGED** — real search spend.                                                                                                                                                                                       |
+| **`internalBilling` chip** | **UNCHANGED IN BEHAVIOUR** — gated on `internalBilling`, `--el-tint-sky`, correct as shipped. **But the ASSET never drew it**: MOTIR-4572 added it at `OrgUsageClient.tsx:402` and this mock did not follow. Drawn here. |
+| **panels 7a / 7b / 7c**    | **UNCHANGED** — settled by MOTIR-4809 and untouched by this card.                                                                                                                                                        |
+
+## Copy
+
+`messages/en.json` → `aiUsage.summary`:
+
+```json
+"exemptPill": "Not billed"
+```
+
+`messages/zh.json` → `aiUsage.summary`:
+
+```json
+"exemptPill": "不计费"
+```
+
+**A NEW key in the `aiUsage` namespace, not a reuse of `billing.exempt.pill`.**
+The two catalogs are per-namespace and a shared key would couple two surfaces'
+copy through a namespace neither owns; the STRING is deliberately identical and
+this note is where that is recorded. `aiUsage.summary.tier` is unchanged — it
+still renders for every `isMeta: false` org.
+
+## What changed in the assets
+
+- `usage.mock.html` — `.pill-exempt` and `.pill-internal` added to the token
+  block; panel 2 gains the hero's two other classifications beneath the trend
+  label. Panels 1 and 3–8 are untouched, and panel 2's crumb, trend and
+  affordance are byte-unchanged. Its populated hero has ONE character changed:
+  the `·` between the org name and the tier pill is deleted. The shipped hero
+  is a `flex … gap-2` row with no separator (`OrgUsageClient.tsx:392`, read in
+  the render above), so the `·` was the asset's own invention — and leaving it
+  would have made the hero disagree with the two variants drawn beneath it,
+  which DO match the shipped markup. It is in this element's scope and is
+  corrected rather than recorded.
+- `usage.png` — re-exported.
+- `usage-panel7.png` — **not re-cropped, and none is owed**: it crops panel 7,
+  which this card does not touch.
+- `search-spend.mock.html` — untouched. Its states panel owes the balance
+  states, not the summary hero.
+
+**A known placeholder this card does NOT fix:** panel 2's populated hero names
+its example org `moooon` while giving it a `Basic tier`, which no meta org can
+have. The name is the mock's generic example throughout the panel (its crumb
+and its intro sentence too), so correcting it is a rename across panel 2 rather
+than a fix to this element, and it is out of this card's scope. The exempt card
+added below it is the one that carries the real `moooon` shape.
+
+## Who consumes this
+
+- **MOTIR-4806** — the code card, which this one blocks. It implements the
+  predicate above beside the panel-7 predicate it already carries, and
+  transcribes the two copy strings. It writes no copy of its own.
+- **MOTIR-4885** — the planning bug recording why this was the THIRD re-take of
+  one clause family. Its criterion 3 is discharged by the per-element table
+  above: the remaining elements are answered here rather than left to be
+  re-opened one at a time.
