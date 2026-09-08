@@ -113,7 +113,12 @@ function seedRepo(name: string) {
  */
 async function roomOrgSection(projectId: string): Promise<string[]> {
   const view = await projectRepoRoomService.getRoomView(projectId, ctx);
-  const { fromOrganization } = splitRoomSections(view.rows, view.connected, view.connectedInDomain);
+  const { fromOrganization } = splitRoomSections(
+    view.rows,
+    view.connected,
+    view.connectedInDomain,
+    view.hostOwner,
+  );
   return fromOrganization.map(entryRef).sort();
 }
 
@@ -269,7 +274,12 @@ describe('the room and the organisation inventory — CONTAINMENT, not equality'
     await seedHostedRow(fx.projectId, 'acme-api');
 
     const view = await projectRepoRoomService.getRoomView(fx.projectId, ctx);
-    const { motirHosted } = splitRoomSections(view.rows, view.connected, view.connectedInDomain);
+    const { motirHosted } = splitRoomSections(
+      view.rows,
+      view.connected,
+      view.connectedInDomain,
+      view.hostOwner,
+    );
     expect(motirHosted.map((row) => row.name)).toEqual(['acme-api']);
     expect(await inventorySaysUsedBy(fx.projectId)).not.toContain('acme-api');
   });

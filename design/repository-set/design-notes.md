@@ -1601,6 +1601,50 @@ half's provenance legible and each half's affordances honest.
 and the saga's history lives on it. The sections answer _"which registry is this row in"_; ownership
 is the row's own state word, where §14.7 already put it.
 
+### AMENDMENT (bug MOTIR-4867, 2026-09-08) — a repository MOTIR HOSTS is in NEITHER section
+
+The sentence above says the sections answer _"which registry is this row in"_, and that is still the
+rule. What MOTIR-4867 found is that the room could not answer it, because the registry it reads
+cannot say **whose** a repository is.
+
+`From your organisation`'s layered half comes from `githubRepoRepository.listByWorkspace`, which
+filters on `github_repo.workspace_id` and nothing else. That read answers _"can this workspace
+dispatch into it?"_ — deliberately, because MOTIR-1931 needed a repository Motir CREATES for a
+workspace to be a legal `targetRepo`, and `persistProvisionedRepo` writes the creating project's
+`workspace_id` onto exactly such a row. So a repository under the **provisioning organisation** that
+the current project holds no `project_repository` row for survived the de-duplication and was drawn
+under a heading reading _"Repositories moooon is connected to"_, counted in `yours`, and absent from
+`0 hosted by Motir`. On the MOTIR project that was one row, and it was the only row on the page with
+an action available — the takeover this whole area exists for — drawn as the rows that have none.
+
+**It is subtracted from the org section and counted in neither total.** Three reasons, in the order
+they decided it:
+
+1. **The hosted section draws ROWS.** Its hint promises _"Motir created these and pays for their CI.
+   Move any of them to your own GitHub whenever you want."_ A mirror row with no `project_repository`
+   row has no takeover to offer, so putting it there would print that promise above the one
+   affordance it cannot keep — the §16.6 rule ("a control that cannot keep its promise is worse than
+   its absence") one tier up, applied to a whole row.
+2. **The room already answers for it, elsewhere.** `otherHostedProjects` (§14.4) is the drawn pointer
+   to the sibling projects whose code Motir also hosts. A hosted repository this project holds no
+   link to is that pointer's business.
+3. **It makes the room's two renders agree.** The client island rebuilds this list from
+   `connectCandidates`, which comes from `listOrganizationInstallations` — and the shared
+   provisioning installation names no organisation, so it was never in that list. The row was present
+   on the server render and gone after the first mutation. Both renders now settle on the
+   organisation-scoped answer, which is also what `get_project_state` reports.
+
+**`0 hosted by Motir` on a set-less project is therefore TRUE**, not an omission: the count is of what
+that section draws, and it draws this project's own rows.
+
+The classification is `organizationConnected` in `lib/projectRepos/roomSections.ts`, keyed on
+`ProjectRepoRoomViewDto.hostOwner` — carried on the view since MOTIR-1939 and, until this bug, read
+by nothing but the onboarding step. **It is passed in, never read from the environment**, because the
+module is pure and client-safe on purpose; `hostOwner: null` (a deployment with no
+`GITHUB_FALLBACK_ORG`, which hosts nothing) classifies nothing and leaves the room exactly as it was.
+**And the fix is a classification, never a narrower read** — filtering inside `listByWorkspace` would
+un-dispatch every hosted repository to correct a settings page.
+
 ## 16.3 · Drawn against SHIPPED reality — what was RENDERED first
 
 Both halves ship, so both were rendered before anything was drawn (the design-against-shipped-reality

@@ -7,7 +7,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
-import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
+import { organizationConnected, summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
 import { RepositoriesRoom } from './_components/RepositoriesRoom';
 import { guardSettingsPage } from '../_guard';
@@ -165,8 +165,17 @@ async function RepositoriesPaneBody({
   // "days later" copy would hydrate differently — this repo's known relative-time
   // hydration-flake class, avoided at the root rather than patched at the leaf.
   const nowIso = new Date().toISOString();
-  const counts = summarizeRepositories(view.rows, view.connected);
-  const hasAny = view.rows.length > 0 || view.connected.length > 0;
+  const counts = summarizeRepositories(view.rows, view.connected, view.hostOwner);
+  // ⚠️ THE ORGANISATION'S HALF, NOT THE WHOLE LAYERED REGISTRY (bug MOTIR-4867).
+  // `view.connected` is `listByWorkspace`'s answer to *what can this workspace
+  // dispatch into*, which legitimately includes a repository MOTIR hosts. Asking
+  // it *does this project have anything to show* counted such a repository as
+  // something to show and then rendered a summary of all zeros above two absent
+  // sections. `organizationConnected` is the same predicate the summary and the
+  // section split use, so the header and the body cannot disagree about whether
+  // there is anything here.
+  const hasAny =
+    view.rows.length > 0 || organizationConnected(view.connected, view.hostOwner).length > 0;
 
   return (
     <>
