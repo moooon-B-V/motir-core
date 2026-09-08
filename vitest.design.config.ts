@@ -126,6 +126,25 @@ export default defineConfig({
       // `design/**` and nothing else, no database and no browser, which is this
       // lane's whole predicate.
       'tests/design-mock-utility-correspondence.test.ts',
+      // `design-dark-board-parity` (MOTIR-4868) is the guard for the FOURTH
+      // file. Five assets ship a `<name>.dark.png` — the same board with
+      // `data-theme="dark"` on the root — and nothing anywhere read one: the
+      // three-file rule `design-three-file-set` measures is written for ONE
+      // PNG, and the re-export script exported the light board only, so a mock
+      // edit left the dark PNG drawing the old design under an `EXACT` verdict
+      // for the half the tool did do. It reads `design/**` and nothing else, no
+      // database and no browser, which is this lane's whole predicate — and a
+      // design PR is both the only thing that can break it and the only thing
+      // that can fix it.
+      'tests/design-dark-board-parity.test.ts',
+      // `scripts/render-design-mock-boards` (MOTIR-4868) guards the BOARD loop
+      // in `scripts/render-design-mock.mjs` — which files one mock exports, and
+      // that a `REFLOW` on one board still writes the other. It reads no asset
+      // (it drives the loop with a fake renderer and a fake writer), so it is
+      // here for the same reason its search sibling above is: a `design/*`
+      // branch is where the script it guards is RUN, and the spec needs neither
+      // a database nor a browser.
+      'tests/scripts/render-design-mock-boards.test.ts',
     ],
   },
   resolve: {

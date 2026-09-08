@@ -51,18 +51,45 @@
 // committed height, with `EXACT` / `DIMS` still exiting early. The rule and the
 // defect it replaces are documented in `scripts/renderDesignMockSearch.mjs`,
 // which holds the search and is unit-tested in
-// `tests/scripts/render-design-mock-search.test.ts`.
+// `tests/scripts/render-design-mock-search.test.ts`. The BOARD loop is split out
+// the same way, into `scripts/renderDesignMockBoards.mjs`, and unit-tested in
+// `tests/scripts/render-design-mock-boards.test.ts`.
+//
+// ── The DARK board (MOTIR-4868) ─────────────────────────────────────────────
+// Five assets in this tree ship a FOURTH file, `<name>.dark.png` — the same
+// board with `data-theme="dark"` on the root. It is not decoration: it is the
+// only asset-side evidence for the dark half of the palette, where
+// `--el-text-inverted` flips and several ink pairings differ from light.
+//
+// Until this card the script exported the LIGHT board only, and said nothing at
+// all about the other one. So an author who edited a mock, ran this script and
+// read `EXACT` had every reason to believe the asset was current while one of
+// its files still specified the design they had just removed — observed on
+// `parent/MOTIR-1754-rebuild` @ `4c9526cc8`, where the light board re-exported
+// to 2400x17160 and the dark board sat at the committed 2400x17392, drawing two
+// page-head buttons and a connect aside that no longer existed.
+//
+// So: a mock with a `<name>.dark.png` beside it exports BOTH boards, and prints
+// one verdict line each. The dark board gets its OWN viewport search against its
+// OWN committed PNG, so the four verdicts mean exactly what they mean for the
+// light board, per board — a `REFLOW` on one writes nothing for that board and
+// leaves the other alone. Nothing is opt-in: an author cannot forget a file they
+// did not know was there. `--dark` is for the one case the existence test cannot
+// cover — CREATING a dark board that does not exist yet, which needs `--width`
+// for the same reason a new light asset does.
 //
 // ── Usage ───────────────────────────────────────────────────────────────────
 //   node scripts/render-design-mock.mjs design/<area>/<surface>.mock.html …
 //   node scripts/render-design-mock.mjs --verify design/**/*.mock.html
 //   node scripts/render-design-mock.mjs --width 1280 design/<area>/<s>.mock.html
+//   node scripts/render-design-mock.mjs --dark --width 1200 design/<a>/<s>.mock.html
 //
 // `--verify` reports without writing. `--width` / `--height` skip the search for
 // an asset whose PNG does not exist yet (a NEW asset has no baseline, so it is
 // the one case where the settings have to be stated rather than recovered), and
 // they are also the override for a REFLOW verdict: settings you STATE are
 // written even when the height is far off, because you asserted them.
+// `--dark` adds the dark board for a mock that has no committed one yet.
 // Run it AFTER `prettier --write` on the mock: prettier reformats the markup, so
 // a PNG rendered from the pre-format source is not an export of what lands.
 
@@ -71,16 +98,11 @@ import { existsSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import {
-  DEVICE_SCALE_FACTORS,
-  HEIGHTS,
-  heightsFor,
-  pngSize,
-  searchRenderSettings,
-} from './renderDesignMockSearch.mjs';
+import { boardsFor, darkPngFor, exportMockBoards } from './renderDesignMockBoards.mjs';
 
 const argv = process.argv.slice(2);
 const verifyOnly = argv.includes('--verify');
+const forceDark = argv.includes('--dark');
 const flagValue = (name) => {
   const at = argv.indexOf(name);
   return at === -1 ? null : Number(argv[at + 1]);
@@ -95,21 +117,42 @@ function isFlagValue(args, index) {
 }
 
 if (mocks.length === 0) {
-  console.error('usage: node scripts/render-design-mock.mjs [--verify] [--width N] <mock.html…>');
+  console.error(
+    'usage: node scripts/render-design-mock.mjs [--verify] [--dark] [--width N] <mock.html…>',
+  );
   process.exit(2);
 }
+
+/** A path's content AT `HEAD`, which is what every comparison in this script is against. */
+const gitShow = (path) =>
+  execFileSync('git', ['show', `HEAD:${path}`], { maxBuffer: 256 * 1024 * 1024 });
 
 const scratch = mkdtempSync(join(tmpdir(), 'design-mock-'));
 const browser = await chromium.launch();
 
-/** Full-page, light theme, at the design tree's `deviceScaleFactor: 2` convention. */
-async function shoot(fileUrl, width, height, scale) {
+/**
+ * Full-page, at the design tree's `deviceScaleFactor: 2` convention.
+ *
+ * ⚠️ `colorScheme` stays `'light'` for BOTH boards, and that is deliberate. The
+ * notes define the dark board as *the same board with `data-theme="dark"` on the
+ * root* — no asset in the tree carries a `prefers-color-scheme` query (checked:
+ * zero matches across all five), so emulating the OS preference would add a
+ * second, unspecified difference between the two renders (UA form-control and
+ * scrollbar painting) that no design note asks for. One board, one attribute.
+ */
+async function shoot(fileUrl, width, height, scale, theme = 'light') {
   const page = await browser.newPage({
     viewport: { width, height },
     deviceScaleFactor: scale,
     colorScheme: 'light',
   });
   await page.goto(fileUrl, { waitUntil: 'networkidle' });
+  if (theme === 'dark') {
+    // Set rather than toggle: two of the five mocks hard-code
+    // `<html data-theme="light">` and three carry no attribute at all, so the
+    // one operation that is correct for every shape is an assignment.
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  }
   // ⚠️ `animations: 'disabled'` is what makes this export REPRODUCIBLE, and it
   // stopped being optional the day the tree gained its first animated asset
   // (`design/runs/run-modal.mock.html`, MOTIR-3893 — the running edge flows).
@@ -130,86 +173,40 @@ async function shoot(fileUrl, width, height, scale) {
   return buffer;
 }
 
-/** `+5334px (+182%)` — the chosen candidate's distance from the committed height. */
-const formatDelta = (heightDelta, committedHeight) => {
-  const sign = heightDelta > 0 ? '+' : '';
-  const percent = committedHeight > 0 ? Math.round((heightDelta / committedHeight) * 100) : 0;
-  return `Δbaseline=${sign}${heightDelta}px (${sign}${percent}%)`;
-};
-
 let failed = 0;
 for (const mock of mocks) {
-  const png = mock.replace(/\.mock\.html$/, '.png');
   const target = 'file://' + resolve(mock);
 
-  if (!existsSync(png)) {
-    if (!forcedWidth) {
-      console.log(`NEW\t—\t${mock} — no committed .png; pass --width to export a new asset`);
-      failed += 1;
-      continue;
+  // The baseline source is a property of the MOCK, not of a board, so it is
+  // written once and both boards render from it.
+  let baselineUrl = null;
+  const baseline = () => {
+    if (baselineUrl === null) {
+      const baselinePath = join(scratch, mock.replace(/\//g, '__'));
+      writeFileSync(baselinePath, gitShow(mock));
+      baselineUrl = 'file://' + baselinePath;
     }
-    const buffer = await shoot(
-      target,
-      forcedWidth,
-      forcedHeight ?? HEIGHTS[0],
-      DEVICE_SCALE_FACTORS[0],
-    );
-    if (!verifyOnly) writeFileSync(png, buffer);
-    console.log(`NEW\t${forcedWidth}\t${pngSize(buffer).join('x')}\t${mock}`);
-    continue;
-  }
+    return baselineUrl;
+  };
 
-  // The committed export is read from HEAD, not from the working tree: on a
-  // re-run inside a sweep the working-tree PNG is one this script already wrote,
-  // and comparing against it would report every asset as EXACT.
-  const committed = execFileSync('git', ['show', `HEAD:${png}`], { maxBuffer: 256 * 1024 * 1024 });
-  const [committedWidth, committedHeight] = pngSize(committed);
-
-  // The baseline: the same mock as it stands at HEAD. Anything this render does
-  // NOT reproduce is the environment's doing, not the working tree's.
-  const baselinePath = join(scratch, mock.replace(/\//g, '__'));
-  writeFileSync(
-    baselinePath,
-    execFileSync('git', ['show', `HEAD:${mock}`], { maxBuffer: 256 * 1024 * 1024 }),
-  );
-  const baselineUrl = 'file://' + baselinePath;
-
-  const { settings, verdict, heightDelta } = await searchRenderSettings({
-    shoot: (width, height, scale) => shoot(baselineUrl, width, height, scale),
-    committed,
+  const { lines, failed: mockFailed } = await exportMockBoards({
+    mock,
+    boards: boardsFor(mock, { darkExists: existsSync(darkPngFor(mock)), forceDark }),
+    shootTarget: (width, height, scale, theme) => shoot(target, width, height, scale, theme),
+    shootBaseline: (width, height, scale, theme) => shoot(baseline(), width, height, scale, theme),
+    // The committed export is read from HEAD, not from the working tree: on a
+    // re-run inside a sweep the working-tree PNG is one this script already
+    // wrote, and comparing against it would report every asset as EXACT.
+    readCommitted: (png) => (existsSync(png) ? gitShow(png) : null),
+    write: (png, buffer) => {
+      if (!verifyOnly) writeFileSync(png, buffer);
+    },
     forcedWidth,
-    heights: heightsFor(forcedHeight),
+    forcedHeight,
   });
 
-  if (!settings) {
-    console.log(`FAIL\t—\tno viewport reproduces ${committedWidth}px wide\t${mock}`);
-    failed += 1;
-    continue;
-  }
-
-  const chosen = `${settings.width}x${settings.height}@${settings.scale}x`;
-  const against = `committed=${committedWidth}x${committedHeight}`;
-  const delta = heightDelta === 0 ? '' : `\t${formatDelta(heightDelta, committedHeight)}`;
-
-  // A REFLOW the search had to CHOOSE is a refusal: writing at these settings
-  // produces a plausible image of a document that reflowed, which is precisely
-  // the failure MOTIR-4374 was filed for. Settings the operator STATED are
-  // written anyway — `--width` is an assertion, not a guess.
-  if (verdict === 'REFLOW' && !forcedWidth) {
-    console.log(
-      `REFLOW\t${chosen}\t${against}${delta}\t${mock} — the nearest viewport still reflows ` +
-        `the document; nothing written. Re-run with --width <the viewport it was exported at> ` +
-        `if this delta is real.`,
-    );
-    failed += 1;
-    continue;
-  }
-
-  const buffer = await shoot(target, settings.width, settings.height, settings.scale);
-  if (!verifyOnly) writeFileSync(png, buffer);
-  console.log(
-    `${verdict}\t${chosen}\t${against}\tnew=${pngSize(buffer).join('x')}${delta}\t${mock}`,
-  );
+  for (const line of lines) console.log(line);
+  failed += mockFailed;
 }
 
 await browser.close();
