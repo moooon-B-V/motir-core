@@ -15,10 +15,8 @@ import {
   Inbox,
   LayoutDashboard,
   LayoutList,
-  ListChecks,
   Map,
   Settings,
-  ShieldCheck,
   Sparkles,
   Waypoints,
 } from 'lucide-react';
@@ -583,94 +581,102 @@ export function SidebarNav({
   // gating on it would hide a door this story has no business touching.
   const showSettingsDoor = hasProject ? hasVisibleSettingsArea(held, availability) : true;
 
-  sections.push({
-    id: 'bottom',
-    items: [
-      ...(showSettingsDoor
-        ? [
-            {
-              icon: <Settings />,
-              label: t('nav.settings'),
-              // Deep-link to project settings when a project is active;
-              // otherwise there's nothing project-scoped to configure, so go to
-              // the settings HOME — which one depends on progressive disclosure
-              // (MOTIR-3502 · organization-tier §6d). Below the reveal threshold
-              // the workspace tier is hidden and its sections are folded into
-              // `/settings/organization`, so the door points there. Re-pointed,
-              // not removed: this is the rail's only settings entry with no
-              // active project, and a settings home exists at every count.
-              href: hasProject
-                ? PROJECT_SETTINGS_ROOT
-                : workspaceTierRevealed
-                  ? '/settings/workspace'
-                  : '/settings/organization',
-              // Stay un-highlighted when a more-specific workspace-settings
-              // sub-link (Job runs / GitHub) is the active route, so only one
-              // row reads current.
-              active:
-                isActive(pathname, '/settings') &&
-                !isActive(pathname, '/settings/workspace/security') &&
-                !isActive(pathname, '/settings/workspace/jobs') &&
-                // Git moved to the organisation tier (MOTIR-4680); the clause
-                // follows the row it exists to yield to.
-                !isActive(pathname, '/settings/organization/git'),
-            },
-          ]
-        : []),
-      // Workspace Security (Story MOTIR-1215 · MOTIR-3647) — the require-2FA
-      // policy for this workspace.
+  // ⚠️ BOTH WORKSPACE ROWS LEFT THIS SECTION (Story MOTIR-4843 · MOTIR-4847 ·
+  // `design/shell/rail-bottom-section.mock.html`, amended by MOTIR-4845).
+  //
+  // `Security` and `Job runs` were workspace-tier panes rendered as loose rows
+  // in the PROJECT's rail — a tenancy mismatch that taught the wrong model
+  // twice. Both capabilities are RELOCATED, never removed, which is what
+  // `organization-tier.md` §6 requires of a hiding rule: above the reveal they
+  // are rows in the workspace area's own rail (`lib/settings/workspaceSettingsNav.ts`),
+  // and below it they are folded into `/settings/organization` — Security by
+  // `WorkspaceFoldInSection` (MOTIR-3502) and Job runs by `JobRunsFoldInSection`
+  // (MOTIR-4861, the fold-in this card waited on). The door into both is the
+  // workspace SWITCHER's new `Workspace settings` row.
+  //
+  // ⚠️ `Git` OUTLIVES THEM HERE, and is a different card's to remove.
+  // MOTIR-4640 already took it out of the design asset above; the code removal
+  // belongs to MOTIR-4643, which folds Code health + Git into one primary
+  // entry. Until that lands this section always has at least one row, so the
+  // asset's FLOOR arm — the section absent entirely — is drawn but not yet
+  // reachable. The guard below is written for it anyway, because a section that
+  // can vanish must not ship as an empty container with a stray separator.
+  const bottomItems = [
+    ...(showSettingsDoor
+      ? [
+          {
+            icon: <Settings />,
+            label: t('nav.settings'),
+            // Deep-link to project settings when a project is active;
+            // otherwise there's nothing project-scoped to configure, so go to
+            // the settings HOME — which one depends on progressive disclosure
+            // (MOTIR-3502 · organization-tier §6d). Below the reveal threshold
+            // the workspace tier is hidden and its sections are folded into
+            // `/settings/organization`, so the door points there. Re-pointed,
+            // not removed: this is the rail's only settings entry with no
+            // active project, and a settings home exists at every count.
+            href: hasProject
+              ? PROJECT_SETTINGS_ROOT
+              : workspaceTierRevealed
+                ? '/settings/workspace'
+                : '/settings/organization',
+            // Stay un-highlighted when a more-specific row in this same section
+            // is the active route, so only one row ever reads current.
+            //
+            // ⚠️ TWO CLAUSES WENT WITH THEIR ROWS (MOTIR-4847). This predicate
+            // used to negate `/settings/workspace/security` and
+            // `/settings/workspace/jobs` as well. Both are now unreachable from
+            // here in TWO independent ways — the rows they yielded to are gone,
+            // and `isWorkspaceSettingsPath` returns the workspace area's own
+            // Sidebar before this block is ever built — so a clause that can
+            // never fire is not a safe extra: it is an untested branch that
+            // still reads as covered (MOTIR-4368's finding about this very
+            // predicate). Only `Git` still has a row here to yield to.
+            active:
+              isActive(pathname, '/settings') &&
+              // Git moved to the organisation tier (MOTIR-4680); the clause
+              // follows the row it exists to yield to.
+              !isActive(pathname, '/settings/organization/git'),
+          },
+        ]
+      : []),
+    {
+      // Git integration settings (Story 7.10 GitHub + 7.23 GitLab · MOTIR-1478)
+      // — the SHARED connect-settings surface. ONE "Git" row (git-branch
+      // glyph): GitLab does NOT get a second row, because the provider is a
+      // Segmented on the page rather than a second destination.
       //
-      // ⚠️ GATED ON THE TIER REVEAL, WHICH THE TWO ROWS BELOW ARE NOT — and the
-      // difference is the rule, not an inconsistency. Job runs and Git are
-      // workspace-SCOPED but not workspace-NAMED, so §6 leaves them alone. This
-      // pane is workspace-NAMED and `notFound()`s below the threshold, so a row
-      // here would point at a 404. Below it the control is reached by scrolling
-      // `/settings/organization`, where `WorkspaceFoldInSection` hosts it.
-      ...(workspaceTierRevealed
-        ? [
-            {
-              icon: <ShieldCheck />,
-              label: t('nav.security'),
-              href: '/settings/workspace/security',
-              active: isActive(pathname, '/settings/workspace/security'),
-            },
-          ]
-        : []),
-      {
-        // Operator surface (Subtask 1.6.5) — the workspace's background-job runs
-        // + dead-letter queue. A workspace-scoped settings sub-page.
-        icon: <ListChecks />,
-        label: t('nav.jobRuns'),
-        href: '/settings/workspace/jobs',
-        active: isActive(pathname, '/settings/workspace/jobs'),
-      },
-      {
-        // Git integration settings (Story 7.10 GitHub + 7.23 GitLab · MOTIR-1478)
-        // — the SHARED connect-settings surface. ONE "Git" row (git-branch
-        // glyph): GitLab does NOT get a second row, because the provider is a
-        // Segmented on the page rather than a second destination.
-        //
-        // ⚠️ IT POINTS AT THE ORGANISATION NOW (Story MOTIR-4669 · MOTIR-4680).
-        // A repository is connected ONCE, to the organisation, so the surface
-        // moved a tier and `/settings/workspace/{github,gitlab}` are deleted.
-        // The ROW stays and is RE-POINTED rather than removed:
-        // `organization-tier.md` §6 — a relocation preserves the door, and this
-        // is the deep link from anywhere in the app, reached the same way Job
-        // runs is. Leaving it on the old path would still have worked, through
-        // the permanent redirect, and would have made every visit pay a hop for
-        // a link the app itself controls.
-        icon: <GitBranch />,
-        label: t('nav.git'),
-        href: '/settings/organization/git',
-        active: isActive(pathname, '/settings/organization/git'),
-      },
-      // Docs and Legal documents LEFT this section for the Help menu
-      // (MOTIR-4239 · design/shell/help-menu.mock.html): the authed shell now
-      // has a footer to put them in, and a bottom section that keeps growing
-      // with every non-product door was the tell, not merely a symptom. The
-      // floor is unchanged — Settings · Security · Job runs · Git.
-    ],
-  });
+      // ⚠️ IT POINTS AT THE ORGANISATION NOW (Story MOTIR-4669 · MOTIR-4680).
+      // A repository is connected ONCE, to the organisation, so the surface
+      // moved a tier and `/settings/workspace/{github,gitlab}` are deleted.
+      // The ROW stays and is RE-POINTED rather than removed:
+      // `organization-tier.md` §6 — a relocation preserves the door, and this
+      // is the deep link from anywhere in the app, reached the same way Job
+      // runs is. Leaving it on the old path would still have worked, through
+      // the permanent redirect, and would have made every visit pay a hop for
+      // a link the app itself controls.
+      icon: <GitBranch />,
+      label: t('nav.git'),
+      href: '/settings/organization/git',
+      active: isActive(pathname, '/settings/organization/git'),
+    },
+    // Docs and Legal documents LEFT this section for the Help menu
+    // (MOTIR-4239 · design/shell/help-menu.mock.html): the authed shell now
+    // has a footer to put them in, and a bottom section that keeps growing
+    // with every non-product door was the tell, not merely a symptom.
+    //
+    // The floor is now Settings · Git — `Security` and `Job runs` left with
+    // MOTIR-4847, and this line is the count nobody re-took last time.
+  ];
+
+  // NOTHING MARKS THE GAP, INCLUDING THE SECTION ITSELF (MOTIR-4847). When the
+  // last row filters away the section is ABSENT — no heading, no separator, no
+  // empty state — rather than an empty container. Pushing `{ items: [] }` would
+  // render the separator `Sidebar` draws between sections above a row that is
+  // not there, which reads as a loading error rather than as policy.
+  if (bottomItems.length > 0) {
+    sections.push({ id: 'bottom', items: bottomItems });
+  }
 
   return (
     <Sidebar

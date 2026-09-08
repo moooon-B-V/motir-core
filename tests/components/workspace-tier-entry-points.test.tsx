@@ -23,12 +23,28 @@ import {
 // promise about a room, and a disabled row is a promise the product then
 // refuses.
 //
-// ⚠️ `/settings/workspace/jobs` and `/settings/workspace/github` are NOT covered
-// by that rule and must keep rendering at every count — they are
-// workspace-SCOPED but not workspace-NAMED, and §6 reveals a tier rather than
-// relocating every page beneath it. That is why every assertion below is
-// anchored on the exact string `"/settings/workspace"` followed by a quote,
-// which a sub-route href does not match.
+// ⚠️ THE CARVE-OUT THIS COMMENT USED TO CARRY IS RETIRED (Story MOTIR-4843 ·
+// MOTIR-4847). It read: `/settings/workspace/jobs` and
+// `/settings/workspace/github` "are NOT covered by that rule and must keep
+// rendering at every count — they are workspace-SCOPED but not workspace-NAMED".
+// That was MOTIR-3502's AC 6, and it was the tell rather than the exception: a
+// surface exempted from a hiding rule BECAUSE IT STILL ANSWERS is a surface that
+// was never given a relocation. All three are now equally absent below the
+// reveal — Git moved a tier (MOTIR-4680), Security folds in via
+// `WorkspaceFoldInSection` (MOTIR-3502), and Job runs gained its own gate and
+// `JobRunsFoldInSection` (MOTIR-4861).
+//
+// The href anchor below (`"/settings/workspace"` followed by a quote) is KEPT
+// anyway, because it is the tighter assertion: it asks about the AREA's own
+// door, which is the thing this file is named after.
+//
+// ⚠️ THE ACCOUNT MENU IS NO LONGER ONE OF THE ENTRY POINTS. `UserMenu` had the
+// only `Workspace settings` row in the product and no longer has any conditional
+// but `platformStaff`; the door is the workspace SWITCHER's now, and
+// `ShellTierNav` renders that whole control only above the reveal — so the tier
+// gate moved from a ROW to the CONTROL that carries it. The arrival is
+// `WorkspaceSwitcher-settings-door.test.tsx`; the cases below are the departure,
+// and they assert the absence at EVERY count rather than at one.
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -75,45 +91,44 @@ describe('the reveal predicate', () => {
   });
 });
 
-describe('the account menu BELOW the reveal threshold', () => {
+describe('the account menu, at EVERY workspace count', () => {
+  // AMENDED, not deleted (MOTIR-4847). These cases used to be split across two
+  // describes — one below the threshold asserting absence, one at it asserting
+  // presence — because the row was reveal-gated. There is no threshold to
+  // straddle any more: the row is gone at every count, and the menu takes no
+  // workspace-count prop at all. Keeping the file's departure cases as ONE
+  // unconditional block is the change; deleting them would leave the strongest
+  // statement this story makes about the account menu recorded nowhere.
+
   it('renders no "Workspace settings" row', () => {
-    renderWithIntl(<UserMenu name="Ada" email="ada@example.com" workspaceTierRevealed={false} />);
+    renderWithIntl(<UserMenu name="Ada" email="ada@example.com" />);
     openMenu();
     expect(screen.queryByText('Workspace settings')).toBeNull();
   });
 
   it('leaves no /settings/workspace reference anywhere in the rendered markup', () => {
-    const { container } = renderWithIntl(
-      <UserMenu name="Ada" email="ada@example.com" workspaceTierRevealed={false} />,
-    );
+    // The href assertion, not the label one: a row relabelled but still pointing
+    // at the area would pass the case above and fail this.
+    const { container } = renderWithIntl(<UserMenu name="Ada" email="ada@example.com" />);
     openMenu();
     // The whole document, because the menu renders through a portal.
     expect(namesTheWorkspaceArea(document.body.innerHTML)).toBe(false);
     expect(namesTheWorkspaceArea(container.innerHTML)).toBe(false);
   });
 
-  it('is the DEFAULT — omitting the prop hides the row', () => {
-    // The omission has to fail CLOSED. The other default leaks a tier the
-    // product is telling the user does not exist yet, from every caller that
-    // forgets to thread the count.
-    renderWithIntl(<UserMenu name="Ada" email="ada@example.com" />);
+  it('is true for a PLATFORM-STAFF menu too — the one conditional left changes nothing here', () => {
+    // `platformStaff` is now the menu's only branch, so this is the whole of its
+    // state space: if the row survived anywhere, it would be in the arm that
+    // renders the most rows.
+    renderWithIntl(<UserMenu name="Ops" email="ops@moooon.net" platformStaff />);
     openMenu();
-    expect(screen.queryByText('Workspace settings')).toBeNull();
+    expect(namesTheWorkspaceArea(document.body.innerHTML)).toBe(false);
   });
 
   it('still offers Account settings — settings do not become unreachable', () => {
-    renderWithIntl(<UserMenu name="Ada" email="ada@example.com" workspaceTierRevealed={false} />);
+    renderWithIntl(<UserMenu name="Ada" email="ada@example.com" />);
     openMenu();
     expect(screen.getByText('Account settings')).toBeTruthy();
-  });
-});
-
-describe('the account menu AT the reveal threshold', () => {
-  it('renders the row, pointing at the workspace area', () => {
-    renderWithIntl(<UserMenu name="Ada" email="ada@example.com" workspaceTierRevealed />);
-    openMenu();
-    expect(screen.getByText('Workspace settings')).toBeTruthy();
-    expect(namesTheWorkspaceArea(document.body.innerHTML)).toBe(true);
   });
 });
 

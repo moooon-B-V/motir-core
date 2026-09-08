@@ -968,7 +968,6 @@
       "reports": "Reports",
       "codeHealth": "Code health",
       "settings": "Settings",
-      "jobRuns": "Job runs",
       "git": "Git",
       "github": "GitHub",
       "backlog": "Backlog",
@@ -976,8 +975,7 @@
       "roadmap": "Roadmap",
       "plans": "Plans",
       "resumeOnboarding": "Resume onboarding",
-      "resumeOnboardingInProgress": "Resume onboarding, in progress",
-      "security": "Security"
+      "resumeOnboardingInProgress": "Resume onboarding, in progress"
     },
     "topNav": {
       "global": "Global",
@@ -1005,6 +1003,7 @@
       "switch": "Switch workspace",
       "select": "Select workspace",
       "heading": "Workspaces",
+      "settings": "Workspace settings",
       "invite": "Invite teammates",
       "nameLabel": "Workspace name",
       "namePlaceholder": "My workspace",
@@ -1026,7 +1025,6 @@
     },
     "userMenu": {
       "account": "Account menu",
-      "workspaceSettings": "Workspace settings",
       "accountSettings": "Account settings",
       "signingOut": "Signing out…",
       "platformAdmin": "Platform admin",

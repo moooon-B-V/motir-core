@@ -413,7 +413,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       buildingInPublic={buildingInPublic}
                       cloudBilling={cloudBilling}
                       showPlanWithAi={showPlanWithAi}
-                      workspaceTierRevealed={workspaceTierRevealed}
                     />
                   }
                   sidebar={

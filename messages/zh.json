@@ -968,7 +968,6 @@
       "reports": "报表",
       "codeHealth": "代码健康度",
       "settings": "设置",
-      "jobRuns": "任务运行",
       "git": "Git",
       "github": "GitHub",
       "backlog": "待办列表",
@@ -976,8 +975,7 @@
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
-      "resumeOnboardingInProgress": "继续引导，进行中",
-      "security": "安全"
+      "resumeOnboardingInProgress": "继续引导，进行中"
     },
     "topNav": {
       "global": "全局",
@@ -1005,6 +1003,7 @@
       "switch": "切换工作区",
       "select": "选择工作区",
       "heading": "工作区",
+      "settings": "工作区设置",
       "invite": "邀请团队成员",
       "nameLabel": "工作区名称",
       "namePlaceholder": "我的工作区",
@@ -1026,7 +1025,6 @@
     },
     "userMenu": {
       "account": "账户菜单",
-      "workspaceSettings": "工作区设置",
       "accountSettings": "账户设置",
       "signingOut": "正在退出登录…",
       "platformAdmin": "平台管理",
