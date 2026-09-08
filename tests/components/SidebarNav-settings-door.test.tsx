@@ -100,6 +100,27 @@ describe('the Project settings door (design panel 1)', () => {
     expect(settingsRow()).toBeNull();
   });
 
+  // ⚠️ REMOVED (MOTIR-4873): 'with NO active project the row survives and
+  // targets the settings HOME'. It asserted the `!hasProject` arm of the
+  // settings door — `/settings/workspace` above the tier-reveal threshold,
+  // `/settings/organization` at or below it (MOTIR-3502 · organization-tier
+  // §6d) — for a reader with no active project.
+  //
+  // Every member is inside a project now (MOTIR-4870), so that arm is gone and
+  // the door always deep-links to project settings. WHICH settings home a
+  // workspace-tier reader reaches is unchanged and is still covered by the
+  // org/workspace rows below; what this case tested was the branch, and the
+  // branch is what the story removed.
+  //
+  // ⚠️ AND MOTIR-4843 RE-ADDED IT ON `main` WHILE THIS BRANCH WAS OPEN, in its
+  // MOTIR-3502 form — `renderRail(undefined, null, true)` asserting
+  // `/settings/workspace`, and `false` asserting `/settings/organization`. It is
+  // dropped again HERE rather than merged, for the reason above and not because
+  // of the conflict: `renderRail(..., null, ...)` passes `activeProject={null}`,
+  // which is the state MOTIR-4870 removed. Keeping it would have re-armed a case
+  // whose fixture the product can no longer produce. The section-absent guard
+  // MOTIR-4847 added beside it is unrelated and is kept in full.
+
   it('⚠️ the section itself is ABSENT when its last row filters away (MOTIR-4847)', () => {
     // The empty arm `design/shell/rail-bottom-section.mock.html` draws: no
     // heading, no separator, no empty state — an empty CONTAINER is the failure
@@ -125,23 +146,6 @@ describe('the Project settings door (design panel 1)', () => {
     );
     expect(rowsPerSection.filter((rows) => rows.length === 0)).toEqual([]);
     expect(rowsPerSection.at(-1)).toEqual(['Git']);
-  });
-
-  it('with NO active project the row survives and targets the settings HOME', () => {
-    // Untouched by this story: workspace settings are governed by the workspace
-    // role, and `settingsPermissions` is empty in this state anyway — gating on
-    // it would hide a door this story has no business touching.
-    //
-    // WHICH home became conditional in MOTIR-3502 (organization-tier §6d): the
-    // workspace area above the tier-reveal threshold, the org settings home at
-    // or below it, where the folded-in workspace sections live. The door itself
-    // survives at every count, which is what this case has always asserted.
-    renderRail(undefined, null, true);
-    expect(settingsRow()?.getAttribute('href')).toBe('/settings/workspace');
-
-    cleanup();
-    renderRail(undefined, null, false);
-    expect(settingsRow()?.getAttribute('href')).toBe('/settings/organization');
   });
 });
 

@@ -990,8 +990,6 @@
     },
     "pageLoading": "页面加载中",
     "project": {
-      "createFirst": "创建你的第一个项目",
-      "emptyDescription": "项目用于归类你的工作项，并赋予它们类似ACME-1的标识。创建一个即可开始规划。",
       "create": "创建项目",
       "planWithAi": "用 AI 规划新项目",
       "untitled": "未命名项目",
@@ -1155,9 +1153,6 @@
     "epicPrivacyError": "无法更新可见性，请重试。",
     "watchToggleFailedTitle": "无法更新关注状态",
     "noProjectTitle": "未选择项目",
-    "noProjectListDescription": "从切换器中选择或创建一个项目，以跟踪其工作项。",
-    "noProjectDetailDescription": "从切换器中选择一个项目，以查看其工作项。",
-    "noProjectEditDescription": "从切换器中选择一个项目，以编辑其工作项。",
     "allIssuesIn": "{project} 的全部工作项",
     "filter": "筛选",
     "filterComingSoon": "筛选功能将在后续更新中推出",
@@ -4366,8 +4361,7 @@
       "resolutionTimeBody": "工作项从创建到解决所需的时间——团队是否在加速？",
       "workloadTitle": "工作量",
       "workloadBody": "按负责人统计的未完成工作——谁承担得更多。",
-      "noProjectTitle": "尚无项目",
-      "noProjectBody": "创建一个项目以查看其报表。"
+      "noProjectTitle": "尚无项目"
     },
     "period": {
       "day": "按日",
@@ -5884,7 +5878,6 @@
         "buildItAll": "不用，直接开始做产品吧。"
       },
       "noProjectTitle": "没有进行中的项目",
-      "noProjectBody": "请先选择或创建一个项目，Motir 才能和你一起规划。",
       "resuming": "正在恢复…",
       "resumingBody": "正在回到你上次离开的地方。",
       "canvas": {

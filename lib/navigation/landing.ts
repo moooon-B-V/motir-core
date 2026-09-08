@@ -34,21 +34,27 @@ import { sanitizeNextPath } from './nextDestination';
 
 /**
  * The signed-in landing — where a reader goes when nothing more specific is
- * asked for. `/workbench` is project-scoped and renders the shipped create-first
- * door when there is no project (MOTIR-2761), so it is a safe destination for
- * every signed-in actor, including one who has just made an account.
+ * asked for. `/workbench` is project-scoped, and every signed-in reader is now
+ * inside a project (MOTIR-4870), so it is a safe destination for all of them.
  *
  * ⚠️ RENAMED from `/home` by MOTIR-4782, and the old address still LANDS: a
  * permanent 308 in `next.config.ts` carries it here with its query string, so a
  * bookmark and a pasted `?tab=` link both survive. The move is this one line
  * because MOTIR-3373 collapsed nine literals into this constant first.
  *
- * ⚠️ AND THE CREATE-FIRST DOOR IS ON ITS WAY OUT — MOTIR-4815. A workbench is
- * somewhere you stand INSIDE a project, so a projectless reader does not belong
- * on it at all; that card seeds a default project at registration and lands a
- * new reader in `/onboarding` instead, after which `getActiveProject()` never
- * returns null and the sentence above loses its second clause. Nothing here
- * changes until it does.
+ * ⚠️ THE CREATE-FIRST DOOR IS GONE — MOTIR-4815, and this docstring used to
+ * carry its notice in the future tense. It said the Workbench "renders the
+ * shipped create-first door when there is no project (MOTIR-2761)", which was
+ * the second clause of the sentence above and is retired with the state it
+ * described: a default project is seeded at the WORKSPACE tier, so
+ * `getActiveProject()` returns null on no reachable path for a member and there
+ * is no project-less reader for the door to serve.
+ *
+ * ⚠️ AND THE LANDING NOW HAS A REGISTRATION ARM, which the retired notice did
+ * not anticipate: it read as though this constant would simply keep serving
+ * everyone. `resolvePostAuthDestination` sends a reader who has just CREATED an
+ * account to `ONBOARDING_ENTRY_PATH` instead — see its docstring — while every
+ * sign-in still lands here.
  */
 export const AUTHED_LANDING_PATH = '/workbench';
 
@@ -70,22 +76,43 @@ export const ONBOARDING_ENTRY_PATH = '/onboarding';
  *      auth depend on it, and `sanitizeNextPath` is what stops it being an open
  *      redirect;
  *   2. `/onboarding`, when an idea draft is being carried across;
- *   3. the signed-in landing.
+ *   3. `/onboarding`, when the account is being CREATED right now (MOTIR-4871);
+ *   4. the signed-in landing.
+ *
+ * ⚠️ ARM 3 IS THE REGISTRATION ARM, AND IT IS AN ARGUMENT RATHER THAN A SECOND
+ * EXPORTED CONSTANT (MOTIR-4871). A brand-new reader is now INSIDE a project
+ * from their first request (`projectsService.ensureDefaultProject`), and the
+ * useful thing to do with a project nobody has described yet is to describe it
+ * — which is what `/onboarding` is for, and what the product already does one
+ * step later when "Plan a new project with AI" mints a project and only then
+ * opens the entrance. Landing them on the Workbench instead would show a
+ * truthful empty surface and answer no question they have.
+ *
+ * It is a FLAG on this one function and not a `REGISTRATION_LANDING_PATH`
+ * beside the others, because a second constant is a second thing a caller can
+ * pick wrongly — and picking wrongly is exactly the six-defect history in this
+ * module's own docstring. The precedence stays in one place; the caller says
+ * only which SITUATION it is in, which is the one fact it holds and this module
+ * does not. Sign-IN passes nothing and is unchanged.
  *
  * @param next the raw `?next=` search param — a string, an array (a hand-edited
  *   URL can repeat the key), `null` from `useSearchParams().get`, or absent.
  * @param draftId the `?draft=` id, when the marketing hero handed one over.
+ * @param isRegistration whether this resolution is for an account being CREATED
+ *   right now, rather than for a sign-in. See the paragraph below.
  */
 export function resolvePostAuthDestination({
   next,
   draftId,
+  isRegistration,
 }: {
   next?: string | string[] | null;
   draftId?: string | null;
+  isRegistration?: boolean;
 }): string {
   const explicit = sanitizeNextPath(next ?? undefined);
   if (explicit) return explicit;
-  return draftId ? ONBOARDING_ENTRY_PATH : AUTHED_LANDING_PATH;
+  return draftId || isRegistration ? ONBOARDING_ENTRY_PATH : AUTHED_LANDING_PATH;
 }
 
 /**

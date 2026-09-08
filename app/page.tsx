@@ -11,11 +11,17 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 //   - a request carrying a valid SESSION  → `/home`
 //   - a request with none                 → `/sign-in`
 //
-// `/home` is the signed-in landing, decided in `docs/decisions/home-scope.md`
-// §2.3 (*"post-auth still lands on `/home`, unconditionally"*) and safe for a
-// brand-new actor too: it has been project-scoped with the shipped create-first
-// door since MOTIR-2761, so a reader with no project meets `ProjectsEmptyState`
-// rather than an empty My-work list.
+// `AUTHED_LANDING_PATH` is the signed-in landing, decided in
+// `docs/decisions/home-scope.md` §2.3 and safe for every signed-in actor: every
+// member is inside a project (MOTIR-4870), so the surface it names always has
+// one to scope to.
+//
+// ⚠️ AMENDED (MOTIR-4871). This comment used to justify the destination by
+// saying a reader with no project "meets `ProjectsEmptyState` rather than an
+// empty My-work list". That component is retired with the state it served, and
+// the justification with it. Note also that this is the ROOT, not a credential
+// surface: it answers a reader who ALREADY has a session, so it takes the
+// landing rather than the registration arm.
 //
 // ⚠️ This line USED to be a bare `redirect('/sign-in')` with no session read at
 // all, under a comment saying the root *"now lands the visitor on the login

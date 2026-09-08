@@ -70,6 +70,24 @@ const disc = enMessages.github.orgDisconnect;
 
 const OWNER = 'acceptance-repo-tenancy@example.com';
 
+// ⚠️ ITS OWN TIMEOUT, BECAUSE ITS PACING DOES NOT FIT THE LANE DEFAULT
+// (MOTIR-4876). This spec holds 17 beats at `BEAT_MS` (4000ms) and 5 chapters at
+// `CHAPTER_HOLD_MS` (2500ms) — **80.5s of deliberate hold** — against the
+// `playwright.acceptance.config.ts` per-test default of 90s. That left 9.5s for
+// every navigation, click, DB read and assertion in the whole walk, and MEASURED
+// on a production build against a private database the test takes **89,891ms**:
+// it was passing by 109 MILLISECONDS. Green here has been luck, not headroom,
+// and the tell is a timeout that prints NO call log — it lands inside a hold
+// rather than inside a locator operation, which is what makes this shape read as
+// a hang instead of as a budget.
+//
+// The holds are the POINT — this lane records a clip a reviewer watches
+// (`docs/decisions/acceptance-video.md`), so the pacing is the deliverable and
+// shortening it to fit is the wrong trade. 180s is the same figure
+// `acceptance-workbench.spec.ts` and `acceptance-planning-overlay.spec.ts`
+// already take for the same reason.
+test.describe.configure({ timeout: 180_000 });
+
 test('a repository is connected once, to the organisation, and the second project pays nothing', async ({
   page,
   chapter,

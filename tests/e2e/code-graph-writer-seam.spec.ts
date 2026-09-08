@@ -24,7 +24,7 @@
 
 import { expect, test } from '@playwright/test';
 import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
-import { signUp, createFirstProject } from './_helpers/shell-session';
+import { signUp } from './_helpers/shell-session';
 import { postSignedWebhook } from './_helpers/github-seed';
 import {
   E2E_INDEX_INSTALLATION_ID,
@@ -83,7 +83,13 @@ test('a push drives the index writer to a SUCCEEDED ledger row on the engine @sm
 }) => {
   const email = `writer-seam-${Date.now()}@example.test`;
   await signUp(page, email);
-  await createFirstProject(page, 'Writer Seam');
+  // ⚠️ NO `createFirstProject` HERE (MOTIR-4876). Registration now SEEDS a
+  // project at the workspace tier, so the workspace already holds exactly one
+  // and creating another made it two — which this test can SEE, because
+  // `projectsIndexed` counts every project in the workspace and the fan-out is
+  // one container per (repo × project). The assertion below is `1`, and it is
+  // the faithful number: a real account that has just registered has one
+  // project, not two.
 
   const local = email.split('@')[0]!;
   const ws = await adminDb.workspace.findFirstOrThrow({

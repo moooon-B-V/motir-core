@@ -31,7 +31,7 @@
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
-import { signUp, createFirstProject } from './_helpers/shell-session';
+import { signUp } from './_helpers/shell-session';
 import { postSignedWebhook } from './_helpers/github-seed';
 import { killJobWorker, startJobWorker } from './_helpers/job-worker-process';
 import {
@@ -113,7 +113,13 @@ async function push(request: APIRequestContext, repo: SeedRepo, head: string): P
 async function seedWorkspace(page: Parameters<typeof signUp>[0], repos: SeedRepo[]) {
   const email = `refresh-engine-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`;
   await signUp(page, email);
-  await createFirstProject(page, 'Refresh Engine');
+  // ⚠️ NO `createFirstProject` HERE (MOTIR-4876). Registration now SEEDS a
+  // project at the workspace tier, so the workspace already holds exactly one
+  // and creating another made it two — which this test can SEE, because
+  // `projectsIndexed` counts every project in the workspace and the fan-out is
+  // one container per (repo × project). The assertion below is `1`, and it is
+  // the faithful number: a real account that has just registered has one
+  // project, not two.
   const local = email.split('@')[0]!;
   const ws = await adminDb.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
   await seedConnectedRepos(ws.id, repos);

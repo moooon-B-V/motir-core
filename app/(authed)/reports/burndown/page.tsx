@@ -32,18 +32,10 @@ export default async function BurndownReportPage({
 
   const t = await getTranslations('reports');
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <ReportPageChrome
-        backLabel={t('backToReports')}
-        crumb={t('hub.title')}
-        title={t('burndown.title')}
-        subLine=""
-      >
-        <EmptyState title={t('hub.noProjectTitle')} description={t('hub.noProjectBody')} />
-      </ReportPageChrome>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const accessCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const sprints = await sprintsService.listByProject(ctx.projectId, accessCtx);

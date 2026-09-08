@@ -4,7 +4,6 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { isCloud } from '@/lib/billing/availability';
 import { projectsService } from '@/lib/services/projectsService';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { guardSettingsPage } from '../_guard';
 import { publicProjectUrl } from '@/lib/publicProjects/urls';
 import { PublicPageEditor } from './_components/PublicPageEditor';
@@ -46,13 +45,10 @@ export default async function ProjectPublicPagePage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[42rem]">
-        <EmptyState title={t('project.empty.title')} description={t('project.empty.description')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const refused = await guardSettingsPage('public-page', ctx);
   if (refused) return refused;

@@ -149,7 +149,6 @@ describe('the ⌘K palette', () => {
         activeWorkspaceId="ws0"
         projects={[PROJECT]}
         activeProjectId={PROJECT.id}
-        hasProject={false}
       />,
     );
   }

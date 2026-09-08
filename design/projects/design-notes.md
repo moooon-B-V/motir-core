@@ -12,6 +12,26 @@ direct analogue of the workspace surfaces.
 
 ---
 
+> ### ⚠️ THE EMPTY-STATE SURFACE IS RETIRED (2026-09-08, MOTIR-4875)
+>
+> This file drafts four project surfaces, and one of them — the **empty state**
+> (`empty-state.png`, and the _"Create your first project"_ copy in the tables
+> below) — no longer exists in the product. It became `ProjectsEmptyState`, the
+> Create-project screen a projectless reader was landed on inside project
+> chrome, and MOTIR-4872 deleted it.
+>
+> **Not because it was drawn badly.** The state it served is gone: a default
+> project is seeded at the WORKSPACE tier (MOTIR-4870), so
+> `getActiveProject()` returns null on no path a member can take. The record
+> is kept whole — this is a design record, and a surface that was right for the
+> product it was drawn for should be readable as such.
+>
+> **The other three surfaces are unaffected**: the create modal, the switcher
+> and the archive confirmation all still ship, and creating an ADDITIONAL
+> project is still a real act on the switcher.
+>
+> `docs/decisions/home-scope.md`'s 2026-09-08 amendment carries the reasoning.
+
 ## Files
 
 | `.pen` source                  | PNG exports                                                                  |

@@ -19,6 +19,7 @@ import {
 } from '@/lib/workflows/errors';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import type { StatusCategoryDto, WorkflowPolicyModeDto } from '@/lib/dto/workflows';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // Server Actions for the workflow-management settings page (Subtask 2.2.5).
 // Transport only: resolve session + active project, call ONE service method,
@@ -42,7 +43,12 @@ async function requireProjectContext(): Promise<{
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const ctx = await getActiveProject();
-  if (!ctx) redirect('/dashboard');
+  // ⚠️ RE-POINTED at the landing constant (MOTIR-4874). This spelled
+  // `/dashboard` — a route literal under a guard about where a reader with
+  // no project goes, which is the exact shape `landing-owner-guard` exists
+  // to catch. The branch itself is unreachable now (MOTIR-4870); the
+  // literal was reachable by every future reader of this file.
+  if (!ctx) redirect(AUTHED_LANDING_PATH);
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: ctx.projectId };
 }
 

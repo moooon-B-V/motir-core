@@ -67,7 +67,7 @@ interface Tenant {
 let seq = 0;
 
 /** Owner workspace + project + a saved filter + a few issues, the active
- * project pinned so /dashboard renders the list (not the projects-empty
+ * project pinned so /dashboard renders the list (the projects-empty
  * onboarding). Returns the sign-in-able owner email. */
 async function seedTenant(): Promise<Tenant> {
   seq += 1;

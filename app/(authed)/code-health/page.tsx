@@ -245,14 +245,10 @@ export default async function CodeHealthPage() {
   const t = await getTranslations('codeHealth');
   const ctx = await getActiveProject();
 
-  if (!ctx) {
-    return (
-      <div className="flex flex-col gap-6">
-        <Header title={t('title')} subtitle={t('subtitle')} />
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   let initialAudits: RepoAuditSurfaceDTO[] = [];

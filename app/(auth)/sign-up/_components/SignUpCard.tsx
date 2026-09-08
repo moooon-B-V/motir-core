@@ -90,16 +90,29 @@ function SignUpForm({ legal }: { legal: LegalLinks }) {
   // reasoning was correct, and it named its own expiry: *"if Home ever learns
   // the no-project case, this is the line to revisit."*
   //
-  // It has. MOTIR-2761 narrowed `/home` to the ACTIVE PROJECT and gave its
-  // no-project branch the shipped `ProjectsEmptyState` — the very component
-  // `/dashboard` renders there — so the create-first door is what a
-  // project-less actor now sees on Home. `docs/decisions/home-scope.md` §2.2
-  // writes down the discriminator (a route a reader is LANDED on gets the
-  // create-first door) and §2.3 decides post-auth lands on `/home`
-  // unconditionally, naming this line's split as the defect to close.
+  // It has, twice. MOTIR-2761 narrowed `/home` to the ACTIVE PROJECT and gave
+  // its no-project branch the shipped create-first door, which
+  // `docs/decisions/home-scope.md` §2.2 recorded as the discriminator (a route
+  // a reader is LANDED on gets an actionable door, not an actionless notice)
+  // and §2.3 used to land post-auth there unconditionally.
   //
   // An explicit `?next=` still WINS, exactly as on sign-in.
-  const callbackURL = resolvePostAuthDestination({ next: searchParams.get('next') });
+  //
+  // ⚠️ AMENDED AGAIN (MOTIR-4871), and the reasoning above named this expiry
+  // too. `/home` — now `/workbench` — learned the no-project case by rendering
+  // the create-first door; this story removes the no-project case altogether,
+  // so that door is going and the sentence "the create-first door is what a
+  // project-less actor now sees" stops being true of anything.
+  //
+  // What a brand-new account gets instead is a project it already has (seeded
+  // at the workspace tier, MOTIR-4870) and no description of it yet — so the
+  // landing is `/onboarding`, the surface whose whole job is turning that into
+  // a plan. `isRegistration` is what says so; the precedence still lives in
+  // `lib/navigation/landing.ts`, and SIGN-IN is untouched.
+  const callbackURL = resolvePostAuthDestination({
+    next: searchParams.get('next'),
+    isRegistration: true,
+  });
   // ⚠️ THIS IS WHERE THE ONBOARDING DOOR NOW LANDS (MOTIR-4402), so this card is
   // the one that has to acknowledge the intent it is carrying. A visitor who
   // pressed "Have a project idea? · Plan with AI" on `/sign-in` arrives here
@@ -108,7 +121,19 @@ function SignUpForm({ legal }: { legal: LegalLinks }) {
   // sent them here in the first place. `IdeaCarried` is the area's shipped
   // primitive for exactly this — an intent that crossed the auth boundary
   // (`design/auth/design-notes.md`, "beyond the artboards", item 3).
-  const carryingOnboardingIntent = isOnboardingDestination(callbackURL);
+  //
+  // ⚠️ IT IS RESOLVED WITHOUT THE REGISTRATION ARM, DELIBERATELY (MOTIR-4871).
+  // Every sign-up now lands on the entrance, so reading `callbackURL` here
+  // would light this banner for EVERY visitor — turning "your intention
+  // survived the auth boundary" into "here is what happens next", which is a
+  // different message on a surface `design/auth/design-notes.md` draws. What
+  // the banner is about is the intent the visitor ARRIVED with, and that is
+  // exactly what the destination resolves to when the registration arm is left
+  // off. The sanitizer still runs, so a hostile `//onboarding` is gone before
+  // this asks.
+  const carryingOnboardingIntent = isOnboardingDestination(
+    resolvePostAuthDestination({ next: searchParams.get('next') }),
+  );
 
   const [step, setStep] = useState<'identity' | 'password'>('identity');
   const [email, setEmail] = useState('');

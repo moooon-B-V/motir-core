@@ -2,7 +2,7 @@
 //
 // Stands up the journey's cast and surface: the PM signs up through the real
 // browser UI (the page needs a live session) and creates the first project via
-// the projects-empty-state CTA, which pins it active; then, server-side through
+// the switcher's create door, which pins it active; then, server-side through
 // the sanctioned test cross-layer reach, two work items —
 //
 //   * a `manual` card carrying FOUR to-dos, written through the REAL
@@ -55,7 +55,16 @@ export async function seedTodoListFixture(page: Page, pmEmail: string): Promise<
   const ws = await adminDb.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
   expect(pm, 'PM user exists after sign-up').not.toBeNull();
   expect(ws, 'auto workspace exists').not.toBeNull();
-  const project = await adminDb.project.findFirst({ where: { workspaceId: ws!.id } });
+  // ⚠️ BOUND TO THE PROJECT THE BROWSER IS IN (MOTIR-4876). This read was
+  // `findFirst({ where: { workspaceId } })` with no ordering, which was
+  // unambiguous only while a workspace held exactly one project. A default
+  // project is now SEEDED per workspace (MOTIR-4870), so an unordered read
+  // can return the seeded one while the browser is pinned to the one
+  // `createFirstProject` just made — and the fixture then writes its work
+  // items into a project the page never shows.
+  const project = await adminDb.project.findFirst({
+    where: { workspaceId: ws!.id, name: 'Platform' },
+  });
   expect(project, 'first project exists').not.toBeNull();
 
   const ctx = { userId: pm!.id, workspaceId: ws!.id };

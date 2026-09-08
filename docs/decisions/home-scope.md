@@ -17,17 +17,79 @@ readiness) · **Unblocks:** MOTIR-2761 · **Files:** MOTIR-2920, MOTIR-2921
 > re-pointed at a new document. What the rename changes is only what the surface
 > is CALLED and where it answers.
 >
-> **One decision below is on its way out, and by a different card:** §2.2's
-> create-first door is retired by [MOTIR-4815](motir:cmtr20oyh00bchuphqur71fja),
-> which seeds a default project at registration so `getActiveProject()` stops
-> being able to return `null`. Until that lands, §2.2 describes the shipped
-> behaviour.
+> **One decision below was on its way out when this banner was written, and it
+> has now landed** — see the second banner directly beneath this one. §2.2 no
+> longer describes shipped behaviour.
 >
 > This banner is an ADDITION rather than an edit. A decision record that is
 > rewritten to match the present has stopped being a record of a decision — the
 > argument below was made about `/home`, in August, and reading it as though it
 > had always said `/workbench` would misrepresent both what was decided and what
 > it was decided against.
+
+> ### ⚠️ §2.2 AND §2.3 ARE AMENDED — the premise both reasoned from is gone (2026-09-08, MOTIR-4875)
+>
+> **§2.2's REASONING was correct. Its PREMISE was removed.** It argued that a
+> route a reader is LANDED on gets an actionable door rather than an actionless
+> notice, and chose the create-first door on that discriminator. That argument
+> still holds and is still being applied — it is why a new registration now
+> lands on `/onboarding`, where there is something to do, rather than on an
+> empty Workbench.
+>
+> What changed is the sentence underneath it, which nobody re-asked: **that a
+> projectless state exists at all.** It does not. It was a consequence of
+> nothing seeding the project, and `projectsService.ensureDefaultProject`
+> (MOTIR-4870) removes it at the WORKSPACE tier — best-effort at creation,
+> lazily self-healed in the resolver — so **`getActiveProject()` returns null on
+> no reachable path for a member of a resolvable workspace.** There is no
+> _Create project_ screen anywhere in the product.
+>
+> **Say the premise fell, not that the argument was wrong.** The two read the
+> same in a diff and are opposite in kind, and the discriminator §2.2
+> established is exactly what its sibling cards kept applying: the forty-three
+> surfaces that used to answer _what if there is no project?_ now redirect,
+> because there is no reader to answer for — not because an actionless notice
+> became the better answer.
+>
+> **The seam is the WORKSPACE, not registration**, and that correction is worth
+> recording because the card that opened this work got it wrong first. Seeding
+> at registration would close ONE of three doors into the projectless state: the
+> other two are `workspacesService.createWorkspace`, which inserts a workspace
+> and its owner memberships and no project, and archiving the last project. A
+> registration-time hook plus the deletions above would have left a reader who
+> creates a second workspace redirected off every project-tier route with
+> nowhere to go — this record's own defect, relocated. (Filed as MOTIR-4864
+> under the planner-bug home: a card that REMOVES a state owes an enumeration of
+> that state's PRODUCERS, not of its consumers.)
+>
+> **§2.3 rested on §2.2, so the two move together.** It declined to branch the
+> landing on project existence partly because _"with §2.2 decided, `/home` in
+> the no-project state IS the create-first door, so there is nothing left for a
+> branch to accomplish."_ Both halves of that are now false. The landing DOES
+> branch — on whether the account is being CREATED, not on whether it has a
+> project — and it branches inside `resolvePostAuthDestination`, the owner §2.4
+> established, rather than in the credential surfaces §2.3 was protecting. Every
+> sign-IN still lands on `AUTHED_LANDING_PATH`, unconditionally, exactly as §2.3
+> decided.
+>
+> **§2.4 is untouched and is what made this cheap.** Moving the landing was one
+> constant and one flag in one module, because §2.4 had already collapsed nine
+> literals into it. Its guard is what proves no tenth appeared here.
+>
+> **§2.1 is untouched and was the same move, made once before**: it removed the
+> duplicate Home nav row whose own comment justified it by a property the card
+> was removing, and recorded the general form — _treat a special case invented
+> to make a surface fit its slot as a signal about the slot._ The shell's
+> `hasProject` prop was that special case, four consumers wide, and it is gone
+> for the same reason (MOTIR-4873).
+>
+> **What is NOT retired:** creating an ADDITIONAL project. That is a real act
+> with a real door — the project switcher, carrying both the create modal and
+> _Plan a new project with AI_. What went is the create-first door offered to
+> somebody with nothing, which was always a workspace-tier act performed on a
+> route that only exists inside a project.
+>
+> Amended, never silently superseded: §2.2 and §2.3 keep their text below.
 
 ## Context
 

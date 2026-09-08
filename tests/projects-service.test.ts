@@ -937,7 +937,7 @@ describe('getActiveProject — resolution, archived surfacing (#29.2), recovery 
     expect(row?.activeProjectId).toBe(first.id);
   });
 
-  it('returns null when every project is archived and no pointer resolves', async () => {
+  it('SEEDS a fresh default when every project is archived — the invariant, not null', async () => {
     const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
     const only = await projectsService.createProject({
       workspaceId: workspace.id,
@@ -956,7 +956,21 @@ describe('getActiveProject — resolution, archived surfacing (#29.2), recovery 
       actorUserId: owner.id,
     });
 
+    // ⚠️ INVERTED (MOTIR-4870), and this is the ONE place the invariant changes
+    // behaviour a reader could notice, so it is asserted rather than left to be
+    // discovered: archiving your last project used to leave you with none, and
+    // now resolves a freshly seeded default — exactly as you can no more sit in
+    // a project-less workspace than in a workspace-less account.
+    //
+    // Archiving the last project is the THIRD door into the projectless state
+    // (registration and `createWorkspace` are the others), and closing all three
+    // at the workspace tier is what lets every no-project surface be deleted
+    // rather than merely made unreachable.
     const resolved = await projectsService.getActiveProject(owner.id, workspace.id);
-    expect(resolved).toBeNull();
+    expect(resolved).not.toBeNull();
+    expect(resolved!.id).not.toBe(only.id);
+    expect(resolved!.archivedAt).toBeNull();
+    // Named for its workspace, which is what `ensureDefaultProject` chooses.
+    expect(resolved!.name).toBe('Acme');
   });
 });
