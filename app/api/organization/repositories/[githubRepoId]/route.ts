@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { organizationRepoService } from '@/lib/services/organizationRepoService';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
-import { GithubRemovalHappensOnGithubError } from '@/lib/projectRepos/errors';
+import {
+  GithubRemovalHappensOnGithubError,
+  MotirHostedRepoIsTakenOverError,
+} from '@/lib/projectRepos/errors';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // DISCONNECT A REPOSITORY FROM THE ORGANISATION (Story MOTIR-4669 · MOTIR-4680).
@@ -15,6 +18,12 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 // reappear on the next installation reconcile. Two sources of truth for one fact.
 // The surface answers it with the pre-link-out disclosure, and the removal
 // arrives through the `installation_repositories` webhook.
+//
+// ⚠️ AND IT REFUSES A REPOSITORY MOTIR HOSTS WITH ITS OWN 409, ahead of that one
+// (bug MOTIR-4892). Same status, different answer: the GitHub refusal sends the
+// admin to the App's install screen, and a repository under the shared
+// provisioning installation is not on the organisation's. The act that applies to
+// it is the TAKEOVER (MOTIR-711), so the code and the message name that instead.
 //
 // ORG-ADMIN, asserted in the SERVICE inside the transaction that performs it.
 // Thin HTTP transport per CLAUDE.md.
@@ -32,6 +41,9 @@ export async function DELETE(
     const result = await organizationRepoService.disconnectFromOrganisation(githubRepoId, ctx);
     return NextResponse.json(result);
   } catch (err) {
+    if (err instanceof MotirHostedRepoIsTakenOverError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+    }
     if (err instanceof GithubRemovalHappensOnGithubError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
     }
