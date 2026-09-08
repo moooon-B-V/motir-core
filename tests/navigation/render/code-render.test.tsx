@@ -191,13 +191,17 @@ describe('/code — the page’s own branches', () => {
     await expect(renderTree(CodePage)).rejects.toThrow('reading `id` of undefined');
   });
 
-  it('renders the no-project state before it resolves any code context', async () => {
+  it('REDIRECTS rather than rendering when there is no active project', async () => {
+    // ⚠️ INVERTED (MOTIR-4874), not deleted. It asserted an `EmptyState`
+    // carrying `noProjectTitle`. Every member is inside a project
+    // (MOTIR-4870), so the only null left is a session-less request — and a
+    // page must not render a screen for a state it cannot be in.
+    //
+    // What the spec is really about survives unchanged and is the half worth
+    // keeping: the gate runs BEFORE any code context is resolved.
     getActiveProject.mockResolvedValue(null);
 
-    const tree = await renderTree(CodePage);
-
-    expect(findFirst(tree, EmptyState)).toBeDefined();
-    expect(textOf(tree)).toContain('noProjectTitle');
+    await expect(renderTree(CodePage)).rejects.toThrow('REDIRECT:/sign-in');
     expect(resolveCodeContextState).not.toHaveBeenCalled();
   });
 

@@ -10,7 +10,6 @@ import { projectRepoAccessService } from '@/lib/services/projectRepoAccessServic
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
 import { publicProjectUrl } from '@/lib/publicProjects/urls';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { ProjectMembersSettings } from './_components/ProjectMembersSettings';
 import { CodeAccessDoorCard } from './_components/CodeAccessDoorCard';
 import { guardSettingsPage } from '../_guard';
@@ -34,13 +33,10 @@ export default async function ProjectMembersPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[42rem]">
-        <EmptyState title={t('project.empty.title')} description={t('project.empty.description')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

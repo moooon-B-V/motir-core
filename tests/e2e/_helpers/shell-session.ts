@@ -8,7 +8,7 @@
 // cannot do it itself here.
 import './job-registry';
 import { expect, type Page } from '@playwright/test';
-import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
+import { AUTHED_LANDING_PATH, ONBOARDING_ENTRY_PATH } from '@/lib/navigation/landing';
 
 export const SHELL_PASSWORD = 'shell-a11y-spec-pass-123';
 
@@ -82,9 +82,17 @@ export const POST_AUTH_LANDING = AUTHED_LANDING_PATH;
  * this race got worse under load, which is exactly where a tuned sleep would
  * fail).
  *
- * ONE settle serves both flows, because both land on `/workbench`, and
- * `workbench-page` is carried by BOTH of that page's branches — the create-first
- * door a fresh sign-up sees and the list an existing account sees.
+ * ⚠️ ONE SETTLE NO LONGER SERVES BOTH FLOWS (MOTIR-4876). It used to, because
+ * both landed on `/workbench` and `workbench-page` was carried by BOTH of that
+ * page's branches — "the create-first door a fresh sign-up sees and the list an
+ * existing account sees". Neither half of that sentence survives: there is no
+ * create-first branch (MOTIR-4872), and a REGISTRATION now lands on the
+ * onboarding entrance (MOTIR-4871) because a brand-new account is already
+ * inside a seeded project and has not described it yet.
+ *
+ * So sign-IN settles on the landing and sign-UP settles on the entrance and
+ * then GOES to the landing — see `signUp`'s own note for why that navigation is
+ * in the helper rather than in eighty-eight callers.
  */
 /** The screen the re-consent gate holds a reader on (`lib/legal/reconsentGate.ts`). */
 const RECONSENT_PATH = '/re-consent';
@@ -199,14 +207,58 @@ export async function startSignedOut(page: Page): Promise<void> {
   if (keep.length) await page.context().addCookies(keep);
 }
 
+/**
+ * Create an account and END UP IN THE APP, on the landing.
+ *
+ * ⚠️ THE DESTINATION MOVED AND THIS HELPER'S CONTRACT DID NOT (MOTIR-4876). A
+ * registration now lands on the onboarding entrance (MOTIR-4871), not on the
+ * landing. This settles there and then navigates on, so the ~85 specs whose
+ * `signUp` means "give me an authenticated session in the app" keep working
+ * without each one learning about a journey they are not testing.
+ *
+ * **That is a contract, not a paper-over.** The entrance is the registration
+ * JOURNEY, and a journey deserves specs that assert it rather than eighty-five
+ * that pass through it — so it has its own helper, `signUpToOnboarding` below,
+ * and `onboarding-fresh.spec.ts` is where the landing itself is asserted. What
+ * would have been a paper-over is making this settle on the entrance and
+ * calling the difference invisible.
+ */
 export async function signUp(page: Page, email: string): Promise<void> {
+  await signUpToOnboarding(page, email);
+  await page.goto(POST_AUTH_LANDING);
+  await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Create an account and STOP where the registration actually lands — the
+ * onboarding entrance (MOTIR-4871).
+ *
+ * For the specs that are about the first-run journey itself. Everything else
+ * wants `signUp`.
+ */
+export async function signUpToOnboarding(page: Page, email: string): Promise<void> {
   await startSignedOut(page);
   await page.goto('/sign-up');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(SHELL_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  await settleOnWorkbench(page);
+  await settleOnOnboardingEntrance(page);
+}
+
+/**
+ * The registration twin of `settleOnWorkbench` — same authoritative-signal
+ * discipline, different destination, and the re-consent hold still cleared the
+ * way a person clears it.
+ */
+async function settleOnOnboardingEntrance(page: Page): Promise<void> {
+  await page.waitForURL(
+    (url) =>
+      url.pathname.startsWith(RECONSENT_PATH) || url.pathname.startsWith(ONBOARDING_ENTRY_PATH),
+    { timeout: 30_000 },
+  );
+  await clearReconsentHold(page);
+  await page.waitForURL(`**${ONBOARDING_ENTRY_PATH}`, { timeout: 30_000 });
 }
 
 // Sign IN an EXISTING user (vs. signUp's fresh account) through the real
@@ -227,12 +279,28 @@ export async function signIn(page: Page, email: string, password: string): Promi
   await settleOnWorkbench(page);
 }
 
-// Create the first project via the projects-empty-state CTA, so the
-// project-scoped sidebar nav (Dashboard / Issues / Boards / Reports) renders.
-// The CTA is the same `ProjectsEmptyState` component wherever it is reached —
-// `/workbench`'s no-project branch (where `signUp` now lands) and `/dashboard`'s
-// alike — so this works without knowing which page the caller is on.
+/**
+ * Leave the caller in an ACTIVE PROJECT NAMED `name`.
+ *
+ * ⚠️ THE DOOR MOVED AND THE NAME KEPT ITS PROMISE (MOTIR-4876). This used to
+ * drive the `ProjectsEmptyState` CTA — "the same component wherever it is
+ * reached, `/workbench`'s no-project branch and `/dashboard`'s alike". Neither
+ * exists: the screen is retired (MOTIR-4872) and there is no projectless
+ * reader to show it to (MOTIR-4870), so a fresh account already HAS a project
+ * named after its workspace.
+ *
+ * It now creates one through the switcher's create door and pins it active,
+ * which is what every caller was actually asking for — an active project whose
+ * name they chose. The seeded default remains in the workspace beside it, so a
+ * spec asserting a project COUNT rather than the ACTIVE project is the one
+ * shape to re-read; none did at the time of writing.
+ *
+ * The name is kept: eighty-eight files reach these helpers, and renaming a
+ * helper whose behaviour is unchanged from the caller's side would be churn
+ * with no reader served.
+ */
 export async function createFirstProject(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
   await page.getByLabel('Project name').fill(name);
@@ -243,8 +311,10 @@ export async function createFirstProject(page: Page, name: string): Promise<void
 }
 
 // Create an additional named workspace via the ALWAYS-PRESENT org control's
-// "New workspace" entry and switch to it (the new workspace becomes active,
-// with zero projects). Story 6.10.5's progressive disclosure HIDES the
+// "New workspace" entry and switch to it (the new workspace becomes active —
+// ⚠️ WITH A SEEDED DEFAULT PROJECT since MOTIR-4870, not "with zero projects"
+// as this said; a workspace is one of the three doors into the projectless
+// state the story closed). Story 6.10.5's progressive disclosure HIDES the
 // workspace switcher at one workspace, so "New workspace" lives in the org menu
 // — the org control is the create path at any workspace count. Mirrors the
 // helper in workspace-flows.spec.ts; lifted here so the shell journey spec can

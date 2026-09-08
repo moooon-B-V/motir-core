@@ -28,16 +28,26 @@ import { deriveCodeGraphIndexState, type CodeGraphIndexState } from '@/lib/codeG
 
 const PAGE = readFileSync('app/(authed)/settings/organization/git/page.tsx', 'utf8');
 
-const REPO = (id: string, name: string, provider: 'github' | 'gitlab' = 'github') => ({
-  id,
-  owner: 'moooon',
-  name,
-  fullName: `moooon/${name}`,
-  defaultBranch: 'main',
-  provider,
-  archived: false,
-  connectedFromWorkspaceId: 'ws1',
-});
+const REPO = (
+  id: string,
+  name: string,
+  provider: 'github' | 'gitlab' = 'github',
+  /** Bug MOTIR-4892 — whose the repository is, which the row now says. */
+  hostedByMotir = false,
+) => {
+  const owner = hostedByMotir ? 'motir-projects' : 'moooon';
+  return {
+    id,
+    owner,
+    name,
+    fullName: `${owner}/${name}`,
+    defaultBranch: 'main',
+    provider,
+    archived: false,
+    connectedFromWorkspaceId: 'ws1',
+    hostedByMotir,
+  };
+};
 
 const ROW = (
   id: string,
@@ -45,8 +55,9 @@ const ROW = (
   projects: string[],
   indexState: CodeGraphIndexState = 'indexed',
   provider: 'github' | 'gitlab' = 'github',
+  hostedByMotir = false,
 ): OrgRepoInventoryRowDto => ({
-  repo: REPO(id, name, provider),
+  repo: REPO(id, name, provider, hostedByMotir),
   projects: projects.map((p) => ({
     id: `p-${p}`,
     name: p,
@@ -252,6 +263,57 @@ describe('⚠️ reading is org MEMBERSHIP; writing is org ADMIN', () => {
     expect(screen.getByText('motir-core')).toBeTruthy();
     expect(screen.getByText('Used by 3 projects')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Disconnect/ })).toBeNull();
+  });
+});
+
+describe('⚠️ a repository MOTIR HOSTS (bug MOTIR-4892)', () => {
+  /** The SAME inventory, plus the one row the organisation did not connect. */
+  const WITH_HOSTED: OrgRepoInventoryRowDto[] = [
+    ...ROWS,
+    ROW('r4', 'motir', ['Atlas'], 'indexed', 'github', true),
+  ];
+
+  it('SAYS SO on the row — silence under that heading is a claim about property', () => {
+    // The card reads "Every repository connected to this organisation", and the
+    // row drew `owner/name`, an index state and a usage count. Telling a
+    // repository Motir HOSTS apart from one the organisation CONNECTED therefore
+    // required knowing `provisioningOrgLogin()`'s value by heart.
+    renderInventory({ rows: WITH_HOSTED });
+    expect(screen.getByText('Hosted by Motir')).toBeTruthy();
+    // …and it is said ONCE, on the row it is true of.
+    expect(screen.getAllByText('Hosted by Motir')).toHaveLength(1);
+  });
+
+  it('⚠️ OFFERS NO GitHub link-out on it — pressing its removal control produces no `<a>`', () => {
+    // THE CRITERION, and the limb that makes this a bug about ACTION rather than
+    // about labelling. `manageOnGithubHref` is computed ONCE for the page from
+    // `soleInstallation` and handed to every row — right for an organisation-wide
+    // affordance, wrong for a PER-ROW act. A repository Motir hosts sits under the
+    // SHARED provisioning installation (`organizationId: null`, because it spans
+    // tenants), so that href names an installation the repository is not in.
+    const HREF = 'https://github.com/organizations/moooon/settings/installations/42';
+    renderInventory({ rows: [ROW('r4', 'motir', ['Atlas'], 'indexed', 'github', true)] });
+
+    // There is no removal control to press…
+    const controls = screen.queryAllByRole('button', { name: /Disconnect/ });
+    expect(controls).toEqual([]);
+    // …so nothing can open the confirm, and no link-out exists anywhere in the
+    // rendered tree. Asserted against the href ITSELF rather than against the
+    // control's absence, because the criterion is about where a reader can be
+    // SENT: a future dialog reached by some other affordance would fail this too.
+    expect(document.querySelector(`a[href="${HREF}"]`)).toBeNull();
+    expect(screen.queryByText('Continue on GitHub')).toBeNull();
+  });
+
+  it('leaves every OTHER row`s removal control exactly as it was', () => {
+    // The withholding is per-ROW. A gate that quietly took the act away from the
+    // organisation's own repositories would pass the assertion above and break the
+    // page — so the counterfactual is asserted on the same render.
+    renderInventory({ rows: WITH_HOSTED });
+    const controls = screen.getAllByRole('button', { name: /Disconnect/ });
+    expect(controls).toHaveLength(ROWS.length);
+    fireEvent.click(controls[0]!);
+    expect(screen.getByText('Continue on GitHub')).toBeTruthy();
   });
 });
 

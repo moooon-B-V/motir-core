@@ -179,12 +179,14 @@ describe('the ACCESS gates still run ahead of the paint', () => {
     expect(getPreplanState).not.toHaveBeenCalled();
   });
 
-  it('no active project renders the pick-a-project hint without reading anything', async () => {
+  it('no active project REDIRECTS without reading anything', async () => {
+    // ⚠️ INVERTED (MOTIR-4874). It asserted a rendered "pick a project" hint;
+    // there is no projectless member to pick for (MOTIR-4870), so the page
+    // redirects. The load-bearing half — that the gate runs before either
+    // read — is unchanged, and is why this spec exists.
     getActiveProject.mockResolvedValue(null);
 
-    const element = await RoadmapPage();
-
-    expect(JSON.stringify(element)).toContain('noProjectTitle');
+    await expect(RoadmapPage()).rejects.toThrow('REDIRECT:/sign-in');
     expect(getProjectRoadmap).not.toHaveBeenCalled();
     expect(getPreplanState).not.toHaveBeenCalled();
   });

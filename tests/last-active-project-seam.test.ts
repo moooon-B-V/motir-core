@@ -173,16 +173,31 @@ describe('8.8.29 — last-active project seam (write actions ↔ read resolver)'
     expect(await workspacesService.resolveActiveWorkspace(user.id, null)).toBe(wsC.id);
   });
 
-  it('a brand-new workspace (action) records nothing until it has a project', async () => {
+  it('a brand-new workspace (action) records the project it was SEEDED with', async () => {
+    // ⚠️ INVERTED (MOTIR-4873). It read: "the new workspace is active but empty
+    // → no project to land on yet", and asserted the pointer stayed null. That
+    // emptiness was the SECOND of the three doors into the projectless state
+    // (MOTIR-4870): `createWorkspace` seeds no project, so the org menu's "New
+    // workspace" produced one at any time, long after registration.
+    //
+    // `createWorkspaceAction` now seeds a default project before it records the
+    // pointer, so the reader lands IN the new workspace's project rather than
+    // nowhere — which is what the recording seam existed to make possible and
+    // could not, for this case, until the state was closed.
     const user = await createTestUser();
     await workspacesService.createWorkspace({ name: 'Seed WS', ownerUserId: user.id });
     actAs(user);
 
     const created = await createWorkspaceAction('Fresh');
 
-    // The new workspace is active but empty → no project to land on yet.
     expect(cookieJar.get(WORKSPACE_COOKIE_NAME)).toBe(created.id);
-    expect(await pointerOf(user.id)).toBeNull();
+    const pointer = await pointerOf(user.id);
+    expect(pointer).not.toBeNull();
+
+    // …and it is the NEW workspace's own project, not the seed workspace's.
+    const seeded = await projectsService.getActiveProject(user.id, created.id);
+    expect(pointer).toBe(seeded!.id);
+    expect(seeded!.name).toBe('Fresh');
   });
 
   it('sync invariant — after a project switch, the global and membership pointers agree', async () => {

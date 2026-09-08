@@ -140,16 +140,21 @@ test.describe('post-auth landing', () => {
       'signing up must navigate to the landing route exactly ONCE, for the same reason signing in must: a second navigation to the same place races the first, and whichever loses is what aborts the next goto.',
     ).toHaveLength(1);
 
-    // A brand-new account has an auto-created workspace with ZERO projects, so
+    // ⚠️ INVERTED (MOTIR-4876). This asserted the create-first door: "a
+    // brand-new account has an auto-created workspace with ZERO projects, so
     // `/workbench` renders the shipped create-first door rather than its My-work
-    // list (MOTIR-2761; `docs/decisions/home-scope.md` §2.2). This is the
-    // criterion the landing move turns on — the actor most affected by "where
-    // does post-auth land" is the one who has nothing yet, and what they must
-    // find here is a way to start.
+    // list". A brand-new account now has a SEEDED project (MOTIR-4870), so the
+    // Workbench renders its list and there is no door to find.
+    //
+    // The criterion the spec names is unchanged and is why it survives: the
+    // actor most affected by "where does post-auth land" is the one who has
+    // nothing yet, and what they must find is a way to start. That is now the
+    // onboarding entrance, and `onboarding-fresh.spec.ts` asserts it — this
+    // spec's own subject is the number of navigations, which it still is.
+    await expect(page.getByTestId('workbench-page')).toBeVisible();
     await expect(
       page.getByRole('heading', { name: 'Create your first project', exact: true }),
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create project' }).first()).toBeVisible();
+    ).toHaveCount(0);
 
     // `/dashboard` still exists and still renders — it stopped being a landing,
     // it did not stop being a page.

@@ -64,7 +64,6 @@ vi.mock('@/lib/ai/availability', () => ({ isMotirAiConfigured: () => false }));
 
 import EditIssuePage from '@/app/(authed)/items/[key]/edit/page';
 import { EditIssueForm } from '@/app/(authed)/items/[key]/edit/_components/EditIssueForm';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 
@@ -177,12 +176,15 @@ describe('/items/[key]/edit — the branches a source read cannot reach', () => 
     expect(listMembers).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the no-project hint rather than crashing, and reads nothing', async () => {
+  it('REDIRECTS on a null active project, and reads nothing', async () => {
+    // ⚠️ INVERTED (MOTIR-4874). It asserted a rendered no-project hint. Every
+    // member is inside a project (MOTIR-4870), so the only null left is a
+    // session-less request and the page redirects rather than rendering a
+    // screen for a state it cannot be in. The half this case exists for is
+    // unchanged: nothing is read before the gate.
     getActiveProject.mockResolvedValue(null);
 
-    const tree = await renderTree(EditIssuePage, params());
-
-    expect(findFirst(tree, EmptyState)).toBeDefined();
+    await expect(renderTree(EditIssuePage, params())).rejects.toThrow('REDIRECT:/sign-in');
     expect(getIssueDetail).not.toHaveBeenCalled();
   });
 

@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import { DISPATCH_RUN_LIVE_STATUSES, DISPATCH_RUN_PAST_STATUSES } from '@/lib/runs/timeline';
 import { RunsIndex } from './_components/RunsIndex';
@@ -41,18 +40,10 @@ export default async function RunsPage() {
 
   const t = await getTranslations('runs');
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="flex flex-col gap-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-            {t('indexHeading')}
-          </h1>
-        </header>
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   return (
     <div className="flex flex-col gap-6">

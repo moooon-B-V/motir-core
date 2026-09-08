@@ -67,12 +67,11 @@ describe('SidebarNav — Resume onboarding row', () => {
     expect(resumeIdx).toBeLessThan(dashIdx);
   });
 
-  it('is not shown when there is no active project', () => {
-    resumeRef.value = true;
-    renderWithIntl(<SidebarNav activeProject={null} user={USER} />);
-    // No primary project section renders at all, so no resume row.
-    expect(screen.queryByRole('link', { name: /Resume onboarding/ })).toBeNull();
-  });
+  // ⚠️ REMOVED (MOTIR-4873): 'is not shown when there is no active project'. It
+  // rested on "no primary project section renders at all, so no resume row" —
+  // the `hasProject` gate, which is gone with the state it gated on
+  // (MOTIR-4870). What still decides this row is the resume marker itself,
+  // which the cases above and below cover in both directions.
 
   it('renders the localized label (zh)', () => {
     resumeRef.value = true;

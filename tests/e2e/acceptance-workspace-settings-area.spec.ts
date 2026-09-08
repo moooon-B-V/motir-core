@@ -295,8 +295,23 @@ test('the workspace tier gains a door and a rail — and at one workspace, nothi
     // The ORG-scoped cards are refused — §6d gates this page per SECTION, and
     // this reader holds no org role. That refusal is what makes the rest
     // meaningful rather than an admin's view.
+    // ⚠️ `getByRole`, NOT `getByText` (MOTIR-4876). This went red in CI as a
+    // STRICT MODE violation — two identical `<h2>`s — and passes locally, which
+    // is the tell for the documented streaming shape rather than a real
+    // duplicate: React keeps the previous subtree mounted while the next one
+    // streams, so both are briefly in the DOM. Playwright's own report named the
+    // difference — it could describe one of the two as `getByRole('heading')`
+    // and the other only as `getByText`, i.e. the second is NOT in the
+    // accessibility tree. `CLAUDE.md` § *the second cost* records the class and
+    // the remedy: the a11y tree excludes the hidden copy, so `getByRole` is
+    // immune where `getByText` is not.
+    //
+    // It is a discriminator rather than a workaround: if the page ever really
+    // rendered this twice, `getByRole` would match two VISIBLE headings and fail
+    // exactly as loudly. Every other assertion in this chapter already reads
+    // this way — this line was the outlier.
     await expect(
-      page.getByText('Organization settings are admin-only', { exact: true }),
+      page.getByRole('heading', { name: 'Organization settings are admin-only', exact: true }),
     ).toBeVisible();
     await beat();
 

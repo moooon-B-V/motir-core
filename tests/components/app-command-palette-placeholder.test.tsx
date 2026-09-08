@@ -60,7 +60,6 @@ function renderPalette(messages?: Record<string, unknown>) {
       activeWorkspaceId="ws_1"
       projects={[PROJECT]}
       activeProjectId={PROJECT.id}
-      hasProject
     />,
     messages ? { messages, locale: 'zh' } : undefined,
   );

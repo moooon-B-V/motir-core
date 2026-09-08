@@ -990,8 +990,6 @@
     },
     "pageLoading": "页面加载中",
     "project": {
-      "createFirst": "创建你的第一个项目",
-      "emptyDescription": "项目用于归类你的工作项，并赋予它们类似ACME-1的标识。创建一个即可开始规划。",
       "create": "创建项目",
       "planWithAi": "用 AI 规划新项目",
       "untitled": "未命名项目",
@@ -1156,9 +1154,6 @@
     "epicPrivacyError": "无法更新可见性，请重试。",
     "watchToggleFailedTitle": "无法更新关注状态",
     "noProjectTitle": "未选择项目",
-    "noProjectListDescription": "从切换器中选择或创建一个项目，以跟踪其工作项。",
-    "noProjectDetailDescription": "从切换器中选择一个项目，以查看其工作项。",
-    "noProjectEditDescription": "从切换器中选择一个项目，以编辑其工作项。",
     "allIssuesIn": "{project} 的全部工作项",
     "filter": "筛选",
     "filterComingSoon": "筛选功能将在后续更新中推出",
@@ -4368,8 +4363,7 @@
       "resolutionTimeBody": "工作项从创建到解决所需的时间——团队是否在加速？",
       "workloadTitle": "工作量",
       "workloadBody": "按负责人统计的未完成工作——谁承担得更多。",
-      "noProjectTitle": "尚无项目",
-      "noProjectBody": "创建一个项目以查看其报表。"
+      "noProjectTitle": "尚无项目"
     },
     "period": {
       "day": "按日",
@@ -5886,7 +5880,6 @@
         "buildItAll": "不用，直接开始做产品吧。"
       },
       "noProjectTitle": "没有进行中的项目",
-      "noProjectBody": "请先选择或创建一个项目，Motir 才能和你一起规划。",
       "resuming": "正在恢复…",
       "resumingBody": "正在回到你上次离开的地方。",
       "canvas": {
@@ -6247,7 +6240,8 @@
       },
       "usedBy": "{count, plural, other {# 个项目在使用}}",
       "usedByNone": "暂无项目使用",
-      "usedByExpanded": "正在使用该仓库的项目"
+      "usedByExpanded": "正在使用该仓库的项目",
+      "hostedByMotir": "由 Motir 托管"
     },
     "organization": {
       "subtitle": "将 {org} 与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
@@ -6555,8 +6549,6 @@
   "codeHealth": {
     "title": "代码健康度",
     "subtitle": "代码健康度审计，以及 Motir 从你的代码中提取并注入每条提示词的按仓库区分的编码规范。",
-    "noProjectTitle": "没有活动项目",
-    "noProjectDescription": "选择或创建一个项目以查看其代码健康度。",
     "adminOnlyTitle": "仅限项目管理员",
     "adminOnlyDescription": "编码标准会驱动 Motir 派发的每一条提示词。只有项目管理员才能查看。请向项目管理员申请权限。",
     "tabsLabel": "代码健康度视图",

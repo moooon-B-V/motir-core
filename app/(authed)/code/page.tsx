@@ -92,14 +92,16 @@ export default async function CodePage() {
   const t = await getTranslations('code');
   const ctx = await getActiveProject();
 
-  if (!ctx) {
-    return (
-      <div className="flex flex-col gap-6">
-        <Header title={t('title')} subtitle={t('subtitle')} />
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectDescription')} />
-      </div>
-    );
-  }
+  // ⚠️ UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier, and MOTIR-4815 retired every no-project surface). The
+  // guard stays because the TYPE does — the only null left is a session-less
+  // request — and it redirects rather than rendering a state nobody can reach.
+  //
+  // Carried from `code-health/page.tsx`, which this route absorbed: main made
+  // exactly this change to that file while this branch was turning it into a
+  // redirect, so taking "my" side of that conflict would have silently kept the
+  // retired branch alive one route over.
+  if (!ctx) redirect('/sign-in');
 
   const svcCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 

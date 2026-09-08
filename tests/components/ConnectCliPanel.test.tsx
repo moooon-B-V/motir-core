@@ -211,7 +211,12 @@ describe('the tie line’s promise — a CLI token is listed in the table below'
     renderWithIntl(
       <ToastProvider>
         <ConnectCliPanel hasTokens={tokens.length > 0} />
-        <ApiTokensManager initialTokens={tokens} scopeOrgs={[]} activeWorkspaceId={null} />
+        <ApiTokensManager
+          initialTokens={tokens}
+          scopeOrgs={[]}
+          activeWorkspaceId={null}
+          activeProjectId={null}
+        />
       </ToastProvider>,
     );
 

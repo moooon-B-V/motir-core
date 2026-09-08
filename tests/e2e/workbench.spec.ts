@@ -371,32 +371,51 @@ test.describe('the Workbench journey', () => {
     await expect(page.getByTestId('workbench-page')).toContainText('What you are doing in Atlas');
   });
 
-  test('with NO active project, /workbench renders the create-first door and the rail offers no Workbench row', async ({
+  test('a BRAND-NEW actor reaching /workbench is already in a project, and the rail is whole', async ({
     page,
   }) => {
-    // A brand-new actor: signed up, no project anywhere in the workspace. This
-    // is the ONLY meaning of "no active project" — the resolver recovers to the
-    // first visible project and persists the pointer, so `null` is "there is
-    // nothing to pick", never "you have not picked yet"
-    // (`docs/decisions/home-scope.md` §1).
+    // ⚠️ THIS TEST WAS INVERTED, PREMISE AND ALL (MOTIR-4876). It read "with NO
+    // active project, /workbench renders the create-first door and the rail
+    // offers no Workbench row", and its fixture was "a brand-new actor: signed
+    // up, no project anywhere in the workspace … the ONLY meaning of 'no active
+    // project'".
+    //
+    // That fixture no longer produces that state, and cannot: the first authed
+    // request a registered account makes SEEDS a project at the workspace tier
+    // (MOTIR-4870), so signing up and signing in leaves the actor inside one.
+    // Inverting only the ASSERTIONS — which is what the first pass at this card
+    // did — left a test whose title and setup still described a reachable
+    // projectless reader while its body denied one, and it went red on the rail
+    // rather than on the door. So the whole test is restated as the invariant it
+    // is now able to witness, from the one entrance no other spec uses: not
+    // registration (`registration-lands-on-onboarding.spec.ts` owns that) but a
+    // later SIGN-IN, which is the half that lands here rather than on the
+    // entrance.
     await apiSignUp(FRESH);
     await signIn(page, FRESH, TEST_PASSWORD);
 
-    // It still LANDS here — the post-auth default is unchanged (§2.3).
+    // A sign-IN lands on the signed-in landing — the registration arm is
+    // registration-only (`lib/navigation/landing.ts`).
     await expect(page).toHaveURL(/\/workbench$/);
     await expect(page.getByTestId('workbench-page')).toBeVisible();
 
-    // The shipped create-first door, reused from `/dashboard` — not a new empty
-    // state and not the actionless `/ready` notice, because this route is LANDED
-    // on rather than navigated to (§2.2).
-    await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create project' })).toBeVisible();
+    // No create-first door, because there is no reader for it: the state it
+    // served is gone, not merely unrouted.
+    await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
 
-    // And NO Workbench row in the rail: the duplicate `!hasProject` entry is gone
-    // (§2.1). The route stays reachable by URL — which is how we got here — but
-    // the product no longer offers a door to a room it can open only sometimes.
-    await expect(page.getByRole('link', { name: 'Workbench', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Boards', exact: true })).toHaveCount(0);
+    // And the rail is WHOLE. It used to carry a conditional duplicate Workbench
+    // entry for the projectless case (§2.1); with `hasProject` retired there is
+    // exactly one of each, always — which is the assertion that would catch the
+    // duplicate coming back as well as the row going missing.
+    // ⚠️ SCOPED TO THE NAMED RAIL, which `permission-gated-ui.spec.ts` calls the
+    // fix rather than a nicety: an unscoped `getByRole('link', …)` counts every
+    // match on the page, so a body link with the same name would make a rail
+    // assertion pass or fail for a reason that has nothing to do with the rail.
+    // The retired assertion could be unscoped because it expected ZERO; a count
+    // of ONE has to say WHERE.
+    const rail = page.getByRole('navigation', { name: 'Primary' });
+    await expect(rail.getByRole('link', { name: 'Workbench', exact: true })).toHaveCount(1);
+    await expect(rail.getByRole('link', { name: 'Boards', exact: true })).toHaveCount(1);
   });
 });
 

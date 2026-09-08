@@ -780,7 +780,7 @@ describe('ink-contrast lint — --el-accent-on-surface is AA in all 20 palette �
     // with is still exactly the one the table measures.
     //
     // The tree paints accent ink on `--el-tint-lavender` — the accent family's
-    // own — in ten files, mostly as a rounded glyph tile (`ProjectsEmptyState`,
+    // own — in ten files, mostly as a rounded glyph tile (`EmptyState`,
     // `PasskeyManager`, `TwoFactorManager`) but also as real text
     // (`IssueFilterBar`'s saved-filter count badge, `ProposalQuickView`'s badge,
     // `Sidebar`'s active row). Pair it with a SECOND tint and this goes red,

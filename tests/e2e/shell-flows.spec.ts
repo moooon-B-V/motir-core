@@ -372,26 +372,30 @@ test.describe('@smoke shell journeys', () => {
     await expect(page).toHaveURL(/\/sign-in/);
   });
 
-  // ── 9. Empty-state path ───────────────────────────────────────────────
-  test('empty workspace shows the sidebar create-project CTA and hides project nav', async ({
-    page,
-  }) => {
-    // A fresh sign-up's auto-workspace has zero projects.
+  // ── 9. A fresh account's shell ────────────────────────────────────────
+  test('a fresh sign-up is IN a project — the switcher, and the project nav', async ({ page }) => {
+    // ⚠️ INVERTED (MOTIR-4876). This was 'empty workspace shows the sidebar
+    // create-project CTA and hides project nav', premised on "a fresh sign-up's
+    // auto-workspace has zero projects". It has one (MOTIR-4870), so the shell
+    // shows the switcher and the project-scoped nav — the exact opposite, which
+    // is why the spec is inverted rather than deleted: what it covers is what a
+    // fresh account's shell looks like, and that is still worth a smoke.
     await signUp(page, 'e2e-shell-flows-empty@example.com');
     await page.goto('/dashboard');
 
-    // The sidebar header renders the "Create your first project" CTA card
-    // inline (a button) instead of the switcher — NOT the main-panel CTA.
-    await expect(page.getByRole('button', { name: 'Create your first project' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Switch project' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create your first project' })).toHaveCount(0);
 
-    // The project-scoped nav is hidden; Settings (bottom section) stays. Docs
-    // and Legal documents left this section for the Help menu (MOTIR-4239), and
-    // `Git` left it for the tenants that own its two actions (MOTIR-4643).
+    // The project-scoped nav RENDERS — it used to be hidden, because the rail
+    // collapsed to its bottom section for a projectless reader (MOTIR-4815:
+    // everyone always has a project now). Settings stays; Docs and Legal left
+    // for the Help menu (MOTIR-4239), and `Git` left for the tenants that own
+    // its two actions (MOTIR-4643) — which is why it is asserted ABSENT below
+    // rather than visible.
     const rail = page.getByRole('navigation', { name: 'Primary' });
-    await expect(rail.getByRole('link', { name: 'Work Items' })).toHaveCount(0);
-    await expect(rail.getByRole('link', { name: 'Boards' })).toHaveCount(0);
-    await expect(rail.getByRole('link', { name: 'Reports' })).toHaveCount(0);
+    await expect(rail.getByRole('link', { name: 'Work Items' })).toBeVisible();
+    await expect(rail.getByRole('link', { name: 'Boards' })).toBeVisible();
+    await expect(rail.getByRole('link', { name: 'Reports' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Settings' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Git' })).toHaveCount(0);
   });

@@ -45,6 +45,50 @@ describe('resolvePostAuthDestination (MOTIR-3373)', () => {
     expect(resolvePostAuthDestination({ next: null })).toBe(AUTHED_LANDING_PATH);
     expect(resolvePostAuthDestination({ next: '/boards' })).toBe('/boards');
   });
+
+  // ── The REGISTRATION arm (MOTIR-4871) ──────────────────────────────────
+  //
+  // A reader creating an account is now inside a seeded project from their
+  // first request, and has not described it yet — so they land where that gets
+  // done. Every assertion below is stated in BOTH session arms, because the
+  // module's own docstring records two defects (MOTIR-3367, MOTIR-3372) that
+  // were surfaces answering for one visitor and never asking about the other.
+
+  it('sends a REGISTRATION to the onboarding entrance, and a sign-in to the landing', () => {
+    expect(resolvePostAuthDestination({ isRegistration: true })).toBe(ONBOARDING_ENTRY_PATH);
+    expect(resolvePostAuthDestination({})).toBe(AUTHED_LANDING_PATH);
+    // The flag is what distinguishes them — not a different constant, and not
+    // a different function.
+    expect(resolvePostAuthDestination({ isRegistration: false })).toBe(AUTHED_LANDING_PATH);
+  });
+
+  it('lets an explicit ?next= win over the registration arm too', () => {
+    // The CLI hand-off must survive a reader who signs UP to complete it.
+    expect(
+      resolvePostAuthDestination({ next: '/device?user_code=ABCD-1234', isRegistration: true }),
+    ).toBe('/device?user_code=ABCD-1234');
+  });
+
+  it('falls back to the entrance, not the landing, when a registration ?next= is off-origin', () => {
+    expect(resolvePostAuthDestination({ next: 'https://evil.example', isRegistration: true })).toBe(
+      ONBOARDING_ENTRY_PATH,
+    );
+  });
+
+  it('agrees with the draft arm rather than competing with it', () => {
+    // Both mean "you have something to describe and nowhere yet to describe
+    // it", so the two composing is not a precedence question.
+    expect(resolvePostAuthDestination({ draftId: 'draft-abc', isRegistration: true })).toBe(
+      ONBOARDING_ENTRY_PATH,
+    );
+  });
+
+  it('is recognised by `isOnboardingDestination`, so the card can say it is carrying the intent', () => {
+    expect(isOnboardingDestination(resolvePostAuthDestination({ isRegistration: true }))).toBe(
+      true,
+    );
+    expect(isOnboardingDestination(resolvePostAuthDestination({}))).toBe(false);
+  });
 });
 
 // MOTIR-4402 — the two answers the credential surfaces needed and were spelling

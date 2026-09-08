@@ -175,10 +175,19 @@ describe('the shell’s context path (MOTIR-2556)', () => {
       expect(trigger.textContent).toContain('Archived');
     });
 
-    it('renders the create-first door — not a switcher — when there is no project', () => {
+    it('renders NOTHING — no switcher and no door — when there is no project', () => {
+      // ⚠️ INVERTED (MOTIR-4873). It asserted the create-first door: an accent
+      // `+` square opening `CreateProjectModal`, in the project tier. Every
+      // member is inside a project (MOTIR-4870), so the door serves nobody, and
+      // a tier that draws something for a state the product cannot produce is a
+      // tier teaching that it can happen.
+      //
+      // The state is unreachable rather than unconstructable, so the assertion
+      // is about what the tier DOES with it: nothing. Creating an ADDITIONAL
+      // project is untouched and lives on the switcher.
       render({ activeProject: null, projects: [] });
       expect(screen.queryByRole('button', { name: 'Switch project' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'Create your first project' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Create your first project' })).toBeNull();
     });
   });
 

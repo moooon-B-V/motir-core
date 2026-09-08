@@ -51,12 +51,15 @@ export function ApiTokensManager({
   initialTokens,
   scopeOrgs,
   activeWorkspaceId,
+  activeProjectId,
 }: {
   initialTokens: ApiTokenDto[];
   /** The org → workspace tree the create modal scopes a token within (bug 7.21). */
   scopeOrgs: TokenScopeOrgDTO[];
   /** The active workspace, pre-selected in the create modal (or null). */
   activeWorkspaceId: string | null;
+  /** The project the reader is in — the create modal's default binding. */
+  activeProjectId: string | null;
 }) {
   const t = useTranslations('settings.apiTokens');
   // The permission LABELS come from the shipped `permissions.*` catalogue copy —
@@ -320,6 +323,7 @@ export function ApiTokensManager({
         onCreated={handleCreated}
         scopeOrgs={scopeOrgs}
         activeWorkspaceId={activeWorkspaceId}
+        activeProjectId={activeProjectId}
       />
       {revokeTarget ? (
         <RevokeTokenDialog

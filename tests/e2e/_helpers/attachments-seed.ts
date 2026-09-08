@@ -2,7 +2,7 @@
 //
 // Mirrors the comments-seed shape: the PM signs up through the real browser
 // UI (shell-session signUp — the page needs a live session) and creates the
-// first project via the projects-empty-state CTA on /workbench (which pins it
+// project via the switcher's create door (which pins it
 // active); then,
 // server-side via the sanctioned test cross-layer reach, the issue under
 // test plus any extra cast members (a plain workspace member, a read-only
@@ -52,7 +52,16 @@ export async function seedAttachmentsFixture(
   const ws = await db.workspace.findFirst({ where: { name: `${local}'s Workspace` } });
   expect(pm, 'PM user exists after sign-up').not.toBeNull();
   expect(ws, 'auto workspace exists').not.toBeNull();
-  const project = await db.project.findFirst({ where: { workspaceId: ws!.id } });
+  // ⚠️ BOUND TO THE PROJECT THE BROWSER IS IN (MOTIR-4876). This read was
+  // `findFirst({ where: { workspaceId } })` with no ordering, which was
+  // unambiguous only while a workspace held exactly one project. A default
+  // project is now SEEDED per workspace (MOTIR-4870), so an unordered read
+  // can return the seeded one while the browser is pinned to the one
+  // `createFirstProject` just made — and the fixture then writes its work
+  // items into a project the page never shows.
+  const project = await db.project.findFirst({
+    where: { workspaceId: ws!.id, name: 'Mobile App' },
+  });
   expect(project, 'first project exists').not.toBeNull();
 
   const issue = await workItemsService.createWorkItem(

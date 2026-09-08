@@ -9,7 +9,6 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { EditIssueForm } from './_components/EditIssueForm';
 import { RelationshipsPanel } from '../_components/RelationshipsPanel';
 import { IssueQuickViewController } from '../../_components/IssueQuickViewController';
@@ -32,13 +31,10 @@ export default async function EditIssuePage({ params }: { params: Promise<{ key:
   const t = await getTranslations('issueViews');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[42rem]">
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectEditDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const { key } = await params;
   const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };

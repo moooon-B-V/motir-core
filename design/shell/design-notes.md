@@ -807,6 +807,35 @@ header keeps the full ancestor path at every width.
 A full-width tinted card cannot be a tier in a horizontal row; the ghost button can, and it keeps
 the door in the same place a person now looks for project context.
 
+> ### ⚠️ AMENDED 2026-09-08 — THE THIRD STATE IS RETIRED (MOTIR-4873)
+>
+> **There are TWO states now.** The `no project` row above, and the paragraph
+> under it, describe a state the product no longer produces: a default project
+> is seeded at the WORKSPACE tier (MOTIR-4870), so `getActiveProject()` returns
+> null on no path a member can take, and `ProjectTier` renders the switcher
+> unconditionally.
+>
+> **The row is kept rather than deleted**, and so is Panel C's third column,
+> because this asset is a record of a decision as well as a specification: the
+> ghost-button re-homing was the RIGHT answer to the question it was asked, and
+> a reader meeting that reasoning elsewhere should land on why it stopped
+> applying rather than on nothing. What changed is the premise underneath it —
+> that a projectless reader exists — not the judgement about how to draw a door
+> for one.
+>
+> **The door itself is not lost, only its placement.** Creating an ADDITIONAL
+> project is a real act with a real home: the project switcher, which this tier
+> now always renders, and which carries both `CreateProjectModal` and _Plan a
+> new project with AI_. What is gone is the create-first door offered to
+> somebody with nothing — which was always a workspace-tier act being performed
+> on a route that only exists inside a project.
+>
+> **⚠️ THE MOCK IS NOT REDRAWN BY THIS CARD, deliberately.** Panel C still draws
+> three columns and Panel E still draws the rail head, so the asset and this
+> section disagree until a design pass reconciles them — which is a design act
+> wanting Yue's eye on a seven-panel board, not a side effect of a code change.
+> It is filed rather than left as a sentence.
+
 ### The rail head, after the project leaves
 
 The rail answers _where inside this project can I go_. Its head was answering a different question,

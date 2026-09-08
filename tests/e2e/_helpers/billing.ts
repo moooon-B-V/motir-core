@@ -11,7 +11,7 @@
 import { writeFileSync, readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { db } from './db-reset';
-import { signUp, SHELL_PASSWORD } from './shell-session';
+import { signUpToOnboarding, SHELL_PASSWORD } from './shell-session';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
@@ -37,7 +37,17 @@ export interface BillingSeed {
  *  `motir.org` cookie the billing page resolves the active org from). Leaves the
  *  page signed in as the owner. */
 export async function seedBillingOwner(page: Page, email: string): Promise<BillingSeed> {
-  await signUp(page, email);
+  // ⚠️ `signUpToOnboarding`, NOT `signUp` (MOTIR-4876). Since a registration
+  // lands on the onboarding entrance, `signUp` settles THERE and then navigates
+  // on to `/workbench` to keep its "leave the caller in the app" contract — a
+  // second, heavy authed page load. This seed does not want it: it pins the
+  // context cookies itself two statements below, creates the project it cares
+  // about, and every one of its seven callers navigates explicitly afterwards.
+  // Paying for the landing here bought nothing and spent budget the acceptance
+  // lane measures in seconds (its per-test timeout is 90s, and
+  // `acceptance-repository-tenancy.spec.ts` runs close enough to it that the
+  // extra navigation tipped it over under CI load).
+  await signUpToOnboarding(page, email);
   const local = email.split('@')[0]!;
   const owner = await db.user.findFirstOrThrow({ where: { email } });
   const workspace = await db.workspace.findFirstOrThrow({

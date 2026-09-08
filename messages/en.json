@@ -990,8 +990,6 @@
     },
     "pageLoading": "Loading page",
     "project": {
-      "createFirst": "Create your first project",
-      "emptyDescription": "Projects group your work items and give them a key like ACME-1. Create one to start planning.",
       "create": "Create project",
       "planWithAi": "Plan a new project with AI",
       "untitled": "Untitled project",
@@ -1156,9 +1154,6 @@
     "epicPrivacyError": "Couldn’t update visibility. Try again.",
     "watchToggleFailedTitle": "Couldn’t update watching",
     "noProjectTitle": "No project selected",
-    "noProjectListDescription": "Pick or create a project from the switcher to track its work items.",
-    "noProjectDetailDescription": "Pick a project from the switcher to view its work items.",
-    "noProjectEditDescription": "Pick a project from the switcher to edit its work items.",
     "allIssuesIn": "All work items in {project}",
     "filter": "Filter",
     "filterComingSoon": "Filtering arrives in a later update",
@@ -4368,8 +4363,7 @@
       "resolutionTimeBody": "How long work items take to resolve — is the team speeding up?",
       "workloadTitle": "Workload",
       "workloadBody": "Open work per assignee — who's carrying how much.",
-      "noProjectTitle": "No project yet",
-      "noProjectBody": "Create a project to see its reports."
+      "noProjectTitle": "No project yet"
     },
     "period": {
       "day": "Daily",
@@ -5890,7 +5884,6 @@
         "buildItAll": "No — let's build the product straight away."
       },
       "noProjectTitle": "No active project",
-      "noProjectBody": "Pick or create a project first, then Motir can plan it with you.",
       "resuming": "Resuming…",
       "resumingBody": "Picking up where you left off.",
       "canvas": {
@@ -6251,7 +6244,8 @@
       },
       "usedBy": "{count, plural, one {Used by # project} other {Used by # projects}}",
       "usedByNone": "Used by no project yet",
-      "usedByExpanded": "Projects working on this repository"
+      "usedByExpanded": "Projects working on this repository",
+      "hostedByMotir": "Hosted by Motir"
     },
     "organization": {
       "subtitle": "Connect {org} to GitHub or GitLab once. Every project in the organisation can then work on a connected repository — picking one never indexes it again.",
@@ -6559,8 +6553,6 @@
   "codeHealth": {
     "title": "Code health",
     "subtitle": "The code-health audit and the per-repo coding convention Motir derives from your code and injects into every prompt.",
-    "noProjectTitle": "No active project",
-    "noProjectDescription": "Select or create a project to see its code health.",
     "adminOnlyTitle": "Project admins only",
     "adminOnlyDescription": "The coding standard drives every prompt Motir dispatches. Only a project admin can view it. Ask a project admin for access.",
     "tabsLabel": "Code health views",

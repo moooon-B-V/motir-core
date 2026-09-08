@@ -4,7 +4,6 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { ArrowLeft } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { parsePage } from '@/lib/issues/issueListView';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -42,18 +41,10 @@ export default async function ArchivedIssuesPage({
   const t = await getTranslations('issueViews');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="flex flex-col gap-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">
-            {t('archivedHeading')}
-          </h1>
-        </header>
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectListDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const caps = await projectAccessService.getCapabilities(ctx.projectId, wsCtx);

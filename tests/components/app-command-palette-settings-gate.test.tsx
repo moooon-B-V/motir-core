@@ -61,7 +61,6 @@ function renderPalette(settingsPermissions?: readonly PermissionKey[]) {
       activeWorkspaceId="ws_1"
       projects={[PROJECT]}
       activeProjectId={PROJECT.id}
-      hasProject
       settingsPermissions={settingsPermissions}
     />,
   );

@@ -229,12 +229,41 @@ const callPage = async (over: Record<string, unknown> = {}) => {
   } as never);
 };
 
+// ── WHICH READS MAY PRECEDE THE GATE, AND WHY (MOTIR-4898) ──────────────────
+//
+// The two cases below assert the SAME property — the gate is in front of every
+// read — at two different depths of the page, so each one names the EXACT set
+// of reads that may have started by the point it stops. They used to name that
+// set as a FILTER instead, and the two filters disagreed: one tolerated `t`,
+// its sibling four lines later tolerated `t` AND `locale`. A tolerance is a
+// claim about the page, so two different tolerances are two different claims
+// about one property, and at most one of them can be right.
+//
+//   * BEFORE the session settles, NOTHING may have started. An unauthenticated
+//     request redirects at the top of the page, ahead of every read including
+//     the translator, so the set is EMPTY — not "empty apart from `t`".
+//   * `t` (`getTranslations`) is the ONE read that runs after the session check
+//     and ahead of the rest of the gate. It resolves a message catalogue and
+//     reads no project data, so it cannot distinguish a missing item from a
+//     browse-denied one — which is the leak this gate exists to prevent. Every
+//     case that gets past the session check therefore expects exactly `t`.
+//   * `locale` (`getLocale`) is NOT in that set at any depth. The page calls it
+//     inside the tier-two `Promise.all`, which starts only after
+//     `getPermissions` has settled — i.e. after the whole gate. Tolerating it
+//     here bought nothing (no case has ever recorded it) and cost the one thing
+//     the assertion is for: a hoist of `getLocale()` above `getIssueDetail`
+//     would have gone unnoticed.
+//
+// So neither case filters. Anything new in `started` fails, and adding a name
+// to one of these arrays is a deliberate statement that the page now starts
+// that read before the gate has finished.
 describe('the item-detail gate stays in front of every read (MOTIR-3435)', () => {
   it('redirects an unauthenticated request before starting anything', async () => {
     getSession.mockResolvedValue(null);
     await expect(callPage()).rejects.toThrow('NEXT_REDIRECT');
     expect(redirected).toHaveBeenCalledWith('/sign-in');
-    expect(started.filter((s) => s !== 't')).toEqual([]);
+    // Not even the translator: the redirect precedes `getTranslations`.
+    expect(started).toEqual([]);
   });
 
   it('404s a missing or browse-denied item without starting a single page read', async () => {
@@ -248,7 +277,9 @@ describe('the item-detail gate stays in front of every read (MOTIR-3435)', () =>
     // The permission read never ran, and neither did anything after it: a 404
     // must not be distinguishable from a denial by what the server did.
     expect(getPermissions).not.toHaveBeenCalled();
-    expect(started.filter((s) => !['t', 'locale'].includes(s))).toEqual([]);
+    // The translator and nothing else — `locale` belongs to the tier-two group,
+    // which this request never reaches.
+    expect(started).toEqual(['t']);
   });
 
   it('308-redirects an item under a retired project key', async () => {
