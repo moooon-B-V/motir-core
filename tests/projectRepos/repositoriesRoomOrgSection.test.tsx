@@ -1,12 +1,17 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { RepositoriesRoom } from '@/app/(authed)/settings/project/repositories/_components/RepositoriesRoom';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
+import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import type { OrgRepoOptionDto } from '@/lib/dto/organizationRepos';
-import type { ProjectRepoDto, ProjectRepoRoomViewDto } from '@/lib/dto/projectRepos';
+import type {
+  ProjectRepoConnectedDto,
+  ProjectRepoDto,
+  ProjectRepoRoomViewDto,
+} from '@/lib/dto/projectRepos';
 
 // THE ROOM AS AN ORG ADMIN SEES IT (Story MOTIR-4669 · MOTIR-4681).
 //
@@ -259,6 +264,107 @@ describe('REMOVING from the project — the narrow one of the two removals', () 
     await waitFor(() => expect(screen.getByRole('alert', { hidden: true })).toBeTruthy());
     expect(screen.getByText('motir-core')).toBeTruthy();
     expect(refresh).not.toHaveBeenCalled();
+  });
+});
+
+// ⚠️ THE ROOM DOES NOT DRAW A REPOSITORY MOTIR HOSTS AS THE ORGANISATION'S (bug
+// MOTIR-4867).
+//
+// The seven-row fixture is the live MOTIR project on the day this was filed: no
+// repository SET, and a workspace registry holding six repositories the
+// organisation connected plus one Motir CREATED, which
+// `githubRepoRepository.listByWorkspace` returns because it filters on
+// `workspace_id` alone. The room drew all seven under `From your organisation`
+// — "Repositories moooon is connected to" — and its header read
+// `0 moving · 0 hosted by Motir · 7 yours`.
+//
+// ⚠️ AND IT IS THE CLASS, NOT THE ROW. The read is WORKSPACE-scoped, so any
+// set-less project in a workspace where Motir hosts anything draws the other
+// project's hosted repositories as its own. Deleting the one offending row on
+// the one tenant would clear the screenshot and leave this test failing, which
+// is the point of asserting the predicate rather than the tenant.
+describe('a repository under the provisioning organisation, in the mounted room', () => {
+  const HOST_OWNER = 'motir-projects';
+
+  /** The six the organisation connected, plus the one Motir created — in the
+   *  order `listByWorkspace` returns them, owner-then-name. */
+  const SEVEN: ProjectRepoConnectedDto[] = [
+    ...[
+      'motir-ai',
+      'motir-core',
+      'motir-gateway',
+      'motir-marketing',
+      'motir-meta',
+      'motir-www',
+    ].map((name) => ({ name, repoRef: `moooon-B-V/${name}`, defaultBranch: 'main' })),
+    { name: 'motir', repoRef: `${HOST_OWNER}/motir`, defaultBranch: 'main' },
+  ];
+
+  function layeredRoom(connected: ProjectRepoConnectedDto[]) {
+    renderWithIntl(
+      <RepositoriesRoom
+        projectKey="ACME"
+        view={{ ...view([]), connected, connectedInDomain: true, hostOwner: HOST_OWNER }}
+        connectHref="/settings/account/git"
+        canAddRepositories={false}
+        organizationName="moooon"
+        organizationInventoryHref="/settings/organization/git"
+        nowIso="2026-09-08T12:00:00.000Z"
+      />,
+    );
+  }
+
+  it('⚠️ THE DEFECT, as one assertion: it is absent from `From your organisation`', () => {
+    layeredRoom(SEVEN);
+    const section = screen.getByRole('region', { name: 'From your organisation' });
+    // The six the organisation really did connect are all there…
+    expect(within(section).getAllByRole('listitem')).toHaveLength(6);
+    expect(within(section).getByText('motir-core')).toBeTruthy();
+    // …and the one Motir hosts is not, by NAME and by its owner prefix — the
+    // prefix matters because `motir` is a substring of five of the six names.
+    expect(within(section).queryByText('motir')).toBeNull();
+    expect(within(section).queryByText(`${HOST_OWNER}/`)).toBeNull();
+  });
+
+  it('⚠️ and the summary over the same fixture does not read `7 yours`', () => {
+    // The summary is rendered by the PAGE (a server component reading the same
+    // room view), not by this island, so it is measured here through the very
+    // function that page calls rather than by a second render of a server
+    // component this test environment cannot mount. Same fixture, same
+    // `hostOwner`, one assertion apart from the render above.
+    expect(summarizeRepositories([], SEVEN, HOST_OWNER)).toEqual({
+      moving: 0,
+      hosted: 0,
+      yours: 6,
+    });
+  });
+
+  it('draws nothing at all for it — the hosted section is the project`s own ROWS', () => {
+    // The disposition this card chose, asserted so a later widening has to
+    // change a test rather than a rendering. `Hosted by Motir` holds
+    // `project_repository` rows carrying the takeover saga; this project has
+    // none, so the section is ABSENT rather than present-and-empty
+    // (`design/repository-set/design-notes.md` §16.1).
+    layeredRoom(SEVEN);
+    expect(screen.queryByText('Hosted by Motir')).toBeNull();
+  });
+
+  it('⚠️ leaves a deployment that cannot provision byte-for-byte unchanged', () => {
+    // `hostOwner: null` — self-hosted, no `GITHUB_FALLBACK_ORG`, nothing hosted.
+    // All seven are the organisation's, exactly as before this rule existed.
+    renderWithIntl(
+      <RepositoriesRoom
+        projectKey="ACME"
+        view={{ ...view([]), connected: SEVEN, connectedInDomain: true, hostOwner: null }}
+        connectHref="/settings/account/git"
+        canAddRepositories={false}
+        organizationName="moooon"
+        organizationInventoryHref="/settings/organization/git"
+        nowIso="2026-09-08T12:00:00.000Z"
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'From your organisation' });
+    expect(within(section).getAllByRole('listitem')).toHaveLength(7);
   });
 });
 

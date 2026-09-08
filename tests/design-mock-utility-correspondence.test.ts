@@ -397,12 +397,13 @@ export const isArbitrary = (token: string): boolean => token.includes('[') || to
  * A VARIANT-prefixed token — `hover:`, `focus-visible:`, `data-[state=…]:`,
  * `[&_svg]:`.
  *
- * Split out because the two halves are DIFFERENT SIZED problems and this card
+ * Split out because the two halves are DIFFERENT SIZED problems and MOTIR-4687
  * fixed one of them (see `INERT_VARIANT_DEBT`), not because a variant is less
  * of a defect. `[&_svg]:h-[18px]` is a descendant rule with no state in it at
  * all: it applies unconditionally, so an undeclared one is exactly as inert as
- * an un-prefixed class, and the seven shell assets carrying it render every nav
- * icon at the `<svg width="24" height="24">` attribute instead of 18px.
+ * an un-prefixed class, and the seven shell assets carrying it rendered every
+ * nav icon at the `<svg width="24" height="24">` attribute instead of 18px
+ * until MOTIR-4810 declared it in each of them.
  */
 export const isVariant = (token: string): boolean => token.includes(':') || token.includes('&');
 
@@ -661,13 +662,13 @@ export function misdeclaredUtilities(mock: MockSource): string[] {
 // EMPTY IS THE INTENDED RESTING STATE for both.
 
 /**
- * DIRECTION (A), variant-prefixed half — MOTIR-4810 (structural) and
- * MOTIR-4813 (state).
+ * DIRECTION (A), variant-prefixed half — MOTIR-4813 (state). The STRUCTURAL
+ * half was MOTIR-4810 and is at zero.
  *
  * MOTIR-4687 took the UN-PREFIXED half to zero: 11 utility groups declared
  * across 7 assets, each read at its use site to tell a wanted style from a
- * vestigial class. The variant half is 636 occurrences of 14 utilities across
- * these 11 assets — 532 structural, 104 stateful — and it is NOT the same size
+ * vestigial class. The variant half was 636 occurrences of 14 utilities across
+ * these 11 assets — 532 structural, 104 stateful — and it was NOT the same size
  * of job, for two reasons those cards measured rather than assumed:
  *
  *   • Declaring `[&_svg]:h-[18px]` in the seven shell assets RESIZES every nav
@@ -679,22 +680,47 @@ export function misdeclaredUtilities(mock: MockSource): string[] {
  *     answer is then which token is right — a design decision, and the one
  *     MOTIR-4812 exists to stop being answered by re-pointing the utility.
  *
+ * ── What MOTIR-4810 did with those two, and why only one of them arose ──────
+ * The `[&_svg]:h-[18px]` / `[&_svg]:w-[18px]` occurrences were DECLARED, in the
+ * form `design/shell/rail-bottom-section.mock.html` already carried — it is the
+ * control that rules out "the mocks intend 24px", and copying its rule rather
+ * than authoring one is what keeps the shell assets saying the same thing.
+ * Every affected `.png` was re-exported.
+ *
+ * ⚠️ SIX assets, 344 occurrences — not the seven and 484 the population had,
+ * because `design/workbench/workbench.mock.html` (140) LANDED FIRST, in
+ * MOTIR-4851, which declared the same pair while redrawing the pager. Two cards
+ * fixing one asset's inert utilities independently is not a collision to
+ * prevent: the row simply left this table under whichever landed first, and the
+ * second found its own edit already made. What it does mean is that a count
+ * taken when a card is FILED is a measurement of that moment — MOTIR-4862 is
+ * the planning bug about this card's numbers, and this is the benign half of
+ * the same fact.
+ *
+ * The 48 `[&_.seg-ic]:` / `[&_.seg-trail]:` occurrences in
+ * `design/work-items/child-panel-graph.mock.html` were REMOVED, and the second
+ * bullet above therefore never fired: the strings `seg-ic` and `seg-trail`
+ * occurred in that file ONLY inside those class tokens — 24 each, all of them
+ * the token's own text — so the segmented control has no icon and no trailing
+ * element for the rule to paint. They select nothing, which makes them
+ * vestigial rather than a token question, and no ink reached
+ * `design-state-ink-contrast` at all. ⚠️ That is NOT the same act as pointing
+ * `--el-text-faint` at a passing token to quieten an arm — the defect
+ * MOTIR-4812 exists for — and the discriminator is checked, not asserted: a
+ * REMOVE is only honest where the selector matches no element, which is a
+ * grep, and where it matches one the answer is the ink question.
+ *
  * The counts are OCCURRENCES, not distinct utilities, so the table measures how
  * much of each asset is inert. A file whose two halves belong to different
  * cards names both, and the first of them to land DECREMENTS the row rather
- * than deleting it.
+ * than deleting it — which is what `design/shell/help-menu.mock.html` did here,
+ * 34 → 6.
  */
 const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/plan-change-run-live.mock.html', count: 88, card: 'MOTIR-4813' },
   { file: 'design/ai-planning/peek-proposal-mode.mock.html', count: 2, card: 'MOTIR-4813' },
-  { file: 'design/projects/public-page.mock.html', count: 60, card: 'MOTIR-4810' },
-  { file: 'design/settings/arrival.mock.html', count: 48, card: 'MOTIR-4810' },
-  { file: 'design/shell/3d-immersive-shell.mock.html', count: 84, card: 'MOTIR-4810' },
   { file: 'design/shell/account-menu.mock.html', count: 8, card: 'MOTIR-4813' },
-  { file: 'design/shell/help-menu.mock.html', count: 34, card: 'MOTIR-4810 / MOTIR-4813' }, // structural 28, state 6
-  { file: 'design/shell/navigation-pending.mock.html', count: 96, card: 'MOTIR-4810' },
-  { file: 'design/shell/top-bar.mock.html', count: 28, card: 'MOTIR-4810' },
-  { file: 'design/work-items/child-panel-graph.mock.html', count: 48, card: 'MOTIR-4810' },
+  { file: 'design/shell/help-menu.mock.html', count: 6, card: 'MOTIR-4813' }, // was 34; 28 structural landed with MOTIR-4810
 ];
 
 /**
@@ -717,7 +743,7 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
  * with `origin/main` and 17% of what it counted still could not be deleted.
  *
  * The two mocks that embed a COMPILED Tailwind build
- * (`design/shell/context-row.mock.html` 868, `design/ai-chat/onboarding.mock.html`
+ * (`design/shell/context-row.mock.html` 867, `design/ai-chat/onboarding.mock.html`
  * 249) are what is left. For those two, unused rules
  * are the normal and correct state of machine output — nobody chose them and no
  * sweep can remove them without hand-editing generated CSS. They are held here
@@ -751,11 +777,11 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
  * class, and direction (A) is enforced at ZERO. **So a sweep of this kind is
  * re-derived against the tree it will land on, never against the tree it was
  * planned on** — MOTIR-4811's own population had to be recomputed after
- * MOTIR-4851 and MOTIR-4812 merged under it.
+ * MOTIR-4851, MOTIR-4812 and MOTIR-4810 merged under it.
  */
 const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
   { file: 'design/ai-chat/onboarding.mock.html', count: 249, card: 'MOTIR-4814' },
-  { file: 'design/shell/context-row.mock.html', count: 868, card: 'MOTIR-4814' },
+  { file: 'design/shell/context-row.mock.html', count: 867, card: 'MOTIR-4814' },
 ];
 
 // ── The real tree ───────────────────────────────────────────────────────────
@@ -1074,11 +1100,17 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
 
   it('holds the two tables to a shrinking total', () => {
     // The number a reader checks in one line, and the one that says whether the
-    // four follow-up cards are making progress. The ceilings may only be lowered:
-    // direction (A)'s is the population measured on `origin/main` `cd77d0225`,
-    // direction (B)'s came down 1493 -> 1117 when MOTIR-4811 swept the
-    // hand-written half, and 1117 is now the two compiled builds alone.
-    expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(636);
-    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1117);
+    // four follow-up cards are making progress. The ceilings may only be lowered.
+    // 636 -> 104 with MOTIR-4810: the whole structural half landed at once,
+    // which is what the ratchet is for — the ceiling comes DOWN with the fix and
+    // cannot go back up.
+    expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(104);
+    // Direction (B)'s comes down the same way. MOTIR-4851 and MOTIR-4810 each
+    // took rows off the table WITHOUT lowering it, correctly — the per-file rows
+    // are the real ratchet there, each asserted EXACT, so the ceiling is a
+    // backstop rather than the instrument. MOTIR-4811 is the case that does
+    // lower it: the hand-written half is gone, so what remains is the two
+    // compiled builds and nothing can be measured against 1493 again.
+    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1116);
   });
 });
