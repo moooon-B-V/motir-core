@@ -89,10 +89,12 @@ describe('the settings rail', () => {
       expect(container.innerHTML, `revealed=${revealed}`).toContain(
         'href="/settings/workspace/jobs"',
       );
-      // Git moved to the ORGANISATION tier (MOTIR-4680) — a different change
-      // from this file's §6 fold, and the row is still here at both counts,
-      // which is what this case is about.
-      expect(container.innerHTML, `revealed=${revealed}`).toContain(
+      // ⚠️ THE `Git` WITNESS IS GONE (MOTIR-4643) — the row LEFT this section,
+      // so it can no longer stand for "the neighbours are unaffected". `Job runs`
+      // above is the surviving neighbour and carries the claim on its own; the
+      // ABSENCE is asserted here too, so this case fails if the row ever comes
+      // back without anyone deciding it should.
+      expect(container.innerHTML, `revealed=${revealed}`).not.toContain(
         'href="/settings/organization/git"',
       );
     }

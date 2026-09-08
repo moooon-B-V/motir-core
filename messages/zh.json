@@ -966,7 +966,7 @@
       "runs": "运行",
       "boards": "面板",
       "reports": "报表",
-      "codeHealth": "代码健康度",
+      "code": "代码库",
       "settings": "设置",
       "jobRuns": "任务运行",
       "git": "Git",
@@ -1091,6 +1091,7 @@
       "current": "当前",
       "goToBacklog": "前往待办列表",
       "goToFilters": "前往筛选器",
+      "goToCode": "前往代码库",
       "aiHeading": "AI",
       "goToOrgSecurity": "前往组织安全设置",
       "goToWorkspaceSecurity": "前往工作区安全设置"
@@ -7881,7 +7882,7 @@
     }
   },
   "code": {
-    "title": "代码",
+    "title": "代码库",
     "subtitle": "本项目所使用的代码仓库，以及 Motir 已读取到的内容。",
     "noProjectTitle": "没有活动项目",
     "noProjectDescription": "选择或创建一个项目以查看其代码。",

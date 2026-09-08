@@ -966,7 +966,7 @@
       "runs": "Runs",
       "boards": "Boards",
       "reports": "Reports",
-      "codeHealth": "Code health",
+      "code": "Codebase",
       "settings": "Settings",
       "jobRuns": "Job runs",
       "git": "Git",
@@ -1091,6 +1091,7 @@
       "current": "Current",
       "goToBacklog": "Go to Backlog",
       "goToFilters": "Go to Filters",
+      "goToCode": "Go to Codebase",
       "aiHeading": "AI",
       "goToOrgSecurity": "Go to organization security",
       "goToWorkspaceSecurity": "Go to workspace security"
@@ -7885,7 +7886,7 @@
     }
   },
   "code": {
-    "title": "Code",
+    "title": "Codebase",
     "subtitle": "The repositories this project works on, and what Motir has read of them.",
     "noProjectTitle": "No active project",
     "noProjectDescription": "Select or create a project to see its code health.",

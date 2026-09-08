@@ -4,12 +4,11 @@ import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  Activity,
   BarChart3,
   CircleDot,
   CirclePlay,
+  Code,
   Columns3,
-  GitBranch,
   History,
   House,
   Inbox,
@@ -382,7 +381,8 @@ export function SidebarNav({
         // you dispatch, Runs is where you watch". The glyph is `Waypoints` — a
         // path through ordered nodes, which is what a run over a SET is — chosen
         // because `CirclePlay` is Ready's, `Zap` is the epic issue type's,
-        // `Activity` is Code health's and `History` is Resume onboarding's.
+        // `Code` is the Code room's and `History` is Resume onboarding's.
+        // (`Activity` was Code health's until MOTIR-4643 freed it.)
         icon: <Waypoints />,
         label: t('nav.runs'),
         href: '/runs',
@@ -465,17 +465,22 @@ export function SidebarNav({
         active: isActive(pathname, '/reports'),
       },
       {
-        // Code (MOTIR-1768) — the project's repository set and its index
-        // freshness, with the shipped code-health audit as its second section.
-        // Sits after Reports (a top-level project page).
+        // Code (MOTIR-1768 · MOTIR-4643) — the project's repository set and its
+        // index freshness, with the shipped code-health audit as its second
+        // section. Sits after Reports, exactly where `Code health` was.
         //
-        // ⚠️ THE ADDRESS MOVED AND SO MUST `isActive` (MOTIR-1768). `/code-health`
-        // permanently redirects into `/code`, so a row still testing the old
-        // pathname could never match: a reader standing on the page would see no
-        // row highlighted. MOTIR-4643 owns the rest of this row — collapsing the
-        // rail's `Git` row into it — and is not done here.
-        icon: <Activity />,
-        label: t('nav.codeHealth'),
+        // ⚠️ ONE ROW APPEARS AND ONE ROW LEAVES. Three surfaces answered one
+        // question — *what code does Motir know about, and is it healthy?* — from
+        // two rail sections with opposite gating, and a user looking for their
+        // repositories had to know the answer was spelled `Git` and lived below a
+        // horizontal rule beside Job runs and Security. This is the door; the
+        // page is MOTIR-1768's.
+        //
+        // ⚠️ THE GLYPH IS `Code`, AND `Activity` IS FREED. `Activity` was Code
+        // health's — a pulse, which named the AUDIT rather than the room. The
+        // room is about code, and its first section is a list of repositories.
+        icon: <Code />,
+        label: t('nav.code'),
         href: '/code',
         active: isActive(pathname, '/code'),
       },
@@ -594,31 +599,36 @@ export function SidebarNav({
         href: '/settings/workspace/jobs',
         active: isActive(pathname, '/settings/workspace/jobs'),
       },
-      {
-        // Git integration settings (Story 7.10 GitHub + 7.23 GitLab · MOTIR-1478)
-        // — the SHARED connect-settings surface. ONE "Git" row (git-branch
-        // glyph): GitLab does NOT get a second row, because the provider is a
-        // Segmented on the page rather than a second destination.
-        //
-        // ⚠️ IT POINTS AT THE ORGANISATION NOW (Story MOTIR-4669 · MOTIR-4680).
-        // A repository is connected ONCE, to the organisation, so the surface
-        // moved a tier and `/settings/workspace/{github,gitlab}` are deleted.
-        // The ROW stays and is RE-POINTED rather than removed:
-        // `organization-tier.md` §6 — a relocation preserves the door, and this
-        // is the deep link from anywhere in the app, reached the same way Job
-        // runs is. Leaving it on the old path would still have worked, through
-        // the permanent redirect, and would have made every visit pay a hop for
-        // a link the app itself controls.
-        icon: <GitBranch />,
-        label: t('nav.git'),
-        href: '/settings/organization/git',
-        active: isActive(pathname, '/settings/organization/git'),
-      },
+      // ⚠️ THE `Git` ROW LEFT THIS SECTION (MOTIR-4643 · design/shell
+      // § *The rail's bottom section*, amended by MOTIR-4640). It pointed at the
+      // organisation's Git settings — the connection LIFECYCLE, which is an
+      // org-admin act at the tenant that owns it — while the question a project
+      // member actually brings to the rail is *what code does Motir know about?*,
+      // which the `Code` row above now answers.
+      //
+      // ⚠️ REMOVING A ROW MAY REMOVE A CONCEPT AND MAY NOT REMOVE A CAPABILITY,
+      // and both actions that lived behind this one are carried forward, to the
+      // tenant that owns each:
+      //
+      //   · configure which repositories exist — ORG ADMIN — Settings →
+      //     Organisation → Git, which the row pointed at and which is still
+      //     reachable from the settings area's own navigation;
+      //   · connect YOUR OWN account — ANY MEMBER — Settings → Account → Git,
+      //     because `GithubIdentity` is `userId @unique` and a personal
+      //     credential belongs beside `/settings/account/tokens`. This is the
+      //     one `projectSettingsNav.ts` calls "the one action nobody can take on
+      //     [a member's] behalf", so it is the one that must not lose its door.
+      //
+      // Neither is gone; both moved off a PROJECT rail that was never the right
+      // place for an administrative door. That is why this card's hardest
+      // argument — reconciling an `ai:configure` row with an ungated one —
+      // dissolved rather than being solved.
+      //
       // Docs and Legal documents LEFT this section for the Help menu
       // (MOTIR-4239 · design/shell/help-menu.mock.html): the authed shell now
       // has a footer to put them in, and a bottom section that keeps growing
       // with every non-product door was the tell, not merely a symptom. The
-      // floor is unchanged — Settings · Security · Job runs · Git.
+      // floor is now Settings · Security · Job runs.
     ],
   });
 

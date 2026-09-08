@@ -72,7 +72,12 @@ describe('the Project settings door (design panel 1)', () => {
     // footer is simply one row shorter, so the rows below close up.
     expect(screen.queryByText('Settings')).toBeNull();
     expect(screen.getByRole('link', { name: 'Job runs' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Git' })).toBeTruthy();
+    // ⚠️ `Git` LEFT this section (MOTIR-4643), so it is no longer the second
+    // witness that the rows below close up — `Job runs` above is the floor now,
+    // and it is the whole floor. The member's own-account connect, which is what
+    // that row ultimately reached, lives at Settings → Account → Git; the
+    // capability moved rather than went.
+    expect(screen.queryByRole('link', { name: 'Git' })).toBeNull();
   });
 
   it('a VIEWER gets no door either', () => {
@@ -206,10 +211,17 @@ describe('the settings door yields to a more specific workspace sub-route', () =
   // REPLACED by the org one rather than kept alongside it: a clause that yields
   // at a path nothing can navigate to is not a passing test, it is an untested
   // clause that still looks covered.
+  //
+  // ⚠️ AMENDED BY MOTIR-4643 — the `Git` case LEFT this table because its row
+  // left the rail. It read `['/settings/organization/git', 'Git']`, and the
+  // claim it made — *the settings door yields and the Git row takes the
+  // highlight* — has no owner left to take it. The route still exists and is
+  // still reachable from the settings area's own navigation; what it no longer
+  // has is a bottom-section row. The case below asserts the honest replacement
+  // rather than the entry being quietly dropped.
   it.each([
     ['/settings/workspace/security', 'Security'],
     ['/settings/workspace/jobs', 'Job runs'],
-    ['/settings/organization/git', 'Git'],
   ])('yields at %s, and the %s row takes the highlight instead', (path, owner) => {
     pathname = path;
     renderRail(ADMIN, PROJECT, true);

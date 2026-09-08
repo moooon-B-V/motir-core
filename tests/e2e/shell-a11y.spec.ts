@@ -73,7 +73,7 @@ const SHELL_ROUTES: { path: string; ready: (page: Page) => Promise<void> }[] = [
     // because it refused them outright.
     path: '/code',
     ready: async (page) =>
-      expect(page.getByRole('heading', { name: 'Code', level: 1 })).toBeVisible(),
+      expect(page.getByRole('heading', { name: 'Codebase', level: 1 })).toBeVisible(),
   },
   {
     // ⚠️ `/settings/organization`, not `/settings/workspace` (MOTIR-3502 ·

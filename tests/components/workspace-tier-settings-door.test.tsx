@@ -78,7 +78,10 @@ describe('the no-project settings door BELOW the reveal threshold', () => {
     // neighbours.
     const { container } = renderRail(false);
     expect(container.innerHTML).toContain('/settings/workspace/jobs');
-    expect(container.innerHTML).toContain('/settings/organization/git');
+    // ⚠️ `Git` LEFT this section entirely (MOTIR-4643), so it is no longer a
+    // witness for "the neighbours are unaffected" — `Job runs` above carries
+    // that. Asserted as an ABSENCE so the row cannot silently return.
+    expect(container.innerHTML).not.toContain('/settings/organization/git');
   });
 });
 
@@ -91,6 +94,7 @@ describe('the no-project settings door AT the reveal threshold', () => {
   it('keeps the sub-routes here too', () => {
     const { container } = renderRail(true);
     expect(container.innerHTML).toContain('/settings/workspace/jobs');
-    expect(container.innerHTML).toContain('/settings/organization/git');
+    // The twin of the case above — `Git` left with MOTIR-4643.
+    expect(container.innerHTML).not.toContain('/settings/organization/git');
   });
 });

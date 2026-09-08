@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   BarChart3,
+  Code,
   CircleDot,
   Columns3,
   Filter,
@@ -322,6 +323,18 @@ export function AppCommandPalette({
         label: t('commandPalette.goToFilters'),
         icon: <Filter />,
         onSelect: () => go('/filters'),
+      }),
+      // ⚠️ THE SAME DESTINATION ON THE SAME GATE (MOTIR-4643). `offerNav` reads
+      // `PROJECT_NAV_ACCESS`, which is the ONE map the rail reads too — so this
+      // entry cannot disagree with the rail about who may be offered the room,
+      // which is the whole reason that map exists rather than a condition beside
+      // each list. The room is browse-reachable and its Health section gates
+      // itself, so every member is offered it here exactly as in the rail.
+      ...offerNav('/code', {
+        id: 'nav-code',
+        label: t('commandPalette.goToCode'),
+        icon: <Code />,
+        onSelect: () => go('/code'),
       }),
     );
   }

@@ -545,25 +545,41 @@ function bottomSectionRowNames(): string[] {
   return afterLast.map((a) => (a.getAttribute('aria-label') ?? a.textContent ?? '').trim());
 }
 
-describe('SEAM — the rail keeps exactly the four rows the two departures left', () => {
-  it('is exactly Settings · Security · Job runs · Git, in that order', () => {
+// ⚠️ AMENDED BY MOTIR-4643 — A THIRD ROW LEFT THIS SECTION, and these
+// assertions are re-measured rather than deleted.
+//
+// This block was written for the Docs and Legal departures (MOTIR-4239) and
+// counted what they left behind: Settings · Security · Job runs · Git, floor
+// Job runs · Git. MOTIR-4643 removes `Git` too — the connection LIFECYCLE is an
+// org-admin act at the tenant that owns it, while the question a project member
+// brings to the rail is *what code does Motir know about?*, which the `Codebase`
+// row in the PRIMARY section now answers.
+//
+// The seam these tests hold is unchanged and is the reason to amend rather than
+// retire them: nothing may re-appear in this section, and its floor may only
+// ever be measured, never assumed. `design/shell/design-notes.md` § *The rail's
+// bottom section* is the design of record and was amended by MOTIR-4640.
+describe('SEAM — the rail keeps exactly the three rows the departures left', () => {
+  it('is exactly Settings · Security · Job runs, in that order', () => {
     renderRail({ workspaceTierRevealed: true });
 
-    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs', 'Git']);
+    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs']);
   });
 
-  it('its FLOOR is exactly Job runs · Git — unchanged by the two departures', () => {
-    // Both departing rows were already conditional, which is why this move costs
-    // an unconfigured deployment nothing: the floor is what it was before.
+  it('its FLOOR is exactly Job runs — Git left with MOTIR-4643', () => {
+    // Both of MOTIR-4239's departing rows were already conditional, which is why
+    // that move cost an unconfigured deployment nothing. `Git` was not
+    // conditional, so this floor is genuinely one row shorter than it was — the
+    // narrowing `design/shell` §2 names and measures.
     renderRail({ permissions: MEMBER, workspaceTierRevealed: false });
 
-    expect(bottomSectionRowNames()).toEqual(['Job runs', 'Git']);
+    expect(bottomSectionRowNames()).toEqual(['Job runs']);
   });
 
-  it('the section is FOUR rows at most — nothing re-appeared beside them', () => {
+  it('the section is THREE rows at most — nothing re-appeared beside them', () => {
     renderRail({ workspaceTierRevealed: true });
 
-    expect(bottomSectionRowNames()).toHaveLength(4);
+    expect(bottomSectionRowNames()).toHaveLength(3);
   });
 
   // ⚠️ THE SWEEP. `SidebarNav-docs-door.test.tsx` and
@@ -735,7 +751,8 @@ describe('CONTRACT — `SidebarNav` carries neither departed prop', () => {
       />,
     );
 
-    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs', 'Git']);
+    // Git left with MOTIR-4643 (see the SEAM block above).
+    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs']);
     expect(screen.getByRole('navigation').textContent).not.toMatch(/\b(docs|legal)\b/i);
   });
 });
