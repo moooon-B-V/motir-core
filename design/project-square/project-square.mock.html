@@ -331,12 +331,6 @@
         width: 100%;
         height: 100%;
       }
-      .surface-card {
-        background: var(--el-page-bg);
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        box-shadow: var(--shadow-subtle);
-      }
 
       /* Buttons (mirror components/ui/Button.tsx variants) */
       .btn {
@@ -466,9 +460,6 @@
       }
       .av-lav {
         background: var(--el-tint-lavender);
-      }
-      .av-peach {
-        background: var(--el-tint-peach);
       }
 
       /* work-item-type icon hue */
@@ -1196,11 +1187,6 @@
       .composer .body {
         flex: 1;
       }
-      .composer-actions {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 9px;
-      }
 
       /* ── Access control (Panel 5) ────────────────────────────────────────── */
       .access-opt {
@@ -1729,117 +1715,7 @@
         color: var(--el-text-muted);
       }
 
-      /* the make-it (authoring) editor in settings */
-      .ov-editor {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-input);
-        overflow: hidden;
-        background: var(--el-page-bg);
-      }
-      .ov-editor .toolbar {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 7px 9px;
-        border-bottom: 1px solid var(--el-border);
-        background: var(--el-surface-soft);
-        color: var(--el-text-secondary);
-      }
-      .ov-editor .toolbar .tb {
-        width: 26px;
-        height: 26px;
-        border-radius: var(--radius-control);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 13px;
-        font-weight: 700;
-      }
-      .ov-editor .toolbar .tb .ic {
-        width: 15px;
-        height: 15px;
-      }
-      .ov-editor .body {
-        padding: 13px var(--spacing-input-x);
-        font-size: 13.5px;
-        line-height: 1.6;
-        color: var(--el-text-secondary);
-        min-height: 96px;
-      }
-      .ov-editor .body b {
-        color: var(--el-text);
-      }
-
-      /* settings entry point → opens the dedicated Edit overview view */
-      .ov-entry {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 13px 14px;
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        background: var(--el-surface-soft);
-      }
-      .ov-entry .body {
-        flex: 1;
-        min-width: 0;
-      }
-      .ov-entry .ttl {
-        font-size: 13.5px;
-        font-weight: 600;
-        color: var(--el-text);
-        margin-bottom: 3px;
-      }
-      .ov-entry .snip {
-        font-size: 12px;
-        color: var(--el-text-muted);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .ov-entry .snip b {
-        color: var(--el-text-secondary);
-        font-weight: 600;
-      }
-
       /* ── The dedicated "Edit overview" view (split editor + live preview) ── */
-      .editor-shell {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        box-shadow: var(--shadow-card);
-        background: var(--el-page-bg);
-        overflow: hidden;
-      }
-      .editor-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--el-border);
-      }
-      .editor-head .titles {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-      .editor-head .title-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .editor-head h2 {
-        font-family: var(--font-serif);
-        font-size: 20px;
-        font-weight: 600;
-        margin: 0;
-        color: var(--el-text);
-      }
-      .editor-head .sub {
-        margin: 0;
-        font-size: 13px;
-        color: var(--el-text-muted);
-      }
       .icon-btn {
         width: var(--height-control);
         height: var(--height-control);
@@ -1907,124 +1783,13 @@
       .editor-toolbar .grow {
         flex: 1;
       }
-      .pane-tag {
-        font-family: var(--font-mono);
-        font-size: 10.5px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--el-text-faint);
-      }
-      .pane-tag.right {
-        width: 50%;
-        padding-left: 16px;
-      }
-
-      .editor-split {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        min-height: 420px;
-      }
-      .editor-src {
-        border-right: 1px solid var(--el-border);
-        overflow: auto;
-        background: var(--el-page-bg);
-      }
-      .editor-src pre {
-        margin: 0;
-        padding: 16px 18px;
-      }
-      .editor-src code {
-        font-family: var(--font-mono);
-        font-size: 12.5px;
-        line-height: 1.65;
-        color: var(--el-text-secondary);
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-      .editor-prev {
-        position: relative;
-        overflow: auto;
-        background: var(--el-surface-soft);
-        padding: 18px 20px;
-      }
-      .prev-badge {
-        position: absolute;
-        top: 12px;
-        right: 14px;
-        font-size: 10.5px;
-        font-weight: 600;
-        color: var(--el-text-secondary);
-        background: var(--el-page-bg);
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-badge);
-        padding: 2px 9px;
-      }
-      .md-prev {
-        background: var(--el-page-bg);
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        padding: 18px;
-      }
-      .md-prev h3:first-child {
-        margin-top: 0;
-      }
     </style>
     <style>
       /* ══════════════════════════════════════════════════════════════════════
          Project-square surface classes — built on the same --el-* colour tokens
          + [data-display-style] shape tokens as the shipped components/ui/*.
-         No Tier-0 --color-* and no raw rounded-*/
-      p-*/h-* on any surface here.
+         No Tier-0 --color-* and no raw rounded-* / p-* / h-* on any surface here.
          ══════════════════════════════════════════════════════════════════════ */
-
-      /* the explore content column */
-      .sq-head {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 18px;
-      }
-      .sq-eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--el-accent);
-        margin-bottom: 8px;
-      }
-      .sq-eyebrow .ic {
-        width: 15px;
-        height: 15px;
-      }
-      .sq-head h2 {
-        font-family: var(--font-serif);
-        font-size: 26px;
-        font-weight: 600;
-        color: var(--el-text);
-        margin: 0;
-        letter-spacing: -0.01em;
-      }
-      .sq-sub {
-        margin: 6px 0 0;
-        font-size: 14px;
-        color: var(--el-text-secondary);
-        max-width: 56ch;
-      }
-      .sq-count {
-        font-size: 13px;
-        color: var(--el-text-muted);
-        white-space: nowrap;
-        padding-bottom: 4px;
-      }
-      .sq-count b {
-        color: var(--el-text);
-        font-weight: 700;
-      }
 
       /* the toolbar — rank tabs (left) + search (right) */
       .sq-toolbar {

@@ -296,9 +296,6 @@
         }
       }
       @layer utilities {
-        .collapse {
-          visibility: collapse;
-        }
         .absolute {
           position: absolute;
         }
@@ -308,14 +305,8 @@
         .relative {
           position: relative;
         }
-        .right-5 {
-          right: calc(var(--spacing) * 5);
-        }
         .bottom-4 {
           bottom: calc(var(--spacing) * 4);
-        }
-        .bottom-5 {
-          bottom: calc(var(--spacing) * 5);
         }
         .bottom-\[4\.25rem\] {
           bottom: 4.25rem;
@@ -325,9 +316,6 @@
         }
         .left-4 {
           left: calc(var(--spacing) * 4);
-        }
-        .left-\[8\.25rem\] {
-          left: 8.25rem;
         }
         .mt-0\.5 {
           margin-top: calc(var(--spacing) * 0.5);
@@ -401,9 +389,6 @@
         .min-h-0 {
           min-height: calc(var(--spacing) * 0);
         }
-        .min-h-\[28rem\] {
-          min-height: 28rem;
-        }
         .w-\(--height-btn-md\) {
           width: var(--height-btn-md);
         }
@@ -427,10 +412,6 @@
         }
         .border-collapse {
           border-collapse: collapse;
-        }
-        .transform {
-          transform: var(--tw-rotate-x,) var(--tw-rotate-y,) var(--tw-rotate-z,) var(--tw-skew-x,)
-            var(--tw-skew-y,);
         }
         .flex-col {
           flex-direction: column;
@@ -481,9 +462,6 @@
         }
         .overflow-hidden {
           overflow: hidden;
-        }
-        .rounded {
-          border-radius: 0.25rem;
         }
         .rounded-\(--radius-badge\) {
           border-radius: var(--radius-badge);
@@ -599,9 +577,6 @@
         }
         .pt-6 {
           padding-top: calc(var(--spacing) * 6);
-        }
-        .pb-\(--shell-bottom-clearance\) {
-          padding-bottom: var(--shell-bottom-clearance);
         }
         .font-mono {
           font-family: var(--font-mono);
@@ -2189,115 +2164,6 @@
         @supports (color: color-mix(in lab, red, red)) {
           background-color: color-mix(in srgb, black 14%, var(--el-surface));
         }
-      }
-      .style-vignette[data-style='glassmorphism'] > .sv-canvas {
-        background-image:
-          radial-gradient(62% 70% at 12% -5%, var(--el-accent), transparent 70%),
-          radial-gradient(58% 65% at 105% 6%, var(--el-highlight), transparent 68%),
-          radial-gradient(72% 78% at 50% 112%, var(--el-link), transparent 72%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            radial-gradient(
-              62% 70% at 12% -5%,
-              color-mix(in srgb, var(--el-accent) var(--glass-wash), transparent),
-              transparent 70%
-            ),
-            radial-gradient(
-              58% 65% at 105% 6%,
-              color-mix(in srgb, var(--el-highlight) var(--glass-wash), transparent),
-              transparent 68%
-            ),
-            radial-gradient(
-              72% 78% at 50% 112%,
-              color-mix(in srgb, var(--el-link) var(--glass-wash), transparent),
-              transparent 72%
-            );
-        }
-      }
-      .style-vignette[data-style='cybercore-y2k'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          linear-gradient(currentColor 1px, transparent 1px),
-          linear-gradient(90deg, currentColor 1px, transparent 1px);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-            linear-gradient(
-              90deg,
-              color-mix(in srgb, currentColor 6%, transparent) 1px,
-              transparent 1px
-            );
-        }
-        background-size: 26px 26px;
-      }
-      .style-vignette[data-style='aurora'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          radial-gradient(58% 75% at 12% 0%, var(--el-accent), transparent 60%),
-          radial-gradient(54% 70% at 92% 8%, var(--el-highlight), transparent 58%),
-          radial-gradient(68% 82% at 62% 104%, var(--el-link), transparent 62%),
-          radial-gradient(48% 64% at 34% 58%, var(--el-info), transparent 55%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            radial-gradient(
-              58% 75% at 12% 0%,
-              color-mix(in srgb, var(--el-accent) var(--aurora-wash), transparent),
-              transparent 60%
-            ),
-            radial-gradient(
-              54% 70% at 92% 8%,
-              color-mix(in srgb, var(--el-highlight) var(--aurora-wash), transparent),
-              transparent 58%
-            ),
-            radial-gradient(
-              68% 82% at 62% 104%,
-              color-mix(in srgb, var(--el-link) var(--aurora-wash), transparent),
-              transparent 62%
-            ),
-            radial-gradient(
-              48% 64% at 34% 58%,
-              color-mix(in srgb, var(--el-info) var(--aurora-wash-soft), transparent),
-              transparent 55%
-            );
-        }
-      }
-      .style-vignette[data-style='retrofuturism'] > .sv-canvas {
-        background-color: var(--el-page-bg);
-        background-image:
-          repeating-linear-gradient(90deg, var(--el-accent) 0 1px, transparent 1px 18px),
-          linear-gradient(180deg, transparent 56%, var(--el-highlight) 64%, transparent 72%),
-          linear-gradient(180deg, var(--el-link), transparent 50%),
-          linear-gradient(0deg, var(--el-accent), transparent 46%);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-image:
-            repeating-linear-gradient(
-              90deg,
-              color-mix(in srgb, var(--el-accent) var(--retro-grid), transparent) 0 1px,
-              transparent 1px 18px
-            ),
-            linear-gradient(
-              180deg,
-              transparent 56%,
-              color-mix(in srgb, var(--el-highlight) var(--retro-horizon), transparent) 64%,
-              transparent 72%
-            ),
-            linear-gradient(
-              180deg,
-              color-mix(in srgb, var(--el-link) var(--retro-sky), transparent),
-              transparent 50%
-            ),
-            linear-gradient(
-              0deg,
-              color-mix(in srgb, var(--el-accent) var(--retro-ground), transparent),
-              transparent 46%
-            );
-        }
-        background-size:
-          18px 100%,
-          100% 100%,
-          100% 100%,
-          100% 100%;
-        background-position: center bottom;
       }
       :root,
       [data-appearance-scope] {
