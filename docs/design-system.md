@@ -397,9 +397,9 @@ preview is the specimen route, not embedded screenshots.
 
 ```tsx
 <EmptyState
-  title="No projects yet"
-  description="Create your first project to get started."
-  action={<Button leftIcon={<Plus />}>New project</Button>}
+  title="No saved filters yet"
+  description="Save a filter to reuse it across boards and reports."
+  action={<Button leftIcon={<Plus />}>New filter</Button>}
 />
 ```
 
