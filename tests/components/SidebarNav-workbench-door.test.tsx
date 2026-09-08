@@ -75,30 +75,20 @@ describe('SidebarNav — the Workbench entry', () => {
     );
   });
 
-  it('is ABSENT with no active project — the row promised a room the page cannot open', () => {
-    // The INVERSE of what this asserted until MOTIR-2761, and the inversion is
-    // the point: the duplicate `!hasProject` row justified itself by "Home is
-    // workspace-scoped: it works with no project", which is exactly the
-    // property the narrowing removed. It now joins every other primary entry in
-    // being correctly absent — asserted beside `Boards`, which has always been
-    // (`docs/decisions/home-scope.md` §2.1).
-    //
-    // `/workbench` stays reachable by URL in this state and renders the
-    // create-first door there; what goes is the NAV row, not the route. That
-    // state is itself on its way out — MOTIR-4815 seeds a default project at
-    // registration — at which point this test's premise is what changes.
-    renderWithIntl(<SidebarNav activeProject={null} user={USER} />);
-    expect(screen.queryByRole('link', { name: 'Workbench' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Boards' })).toBeNull();
-    // …and no primary destination survives at all — the rail keeps only its
-    // bottom section, so this cannot pass by Home merely moving.
-    expect(
-      screen
-        .getAllByRole('link')
-        .map((a) => a.getAttribute('href'))
-        .filter((h) => h === '/workbench' || h === '/dashboard' || h === '/items'),
-    ).toEqual([]);
-  });
+  // ⚠️ REMOVED (MOTIR-4873): 'is ABSENT with no active project — the row
+  // promised a room the page cannot open'.
+  //
+  // ITS OWN LAST PARAGRAPH NAMED THIS EXPIRY: "that state is itself on its way
+  // out — MOTIR-4815 seeds a default project … at which point this test's
+  // premise is what changes." It has, and the premise did. Every member is
+  // inside a project (MOTIR-4870), so `activeProject={null}` is not a state the
+  // shell is rendered in, the `hasProject` gate that hid the primary section is
+  // gone, and the rail never collapses to its bottom section.
+  //
+  // It is REMOVED rather than inverted because inverting it would assert only
+  // that the primary rows render — which every other case in this file already
+  // does, against a real project. There is nothing left here that is this
+  // case's own.
 
   it('survives the nav-access gate — the row is not silently dropped', () => {
     // `canOfferNavDestination` answers FALSE for an href the map does not carry,
