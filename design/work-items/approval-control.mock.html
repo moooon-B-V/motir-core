@@ -48,7 +48,8 @@
       contents belong to MOTIR-4882 and appear here only as a labelled
       placeholder, which is what proves the frame is universal without
       specifying that card's content. The Approvals TAB is MOTIR-4879 and is
-      not drawn.
+      not drawn — but its tab STRIP and the rail are COMPOSED in panel 0b, because
+      an asset owes the door to its own surface, not only the room.
 
       COMPOSES ONLY SHIPPED PRIMITIVES — ContentSectionCard (.card), Button
       variants (.btn-*), Pill (tint bg + --el-text-strong, finding #35), and
@@ -63,7 +64,9 @@
       --el-danger-text is never used, being the ink FOR a danger fill.
 
       PANELS (multi-panel board — review EACH):
-        0 · Placement — the frame IS the Design result section.
+        0 · Placement — the frame's TWO homes, with the door to each:
+             /items/[key] (the Design result section) and
+             /workbench?tab=approvals (a row on the Workbench).
         1 · ANATOMY — the three bands, annotated.
         A · awaiting, YOURS — port live, verbs below it.
         B · awaiting, NOT yours — port live, NO verbs, who it waits on.
@@ -620,6 +623,72 @@
         background: var(--el-surface-soft);
       }
 
+      /* placement — the app shell, composed from design/shell + design/workbench */
+      .shell {
+        display: grid;
+        grid-template-columns: 132px 1fr;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        background: var(--el-surface);
+        border-right: 1px solid var(--el-border);
+        padding: 10px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .railItem {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .railItem--on {
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-weight: 620;
+      }
+      .shellMain {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .crumb {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding-bottom: 4px;
+      }
+      .tabs {
+        display: flex;
+        gap: 2px;
+        background: var(--el-muted);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+        margin-bottom: 4px;
+        flex-wrap: wrap;
+      }
+      .tab {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        white-space: nowrap;
+      }
+      .tab--on {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-weight: 620;
+        box-shadow: var(--shadow-subtle);
+      }
+      .tab b {
+        font-weight: 700;
+      }
+
       /* placement */
       .page {
         border: 1px solid var(--el-border);
@@ -671,24 +740,93 @@
         </p>
       </header>
 
-      <!-- 0 · PLACEMENT -->
+      <!-- 0 · PLACEMENT — TWO homes, with their real routes and doors -->
       <section class="panel">
-        <div class="panelLabel">0 · Placement — the frame IS the section</div>
-        <p class="panelNote">
-          The frame does not sit inside the Design result section; for a card with a gate it
-          <em>is</em> that section. There is no second place to look and nothing to scroll past to
-          find out whether a decision is owed.
-        </p>
-        <div class="page">
-          <div class="ghost">
-            <span class="key">MOTIR-4321</span> · Description · Acceptance criteria
-          </div>
-          <div class="ghost">Development — branch, pull request, checks</div>
-          <div class="ghost ghost--here">
-            <strong>Design result</strong> — the approval frame <em>(this asset)</em>
-          </div>
-          <div class="ghost">Attachments · Activity</div>
+        <div class="panelLabel">
+          0 · Placement — the frame has TWO homes, and this is the door to each
         </div>
+        <p class="panelNote">
+          The frame is not a page. It renders wherever a decision is met, and there are exactly two
+          such places. <strong>This is what "universal" buys</strong> — one review surface, reached
+          two ways, so a person never learns a second way to approve.
+        </p>
+
+        <div class="grid2">
+          <!-- 0a — the item page -->
+          <div>
+            <p class="stateCap">
+              0a · <span class="key">/items/[key]</span> — the work item detail page
+            </p>
+            <div class="shell">
+              <div class="rail">
+                <div class="railItem">Workbench</div>
+                <div class="railItem railItem--on">Work items</div>
+                <div class="railItem">Boards</div>
+                <div class="railItem">Plans</div>
+              </div>
+              <div class="shellMain">
+                <div class="crumb">
+                  <span class="key">MOTIR-4321</span> · Design the approvals row treatment
+                </div>
+                <div class="ghost">Description · Acceptance criteria · Context refs</div>
+                <div class="ghost">Development — branch, pull request, checks</div>
+                <div class="ghost ghost--here">
+                  <strong>Design result</strong> — <em>the frame IS this section</em>
+                </div>
+                <div class="ghost">Attachments · Activity</div>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              <strong>The door:</strong> you are already on the card. The frame REPLACES today's
+              read-only <code>DesignResultPanel</code> in the late stack
+              (<code>LateSections.tsx</code>) — same slot, same position after Development, now with
+              a port and verbs instead of a panel with no buttons.
+            </p>
+          </div>
+
+          <!-- 0b — the Workbench -->
+          <div>
+            <p class="stateCap">
+              0b · <span class="key">/workbench?tab=approvals</span> — the Workbench
+            </p>
+            <div class="shell">
+              <div class="rail">
+                <div class="railItem railItem--on">Workbench</div>
+                <div class="railItem">Work items</div>
+                <div class="railItem">Boards</div>
+                <div class="railItem">Plans</div>
+              </div>
+              <div class="shellMain">
+                <div class="tabs">
+                  <span class="tab">To do</span><span class="tab">In progress</span
+                  ><span class="tab">Recently finished</span><span class="tab">Watching</span
+                  ><span class="tab tab--on">Approvals <b>2</b></span>
+                </div>
+                <div class="ghost ghost--here">
+                  <strong>a row</strong> — <em>the frame renders here</em>
+                </div>
+                <div class="ghost">a second row</div>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              <strong>The door:</strong> the <em>Workbench</em> rail entry — the first primary entry
+              and where signing in lands (<code>AUTHED_LANDING_PATH = '/workbench'</code>) — then
+              the <strong>Approvals</strong> tab. <strong>That tab slot already ships:</strong>
+              <code>WorkbenchTab</code> is
+              <code>todo | in-progress | finished | watching | approvals</code>
+              (MOTIR-4777), so this asset adds no navigation.
+            </p>
+          </div>
+        </div>
+
+        <p class="panelNote">
+          <strong>What each card owns, so the boundary is legible:</strong> the rail and the tab
+          STRIP are <code>design/workbench/</code>'s, shipped by MOTIR-4777 and composed here rather
+          than redrawn. The Approvals <strong>rows</strong>, their ordering and the
+          nothing-awaits-you state are <strong>MOTIR-4879</strong>'s.
+          <strong>This asset specifies the FRAME</strong> — the thing inside both, identical in
+          each.
+        </p>
       </section>
 
       <!-- 1 · ANATOMY -->

@@ -6299,9 +6299,22 @@ amendment adds one CASE to a drawn element; it draws no new element and no new s
 
 Panel `U` draws **the same frame with a different port**: same header shape, same verbs, same confirm, same decided treatment, and only the port's contents swapped. **The merge port's contents are [MOTIR-4882](motir:cmtrwx3580055hxph0vfamj1l)'s** and appear here as a labelled placeholder — enough to prove the frame is universal without specifying that card's content. This is what MOTIR-4796's one-language test asserts: the same component in both contexts, not two look-alikes.
 
+### Placement — the frame has TWO homes, and the asset draws the door to each
+
+**This was missing from the first two cuts, and it is what made the asset unreadable to its reviewer** ("which page is this? the Workbench? I don't see how it's related"). The design-reference rule requires an asset to DRAW its access path — the entry affordance in the parent surface, so the reader SEES the door, not just the room. Naming the route in prose is not enough, and panels 0a / 0b now draw it.
+
+| route                          | where the frame sits                                                                                                                                                         | door                                                                                                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`/items/[key]`**             | it **IS** the `Design result` section — it REPLACES today's read-only `DesignResultPanel` in the late stack (`LateSections.tsx`), same slot, same position after Development | you are already on the card                                                                                                                          |
+| **`/workbench?tab=approvals`** | inside an Approvals **row**                                                                                                                                                  | the _Workbench_ rail entry — the first primary entry, and where signing in lands (`AUTHED_LANDING_PATH = '/workbench'`) — then the **Approvals** tab |
+
+**The Approvals tab slot ALREADY SHIPS.** `WorkbenchTab` is `todo | in-progress | finished | watching | approvals` (MOTIR-4777), so this asset adds no navigation and invents no route.
+
+**Ownership across the two panels, so the boundary is legible:** the rail and the tab STRIP are `design/workbench/`'s, shipped by MOTIR-4777 and **composed** here rather than redrawn. The Approvals **rows**, their ordering and the nothing-awaits-you state are **[MOTIR-4879](motir:cmtrwx30n0052hxphd0yqbnwb)**'s. **This asset specifies the FRAME** — the thing inside both, identical in each.
+
 ### Scope
 
-**Drawn:** the frame, the design port, all nine states. **Not drawn:** the Approvals tab ([MOTIR-4879](motir:cmtrwx30n0052hxphd0yqbnwb)); the merge port's contents and the six merge refusals ([MOTIR-4882](motir:cmtrwx3580055hxph0vfamj1l)).
+**Drawn:** the frame, the design port, all nine states, and the DOOR to both homes. **Not drawn:** the Approvals tab ([MOTIR-4879](motir:cmtrwx30n0052hxphd0yqbnwb)); the merge port's contents and the six merge refusals ([MOTIR-4882](motir:cmtrwx3580055hxph0vfamj1l)).
 
 ### What it COMPOSES rather than redraws
 
