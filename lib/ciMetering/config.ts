@@ -22,6 +22,7 @@
 // repo is transferred away (§5.5).
 
 import { isCloudBilling } from '@/lib/billing/availability';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 
 /**
  * Motir's provisioning GitHub org login (MOTIR-1779; working login
@@ -47,9 +48,7 @@ export function provisioningOrgLogin(): string | null {
  * at the transfer itself, so a run completing afterwards simply fails the gate.
  */
 export function isMotirOwnedRepo(ownerLogin: string | null | undefined): boolean {
-  const org = provisioningOrgLogin();
-  if (!org || typeof ownerLogin !== 'string') return false;
-  return ownerLogin.trim().toLowerCase() === org.toLowerCase();
+  return isMotirHostedOwner(ownerLogin, provisioningOrgLogin());
 }
 
 /**

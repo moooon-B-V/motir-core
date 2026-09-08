@@ -17,6 +17,8 @@ import { repoNameKey } from '@/lib/workItems/repoName';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { deriveCodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import { provisioningOrgLogin } from '@/lib/ciMetering/config';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { toProjectRepoDto } from '@/lib/mappers/projectRepoMappers';
@@ -31,6 +33,7 @@ import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import {
   GithubRemovalHappensOnGithubError,
+  MotirHostedRepoIsTakenOverError,
   ProjectRepoInvalidFieldError,
   ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
@@ -603,6 +606,18 @@ export const organizationRepoService = {
     );
     const byId = new Map(repos.map((r) => [r.id, r]));
 
+    // ⚠️ WHOSE EACH ROW IS — resolved ONCE for the list, and the answer the ROOM
+    // already gives (bug MOTIR-4892). `listByOrganization` filters on
+    // `github_repo.organization_id` and nothing else, which answers "can this
+    // organisation's projects dispatch into it?" — deliberately, since
+    // `persistProvisionedRepo` stamps the creating project's organisation onto a
+    // repository MOTIR provisions. So a repository Motir hosts is in this list and
+    // must stay in it; what was missing is the row being able to SAY so.
+    // The classification is `isMotirHostedOwner`, the same predicate
+    // `lib/projectRepos/roomSections.ts` classifies the project room's sections
+    // with, so the two surfaces cannot answer "whose is it?" differently again.
+    const hostOwner = provisioningOrgLogin();
+
     return usage.flatMap((row) => {
       const repo = byId.get(row.githubRepoId);
       if (!repo) return [];
@@ -612,7 +627,7 @@ export const organizationRepoService = {
         indexedHeadSha: repo.indexedHeadSha,
         hasRunningIndex: repo.indexingRunId !== null && runningRunIds.has(repo.indexingRunId),
       });
-      return [{ repo: toOrgRepoOptionDto(repo), projects: row.projects, indexState }];
+      return [{ repo: toOrgRepoOptionDto(repo, hostOwner), projects: row.projects, indexState }];
     });
   },
 
@@ -659,6 +674,16 @@ export const organizationRepoService = {
       );
     }
     const repoRef = `${repo.owner}/${repo.name}`;
+    // ⚠️ OWNERSHIP IS TESTED BEFORE THE PROVIDER, and the order is the fix (bug
+    // MOTIR-4892). `GithubRemovalHappensOnGithubError` is thrown for EVERY
+    // `github` row, so until this line ran first it answered a repository MOTIR
+    // hosts with *"change the Motir App's repository access on GitHub"* — an
+    // instruction pointing at the ORGANISATION's installation, which a repository
+    // under the shared provisioning installation is not in. The act that applies
+    // to it is the TAKEOVER (MOTIR-711), and the refusal names it.
+    if (isMotirHostedOwner(repo.owner, provisioningOrgLogin())) {
+      throw new MotirHostedRepoIsTakenOverError(repoRef);
+    }
     if (repo.provider === 'github') throw new GithubRemovalHappensOnGithubError(repoRef);
 
     // ENUMERATE BEFORE THE CASCADE — the ordering trap MOTIR-2166 names. The
@@ -752,7 +777,10 @@ export const organizationRepoService = {
         projectRepoRepository.listByProject(projectId, ctx.workspaceId, tx),
       ]);
       const taken = new Set(held.map((row) => row.githubRepoId).filter((id): id is string => !!id));
-      return orgRepos.filter((repo) => !taken.has(repo.id)).map(toOrgRepoOptionDto);
+      const hostOwner = provisioningOrgLogin();
+      return orgRepos
+        .filter((repo) => !taken.has(repo.id))
+        .map((repo) => toOrgRepoOptionDto(repo, hostOwner));
     });
   },
 

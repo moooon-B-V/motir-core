@@ -254,3 +254,35 @@ export class GithubRemovalHappensOnGithubError extends Error {
     this.name = 'GithubRemovalHappensOnGithubError';
   }
 }
+
+/**
+ * Thrown when an org-level disconnect is attempted on a repository MOTIR HOSTS
+ * (bug MOTIR-4892).
+ *
+ * ⚠️ IT IS NOT A NARROWER `GithubRemovalHappensOnGithubError`, AND ITS ORDER
+ * AHEAD OF THAT ONE IS THE WHOLE POINT. That error is about the PROVIDER — *the
+ * removal happens on github.com* — and it is thrown for every `github` row before
+ * any ownership test runs, so it swallowed this case and answered it with the one
+ * sentence that is false about it. A repository under the provisioning
+ * organisation is not in the ORGANISATION's App installation at all: it sits under
+ * the SHARED provisioning installation, which is `organizationId: null` /
+ * `workspaceId: null` precisely because it spans tenants. Sending an admin to
+ * their own installation screen sends them somewhere the repository does not
+ * appear, to perform an act that would not apply to it if it did.
+ *
+ * ⚠️ AND THE PRODUCT HAS THE RIGHT ANSWER, SO THE ERROR NAMES IT. A repository
+ * Motir hosts is handed over by the TAKEOVER (MOTIR-711) — a transfer of
+ * ownership performed per row from the project's own Repositories settings — not
+ * by the removal of a connection. `Disconnect` is the wrong ACT here, which is
+ * why the refusal is a refusal on the MERITS rather than a routing note: it holds
+ * for a caller that never rendered the page.
+ */
+export class MotirHostedRepoIsTakenOverError extends Error {
+  readonly code = 'MOTIR_HOSTED_REPO_IS_TAKEN_OVER' as const;
+  constructor(readonly repoRef: string) {
+    super(
+      `${repoRef} is hosted by Motir, so it cannot be disconnected from the organisation: it is not in the organisation's GitHub App installation. Take it over from the project's Repositories settings to move it to your own GitHub.`,
+    );
+    this.name = 'MotirHostedRepoIsTakenOverError';
+  }
+}
