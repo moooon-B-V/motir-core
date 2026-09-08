@@ -553,11 +553,6 @@
         margin-top: 12px;
         flex-wrap: wrap;
       }
-      .lsplit {
-        height: 1px;
-        background: var(--el-border-soft);
-        margin: 18px 0;
-      }
 
       /* allotment / cap meter (token-only) */
       .meter {
@@ -881,11 +876,6 @@
         font-size: 12px;
         color: var(--el-text-muted);
       }
-      .tracker-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-      }
       /* Tall, equal-height tier cards in ONE row — the standard SaaS storefront
          pattern (Linear / Vercel / Stripe). `align-items: stretch` equalises the
          card heights; `flex-wrap: nowrap` keeps all five cards on a single row
@@ -908,11 +898,6 @@
         flex: 1 0 0;
         min-width: 158px;
         scroll-snap-align: start;
-      }
-      @media (max-width: 640px) {
-        .tracker-grid {
-          grid-template-columns: 1fr;
-        }
       }
       .plan {
         border: 1px solid var(--el-border);
@@ -1405,12 +1390,6 @@
       }
       .opt.active svg {
         color: var(--el-text-strong);
-      }
-      .opt .badge-soon {
-        margin-left: auto;
-        font-size: 10px;
-        font-weight: 600;
-        color: var(--el-text-faint);
       }
       .opt .chev {
         margin-left: auto;
