@@ -194,6 +194,11 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(EMAIL_FIRST_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
+  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); the
+  // helper's contract — leave the caller in the app — is kept by settling
+  // there and navigating on.
+  await page.waitForURL('**/onboarding');
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench');
 
   // Snapshot the email-first user — there should be ONE row with a

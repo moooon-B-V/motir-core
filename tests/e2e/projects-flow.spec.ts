@@ -61,16 +61,18 @@ async function applyTheme(page: Page, mode: 'light' | 'dark'): Promise<void> {
 test('projects UI happy path with theme parity screenshots', async ({ page }) => {
   await signUp(page, USER_EMAIL);
 
-  // 1) Empty-state surface — light
+  // 1) A fresh account's surface — light
+  //
+  // ⚠️ INVERTED (MOTIR-4876). This was the EMPTY-STATE surface: with zero
+  // projects the page rendered "Create your first project" and the sidebar
+  // rendered the CTA card in place of the switcher (PRODECT_FINDINGS #29.1). A
+  // fresh account has a seeded project now (MOTIR-4870), so the switcher is
+  // what renders and the screenshots below capture that instead. The theme
+  // parity they exist for is unaffected — it is the same two renders of the
+  // same route.
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
-  await expect(page.getByText('Projects group your work items')).toBeVisible();
-  // The project switcher moved to the sidebar in Subtask 1.5.3. With zero
-  // projects the sidebar header renders the "Create your first project" CTA
-  // card in place of the switcher (PRODECT_FINDINGS #29.1) — not the
-  // "Switch project" trigger.
-  await expect(page.getByRole('button', { name: 'Create your first project' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Switch project' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
   await applyTheme(page, 'light');
   await page.screenshot({ path: `${SCREENSHOT_DIR}/01-empty-state-light.png`, fullPage: true });
 
@@ -190,7 +192,11 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
     timeout: 5_000,
   });
 
-  // Navigate back to dashboard — empty state again
+  // ⚠️ INVERTED (MOTIR-4876). Archiving the last project used to return the
+  // reader to the empty state. It is now the THIRD door into the projectless
+  // state the story closed: the resolver seeds a fresh default rather than
+  // answering null (MOTIR-4870), so what comes back is a project, not a CTA.
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
 });

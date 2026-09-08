@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
 import type { OrganizationDTO } from '@/lib/dto/organizations';

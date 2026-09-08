@@ -2,7 +2,7 @@
 //
 // Stands up the journey's cast and surface: the PM signs up through the real
 // browser UI (the page needs a live session) and creates the first project via
-// the projects-empty-state CTA, which pins it active; then, server-side through
+// the switcher's create door, which pins it active; then, server-side through
 // the sanctioned test cross-layer reach, two work items —
 //
 //   * a `manual` card carrying FOUR to-dos, written through the REAL

@@ -386,11 +386,13 @@ test.describe('the Workbench journey', () => {
     await expect(page).toHaveURL(/\/workbench$/);
     await expect(page.getByTestId('workbench-page')).toBeVisible();
 
-    // The shipped create-first door, reused from `/dashboard` — not a new empty
-    // state and not the actionless `/ready` notice, because this route is LANDED
-    // on rather than navigated to (§2.2).
-    await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Create project' })).toBeVisible();
+    // ⚠️ INVERTED (MOTIR-4876). It asserted "the shipped create-first door,
+    // reused from `/dashboard` … because this route is LANDED on rather than
+    // navigated to (§2.2)". §2.2's discriminator still holds; its PREMISE does
+    // not. There is no projectless reader for the door to serve (MOTIR-4870),
+    // so what a reader who reaches this route by URL sees is the surface
+    // itself.
+    await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
 
     // And NO Workbench row in the rail: the duplicate `!hasProject` entry is gone
     // (§2.1). The route stays reachable by URL — which is how we got here — but

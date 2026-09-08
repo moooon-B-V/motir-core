@@ -65,6 +65,10 @@ test('the organization settings page offers no address it cannot resolve, and no
     await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await page.getByPlaceholder('Create a password').fill(PASSWORD);
     await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
+    // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); this
+    // helper keeps its contract by settling there and navigating on.
+    await page.waitForURL('**/onboarding', { timeout: 30_000 });
+    await page.goto('/workbench');
     await page.waitForURL('**/workbench', { timeout: 30_000 });
 
     await page.goto('/settings/organization');

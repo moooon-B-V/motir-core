@@ -2,7 +2,7 @@
 //
 // Stands up the comment journey's cast + surface: the PM signs up through the
 // real browser UI (shell-session signUp — the page needs a live session) and
-// creates the first project via the projects-empty-state CTA on /workbench (which
+// creates the project via the switcher's create door (which
 // pins it active);
 // then, server-side via the sanctioned test cross-layer reach, a second
 // workspace member ("Bo Philips" — the mention target the Story verification
