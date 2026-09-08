@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { WORKSPACE_SETTINGS_NAV } from '@/lib/settings/workspaceSettingsNav';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { UserMenu } from '@/app/(authed)/_components/UserMenu';
 import { ShellTierNav } from '@/app/(authed)/_components/ShellTierNav';
+import { SidebarNav } from '@/app/(authed)/_components/SidebarNav';
 import {
   isWorkspaceTierRevealed,
   scopeWorkspacesToActiveOrg,
@@ -46,13 +48,25 @@ import {
 // `WorkspaceSwitcher-settings-door.test.tsx`; the cases below are the departure,
 // and they assert the absence at EVERY count rather than at one.
 
+// MUTABLE, because the AGREEMENT block below drives the workspace-settings AREA
+// rail — the fourth surface — which `SidebarNav` selects on the pathname.
+let pathname = '/dashboard';
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-  usePathname: () => '/dashboard',
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => pathname,
 }));
 vi.mock('@/lib/auth/client', () => ({ signOut: vi.fn(async () => undefined) }));
+vi.mock('@/app/(authed)/_components/OnboardingResumeProvider', () => ({
+  useOnboardingResume: () => false,
+}));
+vi.mock('@/lib/hooks/useSidebarCollapsed', () => ({
+  useSidebarCollapsed: () => [false, vi.fn()],
+}));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  pathname = '/dashboard';
+});
 
 /** The area's OWN href, never one of its sub-routes. */
 function namesTheWorkspaceArea(html: string): boolean {
@@ -159,5 +173,159 @@ describe('the shell tier nav', () => {
       />,
     );
     expect(container.innerHTML).toContain('Workspace a');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Story MOTIR-4843 · MOTIR-4848 — THE FOUR NAVIGATION SURFACES AGREE
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// ⚠️ THIS IS ONE PROPERTY, DRIVEN FROM ONE BOOLEAN — not four tests that each
+// happen to be about the workspace tier. That distinction is the whole reason
+// this block exists, and it is the level no BUILD card occupies: every card in
+// this story can be individually correct while the product is wrong, because a
+// switcher offering a door to a room whose rail is empty passes the switcher's
+// test AND the rail's. The disagreement is only visible when the same value
+// decides both.
+//
+// So `revealed` is computed ONCE per arm, from the workspace COUNT via the
+// product's own predicate, and handed to all four surfaces. A surface that
+// wants a different input than the others cannot be wired into this block
+// without the mismatch becoming visible in the source.
+//
+// The statement, from the card:
+//
+//   arm    | switcher          | account menu | rail bottom  | area rail
+//   -------|-------------------|--------------|--------------|-------------------
+//   ≥2 ws  | offers the door   | offers it    | no workspace | three rows, exactly
+//          |                   | NOWHERE      | row          | one active per route
+//   1 ws   | absent ENTIRELY   | offers it    | no workspace | NO rows at all
+//          |                   | NOWHERE      | row          |
+//
+// ⚠️ THE ACCOUNT-MENU COLUMN IS CONSTANT ON PURPOSE (MOTIR-4847). It used to be
+// the reveal-gated door, and the fact that its answer no longer varies with the
+// boolean IS the agreement: the tier's single entry point is the switcher, and
+// the menu takes no workspace count at all any more.
+
+const ORG = { id: 'org-1', name: 'Acme', role: 'owner' as const };
+const RAIL_USER = { name: 'Ada', email: 'ada@example.com' };
+
+/** The area rail's three routes, read off the registry rather than retyped. */
+const AREA_ROUTES = WORKSPACE_SETTINGS_NAV.map((e) => e.href);
+
+function tierNav(count: number) {
+  return renderWithIntl(
+    <ShellTierNav
+      activeOrg={ORG}
+      orgs={[]}
+      workspaces={Array.from({ length: count }, (_, i) => workspace(`w${i}`, 'org-1'))}
+      activeWorkspaceId="w0"
+      cloudBilling={false}
+    />,
+  );
+}
+
+function railAt(path: string, revealed: boolean) {
+  pathname = path;
+  return renderWithIntl(
+    <SidebarNav
+      activeProject={null}
+      variant="rail"
+      user={RAIL_USER}
+      workspace={{ name: 'Acme workspace' }}
+      workspaceTierRevealed={revealed}
+    />,
+  );
+}
+
+describe.each([
+  { count: 2, arm: 'AT the reveal' },
+  { count: 1, arm: 'BELOW the reveal' },
+])('the four navigation surfaces agree — $arm ($count workspace(s))', ({ count }) => {
+  // THE one boolean. Everything below reads this; nothing below recomputes it.
+  const revealed = isWorkspaceTierRevealed(count);
+
+  it('SURFACE 1 — the workspace SWITCHER carries the door iff the tier is revealed', () => {
+    tierNav(count);
+    const trigger = screen.queryByRole('button', { name: 'Switch workspace' });
+
+    if (!revealed) {
+      // Not "a switcher without the row" — the whole control is absent, which is
+      // what makes a reveal gate on the row itself unnecessary.
+      expect(trigger).toBeNull();
+      expect(namesTheWorkspaceArea(document.body.innerHTML)).toBe(false);
+      return;
+    }
+
+    expect(trigger).not.toBeNull();
+    fireEvent.click(trigger!);
+    expect(screen.getByRole('link', { name: 'Workspace settings' }).getAttribute('href')).toBe(
+      '/settings/workspace',
+    );
+  });
+
+  it('SURFACE 2 — the ACCOUNT MENU offers it nowhere, at this arm as at the other', () => {
+    renderWithIntl(<UserMenu name="Ada" email="ada@example.com" />);
+    openMenu();
+    expect(namesTheWorkspaceArea(document.body.innerHTML)).toBe(false);
+  });
+
+  it('SURFACE 3 — the rail BOTTOM SECTION carries no workspace row', () => {
+    const { container } = railAt('/dashboard', revealed);
+    // Every workspace-tier ROUTE, not just the two this story removed: a row
+    // re-added for any of them fails here.
+    for (const href of AREA_ROUTES.filter((h) => h !== '/settings/workspace')) {
+      expect(container.innerHTML, href).not.toContain(href);
+    }
+  });
+
+  it('SURFACE 4 — the AREA RAIL is the tier, whole or not at all', () => {
+    const { container } = railAt('/settings/workspace', revealed);
+    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+
+    if (!revealed) {
+      // NO rows — not fewer rows. All three routes `notFound()` here, so a rail
+      // of one or two would be a promise the product then refuses.
+      expect(hrefs.filter((h) => h?.startsWith('/settings/workspace'))).toEqual([]);
+      return;
+    }
+    expect(hrefs).toEqual(expect.arrayContaining(AREA_ROUTES));
+  });
+
+  it('SURFACE 4 — and exactly ONE row reads active, on each of its routes', () => {
+    if (!revealed) return; // covered above: there are no rows to be active.
+    for (const route of AREA_ROUTES) {
+      cleanup();
+      const { container } = railAt(route, revealed);
+      const active = [...container.querySelectorAll('[aria-current="page"]')].map((el) =>
+        el.getAttribute('href'),
+      );
+      expect(active, route).toEqual([route]);
+    }
+  });
+});
+
+describe('the agreement is a PROPERTY of the reveal, not of four hand-written arms', () => {
+  it('⚠️ the account menu takes NO workspace-count input at all (MOTIR-4847)', () => {
+    // The structural half of surface 2's constant column, asserted at the type
+    // level so it cannot rot into a vacuous pass: re-adding the prop fails
+    // `pnpm typecheck` here rather than quietly reintroducing a second door.
+    const rejected = (
+      <UserMenu
+        name="Ada"
+        email="ada@example.com"
+        // @ts-expect-error — the row moved to the switcher; the menu no longer
+        // varies by workspace count.
+        workspaceTierRevealed
+      />
+    );
+    expect(rejected).toBeTruthy();
+  });
+
+  it('the switcher and the area rail read the SAME predicate, not two thresholds', () => {
+    // A cheap case that catches the expensive bug: a second `>= 2` written
+    // somewhere would let the door appear at a count the room does not open at.
+    expect(isWorkspaceTierRevealed(WORKSPACE_TIER_REVEAL_MIN - 1)).toBe(false);
+    expect(isWorkspaceTierRevealed(WORKSPACE_TIER_REVEAL_MIN)).toBe(true);
   });
 });

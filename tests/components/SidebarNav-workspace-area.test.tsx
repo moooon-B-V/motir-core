@@ -27,6 +27,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { SidebarNav } from '@/app/(authed)/_components/SidebarNav';
+import { WorkspaceSidebarHeader } from '@/app/(authed)/_components/WorkspaceSidebarHeader';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 const USER = { name: 'Yue', email: 'yue@example.com' };
 const WORKSPACE = { name: 'Engineering' };
@@ -116,5 +118,64 @@ describe('the workspace-settings AREA rail — BELOW the reveal', () => {
     pathname = '/settings/workspace/jobs';
     renderRail(false);
     expect(screen.queryByRole('link', { name: 'Job runs' })).toBeNull();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Story MOTIR-4843 · MOTIR-4848 — the rail HEAD's remaining arms
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// The head is rendered DIRECTLY here rather than through `SidebarNav`, because
+// the arm that was uncovered is the COLLAPSED one and the rail resolves that
+// from `useSidebarCollapsed` — a hook backed by localStorage plus a `storage`
+// event. Driving a prop is the honest instrument for a prop.
+//
+// ⚠️ THIS IS A COVERAGE-FLOOR CASE AND SAYS SO. Measured before this block, the
+// head was 90 / **60** / 100 / 90 — under the repo's 90 branch floor on the one
+// axis, which is why `vitest.config.ts` could not pin all four. The rule the
+// config states for exactly this situation is to CLOSE the gap by writing the
+// missing specs rather than to pin the axis below 90, which would be lowering a
+// bar to make a build pass (MOTIR-4368's precedent, on `SidebarNav` itself).
+describe('the workspace rail HEAD — both widths, and the nameless workspace', () => {
+  it('renders the name, the eyebrow and the back link when EXPANDED', () => {
+    renderWithIntl(<WorkspaceSidebarHeader workspace={{ name: 'Engineering' }} />);
+    expect(screen.getByText('Engineering')).toBeTruthy();
+    expect(screen.getByText('Workspace settings')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /back to motir/i }).getAttribute('href')).toBe(
+      AUTHED_LANDING_PATH,
+    );
+  });
+
+  it('COLLAPSED, it is the back arrow and the tile — the name and eyebrow are gone', () => {
+    // The 56px rail. The label survives as the link's accessible name rather
+    // than as text, which is what keeps the affordance reachable when the rail
+    // has no room to say what it is.
+    renderWithIntl(<WorkspaceSidebarHeader workspace={{ name: 'Engineering' }} collapsed />);
+    expect(screen.getByRole('link', { name: /back to motir/i }).getAttribute('href')).toBe(
+      AUTHED_LANDING_PATH,
+    );
+    expect(screen.queryByText('Workspace settings')).toBeNull();
+    expect(screen.queryByText('Engineering')).toBeNull();
+  });
+
+  it('⚠️ the back href is the IMPORTED constant at BOTH widths, never a retyped path', () => {
+    // The four rail heads go stale as a SET — `/dashboard` survived in two of
+    // them after MOTIR-2654 moved the signed-in landing, because they are
+    // written from one pattern and nobody re-read the rest (MOTIR-3373). The
+    // collapsed arm is the one a reader is least likely to open.
+    for (const collapsed of [false, true]) {
+      cleanup();
+      const { container } = renderWithIntl(
+        <WorkspaceSidebarHeader workspace={{ name: 'Engineering' }} collapsed={collapsed} />,
+      );
+      expect(container.innerHTML, `collapsed=${collapsed}`).not.toContain('/dashboard');
+    }
+  });
+
+  it('falls back to `?` for a whitespace-only name, rather than an empty tile', () => {
+    // `charAt(0)` of a trimmed empty string is `''`, which would render a tile
+    // with nothing in it — indistinguishable from a failed load.
+    const { container } = renderWithIntl(<WorkspaceSidebarHeader workspace={{ name: '   ' }} />);
+    expect(container.textContent).toContain('?');
   });
 });

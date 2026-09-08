@@ -468,6 +468,40 @@ export default defineConfig({
         // 100/100/100/100 apiece before pinning.
         'app/**/workspace/security/actions.ts',
         'app/**/_components/WorkspaceFoldInSection.tsx',
+        // Story MOTIR-4843 · Subtask MOTIR-4848 — the workspace-settings AREA,
+        // and the FOURTH fold-in beside the one above. Measured on this branch
+        // before pinning, `--coverage.include` through the `app/**` form:
+        //
+        //   workspaceSettingsNav.ts     93.33 / 91.66 / 100 / 100
+        //   WorkspaceSidebarHeader.tsx  100   / 100   / 100 / 100
+        //   JobRunsFoldInSection.tsx    100   / 100   / 100 / 100
+        //   WorkspaceSwitcher.tsx        40   /  61.11/  26.66 / 40.42
+        //
+        // The registry's one uncovered line is its `if (!entry.href)` guard, an
+        // arm no entry reaches. The HEADER measured 90 / **60** / 100 / 90 first
+        // — under the branch floor because its COLLAPSED arm and its `'?'`
+        // initial fallback were undriven — and MOTIR-4848 wrote the four missing
+        // cases rather than pinning three axes and leaving the fourth off, which
+        // is the remedy this list's own rule prescribes (MOTIR-4368's precedent
+        // on `SidebarNav`). All three are GATED in `thresholds` below.
+        //
+        // ⚠️ `WorkspaceSwitcher.tsx` IS REPORT-ONLY, deliberately — it is in this
+        // list and NOT in `thresholds`. This story added one row to it and the
+        // spec that drives that row; the 60% it does not reach is the
+        // create-workspace modal, the switch handler and their toast paths —
+        // pre-existing behaviour no card here touched. Pinning it at the
+        // measured number would put a 40 in a list whose floor is 90, and
+        // pinning it AT 90 would fail the build for work this story did not
+        // undertake. It publishes a number until a card owns the gap.
+        'lib/settings/workspaceSettingsNav.ts',
+        'app/**/_components/WorkspaceSidebarHeader.tsx',
+        'app/**/_components/JobRunsFoldInSection.tsx',
+        'app/**/_components/WorkspaceSwitcher.tsx',
+        // ⚠️ `app/**/settings/workspace/layout.tsx` is NOT here. It is an async
+        // Server Component whose whole body is a session check and a redirect,
+        // and this repo has no RSC render harness — the same reason the settings
+        // PAGE files above it stay out. Its behaviour is asserted structurally,
+        // by the area rail's specs and by the route's own 404 arm.
         // Story MOTIR-1215 · Subtask MOTIR-3648 — the enforcement gate and the
         // screen it holds people at. Measured at 100/100/100/100 apiece.
         'lib/auth/twoFactorGate.ts',
@@ -2159,6 +2193,27 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/_components/WorkspaceFoldInSection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-4843 · Subtask MOTIR-4848. The three files that MEASURED
+        // above the floor on all four axes; the numbers and the one deliberate
+        // omission are recorded beside their `include` entries.
+        'lib/settings/workspaceSettingsNav.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/WorkspaceSidebarHeader.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/JobRunsFoldInSection.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
