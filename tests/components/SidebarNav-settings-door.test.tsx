@@ -71,13 +71,20 @@ describe('the Project settings door (design panel 1)', () => {
     // The decided treatment: no disabled stand-in, no "ask an admin" row. The
     // footer is simply one row shorter, so the rows below close up.
     expect(screen.queryByText('Settings')).toBeNull();
-    // ⚠️ AMENDED (MOTIR-4847): this used to also assert a `Job runs` row here.
-    // Both workspace rows left this section — the capability is a row in the
-    // workspace area's own rail above the reveal, and `JobRunsFoldInSection` on
-    // `/settings/organization` below it. `Git` is what survives beside the door,
-    // and it is organisation-scoped rather than workspace-scoped.
+    // ⚠️ AMENDED TWICE, AND THE SECOND ONE EMPTIES THE SECTION (MOTIR-4847,
+    // then MOTIR-4643). This once asserted a `Job runs` row and a `Git` row
+    // survived beside the absent door. Both are gone now: the workspace rows
+    // left with MOTIR-4847 — the capability is a row in the workspace area's own
+    // rail above the reveal, and `JobRunsFoldInSection` on
+    // `/settings/organization` below it — and `Git` left with MOTIR-4643, its
+    // two actions carried to the org and the account tiers.
+    //
+    // So for a MEMBER the bottom section has no rows at all, and `SidebarNav`
+    // renders no section rather than an empty container. Every row is asserted
+    // ABSENT rather than the case being deleted, because the claim this test
+    // makes — *nothing marks the gap* — is now about the whole section.
     expect(screen.queryByRole('link', { name: 'Job runs' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Git' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Git' })).toBeNull();
   });
 
   it('a VIEWER gets no door either', () => {
@@ -128,14 +135,18 @@ describe('the Project settings door (design panel 1)', () => {
     // above a row that is not there reads as a loading error rather than as
     // policy.
     //
-    // ⚠️ THE ARM IS NOT REACHABLE FROM THIS COMPONENT YET, and saying so is the
-    // point of this case. `Git` is still an unconditional member of the section,
-    // so `bottomItems` is never empty in the shipped rail. Its removal is
-    // MOTIR-4643's (the `Code` nav row), which MOTIR-4640 already amended the
-    // design asset for. So this asserts the CURRENT floor exactly — the section
-    // present with `Git` alone — which is the assertion that will FAIL, loudly
-    // and in the right file, on the day that row leaves and the guard in
-    // `SidebarNav` starts carrying the weight it was written for.
+    // ⚠️ AND THE ARM IS REACHABLE NOW — this case predicted its own failure and
+    // was right. MOTIR-4847 left it saying: *`Git` is still an unconditional
+    // member, so `bottomItems` is never empty; its removal is MOTIR-4643's, and
+    // this asserts the CURRENT floor — the section present with `Git` alone —
+    // which will FAIL, loudly and in the right file, on the day that row leaves
+    // and the guard in `SidebarNav` starts carrying the weight it was written
+    // for.*
+    //
+    // That day is this commit. `Git` left, a MEMBER holds no settings door, and
+    // `bottomItems` is empty — so the guard fires and there is NO bottom
+    // section. Re-measured to the arm the design draws, which is what the case
+    // was for all along.
     const { container } = renderRail(MEMBER);
     // `Sidebar` wraps each section in its own div inside the scroll container
     // and draws the separator INSIDE that wrapper, so an empty section is
@@ -144,8 +155,12 @@ describe('the Project settings door (design panel 1)', () => {
     const rowsPerSection = wrappers.map((w) =>
       [...w.querySelectorAll('a')].map((a) => (a.textContent ?? '').trim()),
     );
+    // No wrapper is EMPTY — the failure this guards is a container with a
+    // separator and no rows…
     expect(rowsPerSection.filter((rows) => rows.length === 0)).toEqual([]);
-    expect(rowsPerSection.at(-1)).toEqual(['Git']);
+    // …and the last section is the PRIMARY one, because the bottom section is
+    // not rendered at all. `Codebase` is its final row (MOTIR-1768).
+    expect(rowsPerSection.at(-1)?.at(-1)).toBe('Codebase');
   });
 });
 
@@ -258,35 +273,37 @@ describe('the settings door yields to a more specific workspace sub-route', () =
   // REPLACED by the org one rather than kept alongside it: a clause that yields
   // at a path nothing can navigate to is not a passing test, it is an untested
   // clause that still looks covered.
-  // ⚠️ TWO OF THE THREE ROWS THIS YIELDED TO ARE GONE (Story MOTIR-4843 ·
-  // MOTIR-4847). `Security` and `Job runs` left this section, and their two
-  // negation clauses left the predicate with them — deliberately, not as
-  // collateral: `/settings/workspace/*` now returns the workspace AREA's own
-  // Sidebar before this section is ever built (MOTIR-4846's fourth branch), so
-  // those clauses became doubly unreachable, and MOTIR-4368's whole finding
-  // about this predicate is that an unreachable clause still READS as covered.
+  // ⚠️ THE TABLE IS GONE, BECAUSE EVERY ROW IT YIELDED TO IS (MOTIR-4847, then
+  // MOTIR-4643). It read `[security, Security] · [jobs, Job runs] · [org/git,
+  // Git]` and asserted *the settings door stands down, and the more-specific row
+  // takes the highlight*. `Security` and `Job runs` left with MOTIR-4847 — and
+  // their two negation clauses left the predicate with them, deliberately:
+  // `/settings/workspace/*` returns the workspace AREA's own Sidebar before this
+  // section is ever built, so those clauses became doubly unreachable, and
+  // MOTIR-4368's finding about this very predicate is that an unreachable clause
+  // still READS as covered. `Git` left with MOTIR-4643.
   //
-  // `Git` is the only sub-route row left, so it is the only clause left. The
-  // table is kept as a table rather than collapsed to one case, because the
-  // shape — "yield, and name who took the highlight" — is what a future row
-  // added here has to satisfy.
-  it.each([['/settings/organization/git', 'Git']])(
-    'yields at %s, and the %s row takes the highlight instead',
-    (path, owner) => {
-      pathname = path;
-      renderRail(ADMIN, PROJECT, true);
-      expect(current()).toBeNull();
-      expect(currentRows()).toHaveLength(1);
-      expect(currentRows()[0]?.textContent).toContain(owner);
-    },
-  );
+  // An `it.each([])` would pass while asserting nothing, so the claim is
+  // re-stated as the thing that is now TRUE: there is no sub-route row left for
+  // the door to yield to, and the predicate carries no clause pretending
+  // otherwise.
+  it('has no row left to yield to — every sub-route row left this section', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('app/(authed)/_components/SidebarNav.tsx', 'utf8');
+    const door = src.slice(src.indexOf('const bottomItems'), src.indexOf('sections.push({ id:'));
+    // The door's `active` predicate negates NOTHING now: there is nothing below
+    // it in this section to be more specific than it.
+    expect(door).not.toContain("!isActive(pathname, '/settings/workspace/security')");
+    expect(door).not.toContain("!isActive(pathname, '/settings/workspace/jobs')");
+    expect(door).not.toContain("!isActive(pathname, '/settings/organization/git')");
+  });
 
   it.each([['/settings/workspace/security'], ['/settings/workspace/jobs']])(
     'renders no bottom section AT ALL on %s — the area branch answers first',
     (path) => {
-      // The replacement for the two deleted rows of the table above, and a
-      // stronger claim than the one it replaces: not "the door stands down here"
-      // but "this block never runs here". Driving it is what stops the deleted
+      // The replacement for the deleted rows of the table above, and a stronger
+      // claim than the one it replaces: not "the door stands down here" but
+      // "this block never runs here". Driving it is what stops the deleted
       // clauses from being re-added later as a defensive extra.
       pathname = path;
       renderRail(ADMIN, PROJECT, true);

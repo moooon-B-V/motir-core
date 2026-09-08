@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { AuditPanel } from '@/app/(authed)/code-health/_components/AuditPanel';
+import { AuditPanel } from '@/app/(authed)/code/_components/AuditPanel';
 import type { CodeAuditSurfaceDTO } from '@/lib/dto/codeHealth';
 import enMessages from '@/messages/en.json';
 

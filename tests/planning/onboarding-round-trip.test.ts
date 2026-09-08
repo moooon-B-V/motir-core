@@ -72,7 +72,12 @@ describe('COMPLETING lands back in the window they opened', () => {
     ['project', { kind: 'project' } as const, '/roadmap'],
     ['roadmap', { kind: 'roadmap' } as const, '/roadmap'],
     ['work-item', { kind: 'work-item', itemKey: 'ACME-7' } as const, '/items/ACME-7'],
-    ['convention-refine', { kind: 'convention-refine', repoKey: 'r' } as const, '/code-health'],
+    // ⚠️ `/code`, not `/code-health` (MOTIR-1768). The convention-refine host
+    // moved: the audit is one SECTION of the Code room now, and `/code-health`
+    // permanently redirects into it. The round trip must name the real address —
+    // a forward that lands on a 308 still arrives, but it arrives having asked
+    // twice, and the link a test pins is the one a person's history records.
+    ['convention-refine', { kind: 'convention-refine', repoKey: 'r' } as const, '/code'],
   ])('a %s context returns to %s', (_kind, context, expected) => {
     expect(onboardingReturnHref(outbound(context), 'completed')!.split('?')[0]).toBe(expected);
   });
@@ -117,7 +122,7 @@ describe('AC4 · the host mapping exists in ONE place', () => {
     expect(planningForwardTarget({ mode: 'contextual', from: 'roadmap' })).toMatch(/^\/roadmap\?/);
     expect(
       planningForwardTarget({ mode: 'contextual', from: 'convention-refine', repo: 'r' }),
-    ).toMatch(/^\/code-health\?/);
+    ).toMatch(/^\/code\?/);
   });
 
   it('and the forward declares no mapping of its own any more', () => {

@@ -63,6 +63,11 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
     createdAt: now,
     updatedAt: now,
     githubRepo: {
+      // MOTIR-4644's drift columns — part of the row's shape since that card,
+      // and absent here only because `tsc --noEmit` does not cover `tests/`.
+      commitsBehind: null,
+      commitsBehindBaseSha: null,
+      commitsBehindHeadSha: null,
       id: 'gr-1',
       provider: 'github',
       workspaceId: 'ws-1',

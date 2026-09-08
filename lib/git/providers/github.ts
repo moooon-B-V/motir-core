@@ -2,6 +2,7 @@ import { registerGitProvider } from '../registry';
 import { createAppJwt, mintInstallationToken } from '@/lib/github/appAuth';
 import {
   REPO_FILE_MAX_BYTES,
+  COMMIT_COMPARE_TIMEOUT_MS,
   REPO_FILE_READ_TIMEOUT_MS,
   REPO_TARBALL_TIMEOUT_MS,
   type GitProvider,
@@ -28,6 +29,7 @@ import type {
   NormalizedWorkflowJobEvent,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
+  CommitComparison,
 } from '../types';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
@@ -186,6 +188,62 @@ export const githubProvider: GitProvider = {
     const location = res.headers.get('location');
     if (!location) throw new RepoTarballUrlMissingLocationError(res.status);
     return location;
+  },
+
+  /**
+   * `GET /repos/{owner}/{name}/compare/{base}...{head}` — GitHub answers with
+   * `behind_by`, the count of commits on `head` that are not on `base`, which is
+   * exactly the drift this surface renders.
+   *
+   * ⚠️ 404 IS `no_common_ancestor`, NOT AN ERROR. A force-push or a rewritten
+   * history leaves the indexed sha unreachable from the current head, and GitHub
+   * says so with a 404 — the count is UNDEFINED for that pair rather than zero.
+   */
+  async compareCommits(
+    installationId: string,
+    owner: string,
+    name: string,
+    base: string,
+    head: string,
+  ): Promise<CommitComparison> {
+    const { token } = await mintInstallationToken(installationId);
+    const url =
+      `${GITHUB_API}/repos/${owner}/${name}/compare/` +
+      `${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), COMMIT_COMPARE_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'user-agent': 'motir',
+        },
+        signal: controller.signal,
+      });
+    } catch {
+      return { behindBy: null, reason: 'unreachable' };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    // The pair has no common ancestor — the indexed commit is not reachable from
+    // the current head. Undefined, not zero.
+    if (res.status === 404) return { behindBy: null, reason: 'no_common_ancestor' };
+    if (!res.ok) return { behindBy: null, reason: 'unreachable' };
+
+    const body: unknown = await res.json().catch(() => null);
+    const behind =
+      body && typeof body === 'object' ? (body as Record<string, unknown>)['behind_by'] : undefined;
+    // ⚠️ A NON-NUMBER IS `null`, NOT A COERCION. `Number(undefined)` is `NaN` and
+    // `Number(null)` is 0 — and 0 is the one answer this must never invent.
+    if (typeof behind !== 'number' || !Number.isFinite(behind) || behind < 0) {
+      return { behindBy: null, reason: 'inexact' };
+    }
+    return { behindBy: behind };
   },
 
   async readFileAtRef(

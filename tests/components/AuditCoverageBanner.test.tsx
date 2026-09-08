@@ -49,7 +49,7 @@ async function render() {
 }
 
 describe('what it renders', () => {
-  it('names the count and links to /code-health', async () => {
+  it('names the count and DEEP-LINKS to the Health section of /code', async () => {
     await render();
 
     const banner = screen.getByRole('status');
@@ -58,7 +58,12 @@ describe('what it renders', () => {
       'Plans that touch them are made without their recorded standards.',
     );
     const link = screen.getByRole('link', { name: 'Review code health' });
-    expect(link.getAttribute('href')).toBe('/code-health');
+    // ⚠️ `/code?section=health` (MOTIR-1768). The audit stopped being a page and
+    // became the second SECTION of the Code room, so a bare `/code` would land
+    // this reader on the repository list — one click short of the thing the
+    // banner just told them about. The chapter's own claim is "in one click",
+    // and the parameter is what keeps it true.
+    expect(link.getAttribute('href')).toBe('/code?section=health');
   });
 
   it('pluralises the count', async () => {

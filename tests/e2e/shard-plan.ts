@@ -508,6 +508,14 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'cli-connect.spec.ts': 17.2,
   'code-graph-refresh-engine.spec.ts': 56.6,
   'code-graph-writer-seam.spec.ts': 14.8,
+  // ⚠️ AN ESTIMATE, NOT A MEASUREMENT, and said so rather than blended into the
+  // table above. `code-index-freshness.spec.ts` (MOTIR-1771) has never run in
+  // this lane, and a spec with no entry is assigned to no leg at all — so an
+  // honest guess that makes it RUN beats an accurate silence that does not.
+  // Sized from its shape: seven cases, each a sign-up plus a small seed and one
+  // or two page loads, which is the expensive part. RE-MEASURE from the first
+  // green run that includes it, per this file's own instructions.
+  'code-index-freshness.spec.ts': 35.0,
   'collab-at-scale.spec.ts': 0,
   'collab-journey.spec.ts': 11.4,
   'comments.spec.ts': 12.1,

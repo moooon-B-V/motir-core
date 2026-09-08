@@ -32,6 +32,7 @@ import { planDriftService } from '@/lib/services/planDriftService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import { codeGraphDriftService } from '@/lib/services/codeGraphDriftService';
 import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { dataExportService } from '@/lib/services/dataExportService';
@@ -84,6 +85,7 @@ export const jobServices = {
   workItemEmbeddings: workItemEmbeddingsService,
   planTargetLock: planTargetLockService,
   abandonedPlan: abandonedPlanService,
+  codeGraphDrift: codeGraphDriftService,
   // The ledger itself is a job's subject exactly once: the abandoned-run reap
   // (MOTIR-3683), which closes rows no completion write will ever reach.
   jobRuns: jobRunsService,

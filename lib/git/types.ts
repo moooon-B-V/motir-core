@@ -288,3 +288,29 @@ export type RepoFileReadResult =
       failure: RepoFileReadTransportFailure;
       detail: string;
     };
+
+/**
+ * The answer to "how far is HEAD ahead of the indexed commit?" (MOTIR-4644).
+ *
+ * ⚠️ `null` IS A FIRST-CLASS ANSWER AND ALWAYS WILL BE — it is not an error
+ * channel and it is not a zero. Four different situations produce it, and every
+ * consumer already renders it: a host that cannot back the comparison, a pair
+ * with no common ancestor (a force-push or a rewritten history), a host that
+ * failed or did not answer, and a count the host could not give exactly.
+ *
+ * ⚠️ AND `null` IS NEVER `0`. Zero means CURRENT to every consumer — the graph
+ * matches the head — so returning it for "we could not tell" would put the most
+ * reassuring possible answer on the case with the least evidence behind it. That
+ * is the same failure `indexState`'s null handling exists to prevent, one field
+ * over.
+ */
+export interface CommitComparison {
+  /** Commits on `head` that are not on `base`, or `null` when not determinable. */
+  behindBy: number | null;
+  /**
+   * WHY it is null, when it is — for the log line, never for a surface. A
+   * consumer branches on `behindBy === null` and nothing else; this exists so a
+   * `null` in production can be explained without a second round-trip.
+   */
+  reason?: 'no_common_ancestor' | 'unsupported' | 'unreachable' | 'inexact';
+}

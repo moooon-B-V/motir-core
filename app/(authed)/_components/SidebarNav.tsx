@@ -4,12 +4,11 @@ import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  Activity,
   BarChart3,
   CircleDot,
   CirclePlay,
+  Code,
   Columns3,
-  GitBranch,
   History,
   House,
   Inbox,
@@ -439,7 +438,8 @@ export function SidebarNav({
         // you dispatch, Runs is where you watch". The glyph is `Waypoints` — a
         // path through ordered nodes, which is what a run over a SET is — chosen
         // because `CirclePlay` is Ready's, `Zap` is the epic issue type's,
-        // `Activity` is Code health's and `History` is Resume onboarding's.
+        // `Code` is the Code room's and `History` is Resume onboarding's.
+        // (`Activity` was Code health's until MOTIR-4643 freed it.)
         icon: <Waypoints />,
         label: t('nav.runs'),
         href: '/runs',
@@ -522,12 +522,24 @@ export function SidebarNav({
         active: isActive(pathname, '/reports'),
       },
       {
-        // Code health (7.14.5) — the code-health audit + coding-convention
-        // review/approve surface; sits after Reports (a top-level project page).
-        icon: <Activity />,
-        label: t('nav.codeHealth'),
-        href: '/code-health',
-        active: isActive(pathname, '/code-health'),
+        // Code (MOTIR-1768 · MOTIR-4643) — the project's repository set and its
+        // index freshness, with the shipped code-health audit as its second
+        // section. Sits after Reports, exactly where `Code health` was.
+        //
+        // ⚠️ ONE ROW APPEARS AND ONE ROW LEAVES. Three surfaces answered one
+        // question — *what code does Motir know about, and is it healthy?* — from
+        // two rail sections with opposite gating, and a user looking for their
+        // repositories had to know the answer was spelled `Git` and lived below a
+        // horizontal rule beside Job runs and Security. This is the door; the
+        // page is MOTIR-1768's.
+        //
+        // ⚠️ THE GLYPH IS `Code`, AND `Activity` IS FREED. `Activity` was Code
+        // health's — a pulse, which named the AUDIT rather than the room. The
+        // room is about code, and its first section is a list of repositories.
+        icon: <Code />,
+        label: t('nav.code'),
+        href: '/code',
+        active: isActive(pathname, '/code'),
       },
     ];
     // The labeled "Resume onboarding" re-entry door (MOTIR-1533; design
@@ -596,13 +608,15 @@ export function SidebarNav({
   // (MOTIR-4861, the fold-in this card waited on). The door into both is the
   // workspace SWITCHER's new `Workspace settings` row.
   //
-  // ⚠️ `Git` OUTLIVES THEM HERE, and is a different card's to remove.
-  // MOTIR-4640 already took it out of the design asset above; the code removal
-  // belongs to MOTIR-4643, which folds Code health + Git into one primary
-  // entry. Until that lands this section always has at least one row, so the
-  // asset's FLOOR arm — the section absent entirely — is drawn but not yet
-  // reachable. The guard below is written for it anyway, because a section that
-  // can vanish must not ship as an empty container with a stray separator.
+  // ⚠️ AND `Git` HAS NOW LEFT IT TOO (Story MOTIR-1754 · MOTIR-1768). MOTIR-4640
+  // took it out of the design asset above; MOTIR-4643 folded Code health + Git
+  // into the one primary `Codebase` entry, and this branch is where that landed.
+  // The consequence is that the note this paragraph used to carry — "this
+  // section always has at least one row" — is FALSE from here on: `Settings` is
+  // conditional, so the section can be empty, and the asset's FLOOR arm (the
+  // section absent entirely) is reachable rather than merely drawn. The guard
+  // below was written ahead of that and is now load-bearing: a section that can
+  // vanish must not ship as an empty container with a stray separator.
   const bottomItems = [
     ...(showSettingsDoor
       ? [
@@ -644,33 +658,42 @@ export function SidebarNav({
           },
         ]
       : []),
-    {
-      // Git integration settings (Story 7.10 GitHub + 7.23 GitLab · MOTIR-1478)
-      // — the SHARED connect-settings surface. ONE "Git" row (git-branch
-      // glyph): GitLab does NOT get a second row, because the provider is a
-      // Segmented on the page rather than a second destination.
-      //
-      // ⚠️ IT POINTS AT THE ORGANISATION NOW (Story MOTIR-4669 · MOTIR-4680).
-      // A repository is connected ONCE, to the organisation, so the surface
-      // moved a tier and `/settings/workspace/{github,gitlab}` are deleted.
-      // The ROW stays and is RE-POINTED rather than removed:
-      // `organization-tier.md` §6 — a relocation preserves the door, and this
-      // is the deep link from anywhere in the app, reached the same way Job
-      // runs is. Leaving it on the old path would still have worked, through
-      // the permanent redirect, and would have made every visit pay a hop for
-      // a link the app itself controls.
-      icon: <GitBranch />,
-      label: t('nav.git'),
-      href: '/settings/organization/git',
-      active: isActive(pathname, '/settings/organization/git'),
-    },
+    // ⚠️ THE `Git` ROW LEFT THIS SECTION TOO (MOTIR-4643 · design/shell
+    // § *The rail's bottom section*, amended by MOTIR-4640) — so this whole
+    // entry is gone, and with it the last row MOTIR-4847 left standing beside
+    // `Settings`.
+    //
+    // It pointed at the organisation's Git settings — the connection
+    // LIFECYCLE, an org-admin act at the tenant that owns it — while the
+    // question a project member actually brings to the rail is *what code does
+    // Motir know about?*, which the `Codebase` row in the PRIMARY section now
+    // answers.
+    //
+    // ⚠️ REMOVING A ROW MAY REMOVE A CONCEPT AND MAY NOT REMOVE A CAPABILITY,
+    // and both actions that lived behind this one are carried forward, to the
+    // tenant that owns each:
+    //
+    //   · configure which repositories exist — ORG ADMIN — Settings →
+    //     Organisation → Git, still reachable from the settings area's own
+    //     navigation;
+    //   · connect YOUR OWN account — ANY MEMBER — Settings → Account → Git,
+    //     because `GithubIdentity` is `userId @unique` and a personal
+    //     credential belongs beside `/settings/account/tokens`. This is the one
+    //     `projectSettingsNav.ts` calls "the one action nobody can take on [a
+    //     member's] behalf", so it is the one that must not lose its door.
+    //
+    // Neither is gone; both moved off a PROJECT rail that was never the right
+    // place for an administrative door.
+    //
     // Docs and Legal documents LEFT this section for the Help menu
     // (MOTIR-4239 · design/shell/help-menu.mock.html): the authed shell now
     // has a footer to put them in, and a bottom section that keeps growing
     // with every non-product door was the tell, not merely a symptom.
     //
-    // The floor is now Settings · Git — `Security` and `Job runs` left with
-    // MOTIR-4847, and this line is the count nobody re-took last time.
+    // ⚠️ THE FLOOR IS NOW `Settings` ALONE. `Security` and `Job runs` left with
+    // MOTIR-4847, `Git` leaves here, and the count is RE-TAKEN rather than
+    // inherited — the previous line in this comment recorded a floor nobody
+    // had re-measured, which is the mistake it warns about.
   ];
 
   // NOTHING MARKS THE GAP, INCLUDING THE SECTION ITSELF (MOTIR-4847). When the
@@ -678,6 +701,11 @@ export function SidebarNav({
   // empty state — rather than an empty container. Pushing `{ items: [] }` would
   // render the separator `Sidebar` draws between sections above a row that is
   // not there, which reads as a loading error rather than as policy.
+  //
+  // ⚠️ AND THAT IS REACHABLE NOW, WHICH IT BARELY WAS BEFORE (MOTIR-4643). With
+  // `Git` gone, `Settings` is the only row left — so an actor without the
+  // settings door gets NO bottom section at all, and this branch stops being
+  // defensive and starts being the ordinary member's rail.
   if (bottomItems.length > 0) {
     sections.push({ id: 'bottom', items: bottomItems });
   }

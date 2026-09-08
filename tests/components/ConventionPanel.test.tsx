@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { ConventionPanel } from '@/app/(authed)/code-health/_components/ConventionPanel';
+import { ConventionPanel } from '@/app/(authed)/code/_components/ConventionPanel';
 import type { CodingConventionDTO, ConventionSurfaceDTO } from '@/lib/dto/codeHealth';
 
 // ⚠️ THE PLANNING DOORS READ THE ADDRESS (MOTIR-4730). Every surface that mounts

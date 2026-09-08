@@ -42,10 +42,27 @@ import {
 // intended repo, each carrying the realized `GithubRepo` it maps to — read it via
 // `projectRepoSetService.getSet` / `listByProject`. This service is DELIBERATELY
 // still workspace-scoped: narrowing the fan-out is a behaviour change to shipped,
-// working code-graph plumbing, and it belongs to MOTIR-1754 (the BYOK code-index
-// loop), which owns per-repo index freshness end to end. So the association is no
-// longer missing — only unadopted here, and by whom is recorded. Do not read this
-// paragraph as an invitation to fix it in passing.
+// working code-graph plumbing, and it wants its own decision, its own tests and
+// its own review.
+//
+// ⚠️ DECIDED, 2026-09-05 — `docs/decisions/code-graph-index-fan-out.md` (MOTIR-2029).
+// This paragraph named MOTIR-1754 for months and that story's own scope boundary
+// handed the question straight back, which is exactly how a deferral orphans. It
+// is answered now, and NOT by narrowing this fan-out:
+//
+//   THE CODE GRAPH IS KEYED TO THE ORGANISATION. One repository has ONE graph,
+//   built once. Which projects work on it is VISIBILITY CONFIGURATION — an org
+//   admin adds a repository to any project, in any workspace of the org, and
+//   doing so rebuilds nothing. The repository belongs to the org, the org is the
+//   billing unit, so there is no boundary between two of its projects that a
+//   second copy of the same graph would protect.
+//
+// So this fan-out does not get a narrower project list — it stops being a fan-out.
+// The decision record carries the eleven-row tenancy audit and the migration
+// question it deliberately leaves to the implementation story.
+//
+// Do not read this paragraph as an invitation to fix it in passing: the change is
+// a schema move on both sides of the boundary, and it is that story's.
 //
 // SIDE-EFFECTS-OUTSIDE-TX: the DB reads run inside one `withSystemContext`
 // transaction (RLS-safe under the trusted-writer escape, like the webhook); every

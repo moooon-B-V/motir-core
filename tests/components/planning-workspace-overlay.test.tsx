@@ -592,8 +592,9 @@ describe('coverage · Keep planning after a Back, for every launch shape', () =>
     {
       name: 'a convention-refine launch',
       search: 'plan=contextual&planFrom=convention-refine&planRepo=motir-core',
-      path: '/code-health',
-      expected: '/code-health?plan=contextual&planFrom=convention-refine&planRepo=motir-core',
+      // The convention-refine host is `/code` since MOTIR-1768.
+      path: '/code',
+      expected: '/code?plan=contextual&planFrom=convention-refine&planRepo=motir-core',
     },
     {
       name: 'a roadmap launch',

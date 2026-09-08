@@ -387,15 +387,17 @@ test.describe('@smoke shell journeys', () => {
     await expect(page.getByRole('button', { name: 'Create your first project' })).toHaveCount(0);
 
     // The project-scoped nav RENDERS — it used to be hidden, because the rail
-    // collapsed to its bottom section for a projectless reader. Settings/Git
-    // still stay; Docs and Legal documents left this section for the Help menu
-    // (MOTIR-4239).
+    // collapsed to its bottom section for a projectless reader (MOTIR-4815:
+    // everyone always has a project now). Settings stays; Docs and Legal left
+    // for the Help menu (MOTIR-4239), and `Git` left for the tenants that own
+    // its two actions (MOTIR-4643) — which is why it is asserted ABSENT below
+    // rather than visible.
     const rail = page.getByRole('navigation', { name: 'Primary' });
     await expect(rail.getByRole('link', { name: 'Work Items' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Boards' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Reports' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Settings' })).toBeVisible();
-    await expect(rail.getByRole('link', { name: 'Git' })).toBeVisible();
+    await expect(rail.getByRole('link', { name: 'Git' })).toHaveCount(0);
   });
 
   // ── 10. Re-login lands on the LAST working project (+ its workspace/org) ───

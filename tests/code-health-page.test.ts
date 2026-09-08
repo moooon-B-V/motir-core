@@ -28,7 +28,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   refreshCodeAudit: vi.fn(),
 }));
 
-const { loadCodeHealthSurfaces } = await import('@/app/(authed)/code-health/page');
+const { loadCodeHealthSurfaces } = await import('@/app/(authed)/code/_health');
 const { createTestWorkspace, createTestProject } = await import('./fixtures');
 const { truncateAuthTables } = await import('./helpers/db');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');

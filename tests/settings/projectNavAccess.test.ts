@@ -152,24 +152,34 @@ describe('what each built-in role is offered', () => {
     expect(offered(ADMIN as never)).toEqual(PROJECT_NAV_ACCESS.map((e) => e.href));
   });
 
-  it('a MEMBER loses exactly ONE row — Code health, which asserts `ai:configure`', () => {
-    // Worth stating plainly, because it is the only place this story narrows the
-    // nav for a member and it was NOT obvious from the row's name. `/code-health`
-    // reads through `aiConventionService`, whose own comments record that mapping
-    // those operations to `ai:plan` (which a member holds) would have WIDENED an
-    // admin-only operation — so `ai:configure` it is, and a member never held it.
-    // The page already refused them; the row just stops offering the trip.
+  it('⚠️ a MEMBER now loses NOTHING — the one narrowed row was re-opened by MOTIR-1768', () => {
+    // This assertion used to read *"a MEMBER loses exactly ONE row — Code health,
+    // which asserts `ai:configure`"*, and it was true of a destination that no
+    // longer exists. `/code-health` was an admin-only audit; `/code` is a room
+    // whose FIRST section — the project's repository set and its index freshness
+    // — asserts nothing past browse, and whose second section carries the
+    // `ai:configure` gate INSIDE itself and renders its own admin-only state.
+    //
+    // ⚠️ NOTHING WAS WIDENED. `aiConventionService` still asserts `ai:configure`
+    // and no member can read an audit. What changed is that gating the ROW on the
+    // stricter of its two sections would have hidden the browse-reachable one
+    // behind the admin-only one — the capability loss `design/code-context` §3.1
+    // forbids, and the reason §2.1 puts the gate in the section rather than on
+    // the row.
     const gone = PROJECT_NAV_ACCESS.map((e) => e.href).filter(
       (href) => !offered(MEMBER as never).includes(href),
     );
-    expect(gone).toEqual(['/code-health']);
+    expect(gone).toEqual([]);
   });
 
-  it('a VIEWER loses exactly the three destinations that refuse them outright', () => {
+  it('a VIEWER loses exactly the TWO destinations that refuse them outright', () => {
+    // Three became two for the same reason as above: `/code` is browse-reachable,
+    // so a viewer is offered the room and meets Health's own admin-only state
+    // inside it rather than being denied the door.
     const gone = PROJECT_NAV_ACCESS.map((e) => e.href).filter(
       (href) => !offered(VIEWER as never).includes(href),
     );
-    expect(gone.sort()).toEqual(['/code-health', '/plans', '/triage']);
+    expect(gone.sort()).toEqual(['/plans', '/triage']);
   });
 
   it('a viewer keeps every READ surface', () => {

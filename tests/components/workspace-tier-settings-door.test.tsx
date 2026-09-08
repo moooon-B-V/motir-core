@@ -101,13 +101,29 @@ describe('the workspace-tier sub-routes BELOW the reveal threshold', () => {
     expect(container.innerHTML).not.toContain('/settings/workspace');
   });
 
-  it("keeps the Git row, which is organisation-scoped and not this rule's business", () => {
-    // ⚠️ GIT NOW NAMES THE ORGANISATION (Story MOTIR-4669 · MOTIR-4680), and
-    // that is a TIER move, not the §6 fold this file is about. It is present at
-    // both counts because an organisation always exists — which is exactly why
-    // it is NOT evidence for the exemption the case above retired.
+  it('⚠️ names no organisation sub-route either — `Git` has left this rail as well', () => {
+    // ⚠️ INVERTED A SECOND TIME (Story MOTIR-1754 · MOTIR-1768), and the title
+    // went with the assertion. This case was `keeps the Git row, which is
+    // organisation-scoped and not this rule's business`, and its rationale was
+    // "GIT NOW NAMES THE ORGANISATION (MOTIR-4669 · MOTIR-4680) — a TIER move,
+    // not the §6 fold this file is about; present at both counts because an
+    // organisation always exists". That reading was correct and is simply
+    // spent: MOTIR-4643 folded Code health + Git into the one primary
+    // `Codebase` entry, so the row is not in this section at either count and
+    // there is no longer an organisation-tier row here to be "not this rule's
+    // business".
+    //
+    // It is asserted ABSENT rather than dropped because that is what fails if
+    // the fold is ever partly reverted and a loose `Git` row returns.
     const { container } = renderRail(false);
-    expect(container.innerHTML).toContain('/settings/organization/git');
+    expect(container.innerHTML).not.toContain('/settings/workspace/jobs');
+    expect(container.innerHTML).not.toContain('/settings/organization/git');
+    // ⚠️ AND THE WITNESS THAT THIS IS NOT AN EMPTY RAIL. `Git` used to be it —
+    // the one row asserted PRESENT, which is what kept every negative above
+    // from passing on markup that rendered nothing. With the row gone the
+    // primary section carries the proof instead: it renders unconditionally now
+    // (MOTIR-4873), so a rail that painted nothing fails here.
+    expect(container.innerHTML).toContain('/items');
   });
 });
 
@@ -136,11 +152,18 @@ describe('the workspace-tier sub-routes AT the reveal threshold', () => {
     // reveal no longer changes this component's markup, and it is the assertion
     // that fails if a workspace-tier href is ever re-introduced here.
     const { container } = renderRail(true);
+    // NOTHING IN THE WORKSPACE TIER — not the area, not one of its rooms. This
+    // is main's assertion set (MOTIR-4873 · MOTIR-4847) kept whole.
     expect(container.innerHTML).not.toContain('href="/settings/workspace"');
     expect(container.innerHTML).not.toContain('/settings/workspace/jobs');
     expect(container.innerHTML).not.toContain('/settings/workspace/security');
-    // The Git row is organisation-scoped and stays, which is what keeps this
-    // from passing on an empty rail.
-    expect(container.innerHTML).toContain('/settings/organization/git');
+    // ⚠️ AND NOTHING IN THE ORGANISATION TIER EITHER (Story MOTIR-1754 ·
+    // MOTIR-1768). This line asserted `/settings/organization/git` PRESENT,
+    // with the note "the Git row is organisation-scoped and stays, which is
+    // what keeps this from passing on an empty rail". MOTIR-4643 folded that
+    // row into the primary `Codebase` entry, so the assertion is inverted and
+    // the non-emptiness witness has to be found elsewhere — the line below.
+    expect(container.innerHTML).not.toContain('/settings/organization/git');
+    expect(container.innerHTML).toContain('/items');
   });
 });

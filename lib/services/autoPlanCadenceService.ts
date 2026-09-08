@@ -4,6 +4,8 @@ import {
   withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 import { readProjectForService } from '@/lib/workspaces/tenantRead';
+import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import { codeBlindPauseReason } from '@/lib/ai/codeFreshness';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
@@ -62,7 +64,23 @@ export type CadenceSkipReason =
   /** The workspace has no owner row to act as (an invariant violation, logged not thrown). */
   | 'no_owner'
   /** The project vanished between the scan and the per-project read. */
-  | 'project_gone';
+  | 'project_gone'
+  /**
+   * MOTIR CANNOT READ THE CODE, so it stops DECIDING to plan (MOTIR-4603) —
+   * either the workspace has no connected repository, or a connected repo's
+   * graph is badly behind its default branch.
+   *
+   * ⚠️ THE MANUAL PATH IS UNTOUCHED. Auto-plan is Motir deciding; clicking
+   * "Plan with AI" is the user deciding, and only the first is withheld here.
+   * A cadence that keeps producing plans from work items alone, unasked, spends
+   * credit on output nobody requested and fills the board with plans built on
+   * less than they should have been.
+   *
+   * ⚠️ AND IT RESUMES BY ITSELF. Nothing is written when this fires — no flag,
+   * and above all NOT the user's checkbox. Connect a repository or let a
+   * refresh land and the next tick simply proceeds.
+   */
+  | 'code_blind';
 
 export type CadenceProjectOutcome =
   | { projectId: string; status: 'fired'; itemKey: string; jobId: string; planId: string }
@@ -343,6 +361,24 @@ export const autoPlanCadenceService = {
       // pending one stale.
       const pending = await this.getPendingPlan(project.id, svcCtx);
       if (pending) return { projectId: project.id, status: 'skipped', reason: 'pending_proposal' };
+
+      // Gate 1b — CODE BLINDNESS (MOTIR-4603). Placed after the cheap
+      // pending-proposal read and before the ready-set count, because it is a
+      // property of the project rather than of its tree: if Motir cannot read
+      // the code it should not decide to plan whatever the ready set says.
+      //
+      // Reads the SAME join both UI surfaces render (`resolveCodeContextState`)
+      // and the SAME threshold the planner-side framing reads, so the cadence
+      // can never disagree with what the user is shown about the same project.
+      //
+      // ⚠️ Nothing is WRITTEN. The user's `aiAutoPlanEnabled` checkbox records
+      // what they want and is never mutated to reflect a system state — the
+      // settings row explains the condition instead. Silently unchecking it
+      // would be Motir editing the user's intent, and they would later find a
+      // setting they never changed.
+      const codeContext = await resolveCodeContextState(project.id, svcCtx);
+      if (codeBlindPauseReason(codeContext))
+        return { projectId: project.id, status: 'skipped', reason: 'code_blind' };
 
       // Gate 2 — the drain condition, read through the SHIPPED ready-set count
       // (`countReady`, the same predicate /ready renders) so cadence can never

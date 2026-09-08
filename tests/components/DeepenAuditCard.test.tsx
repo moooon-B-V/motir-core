@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { DeepenAuditCard } from '@/app/(authed)/code-health/_components/DeepenAuditCard';
+import { DeepenAuditCard } from '@/app/(authed)/code/_components/DeepenAuditCard';
 import type { ExternalScannerStateDTO } from '@/lib/dto/codeHealth';
 
 // The §10.3 "Deepen this audit" affordance (MOTIR-1592) under happy-dom. The card

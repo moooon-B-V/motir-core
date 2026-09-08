@@ -1510,7 +1510,7 @@ export default defineConfig({
         // saying the other repos exist at all — an untested branch in either is
         // a project silently showing one repo's grade as if it were its own.
         'lib/codeHealth/repoAuditRows.ts',
-        'app/**/code-health/_components/AuditRepoList.tsx',
+        'app/**/code/_components/AuditRepoList.tsx',
         // Story MOTIR-2244 · Subtask MOTIR-2247 — the repo-SCOPED audit trigger.
         // The scope decides how many derivations a click PAYS for, so an
         // untested branch here is either a fan-out that spends N times what was
@@ -1858,7 +1858,12 @@ export default defineConfig({
         'app/**/settings/project/automation/page.tsx',
         'app/**/plans/\\[id\\]/page.tsx',
         'app/**/items/\\[key\\]/edit/page.tsx',
-        'app/**/code-health/page.tsx',
+        // ⚠️ `code/page.tsx`, NOT `code-health/page.tsx` (MOTIR-1768). The audit
+        // became one section of the Code room and `/code-health` is now a
+        // three-line permanent redirect — a file these numbers would gate
+        // trivially while the surface they were measured against went
+        // unmeasured.
+        'app/**/code/page.tsx',
         'app/**/invite/accept/page.tsx',
         // Story MOTIR-4237 · Subtask MOTIR-4240 — THE HELP MENU, and the context
         // the story widened to give it a door. Both were built by MOTIR-4239 and
@@ -2695,7 +2700,7 @@ export default defineConfig({
         // Story MOTIR-2192 · Subtask MOTIR-2166 — the code-graph offboarding queue.
         // Story MOTIR-1755 · Subtask MOTIR-2207 — the multi-repo audit tab.
         'lib/codeHealth/repoAuditRows.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/**/code-health/_components/AuditRepoList.tsx': {
+        'app/**/code/_components/AuditRepoList.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,

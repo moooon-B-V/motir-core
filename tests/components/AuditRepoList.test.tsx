@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { AuditRepoList } from '@/app/(authed)/code-health/_components/AuditRepoList';
+import { AuditRepoList } from '@/app/(authed)/code/_components/AuditRepoList';
 import { buildRepoAuditRows } from '@/lib/codeHealth/repoAuditRows';
 import type { RepoAuditSurfaceDTO } from '@/lib/dto/codeHealth';
 

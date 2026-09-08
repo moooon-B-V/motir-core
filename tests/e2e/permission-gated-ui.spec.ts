@@ -138,14 +138,20 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // PANEL 1. The door is not there, and nothing marks the gap: no disabled row,
   // no tooltip, no "ask an admin" line. The rows below simply close up.
   await expect(settingsDoor(page)).toHaveCount(0);
-  // ⚠️ `Job runs` LEFT THIS SECTION (Story MOTIR-4843 · MOTIR-4847). It was a
-  // workspace-tier pane rendered as a loose row in the PROJECT's rail; it is a
-  // row in the workspace area's own rail above the reveal, and folded into
-  // `/settings/organization` below it. `Git` is what still stands beside the
-  // door — and it is the one this case needs, because the claim is that the
-  // rows below the missing door close up rather than the section vanishing.
+  // ⚠️ BOTH ROWS LEFT THIS SECTION, so for a member it is EMPTY and `SidebarNav`
+  // renders no section at all. `Job runs` went with MOTIR-4843/4847 — a
+  // workspace-tier pane that had been a loose row in the PROJECT's rail, now a
+  // row in the workspace area's own rail above the reveal and folded into
+  // `/settings/organization` below it. `Git` went with MOTIR-4643, its two
+  // actions carried to the organisation and account tiers.
   await expect(rail(page).getByRole('link', { name: 'Job runs' })).toHaveCount(0);
-  await expect(rail(page).getByRole('link', { name: 'Git' })).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: 'Git' })).toHaveCount(0);
+  // ⚠️ AND A MEMBER IS OFFERED THE `Codebase` ROOM — the capability the collapse
+  // could have taken and did not. `/code`'s Repositories section asserts nothing
+  // past browse; its Health section keeps the `ai:configure` gate INSIDE itself
+  // and renders its own admin-only state. Gating the ROW on the stricter of the
+  // two would have hidden the browse-reachable half behind the admin-only one.
+  await expect(rail(page).getByRole('link', { name: 'Codebase' })).toBeVisible();
 
   // ⌘K offers no settings deep link either — the palette reads the same registry.
   const palette = await openPalette(page);

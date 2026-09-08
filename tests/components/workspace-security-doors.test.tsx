@@ -107,14 +107,24 @@ describe('the settings rail', () => {
     }
   });
 
-  it('the Git row is unaffected at either count — it is organisation-scoped', () => {
-    // Git moved to the ORGANISATION tier (MOTIR-4680) — a different change from
-    // this file's §6 fold — and an organisation always exists, so this row has
-    // no reveal arm at all. It is the section's only unconditional member now.
+  it('⚠️ NEITHER neighbour is in this section any more, at either count', () => {
+    // This case was `the Git row is unaffected at either count` — Git had moved
+    // to the ORGANISATION tier (MOTIR-4680), which gave it no reveal arm and
+    // made it the section's only unconditional member.
+    //
+    // Both witnesses have since left: `Job runs` with MOTIR-4847 and `Git` with
+    // MOTIR-4643. So the case can no longer prove "the neighbours are
+    // unaffected" by naming a survivor — there is none to name. It asserts their
+    // ABSENCE at both counts instead, which is the claim that is now true and
+    // the one that fails if either row returns without anyone deciding it
+    // should.
     for (const revealed of [true, false]) {
       cleanup();
       const { container } = renderRail(revealed);
-      expect(container.innerHTML, `revealed=${revealed}`).toContain(
+      expect(container.innerHTML, `revealed=${revealed}`).not.toContain(
+        'href="/settings/workspace/jobs"',
+      );
+      expect(container.innerHTML, `revealed=${revealed}`).not.toContain(
         'href="/settings/organization/git"',
       );
     }

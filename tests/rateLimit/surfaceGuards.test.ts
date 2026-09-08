@@ -738,6 +738,10 @@ describe('the routes are actually WIRED to the guards', () => {
     'app/api/ai/augment/[jobId]/stream/route.ts',
     'app/api/ai/chat/[jobId]/stream/route.ts',
     'app/api/ai/coding-convention/audit-coverage/route.ts',
+    // The project's CODE CONTEXT — a pure database read of `project_repository`
+    // and the columns MOTIR-4724 put the index state in. No boundary call, no
+    // model job, no provider money (MOTIR-1767).
+    'app/api/ai/code-context/route.ts',
     'app/api/ai/coding-convention/audit/route.ts',
     'app/api/ai/coding-convention/convention/route.ts',
     'app/api/ai/expand/[jobId]/stream/route.ts',

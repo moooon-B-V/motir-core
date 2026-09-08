@@ -155,6 +155,42 @@ export const jobRunRepository = {
    * or `withSystemContext` (the grant/webhook paths, which have no active
    * workspace — the policy's system-admin branch admits them).
    */
+  /**
+   * ⚠️ THE RUNS THAT WILL NEVER FINISH (Story MOTIR-1754 · MOTIR-2105) — every
+   * code-graph run in a TERMINAL failure state, by id.
+   *
+   * The caller resolves these against `GithubRepo.indexingRunId`, exactly as the
+   * running-state read does, because the pointer is the only attribution that
+   * exists: the index job writes `output.repoRef` only on success, so a `failed`
+   * or `abandoned` row cannot say which repository it belonged to.
+   *
+   * ⚠️ BOTH FUNCTIONS, because a REFRESH and a first INDEX are the same fact to
+   * a reader — the graph is behind and nothing is coming — and reading only one
+   * of them would leave the other silently stale, which is the shape this whole
+   * card exists to end.
+   *
+   * ⚠️ AND BOTH TERMINAL STATUSES. `failed` is "the handler threw" and
+   * `abandoned` is "nothing ever came back"; the schema keeps them apart because
+   * only one has a stack trace, and for THIS question they are one answer.
+   *
+   * Ids rather than refs, so the join is the caller's and this stays a single
+   * Prisma operation.
+   */
+  async listTerminalCodeGraphRunIds(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.jobRun.findMany({
+      where: {
+        workspaceId,
+        functionId: { in: ['system.code-graph-index', 'system.code-graph-refresh'] },
+        status: { in: ['failed', 'abandoned'] },
+      },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
   async listSucceededCodeGraphIndexRepoRefs(
     workspaceId: string,
     tx: Prisma.TransactionClient,

@@ -128,11 +128,25 @@ export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
     evidence: '`reportsService` and `sprintsService` both assert `report:view`.',
   },
   {
-    href: '/code-health',
-    requires: 'ai:configure',
+    // ⚠️ BROWSE-ONLY, AND IT USED TO BE `ai:configure` (MOTIR-1768). The
+    // destination moved: `/code-health` was an admin-only audit and is now ONE
+    // SECTION of `/code`, whose other section — the project's repository set and
+    // its index freshness — asserts nothing past browse.
+    //
+    // The row must therefore be VISIBLE to every member, or the collapse takes a
+    // capability away rather than moving it (`design/code-context` §2.1, §3.1).
+    // `aiConventionService` still asserts `ai:configure` and nothing about that
+    // changed — the gate simply lives INSIDE the Health section now, which
+    // renders its own admin-only empty state while Repositories keeps working on
+    // the same page load. Gating the ROW on the stricter of its two sections
+    // would hide the browse-reachable one behind the admin-only one.
+    href: '/code',
+    requires: 'browse-only',
     evidence:
-      '`aiConventionService.getAudit` / `.getConvention` assert `ai:configure` — and their own ' +
-      'comments record that mapping them to `ai:plan` would have WIDENED an admin-only operation.',
+      '`app/(authed)/code/page.tsx` gates only its Health SECTION: the ' +
+      '`NotProjectAdminError` catch sets a flag rather than returning, so a member ' +
+      'gets the repository list beside Health’s admin-only state. ' +
+      '`resolveCodeContextState` asserts nothing past browse.',
   },
   {
     href: '/filters',

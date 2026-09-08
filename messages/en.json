@@ -973,7 +973,7 @@
       "runs": "Runs",
       "boards": "Boards",
       "reports": "Reports",
-      "codeHealth": "Code health",
+      "code": "Codebase",
       "settings": "Settings",
       "git": "Git",
       "github": "GitHub",
@@ -1094,6 +1094,7 @@
       "current": "Current",
       "goToBacklog": "Go to Backlog",
       "goToFilters": "Go to Filters",
+      "goToCode": "Go to Codebase",
       "aiHeading": "AI",
       "goToOrgSecurity": "Go to organization security",
       "goToWorkspaceSecurity": "Go to workspace security"
@@ -3275,6 +3276,7 @@
         "thresholdInvalid": "Enter 1 or more ready items.",
         "decreaseAria": "Decrease threshold",
         "increaseAria": "Increase threshold",
+        "pauseConditions": "Auto-planning pauses while Motir cannot read your code — when no repository is connected, or the code index is out of date. It also waits while a proposed plan is still undecided, while ready work is above your threshold, when there is nothing left to expand, and while your plan does not include AI planning. Your setting is unchanged, and it resumes on its own once the condition clears.",
         "guardrail": "Auto-plan <strong>proposes</strong> an expansion for your approval — it never creates work without you."
       },
       "paused": {
@@ -6551,8 +6553,6 @@
   "codeHealth": {
     "title": "Code health",
     "subtitle": "The code-health audit and the per-repo coding convention Motir derives from your code and injects into every prompt.",
-    "noProjectTitle": "No active project",
-    "noProjectDescription": "Select or create a project to see its code health.",
     "adminOnlyTitle": "Project admins only",
     "adminOnlyDescription": "The coding standard drives every prompt Motir dispatches. Only a project admin can view it. Ask a project admin for access.",
     "tabsLabel": "Code health views",
@@ -7896,6 +7896,40 @@
       "body": "It stays connected to {org}, other projects keep it, and the code index is untouched. You can add it back at any time and nothing will re-index.",
       "confirm": "Remove",
       "cancel": "Cancel"
+    }
+  },
+  "code": {
+    "title": "Codebase",
+    "subtitle": "The repositories this project works on, and what Motir has read of them.",
+    "noProjectTitle": "No active project",
+    "noProjectDescription": "Select or create a project to see its code health.",
+    "adminOnlyTitle": "Project admins only",
+    "adminOnlyDescription": "The coding standard drives every prompt Motir dispatches. Only a project admin can view it. Ask a project admin for access.",
+    "sectionsLabel": "Code sections",
+    "tabs": {
+      "repositories": "Repositories",
+      "health": "Health"
+    },
+    "repositories": {
+      "listLabel": "Repositories this project works on",
+      "emptyTitle": "No repositories yet",
+      "emptyDescription": "This project has no repositories configured. Add one and Motir can read your code when it plans.",
+      "manageLink": "Manage this project’s repositories",
+      "notUpdating": "This index is not updating.",
+      "provider": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      },
+      "index": {
+        "indexed": "Indexed",
+        "stale": "Stale",
+        "indexing": "Indexing…",
+        "never": "Never indexed"
+      },
+      "drift": {
+        "commits": "{count, plural, one {# commit behind} other {# commits behind}}",
+        "unknown": "Behind by an unknown number of commits"
+      }
     }
   }
 }

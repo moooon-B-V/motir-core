@@ -247,6 +247,10 @@ export const config = {
     '/p/:path*',
     '/backlog/:path*',
     '/boards/:path*',
+    // The Codebase room (MOTIR-1768), and the address it absorbed — which still
+    // needs the proxy, because a permanent redirect is served BY the route and
+    // the route is behind this matcher.
+    '/code/:path*',
     '/code-health/:path*',
     '/dashboard/:path*',
     '/direction/:path*',

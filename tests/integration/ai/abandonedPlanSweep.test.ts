@@ -28,6 +28,7 @@ import { jobDefinitions } from '@/lib/jobs/registry';
 import { autoPlanCadenceService } from '@/lib/services/autoPlanCadenceService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { connectAndLinkRepo } from '../../fixtures/codeContextFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../../helpers/db';
 import type { JobStatus } from '@/lib/ai/types';
@@ -157,6 +158,15 @@ async function makeDrainedProject(
     where: { id: fx.projectId },
     data: { aiAutoPlanEnabled: true, aiAutoPlanThreshold: 5 },
   });
+  // ⚠️ CONNECTED (MOTIR-4603) — the cadence now holds off when Motir cannot read
+  // the code, and a workspace with no installation is exactly that. Every case
+  // here is about the PLAN-abandonment gate, so the fixture has to clear the
+  // code-blindness one to reach it; otherwise each case would be asserting a
+  // verdict it is not named for.
+  // ⚠️ CONNECT **AND LINK** — MOTIR-1767 made the code-blindness gate read the
+  // PROJECT's set, so an installation alone no longer gives this project code
+  // context and every cadence assertion below would read `fired: 0`.
+  await connectAndLinkRepo(fx);
   const stub = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'epic', title: 'Unexpanded epic' },
     fx.ctx,
