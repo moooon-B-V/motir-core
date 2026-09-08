@@ -166,20 +166,20 @@ describe('Home story seam — the dedupe, at the boundary that can break it', ()
     }
 
     const seen: string[] = [];
-    let cursor: string | null = null;
-    let pages = 0;
-    do {
-      const page: { items: { identifier: string }[]; nextCursor: string | null } =
-        await homeService.listMyWork(hctx(fx), { limit: 4, cursor });
-      // Every page but the last is FULL — the has-more probe makes the boundary
-      // exact, so a short page here would mean rows were dropped after the read.
-      if (page.nextCursor !== null) expect(page.items).toHaveLength(4);
-      seen.push(...page.items.map((r) => r.identifier));
-      cursor = page.nextCursor;
-      pages += 1;
-    } while (cursor !== null && pages < 10);
+    // Walked by page NUMBER since MOTIR-4852. `total` bounds the walk, so it
+    // cannot terminate early on a short page — which is the very thing the
+    // assertion inside is looking for.
+    const probe = await homeService.listMyWork(hctx(fx), { limit: 4 });
+    const pageCount = Math.max(1, Math.ceil(probe.total / probe.pageSize));
+    for (let page = 1; page <= pageCount; page += 1) {
+      const window = await homeService.listMyWork(hctx(fx), { limit: 4, page });
+      // Every page but the last is FULL — a short page here would mean rows were
+      // dropped after the read.
+      if (page < pageCount) expect(window.items, `page ${page}`).toHaveLength(4);
+      seen.push(...window.items.map((r) => r.identifier));
+    }
 
-    expect(pages).toBeGreaterThan(1); // there IS a boundary to be wrong at
+    expect(pageCount).toBeGreaterThan(1); // there IS a boundary to be wrong at
     expect(new Set(seen).size).toBe(seen.length); // no id repeated across pages
     expect(seen.slice().sort()).toEqual(made.slice().sort()); // and none dropped
   });
@@ -352,7 +352,7 @@ describe('Home story seam — the access matrix', () => {
     ).toHaveLength(13);
 
     const first = await homeService.listMyWork(ctx, { limit: 3 });
-    const second = await homeService.listMyWork(ctx, { limit: 3, cursor: first.nextCursor });
+    const second = await homeService.listMyWork(ctx, { limit: 3, page: 2 });
 
     // FULL pages, both of them. A JavaScript-side filter after a `take: 3` read
     // would return one or two rows here — the exact "the list ends early

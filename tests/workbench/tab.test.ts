@@ -67,19 +67,27 @@ describe('workbenchTabHref', () => {
     }
   });
 
-  it('carries a page cursor alongside the tab', () => {
-    expect(workbenchTabHref('todo', 'abc')).toBe('/workbench?cursor=abc');
-    expect(workbenchTabHref('watching', 'abc')).toBe('/workbench?tab=watching&cursor=abc');
+  it('carries a PAGE alongside the tab', () => {
+    expect(workbenchTabHref('todo', 3)).toBe('/workbench?page=3');
+    expect(workbenchTabHref('watching', 3)).toBe('/workbench?tab=watching&page=3');
   });
 
-  it('drops an absent cursor rather than emitting an empty param', () => {
+  it('emits NO param for page one — one canonical URL per view', () => {
+    // ⚠️ THE SAME RULE THAT MAKES To do THE ABSENCE OF `?tab=`, one axis over
+    // (MOTIR-4853). A link to a tab and a link to its first page must be the
+    // SAME link, or the product has two spellings for one view and has to pick
+    // one every time it shares, bookmarks or compares them. The pager's own `1`
+    // button navigates here.
+    expect(workbenchTabHref('todo', 1)).toBe('/workbench');
+    expect(workbenchTabHref('watching', 1)).toBe('/workbench?tab=watching');
+  });
+
+  it('drops an absent or degenerate page rather than emitting an empty param', () => {
+    expect(workbenchTabHref('todo')).toBe('/workbench');
     expect(workbenchTabHref('todo', null)).toBe('/workbench');
-    expect(workbenchTabHref('watching', '')).toBe('/workbench?tab=watching');
-  });
-
-  it('escapes a cursor that is not URL-safe', () => {
-    // The cursor is base64url today and therefore safe, but the href builder
-    // must not be the thing that assumes so.
-    expect(workbenchTabHref('todo', 'a b&c=d')).toBe('/workbench?cursor=a+b%26c%3Dd');
+    // 0 and a negative are what a hand-edited URL produces; `parsePage` already
+    // answers 1 for them, and the builder must not emit them either.
+    expect(workbenchTabHref('watching', 0)).toBe('/workbench?tab=watching');
+    expect(workbenchTabHref('watching', -5)).toBe('/workbench?tab=watching');
   });
 });

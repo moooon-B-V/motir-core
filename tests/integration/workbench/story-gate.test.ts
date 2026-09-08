@@ -224,15 +224,15 @@ describe('the stamp and the window are ONE seam', () => {
     await move(unstamped.id, 'in_progress', 'done');
     await adminDb.workItem.update({ where: { id: unstamped.id }, data: { completedAt: null } });
 
-    let cursor: string | null = null;
-    let pages = 0;
-    do {
-      const page: { items: { completedAt: string | null }[]; nextCursor: string | null } =
-        await homeService.listRecentlyFinished(ctx(), { limit: 2, cursor });
-      for (const row of page.items) expect(row.completedAt).not.toBeNull();
-      cursor = page.nextCursor;
-      pages += 1;
-    } while (cursor !== null && pages < 10);
+    // Walk every page by NUMBER (MOTIR-4852 retired the keyset). `total` is what
+    // bounds the walk now, which is stricter than the old `nextCursor !== null`
+    // loop: it cannot terminate early because a page came back short.
+    const probe = await homeService.listRecentlyFinished(ctx(), { limit: 2 });
+    const pageCount = Math.max(1, Math.ceil(probe.total / probe.pageSize));
+    for (let page = 1; page <= pageCount; page += 1) {
+      const window = await homeService.listRecentlyFinished(ctx(), { limit: 2, page });
+      for (const row of window.items) expect(row.completedAt, `page ${page}`).not.toBeNull();
+    }
 
     // SENSITIVITY: the unstamped row exists, is done-category, and is excluded —
     // so the loop above ran over a real corpus rather than an empty one.
@@ -477,20 +477,19 @@ describe('every read is exact at a page boundary', () => {
 
     for (const [name, read, expected] of reads) {
       const seen: string[] = [];
-      let cursor: string | null = null;
-      for (let page = 0; page < 10; page += 1) {
-        const got: { items: { identifier: string }[]; nextCursor: string | null } = await read(
-          ctx(),
-          { limit: 2, cursor },
-        );
+      const first: { items: { identifier: string }[]; total: number; pageSize: number } =
+        await read(ctx(), { limit: 2 });
+      const pageCount = Math.max(1, Math.ceil(first.total / first.pageSize));
+      for (let page = 1; page <= pageCount; page += 1) {
+        const got: { items: { identifier: string }[]; total: number } = await read(ctx(), {
+          limit: 2,
+          page,
+        });
         // REQUEST N, GET N until the last page — a predicate applied after the
         // limit would shorten a page instead of erroring.
-        if (got.nextCursor !== null) expect(got.items, `${name} page ${page}`).toHaveLength(2);
+        if (page < pageCount) expect(got.items, `${name} page ${page}`).toHaveLength(2);
         seen.push(...ids(got));
-        cursor = got.nextCursor;
-        if (cursor === null) break;
       }
-      expect(cursor, `${name} did not terminate`).toBeNull();
       expect(new Set(seen).size, `${name} repeated a row`).toBe(seen.length);
       expect(seen.sort(), `${name} dropped a row`).toEqual([...expected].sort());
     }
@@ -552,7 +551,7 @@ describe('tenant isolation holds on every read, not just the one', () => {
       homeService.listRecentlyFinished,
       homeService.listWatching,
     ]) {
-      await expect(read(strangerCtx)).resolves.toEqual({ items: [], nextCursor: null });
+      await expect(read(strangerCtx)).resolves.toMatchObject({ items: [], total: 0 });
     }
     const counts = await homeService.tabCounts(strangerCtx);
     expect([counts.toDo, counts.inProgress, counts.recentlyFinished, counts.watching]).toEqual([

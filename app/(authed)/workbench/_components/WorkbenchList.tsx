@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Avatar, StatusValue } from '../../items/_components/issueCellPrimitives';
 import { usePeekRowClick } from '../../items/_components/IssueQuickView';
-import type { WorkbenchTab } from '@/lib/workbench/tab';
+import { IssueListPager } from '../../items/_components/IssueListPager';
+import { workbenchTabHref, type WorkbenchTab } from '@/lib/workbench/tab';
 import type { WorkbenchRowView } from './workbenchRows';
 
 // The Workbench list (Story MOTIR-2649 · MOTIR-2653, renamed and widened by
@@ -256,12 +258,16 @@ export function WorkbenchList({
   rows,
   label,
   tab,
+  pagination,
 }: {
   rows: WorkbenchRowView[];
   label: string;
   tab: WorkbenchTab;
+  /** The window this list is one page of — the pager's own contract. */
+  pagination: { total: number; page: number; pageSize: number };
 }) {
   const t = useTranslations('workbench');
+  const router = useRouter();
   const showFinished = tab === 'finished';
   const columns = [
     t('columns.title'),
@@ -327,6 +333,29 @@ export function WorkbenchList({
           </div>
         )}
       </div>
+      {/* The pager — the LAST ROW INSIDE the bordered box, which is the change
+          `design/workbench/` Panel 8 draws: it sat OUTSIDE, as two loose links
+          under the list, which reads as page furniture rather than as part of
+          the list. Inside, it reads as the list's own last row — the same
+          relationship `/items` has, so a reader who has used one surface knows
+          how the other works without being taught.
+
+          COMPOSED, not forked: this is `/items`' own `IssueListPager`, mounted
+          exactly the way `IssueListTable` mounts it — presentational, raising
+          `onPage`, with the parent owning the navigation. The Workbench already
+          imports across this boundary for `issueCellPrimitives` and
+          `IssueQuickView`.
+
+          ⚠️ `router.push`, NOT `shallowPush`. The page's body is data the
+          browser does not have — a different window of rows the SERVER must
+          read — which is the discriminator `CLAUDE.md` § URL state draws, and
+          the same call `/items`' own pager makes. */}
+      <IssueListPager
+        total={pagination.total}
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        onPage={(page) => router.push(workbenchTabHref(tab, page))}
+      />
     </div>
   );
 }

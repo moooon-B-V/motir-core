@@ -81,12 +81,23 @@ function dto(over: Partial<HomeWorkItemRowDto> & { identifier: string }): HomeWo
   };
 }
 
-const renderRows = (rows: HomeWorkItemRowDto[], tab: WorkbenchTab = 'todo') =>
+/**
+ * `pagination` defaults to ONE FULL PAGE of whatever was passed, so a test that
+ * is not about paging renders the list it always did — and the pager below it
+ * draws its range line with no page nav, which is the single-page state
+ * `design/workbench/` Panel 9 draws.
+ */
+const renderRows = (
+  rows: HomeWorkItemRowDto[],
+  tab: WorkbenchTab = 'todo',
+  pagination?: { total: number; page: number; pageSize: number },
+) =>
   render(
     <WorkbenchList
       rows={toWorkbenchRowViews(rows, WORKFLOW, MEMBERS, tab === 'watching')}
       label="To do"
       tab={tab}
+      pagination={pagination ?? { total: rows.length, page: 1, pageSize: 25 }}
     />,
   );
 
@@ -456,5 +467,95 @@ describe('Watching — the two group bands', () => {
   it('bands NOTHING on the four work tabs', () => {
     renderRows([dto({ identifier: 'T-1', status: 'in_progress' })], 'in-progress');
     expect(screen.queryAllByRole('rowheader')).toEqual([]);
+  });
+});
+
+describe('the pager — the last row INSIDE the list box (MOTIR-4853)', () => {
+  it('renders the footer inside the bordered box, after the table', () => {
+    renderRows([dto({ identifier: 'M-1' })], 'todo', { total: 60, page: 2, pageSize: 25 });
+
+    const table = screen.getByRole('table', { name: 'To do' });
+    const nav = screen.getByRole('navigation', { name: 'Pagination' });
+
+    // ⚠️ ASSERTED AS A RELATIONSHIP, not as presence. The change this card makes
+    // is WHERE the control sits: it used to be two loose links OUTSIDE the box,
+    // which reads as page furniture rather than as part of the list. So the test
+    // has to say "inside the same bordered box, and after the rows" — a
+    // `getByRole('navigation')` alone would have passed before and after.
+    const box = table.parentElement!;
+    expect(box.getAttribute('data-surface')).toBe('card');
+    expect(box.className).toContain('rounded-(--radius-card)');
+    expect(box.contains(nav)).toBe(true);
+    // After the table in DOM order — `compareDocumentPosition` reads the tree
+    // rather than the class list, so a re-styling cannot make this pass wrongly.
+    expect(table.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows the window this tab is one page of, from the read', () => {
+    renderRows([dto({ identifier: 'M-1' })], 'todo', { total: 60, page: 2, pageSize: 25 });
+    expect(
+      screen
+        .getByText(/Showing/)
+        .textContent?.replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('Showing 26–50 of 60');
+  });
+
+  it('a set that fits one page keeps the range line and drops the page nav', () => {
+    renderRows([dto({ identifier: 'M-1' })], 'todo', { total: 9, page: 1, pageSize: 25 });
+    expect(screen.getByText(/Showing/)).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Pagination' })).toBeNull();
+  });
+
+  it('navigates to the tab-and-page href — and page ONE has no param', () => {
+    push.mockClear();
+    renderRows([dto({ identifier: 'M-1' })], 'watching', { total: 60, page: 2, pageSize: 25 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Page 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Page 1' }));
+
+    // The tab travels with the page, and page 1 is the tab's plain href — the
+    // canonical-URL rule `workbenchTabHref` owns.
+    expect(push.mock.calls.map(([href]) => href)).toEqual([
+      '/workbench?tab=watching&page=3',
+      '/workbench?tab=watching',
+    ]);
+  });
+});
+
+describe('Watching over an OFFSET page — the band arrangements the keyset never produced', () => {
+  it('a page holding ONLY the `todo` group draws that band alone, with no empty band above', () => {
+    // ⚠️ THE ONE ARRANGEMENT THIS SURFACE HAS NEVER RENDERED. Under the keyset
+    // every Watching page started at the top of the order, so the first band was
+    // always `In progress`; an OFFSET page can land wholly inside the second
+    // group (`design/workbench/` Panel 11b). `splitWatchingGroups` already
+    // returns an empty `moving` here and the list already renders nothing for
+    // it — "already handles it" and "is asserted to handle it" are different
+    // states, and only the second survives the next edit.
+    renderRows(
+      [dto({ identifier: 'W-1', status: 'todo' }), dto({ identifier: 'W-2', status: 'todo' })],
+      'watching',
+      { total: 140, page: 5, pageSize: 25 },
+    );
+
+    const bands = screen.getAllByRole('rowheader').map((n) => n.textContent?.trim());
+    expect(bands).toEqual(['To do']);
+    expect(screen.queryByText('In progress')).toBeNull();
+  });
+
+  it('a page that STRADDLES the boundary keeps the two bands in order', () => {
+    renderRows(
+      [
+        dto({ identifier: 'W-1', status: 'in_progress' }),
+        dto({ identifier: 'W-2', status: 'todo' }),
+      ],
+      'watching',
+      { total: 140, page: 3, pageSize: 25 },
+    );
+
+    expect(screen.getAllByRole('rowheader').map((n) => n.textContent?.trim())).toEqual([
+      'In progress',
+      'To do',
+    ]);
   });
 });
