@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
-import { Check, ChevronDown, Mail, Plus } from 'lucide-react';
+import { Check, ChevronDown, Mail, Plus, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
 import { Pill } from '@/components/ui/Pill';
@@ -170,7 +170,37 @@ export function WorkspaceSwitcher({ workspaces, activeWorkspaceId }: WorkspaceSw
             </button>
           </div>
           <div className="my-1 h-px bg-(--el-border)" />
+          {/* THE LAST GROUP — the two rows that act on THIS workspace (Story
+              MOTIR-4843 · MOTIR-4847 · `design/settings/workspace-settings.mock.html`
+              panel 5). The popover's three groups answer three different
+              questions: WHICH workspace am I in, MAKE a new one, and act on
+              THIS one.
+
+              `Workspace settings` goes FIRST, above `Invite teammates`, because
+              the invite row already points INTO the area it opens
+              (`/settings/workspace#members`) — the general door above the
+              shortcut through it, never the other way round.
+
+              ⚠️ The `Settings` gear is the glyph the ACCOUNT MENU's
+              `Workspace settings` row carried until this card removed it, and
+              the one the rail's bottom `Settings` row carries, so the departure
+              and the arrival read as one move rather than as two rows (the same
+              argument MOTIR-4673 made for keeping `GitBranch` when the `Git`
+              row changed tier).
+
+              No reveal gate HERE, and none is owed: `ShellTierNav` renders this
+              whole switcher only above the threshold, so below it there is no
+              popover to carry a door — which is right, because both rooms it
+              opens onto `notFound()` there. */}
           <div className="px-1 pb-1">
+            <a
+              href="/settings/workspace"
+              onClick={() => setOpen(false)}
+              className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+            >
+              <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
+              {t('workspaceSwitcher.settings')}
+            </a>
             <a
               href="/settings/workspace#members"
               onClick={() => setOpen(false)}
