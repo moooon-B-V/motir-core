@@ -764,6 +764,15 @@
         background: var(--el-accent);
         color: var(--el-accent-text);
       }
+      /* MOTIR-4944 — copied from `design/projects/access-members.mock.html`
+         (and 2 more in this area). `.btn` sets `border: 1px solid transparent`,
+         so four `.btn.btn-secondary.sm` drew with an invisible border and no
+         explicit ink — a secondary button that read as bare text. */
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
       .btn-ghost {
         background: transparent;
         color: var(--el-text);

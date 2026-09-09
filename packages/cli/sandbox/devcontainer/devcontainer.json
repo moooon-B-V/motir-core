@@ -14,6 +14,7 @@
   ],
   "remoteUser": "node",
   "overrideCommand": true,
+  "postStartCommand": "motir-sandbox-agent-config || true",
   "postAttachCommand": "motir --version",
   "remoteEnv": {
     "MOTIR_TOKEN": "${localEnv:MOTIR_TOKEN}",

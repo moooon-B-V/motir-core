@@ -281,8 +281,30 @@ describe('the release lane is wired to the script it claims to run (MOTIR-3970)'
   });
 
   it('pushes the tags only once the Version Packages pull request has merged', () => {
-    expect(code).toContain("if: steps.changesets.outputs.hasChangesets == 'false'");
+    // BOTH halves of the gate (MOTIR-3967). `hasChangesets == 'false'` is the
+    // original condition: no changesets left means that pull request has just
+    // merged and the bumped versions are on `main`, which is when tags are owed.
+    //
+    // `queued == 'false'` was added when the merge queue turned out to forbid the
+    // sync push while the Version Packages pull request is queued. A run that
+    // skipped the sync leaves `hasChangesets` EMPTY, which is already not
+    // `'false'` — but a gate that depends on an empty string meaning "no" is a
+    // gate nobody can read. Naming the skip is what makes it legible, and it is
+    // asserted here so it cannot be dropped as redundant.
+    expect(code).toContain(
+      "if: steps.queued.outputs.queued == 'false' && steps.changesets.outputs.hasChangesets == 'false'",
+    );
     expect(code).toContain('run: node scripts/push-release-tags.mjs');
+  });
+
+  it('asks the merge queue before trying to sync a branch it may not update', () => {
+    // The first release through this lane went red on an unrelated merge: GitHub
+    // refuses any update to a branch whose pull request is queued (`GH006`), and
+    // `changesets/action` force-pushes `changeset-release/main` on every push to
+    // `main`. The query names that branch and the sync is gated on the answer.
+    expect(code).toContain("-F head='changeset-release/main'");
+    expect(code).toContain('mergeQueueEntry');
+    expect(code).toContain("if: steps.queued.outputs.queued == 'false'");
   });
 
   it('serialises release runs without cancelling one in flight', () => {

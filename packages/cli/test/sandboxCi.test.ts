@@ -130,6 +130,7 @@ describe('the sandbox smoke harness', () => {
     'env-credential-smoke.sh',
     'login-smoke.sh',
     'readonly-login-smoke.sh',
+    'entrypoint-bypass-smoke.sh',
     'fake-agent.sh',
     'failing-agent.sh',
     'stub-server.mjs',
@@ -203,6 +204,34 @@ describe('the sandbox smoke harness', () => {
     // The credential it wrote must then be USED — a file appearing proves less
     // than a read that succeeds because of it.
     expect(loginSh).toContain('motir ready');
+  });
+
+  it('runs the entrypoint-bypass guard on EVERY profile leg (MOTIR-4956)', () => {
+    // The defect this reproduces is invisible to every other check in this
+    // workflow: the image builds, `motir --version` runs, the liveness command
+    // runs — all through the ENTRYPOINT, which is precisely the thing a
+    // devcontainer replaces. The guard has to launch the container the way the
+    // published recipe does, or it asserts nothing about that route.
+    expect(images).toContain('packages/cli/sandbox/smoke/entrypoint-bypass-smoke.sh');
+    expect(images).toContain('--profile ${{ matrix.profile.id }}');
+    const guard = read(join(SMOKE_DIR, 'entrypoint-bypass-smoke.sh'));
+    expect(guard).toContain('--entrypoint /bin/bash');
+    // Both shell shapes a devcontainer produces, and the failure names the card.
+    expect(guard).toContain("check 'login shell' -lc");
+    // ⚠️ The second arm must be INTERACTIVE. Debian's stock ~/.bashrc opens
+    // with `case $- in *i*) ;; *) return;; esac`, so `bash -c '. ~/.bashrc'`
+    // returns before the line the image appends and the guard reports UNSET —
+    // blaming the product for the check's own shape. That is exactly what this
+    // guard did on its first CI run, with the login-shell arm passing beside it.
+    expect(guard).toContain("check 'interactive non-login shell' -ic");
+    // …and stdin stays open for it, while no `-t` is asked for: a CI runner has
+    // no tty, and bash needs none to run `-c`.
+    expect(guard).toContain('docker run --rm -i --entrypoint /bin/bash');
+    expect(guard).not.toContain('docker run --rm -it');
+    expect(guard).toContain('MOTIR-4956');
+    // It must demand the image-owned home, not merely a non-empty value: the
+    // read-only mount is a perfectly non-empty path and is the wrong answer.
+    expect(guard).toContain('EXPECTED_PREFIX=/home/node/.motir-sandbox/agent-config');
   });
 
   it('asserts the read-only login fails as ONE SENTENCE, never as a stack', () => {
@@ -633,18 +662,35 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
       // revert whatever main has learned since the tag was cut, so the checkout is
       // pinned to the branch the record belongs on.
       expect(readmeJob).toContain('ref: main');
-      expect(readmeJob).toContain('git push origin HEAD:main');
+      // It reaches `main` through a pull request rather than a direct push
+      // (MOTIR-3967): `main` carries a merge-queue ruleset that refuses one
+      // outright — `GH013 ... Changes must be made through the merge queue`.
+      expect(readmeJob).toContain('--base main');
+      expect(readmeJob).toContain('gh pr create');
+      expect(readmeJob).not.toContain('git push origin HEAD:main');
     });
 
-    it('holds contents: write and NO registry scope — it reads GHCR anonymously', () => {
-      expect(readmeJob).toContain('contents: write');
+    it('holds contents: READ and NO registry scope — it reads GHCR anonymously', () => {
+      // It held `contents: write` while it pushed to `main` with the automatic
+      // token. The branch push and the pull request are the App's now, so the
+      // automatic token needs no write at all and does not get one.
+      expect(readmeJob).toContain('contents: read');
+      expect(readmeJob).not.toContain('contents: write');
       expect(readmeJob).not.toContain('packages:');
       expect(readmeJob).not.toContain('docker/login-action');
     });
 
-    it('introduces no new secret — the job token is the whole credential', () => {
-      // Same posture as the publish half: nothing to provision, nothing to rotate.
-      expect([...readmeJob.matchAll(/secrets\.(\w+)/g)].map((m) => m[1])).toEqual([]);
+    it('introduces no NEW secret — it reuses the release App, provisioning nothing', () => {
+      // It used to name no secret at all, because the automatic token was the whole
+      // credential. That token cannot open a pull request here (the repository's
+      // "Allow GitHub Actions to create and approve pull requests" is off) and a
+      // pull request it pushed would run no checks, so it could never clear the
+      // merge queue. This job therefore borrows the App the release lane already
+      // provisions — the SAME two secrets, nothing to add and nothing more to
+      // rotate. Asserting the exact set is what keeps a third one from creeping in.
+      expect(
+        [...new Set([...readmeJob.matchAll(/secrets\.(\w+)/g)].map((m) => m[1]))].sort(),
+      ).toEqual(['RELEASE_APP_ID', 'RELEASE_APP_PRIVATE_KEY']);
     });
 
     it('names the SAME image repository the publish matrix pushes to', () => {
@@ -691,9 +737,18 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
       expect(readmeJob).toContain("if: ${{ steps.render.outputs.changed == 'true' }}");
     });
 
-    it('rebases onto a concurrent merge rather than forcing over it', () => {
-      expect(readmeJob).toContain('git pull --rebase origin main');
-      expect(readmeJob).not.toMatch(/push[^\n]*--force/);
+    it('never forces anything onto main — the only force is its own per-tag branch', () => {
+      // The rebase-and-retry loop this replaces was written for the race it named,
+      // a merge landing between checkout and push. A ruleset is not a race, so the
+      // loop could only burn three attempts and fail. What survives is the property
+      // it existed to protect: this lane must never force over `main`.
+      expect(readmeJob).not.toMatch(/push[^\n]*--force[^\n]*main\b(?!-)/);
+      expect(readmeJob).not.toContain('git pull --rebase origin main');
+      // The force it does use is confined to the branch that carries this tag's
+      // record, so a re-run updates that branch instead of opening a second
+      // pull request.
+      expect(readmeJob).toContain('git push --force origin "HEAD:${branch}"');
+      expect(readmeJob).toContain('branch="chore/sandbox-digests-${TAG}"');
     });
 
     it('leaves the README carrying the frame the next demotion needs', () => {

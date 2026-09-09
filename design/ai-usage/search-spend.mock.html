@@ -1090,6 +1090,16 @@
         color: var(--el-text-muted);
         font-weight: 400;
       }
+      /* MOTIR-4944 — the option NAME's rule, copied from
+         `design/org-admin/org-admin.mock.html` (and 2 more). This asset already
+         declares `.opt`, `.opt .ot` and `.opt .ot .od`: the DESCRIPTION line
+         truncated and the name line above it did not. */
+      .opt .ot .nm {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .opt svg.li {
         width: 15px;
         height: 15px;

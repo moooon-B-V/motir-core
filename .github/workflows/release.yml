@@ -125,8 +125,65 @@ jobs:
         env:
           HUSKY: '0'
 
+      # ⚠️ THE SYNC PUSH IS REFUSED WHILE THE VERSION PACKAGES PULL REQUEST IS
+      # QUEUED, AND THAT IS NOT AN ERROR (MOTIR-3967, first release through this
+      # lane). `changesets/action` keeps the pull request current by force-pushing
+      # `changeset-release/main`. `main` now carries a MERGE QUEUE rule, and GitHub
+      # refuses any update to a branch whose pull request is queued:
+      #
+      #   remote: error: GH006: Protected branch update failed for
+      #     refs/heads/changeset-release/main.
+      #   remote: - A pull request for this branch has been added to a merge queue.
+      #
+      # So ANY merge to `main` landing while the Version Packages pull request sits
+      # in the queue turned this whole lane red, for a sync that had nothing to add.
+      # That is a red run on `main` that means nothing — the signal that teaches
+      # people to stop reading this lane. Asking first, and skipping with a reason,
+      # is the honest shape.
+      #
+      # ⚠️ A residual race remains, deliberately not papered over: the pull request
+      # can be enqueued in the seconds between this query and the push, and that run
+      # still fails with GH006. It self-heals — the next push to `main` re-runs this
+      # lane and recomputes the pull request from whatever changesets `main` holds,
+      # so nothing is lost.
+      #
+      # ⚠️ What this does NOT fix, stated rather than left to be discovered: if a
+      # pull request carrying a NEW changeset merges while the Version Packages pull
+      # request is queued, that pull request merges WITHOUT the new bump. The
+      # changeset file survives on `main`, so the next release picks it up — nothing
+      # is lost, but the release that just went out is missing a bump it should have
+      # had and nothing says so. Closing that needs the queue itself to refuse the
+      # Version Packages pull request while unconsumed changesets exist, which is a
+      # bigger change than this one.
+      - name: Is the Version Packages pull request in the merge queue?
+        id: queued
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          state="$(gh api graphql \
+            -f query='query($owner:String!,$name:String!,$head:String!){
+              repository(owner:$owner,name:$name){
+                pullRequests(headRefName:$head, states:OPEN, first:1){
+                  nodes{ number mergeQueueEntry{ state } }
+                }
+              }
+            }' \
+            -F owner="${GITHUB_REPOSITORY%/*}" \
+            -F name="${GITHUB_REPOSITORY#*/}" \
+            -F head='changeset-release/main' \
+            --jq '.data.repository.pullRequests.nodes[0].mergeQueueEntry.state // "none"')"
+          echo "Version Packages pull request merge-queue state: ${state}"
+          if [ "$state" = 'none' ]; then
+            echo 'queued=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'queued=true' >> "$GITHUB_OUTPUT"
+            echo "::notice::The Version Packages pull request is in the merge queue (${state}), so its branch cannot be updated. Skipping the sync; the next push to main recomputes it."
+          fi
+
       - name: Keep the Version Packages pull request in sync
         id: changesets
+        if: steps.queued.outputs.queued == 'false'
         uses: changesets/action@v1
         with:
           # A `version` input and NO `publish` input: the three existing lanes
@@ -139,8 +196,14 @@ jobs:
       # just merged and the bumped versions are now on `main` — which is exactly
       # when the tags are owed. While changesets are still accumulating the step
       # is skipped, because the versions on `main` have not moved.
+      # Both halves are required. `hasChangesets` is EMPTY when the sync above was
+      # skipped for a queued pull request, and an empty string is not `'false'` —
+      # but naming the skip explicitly says what is meant rather than relying on
+      # that. A run that skipped the sync owes no tags: it is not the run in which
+      # the Version Packages pull request merged, and the run that IS will push
+      # them.
       - name: Push the version tags
-        if: steps.changesets.outputs.hasChangesets == 'false'
+        if: steps.queued.outputs.queued == 'false' && steps.changesets.outputs.hasChangesets == 'false'
         env:
           # `actions/checkout` already persisted this credential for `git push`;
           # it is set here as well so a reader of this step can see which token
