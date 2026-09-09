@@ -12,7 +12,7 @@ import type { GitProviderId } from '@/lib/git/types';
 // half this service is dispatched BY, so a value import would close a cycle. The
 // phase vocabulary lives there because that is where the ledger's result type
 // lives, and both halves must name the same three spans (MOTIR-4413).
-import type { IndexCorePhase } from '@/lib/services/codeGraphIndexService';
+import type { IndexCorePhase, IndexMode } from '@/lib/services/codeGraphIndexService';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   OrchestratorImageUnpullableError,
@@ -535,6 +535,26 @@ export interface IndexSession {
    * slot nothing could ever give back.
    */
   readonly slotRef: string;
+  /**
+   * WHETHER motir-ai GRANTED THIS RUN A SYNC (MOTIR-4945) — `true` when the boot
+   * was handed a `previousSnapshotUrl`, `false` when it was not.
+   *
+   * Carried on the SESSION for exactly the reason `slotRef` and
+   * `credentialExpiresAt` are: the grant is known at BOOT and the ledger row is
+   * written at SETTLE, minutes and often several invocations later, and the
+   * session is the only thing that crosses that boundary. A boolean living in a
+   * closure would be a boolean no replay could see.
+   *
+   * ⚠️ OPTIONAL, AND THAT IS NOT DEFENSIVENESS — IT IS THE ROLLOUT. This field
+   * lands in the `index-boot:<projectId>` memo, and every run already in flight
+   * holds a memo written before it existed. Those replay the OLD shape, so this
+   * arrives `undefined` for as long as they live, and a run in that state must
+   * report NO mode rather than a plausible one. Defaulting the absence to
+   * `rebuild` would be the worst available answer: it is the commoner mode, so
+   * the wrong value would look right, and the first measurement anybody takes of
+   * what a sync saves would be polluted by runs that never reported.
+   */
+  readonly syncGranted?: boolean;
   readonly attribution: {
     readonly orgId: string;
     readonly workspaceId: string;
@@ -696,6 +716,22 @@ export type IndexDispatchOutcome =
        * Absent when nothing could be computed — telemetry never fails a run.
        */
       coreTimings?: IndexCoreSpans;
+      /**
+       * WHAT THIS CONTAINER DID — `sync` or `rebuild` (MOTIR-4945).
+       *
+       * ⚠️ ATTACHED BESIDE {@link IndexDispatchOutcome.coreTimings}, by
+       * {@link codeGraphIndexDispatchService.advanceIndexContainer} AFTER the
+       * settle step returns, and for the same reason: the mode belongs to the
+       * DISPATCH, not to the teardown, so widening the `index-settle:<pid>` memo
+       * would freeze it into a `job_step` row whose shape in-flight runs already
+       * hold. It is re-derived on every pass from the memoized SESSION, which
+       * cannot disagree with itself.
+       *
+       * Absent when the session carries no grant — an in-flight run whose
+       * `index-boot` memo predates this card. Absent means UNKNOWN, never
+       * `rebuild`.
+       */
+      indexMode?: IndexMode;
     }
   /**
    * Teardown itself failed, so the container may still be running. Reported
@@ -1168,6 +1204,18 @@ export const codeGraphIndexDispatchService = {
         dispatchId: input.dispatchId,
         repoRef: input.repoRef,
         slotRef: admission.slotRef,
+        // MOTIR-4945 — the MODE, recorded at the only moment it is knowable.
+        //
+        // ⚠️ THE SAME PREDICATE THE SPEC BRANCHED ON, deliberately, and it must
+        // stay that way: `buildIndexSpec` above forwards `previousSnapshotUrl`
+        // under a TRUTHINESS test, so a falsy value means the container was NOT
+        // handed a snapshot and did NOT sync. Recording the mode off a different
+        // test (`!== undefined`, say) would let the ledger claim `sync` for a run
+        // that provably rebuilt — a wrong answer that no signal would ever
+        // contradict, on the one field this card exists to make trustworthy.
+        // `motirAiClient` already normalises an empty string to `undefined`, so
+        // today the two tests agree; this line does not depend on that.
+        syncGranted: Boolean(credential.previousSnapshotUrl),
         attribution: {
           orgId: input.organizationId,
           workspaceId: input.workspaceId,
@@ -1719,11 +1767,26 @@ export const codeGraphIndexDispatchService = {
       pollToDetect: indexPollWaitMs(result.pollNumber, options),
     });
 
+    // ── 9 · THE MODE (MOTIR-4945) ─────────────────────────────────────────────
+    // Read off the `index-boot:<projectId>` MEMO, which every pass replays
+    // identically — so this is the same derivation on the pass that did the work
+    // and on every pass that follows it.
+    //
+    // ⚠️ `undefined` PROPAGATES AS `undefined`. A session whose memo predates
+    // this card carries no `syncGranted`, and the honest report is then NO mode
+    // at all. Collapsing that to `rebuild` would be indistinguishable from a run
+    // that really did rebuild, which is exactly the ambiguity this field exists
+    // to remove.
+    const indexMode: IndexMode | undefined =
+      session.syncGranted === undefined ? undefined : session.syncGranted ? 'sync' : 'rebuild';
+
     // ⚠️ ONLY THE `settled` ARM CARRIES THEM, and the guard is a type narrowing
     // rather than a check: the other outcomes are dispatches that never ran a
     // container, so spans over them would describe a boot that did not happen.
+    // The mode rides the same arm for the same reason — a dispatch that never
+    // booted has no mode, not `rebuild`.
     return result.outcome.outcome === 'settled'
-      ? { ...result.outcome, coreTimings }
+      ? { ...result.outcome, coreTimings, ...(indexMode ? { indexMode } : {}) }
       : result.outcome;
   },
 
