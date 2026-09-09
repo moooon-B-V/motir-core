@@ -11,6 +11,7 @@ import type { JobContext } from './defineJob';
 import type { JobServices } from './services';
 import type {
   IndexCoreTimings,
+  IndexModeRecord,
   IndexRepoInput,
   IndexRepoResult,
   IndexTarget,
@@ -237,9 +238,15 @@ export async function runIndexFleetSteps(
   // an index that ran must never fail because a field write did not.
   const headAtStart = await claimIndexingRepo(ctx, target.repoRef);
 
-  const coreTimings = await indexEveryProject(ctx, services, input, target, dispatchId);
+  const { coreTimings, indexModes } = await indexEveryProject(
+    ctx,
+    services,
+    input,
+    target,
+    dispatchId,
+  );
 
-  const result = await finishIndexRun(ctx, services, input, target, coreTimings);
+  const result = await finishIndexRun(ctx, services, input, target, coreTimings, indexModes);
   await settleIndexingRepo(target.repoRef, headAtStart);
   return result;
 }
@@ -278,7 +285,7 @@ async function indexEveryProject(
   target: Extract<IndexTarget, { indexed: true }>,
   /** See its definition in {@link runIndexFleetSteps} — the cross-pass identity. */
   dispatchId: string,
-): Promise<IndexCoreTimings[]> {
+): Promise<{ coreTimings: IndexCoreTimings[]; indexModes: IndexModeRecord[] }> {
   const steps = stepSeam(ctx);
 
   // ⚠️ RE-DERIVED PER PASS, NEVER ACCUMULATED ACROSS THEM (MOTIR-4413). This
@@ -294,6 +301,10 @@ async function indexEveryProject(
   // silently report the last pass's fragment in production, where a supervision
   // spans dozens of runs.
   const coreTimings: IndexCoreTimings[] = [];
+  // MOTIR-4945 — the same discipline, one array over: LOCAL, rebuilt from the
+  // memoized sessions on every pass, discarded on all but the last. See the note
+  // above for why being local is what makes it safe.
+  const indexModes: IndexModeRecord[] = [];
 
   for (const projectId of target.projectIds) {
     const dispatchInput = {
@@ -354,9 +365,20 @@ async function indexEveryProject(
     if (outcome.coreTimings && Object.keys(outcome.coreTimings.phasesMs).length > 0) {
       coreTimings.push({ projectId, ...outcome.coreTimings });
     }
+
+    // ⚠️ COLLECTED SEPARATELY FROM THE SPANS, AND NOT UNDER THEIR GUARD
+    // (MOTIR-4945). The block above drops a container whose `phasesMs` came back
+    // empty, because a row saying only "these spans are unknown" is noise. The
+    // MODE is not a span: it comes from the boot memo rather than from clock
+    // arithmetic, so it is knowable in exactly the case that discards the
+    // timings. Sharing their guard would lose the mode whenever a clock went
+    // backwards — which has nothing to do with whether the run synced.
+    if (outcome.indexMode) {
+      indexModes.push({ projectId, mode: outcome.indexMode });
+    }
   }
 
-  return coreTimings;
+  return { coreTimings, indexModes };
 }
 
 /**
@@ -370,6 +392,8 @@ async function finishIndexRun(
   target: Extract<IndexTarget, { indexed: true }>,
   /** The per-container core-side spans this run re-derived (MOTIR-4413). */
   coreTimings: IndexCoreTimings[],
+  /** The per-container sync/rebuild modes this run re-derived (MOTIR-4945). */
+  indexModes: IndexModeRecord[],
 ): Promise<IndexRepoResult> {
   void services;
   // CANCEL any pending code-graph offboarding for this repo (MOTIR-2166 ·
@@ -424,6 +448,12 @@ async function finishIndexRun(
     repoRef: target.repoRef,
     projectsIndexed: target.projectIds.length,
     ...(coreTimings.length > 0 ? { coreTimings } : {}),
+    // MOTIR-4945 — a FIFTH key, spread in on the same terms as the fourth: §6's
+    // three fields are untouched, and this one is absent entirely on a run that
+    // could not determine a mode. That absence is what keeps a deployment
+    // mid-rollout honest — runs whose `index-boot` memo predates this card
+    // produce exactly the row they produced before.
+    ...(indexModes.length > 0 ? { indexModes } : {}),
   };
 }
 

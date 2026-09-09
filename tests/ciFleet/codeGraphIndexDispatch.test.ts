@@ -1738,3 +1738,143 @@ describe('the CORE-side phase spans survive a JobRunDefer (MOTIR-4413)', () => {
     expect(timings?.totalMs).toBe(timings?.phasesMs.pollToDetect);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SYNC / REBUILD MODE (MOTIR-4945) — `docs/decisions/code-graph-index-fleet.md` §6
+//
+// ⚠️ THE PROPERTY UNDER TEST IS SURVIVAL, exactly as it is for the spans above,
+// and for a sharper reason. The mode is known at BOOT — `previousSnapshotUrl` is
+// in hand when the spec is built — and it is written at SETTLE, minutes and
+// several invocations later. Nothing in between re-derives it from the world, so
+// the only thing carrying it is the `index-boot:<projectId>` memo. A boolean held
+// in a closure would pass a single-pass test and be `undefined` in production on
+// the second pass, which is the pass that writes the ledger row.
+//
+// So these tests drive MORE THAN ONE PASS through `driveToSettlement`, whose step
+// seam JSON-round-trips every memo — a value that survives only because it stayed
+// in memory fails here rather than in production.
+//
+// ⚠️ THE FAKE CLOCK IS DATED IN THE PAST, and it is not arbitrary. The supervision
+// runs on `clock.ms`, but `credentialResponse` mints `expiresAt` from the REAL
+// `Date.now()` — so a fake clock set to "today" puts the container deadline
+// (`clock.ms + indexTimeoutMs`) BEYOND a credential minted now, and every boot
+// dies on MOTIR-4923's run-credential floor before reaching what is under test.
+// The date matches the span tests above for exactly this reason; keep it behind
+// the wall clock.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A credential response that GRANTS the sync — motir-ai offering a snapshot.
+ *
+ * The TTL is the same default {@link credentialResponse} serves, so a run driven
+ * through here still clears the run-credential floor MOTIR-4923 installed rather
+ * than passing because this suite quietly handed it a different clock.
+ */
+function credentialResponseWithSnapshot(): Response {
+  return json(201, {
+    credential: RUN_CREDENTIAL,
+    expiresAt: new Date(Date.now() + AI_DEFAULT_TTL_SECONDS * 1000).toISOString(),
+    previousSnapshotUrl: SNAPSHOT_URL,
+  });
+}
+
+describe('the sync/rebuild MODE survives a JobRunDefer (MOTIR-4945)', () => {
+  it('records `rebuild` when motir-ai offered NO snapshot', async () => {
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const { outcome, passes } = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    // The supervision really was a state machine over runs, not one call — the
+    // same guard the span tests carry, and for the same reason.
+    expect(passes).toBeGreaterThan(1);
+    expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+    expect((outcome as Extract<typeof outcome, { outcome: 'settled' }>).indexMode).toBe('rebuild');
+  });
+
+  it('records `sync` when motir-ai DID offer one — the same value the spec branched on', async () => {
+    credentialResponder = credentialResponseWithSnapshot;
+
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const { outcome, passes } = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    expect(passes).toBeGreaterThan(1);
+    expect((outcome as Extract<typeof outcome, { outcome: 'settled' }>).indexMode).toBe('sync');
+
+    // ⚠️ AND THE MODE AGREES WITH WHAT THE CONTAINER WAS ACTUALLY HANDED. This is
+    // the assertion that makes the field trustworthy rather than merely present:
+    // the ledger may not claim `sync` for a run that was given no snapshot to
+    // sync against, so the recorded mode is checked against the environment the
+    // boot really produced, not against the response we stubbed.
+    const booted = fakeOrchestrator.specs.at(-1);
+    expect(booted?.env['MOTIR_INDEX_SNAPSHOT_URL']).toBe(SNAPSHOT_URL);
+  });
+
+  it('a LATER pass re-derives the SAME mode — it is not lost by the pass that reads it', async () => {
+    credentialResponder = credentialResponseWithSnapshot;
+
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const settled = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+    expect(
+      (settled.outcome as Extract<typeof settled.outcome, { outcome: 'settled' }>).indexMode,
+    ).toBe('sync');
+
+    // ── THE REPLAY PASS ──────────────────────────────────────────────────────
+    // An hour later, answering entirely from the memo — and, critically, with the
+    // credential endpoint now REFUSING to offer a snapshot. A mode re-minted from
+    // the world on this pass would come back `rebuild`; one read off the boot memo
+    // comes back `sync`, which is what actually happened.
+    credentialResponder = credentialResponse;
+    clock.ms += 3_600_000;
+    const replayed = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    expect(replayed.passes).toBe(1);
+    expect(
+      (replayed.outcome as Extract<typeof replayed.outcome, { outcome: 'settled' }>).indexMode,
+    ).toBe('sync');
+  });
+
+  it('OMITS the mode — never guesses `rebuild` — when the boot memo predates this card', async () => {
+    // ⚠️ THE REAL CASE THIS COVERS IS A DEPLOYMENT MID-ROLLOUT, not a defensive
+    // hypothetical, and it is the one arm where a wrong answer would be invisible.
+    // A run already in flight holds an `index-boot:<pid>` memo written in the OLD
+    // shape — no `syncGranted` — and replays it for the rest of its life. If the
+    // absence collapsed to `rebuild`, those runs would report the COMMONER mode,
+    // so every wrong row would look exactly right, and the first measurement
+    // anybody takes of what a sync saves would be quietly polluted.
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    // Drive once to obtain a REAL boot memo, then strip the new field from it —
+    // so the seeded row is the genuine old shape rather than one hand-written to
+    // match today's expectations.
+    const first = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+    expect((first.outcome as Extract<typeof first.outcome, { outcome: 'settled' }>).indexMode).toBe(
+      'rebuild',
+    );
+
+    const bootKey = `index-boot:${INPUT.projectId}`;
+    const booted = memo.get(bootKey) as { session?: Record<string, unknown> } | undefined;
+    expect(booted?.session).toHaveProperty('syncGranted');
+    delete booted!.session!.syncGranted;
+
+    const replayed = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    // The run SETTLED. Nothing threw, and the verdict is untouched — a ledger
+    // field may never fail a run.
+    expect(replayed.outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+    // And the mode is ABSENT, not `rebuild`. Absent means UNKNOWN.
+    const out = replayed.outcome as Extract<typeof replayed.outcome, { outcome: 'settled' }>;
+    expect(out).not.toHaveProperty('indexMode');
+    // The spans beside it are unaffected — the two channels are independent.
+    expect(out.coreTimings).toBeDefined();
+  });
+});
