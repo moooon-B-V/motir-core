@@ -314,6 +314,9 @@ model User {
   // audit-not-ownership semantics as `approvedAcceptanceEvidences`. Modelled on
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   withdrawnDesignEvidences         DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
+  /// Approval gates this user decided (the audit's "who", ADR §6a). `SetNull` on
+  /// the gate keeps the row — the back-relation is the inverse of that.
+  approvalGates                   ApprovalGate[]
   requestedPlans                   Plan[]                    @relation("PlanCreatedBy")
   // Plan CONTENT mutations this user made (Story MOTIR-3532 · MOTIR-3535) — the
   // append-only trail beside the plan's own three party columns. SetNull on the
@@ -1081,6 +1084,8 @@ model Workspace {
   // workspace, like every other tenanted lifecycle row.
   designEvidences             DesignEvidence[]
   designAssets                DesignAsset[]
+  /// Approval gates scoped to this workspace (the routing read's tenancy half).
+  approvalGates               ApprovalGate[]
   boards                      Board[]
   boardColumns                BoardColumn[]
   boardColumnStatuses         BoardColumnStatus[]
@@ -1600,6 +1605,9 @@ model Project {
   primaryAddressId String?         @map("primary_address_id")
   primaryAddress   PublicAddress?  @relation("ProjectPrimaryAddress", fields: [primaryAddressId], references: [id], onDelete: SetNull)
   publicAddresses  PublicAddress[] @relation("ProjectPublicAddresses")
+  /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
+  /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
+  approvalGates     ApprovalGate[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -2256,6 +2264,8 @@ model WorkItem {
   // it (docs/decisions/design-result.md §3), so this relation hangs off every
   // leaf, not only stories. Cascade with the item.
   designEvidences      DesignEvidence[]
+  /// Approval gates hanging off this card (the per-card read).
+  approvalGates        ApprovalGate[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
@@ -4091,6 +4101,95 @@ model DesignAsset {
   /// The panel read: one result's assets in render order.
   @@index([designEvidenceId, position])
   @@map("design_asset")
+}
+
+/// Which vocabulary of decision verbs a gate carries (the approval-gate ADR
+/// `docs/decisions/approval-gates.md` §1, Story MOTIR-4778 · Subtask MOTIR-4788).
+/// A Prisma enum rather than free text so the registry that dispatches on it is
+/// TOTAL over its values and a compiler can prove a third kind cannot ship
+/// half-wired. MOTIR-4790's registry registers ONE handler (`design_result`)
+/// and carries deliberate compile-time holes for the other three.
+enum ApprovalGateKind {
+  /// A design result (mock + notes + screenshot) with NO pull request — approve
+  /// is TERMINAL and writes `done` (Workflow A).
+  design_result
+  /// An agent-proposed decision DOC with NO pull request — approve accepts the
+  /// agent's proposed decision.
+  decision_approval
+  /// A pull request's APPROVAL (the code was approved), any card WITH a PR. May
+  /// be decided in Motir or synced from a GitHub review.
+  pull_request_approval
+  /// A pull request's MERGE — recorded when the host webhook lands the merge;
+  /// the gate that the `pull_request_approval` decision caused.
+  pull_request_merge
+
+  @@map("approval_gate_kind")
+}
+
+/// Where a gate's decision stands (the ADR §6b). `awaiting` is written by the
+/// product when the subject appears; `approved` / `changes_requested` by a
+/// person; `superseded` by the product when the subject is superseded — a
+/// withdrawn question that carries no actor, no permission and no note, so the
+/// audit can never read it as a human decision.
+enum ApprovalGateState {
+  awaiting
+  approved
+  changes_requested
+  superseded
+
+  @@map("approval_gate_state")
+}
+
+/// An APPROVAL GATE — one row per decision that holds work up, the
+/// human-in-the-loop evidence an agent-driven pipeline owes an auditor (ADR
+/// §6a). BASE record (MOTIR-4788): the subject, the kind, the state, who
+/// decided it and when, and the note. The AUDIT columns (the immutable subject
+/// version, the surviving actor label, the routed-to, the permission, the
+/// source, the outcome) and the immutability guard land in a sibling
+/// `blocked_by` this card — adding them here would re-cross the estimation gate
+/// the epic-wide re-plan split along.
+///
+/// EAGER: a row is written when its subject appears (the design-result publish
+/// or the `link_pull_request` call), not derived on read — the partial unique
+/// index over the `awaiting` state and the decide door's `SELECT … FOR UPDATE`
+/// both need a row to lock. A derived model is the eager model minus its index
+/// and its lock.
+///
+/// `subjectId` is a polymorphic id (a `DesignEvidence` id; a pull-request
+/// delivery id; …) resolved by the registry handler for its `kind`, NOT an FK —
+/// the subject's table depends on the kind, and a polymorphic FK is worse than
+/// none. RLS is a pure active-workspace gate (`ENABLE` + `FORCE`, no
+/// `app.system_admin` hatch), mirroring `design_evidence` / `acceptance_evidence`.
+model ApprovalGate {
+  id          String            @id @default(cuid())
+  workspaceId String            @map("workspace_id")
+  projectId   String            @map("project_id")
+  /// The card the gate hangs off — the join every read and every surface uses.
+  workItemId  String            @map("work_item_id")
+  /// Which vocabulary of verbs applies (ADR §1).
+  kind        ApprovalGateKind
+  /// What is being decided — resolved by the registry handler for `kind`.
+  subjectId   String            @map("subject_id")
+  state       ApprovalGateState @default(awaiting)
+  /// WHO decided. `SetNull` so a departing member loses attribution, never the
+  /// record that a decision happened (mirrors `WorkItemTodo.doneById`).
+  decidedById String?           @map("decided_by_id")
+  decidedAt   DateTime?         @map("decided_at")
+  /// Why they said yes, or what they sent back. Free text, not an enum.
+  noteMd      String?           @map("note_md") @db.Text
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  decidedBy User?     @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+
+  /// The routing read: a workspace's gates by state (whose Approvals tab).
+  @@index([workspaceId, state])
+  /// The per-card read: every gate on one work item.
+  @@index([workItemId])
+  @@map("approval_gate")
 }
 
 /// A comment on a work item (Story 5.1 · Subtask 5.1.1) — the Activity
