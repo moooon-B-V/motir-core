@@ -360,6 +360,58 @@ describe('the credential tiers', () => {
     expect(readme).toMatch(/\*\*Optional\*\*, read-only/);
   });
 
+  it('makes EVERY devcontainer variant run the agent-config setup (MOTIR-4956)', () => {
+    // `overrideCommand: true` replaces the image's ENTRYPOINT as well as its
+    // CMD, so a devcontainer never ran `motir-sandbox-entrypoint` and the agent
+    // was handed an unset CLAUDE_CONFIG_DIR — a read-only `~/.claude` it could
+    // neither read a credential from nor sign in to. `postStart` rather than
+    // `postCreate`: it must also run when a STOPPED container is restarted,
+    // which is the case MOTIR-4959's idempotency work makes safe.
+    //
+    // In the same loop as `remoteEnv` above, deliberately: a profile added later
+    // cannot ship without it.
+    const variants = [
+      'devcontainer.json',
+      ...PROFILE_IDS.map((id) => join(id, 'devcontainer.json')),
+    ];
+    expect(variants).toHaveLength(9);
+    for (const relative of variants) {
+      const variant = JSON.parse(
+        readFileSync(join(SANDBOX_DIR, 'devcontainer', relative), 'utf8'),
+      ) as { postStartCommand?: string; overrideCommand?: boolean };
+      expect(variant.postStartCommand, `${relative} must run the setup`).toContain(
+        'motir-sandbox-agent-config',
+      );
+      // And it STAYS `true`: the image's `CMD ["bash", "-l"]` exits, so dropping
+      // it trades a container nobody can sign in to for one that will not stay
+      // up. The fix is the postStartCommand, never removing this.
+      expect(variant.overrideCommand, `${relative} still needs overrideCommand`).toBe(true);
+    }
+  });
+
+  it('keeps the guide constant and the shipped recipes on the SAME command string', () => {
+    // lib/apiDocs/sandbox.ts is the guide of record the sandbox smoke asserts
+    // against (assert-commands.mjs's DEFAULT_GUIDE_PATH), and no route renders
+    // it any more — which is exactly what makes it easy to leave behind. Two
+    // spellings of the same command would publish one recipe and test another.
+    const base = JSON.parse(read(join('devcontainer', 'devcontainer.json'))) as {
+      postStartCommand?: string;
+    };
+    // Read as TEXT rather than imported: packages/cli does not depend on the
+    // app's lib/, and the repo's other guide guards read it the same way.
+    const guideSource = readFileSync(
+      join(SANDBOX_DIR, '..', '..', '..', 'lib', 'apiDocs', 'sandbox.ts'),
+      'utf8',
+    );
+    const guideLine = /"postStartCommand":\s*"([^"]*)"/.exec(guideSource)?.[1];
+    expect(guideLine, 'the guide constant must carry a postStartCommand').toBeDefined();
+    expect(guideLine).toBe(base.postStartCommand);
+    // `|| true` so an older pinned `:<profile>-<version>` image, which has no
+    // such command on PATH, still starts. The image's own login-shell hook is
+    // what covers that container instead.
+    expect(base.postStartCommand).toContain('|| true');
+  });
+
   it('forwards the env tier into every devcontainer variant too', () => {
     // `remoteEnv` is the devcontainer analogue of compose's `environment:` — a
     // variant without it is the one shape of this image that still demands a
