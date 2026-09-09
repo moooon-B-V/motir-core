@@ -558,13 +558,14 @@ assets touched in one pass disagreed about whether the grouping existed.
   `GithubIdentity` moved to the account tier (MOTIR-4675, `design/settings/`).
 - **The inventory table** is the substantive addition — one row per connected repository:
 
-  | column      | content                                                                                                                                         |
-  | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-  | Repository  | repo glyph + `owner/name`, owner in `--el-text-secondary` (see the ink note below)                                                              |
-  | Provider    | the provider mark + label — the inventory spans both, so the pressed Segmented does not answer this                                             |
-  | Index       | a `Pill` in **all four** states: **Indexed** (mint, check) · **Stale** (peach, clock) · **Indexing…** (sky, dots) · **Never indexed** (neutral) |
-  | Used by     | **`Used by N projects`**, drawn AT REST                                                                                                         |
-  | _(actions)_ | **`Disconnect`** on both providers, with the VENUE on a second line — `happens on GitHub` / `happens here`                                      |
+  | column        | content                                                                                                                                                                                                 |
+  | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Repository    | repo glyph + `owner/name`, owner in `--el-text-secondary` (see the ink note below)                                                                                                                      |
+  | Provider      | the provider mark + label — the inventory spans both, so the pressed Segmented does not answer this                                                                                                     |
+  | _(ownership)_ | a neutral `Pill` reading **`Hosted by Motir`**, drawn ONLY for a repository under the provisioning organisation. Head cell EMPTY. See the ownership note below                                          |
+  | Index         | a `Pill` in **all four** states: **Indexed** (mint, check) · **Stale** (peach, clock) · **Indexing…** (sky, dots) · **Never indexed** (neutral)                                                         |
+  | Used by       | **`Used by N projects`**, drawn AT REST                                                                                                                                                                 |
+  | _(actions)_   | **`Disconnect`** with the VENUE on a second line — `happens on GitHub` / `happens here` — on both providers, and **WITHHELD ENTIRELY for a repository Motir hosts**. See the withheld-action note below |
 
 - **⚠️ THE FOURTH STATE READS `Indexed`, NOT `Current` (MOTIR-4831, amending this asset for
   MOTIR-4817).** It said `Current` when this surface was drawn, and the product no longer renders
@@ -575,6 +576,72 @@ assets touched in one pass disagreed about whether the grouping existed.
 
   What is amended is one label. `Stale` · `Indexing…` · `Never indexed` are untouched, and so is
   every tone, glyph and column beside them.
+
+- **⚠️ WHOSE THE REPOSITORY IS, SAID ON THE ROW — the `Hosted by Motir` chip (MOTIR-4892 shipped it;
+  MOTIR-4900 amends this asset to record it).** A repository MOTIR hosts is legitimately in this
+  inventory — the organisation's projects dispatch into it and it carries the organisation's tenancy
+  on purpose (MOTIR-1931, MOTIR-4649) — but the row drew `owner/name`, a provider, an index state
+  and a usage count and nothing else, so telling it apart from a repository the organisation
+  CONNECTED required knowing `provisioningOrgLogin()`'s value by heart. Under a card heading reading
+  _"Every repository connected to this organisation"_, silence is a claim, and on this row the claim
+  is about whose property it is.
+  - **It is a neutral `Pill`, not a tint, and that is NOT re-decided here.**
+    `design/repository-set/design-notes.md` **§17.3** rules it for `already indexed · shared`: a
+    per-row marker of this kind is _"a **neutral chip**, not a tint: a fact about the repository,
+    not a step in a flow."_ Ownership is exactly such a fact. Tones `--el-chip-bg` /
+    `--el-chip-border` / `--el-text-secondary`, radius `--radius-badge`, padding `--spacing-chip-*`
+    — the same treatment `Never indexed` already uses in the Index column, so no new tone and no new
+    primitive.
+  - **The words are the room's, verbatim.** `github.inventory.hostedByMotir` = **`Hosted by Motir`**
+    (`zh`: 由 Motir 托管), the same string `repositoryTakeover.hostedHeading` uses one tier down in
+    `design/repository-set/`. One noun for one fact, across both surfaces.
+  - **Position: between Provider and Index**, because ownership reads ahead of freshness — _whose is
+    this_ before _how current is its graph_. It has its OWN grid track with an **empty head cell**,
+    the convention the actions column already uses for a per-row affordance that needs no label.
+    **A track, not a shared cell, and the cost is measured, not assumed:** the row is a grid so the
+    columns cannot drift (below), and a conditional chip folded into a neighbouring cell would
+    either take the Index head's label or push the repository name below its floor. The sixth track
+    is **108px + one 12px gap**, and the panel shell widens **1112px → 1232px** to pay for it — the
+    same content column plus 120px, with the name column keeping the slack it had. The earlier
+    sentence _"the inventory is a five-column table and does not shrink to make room"_ is amended by
+    exactly this: it is a **six**-column table now, and it still does not shrink.
+    **⚠️ AND THE BOARD'S EXPORT VIEWPORT MOVED WITH IT, 1200 → 1320.** The five-track table sat at
+    exactly the tree's ~1200px render convention with nothing to spare (1112 + the board's 80px
+    padding = 1192), so the sixth track could not be free: at 1200 the grid overflowed its own
+    viewport and the export became a capture of a horizontally scrolling board. `github.png` is
+    re-exported at **1320 × 2x** — `node scripts/render-design-mock.mjs --width 1320
+design/github/github.mock.html` — and the exporter recovers that width from the committed PNG
+    from here on, so a later re-export needs no flag. The measurement is the finding, not a
+    footnote: **adding a column to a table already at its board's width budget costs board width**,
+    and paying it in the export is honest where squeezing the repository name would not have been.
+  - **It is drawn ONLY for a repository under the provisioning organisation** (`repo.hostedByMotir`).
+    Every other row leaves the cell empty — the chip is a marked exception, not a column every row
+    fills in.
+
+- **⚠️ AND A REPOSITORY MOTIR HOSTS CARRIES NO REMOVAL CONTROL AT ALL — `Disconnect` is WITHHELD,
+  not disabled (MOTIR-4892; recorded here by MOTIR-4900).** The `_(actions)_` row above used to read
+  _"`Disconnect` on both providers"_, unqualified. That is now false, and false in the direction
+  that offers an act the product cannot perform.
+  - **The rule is `design/repository-set/` §16.6's, applied one tier up:** _"a control that cannot
+    keep its promise is worse than its absence"_ — the same rule the room applies to a `domain`
+    entry, and the reason a mirror row with no takeover to offer is subtracted from the hosted
+    section rather than drawn with a dead affordance.
+  - **What made the promise unkeepable.** `manageOnGithubHref` is computed ONCE for the page from
+    the organisation's sole installation and handed to every row — right for an organisation-wide
+    affordance, wrong for a PER-ROW act, and indistinguishable from correct for as long as every row
+    belongs to the same installation. A repository Motir hosts does not: it sits under the SHARED
+    provisioning installation, which names no organisation on purpose because it spans tenants. So
+    `Continue on GitHub ↗` sent the reader to their own installation screen, where the repository
+    does not appear and nothing they do there can disconnect it.
+  - **And `Disconnect` is the WRONG ACT for this row, not merely an unreachable one.** A repository
+    Motir hosts is handed over by the **TAKEOVER** (MOTIR-711), per row, from the project's own
+    Repositories settings — `design/repository-set/` owns that surface. The service refuses the
+    disconnect on the same grounds and names that act, so a caller that never rendered this page
+    gets the same answer.
+  - **Withheld, never disabled.** A disabled control is a promise the product then refuses
+    (`design/repository-set/` §17.5 makes the same call for the add affordance). The cell is empty,
+    and the `Hosted by Motir` chip on the same row is what turns that absence into an answer — which
+    is the second reason the chip and the withheld action are one amendment rather than two.
 
 - **⚠️ THE LABEL NAMES THE ACT; A SECOND LINE NAMES THE VENUE. `Remove on GitHub` was WRONG, and
   wrong in the dangerous direction (Yue, 2026-09-05).** It reads as _"delete the repository FROM
@@ -589,6 +656,11 @@ assets touched in one pass disagreed about whether the grouping existed.
   | ---------- | -------------- | ------------------- |
   | **GitHub** | `Disconnect` ↗ | `happens on GitHub` |
   | **GitLab** | `Disconnect`   | `happens here`      |
+
+  **⚠️ This table is the shape of the action WHERE THERE IS ONE.** It is read against the row above
+  it, not on its own: a repository Motir hosts draws neither cell (the withheld-action note above,
+  MOTIR-4892 / MOTIR-4900). The provider axis decides the venue; the OWNERSHIP axis decides whether
+  the control exists at all, and the two are independent.
 
   Three things follow, and each is a reason the split is better than a re-word:
   - **`happens on GitHub` cannot be misread as an object.** "Happens" names where the ACT occurs;
@@ -625,8 +697,13 @@ assets touched in one pass disagreed about whether the grouping existed.
   forbids.
 - **Layout.** The row is a **CSS grid**, not a flex row, and the head shares the same template. A
   flex item's `min-width` is `auto`, so an over-long button in a later column silently steals from
-  the repository name; the grid gives the name column a floor. The shell is drawn at **1100px** —
-  the same settings shell as Panels 1–2 measured at a desktop width, not a different one.
+  the repository name; the grid gives the name column a floor. **⚠️ RE-MEASURED (MOTIR-4900): six
+  tracks, and the shell is drawn at 1232px.** The template is
+  `minmax(178px, 1fr) 80px 108px 120px 166px 146px` with a 12px gap — the ownership track is the
+  108px one, third, between Provider and Index. It said **1100px** and five tracks before the
+  ownership chip existed; the shell grew by exactly the new track plus its gap, so every other
+  column keeps the width it was measured at and the name column keeps the same slack. It is still
+  the same settings shell as Panels 1–2, measured at a desktop width, not a different one.
 - **⚠️ Ink — the one place this amendment deliberately differs from Panel 2.** The inventory row's
   owner segment is **`--el-text-secondary`**, where `repo-row .r-owner` two panels up is
   `--el-text-muted`. The difference is the **hover tint**, not a style choice: the inventory row
@@ -669,19 +746,20 @@ assets touched in one pass disagreed about whether the grouping existed.
 
 ### Per-element `--el-*` roles added by this amendment
 
-| Element                                       | Token(s)                                                                                                                                                                |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| provider `Segmented` track / option / pressed | `--el-tabnav-track` · `--el-text-secondary` · pressed `--el-page-bg` + `--el-text-strong` + `--shadow-subtle`, glyph `--el-tabnav-active`                               |
-| inventory head row                            | `--el-text-eyebrow` on `--el-card`, rule `--el-border-soft`                                                                                                             |
-| inventory row · its hover tint                | `--el-card` → `--el-surface` on hover; rule `--el-border-soft`                                                                                                          |
-| repository name · owner segment               | `--el-text` · **`--el-text-secondary`** (never `--el-text-muted` — the hover tint, above)                                                                               |
-| index-state pills                             | `--el-tint-mint` / `--el-tint-peach` / `--el-tint-sky` + `--el-text-strong`; _Never indexed_ is the neutral `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary` |
-| `Used by N projects` control + its chevron    | `--el-text-secondary` · glyph `--el-icon-muted`                                                                                                                         |
-| project chips (expanded)                      | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, radius `--radius-badge`, padding `--spacing-chip-*`                                                        |
-| org-removal row action                        | the shipped danger-ghost: text `--el-danger` on border `--el-border`                                                                                                    |
-| disclosure card                               | `--el-card` / `--el-border` / `--radius-card` / `--shadow-elevated`; foot `--el-surface-soft`                                                                           |
-| disclosure fact rows                          | glyph `--el-icon-muted`, body `--el-text-secondary`, emphasis `--el-text`                                                                                               |
-| disclosure primary action                     | fill `--el-accent` · ink `--el-accent-text`                                                                                                                             |
+| Element                                       | Token(s)                                                                                                                                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| provider `Segmented` track / option / pressed | `--el-tabnav-track` · `--el-text-secondary` · pressed `--el-page-bg` + `--el-text-strong` + `--shadow-subtle`, glyph `--el-tabnav-active`                                                               |
+| inventory head row                            | `--el-text-eyebrow` on `--el-card`, rule `--el-border-soft`                                                                                                                                             |
+| inventory row · its hover tint                | `--el-card` → `--el-surface` on hover; rule `--el-border-soft`                                                                                                                                          |
+| repository name · owner segment               | `--el-text` · **`--el-text-secondary`** (never `--el-text-muted` — the hover tint, above)                                                                                                               |
+| ownership chip (`Hosted by Motir`)            | the neutral `Pill`: `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, radius `--radius-badge`, padding `--spacing-chip-*` — identical to _Never indexed_, per `design/repository-set/` §17.3 |
+| index-state pills                             | `--el-tint-mint` / `--el-tint-peach` / `--el-tint-sky` + `--el-text-strong`; _Never indexed_ is the neutral `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`                                 |
+| `Used by N projects` control + its chevron    | `--el-text-secondary` · glyph `--el-icon-muted`                                                                                                                                                         |
+| project chips (expanded)                      | `--el-chip-bg` / `--el-chip-border` / `--el-text-secondary`, radius `--radius-badge`, padding `--spacing-chip-*`                                                                                        |
+| org-removal row action                        | the shipped danger-ghost: text `--el-danger` on border `--el-border`                                                                                                                                    |
+| disclosure card                               | `--el-card` / `--el-border` / `--radius-card` / `--shadow-elevated`; foot `--el-surface-soft`                                                                                                           |
+| disclosure fact rows                          | glyph `--el-icon-muted`, body `--el-text-secondary`, emphasis `--el-text`                                                                                                                               |
+| disclosure primary action                     | fill `--el-accent` · ink `--el-accent-text`                                                                                                                                                             |
 
 Shape flows only through element-semantic tokens (`--radius-card` / `--radius-badge` /
 `--radius-control` / `--radius-btn`; `--spacing-card-padding` / `--spacing-control-*` /
@@ -690,7 +768,8 @@ Shape flows only through element-semantic tokens (`--radius-card` / `--radius-ba
 
 ### Primitives composed — still no new design-system entry
 
-`Card` · `Pill` (existing `status` / `severity` / `tone` axes only) · `Button`
+`Card` · `Pill` (existing `status` / `severity` / `tone` axes only — the `Hosted by Motir` ownership
+chip is `Pill tone="neutral"`, the same treatment `Never indexed` already uses) · `Button`
 (`primary` / `secondary` / `ghost` / danger-ghost) · `Segmented` (via `GitSettingsShell`'s
 `ProviderSwitch`) · `SectionLabel` · the settings-area shell. The inventory table is a composition
 of `Card` + rows, not a new primitive; the disclosure is `Card` + `Button`s, not a new dialog
