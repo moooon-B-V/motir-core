@@ -114,6 +114,7 @@ export type PersonalDataDelegate =
   | 'planChangeTurn'
   | 'planChangeMailboxEntry'
   | 'workItemTodo'
+  | 'approvalGate'
   | 'planRevision';
 
 const byUserId = (userId: string) => ({ userId });
@@ -488,6 +489,19 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     // personal data whatever the row is otherwise about.
     basis: 'To-do steps the reader ticked off.',
     where: (userId) => ({ doneById: userId }),
+  },
+  {
+    table: 'approval_gate',
+    model: 'approvalGate',
+    tier: 'tenant',
+    // `decided_by_id` records WHO approved or requested changes on a gate —
+    // the "human in the agent loop" evidence (Story MOTIR-4778). Same shape as
+    // `work_item_todo.doneById` and `acceptance_evidence.approvedById`, both
+    // exported: a SetNull-preserved attribution of a decision to a person is
+    // personal data whatever the gate is otherwise about. Rows the reader did
+    // NOT decide carry a null / other `decided_by_id` and are not theirs.
+    basis: 'Approval-gate decisions the reader made.',
+    where: (userId) => ({ decidedById: userId }),
   },
   {
     table: 'plan_revision',
