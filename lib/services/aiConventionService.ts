@@ -7,7 +7,7 @@ import {
   type RawCodeAuditSurface,
   type RawExternalScannerState,
 } from '@/lib/ai/motirAiClient';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { EmptyRepoScopeError, UnknownRepoScopeError } from '@/lib/codeHealth/errors';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
@@ -294,7 +294,11 @@ export const aiConventionService = {
     // `assertPermission(…, 'project:administer')` and `admin` holds
     // `ai:configure`, so NO actor's answer changes.
     await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
-    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const code = await resolveProjectCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId,
+    });
     const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,

@@ -6984,11 +6984,10 @@ model PlanTargetLock {
 /// drift — the same argument `docs/decisions/target-repo-attribution.md` §1 used
 /// to refuse a second repo registry.
 ///
-/// It is ALSO the project↔repo association whose absence
-/// `lib/services/codeGraphIndexService.ts` and `lib/ai/codeContext.ts` each
-/// record as a deferred refinement. MOTIR-1780 makes the association EXIST; it
-/// deliberately does NOT re-point either consumer (that is MOTIR-1754's
-/// code-index loop) — see the comments at both sites.
+/// It is ALSO the project↔repo isolation boundary (MOTIR-4955). `GithubRepo`
+/// records organisation connectivity; a project may read, audit or dispatch into
+/// that asset only when this table links it. `github_repo.workspace_id` remains
+/// the connection/RLS key and is not project membership.
 ///
 /// CARDINALITY comes from the architecture, never from a constant: a project that
 /// separates a web app from an API is TWO rows, add a shared package and it is
