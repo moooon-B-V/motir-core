@@ -522,6 +522,13 @@
       .t-code {
         color: var(--el-type-code);
       }
+      /* MOTIR-4944 — the one member of the `t-*` family this asset left out. The
+         glyph carried the ink inline instead; declaring it here matches the 32
+         assets that hold the family in the stylesheet, and the inline value is
+         the same token, so nothing moves. */
+      .t-task {
+        color: var(--el-type-task);
+      }
       .t-design {
         color: var(--el-type-design);
       }

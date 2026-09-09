@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 // lists that are supposed to be in correspondence, and until this spec nothing
 // checked that they were, in either direction.
 //
-// ── The two directions, and why they are one guard ──────────────────────────
+// ── The four directions, and why they are one guard ─────────────────────────
 // A `*.mock.html` is static HTML with a hand-written "utility shims" `<style>`
 // block. It is not Tailwind output, so an arbitrary-value utility exists only
 // if that block spells it out. Two things then go wrong, and they are exact
@@ -35,10 +35,29 @@ import { beforeAll, describe, expect, it } from 'vitest';
 //       assets declared `.text-\(--el-text-faint\)` as
 //       `color: var(--el-text-secondary)`.
 //
+//   (D) UN-ADOPTED — a class ONE mock's shim block declares, that a DIFFERENT
+//       mock carries with no rule of its own (MOTIR-4944). Direction (A) asks
+//       TAILWIND whether a plain class names a style; this asks THE TREE, which
+//       is the only thing that can answer for the mocks' own semantic
+//       vocabulary — `nl`, `ic`, `brand-glyph`, `mini-label`. 165 occurrences of
+//       21 tokens across 28 assets on `origin/main` `1491e9464`, among them
+//       three shell assets whose brand mark painted the inherited ink instead of
+//       `--el-accent-on-surface`, and a settings option row whose NAME line had
+//       no truncation while its own description line did.
+//
 // (A) silently un-styles the ASSET; (B) misleads a READER; (C) survives both,
 // because the class exists and the rule exists and they are in correspondence —
-// the rule is simply not what it says. One cause, three costs, which is why
+// the rule is simply not what it says. (D) is (A) again, arriving through a
+// vocabulary no compiler has an opinion on. One cause, four costs, which is why
 // fixing one alone leaves the set incomplete.
+//
+// ⚠️ (A) AND (D) ARE DISJOINT BY CONSTRUCTION, AND THE REMEDIES ARE WHY. (A)'s
+// is mechanical — the compiler writes the rule, and the only question is whether
+// the element wants it. (D)'s is a JUDGEMENT: the rule already exists, in another
+// file, written by somebody who meant something by the name, and copying it is
+// right only if the two assets mean the same thing. So a token (A) reports is
+// never also reported here, and `TREE_DECLARED_COLLISIONS` is where the answer
+// came out `no`.
 //
 // ── Why no existing guard sees any of them ──────────────────────────────────
 // `design-ink-contrast` and `design-state-ink-contrast` read the ink a rule
@@ -514,22 +533,24 @@ export const isVariant = (token: string): boolean => token.includes(':') || toke
  * declared is not an inert class when undeclared.
  *
  * ── WHERE IT STOPS, so the next reader inherits the boundary ────────────────
- * The predicate is silent about a class the TREE styles and Tailwind does not:
- * **165 occurrences of 21 tokens across 28 assets**, measured after this card's
- * own 16 declarations landed — `nl` 21, `seg-ic` 20, `ic` 20, `brand-glyph` 19,
- * `group` 18, down to eight tokens at 1. Each is DECLARED by some other mock's
- * shim block and carried bare here, so those elements do render unstyled
- * relative to their siblings. That is a real defect and a DIFFERENT direction:
- * its disposition is not "copy the rule the compiler writes" but "decide whether
- * two assets mean the same thing by one name" — `ic` is declared in 60 assets
- * and carried bare in 3, which is a defect with a high prior, while `fr` is
- * declared in 2 and carried bare in 1, which is where two assets mean different
- * things by a two-letter word. Filed as MOTIR-4944, with the per-token table.
+ * The predicate is silent about a class the TREE styles and Tailwind does not —
+ * **165 occurrences of 21 tokens across 28 assets** at `1491e9464`. That is
+ * **DIRECTION (D)** now (`foreignDeclaredUtilities` below, MOTIR-4944), not an
+ * open boundary: the tokens are dispositioned, the 14 DECLAREs are in their
+ * assets, and the six the answer came out `no` for are in
+ * `TREE_DECLARED_COLLISIONS` by NAME and by FILE.
+ *
+ * What is still true, and is the reason the two predicates stay separate: this
+ * one answers *can the compiler write a rule for this name*, and it has no
+ * opinion whatsoever about `nl` or `brand-glyph`. Direction (D) answers *does
+ * some other mock in this tree already write one*, which is a question only the
+ * tree can be asked.
  *
  * ⚠️ AND IT IS SILENT ABOUT THE 4161 OCCURRENCES IN NEITHER SET — `lucide` and
  * its 110 icon classes, `ProseMirror`, `tiptap`. Nothing declares them, nothing
- * should, and no direction of this guard is ever going to report them. That is
- * the boundary being where it belongs rather than a gap left open.
+ * should, and no direction of this guard is ever going to report them: direction
+ * (D) asks the tree and the tree says nothing about them either. That is the
+ * boundary being where it belongs rather than a gap left open.
  */
 export const TAILWIND_ENTRY = "@import 'tailwindcss';\n@import '@motir/design-system/theme.css';\n";
 
@@ -628,6 +649,78 @@ export function deadUtilities(mocks: MockSource[]): Map<string, string[]> {
   return dead;
 }
 
+/**
+ * DIRECTION (D): classes an asset carries, does not declare, and that ANOTHER
+ * mock in the tree DOES declare — MOTIR-4944.
+ *
+ * ── The question, and why the tree is the only thing that can answer it ─────
+ * Direction (A) reports a plain undeclared class when the project's own Tailwind
+ * build can name it (`utilityVocabulary`). That is right about what it claims and
+ * silent about the mocks' OWN semantic vocabulary — `nl`, `ic`, `brand-glyph`,
+ * `mini-label`, `decided-strip` — which no compiler can name and which the shim
+ * blocks are full of, because a block is COPIED between assets rather than
+ * generated. When the copy drops a rule the markup kept, the element renders
+ * unstyled relative to its sibling: the same defect direction (A) exists for,
+ * arriving through a vocabulary Tailwind has no opinion on.
+ *
+ * So the predicate is DERIVED FROM THE TREE, exactly as `deadUtilities` is and
+ * for the same reason: a spelling would expire, and the tree is what the
+ * question is actually about. It is `deadUtilities` pointed the other way —
+ * (B) says a rule NOTHING carries is dead, and (D) says a class NOTHING HERE
+ * declares is inert.
+ *
+ * ⚠️ IT SUBTRACTS DIRECTION (A), WHICH IS WHAT MAKES THE TWO REMEDIES STAY
+ * APART. A Tailwind-nameable token that some mock also declares is (A)'s — the
+ * compiler writes its rule and nobody has to decide anything. Reporting it here
+ * as well would offer a reader two different remedies for one occurrence, and the
+ * one this direction offers is the expensive one. (The overlap is empty today
+ * because (A) is at zero; it is subtracted so that it stays empty when (A) is
+ * next widened.)
+ *
+ * ⚠️ IT READS THE MARKUP VIEW, NOT THE SCRIPT ONE — the same boundary direction
+ * (A) has, deliberately. `usedClasses` is the static attribute scan, so a class a
+ * mock's `<script>` puts on an element at runtime is not reported here even when
+ * a sibling declares it. Direction (B) DOES read `scriptCarriedClasses`, and the
+ * asymmetry is the one `scriptOf`'s note explains: for "is this class inert" the
+ * script block is a template a reader cannot see, and for "is this rule dead" it
+ * is evidence the class is carried. (D) is the first question, so it takes (A)'s
+ * view of the document.
+ *
+ * ⚠️ AND THE MATCH IS ON THE TOKEN, WHILE THE REMEDY IS ON THE COMPOUND
+ * SELECTOR THAT CARRIES IT. `declaredClasses` reads `.shell.compact` and
+ * `.opt .ot .nm` as declaring `compact` and `nm`, which is correct for
+ * "does the tree style this name" and is NOT a rule to copy: what gets copied is
+ * the selector whose OTHER halves the carrying asset also has. Two of the 14
+ * DECLAREs were exactly that shape — `compact` had three declarations and only
+ * `.shell.compact` was the one to take.
+ */
+export function foreignDeclaredUtilities(
+  mocks: MockSource[],
+  namesUtility: (token: string) => boolean,
+): Map<string, { token: string; count: number }[]> {
+  const declaredIn = new Map<string, Set<string>>();
+  for (const mock of mocks)
+    for (const name of declaredClasses(mock.source))
+      declaredIn.set(name, (declaredIn.get(name) ?? new Set()).add(mock.path));
+
+  const findings = new Map<string, { token: string; count: number }[]>();
+  for (const mock of mocks) {
+    const declared = declaredClasses(mock.source);
+    const rows = [...usedClasses(mock.source)]
+      .filter(([token]) => {
+        if (declared.has(token)) return false;
+        // Direction (A)'s, whichever of its three arms reports it.
+        if (isArbitrary(token) || isVariant(token) || namesUtility(token)) return false;
+        const elsewhere = declaredIn.get(token);
+        return elsewhere !== undefined && [...elsewhere].some((path) => path !== mock.path);
+      })
+      .map(([token, count]) => ({ token, count }))
+      .sort((a, b) => b.count - a.count || a.token.localeCompare(b.token));
+    if (rows.length > 0) findings.set(mock.path, rows);
+  }
+  return findings;
+}
+
 /** How many globally-dead rules each mock declares. */
 export function deadCountByFile(mocks: MockSource[]): Map<string, number> {
   const counts = new Map<string, number>();
@@ -638,8 +731,9 @@ export function deadCountByFile(mocks: MockSource[]): Map<string, number> {
 
 // ── DIRECTION (C): the rule agrees with its own NAME (MOTIR-4812) ───────────
 //
-// The two directions above both ask about EXISTENCE — does this class have a
-// rule, does this rule have a class. Neither asks whether the rule DOES what
+// The three directions above all ask about EXISTENCE — does this class have a
+// rule, does this rule have a class, does some OTHER mock have the rule this one
+// is missing. None of them asks whether the rule DOES what
 // its name says, and an arbitrary-value utility's name is a promise about
 // exactly one thing: `.text-\(--el-text-faint\)` paints `--el-text-faint`.
 //
@@ -1098,6 +1192,147 @@ const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [];
  */
 const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [];
 
+/**
+ * DIRECTION (D) — the COLLISIONS, and this table's resting state is NOT empty.
+ *
+ * ⚠️ READ THAT FIRST, BECAUSE IT IS THE ONE PLACE THIS FILE DEPARTS FROM ITS TWO
+ * NEIGHBOURS ABOVE. `INERT_VARIANT_DEBT` and `DEAD_UTILITY_DEBT` are COUNTDOWNS:
+ * every row is a defect somebody will fix, and empty is the intended end state.
+ * These rows are DECISIONS. Each is a name that means two different things in two
+ * assets, where the tree was asked and the answer came out `no` — so there is
+ * nothing to schedule and a row leaving this table means somebody RENAMED one of
+ * the two meanings, not that a defect was repaired.
+ *
+ * ── Why an exclusion at all, when (A)'s two arms reached zero outright ───────
+ * Direction (A)'s remedy is mechanical, so its population resolves to DECLARE or
+ * REMOVE and the arm holds every mock at zero. (D)'s does not: the rule already
+ * exists, in another file, written by somebody who meant something by the name.
+ * MOTIR-4944 dispositioned all 21 tokens — **14 DECLARE (92 occurrences), 1
+ * REMOVE (1), 6 COLLIDES (72)** — and for these six neither remedy is honest:
+ *
+ *   • DECLARE would import a rule the carrying asset's own markup contradicts,
+ *     which is worse than the inert class it replaces — an inert class draws
+ *     nothing and a wrong rule draws something (`plan-rules`' own argument for
+ *     why this was a card and not a fourth arm of the same predicate).
+ *   • REMOVE is honest only where the declaring selector matches NO element
+ *     (MOTIR-4813's terms). For `ic`, `fr` and `helper` it matches one; for
+ *     `seg-ic` and `group` the class is a verbatim transcription of SHIPPED
+ *     markup, and deleting it would diverge the mock from the component it
+ *     draws — the design-against-shipped-reality rule, which outranks tidiness.
+ *
+ * ── KEYED ON (file, token), NOT ON token ────────────────────────────────────
+ * ⚠️ AND THAT IS THE WHOLE DIFFERENCE BETWEEN THIS AND AN ALLOWLIST. Excluding
+ * `ic` by NAME would silence every future asset that carries it bare, which is
+ * the exemption-wider-than-it-reads shape both tables above exist to prevent —
+ * and `ic` is declared in 60 assets, so it is exactly the name a new mock is
+ * likeliest to pick up. A (file, token) row silences the fourteen occurrences
+ * somebody looked at and nothing else. The arm below asserts each row EXACT in
+ * both directions, so a row cannot outlive its file, its token or its count.
+ *
+ * ── The six, with BOTH meanings, per criterion 3 ────────────────────────────
+ *
+ *   `ic` — HERE (`design/runs/*`): a bare marker on an icon the asset sizes with
+ *     its own base rule, `svg { width: 1em; height: 1em; }`, plus contextual
+ *     overrides (`.railRow svg` 16px, `.crumb svg` 14px). ELSEWHERE (14 assets):
+ *     `.ic { width: 16px; height: 16px; flex: none; }` — the class IS the sizing
+ *     mechanism. ⚠️ THE CARD'S OWN PREMISE IS FALSIFIED HERE and the correction
+ *     is on the record: it read *"those three draw an icon slot with no icon slot
+ *     rules"*, and all three have one. Declaring `.ic` would take twenty icons
+ *     from 1em to 16px across three approved assets, for a defect that is not
+ *     there. The rename that would resolve it is the `runs/` family's, not the
+ *     control's.
+ *
+ *   `seg-ic` — HERE (4 assets): a verbatim transcription of
+ *     `packages/design-system/src/components/ui/Segmented.tsx:100`,
+ *     `'seg-ic inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center'`
+ *     with the ink split onto `text-(--el-tabnav-active)` / `text-(--el-text-faint)`
+ *     beside it. `.seg-ic` has NO rule anywhere in the shipped app — it is a
+ *     naming hook, and the utilities on the same element already say what it
+ *     would say. ELSEWHERE (`work-items/type-executor-picker`): a hand-drawn
+ *     segmented control with its own `.seg` idiom —
+ *     `.seg button .seg-ic { display: inline-flex; color: var(--el-text-faint); }`.
+ *     That selector matches nothing in the four carriers: none of them has a
+ *     `.seg` ancestor, because the shipped component's group is
+ *     `<div role="group" class="inline-flex …">`.
+ *
+ *   `group` — HERE (3 shell assets): Tailwind's variant ANCHOR on a button,
+ *     `class="group relative inline-flex …"`, transcribed from the shipped
+ *     component. `utilityVocabulary`'s own note already rules on this name: the
+ *     compiler emits no rule for it, because it styles nothing by itself. None of
+ *     the three carries a single `group-hover:` class, so nothing selects through
+ *     it — which is the anchor being unused, not inert. ELSEWHERE
+ *     (`work-items/links` · `relationships` · `internal-links`): the mocks' own
+ *     semantic class, `.group { display: flex; flex-direction: column; gap: 2px; }`.
+ *     Copying that onto an `inline-flex` button would stack its label under its
+ *     icon.
+ *
+ *   `fr` — HERE (`design/brand/brand-mark`): a **frame** — one cell of the
+ *     `.frames` strip that walks the wave animation, wrapping a 46px glyph.
+ *     ELSEWHERE (2 auth assets): `.flow .fr { font-family: var(--font-mono);
+ *     font-size: 11px; color: var(--el-text-secondary); }` — the caption under a
+ *     flow step. Two words abbreviated the same, and the card predicted this row
+ *     before it was checked.
+ *
+ *   `helper` — HERE (`design/github/github`): two `<p>` that set the same two
+ *     properties INLINE and at deliberately different values —
+ *     `font-size: 12.5px; color: var(--el-text-secondary)`. ELSEWHERE
+ *     (`audit-coverage` · `coding-convention`): `.helper { font-size: 12px;
+ *     color: var(--el-text-muted); margin-top: 6px; }`. A DECLARE would be
+ *     overridden at the same element and paint nothing, and a DECLARE that
+ *     renders nothing is not a fix (MOTIR-4813's own rule).
+ *
+ *   `modal-sm` — HERE (`design/settings/profile`): `<div class="modal modal-sm"
+ *     style="max-width: 25rem">` — the element states its own width and
+ *     contradicts the shared one. ELSEWHERE (`settings/account-settings` ·
+ *     `token-scopes`): `.modal.modal-sm { max-width: 24rem; }`. Same failure as
+ *     `helper`, one property wide: the inline rule wins, so the copy is inert.
+ */
+const TREE_DECLARED_COLLISIONS: {
+  file: string;
+  token: string;
+  count: number;
+  card: string;
+}[] = [
+  {
+    file: 'design/ai-planning/plan-detail-refined.mock.html',
+    token: 'seg-ic',
+    count: 2,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/brand/brand-mark.mock.html', token: 'fr', count: 11, card: 'MOTIR-4944' },
+  { file: 'design/github/github.mock.html', token: 'helper', count: 2, card: 'MOTIR-4944' },
+  {
+    file: 'design/roadmap/roadmap-arrival.mock.html',
+    token: 'seg-ic',
+    count: 2,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/runs/run-modal.mock.html', token: 'ic', count: 9, card: 'MOTIR-4944' },
+  { file: 'design/runs/run-section.mock.html', token: 'ic', count: 9, card: 'MOTIR-4944' },
+  { file: 'design/runs/runs-index.mock.html', token: 'ic', count: 2, card: 'MOTIR-4944' },
+  { file: 'design/settings/profile.mock.html', token: 'modal-sm', count: 1, card: 'MOTIR-4944' },
+  {
+    file: 'design/shell/3d-immersive-shell.mock.html',
+    token: 'group',
+    count: 6,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/shell/account-menu.mock.html', token: 'group', count: 3, card: 'MOTIR-4944' },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    token: 'seg-ic',
+    count: 12,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/shell/top-bar.mock.html', token: 'group', count: 9, card: 'MOTIR-4944' },
+  {
+    file: 'design/work-items/detail-arrival.mock.html',
+    token: 'seg-ic',
+    count: 4,
+    card: 'MOTIR-4944',
+  },
+];
+
 // ── The real tree ───────────────────────────────────────────────────────────
 
 /** Every file under `design/`, as a repo-relative POSIX path. */
@@ -1116,6 +1351,11 @@ const MOCKS: MockSource[] = designTree()
 
 const inertBudget = new Map(INERT_VARIANT_DEBT.map((row) => [row.file, row.count]));
 const deadBudget = new Map(DEAD_UTILITY_DEBT.map((row) => [row.file, row.count]));
+/** The direction-(D) exclusions, keyed the way they are asserted: `<file>\u0000<token>`. */
+const collisionKey = (file: string, token: string) => `${file}\u0000${token}`;
+const collisionBudget = new Map(
+  TREE_DECLARED_COLLISIONS.map((row) => [collisionKey(row.file, row.token), row.count]),
+);
 
 /**
  * Every class the tree carries that its OWN asset does not declare — the only
@@ -1369,6 +1609,68 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(kinds(".before\\:content-\\[\\'\\'\\] { color: red; }")).toEqual([]);
   });
 
+  it('direction (D) reports a class ANOTHER mock declares, and stops at one nothing does', () => {
+    // MOTIR-4944's direction, pinned in BOTH directions on one three-mock
+    // fixture — the reporting branch and the stopping point together, so the
+    // boundary is exercised rather than inferred from the tree passing. The
+    // same treatment `namesUtility`'s arm gets above.
+    const mocks = [
+      // The CONTROL: it declares `.nl`, and carries it.
+      {
+        path: 'control.mock.html',
+        source:
+          '<style>.nav-row .nl { flex: 1; }</style><div class="nav-row"><span class="nl">A</span></div>',
+      },
+      // The CARRIER: same markup, and its shim block dropped the rule.
+      {
+        path: 'carrier.mock.html',
+        source:
+          '<style>.nav-row { display: flex; }</style><div class="nav-row"><span class="nl">A</span><i class="lucide lucide-menu"></i><b class="underline"></b></div>',
+      },
+    ];
+    // REPORTED: `nl` is carried bare here and declared by `control`.
+    expect(foreignDeclaredUtilities(mocks, namesNothing).get('carrier.mock.html')).toEqual([
+      { token: 'nl', count: 1 },
+    ]);
+    // STOPPING POINT ONE — a class NO mock in the tree declares is not this
+    // direction's, however plainly inert it looks. `lucide` / `lucide-menu` are
+    // 4116 of the 4419 occurrences an every-plain-class predicate would report,
+    // and nothing should ever declare one.
+    //
+    // STOPPING POINT TWO — a class direction (A) reports is not reported twice.
+    // `underline` is undeclared here and declared by nobody, so it is out on the
+    // first count; the arm below is the one that pins the SUBTRACTION, with a
+    // token the tree does declare.
+    expect(foreignDeclaredUtilities(mocks, namesNothing).get('control.mock.html')).toBeUndefined();
+  });
+
+  it('direction (D) does not report what direction (A) already does', () => {
+    // The subtraction, on its own fixture, because it is the half a reader is
+    // most likely to think is redundant: `underline` is BOTH declared by another
+    // mock AND a name the compiler writes a rule for. It belongs to (A), whose
+    // remedy is mechanical; reporting it here too would offer two remedies for
+    // one occurrence and the expensive one is this direction's.
+    const mocks = [
+      {
+        path: 'control.mock.html',
+        source:
+          '<style>.underline { text-decoration: underline; }</style><a class="underline">A</a>',
+      },
+      {
+        path: 'carrier.mock.html',
+        source: '<style>.x { color: red; }</style><a class="underline">A</a>',
+      },
+    ];
+    expect(foreignDeclaredUtilities(mocks, namesNothing).get('carrier.mock.html')).toEqual([
+      { token: 'underline', count: 1 },
+    ]);
+    // The SAME tree, the predicate the only difference — exactly the shape the
+    // `namesUtility` arm above uses.
+    expect(
+      foreignDeclaredUtilities(mocks, (t) => t === 'underline').get('carrier.mock.html'),
+    ).toBeUndefined();
+  });
+
   it('reports a dead utility when one is actually there', () => {
     // Direction (B)'s negative path, and MOTIR-4150's own shape: a rule present
     // in the stylesheet that no element in the tree carries.
@@ -1461,6 +1763,71 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
       expect(paths.has(row.file), `${row.file} is gone — drop its row`).toBe(true);
       expect(row.count, row.file).toBeGreaterThan(0);
     }
+  });
+
+  it('direction (D) — no mock carries a class another mock declares, outside the named collisions', () => {
+    // MOTIR-4944's own population: 165 occurrences of 21 tokens across 28 assets
+    // on `origin/main` `1491e9464`, dispositioned per TOKEN — 14 DECLARE (92
+    // occurrences), 1 REMOVE (1), 6 COLLIDES (72). The DECLAREs are in their
+    // assets and the REMOVE is out of its attribute, so what this arm holds at
+    // zero is everything except the thirteen rows of
+    // `TREE_DECLARED_COLLISIONS`, each asserted EXACT.
+    const found = foreignDeclaredUtilities(MOCKS, namesUtility);
+    const findings = [
+      ...MOCKS.flatMap(({ path }) =>
+        (found.get(path) ?? []).map(({ token, count }) => ({
+          key: collisionKey(path, token),
+          path,
+          token,
+          count,
+        })),
+      ),
+      // A row whose occurrences went away is a finding too — otherwise the table
+      // becomes a mute button the moment somebody fixes one of its rows.
+      ...TREE_DECLARED_COLLISIONS.filter(
+        (row) => !(found.get(row.file) ?? []).some(({ token }) => token === row.token),
+      ).map((row) => ({
+        key: collisionKey(row.file, row.token),
+        path: row.file,
+        token: row.token,
+        count: 0,
+      })),
+    ]
+      .filter(({ key, count }) => count !== (collisionBudget.get(key) ?? 0))
+      .map(
+        ({ path, token, count }) =>
+          `${path} carries \`${token}\` ${count}× (pinned: ${collisionBudget.get(collisionKey(path, token)) ?? 0}) ` +
+          `and declares no rule for it, while another mock in this tree does — copy the DECLARING ` +
+          `selector whose other halves this asset also has (\`.shell.compact\`, not \`.compact\`), or ` +
+          `delete the class from the attribute where no declaring selector matches here; if the two ` +
+          `assets mean DIFFERENT things by the name, that is a TREE_DECLARED_COLLISIONS row with both ` +
+          `meanings and a card, never a silent predicate`,
+      )
+      .sort();
+    expect(findings).toEqual([]);
+  });
+
+  it('holds `TREE_DECLARED_COLLISIONS` tight — a row that no longer fires fails', () => {
+    // Same treatment the two tables above get, and it needs BOTH halves for the
+    // same reason they do: the arm above fails a row whose COUNT moved, and this
+    // fails a row whose FILE was deleted or renamed, which that one cannot see.
+    const paths = new Set(MOCKS.map(({ path }) => path));
+    for (const row of TREE_DECLARED_COLLISIONS) {
+      expect(paths.has(row.file), `${row.file} is gone — drop its row`).toBe(true);
+      expect(row.count, `${row.file} \`${row.token}\``).toBeGreaterThan(0);
+      expect(
+        row.card,
+        `${row.file} \`${row.token}\` — an exclusion with no card is an allowlist`,
+      ).toMatch(/^MOTIR-\d+$/);
+    }
+    // ⚠️ AND NO ROW MAY BE KEYED ON THE TOKEN ALONE. The whole difference between
+    // this table and an allowlist is that `ic` is excluded in three named files
+    // and reported everywhere else — `ic` is declared in 60 assets, so a
+    // token-wide row would silence the name a new mock is likeliest to pick up.
+    for (const row of TREE_DECLARED_COLLISIONS)
+      expect(row.file, 'a collision row is keyed on (file, token)').toMatch(
+        /^design\/.+\.mock\.html$/,
+      );
   });
 
   it('reports a mis-declared utility, and leaves a legitimate override alone', () => {
