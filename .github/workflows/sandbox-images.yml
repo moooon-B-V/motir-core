@@ -216,6 +216,19 @@ jobs:
       - name: ${{ matrix.profile.liveness }}
         run: docker run --rm motir-sandbox:${{ matrix.profile.id }} ${{ matrix.profile.liveness }}
 
+      # MOTIR-4956, as a guard. A Dev Containers session sets
+      # `"overrideCommand": true`, which replaces the ENTRYPOINT as well as the
+      # CMD — so everything the entrypoint used to do had to become reachable
+      # from the SHELL instead (MOTIR-4959). `--entrypoint /bin/bash` is exactly
+      # what that recipe does to the container, so this asserts the real shape.
+      # It runs on every leg; the script asserts for the three profiles that
+      # redirect a config path and reports the rest.
+      - name: Agent config survives an entrypoint bypass
+        run: |
+          packages/cli/sandbox/smoke/entrypoint-bypass-smoke.sh \
+            --image motir-sandbox:${{ matrix.profile.id }} \
+            --profile ${{ matrix.profile.id }}
+
       # ── Release lane only, and only after both checks above passed.
       - name: Resolve the @motir/cli version
         if: ${{ inputs.publish }}

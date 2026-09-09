@@ -3630,6 +3630,36 @@
         color: var(--el-text-strong);
         white-space: nowrap;
       }
+      /* MOTIR-4944 — the brand mark's ink, copied verbatim from
+         `packages/brand/brand.css:46` by way of `design/brand/brand-mark.mock.html`
+         (and 7 more). The glyph's path is `fill="currentColor"` and this was the
+         only rule that set the colour, so the mark painted the inherited text ink
+         instead of the accent. NOT `--el-accent`: the two are identical in light
+         and diverge in dark, where `--el-accent` is the darker FILL built to
+         carry white ink and loses 0.8 of a contrast point as a glyph (brand.css §4). */
+      .brand-glyph {
+        color: var(--el-accent-on-surface);
+        flex: none;
+      }
+      /* MOTIR-4944 — the "Plan with AI" sweep, copied verbatim from
+         `app/globals.css:123` by way of `design/shell/context-row.mock.html`
+         (and 5 more). The band element was here and the animation was not, so it
+         sat clipped off the left edge for ever — which is the state a
+         reduced-motion user is supposed to get, and every other user was getting
+         it too. Gated exactly as the shipped rule is. */
+      @keyframes plan-with-ai-shimmer {
+        0% {
+          transform: translateX(0) skewX(-12deg);
+        }
+        100% {
+          transform: translateX(420%) skewX(-12deg);
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .plan-with-ai-shimmer {
+          animation: plan-with-ai-shimmer 4.5s ease-in-out 1.2s infinite;
+        }
+      }
     </style>
   </head>
   <body>

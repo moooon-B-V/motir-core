@@ -273,6 +273,20 @@
         color: var(--el-text-strong);
         box-shadow: var(--shadow-subtle);
       }
+      /* MOTIR-4944 — copied from `design/ai-planning/plans-tabbed-list.mock.html`
+         / `plan-detail-list-view.mock.html`, the two assets in this area that
+         declare it. The strip's own inline `padding` legitimately overrides one
+         property of it; the mono cap, the flex row and the ink were simply absent. */
+      .decided-strip {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 0 18px 4px;
+        font: 600 10.5px var(--font-mono);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
       .crumb svg {
         width: 13px;
         height: 13px;
