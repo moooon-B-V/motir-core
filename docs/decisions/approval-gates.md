@@ -26,6 +26,25 @@
   gate IS and for the gate LIFECYCLE. `design-result.md` remains the authority
   for the design artefact itself; `acceptance-receipt-lifecycle.md` remains the
   authority for the acceptance receipt, which this record does not re-home.
+- **AMENDED 2026-09-08 (MOTIR-4911), by Yue, at six clauses.** The record was
+  accepted the same day and is right about most things; the amendments below
+  correct what the model settled afterwards. **Every one keeps its struck text**,
+  so a reader arriving from an old citation lands on the correction rather than
+  on nothing. **No behaviour ships in the amendment either** — the ADR only, plus
+  the one-line pointer §6c owes `design-result.md` §7.
+
+  | clause                    | what changed                                                                                                                    |
+  | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+  | **§1** (INCOMPLETE)       | `decision_approval` joins the enum, and the SUBJECT is re-stated as _a document with a resolver_ rather than a concrete row     |
+  | **§2** (WRONG)            | AUTHORITY is **assignee OR reporter OR admin** for both verbs, not two permission keys. ROUTING is unchanged                    |
+  | **§3** (WRONG)            | approving writes `done` **only when there is no linked open pull request**; otherwise it writes `approved` and the merge closes |
+  | **§4** (partly falsified) | the merge gate DOES write a status — `approved` — and still does not write `done`                                               |
+  | **§6b** (incomplete)      | the `approved` WORK-ITEM status, and `decisionSource: github` with the unmappable-actor rule                                    |
+  | **§6c** (FAILS SILENTLY)  | the pin is keyed on the **SUBJECT**, not on the gate kind                                                                       |
+  | **§8 · §9** (new)         | THE TWO WORKFLOWS, and HOW TO TEST as a first-class deliverable                                                                 |
+
+  **§8 is the one to read first.** It is the discriminator the other five
+  amendments are consequences of.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `acceptance-video.md` / `design-result.md` /
@@ -113,6 +132,59 @@ must supply to register — the table this record exists to make re-usable:**
 A third kind is then a row in the enum, a handler, and a renderer for its
 subject body. **No second vocabulary, no second control, no second decide door.**
 
+> ### §1 — AMENDMENT (MOTIR-4911, 2026-09-08): a third kind, and a SUBJECT that is a document with a RESOLVER
+>
+> **What was INCOMPLETE.** The section above is right about the mechanism and
+> short by one kind, and its subject column named two concrete row types — _"a
+> `DesignEvidence` id, a pull-request delivery id"_. Naming rows makes the enum
+> look like it is keyed on STORAGE, so the next kind whose subject is not yet a
+> row reads as needing a migration before it can register. It does not.
+>
+> **`decision_approval` is a third kind.** A `type: decision` card with
+> `executor: coding_agent` produces a decision DOCUMENT — the agent researches,
+> proposes, and writes it — and a person approves or requests changes on it, with
+> exactly the verbs `design_result` already has. It is the same vocabulary over a
+> different subject, which is the whole claim §1 makes.
+>
+> **The KIND axis, in full, after this amendment:**
+>
+> | kind                    | the port shows                                                            | fires when                           |
+> | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------ |
+> | `design_result`         | the mock, the notes, the screenshot                                       | a design with **no pull request**    |
+> | `decision_approval`     | the decision **document**                                                 | a decision with **no pull request**  |
+> | `pull_request_approval` | what the card produced — design assets, or **what changed + how to test** | **any** card **with a pull request** |
+> | `pull_request_merge`    | the same port; it is the second decision on the same subject (§8, row 4b) | **any** card **with a pull request** |
+>
+> **The kind decides the VERBS and the EFFECT; the PORT decides what you LOOK
+> at, and the port is chosen by what the card PRODUCED, not by the kind.** That
+> is why a design with a pull request is approved through
+> `pull_request_approval` and still shows its mock: same gate, design port.
+>
+> **THE SUBJECT IS A DOCUMENT WITH A RESOLVER.** ~~what is being decided — a
+> `DesignEvidence` id, a pull-request delivery id~~ **What a gate points at is a
+> document, and the handler supplies the RESOLVER that fetches it.** The gate row
+> stores an opaque `subjectId` plus its kind; nothing in the schema knows which
+> table — or whether there is a table at all.
+>
+> **Why that matters concretely: Motir's `pages` domain will later host decision
+> documents**, and a decision doc that moves from an attachment to a page must be
+> a RENDERER change and a resolver change — never a migration on the gate table.
+> A subject column typed to a concrete row would have made the move a schema
+> change on the audit table, which is the one table that should never be
+> rewritten. Registering a kind therefore stays exactly what §1's table says:
+> **a row in the enum, a handler (resolver + routing + authority + effect +
+> retention), and a renderer.**
+>
+> **A kind may also carry a VERB SET rather than two verbs.** `decision_choice`
+> — a `type: decision` card with `executor: human`, where the card states two or
+> more options on named axes and a person PICKS one — is a gate by every property
+> that matters here: it blocks work, it routes to one person, it needs a surface,
+> and what they chose must be stamped with the same audit §6a describes. What
+> differs is only the verb set, N options instead of Approve / Request changes,
+> and the frame already accommodates it because the KIND is what decides the
+> verbs. **This record ships none of these handlers** — see _Deliberately NOT
+> decided here_.
+
 ### 2. Routing and authority — DECIDED BY THE REQUESTER (Yue, 2026-09-08)
 
 **ROUTING: `assigneeId ?? reporterId`.** Assignee first; the reporter receives
@@ -161,6 +233,65 @@ a permission-holder who is neither assignee nor reporter may still decide it
 from the item page, without it cluttering their queue. A reader who may see a
 gate but not decide it sees its state and no control.
 
+> ### §2 — AMENDMENT (MOTIR-4911, 2026-09-08): AUTHORITY is a RELATIONSHIP or ADMIN, not two permission keys
+>
+> **ROUTING IS UNCHANGED, and the paragraphs above stand in full.**
+> `assigneeId ?? reporterId`, exactly one recipient, and the recorded divergence
+> from `homeService`'s union is still the right divergence for the reason it
+> gives. Only the AUTHORITY half is amended.
+>
+> **What was WRONG.** The table above settles authority on **two permission
+> keys** — `work_item:edit` for the design gate, a new
+> `work_item:merge_pull_request` for the merge gate — and derives who may press
+> from a ROLE. Yue settled it the other way on 2026-09-08:
+>
+> ~~| gate kind | key | rationale |~~
+> ~~| `design_result` | the existing **`work_item:edit`** | … |~~
+> ~~| `pull_request_merge` | a NEW **`work_item:merge_pull_request`** | … |~~
+>
+> **THE RULE IS: assignee OR reporter OR admin — for BOTH verbs, and an admin
+> may approve and merge ANY work item.** Authority follows a RELATIONSHIP to the
+> work item, with an org-wide override for admins; it does not follow a
+> permission a role happens to carry. Three people may press a gate that is shown
+> to one.
+>
+> | axis                                          | rule                                                                        |
+> | --------------------------------------------- | --------------------------------------------------------------------------- |
+> | **ROUTING** — whose Approvals tab it lands in | `assigneeId ?? reporterId` — exactly ONE recipient. **Unchanged**           |
+> | **AUTHORITY** — who may press                 | **assignee OR reporter OR admin**, both verbs; an admin may act on ANY item |
+>
+> **A gate appears in ONE queue and can be pressed by THREE people, and that is
+> coherent rather than sloppy** — because the two axes answer different
+> questions. ROUTING answers _whose job is it to look?_, and a gate shown to two
+> people is a decision neither owns, which is the whole argument the routing half
+> already makes. AUTHORITY answers _may this press be honoured?_, and the failure
+> it must prevent is the OPPOSITE one: a gate whose single recipient is on leave,
+> has left the company, or was never the right person, with nobody able to
+> unblock the work. **Widening authority costs the queue nothing** — a
+> reporter or an admin who presses from the item page never sees the gate in
+> their own tab — so the two can be tuned independently, and are.
+>
+> **The design gate keeps `work_item:edit` as its floor**; the relationship test
+> is applied on top of it, not instead of it. What is retired is the ROLE-derived
+> answer to who may merge.
+>
+> **`work_item:merge_pull_request` SURVIVES, and its only remaining job is to sit
+> in `IRREVERSIBLE_PERMISSIONS`** (`lib/tokens/grant.ts`, today
+> `['work_item:delete']`), which `apiTokensService` filters out of what an API
+> token may confer. **So no API token can ever confer merge**, whatever grant it
+> is minted with. The key is no longer how a PERSON is authorised — that is the
+> relationship rule above — it is how a TOKEN is refused. It enters the catalog
+> as `enforcement: 'planned'` and is excluded from `getRoleCatalog` exactly as
+> §2 originally said.
+>
+> **What this costs, stated because §2's original argument was good.** The
+> rejected split bought a custom role that could withhold merge from a `member`.
+> The relationship rule cannot express that: every assignee and every reporter
+> may merge their own item. **That is the accepted trade** — the merge is gated
+> by a person pressing a button on an item that is already theirs, and a team
+> that wants a narrower rule sets `prMergeMode` per project (§7) rather than
+> per role.
+
 ### 3. What approving a DESIGN result does — DECIDED BY THE PLANNER (rung 3: the story's own stated intent)
 
 **Approve** records the decision, performs §6c's pin, and transitions the design
@@ -171,6 +302,42 @@ it inherits the `completedAt` stamp and every existing guard.
 
 **Request changes** records the decision and moves nothing. **It re-dispatches
 nothing** — the revise loop is Story 9.2's (§5).
+
+> ### §3 — AMENDMENT (MOTIR-4911, 2026-09-08): approval writes `done` ONLY when nothing will ever merge
+>
+> **What was WRONG, and it is the clause that produced the confusion this whole
+> amendment exists to end.** The paragraph above says approve _"transitions the
+> design subtask into the project's `done` category"_ — unconditionally:
+>
+> ~~**Approve** records the decision, performs §6c's pin, and transitions the
+> design subtask into the project's `done` category — which is what unblocks the
+> cards `blocked_by` it.~~
+>
+> **The shipped status sync says the MERGE writes `done`.** Both cannot be the
+> single writer, and §4 four paragraphs below states the invariant in its own
+> words — _"there is **one status writer, not two**"_. So the record contradicted
+> itself, and _"approved but still `in_review`"_ is what that collision looks
+> like from the board.
+>
+> **THE CORRECTION — approval is a TRIGGER, not a status write, and the
+> discriminator decides what it triggers:**
+>
+> | the work item has …             | approve does                                                                              |
+> | ------------------------------- | ----------------------------------------------------------------------------------------- |
+> | **no linked OPEN pull request** | record the decision, perform §6c's pin, and write **`done`** — approval is TERMINAL       |
+> | **a linked OPEN pull request**  | record the decision, perform §6c's pin, and write **`approved`**; the MERGE writes `done` |
+>
+> **Nothing else changes.** It still goes through
+> `workItemsService.applyStatusTransition`, the one shipped status funnel, rather
+> than writing `work_item.status` directly, so it inherits the `completedAt`
+> stamp and every existing guard — and **Request changes** still records the
+> decision and moves nothing.
+>
+> **The invariant is PRESERVED, not weakened: there is still exactly one writer
+> of `done`.** In the first row nothing will ever merge, so nothing else would
+> write it. In the second the merge writes it, and approval stops one status
+> short. §8 is the discriminator and both workflows in full; §6b is the
+> `approved` status it writes.
 
 ### 4. What approving a MERGE does — DECIDED BY THE PLANNER (rung 2: the shipped provider seam)
 
@@ -196,6 +363,33 @@ nothing** — the revise loop is Story 9.2's (§5).
 
 **Merging for real is the point, and it costs a permission and a re-consent.**
 An approval that does not merge is a note, not a gate.
+
+> ### §4 — AMENDMENT (MOTIR-4911, 2026-09-08): the gate writes `approved`, and still does not write `done`
+>
+> **Everything above stands except one bullet, and it is falsified in a narrow
+> way that matters.** The seam, the provider argument, the App-by-provenance
+> rule and the render-every-refusal rule are all unchanged.
+>
+> ~~**The gate does NOT write the card's status.** The card advances on the
+> resulting webhook, exactly as when a person merges by hand, so there is **one
+> status writer, not two**.~~
+>
+> **The gate DOES write a status — `approved` — and it does NOT write `done`.**
+> The sentence conflated the two, and correcting it is what makes §3's amendment
+> and §8's Workflow B expressible at all: a person pressing Approve is an EVENT
+> the board has to be able to show, and before `approved` existed there was no
+> status for it to land in.
+>
+> **The invariant the struck sentence was protecting is intact and is now stated
+> exactly:** `done` has **one writer**, the merge webhook. `approved` has one
+> writer too, the decision. Two statuses, two writers, no contention — which is
+> strictly stronger than the original claim, because it also says who writes the
+> intermediate state instead of leaving it unwritten.
+>
+> **Approving in GITHUB decides only the FIRST gate.** A GitHub review approval
+> syncs `pull_request_approval` and leaves `pull_request_merge` `awaiting`; the
+> card reaches `approved` either way, and somebody still presses merge. §8's
+> Workflow B row 4b is why there are two gates rather than one.
 
 ### 5. The line against Story 9.2 — DECIDED BY THE PLANNER (rung 3, and it re-scopes existing cards)
 
@@ -269,6 +463,71 @@ kind)`.** For `design_result` there is one current design, so superseding frees
 the slot; for `pull_request_merge` a card carrying a repository SET legitimately
 has several open pull requests and therefore several simultaneous awaiting gates.
 
+> ### §6b — AMENDMENT (MOTIR-4911, 2026-09-08): the `approved` WORK-ITEM status, and `decisionSource: github`
+>
+> **The gate state set above is unchanged and complete.** What was missing is
+> everything on the OTHER side of the decision: the status the work item lands
+> in, and where the decision came from.
+>
+> **⚠️ TWO DIFFERENT THINGS ARE SPELLED `approved`, AND CONFLATING THEM IS THE
+> ONE READING ERROR THIS SECTION INVITES.** The table above is the **GATE's**
+> state — one row's answer to one question. What follows is the **WORK ITEM's**
+> workflow status. A card can hold an `approved` `pull_request_approval` gate and
+> an `awaiting` `pull_request_merge` gate at the same time (§4's amendment), and
+> be at work-item status `approved` because of the first. The two never have to
+> agree, and nothing derives one from the other by name.
+>
+> #### The `approved` work-item status
+>
+> ```
+> todo → in_progress → implemented → in_review → approved → done
+>                      PR open       CI green    a person   merged
+>                                                said yes
+> ```
+>
+> `in_review → approved → done`, joining the project's default workflow beside
+> the seven statuses it already has. **Its CATEGORY is `in_progress`. Only `done`
+> and `cancelled` are terminal**, and that is the load-bearing field rather than
+> a detail of presentation — **three things follow from it, and each would be a
+> defect if the category were `done`:**
+>
+> | consequence           | what the `in_progress` category buys                                                                                                                                             |
+> | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **open counts**       | an `approved` card is still OPEN in every count, board column total, sprint burndown and report. A card whose pull request has not merged has not shipped                        |
+> | **the parent rollup** | `parentStatusRollupService` must NOT complete a container out of `approved` children. A story is finished when its work is on `main`, not when somebody said yes to it           |
+> | **dependents**        | cards `blocked_by` it stay BLOCKED. Readiness is computed from `done`, so an approved-but-unmerged blocker cannot make a dependent claimable against substrate that is not there |
+>
+> **This record does not decide the status's MIGRATION** — its transitions, its
+> position, and the `restricted`-policy edges it needs are a sibling story's.
+> What is decided here is the status, its category, and the three consequences
+> above.
+>
+> #### `decisionSource` gains `github`
+>
+> §6a already records **through which SURFACE** a decision arrived — `ui | api |
+mcp`. **A fourth value, `github`, is required**, because a pull request
+> approved in GitHub's own review UI syncs into the
+> `pull_request_approval` gate (§4's amendment, §8 row 4b) and none of the three
+> existing values is true of it: nobody clicked in Motir, no token called an API,
+> no agent called the MCP.
+>
+> **⚠️ AND THE APPROVING ACTOR MAY BE A GITHUB IDENTITY MOTIR CANNOT MAP TO A
+> MEMBER.** A reviewer with no linked Motir account, a GitHub App, a former
+> member whose row is gone. **The record states that in WORDS rather than leaving
+> `decidedById` null**, because `decidedById: null` already means something else
+> and something worse: §6b's `superseded` state uses exactly that shape to mean
+> **the question was withdrawn and nobody decided it**. An unmappable human
+> approver recorded as a null FK is therefore indistinguishable, in the one table
+> an auditor trusts, from a decision that never happened.
+>
+> So the row carries the **denormalised actor label** §6a already requires — for
+> this case the GitHub login and the fact that it did not resolve to a member —
+> beside the nullable FK. The audit then answers _"who approved this?"_ with _"a
+> GitHub identity we could not map, and here is the handle"_, which is true,
+> legible, and not the same sentence as _"nobody"_. It is the same argument §7a
+> makes about `auto`: **an absence and an unattributable presence must not read
+> the same.**
+
 #### 6c. Retention — only an approval keeps its bytes, and it PINS rather than FREEZES
 
 **Yue:** _"I don't think we should keep the not approved versions. We don't need
@@ -303,6 +562,59 @@ MOTIR-2764). That is right for a story that is finished and **wrong here**: a
 design legitimately evolves after approval, and 9.2's revise loop depends on
 republishing. The design path keeps superseding; it simply stops feeding
 approved blobs to the GC.
+
+> ### §6c — AMENDMENT (MOTIR-4911, 2026-09-08): the pin is keyed on the SUBJECT, never on the gate KIND
+>
+> **What FAILS SILENTLY as written, and this is the expensive one.** The
+> mechanism paragraph keys retention on the **`design_result` gate**:
+>
+> ~~The supersede path gains the same behaviour under one more condition: **do
+> not unlink the attachments of a row an approved gate references** [where the
+>
+> > approved gate is the `design_result` one].~~
+>
+> **A design with a pull request is approved through `pull_request_approval`, not
+> through `design_result`** (§1's amendment: the KIND is chosen by whether there
+> is a pull request; the PORT is chosen by what the card produced). So the clause
+> as written **stops pinning for the common case** — a design card that opened a
+> pull request, which is most of them.
+>
+> **⚠️ Keying retention on the gate KIND would fail with no error and no red
+> test: the supersede path simply stops finding an approved `design_result` gate,
+> unlinks the attachments as it always did, and the orphan-GC reclaims the bytes
+> seven days later — so the failure is invisible for a week and then arrives as
+> an approval pointing at nothing.**
+>
+> **THE CORRECTION — key it on the SUBJECT.** ⚠️ **When a WORK ITEM carrying a
+> current design result is approved, pin THAT version's assets — whichever gate
+> kind carried the decision.** The predicate is _does an approved gate on this
+> work item reference this `DesignEvidence` version?_, and it does not read the
+> gate's `kind` at all.
+>
+> **Everything else about §6c is unchanged**, and each half is now stated against
+> the subject rather than the kind:
+>
+> - **PIN, do not FREEZE.** The design path keeps superseding; it stops feeding
+>   approved blobs to the GC. The divergence from
+>   `acceptance-receipt-lifecycle.md` stands for the reason given.
+> - **Written in the SAME TRANSACTION as the decision** — written afterwards, a
+>   republish racing an approval re-opens the window it exists to close.
+> - **PER APPROVED VERSION, never "the approved one"** (§6d) — approvals
+>   accumulate, and a card approved, reopened and approved again holds two pinned
+>   sets.
+> - **Only approvals pin.** `changes_requested` and `superseded` keep the ROW and
+>   let the bytes go, which is the intended loss.
+>
+> **The general form, worth stating once because the next kind will need it:**
+> §1's registration table asks a handler for _what to RETAIN on approval_, and
+> the answer is a property of the SUBJECT — what was decided — never of the gate
+> that carried the decision. A retention rule keyed on a kind is a rule that
+> stops applying the moment the same subject can be decided through a second
+> door, which is exactly what happened here.
+>
+> **`design-result.md` §7 carries the pointer** — its statement of this clause is
+> amended in the same pull request, because the trigger it was told about has
+> changed.
 
 #### 6d. The reopen lifecycle, and why the guard keys on `awaiting`
 
@@ -387,6 +699,125 @@ than a fabricated approval.
 confirmed.** It follows from their stated principle and is recorded as the
 planner's reading of it; it is cheap to reverse before MOTIR-4882 ships.
 
+### 8. THE TWO WORKFLOWS — NEW (MOTIR-4911, 2026-09-08), DECIDED BY THE REQUESTER (Yue, 2026-09-08)
+
+**This section is the record's own statement of the model, not a pointer at
+one.** It was settled in conversation and would otherwise live only in a plan
+summary — which is read once, by whoever approves it, and then archived. A
+decision record is read by everyone who builds against it, months later, and the
+two workflows are the thing they will need most. §3, §4 and §6b are consequences
+of what is stated here.
+
+**The defect it fixes: approval and the merge were both trying to write `done`.**
+§3 said approving flips the design subtask `done`; the shipped status sync says
+the merge flips the card `done`. Both cannot be the single writer, and
+_"approved but still `in_review`"_ is what that collision looks like from the
+board.
+
+**APPROVAL IS A TRIGGER, NOT A STATUS WRITE.** What it triggers is decided by one
+question, asked once.
+
+#### The discriminator: does the work item have a linked OPEN pull request?
+
+**It is READ, never configured.** The answer comes from the work item's own
+**delivery rows** — `work_item_delivery` joined to the pull request's `state`,
+the same set `countOtherOpenByWorkItem` already counts for the
+`deferred_open_pr` defer. There is no setting, no field on the card, and nothing
+for a planner to get wrong: a card that opened a pull request has a delivery row
+because `link_pull_request` wrote one, and a card that never will has none.
+
+_(`prMergeMode` (§7) is a different question and does not enter here. The
+discriminator asks whether a merge is COMING; `prMergeMode` asks whether a PERSON
+decides it. `auto` still merges, so `done` still comes from the merge.)_
+
+#### WORKFLOW A — no pull request
+
+```
+implemented → in_review → [ design_result | decision_approval ] → done
+                           approve is TERMINAL
+```
+
+| #   | event                             | actor      | status        |
+| --- | --------------------------------- | ---------- | ------------- |
+| 1   | the subject is published          | agent      | `implemented` |
+| 2   | the gate is created `awaiting`    | product    | `in_review`   |
+| 3   | **Approve** — records, pins (§6c) | **person** | **`done`**    |
+| 3′  | _or_ **Request changes**          | person     | unchanged     |
+
+**Nothing will ever merge, so nothing else would write `done`. Approval writes
+it**, and that is why §3's rule is conditional rather than simply reversed.
+
+#### WORKFLOW B — a pull request exists (design and code, IDENTICALLY)
+
+| #   | event                                                                                                               | actor                              | status         |
+| --- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------- |
+| 1   | the agent opens the pull request                                                                                    | agent                              | `implemented`  |
+| 2   | CI goes green                                                                                                       | CI, server-side                    | `in_review`    |
+| 3   | **both** gates created `awaiting` — `pull_request_approval` and `pull_request_merge`                                | product                            | —              |
+| 4a  | **"Approve and merge" in Motir** — decides BOTH gates in ONE transaction                                            | **person**                         | **`approved`** |
+| 4b  | _or_ the pull request is approved **IN GITHUB** → syncs the approval gate only; the **merge gate stays `awaiting`** | **GitHub reviewer**                | **`approved`** |
+| 5   | merge — or ENQUEUE, where the repository has a merge queue                                                          | product (4a) / a second press (4b) | —              |
+| 6   | the merge lands                                                                                                     | webhook                            | **`done`**     |
+
+**Design and code take the SAME rows.** A design card that opened a pull request
+is Workflow B; only its PORT differs — it shows the mock, the notes and the
+screenshot instead of what changed and how to test it (§1's amendment).
+
+**Row 4b is WHY there are two gates rather than one.** A GitHub approval tells
+Motir the code was approved and **nothing else** — it is not a merge, and
+treating it as one would merge on somebody's review. And the audit needs two rows
+regardless: **if one person approves in GitHub and another merges in Motir, that
+is two decisions by two people, and one row could not record it.**
+
+**`decisionSource` gains `github` for row 4b**, and the approving actor may be a
+GitHub identity Motir cannot map to a member — §6b's amendment says what the
+record holds then, and why a null FK would be the wrong answer.
+
+#### What the two workflows settle, in one line each
+
+- **`done` has exactly ONE writer, in both workflows.** In A it is the approval,
+  because nothing else ever will. In B it is the merge webhook, exactly as when a
+  person merges by hand.
+- **`approved` exists so that B has somewhere to land** between _a person said
+  yes_ and _it shipped_ — and it is `in_progress`-category, so the card is still
+  open (§6b).
+- **The discriminator is asked ONCE, at decision time**, from data the product
+  already has.
+
+### 9. HOW TO TEST is a first-class deliverable, and it belongs on the WORK ITEM — NEW (MOTIR-4911, 2026-09-08), DECIDED BY THE REQUESTER (Yue, 2026-09-08)
+
+**A person deciding a `pull_request_approval` gate is being asked to say yes to
+something they have not seen run.** The port shows what changed; that is
+necessary and it is not sufficient. **So a coding card's agent writes a HOW TO
+TEST section as part of its deliverable — onto the WORK ITEM, not into the
+pull-request body — and the port renders it.**
+
+**Why the work item rather than the pull request.** The gate is decided in Motir,
+by someone who may not open GitHub at all; a pull-request body is a surface the
+decision surface does not read. It is also the wrong lifetime — a pull-request
+body is edited by whoever pushes next, while the work item is the record the
+audit trail (§6a) points back at.
+
+**It carries EVERY path available, and the diff is a link out rather than the
+lead:**
+
+| path               | what it must state                                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| **the preview**    | the URL the repository's own CI produced, **and its click-path** — how to reach the changed surface once it is open         |
+| **locally**        | fetch, install, migrate, seed, run — then the click-path. Name the SEED that makes the surface non-empty or hits the branch |
+| **what CI proved** | which lanes ran and what they assert, so the reader knows what they do NOT have to re-check by hand                         |
+
+**A path that is unavailable is SAID to be unavailable**, with what is missing. A
+reviewer who cannot tell _"there is no preview"_ from _"nobody wrote this
+section"_ is being asked to approve on faith.
+
+**⚠️ SCOPE: SELF-HOSTED REPOSITORIES ONLY.** The preview URL above is one the
+repository's OWN CI produced — Motir reads it, it does not create it. **A
+Motir-hosted deploy, where Motir stands up the preview itself, is epic
+MOTIR-4527 (_Hosting what the agent builds — tenant applications on
+motir.site_)** and is not decided here. Until it lands, a project whose
+repositories produce no preview has two paths rather than three, and says so.
+
 ---
 
 ## Consequences
@@ -407,10 +838,37 @@ planner's reading of it; it is cheap to reverse before MOTIR-4882 ships.
 - **Storage grows with approvals, and only with approvals** — bounded by human
   clicks, which does not scale the way CI artefacts do.
 
+> ### Consequences — AMENDMENT (MOTIR-4911, 2026-09-08)
+>
+> - **The `approved` work-item status is a new consequence, and it is a
+>   MIGRATION** — a status row, its two transitions, and its `restricted`-policy
+>   edges. It is a sibling story's, not MOTIR-4778's, and §6b says so.
+> - **MOTIR-4788 grows again** — `decisionSource: github`, the unmappable-actor
+>   label, and a `subjectId` typed as an opaque id with a per-kind resolver rather
+>   than a concrete FK (§1). Its estimate predates all of it.
+> - **MOTIR-4790 grows again** — the pin's predicate is now keyed on the SUBJECT
+>   (§6c), which is a different query from the one its estimate assumed, and the
+>   discriminator read (§8) is a delivery-row join it did not carry.
+> - **No new permission key reaches anybody.** §2's amendment retires the
+>   role-derived answer entirely: authority is a relationship, and
+>   `work_item:merge_pull_request` exists only to sit in
+>   `IRREVERSIBLE_PERMISSIONS` so no API token can confer merge.
+> - **`design-result.md` §7 is amended a SECOND time** by this record's
+>   amendment pull request, for §6c's re-keying. It remains the only file outside
+>   this one that changes.
+> - **A coding card's deliverable grows a HOW TO TEST section** (§9), written onto
+>   the work item. That is an authoring obligation on every card that produces a
+>   pull request, and it is what the approval port renders.
+
 ### Deliberately NOT decided here
 
-- **The decision gate** — named by the requester as a future kind. §1's table
-  says how it registers; this record ships none.
+- **The decision gate.** ⚠️ **AMENDED (MOTIR-4911, 2026-09-08): the KIND is now
+  decided — `decision_approval` is in §1's enum, with its port and its verbs.**
+  ~~named by the requester as a future kind. §1's table says how it registers;
+  this record ships none.~~ What is still not decided is its **HANDLER** — the
+  resolver for a decision document, and where that document lives before the
+  `pages` domain hosts it. `decision_choice`, the N-option verb set, is named in
+  §1 and likewise ships nothing here.
 - **Re-homing the ACCEPTANCE gate.** `AcceptancePanel` is the language §1
   generalises from and is deliberately left where it is; folding it onto the
   Approvals tab is its own story.
