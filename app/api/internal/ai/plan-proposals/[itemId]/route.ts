@@ -272,6 +272,17 @@ function correctionFrom(
           ),
         }
       : {}),
+    // The singular ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045, surfaced
+    // by MOTIR-4924), beside the SET forms above and the ROLE below. Sparse like
+    // them: absent leaves the pin alone, an explicit `null` unpins. A non-string
+    // is ignored rather than coerced, for the same reason a malformed set member
+    // is — the correction did not describe the axis.
+    ...('targetRepositoryRef' in b
+      ? {
+          targetRepositoryRef:
+            typeof b.targetRepositoryRef === 'string' ? b.targetRepositoryRef : null,
+        }
+      : {}),
     // The ROLE half of the pin (MOTIR-3865) — structural, beside the name, and
     // the one a correction could not reach at all. It matters most exactly where
     // `targetRepo` cannot help: an ONBOARDING plan's repositories do not exist

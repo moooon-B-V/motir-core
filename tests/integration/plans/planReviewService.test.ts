@@ -959,6 +959,59 @@ describe('planReviewService.getPlanReview', () => {
     expect(modify.changes).toEqual([{ field: 'targetRepoRole', from: null, to: 'api' }]);
   });
 
+  // ── The SINGULAR ROW-ID pin (bug MOTIR-4924, AC3) ─────────────────────────
+  // motir-ai emits `targetRepositoryRef` on `proposedFields`, and core read
+  // NOTHING off it until this bug — the pin was persisted and dropped at
+  // approve. The approval surface has to SHOW the decision, both when an `add`
+  // pins by ref and when a `modify` re-pins by ref, or an approver is shown a
+  // proposal "with no repository at all".
+
+  it('surfaces a `modify` ROW-REF re-pin in the change list, on KEY PRESENCE (MOTIR-4924, AC3)', async () => {
+    // Same presence-triggered row as `targetRepoRole` above: the ref is resolved
+    // at approve, so there is no old-side name to compare against — the diff row
+    // appears precisely when the approve will act.
+    const fx = await makeWorkItemFixture();
+    const target = await seedItem(fx, 'Card that moves to a specific row');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Re-pin by ref' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: target.id, patch: { targetRepositoryRef: 'row-web-1' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const modify = review.items.find((i) => i.op === 'modify')!;
+    expect(modify.changes).toEqual([{ field: 'targetRepo', from: null, to: 'row row-web-1' }]);
+  });
+
+  it('carries the `add` ROW-REF pin on the review item, add-only, so an approver is not shown a proposal with no repository at all (MOTIR-4924, AC3)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Row-pinned add' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Pinned to a row',
+            kind: 'task',
+            targetRepositoryRef: 'row-web-1',
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const add = review.items.find((i) => i.op === 'add')!;
+    expect(add.targetRepositoryRef).toBe('row-web-1');
+    // A `modify` reports the pin through the DIFF, not the add-only rail field.
+    expect(add.changes).toEqual([]);
+  });
+
   it('resolves the decider name + an approved history event after approve', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await plansService.createPlan(fx.projectId, { title: 'Tiny plan' }, fx.ctx);

@@ -43,6 +43,7 @@ const EVERY_PATCH_KEY: Required<PlanItemPatch> = {
   // arrival, which is exactly what this file exists to make visible.
   targetRepos: [],
   targetRepositories: [],
+  targetRepositoryRef: null,
   targetRepoRole: null,
   parentRef: null,
   blockedByAdd: [],

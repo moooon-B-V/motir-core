@@ -246,6 +246,14 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
         "carries on every op. Reporting a committed card's rows here would put cuids on a rail " +
         'beside the same repositories spelled as names, one row up.',
     },
+    targetRepositoryRef: {
+      addOnly:
+        'MOTIR-4924 — the singular ROW-ID pin, and it is `add`-ONLY for exactly the reason ' +
+        '`targetRepositories` is: a cuid is an authoring form, not a value a reviewer reads, and ' +
+        'the repository it names is what `targetRepo` / `targetRepos` carry once resolved. A ' +
+        '`modify` that re-pins by ref shows in the DIFF (`buildChanges`, under `targetRepo`), so ' +
+        'the rail need not repeat it.',
+    },
     targetRepoRole: {
       everyOp:
         'MOTIR-4143 — patch-only in practice: `work_item.targetRepoRole` is RETIRED, so the ' +
@@ -326,6 +334,7 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
       'explanationSource',
       'planningProvenance',
       'targetRepositories',
+      'targetRepositoryRef',
       'todos',
     ]);
     expect(everyOp.length).toBeGreaterThan(2);
@@ -517,6 +526,7 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     // change.
     targetRepos: { row: 'targetRepo' },
     targetRepositories: { row: 'targetRepo' },
+    targetRepositoryRef: { row: 'targetRepo' },
     targetRepoRole: { row: 'targetRepoRole' },
     parentRef: { row: 'parent' },
     // BOTH edge carriers collapse onto one row — the diff cell reads

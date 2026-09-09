@@ -327,6 +327,19 @@ function buildChanges(
       to: repoSetCell(patch.targetRepositories.map((id) => `row ${id}`)),
     });
   }
+  // …and the singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by
+  // MOTIR-4924), the `modify` mirror of the `add` path's `targetRepositoryRef`.
+  // Same presence-triggered row as the SET form directly above: it cannot resolve
+  // the ref to a name without a read it does not make, so the cell shows the id
+  // and says so — worse to read and better than silence, the failure MOTIR-3868
+  // was filed about.
+  if (patch.targetRepositoryRef !== undefined) {
+    changes.push({
+      field: 'targetRepo',
+      from: repoSetCell(target?.targetRepos ?? []),
+      to: patch.targetRepositoryRef == null ? null : `row ${patch.targetRepositoryRef}`,
+    });
+  }
   // …and the ROLE, which is emitted on KEY PRESENCE rather than on a difference,
   // because there is NO OLD SIDE TO COMPARE AGAINST.
   //
@@ -917,6 +930,13 @@ export const planReviewService = {
         // cuids, an authoring form rather than a value a reviewer reads, and the
         // names they resolve to are what `targetRepos` directly above carries.
         targetRepositories: item.op === 'add' ? (proposed?.targetRepositories ?? null) : null,
+        // The singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by
+        // MOTIR-4924) — `add`-ONLY for exactly the same reason: a cuid is an
+        // authoring form, not a value a reviewer reads, and the repository it names
+        // is what `targetRepo` / `targetRepos` carry once resolved. On a `modify`
+        // the re-pin is read off the DIFF (`buildChanges`, under `targetRepo`), so
+        // the rail need not repeat it.
+        targetRepositoryRef: item.op === 'add' ? (proposed?.targetRepositoryRef ?? null) : null,
         // ⚠️ NO TARGET FALLBACK, and that is not an omission: `work_item.
         // targetRepoRole` is RETIRED (Story MOTIR-2732 · MOTIR-3040), so a
         // committed card HAS no role to report. A `modify` shows the role only
