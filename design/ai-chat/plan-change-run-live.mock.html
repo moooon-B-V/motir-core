@@ -3866,6 +3866,17 @@
       .brand-inv svg {
         display: block;
       }
+      /* MOTIR-4944 — the brand mark's ink, copied verbatim from
+         `packages/brand/brand.css:46` by way of `design/brand/brand-mark.mock.html`
+         (and 7 more). The glyph's path is `fill="currentColor"` and this was the
+         only rule that set the colour, so the mark painted the inherited text ink
+         instead of the accent. NOT `--el-accent`: the two are identical in light
+         and diverge in dark, where `--el-accent` is the darker FILL built to
+         carry white ink and loses 0.8 of a contrast point as a glyph (brand.css §4). */
+      .brand-glyph {
+        color: var(--el-accent-on-surface);
+        flex: none;
+      }
     </style>
   </head>
   <body>

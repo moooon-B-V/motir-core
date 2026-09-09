@@ -528,6 +528,19 @@
       .page-head {
         margin-bottom: 22px;
       }
+      /* MOTIR-4944 — the breadcrumb trail's rule, copied from
+         `design/reports/dashboard.mock.html` / `more-reports.mock.html`, the pair
+         whose crumb is the same shape as this one (a plain text row above the page
+         head) and whose shim block uses the same px idiom this asset does. Five
+         `.crumbs` divs sat directly above an `<h2>` at body size and body ink. */
+      .crumbs {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
       .page-head h2 {
         font-family: var(--font-serif);
         font-size: 26px;
