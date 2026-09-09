@@ -285,6 +285,32 @@ export interface PlanItemProposedFields {
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
   /**
+   * WHICH `project_repository` ROW this item ships in, by id (Story MOTIR-2732 ·
+   * MOTIR-3045) — the reference-native SINGULAR pin, and the one spelling that
+   * lifts the repeated-role ceiling: a role resolves to NOTHING on a project where
+   * two rows share it (by design — the label that distinguishes them is documented
+   * as never a resolution key), and a NAME is meaningless before the row exists,
+   * so on precisely the projects the row pin was built for the row pin is the ONLY
+   * expressible one.
+   *
+   * It IS already the `project_repository` id, so {@link proposalRepoRef} needs no
+   * lookup for it — only validation that the row belongs to this project. It sits
+   * AHEAD of {@link targetRepoRole} in that ladder (a row reference is more
+   * specific than a role), beside {@link targetRepo} (a name is the settled pin,
+   * this is the stable one) and the set forms, and MUTUALLY EXCLUSIVE with all of
+   * them at the append (`assertSingleTargetRepoInput`): one axis, five spellings,
+   * never two on one proposal.
+   *
+   * ⚠️ motir-ai has EMITTED this field since MOTIR-3045 and motir-core READ NOTHING
+   * off it until MOTIR-4924 — the pin was persisted onto the plan-item row and
+   * dropped at approve, so a leaf pinned only by row ref materialized unrouted and
+   * indistinguishable from a leaf the planner could not classify. The drift guard
+   * in `tests/integration/plans/proposedRepoAxisDriftGuard.test.ts` holds this side
+   * total against the keys the producer emits, so the next spelling to cross the
+   * boundary unequally fails in the PR that creates it.
+   */
+  targetRepositoryRef?: string | null;
+  /**
    * The card's ORDERED STEPS (Story MOTIR-3810 · MOTIR-4616) — a `manual` card's
    * to-do list, proposed with the card so the reviewer reads what approve will
    * write (`docs/decisions/agent-authored-plans.md` AMENDMENT 14 D1).
@@ -404,6 +430,19 @@ export interface PlanItemPatch {
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
   /**
+   * RE-PIN the target's repo ROW (Story MOTIR-2732 · MOTIR-3045, surfaced by
+   * MOTIR-4924) — the `modify` mirror of the `add` path's
+   * {@link PlanItemProposedFields.targetRepositoryRef}, so a re-plan that moves work
+   * to a specific `project_repository` row (the case the role pin cannot serve on a
+   * two-rows-share-a-role project) can say so on the plan a person approves.
+   *
+   * Same sparse semantics as {@link targetRepoRole}: absent (`undefined`) leaves the
+   * pin untouched; an explicit `null` UNPINS. Validated at approve — the row must
+   * belong to this project — the same way the `add` path's ref is, so the two paths
+   * cannot disagree about which row a ref names.
+   */
+  targetRepositoryRef?: string | null;
+  /**
    * RE-PARENT the target (MOTIR-3859) — the `modify` mirror of the `add` path's
    * {@link PlanItemDto.parentRef}, and the half of D3's `SITS or SHIPS` pair the
    * patch never had.
@@ -476,6 +515,7 @@ export const PLAN_ITEM_PATCH_KEYS = [
   'targetRepos',
   'targetRepositories',
   'targetRepoRole',
+  'targetRepositoryRef',
   'parentRef',
   'blockedByAdd',
   'blockedByRemove',
@@ -762,6 +802,15 @@ export interface CorrectProposalInput extends UpdateProposalInput {
    */
   targetRepositories?: string[];
   /**
+   * `add` only — the SINGULAR ROW-ID half of the pin (Story MOTIR-2732 ·
+   * MOTIR-3045, surfaced by MOTIR-4924), as the mirror of {@link targetRepoRole}
+   * below: a correction that could re-pin a specific row on a two-rows-share-a-role
+   * project could not otherwise say which. `null` unpins.
+   *
+   * Clears the other spellings of the axis, exactly as the SET forms above do.
+   */
+  targetRepositoryRef?: string | null;
+  /**
    * `add` only — RE-PIN the proposal's repo ROLE (MOTIR-3865), the portable half
    * of the pin beside {@link targetRepo}'s settled one. `null` unpins.
    *
@@ -828,6 +877,7 @@ export const CORRECT_PROPOSAL_KEYS = [
   'targetRepo',
   'targetRepos',
   'targetRepositories',
+  'targetRepositoryRef',
   'targetRepoRole',
   'patch',
 ] as const;

@@ -95,22 +95,30 @@ describe('the repository axis: `create_work_item` ⟷ a plan proposal (bug MOTIR
     expect(repositoryAxis(createKeys)).toEqual(['targetRepo', 'targetRepos', 'targetRepositories']);
   });
 
-  it('the proposal side carries ONE MORE — `targetRepoRole`, and the asymmetry is right', () => {
+  it('the proposal side carries TWO MORE — `targetRepoRole` and the singular ROW-ID ref, and the asymmetry is right', () => {
     // ⚠️ THE PARITY IS ONE-DIRECTIONAL ON PURPOSE, and this records why so the
-    // next reader does not "finish" it by adding a role to `create_work_item`.
-    // A ROLE is a PLAN-ONLY addressing mode: `work_item.targetRepoRole` is
-    // RETIRED (Story MOTIR-2732 · MOTIR-3040), so there is no column for the
-    // direct door to write. It exists because at generation the project's
-    // repositories DO NOT EXIST — the set is derived from the tree — so a fresh
-    // plan can pin a role and nothing else. A committed card has rows to point
-    // at and needs no stand-in for them.
+    // next reader does not "finish" it by adding a role (or a row-ref) to
+    // `create_work_item`. A ROLE is a PLAN-ONLY addressing mode:
+    // `work_item.targetRepoRole` is RETIRED (Story MOTIR-2732 · MOTIR-3040), so
+    // there is no column for the direct door to write. It exists because at
+    // generation the project's repositories DO NOT EXIST — the set is derived
+    // from the tree — so a fresh plan can pin a role and nothing else. A
+    // committed card has rows to point at and needs no stand-in for them.
+    //
+    // The SINGULAR ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by
+    // MOTIR-4924) is the same PLAN-ONLY shape one spelling over: `create_work_item`
+    // expresses a row id as the PLURAL `targetRepositories`, so the direct door
+    // has no need of (and no column for) a singular form — while a proposal, whose
+    // planner emits the singular, must be able to say it.
     expect(repositoryAxis(proposedKeys)).toEqual([
       'targetRepo',
       'targetRepoRole',
       'targetRepos',
       'targetRepositories',
+      'targetRepositoryRef',
     ]);
     expect(createKeys.has('targetRepoRole')).toBe(false);
+    expect(createKeys.has('targetRepositoryRef')).toBe(false);
   });
 });
 
@@ -146,6 +154,7 @@ describe('the DEEPEN turn still refuses the repository axis (bug MOTIR-4904)', (
       'targetRepoRole',
       'targetRepos',
       'targetRepositories',
+      'targetRepositoryRef',
     ]);
   });
 });

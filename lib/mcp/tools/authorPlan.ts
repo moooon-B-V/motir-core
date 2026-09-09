@@ -314,6 +314,15 @@ const proposedFieldsSchema = z
           'when you have the ids: a reference survives a rename and can name one of two rows that ' +
           'share a role, which a name cannot. Mutually exclusive with the two fields above.',
       ),
+    targetRepositoryRef: z
+      .string()
+      .optional()
+      .describe(
+        'The singular `project_repository` ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced ' +
+          'by MOTIR-4924) — the reference-native spelling for the proposal that ships in ONE ' +
+          'repository named by row. It is the only pin that can name one of two rows sharing a ' +
+          'role. MUTUALLY EXCLUSIVE with the other repository spellings on the same proposal.',
+      ),
     targetRepoRole: z
       .string()
       .optional()
@@ -396,6 +405,15 @@ const patchSchema = z
       .describe(
         'The same re-pin, as the project’s repository ROW IDS. Mutually exclusive with the two ' +
           'fields above.',
+      ),
+    targetRepositoryRef: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        'RE-PIN the target’s repo ROW (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) — ' +
+          'the `modify` mirror of the `add` path’s row pin, for the re-plan that moves work to a ' +
+          'specific row the role cannot name. An explicit `null` unpins it.',
       ),
     targetRepoRole: z
       .string()
@@ -716,6 +734,15 @@ const updatePlanProposalInputSchema = {
       '`add` only: the same replacement, as the project’s repository ROW IDS. Clears the other ' +
         'two spellings, for the reason above.',
     ),
+  targetRepositoryRef: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      '`add` only: re-pin the SINGULAR ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045, ' +
+        'surfaced by MOTIR-4924) — the one spelling that names one of two rows sharing a role. ' +
+        '`null` unpins it. Clears the other spellings, for the reason above.',
+    ),
   targetRepoRole: z
     .string()
     .nullable()
@@ -802,6 +829,7 @@ interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
   targetRepo?: string | null;
   targetRepos?: string[];
   targetRepositories?: string[];
+  targetRepositoryRef?: string | null;
   targetRepoRole?: string | null;
   patch?: Record<string, unknown> | null;
 }
@@ -1008,6 +1036,7 @@ function summarizeCorrection(
       'targetRepo',
       'targetRepos',
       'targetRepositories',
+      'targetRepositoryRef',
       'targetRepoRole',
       'patch',
     ].includes(f),
@@ -1481,6 +1510,7 @@ export async function runUpdatePlanProposal(
     'targetRepo',
     'targetRepos',
     'targetRepositories',
+    'targetRepositoryRef',
     'targetRepoRole',
     'patch',
   ] as const satisfies readonly CorrectProposalKey[];
@@ -1701,8 +1731,9 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
       description:
         'Correct a proposal you already appended — the repair for a mistake you can see but ' +
         `could not fix. Unlike \`${UPDATE_PLAN_ITEM_TOOL_NAME}\`, this reaches the STRUCTURAL ` +
-        'fields: `parentRef`, `blockedByRefs`, the repository axis (`targetRepo`, `targetRepos`, ' +
-        '`targetRepositories`, `targetRepoRole`), and a `modify` ' +
+        'fields: `parentRef`, `blockedByRefs`, the repository axis (`targetRepo`, ' +
+        '`targetRepos`, `targetRepositories`, the singular row pin `targetRepositoryRef`, ' +
+        '`targetRepoRole`), and a `modify` ' +
         'proposal’s `patch` — which is where a mistyped dependency edge usually sits. Legal ' +
         'while the plan is ' +
         '`generating` AND after you have closed it with `final: true`, while it is `planned` ' +

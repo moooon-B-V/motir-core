@@ -113,6 +113,10 @@ const PATCH_KEY_RAIL_ROW = {
   targetRepos: 'targetRepo',
   targetRepositories: 'targetRepo',
   targetRepoRole: 'targetRepo',
+  // The singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924)
+  // joins the same row for the same reason: it is the same axis in another spelling,
+  // mutually exclusive with the four above at the append.
+  targetRepositoryRef: 'targetRepo',
   parentRef: 'parent',
 } satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
 
@@ -455,6 +459,15 @@ export interface PlanReviewItemDto {
    * this field has nothing to say, and the rail draws the names.
    */
   targetRepositories: string[] | null;
+  /**
+   * The singular `project_repository` ROW-ID pin (Story MOTIR-2732 · MOTIR-3045,
+   * surfaced by MOTIR-4924) — `add`-ONLY for exactly the reason
+   * {@link targetRepositories} is: a cuid is an authoring form, not a value a
+   * reviewer reads, and the name it resolves to is what {@link targetRepo} /
+   * {@link targetRepos} already carry. The diff row a re-pin by ref produces lives
+   * in `changes` (under `targetRepo`), so the rail need not repeat it.
+   */
+  targetRepositoryRef: string | null;
   targetRepoRole: string | null;
   executor: string | null;
   planningProvenance: { source?: string; harness?: string | null; model?: string | null } | null;

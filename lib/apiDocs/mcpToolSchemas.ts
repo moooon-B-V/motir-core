@@ -209,6 +209,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   description:
                     'The same axis as `targetRepos`, as the project’s repository ROW IDS, ORDERED. Prefer it when you have the ids: a reference survives a rename and can name one of two rows that share a role, which a name cannot. Mutually exclusive with the two fields above.',
                 },
+                targetRepositoryRef: {
+                  type: 'string',
+                  description:
+                    'The singular `project_repository` ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) — the reference-native spelling for the proposal that ships in ONE repository named by row. It is the only pin that can name one of two rows sharing a role. MUTUALLY EXCLUSIVE with the other repository spellings on the same proposal.',
+                },
                 targetRepoRole: {
                   type: 'string',
                   description: 'The PORTABLE repo pin — a role of the project’s repository set.',
@@ -321,6 +326,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   items: { type: 'string' },
                   description:
                     'The same re-pin, as the project’s repository ROW IDS. Mutually exclusive with the two fields above.',
+                },
+                targetRepositoryRef: {
+                  type: ['string', 'null'],
+                  description:
+                    'RE-PIN the target’s repo ROW (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) — the `modify` mirror of the `add` path’s row pin, for the re-plan that moves work to a specific row the role cannot name. An explicit `null` unpins it.',
                 },
                 targetRepoRole: {
                   type: ['string', 'null'],
@@ -2043,6 +2053,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           '`add` only: the same replacement, as the project’s repository ROW IDS. Clears the other two spellings, for the reason above.',
       },
+      targetRepositoryRef: {
+        type: ['string', 'null'],
+        description:
+          '`add` only: re-pin the SINGULAR ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) — the one spelling that names one of two rows sharing a role. `null` unpins it. Clears the other spellings, for the reason above.',
+      },
       targetRepoRole: {
         type: ['string', 'null'],
         description:
@@ -2118,6 +2133,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 items: { type: 'string' },
                 description:
                   'The same re-pin, as the project’s repository ROW IDS. Mutually exclusive with the two fields above.',
+              },
+              targetRepositoryRef: {
+                type: ['string', 'null'],
+                description:
+                  'RE-PIN the target’s repo ROW (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) — the `modify` mirror of the `add` path’s row pin, for the re-plan that moves work to a specific row the role cannot name. An explicit `null` unpins it.',
               },
               targetRepoRole: {
                 type: ['string', 'null'],

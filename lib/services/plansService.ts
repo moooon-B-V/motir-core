@@ -286,6 +286,7 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields.targetRepo,
       p.proposedFields.targetRepos,
       p.proposedFields.targetRepositories,
+      p.proposedFields.targetRepositoryRef,
     );
   } else if (p.op === 'modify') {
     if (!p.workItemId) throw new InvalidProposalError('A `modify` proposal requires workItemId.');
@@ -311,6 +312,7 @@ function validateProposal(p: ProposalInput): void {
       p.patch.targetRepo,
       p.patch.targetRepos,
       p.patch.targetRepositories,
+      p.patch.targetRepositoryRef,
     );
     // A `modify` may RE-PARENT the target (MOTIR-3859) — and the ONE form of
     // that key which is refused at the boundary rather than validated is an
@@ -934,6 +936,12 @@ type ResolvedRepoPins = ReadonlyMap<string, string | null>;
 interface ProposalRepoRefs {
   byName: ReadonlyMap<string, string>;
   byRole: ReadonlyMap<string, string>;
+  // Every `project_repository` id this project has (Story MOTIR-2732 · MOTIR-3045,
+  // surfaced by MOTIR-4924). The singular row-ref pin IS already the id, so
+  // resolving it is a MEMBERSHIP check against this set rather than a lookup — the
+  // validation `proposalRepoRef` owes a `targetRepositoryRef` ("the row belongs to
+  // this project"), read off the same fresh row set `byName`/`byRole` read.
+  byId: ReadonlySet<string>;
 }
 
 async function resolveProposalRepoRefs(
@@ -944,25 +952,30 @@ async function resolveProposalRepoRefs(
   const rows = await projectRepoSetService.listByProject(projectId, ctx);
   const byName = new Map<string, string>();
   const roleCounts = new Map<string, number>();
+  const byId = new Set<string>();
   for (const row of rows) {
     // The RESOLVED name, same rule as everywhere else (§A4): the realized
     // repository's own once it is realized, else the row's authored intent.
     const name = (row.realizedRepo?.name ?? row.name).trim().toLowerCase();
     if (name.length > 0 && !byName.has(name)) byName.set(name, row.id);
     roleCounts.set(row.role, (roleCounts.get(row.role) ?? 0) + 1);
+    byId.add(row.id);
   }
   const byRole = new Map<string, string>();
   for (const row of rows) {
     if (roleCounts.get(row.role) === 1) byRole.set(row.role, row.id);
   }
-  return { byName, byRole };
+  return { byName, byRole, byId };
 }
 
 /** The reference a single proposal resolves to, or `null` when it names nothing
- *  this project has — a NAME first (it is the settled, unambiguous pin), then the
+ *  this project has — a NAME first (it is the settled, unambiguous pin), then a
+ *  ROW REFERENCE (the most specific singular pin — it IS the `project_repository`
+ *  id, so it needs only validation that the row belongs to this project), then the
  *  ROLE, which is what a plan written before the repositories existed carries. */
 function proposalRepoRef(
   pinnedName: string | null,
+  repoRef: string | null,
   role: string | null,
   refs: ProposalRepoRefs,
 ): string | null {
@@ -970,6 +983,13 @@ function proposalRepoRef(
     const byName = refs.byName.get(pinnedName.trim().toLowerCase());
     if (byName !== undefined) return byName;
   }
+  // A ROW REFERENCE resolves AHEAD of the role (Story MOTIR-2732 · MOTIR-3045,
+  // surfaced by MOTIR-4924): a role resolves to NOTHING on a project where two
+  // rows share it, and the ref is the one spelling that lifts that ceiling. It is
+  // already the id, so this is a membership check against `byId` — the validation
+  // that the row belongs to this project — and a ref outside the set lands unrouted
+  // and honest, never a guess.
+  if (repoRef !== null) return refs.byId.has(repoRef) ? repoRef : null;
   if (role !== null) return refs.byRole.get(role) ?? null;
   return null;
 }
@@ -1694,7 +1714,14 @@ async function materialize(
     // answer `resolveAuthoredRepoPinsInProject` gives the direct door.
     const createdRefs = repoSets.has(item.id)
       ? repoSets.get(item.id)!.refs
-      : refsOf(proposalRepoRef(repoPins.get(item.id) ?? null, pf.targetRepoRole ?? null, repoRefs));
+      : refsOf(
+          proposalRepoRef(
+            repoPins.get(item.id) ?? null,
+            pf.targetRepositoryRef ?? null,
+            pf.targetRepoRole ?? null,
+            repoRefs,
+          ),
+        );
     if (createdRefs.length > 0) {
       await workItemRepoRepository.createMany(
         createdRefs.map((projectRepoId, position) => ({
@@ -2294,7 +2321,8 @@ async function applyModify(
   if (
     repoSets.has(item.id) ||
     repoPins.has(item.id) ||
-    (item.patch as PlanItemPatch | null)?.targetRepoRole !== undefined
+    (item.patch as PlanItemPatch | null)?.targetRepoRole !== undefined ||
+    (item.patch as PlanItemPatch | null)?.targetRepositoryRef !== undefined
   ) {
     const patched = (item.patch as PlanItemPatch | null) ?? null;
     // A proposed SET replaces the references WHOLE, in its authored order — the
@@ -2304,7 +2332,12 @@ async function applyModify(
     const nextRefs = repoSets.has(item.id)
       ? repoSets.get(item.id)!.refs
       : refsOf(
-          proposalRepoRef(repoPins.get(item.id) ?? null, patched?.targetRepoRole ?? null, repoRefs),
+          proposalRepoRef(
+            repoPins.get(item.id) ?? null,
+            patched?.targetRepositoryRef ?? null,
+            patched?.targetRepoRole ?? null,
+            repoRefs,
+          ),
         );
     await workItemRepoRepository.deleteByWorkItem(current.id, tx);
     if (nextRefs.length > 0) {
@@ -3827,8 +3860,15 @@ export const plansService = {
     //
     // ⚠️ AND THE AXIS MAY BE DESCRIBED ONCE (bug MOTIR-4904), through the direct
     // door's own guard — before either resolver runs, so a contradictory
-    // correction is refused rather than half-resolved.
-    assertSingleTargetRepoInput(input.targetRepo, input.targetRepos, input.targetRepositories);
+    // correction is refused rather than half-resolved. The singular ROW-ID pin
+    // (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924) joins the same
+    // exclusivity set as the name and the SET forms.
+    assertSingleTargetRepoInput(
+      input.targetRepo,
+      input.targetRepos,
+      input.targetRepositories,
+      input.targetRepositoryRef,
+    );
     let resolvedTargetRepo: string | null | undefined;
     if (input.targetRepo !== undefined) {
       try {
@@ -3901,21 +3941,23 @@ export const plansService = {
           }
           const current = (item.proposedFields ?? {}) as unknown as PlanItemProposedFields;
           const next = mergeProposedFields(current, input);
-          // ⚠️ THE REPOSITORY AXIS IS REPLACED, NOT MERGED (bug MOTIR-4904).
-          // Every other key here is sparse per KEY; these three are one field in
-          // three spellings, so correcting one CLEARS the other two. Merging
-          // instead would store the exact contradiction
-          // `assertSingleTargetRepoInput` refuses at the append — a stale
-          // `targetRepo` beside a new `targetRepos` — and approve would then have
-          // to invent a precedence rule over a state nobody authored.
+          // ⚠️ THE REPOSITORY AXIS IS REPLACED, NOT MERGED (bug MOTIR-4904). Every
+          // other key here is sparse per KEY; these FOUR spellings are one field in
+          // one axis, so correcting one CLEARS the others. Merging instead would
+          // store the exact contradiction `assertSingleTargetRepoInput` refuses at
+          // the append — a stale `targetRepo` beside a new `targetRepos` — and
+          // approve would then have to invent a precedence rule over a state
+          // nobody authored.
           if (
             resolvedTargetRepo !== undefined ||
             resolvedRepoSet !== undefined ||
-            input.targetRepo !== undefined
+            input.targetRepo !== undefined ||
+            input.targetRepositoryRef !== undefined
           ) {
             delete next.targetRepo;
             delete next.targetRepos;
             delete next.targetRepositories;
+            delete next.targetRepositoryRef;
           }
           if (resolvedTargetRepo !== undefined) next.targetRepo = resolvedTargetRepo;
           if (resolvedRepoSet !== undefined) {
@@ -3928,6 +3970,15 @@ export const plansService = {
             } else {
               next.targetRepos = resolvedRepoSet.names;
             }
+          }
+          // The singular ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045,
+          // surfaced by MOTIR-4924), stored under its own spelling for the same
+          // reason the SET row-id form is: the id the author pinned survives
+          // rather than being rewritten to the name it happens to resolve to
+          // today. Membership of the project's row set is re-validated at approve
+          // (`proposalRepoRef`'s byId check), exactly as it is on the append path.
+          if (input.targetRepositoryRef !== undefined) {
+            next.targetRepositoryRef = input.targetRepositoryRef;
           }
           // The ROLE half of the pin (MOTIR-3865), applied HERE rather than in
           // `mergeProposedFields` for the same reason its NAME twin is: that
@@ -3997,6 +4048,7 @@ export const plansService = {
               input.patch?.targetRepo,
               input.patch?.targetRepos,
               input.patch?.targetRepositories,
+              input.patch?.targetRepositoryRef,
             );
             data.patch = (input.patch ?? Prisma.JsonNull) as Prisma.InputJsonValue;
             touched.push('patch');
