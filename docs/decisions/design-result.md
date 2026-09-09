@@ -713,6 +713,17 @@ is still unfinished until the evidence id is on it.
 > `acceptance-receipt-lifecycle.md` records as MOTIR-2764). Its **§6b** adds a
 > product-written `superseded` gate state, so a gate whose subject this record's
 > supersede path retires is retired with it.
+>
+> **⚠️ POINTER UPDATED (MOTIR-4911, 2026-09-08) — §6c's TRIGGER is not what this
+> paragraph was originally told.** `approval-gates.md` §6c has been re-keyed onto
+> the **SUBJECT**: the pin fires **when a WORK ITEM carrying a current design
+> result is approved, whichever GATE KIND carried the decision** — not when a
+> `design_result` gate is approved. A design with a pull request is approved
+> through `pull_request_approval`, so keying the predicate on the gate kind would
+> have stopped pinning for the common case with no error and no red test. **So
+> §4's supersede path must test _"does an approved gate on this work item
+> reference this `DesignEvidence` version?"_ and must NOT read the gate's
+> `kind`.** Read `approval-gates.md` §6c's own amendment for the full statement.
 
 ~~Story 9.2 keeps the runtime human-in-the-loop semantics in full: the "for
 review" state, HOLDING the `depends_on` dependents, the revise-chat re-dispatch,
