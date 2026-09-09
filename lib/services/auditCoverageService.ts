@@ -87,7 +87,11 @@ export const auditCoverageService = {
     // `ai:configure`, so NO actor's answer changes.
     await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
 
-    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const code = await resolveCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId,
+    });
     const repoRefs = code?.repos.map((repo) => repo.repoRef) ?? [];
     // A project with no connected repo is a well-formed EMPTY answer, never an
     // error — there is nothing un-audited, so the nudge has nothing to say.

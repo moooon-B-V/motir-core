@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { db } from '@/lib/db';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
 import { adminDb } from '../helpers/adminDb';
+import { linkAllWorkspaceReposIntoProject } from '../fixtures/codeContextFixtures';
 
 // The STORY gate for MOTIR-2244 (MOTIR-2252).
 //
@@ -94,6 +95,13 @@ async function project(installationId: string) {
     workspaceId: workspace.id,
     installation: { installationId, accountLogin: 'moooon', accountType: 'Organization' },
     repos: REPOS,
+  });
+  // MOTIR-4653 — the envelope's repositories come from the PROJECT's configured
+  // set now, so connecting them to the workspace is no longer enough.
+  await linkAllWorkspaceReposIntoProject({
+    userId: owner.id,
+    workspaceId: workspace.id,
+    projectId: proj.id,
   });
   return { workspace, owner, project: proj, ctx: { userId: owner.id, workspaceId: workspace.id } };
 }

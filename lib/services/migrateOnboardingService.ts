@@ -25,7 +25,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { toMigrateOnboardingDto } from '@/lib/mappers/migrateOnboardingMappers';
 import { toProjectDTO } from '@/lib/mappers/projectMappers';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
 import { aiChatService } from '@/lib/services/aiChatService';
 import { aiConventionService } from '@/lib/services/aiConventionService';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
@@ -51,7 +51,7 @@ import {
 // signal each owning story produces), plus the resumable API (its routes).
 //
 // EACH STEP CALLS THE OWNING STORY'S SHIPPED SURFACE — re-implementing none:
-//   connect  → the GitHub grant (7.10) — a connected repo set (resolveCodeContext)
+//   connect  → the GitHub grant (7.10) — a connected repo set (resolveWorkspaceConnectedRepos)
 //   index    → the code-graph index job (7.5) — its terminal state in the job_run
 //              ledger (jobRunRepository); the wizard WAITS, it does not index
 //              (the grant flow enqueues the index — `enqueueCodeGraphIndex`)
@@ -62,7 +62,7 @@ import {
 //   discovery → a short discovery job (7.3 · aiChatService.submitDiscoveryTurn);
 //              exit: direction docs exist (aiPreplanService.getPreplanState)
 //   generate → code-aware generation (7.4 · aiGenerationService.startGeneration,
-//              which reads the code graph via resolveCodeContext); exit: the plan
+//              which reads the code graph via resolveWorkspaceConnectedRepos); exit: the plan
 //              is `planned`
 //   review   → the standard plan review/approve (7.21) — exit: the plan is
 //              `approved`; on approve the run completes
@@ -168,7 +168,10 @@ const CONNECT: StepWiring = {
   from: 'connect',
   to: 'index',
   async checkExit({ run, ctx }) {
-    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const code = await resolveWorkspaceConnectedRepos({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     const firstRepo = code?.repos[0];
     if (!firstRepo) return { ready: false };
     // Record WHICH repo backs the run (the connect-time ref, else the first
@@ -919,7 +922,7 @@ export const migrateOnboardingService = {
   /**
    * The Index step's live per-repo progress (Story 7.15 · MOTIR-934) — what the
    * wizard polls at `GET /api/onboarding/migrate/[id]/index-status`. Resolves the
-   * workspace's connected repo set (`resolveCodeContext`, the same set the CONNECT
+   * workspace's connected repo set (`resolveWorkspaceConnectedRepos`, the same set the CONNECT
    * step observed) and maps each repo to `indexed` (a succeeded
    * `system.code-graph-index` run matches its `output.repoRef`) or `pending`, plus
    * the aggregate `hasRunning` flag (a running index row exists — the ledger cannot
@@ -937,11 +940,14 @@ export const migrateOnboardingService = {
     if (!run) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanBrowse(run.projectId, ctx);
 
-    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const code = await resolveWorkspaceConnectedRepos({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
     const repos = code?.repos ?? [];
 
     // One workspace-scoped transaction for all the job_run reads (the job_run RLS
-    // policy scopes them; `resolveCodeContext` opens its own).
+    // policy scopes them; `resolveWorkspaceConnectedRepos` opens its own).
     const { statuses, hasRunning } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {

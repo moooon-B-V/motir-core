@@ -2,7 +2,7 @@ import 'server-only';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
 import {
   ONBOARDING_SUBSTRATE_ITEM_CAP,
   type OnboardingSubstrate,
@@ -31,8 +31,8 @@ import {
 // is the step machine's. This module answers a question of fact and stops there.
 //
 // Layered per `CLAUDE.md`: a service composing EXISTING repository reads and
-// `resolveCodeContext`. No Prisma outside a repository, and no new query — the
-// connection half is `resolveCodeContext`'s and the indexed half is the same
+// `resolveWorkspaceConnectedRepos`. No Prisma outside a repository, and no new query — the
+// connection half is `resolveWorkspaceConnectedRepos`'s and the indexed half is the same
 // `job_run` ledger read the wizard's INDEX step already waits on.
 
 // ⚠️ THE SHAPE MOVED TO `lib/dto/` (MOTIR-4768) and is re-exported here, so no
@@ -70,7 +70,7 @@ export async function readOnboardingSubstrate(
     withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findByProject(projectId, { take: itemCap + 1 }, tx),
     ),
-    resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
+    resolveWorkspaceConnectedRepos({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
   ]);
 
   const itemCountTruncated = items.length > itemCap;

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
 import { adminDb } from './helpers/adminDb';
+import { linkAllWorkspaceReposIntoProject } from './fixtures/codeContextFixtures';
 
 // Transport tests for GET /api/ai/coding-convention/audit-coverage (MOTIR-2248).
 // The route is a thin one-service-call transport, so this proves the route-layer
@@ -78,7 +79,7 @@ describe('GET /api/ai/coding-convention/audit-coverage', () => {
   });
 
   it('returns the coverage answer for an admin, uncacheable', async () => {
-    const { workspace } = await signInAtProject();
+    const { workspace, owner, project } = await signInAtProject();
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: {
@@ -87,6 +88,13 @@ describe('GET /api/ai/coding-convention/audit-coverage', () => {
         accountType: 'Organization',
       },
       repos: ONE_REPO,
+    });
+    // MOTIR-4653 — the read resolves repositories from the PROJECT's
+    // configured set, so the fixture states which ones this project works on.
+    await linkAllWorkspaceReposIntoProject({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
     });
     getCodeAuditMock.mockResolvedValue({
       audit: null,
@@ -169,7 +177,7 @@ describe('GET /api/ai/coding-convention/audit-coverage', () => {
   });
 
   it('does NOT 502 on a per-repo boundary failure — it reports the repo unreadable', async () => {
-    const { workspace } = await signInAtProject();
+    const { workspace, owner, project } = await signInAtProject();
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: {
@@ -178,6 +186,13 @@ describe('GET /api/ai/coding-convention/audit-coverage', () => {
         accountType: 'Organization',
       },
       repos: ONE_REPO,
+    });
+    // MOTIR-4653 — the read resolves repositories from the PROJECT's
+    // configured set, so the fixture states which ones this project works on.
+    await linkAllWorkspaceReposIntoProject({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
     });
     getCodeAuditMock.mockRejectedValue(new MotirAiUnavailableError('down'));
 

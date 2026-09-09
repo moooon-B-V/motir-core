@@ -7,6 +7,7 @@ import type {
   RawConventionSurface,
   RawCodeAuditSurface,
 } from '@/lib/ai/motirAiClient';
+import { linkAllWorkspaceReposIntoProject } from './fixtures/codeContextFixtures';
 
 // Transport tests for the /api/ai/coding-convention/* routes (MOTIR-926/1663).
 // The approve/PATCH routes are removed per MOTIR-1660/1663 (convention is
@@ -320,7 +321,7 @@ describe('POST /api/ai/coding-convention/refresh', () => {
   // no-body path pinned unchanged above.
 
   it('forwards a repo scope to the service — one pair for the named repo only', async () => {
-    const { workspace } = await signInAtProject();
+    const { workspace, owner, project } = await signInAtProject();
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: {
@@ -329,6 +330,13 @@ describe('POST /api/ai/coding-convention/refresh', () => {
         accountType: 'Organization',
       },
       repos: ROUTE_REPOS,
+    });
+    // MOTIR-4653 — the read resolves repositories from the PROJECT's
+    // configured set, so the fixture states which ones this project works on.
+    await linkAllWorkspaceReposIntoProject({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
     });
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
 

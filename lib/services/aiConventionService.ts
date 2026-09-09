@@ -294,7 +294,11 @@ export const aiConventionService = {
     // `assertPermission(…, 'project:administer')` and `admin` holds
     // `ai:configure`, so NO actor's answer changes.
     await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
-    const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
+    const code = await resolveCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId,
+    });
     const { organizationId, isMeta, internalBilling } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,

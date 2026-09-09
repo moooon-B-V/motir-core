@@ -62,6 +62,7 @@ export const conventionEstablishService = {
     const code = await resolveCodeContext({
       userId: input.userId,
       workspaceId: input.workspaceId,
+      projectId: input.projectId,
     });
     if (code) return { submitted: false, reason: 'has_connected_repo' };
 

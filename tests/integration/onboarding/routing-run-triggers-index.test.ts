@@ -41,16 +41,26 @@ vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
 const { aiGenerationService } = await import('@/lib/services/aiGenerationService');
 const { resolveCodeContext } = await import('@/lib/ai/codeContext');
 const { projectsService } = await import('@/lib/services/projectsService');
+const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
 const { toProjectDTO } = await import('@/lib/mappers/projectMappers');
 import type { ProjectContext } from '@/lib/projects';
 
 /**
- * A connected GitHub repo, so `resolveCodeContext` resolves it.
+ * A connected GitHub repo THAT THE PROJECT WORKS ON, so `resolveCodeContext`
+ * resolves it.
  *
- * ⚠️ ONE INSTALLATION PER WORKSPACE, REUSED. `resolveCodeContext` reads
- * `findByWorkspaceId` and then lists that ONE installation's repos, so seeding a
- * second installation would hide the second repository rather than add it — the
- * mixed-set case would have passed for the wrong reason.
+ * ⚠️ ONE INSTALLATION PER WORKSPACE, REUSED. The workspace mirror still holds one
+ * installation per workspace, so seeding a second would hide the second
+ * repository rather than add it — the mixed-set case would have passed for the
+ * wrong reason.
+ *
+ * ⚠️ AND CONNECTING IT TO THE WORKSPACE IS NO LONGER ENOUGH (MOTIR-4653).
+ * `resolveCodeContext` reads the PROJECT's configured set, so a repository the
+ * workspace connected but nobody added to this project is correctly absent from
+ * the envelope. Both halves are done here, together, for the reason
+ * `tests/fixtures/codeContextFixtures.ts` gives: apart, the second one is
+ * forgotten and every assertion downstream reads as a mysterious empty answer
+ * rather than as a missing link.
  */
 async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'widgets') {
   const rand = randomToken(6);
@@ -64,7 +74,7 @@ async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'wi
         accountType: 'Organization',
       },
     }));
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -76,6 +86,9 @@ async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'wi
       archived: false,
     },
   });
+  // THE SECOND HALF — the project's own set row, realized against that mirror.
+  const row = await projectRepoSetService.addRow(fx.projectId, { role: 'web', name }, fx.ctx);
+  await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
   return `${owner}/${name}`;
 }
 
@@ -119,7 +132,11 @@ describe('the FACT reaches the planner, per repository', () => {
   it('an UNINDEXED repository rides the wire as `indexed: false`', async () => {
     const fx = await makeWorkItemFixture();
     const ref = await seedConnectedRepo(fx);
-    const code = await resolveCodeContext({ userId: fx.ownerId, workspaceId: fx.workspaceId });
+    const code = await resolveCodeContext({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
     expect(code?.repos).toEqual([
       { provider: 'github', repoRef: ref, defaultBranch: 'main', indexed: false },
     ]);
@@ -129,7 +146,11 @@ describe('the FACT reaches the planner, per repository', () => {
     const fx = await makeWorkItemFixture();
     const ref = await seedConnectedRepo(fx);
     await seedSucceededIndexJob(fx, ref);
-    const code = await resolveCodeContext({ userId: fx.ownerId, workspaceId: fx.workspaceId });
+    const code = await resolveCodeContext({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
     expect(code?.repos[0]!.indexed).toBe(true);
   });
 
@@ -138,7 +159,11 @@ describe('the FACT reaches the planner, per repository', () => {
     await seedConnectedRepo(fx, 'acme', 'widgets');
     const apiRef = await seedConnectedRepo(fx, 'acme', 'api');
     await seedSucceededIndexJob(fx, apiRef);
-    const code = await resolveCodeContext({ userId: fx.ownerId, workspaceId: fx.workspaceId });
+    const code = await resolveCodeContext({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
     const byRef = Object.fromEntries(code!.repos.map((r) => [r.repoRef, r.indexed]));
     expect(byRef['acme/widgets']).toBe(false);
     expect(byRef['acme/api']).toBe(true);
