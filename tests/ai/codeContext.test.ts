@@ -16,7 +16,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 import { db } from '@/lib/db';
 import { submitJob } from '@/lib/ai/motirAiClient';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveCodeContext, resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { usersService } from '@/lib/services/usersService';
@@ -117,6 +117,110 @@ async function linkIntoSet(
   );
   await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
 }
+
+// ⚠️ THE WORKSPACE-GRANT READ KEEPS ITS OWN TESTS (MOTIR-4653), and this block
+// exists because moving them was a real coverage regression rather than a
+// tidy-up. `resolveWorkspaceConnectedRepos` IS the read `resolveCodeContext`
+// used to perform; when the describe below was re-pointed at the project set,
+// its "no installation" and "no granted repos" cases went with it — and those
+// are branches of the RENAMED function, which nothing else asserts directly.
+// The per-file coverage gate caught it (branches 84.78% against a 90% floor).
+//
+// The onboarding wizard is this function's only production caller, so its
+// branches are load-bearing for a gate a person walks through, not for a
+// planning envelope.
+describe('resolveWorkspaceConnectedRepos', () => {
+  it('resolves EVERY granted repo of the workspace installation, stable-ordered', async () => {
+    const ctx = await seedProjectContext();
+    await githubInstallationService.persistInstallation({
+      workspaceId: ctx.workspaceId,
+      installation: {
+        installationId: 'inst-grant',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: FOUR_REPOS,
+    });
+
+    // ⚠️ NO PROJECT SET IS CONFIGURED, deliberately. This read answers "what has
+    // the workspace connected?", so it must see all four with the project's own
+    // set empty — the exact case that makes it different from
+    // `resolveCodeContext`, which returns `undefined` here.
+    const code = await resolveWorkspaceConnectedRepos({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+
+    expect(code?.repos.map((r) => r.repoRef)).toEqual([
+      'moooon/motir-ai',
+      'moooon/motir-core',
+      'moooon/motir-gateway',
+      'moooon/motir-meta',
+    ]);
+    // The ledger read ran and said nothing is indexed — measured, not assumed.
+    expect(code?.repos.every((r) => r.indexed === false)).toBe(true);
+  });
+
+  it('resolves undefined when the workspace has NO installation', async () => {
+    // The wizard's CONNECT step gates on this: no installation means the user has
+    // not connected anything yet, and the step must not exit.
+    const ctx = await seedProjectContext();
+
+    await expect(
+      resolveWorkspaceConnectedRepos({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('resolves undefined when the installation granted NO repos', async () => {
+    // Distinct from the branch above: the installation EXISTS and its grant list
+    // is empty. Both reach the same answer by different paths, and the ledger
+    // read is skipped entirely — there is no set to ask about.
+    const ctx = await seedProjectContext();
+    await githubInstallationService.persistInstallation({
+      workspaceId: ctx.workspaceId,
+      installation: {
+        installationId: 'inst-empty',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: [],
+    });
+
+    await expect(
+      resolveWorkspaceConnectedRepos({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("is UNAFFECTED by the project's configured set — it answers about the workspace", async () => {
+    // The inverse of `resolveCodeContext`'s central case, and what keeps the two
+    // functions from silently converging: configuring one repository for the
+    // project must not narrow the workspace answer.
+    const ctx = await seedProjectContext();
+    await githubInstallationService.persistInstallation({
+      workspaceId: ctx.workspaceId,
+      installation: {
+        installationId: 'inst-both',
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+      },
+      repos: FOUR_REPOS,
+    });
+    await linkIntoSet(ctx, 'motir-core');
+
+    const workspaceAnswer = await resolveWorkspaceConnectedRepos({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    const projectAnswer = await resolveCodeContext({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
+    });
+
+    expect(workspaceAnswer?.repos).toHaveLength(4);
+    expect(projectAnswer?.repos.map((r) => r.repoRef)).toEqual(['moooon/motir-core']);
+  });
+});
 
 // ⚠️ RE-POINTED TO THE PROJECT'S SET BY MOTIR-4653 (MOTIR-4642 · MOTIR-2029).
 // This describe used to assert the WORKSPACE's whole installation grant. The
