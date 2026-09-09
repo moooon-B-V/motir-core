@@ -68,6 +68,12 @@
            connected.
         6  AUTO-PLAN PAUSED (amendment · MOTIR-1739) — running vs paused-with-a-
            current-plan vs paused-with-an-out-of-date-plan.
+        7  DATA-PRACTICE PROMISE (amendment) — two sentences and a link at the
+           foot of the EXISTING Planner card; no new control. (Listed here by
+           MOTIR-4942 — its own amendment added the panel and not this line.)
+        8  ACCEPTANCE VIDEO (amendment · MOTIR-4942) — the org-tier switch moves
+           into THIS room as one more card: the door, its four states, and the
+           organisation page as it stands once the card leaves it.
       Toggle dark mode (top right) to confirm token parity.
 
       ── AMENDMENT · MOTIR-1739 (7.13.9) ──
@@ -85,6 +91,29 @@
         · messages/en.json planReview.* / aiPlanning.* — the shipped vocabulary
           this copy follows ("Out of date", "may be out of date", "planned {when}").
       Spec, copy strings and per-element token roles: design-notes.md.
+
+      ── AMENDMENT · MOTIR-4942 (gating MOTIR-4925) ──
+      Panel 8 is the ONLY addition; panels 0-7 are untouched. It draws where the
+      ACCEPTANCE-VIDEO switch lands once it stops being an organisation-wide flag
+      (MOTIR-4925): one more card in this room, NOT a new rail row and NOT a new
+      route. Grounded the same way as the rest:
+        · app/(authed)/settings/organization/_components/AcceptanceVideoCard.tsx
+          - the SHIPPED control being relocated. Its composition (Card + Switch,
+          an On/Off label beside the switch, and a card FOOTER carrying the
+          "Requires a paid Motir AI plan" note + an Upgrade button when the org
+          holds no plan) is reproduced here 1:1; only its HOST changes.
+        · lib/services/acceptanceVideoEligibilityService.ts - eligibility is
+          `hasPaidAiPlan AND the toggle`. The AND is what panel 8's third state
+          draws: the ENTITLEMENT half stays org-resolved and the switch cannot
+          overrule it.
+        · lib/settings/projectSettingsNav.ts - the `automation` group already
+          holds `ai-planning`; the card joins that ROUTE, so the registry and the
+          route-registry totality test are both unchanged by this design.
+        · messages/en.json `acceptance.card.*` - the copy, reused verbatim. It is
+          already tier-neutral, so the relocation adds no i18n key.
+        · docs/decisions/organization-tier.md §6 - relocating a surface preserves
+          its gate; the destination's gate is the one that must change if it
+          admits fewer actors. Panel 8's read-only state is that gate drawn.
     -->
     <style>
       /* ══ Tier 0 (--color-*) + Tier 3 (--el-*) + shape tokens ═══════════════
@@ -2591,6 +2620,342 @@
         >
         — the mock draws the destination, and §D3 records that the implementing card resolves the
         href through motir-core's existing public-site origin rather than hard-coding a host.
+      </p>
+
+      <!-- ══════════ PANEL 8 — ACCEPTANCE VIDEO (amendment · MOTIR-4942) ══════════ -->
+      <section class="panel">
+        <div class="panel-cap">
+          <span class="n">8</span>
+          <span class="t">Acceptance video — the switch moves to the PROJECT</span>
+          <span class="d"
+            >Amendment (MOTIR-4942, gating MOTIR-4925) · a card in THIS room · four states · the
+            door · what leaves the organisation page</span
+          >
+        </div>
+
+        <div class="pad">
+          <span class="cap"
+            >The door — no new rail row; the control joins the room behind an existing one</span
+          >
+          <div class="shell compact">
+            <aside class="rail">
+              <div class="rail-head">
+                <span class="back"
+                  ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+                >
+                <div class="proj">
+                  <span class="pav">M</span>
+                  <span>
+                    <span class="pname">motir</span>
+                    <span class="pkey">MOTIR</span>
+                  </span>
+                </div>
+                <span class="settings-eyebrow">Project settings</span>
+              </div>
+              <nav aria-label="Project settings">
+                <div class="grp">
+                  <div class="grp-label">Work</div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                    ></span>
+                    <span class="nl">Workflow</span>
+                  </div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                    ></span>
+                    <span class="nl">Estimation</span>
+                  </div>
+                </div>
+                <div class="grp">
+                  <div class="grp-label">Automation</div>
+                  <div class="nav-row active" aria-current="page">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                    ></span>
+                    <span class="nl">AI planning</span>
+                  </div>
+                  <div class="nav-row">
+                    <span class="ni"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                    ></span>
+                    <span class="nl">Rules</span>
+                  </div>
+                </div>
+              </nav>
+            </aside>
+            <div class="content">
+              <div class="page">
+                <div class="page-head">
+                  <h2>AI planning</h2>
+                  <p>
+                    How Motir's planner keeps this project moving — when it expands the plan, how it
+                    packs sprints, which model drafts the work, and whether a finished story records
+                    its receipt.
+                  </p>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <span class="chi"
+                      ><svg viewBox="0 0 24 24"><use href="#i-sparkles" /></svg
+                    ></span>
+                    <div>
+                      <h3>Auto-plan</h3>
+                      <p class="hsub">Expand the plan automatically when ready work runs low.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <span class="chi"
+                      ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                    ></span>
+                    <div>
+                      <h3>Planner</h3>
+                      <p class="hsub">Which model drafts this project's plans.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <span class="chi"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg
+                    ></span>
+                    <div>
+                      <h3>Acceptance video</h3>
+                      <p class="hsub">
+                        Record a short video when a story's E2E passes and attach it to the story
+                        for review &amp; approval.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    <div class="srow">
+                      <span class="sw on" role="switch" aria-checked="true"
+                        ><span class="knob"></span
+                      ></span>
+                      <span class="stext">
+                        <span class="lbl">On</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pad split">
+          <div class="col" style="flex: 1; min-width: 320px">
+            <span class="cap">On — the default, and what a paid project sees</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg
+                ></span>
+                <div>
+                  <h3>Acceptance video</h3>
+                  <p class="hsub">
+                    Record a short video when a story's E2E passes and attach it to the story for
+                    review &amp; approval.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="srow">
+                  <span class="sw on" role="switch" aria-checked="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">On</span>
+                    <p class="hint">
+                      Stories in <strong>this project</strong> record a receipt. A sibling project
+                      in the same organisation is unaffected.
+                    </p>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col" style="flex: 1; min-width: 320px">
+            <span class="cap">Off — a project with no user-facing flow to film</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg
+                ></span>
+                <div>
+                  <h3>Acceptance video</h3>
+                  <p class="hsub">
+                    Record a short video when a story's E2E passes and attach it to the story for
+                    review &amp; approval.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="srow">
+                  <span class="sw" role="switch" aria-checked="false"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Off</span>
+                    <p class="hint">
+                      Publishing is refused for this project's stories with reason
+                      <code>toggle_off</code>; the recording still exists in the run's report.
+                    </p>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pad split">
+          <div class="col" style="flex: 1; min-width: 320px">
+            <span class="cap">No paid AI plan — the switch is moot, and says so</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg
+                ></span>
+                <div>
+                  <h3>Acceptance video</h3>
+                  <p class="hsub">
+                    Record a short video when a story's E2E passes and attach it to the story for
+                    review &amp; approval.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="srow">
+                  <span class="sw disabled" role="switch" aria-checked="false" aria-disabled="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">Off</span>
+                  </span>
+                </div>
+                <div class="callout gate">
+                  <svg viewBox="0 0 24 24"><use href="#i-cloud-off" /></svg>
+                  <span
+                    ><strong>The ENTITLEMENT stays at the organisation.</strong> The plan is bought
+                    once for the organisation, so this project cannot switch on what the
+                    organisation has not paid for — the switch moved tier, the entitlement did
+                    not.</span
+                  >
+                </div>
+              </div>
+              <div class="card-foot">
+                <span class="dirty">Requires a paid Motir AI plan</span>
+                <button class="btn btn-primary">Upgrade</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="col" style="flex: 1; min-width: 320px">
+            <span class="cap">Read-only — a member who cannot manage the project</span>
+            <div class="card">
+              <div class="card-head">
+                <span class="chi"
+                  ><svg viewBox="0 0 24 24"><use href="#i-check-circle" /></svg
+                ></span>
+                <div>
+                  <h3>Acceptance video</h3>
+                  <p class="hsub">
+                    Record a short video when a story's E2E passes and attach it to the story for
+                    review &amp; approval.
+                  </p>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="callout lock">
+                  <svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>
+                  <span>Only a project admin can change AI planning settings.</span>
+                </div>
+                <div class="srow">
+                  <span
+                    class="sw on disabled"
+                    role="switch"
+                    aria-checked="true"
+                    aria-disabled="true"
+                    ><span class="knob"></span
+                  ></span>
+                  <span class="stext">
+                    <span class="lbl">On</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pad">
+          <span class="cap"
+            >The losing end — the organisation page as it will stand, card for card</span
+          >
+          <div class="stack" style="max-width: 42rem">
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Organisation</h3>
+                  <p class="hsub"><code>OrgGeneralCard</code> — name, workspaces, members</p>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Billing</h3>
+                  <p class="hsub"><code>BillingCard</code> — cloud only</p>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Workspace</h3>
+                  <p class="hsub"><code>WorkspaceFoldInSection</code></p>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head">
+                <div>
+                  <h3>Danger zone</h3>
+                  <p class="hsub"><code>DangerZoneCard</code></p>
+                </div>
+              </div>
+            </div>
+            <div class="callout">
+              <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+              <span
+                ><strong><code>AcceptanceVideoCard</code> is GONE from this page</strong> — not
+                hidden, not disabled, not kept as an organisation-wide floor. Four cards, in this
+                order. <code>design/org-admin/org-admin.mock.html</code> panel 7a's "card for card"
+                list is amended to match in the same change.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+      <p class="note">
+        <strong>Panel 8 — the whole amendment.</strong> One more <code>.card</code> in the EXISTING
+        AI-planning room, composed from the primitives this asset already draws: no new rail row, no
+        new route, no new primitive and no new CSS.
+        <strong>A single boolean does not earn a settings page</strong> — every other row in the
+        rail owns a substantial surface (a workflow editor, a board configuration, a field list),
+        and adding a seventh route for one switch is complexity with no use case behind it.
+        <strong>Why THIS room rather than Work ▸ Estimation:</strong> the receipt is produced by the
+        agent, on the agent's pipeline, and it is gated on the organisation's AI plan — so it lives
+        beside the other switches that say what the AI does for this project, under the same
+        <code>hasPlan</code> paywall grammar the room already renders. The Work group configures the
+        shape of the work items themselves (statuses, columns, points, fields); whether a machine
+        records a video is not that. <strong>The copy needs no new i18n keys</strong> —
+        <code>acceptance.card.*</code> is already tier-neutral ("Acceptance video", the description,
+        On/Off, "Requires a paid Motir AI plan", "Upgrade") and carries over verbatim, which is
+        itself evidence the string was never about the organisation.
       </p>
     </div>
   </body>

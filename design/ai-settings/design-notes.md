@@ -738,3 +738,159 @@ amendment introduces no second viewport.
 - **The provider table itself** — `motir-marketing/design/legal/` owns it. This asset links to it and
   never restates it.
 - **The GA default provider** — MOTIR-4744.
+
+---
+
+# Amendment — THE ACCEPTANCE-VIDEO SWITCH MOVES TO THE PROJECT (Task MOTIR-4942, gating MOTIR-4925)
+
+Panel 8 of `ai-planning-settings.mock.html`. MOTIR-4925 found that
+`Organization.acceptanceVideoEnabled` is the only _work-process_ setting in motir-core that is not
+project-scoped: one org admin's flip decides whether every project in the organisation records story
+receipts. This asset settles **where the switch lands** so that card can be built.
+
+## A1. What moves, and what explicitly does not
+
+|                                                                         | tier                          | why                                                                                                                |
+| ----------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **The SWITCH** — _does a finished story in this project owe a receipt?_ | **moves to the PROJECT**      | it is a statement about one project's process; a UI product and a CLI under one organisation want opposite answers |
+| **The ENTITLEMENT** — `hasPaidAiPlan`                                   | **stays at the ORGANISATION** | the plan is bought once, for the organisation. Eligibility remains `hasPaidAiPlan AND the toggle`                  |
+
+**The tier question is NOT re-opened here.** The reporter's words — _"should be in the project settings
+not organization settings"_ — are an explicit, informed choice by the decision authority, so the switch
+MOVES and does not become an organisation-level floor. A design pass that quietly reintroduced an
+org-level control "in case" would be overturning that decision under cover of drawing it.
+
+## A2. Placement — a CARD in the EXISTING AI-planning room, not a new rail row
+
+**A single boolean does not earn a settings page.** Every other row in `PROJECT_SETTINGS_NAV` owns a
+substantial surface — a workflow editor, a board configuration, a field list, a members table. Adding a
+seventh route for one switch is complexity with no use case behind it (the decision ladder's
+_no complexity for nothing_), and it would oblige a new registry entry, a new route, a new page title
+and a new ⌘K entry to host two lines of UI.
+
+**Why the `automation` group's AI-planning room and not `work` ▸ Estimation** — the rejected candidate,
+stated so a later reader can tell a decision from an accident:
+
+- The receipt is **produced by the agent**, on the agent's own pipeline (`publish_acceptance_result`
+  over MCP). It is a statement about what the machine does for this project, which is exactly what this
+  room already configures: when it expands the plan, how it packs sprints, which model drafts the work.
+- It carries an **AI-plan paywall**. This room already renders that grammar — the `hasPlan` gate, the
+  Upgrade CTA, the _"Motir AI isn't connected"_ state — so the third state below is the room's existing
+  idiom rather than a new one. Under `work` ▸ Estimation a plan gate would be the only one on the page.
+- The `work` group configures **the shape of the work items themselves** — statuses, columns, points,
+  fields, components. Whether a machine records a video is not that.
+
+The card sits **last** in the room, after Auto-plan and Planner: those two configure planning, and the
+receipt is about what happens when a story is finished.
+
+## A3. The access path — DRAWN (panel 8, first block)
+
+The door is the **existing** `Automation ▸ AI planning` rail row, drawn active with the room open and
+the new card visible in it. Nothing is added to the rail, so `lib/settings/projectSettingsNav.ts` and
+the route↔registry totality test are untouched by this design — which is itself the argument for the
+placement: the cheapest door is one that already exists and already leads somewhere a project admin goes.
+
+## A4. The four states (panel 8)
+
+1. **On** — the default. The hint states the property that makes the whole card worth building: _stories
+   in **this project** record a receipt; a sibling project in the same organisation is unaffected._
+2. **Off** — publishing is refused for this project's stories with reason `toggle_off`, and the hint says
+   the recording still exists in the run's report, so "off" reads as _not published_, not _not recorded_.
+3. **No paid AI plan** — switch disabled, a `.callout.gate` explaining that the entitlement stays at the
+   organisation, and the card FOOTER carrying _"Requires a paid Motir AI plan"_ + **Upgrade**. This is the
+   shipped card's own footer, reproduced 1:1.
+4. **Read-only** — a member without project-manage authority sees the `.callout.lock` banner and a
+   disabled switch showing the current value. This is `organization-tier.md` §6 drawn: _relocating a
+   surface preserves its gate; if the destination admits fewer actors than the source, the DESTINATION's
+   gate is what must change._ Here the destination admits a **different** set (project admins rather than
+   org admins), and every member of the project still SEES the setting — matching the browse-to-read /
+   manage-to-write shape this room already ships.
+
+## A5. The losing end — the organisation page, drawn as it will stand
+
+Panel 8's last block draws the org page's card order after the removal: `OrgGeneralCard` · `BillingCard`
+· `WorkspaceFoldInSection` · `DangerZoneCard`. **Four cards, in that order** —
+`AcceptanceVideoCard` is gone, not hidden and not disabled.
+
+`design/org-admin/org-admin.mock.html` panel 7a names that order card-for-card and is **amended in this
+same change** to match. Drawing only the winning end is how an asset comes to claim a card the product no
+longer has, and a later reader cannot then tell a stale mock from a regression.
+
+## A6. Primitives and tokens — nothing new
+
+`Card` (head + body + foot) · `Switch` · the `.callout` box in its `gate` and `lock` roles · `.btn
+.btn-primary`. No new primitive, no new CSS rule and no new token were added to the asset — the panel
+composes what panels 0–7 already define. The card's glyph is `#i-check-circle` (a passed check, which is
+what produces the receipt), chosen because `#i-sparkles` is Auto-plan's and `#i-bot` is Planner's.
+
+## A7. Copy — no new i18n keys
+
+`acceptance.card.*` carries over **verbatim**: `title` _"Acceptance video"_, `desc`, `on` / `off`,
+`requiresPlan` _"Requires a paid Motir AI plan"_, `upgrade` _"Upgrade"_, `saved`, `saveError`. The
+namespace is already tier-neutral — no string in it says "organisation" — which is itself evidence the
+copy was never about the organisation. The lock banner reuses the room's existing
+non-admin string.
+
+## A8. A FINDING from rendering the shipped control — the label and the switch disagree
+
+`AcceptanceVideoCard.tsx` drives its **label** from `enabled` and its **switch** from
+`enabled && hasPlan`:
+
+```tsx
+<span …>{enabled ? t('card.on') : t('card.off')}</span>
+<Switch checked={enabled && hasPlan} … />
+```
+
+So an organisation holding the flag ON with **no paid plan** renders the word **"On"** beside a switch
+that is **off**. That is the surface saying two things at once, and it survives the relocation unless
+someone changes it. **The design specifies the target: label and switch both read the EFFECTIVE value**,
+so state 3 draws "Off" beside an off switch, with the `.callout.gate` carrying the reason. This is drawn
+as the target rather than the migration, per the draw-the-target rule.
+
+## A9. What MOTIR-4925 then owes the code (the handover)
+
+- **Room:** `/settings/project/ai-planning`, as one more `Card` after Planner. **No** new registry entry,
+  route, page title or ⌘K entry.
+- **Gate:** browse to READ (every member sees it, read-only), project-manage to WRITE — re-gated in the
+  service, exactly as `projectAiSettingsService.updateAiSettings` does with `assertCanManage`; the
+  client `canManage` flag governs only whether the affordance is live.
+- **Copy:** reuse `acceptance.card.*` unchanged. No new key, and therefore no new `zh` twin.
+- **Org page:** delete the card, leaving four in the order above; amend
+  `design/org-admin/org-admin.mock.html` panel 7a in the same PR (already amended here for the design of
+  record, so the code change should not need to touch it again).
+- **The A8 fix:** label and switch read one effective value.
+- **The panel's door:** `LateSections.tsx:199` passes `settingsHref="/settings/organization"` and the
+  panel appends `#acceptance-video`. Both retarget to the project room, or the acceptance panel's
+  "Go to settings" link lands on a page that no longer has the card.
+
+## A10. GIVES / TAKES sweep
+
+Greped over the asset and the tree, not only over the keys this asset names:
+
+| work item                                         | GIVES / TAKES                      | what                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-4925** (`todo`, gated on this)            | **GIVES** an ELEMENT + a STRUCTURE | the room, the form (a card, not a rail row), the four states, the org page's resulting order, and the A8 fix. It also **SHRINKS** the card's imagined scope: its _Fix direction_ left open _"a `PROJECT_SETTINGS_NAV` row **or** a card on an existing one"_, and this asset takes the cheaper branch — no new route, no registry entry, no new i18n key. |
+| MOTIR-1635 · MOTIR-1628 · MOTIR-2545 · MOTIR-4710 | —                                  | all `done`. We plan forward: the record of what shipped is not rewritten, and MOTIR-4925 supersedes it.                                                                                                                                                                                                                                                   |
+
+**Sizing (the GIVES-is-a-claim-about-size limb).** MOTIR-4925 was authored **unsized**, so there is no
+stale estimate to correct — but an estimate is now owed, because the scope is known. Against this asset
+its build list is: the project-scoped column + migration + backfill · the eligibility service's signature
+and its three consumers · the card in this room and its write path · the removal from the org page and
+its API route · the ADR amendment · the A8 fix · the vitest coverage. Set on the record in this pass at
+**8 points / 70 minutes** — at the estimation gate, not over it, and it fits only _because_ the design
+took the no-new-route branch. **No `TAKES` was found**, so no acceptance criterion is contradicted; the
+amendments to MOTIR-4925 are additive and are recorded on that card.
+
+## A11. Out of scope for this asset — stated, not implied
+
+- **The data model.** Which table holds the project-scoped flag is MOTIR-4925's to settle; this asset
+  draws a surface, not a column.
+- **`design/projects/settings-area.mock.html` is UNCHANGED, deliberately.** The rail gains no row, so the
+  area asset makes no claim that this change falsifies. Stated as a negative result rather than left to
+  be inferred from silence.
+- **The acceptance PANEL on the work item** (`design/work-items/acceptance-panel.mock.html`) is
+  untouched, and its asset draws no settings link at all — checked, not assumed. The link exists only in
+  SHIPPED code: `LateSections.tsx:199` passes `settingsHref="/settings/organization"` and
+  `AcceptancePanel.tsx:52,157,170` appends the anchor `#acceptance-video`. **Both must be retargeted by
+  MOTIR-4925** — a dangling `#acceptance-video` on a page that no longer has that card is the failure
+  mode — but the panel's own drawn states do not change, so no asset is stale.
