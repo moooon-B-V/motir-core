@@ -101,6 +101,7 @@ function modifiedItem(changes: PlanReviewItemDto['changes']): PlanReviewItemDto 
     parentTrail: [],
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
+    committedBlockedBy: [],
     identifier: 'PROD-21',
     title: 'Seller onboarding',
     kind: 'subtask',

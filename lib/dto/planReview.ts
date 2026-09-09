@@ -244,6 +244,23 @@ export interface PlanParentCrumbDto {
   title: string;
 }
 
+/**
+ * One COMMITTED blocked-by edge a proposal's target already carries (bug
+ * MOTIR-4951) — see {@link PlanReviewItemDto.committedBlockedBy}.
+ *
+ * A pair rather than a bare node id, because the canvas's committed treatment is
+ * status-derived and the level builder cannot recover the status: the blocker may
+ * be a card the plan is relocating too, in which case it is not in the roadmap
+ * read for this level either.
+ */
+export interface PlanCommittedBlockerDto {
+  /** The blocker's canvas node id — its work-item id. */
+  nodeId: string;
+  /** The blocker sits at `done`, so the edge draws `firm` rather than `pending` —
+   *  `buildWorkItemLevel`'s rule for every within-level committed edge. */
+  isDone: boolean;
+}
+
 /** A proposed operation, enriched for the canvas + review rail. */
 export interface PlanReviewItemDto {
   /** The PlanItem id — the stable review key. */
@@ -314,6 +331,46 @@ export interface PlanReviewItemDto {
    * `modify` whose patch does not touch the edge set.
    */
   blockedByRemovedNodeIds: string[];
+  /**
+   * The blocked-by edges the TARGET ALREADY CARRIES — committed, untouched by
+   * the plan, resolved to canvas node ids (bug MOTIR-4951).
+   *
+   * ⚠️ THE THIRD CARRIER, AND IT IS THE ONLY ONE THE PLAN DOES NOT STATE. The two
+   * above are what a proposal SAYS about edges — `blockedByRefs` /
+   * `patch.blockedByAdd` for an arriving one, `patch.blockedByRemove` for a
+   * departing one — and both are correct and complete for a proposal that stays
+   * where it is, because `mergePlanLevel` gets everything else from the COMMITTED
+   * level the roadmap read returned.
+   *
+   * A `modify` that RE-PARENTS its target (`patch.parentRef`, MOTIR-3859) breaks
+   * that arrangement, and it breaks it silently. The card is drawn at its new
+   * level — MOTIR-3867 taught the projection WHERE it goes, and
+   * `parentNodeIdOf` puts it there — but the committed level it lands on is the
+   * destination's CURRENT children, which is exactly the set the moving card is
+   * not in yet. So its committed edges are in neither source: not in
+   * `committed.deps` (it is not a child there yet) and not in the two carriers
+   * above (a relocation proposes no edge — the edge already exists). The
+   * relocated card arrived as a NODE and never as an ENDPOINT, and a reviewer
+   * reading the canvas for what blocks what saw a set of unrelated cards.
+   *
+   * That is why this field says what the card BRINGS rather than what the plan
+   * CHANGES, and why it is populated on every op that has a target rather than
+   * on a re-parenting `modify` alone: an already-at-level target's edges are in
+   * `committed.deps` too, so including them is a no-op the level builder
+   * de-duplicates — while a rule keyed on `patch.parentRef` would go quiet the
+   * first time a card reaches a level by some other route.
+   *
+   * `isDone` rides along because the canvas's committed treatment is
+   * status-derived: `buildWorkItemLevel` draws a within-level edge `firm` when
+   * its blocker is `done` and `pending` otherwise, and these edges must be drawn
+   * by that same rule — approving creates nothing here, so the canvas must not
+   * draw them the way it draws an edge approving WOULD create.
+   *
+   * Empty for an un-materialized `add` (it is not a work item yet, so it carries
+   * nothing) and for any target with no committed blockers. ARCHIVED blockers are
+   * excluded, the same rule the readiness reads apply.
+   */
+  committedBlockedBy: PlanCommittedBlockerDto[];
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`,
    *  which has no key, and the target's real key for every proposal that does. */
   identifier: string | null;

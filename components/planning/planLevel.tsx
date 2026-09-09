@@ -147,6 +147,43 @@ export function mergePlanLevel(
     (dep) => !removedPairs.has(`${dep.from} ${dep.to}`),
   );
   const seen = new Set(deps.map((d) => `${d.from} ${d.to}`));
+
+  // ⚠️ A CARD THE PLAN RE-PARENTS ONTO THIS LEVEL BRINGS ITS OWN COMMITTED EDGES
+  // (bug MOTIR-4951) — and `committed` cannot supply them, because `committed` is
+  // the level's CURRENT children and the moving card is precisely the one that is
+  // not among them yet. It is the same COMMITTED-only trap the `drillable`
+  // comment forty lines up names for a different field, from the same cause, in
+  // this function: the level's committed read is the wrong basis for ANYTHING
+  // about a card the plan is moving.
+  //
+  // So the endpoint half of the card arrives on the proposal, as
+  // `committedBlockedBy`. It is not a proposed edge and must not be drawn like
+  // one: approving creates nothing here, so each is drawn by the committed rule
+  // `buildWorkItemLevel` uses — `firm` once the blocker is `done`, `pending`
+  // while it is not — which is exactly how the same edge will be drawn on the
+  // level the reviewer gets after approve.
+  //
+  // BEFORE the proposed loop, so a plan that ALSO proposes an existing edge does
+  // not re-draw it `pending` (`seen` is what holds that), and AFTER the removal
+  // filter, so `removedPairs` still subtracts one of these: widening the
+  // committed set must not resurrect an edge the plan deletes (bugs MOTIR-4092 /
+  // MOTIR-4098). Both ends must be on the level, the same rule the proposed loop
+  // below applies — an edge to a blocker that stays elsewhere is not drawn.
+  for (const item of atLevel) {
+    for (const blocker of item.committedBlockedBy) {
+      if (blocker.nodeId === item.nodeId) continue;
+      if (!nodeIds.has(blocker.nodeId) || !nodeIds.has(item.nodeId)) continue;
+      const key = `${blocker.nodeId} ${item.nodeId}`;
+      if (seen.has(key) || removedPairs.has(key)) continue;
+      seen.add(key);
+      deps.push({
+        from: blocker.nodeId,
+        to: item.nodeId,
+        variant: blocker.isDone ? 'firm' : 'pending',
+      });
+    }
+  }
+
   for (const item of atLevel) {
     for (const blockerId of item.blockedByNodeIds) {
       if (blockerId === item.nodeId) continue;
