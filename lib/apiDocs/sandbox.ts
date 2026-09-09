@@ -142,7 +142,8 @@ export const SANDBOX_DEVCONTAINER_JSON = `{
     "source=\${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
   ],
   "remoteUser": "node",
-  "overrideCommand": true
+  "overrideCommand": true,
+  "postStartCommand": "motir-sandbox-agent-config || true"
 }`;
 
 /**
@@ -330,6 +331,10 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
         caption: '.devcontainer/devcontainer.json',
         copyable: true,
         code: SANDBOX_DEVCONTAINER_JSON,
+      },
+      {
+        kind: 'prose',
+        text: 'The `postStartCommand` line is load-bearing, and it is what keeps this route equivalent to step 2 rather than a quieter version of it. `overrideCommand` replaces the image’s entrypoint as well as its command — it has to, because the image’s own command exits and a dev container needs one that stays up — so the setup that would otherwise run when the container starts is invoked here instead. That setup is what points your agent at a config directory it can actually write to, which is where its sign-in lands.',
       },
       {
         kind: 'prose',

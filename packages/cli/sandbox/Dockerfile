@@ -163,6 +163,33 @@ RUN /usr/local/lib/motir-sandbox/install-agent.sh "${AGENT}"
 
 COPY --chmod=0755 packages/cli/sandbox/entrypoint.sh /usr/local/bin/motir-sandbox-entrypoint
 
+# ── The agent-config setup, reachable from ANY shell (MOTIR-4959 / MOTIR-4956) ─
+#
+# `"overrideCommand": true` — which every devcontainer recipe needs, because the
+# `CMD ["bash", "-l"]` below exits immediately — replaces the container's
+# ENTRYPOINT as well as its CMD. So the entrypoint is NOT a reliable place to put
+# work the agent cannot start without: on the Dev Containers route none of it
+# ran, CLAUDE_CONFIG_DIR stayed unset, and the agent fell back to a `~/.claude`
+# that is read-only and, on a macOS host, holds no credential at all.
+#
+# The setup therefore goes on PATH under its own name, and two shell hooks call
+# it. That is what repairs a `.devcontainer/devcontainer.json` somebody has
+# already copied into their own repository, which no edit to a recipe can reach.
+COPY --chmod=0755 packages/cli/sandbox/agent-config.sh /usr/local/bin/motir-sandbox-agent-config
+
+# SOURCED, never executed: a child process cannot put CLAUDE_CONFIG_DIR into the
+# shell that needs it. Two hooks, because they cover different shells and a
+# devcontainer produces both — /etc/profile.d is read by a LOGIN shell (this
+# image's own `bash -l`, and any `sh -lc`), ~/.bashrc by an INTERACTIVE NON-LOGIN
+# one, which is what a VS Code terminal usually opens. Neither existed before.
+COPY --chmod=0644 packages/cli/sandbox/agent-config-profile.sh /etc/profile.d/motir-sandbox-agent-config.sh
+RUN printf '%s\n' \
+    '' \
+    '# motir-sandbox: the agent-config setup, for an interactive NON-login shell.' \
+    '# /etc/profile.d is not read by one, and a VS Code terminal is usually one.' \
+    '[ -r /etc/profile.d/motir-sandbox-agent-config.sh ] && . /etc/profile.d/motir-sandbox-agent-config.sh' \
+    >> /home/node/.bashrc
+
 # Run unprivileged. The node image already ships a `node` user at uid/gid 1000,
 # which is the common host uid — so files the agent writes into the /workspace
 # bind mount stay owned by the invoking user rather than by root.
