@@ -2,6 +2,7 @@ import type { WorkItem } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { fullestContainer } from '@/lib/planning/planShape';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -26,6 +27,7 @@ import type {
 import type { PlanRevision } from '@/generated/prisma/client';
 import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type {
+  PlanCommittedBlockerDto,
   PlanHistoryEventDto,
   PlanItemChangeDto,
   PlanItemChangeField,
@@ -467,6 +469,36 @@ export const planReviewService = {
     );
     const targetById = new Map(targets.map((t) => [t.id, t]));
 
+    // …AND the COMMITTED `blocked_by` EDGES of every target (bug MOTIR-4951).
+    //
+    // The canvas builds a level from the roadmap read of that level's CURRENT
+    // children ∪ this plan's proposals at it. That is complete for a proposal
+    // that stays where it is, and it is silently incomplete for one the plan
+    // RE-PARENTS onto the level: the moving card is not among the destination's
+    // current children, so its committed edges are in `committed.deps` nowhere —
+    // and they are not in the two carriers either, because a relocation proposes
+    // no edge. The card was drawn as a node and never as an endpoint, and a
+    // relocation plan — whose whole subject is moving cards into a container so
+    // they can be worked in some order — rendered as unrelated cards side by
+    // side. Approving made the arrows appear, which is the tell.
+    //
+    // ONE query for the whole plan, on the same "never an N+1" rule the target
+    // read above states. `findBlockerEdgesForItems` already carries the blocker's
+    // STATUS, which is the other half of what the level builder needs: a
+    // committed edge is drawn `firm` or `pending` by whether its blocker is
+    // `done` (`buildWorkItemLevel`), and the level builder cannot look that up —
+    // the blocker may be a card this same plan is relocating, in which case it is
+    // not in the roadmap read for this level either.
+    const committedEdgeRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockerEdgesForItems(targetIds, ctx.workspaceId, tx),
+    );
+    const committedBlockersByItemId = new Map<string, PlanCommittedBlockerDto[]>();
+    for (const row of committedEdgeRows) {
+      const list = committedBlockersByItemId.get(row.fromId) ?? [];
+      list.push({ nodeId: row.blockerId, isDone: row.blockerStatus === 'done' });
+      committedBlockersByItemId.set(row.fromId, list);
+    }
+
     // …AND the LIVE PARENT of every proposal that names a TARGET instead of a
     // parent (bug MOTIR-3191).
     //
@@ -667,6 +699,22 @@ export const planReviewService = {
       return [...new Set(refs.map(resolveNodeRef))];
     };
     /**
+     * What the target ALREADY BRINGS — its committed `blocked_by` edges, as
+     * canvas node ids (bug MOTIR-4951). The third carrier, and the only one the
+     * plan does not state.
+     *
+     * ⚠️ NO REF RESOLUTION HERE, and that is not an omission. The two resolvers
+     * above turn a PLAN's refs into node ids, and a temp-ref has to be followed
+     * to the item it names. These endpoints are committed work items, whose node
+     * id IS their work-item id by the one rule at the top of this function — so
+     * the row's `blockerId` is already the answer.
+     *
+     * `[]` for an un-materialized `add`: no `workItemId`, nothing in the map, and
+     * nothing it could carry — it is not a work item yet.
+     */
+    const committedBlockedByOf = (item: PlanItemDto): PlanCommittedBlockerDto[] =>
+      (item.workItemId ? committedBlockersByItemId.get(item.workItemId) : undefined) ?? [];
+    /**
      * Where this proposal SITS — one rule for all three ops (bug MOTIR-3191).
      *
      * An `add` says so itself, in `parentRef`. A `modify` says so too now — in
@@ -778,6 +826,7 @@ export const planReviewService = {
         parentTrail: committedParent ? trailFor(committedParent.id) : [],
         blockedByNodeIds: blockedByNodeIdsOf(item),
         blockedByRemovedNodeIds: blockedByRemovedNodeIdsOf(item),
+        committedBlockedBy: committedBlockedByOf(item),
         // The target's key, for EVERY op that has a target (MOTIR-3160). An
         // un-materialized `add` still reports null — it has no key and inventing
         // one would be the surface asserting a work item that does not exist —

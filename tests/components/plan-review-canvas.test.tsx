@@ -172,6 +172,7 @@ function proposal(over: Partial<PlanReviewItemDto> = {}): PlanReviewItemDto {
     ],
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
+    committedBlockedBy: [],
     identifier: null,
     title: 'A proposed subtask',
     kind: 'subtask',

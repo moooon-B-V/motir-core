@@ -1956,3 +1956,134 @@ describe('planReviewService — the edge a plan REMOVES', () => {
     for (const item of review.items) expect(item.blockedByRemovedNodeIds).toEqual([]);
   });
 });
+
+// ── THE THIRD CARRIER (bug MOTIR-4951) ──────────────────────────────────────
+//
+// The two blocks above resolve what a plan SAYS about edges: the two add
+// carriers, and the removal on its own channel. Both are complete for a proposal
+// that stays where it is, because the canvas gets everything else from the
+// COMMITTED level the roadmap read returned.
+//
+// A `modify` that RE-PARENTS its target (MOTIR-3859) is the case that breaks
+// that arrangement, and it breaks it silently. Reported by Yue on a live plan:
+// *"before I approved the plan I don't see the edge from 4942 to 4925, after I
+// approved the plan I see the edge."* The edge was committed before the plan was
+// written and untouched by it — the card was simply not yet a child of the level
+// it was drawn on, so the level's own read did not carry it, and a relocation
+// proposes no edge for the carriers above to carry.
+//
+// What the review model owes, therefore, is what the moving card BRINGS. Its
+// blocker's STATUS rides along because the canvas's committed treatment is
+// status-derived and the level builder cannot look it up: the blocker may be a
+// card this same plan is relocating too, in which case it is not in the roadmap
+// read for that level either — which is exactly the reported fixture.
+describe('planReviewService — the committed edges a proposal BRINGS', () => {
+  it('carries a re-parented target’s committed blockers, with the blocker’s doneness', async () => {
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'Approval gates');
+    // Two ROOT cards with a committed edge between them — the reported shape.
+    const design = await seedChild(fx, 'task', 'Design the acceptance-video gate');
+    const build = await seedChild(fx, 'task', 'The per-project switch');
+    await workItemsService.linkWorkItems(
+      { fromId: build.id, toId: design.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    // The plan moves BOTH onto the epic's level, and proposes no edge — because
+    // the edge already exists.
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Adopt the pair' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: design.id, patch: { parentRef: epic.id } },
+        { op: 'modify', workItemId: build.id, patch: { parentRef: epic.id } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    const blocked = review.items.find((i) => i.nodeId === build.id)!;
+    const blocker = review.items.find((i) => i.nodeId === design.id)!;
+
+    // THE assertion: the edge the plan does not state reaches the canvas anyway.
+    expect(blocked.committedBlockedBy).toEqual([{ nodeId: design.id, isDone: false }]);
+    // …and it is not folded into either carrier, both of which are correctly
+    // empty: the plan proposes no edge and removes none.
+    expect(blocked.blockedByNodeIds).toEqual([]);
+    expect(blocked.blockedByRemovedNodeIds).toEqual([]);
+    // The blocker itself brings nothing — the edge is directional.
+    expect(blocker.committedBlockedBy).toEqual([]);
+    // Both land on the epic's level, so `mergePlanLevel` can draw it there.
+    expect(blocked.parentNodeId).toBe(epic.id);
+    expect(blocker.parentNodeId).toBe(epic.id);
+  });
+
+  it('reports `isDone` off the blocker’s live status', async () => {
+    // The half the level builder cannot compute for itself. A committed edge is
+    // drawn `firm` once its blocker is `done` and `pending` while it is not, and
+    // the drawing must agree with the level the reviewer gets AFTER approve.
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'An epic');
+    const blocker = await seedChild(fx, 'task', 'Already shipped');
+    const blocked = await seedChild(fx, 'task', 'Waiting on it');
+    await workItemsService.linkWorkItems(
+      { fromId: blocked.id, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Move it' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: blocked.id, patch: { parentRef: epic.id } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.committedBlockedBy).toEqual([{ nodeId: blocker.id, isDone: true }]);
+  });
+
+  it('is EMPTY for an un-materialized `add` — it is not a work item yet', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await seedChild(fx, 'story', 'A story');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'A new card' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', parentRef: story.id, proposedFields: { title: 'A new card' } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.committedBlockedBy).toEqual([]);
+  });
+
+  it('EXCLUDES an archived blocker, as every readiness read does', async () => {
+    // A stale edge to a soft-removed card must not phantom-draw an arrow on the
+    // surface a plan is approved from, for the same reason it must not
+    // phantom-gate a sprint.
+    const fx = await makeWorkItemFixture();
+    const epic = await seedChild(fx, 'epic', 'An epic');
+    const gone = await seedChild(fx, 'task', 'Retired');
+    const blocked = await seedChild(fx, 'task', 'Still live');
+    await workItemsService.linkWorkItems(
+      { fromId: blocked.id, toId: gone.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Move it' }, fx.ctx);
+    await plansService.addProposals(
+      plan.id,
+      [{ op: 'modify', workItemId: blocked.id, patch: { parentRef: epic.id } }],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items[0]!.committedBlockedBy).toEqual([]);
+  });
+});

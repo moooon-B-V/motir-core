@@ -26,6 +26,7 @@ export function planReviewItem(over: Partial<PlanReviewItemDto> = {}): PlanRevie
     parentTrail: [],
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
+    committedBlockedBy: [],
     identifier: null,
     title: 'A proposed item',
     kind: 'task',

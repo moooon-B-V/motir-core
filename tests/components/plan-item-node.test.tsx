@@ -30,6 +30,7 @@ function item(over: Partial<PlanReviewItemDto>): PlanReviewItemDto {
     parentTrail: [],
     blockedByNodeIds: [],
     blockedByRemovedNodeIds: [],
+    committedBlockedBy: [],
     identifier: null,
     title: 'A proposed item',
     kind: 'task',
@@ -875,5 +876,212 @@ describe('mergePlanLevel — an edge the plan REMOVES', () => {
     );
 
     expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b' }]);
+  });
+});
+
+// ── bug MOTIR-4951 — a card the plan RE-PARENTS onto a level brings its EDGES ─
+//
+// Reported by Yue while reviewing a real plan: *"before I approved the plan I
+// don't see the edge from 4942 to 4925, after I approved the plan I see the
+// edge."* Nothing about the edge changed at any point — it was committed before
+// the plan was written and untouched by it. Only the DRAWING changed.
+//
+// `mergePlanLevel` seeds its dep list from the COMMITTED level it is handed, and
+// that level is the destination's CURRENT children. A card the plan is moving is
+// exactly the card that is not among them yet, so its committed edges are in
+// `committed.deps` nowhere — and they are in neither PLAN carrier either, since
+// a relocation proposes no edge. The card arrived as a NODE and never as an
+// ENDPOINT.
+//
+// ⚠️ THE FAILURE IS BIASED TOWARD FALSE CONFIDENCE, which is why it is worth a
+// block of its own. A missing arrow is not a blank space: the canvas is read for
+// its SHAPE, so an absent edge asserts *these are independent* — a claim, not an
+// absence — and a reviewer has no way to tell it from a real one. A relocation
+// plan, whose whole subject is moving cards into a container so they can be
+// worked in some order, rendered as a handful of unrelated cards side by side.
+//
+// It is the SAME COMMITTED-only trap `mergePlanLevel`'s own MOTIR-4266 comment
+// names for `drillable`, one field over and from the identical cause.
+describe('mergePlanLevel — a RE-PARENTED card’s committed edges', () => {
+  function committed(ids: string[], deps: PlanCanvasLevel['deps'] = []): PlanCanvasLevel {
+    return {
+      nodes: ids.map((id) => ({
+        id,
+        parentId: 'parent_1',
+        searchText: id,
+        crumbLabel: id,
+        drillable: false,
+        content: <span>{id}</span>,
+      })),
+      deps,
+    };
+  }
+
+  it('draws the committed edge between two cards the plan moves onto this level', () => {
+    // The reported fixture, at the shape the model sees it: MOTIR-4925
+    // `blocked_by` MOTIR-4942, both re-parented onto MOTIR-4878's level by one
+    // plan. Neither is a committed child of that level yet, so `committed` holds
+    // only the level's own fifteen — here, one stand-in.
+    const level = mergePlanLevel(
+      committed(['wi_existing']),
+      [
+        item({
+          planItemId: 'p_4942',
+          nodeId: 'wi_4942',
+          op: 'modify',
+          identifier: 'MOTIR-4942',
+          parentNodeId: 'parent_1',
+        }),
+        item({
+          planItemId: 'p_4925',
+          nodeId: 'wi_4925',
+          op: 'modify',
+          identifier: 'MOTIR-4925',
+          parentNodeId: 'parent_1',
+          committedBlockedBy: [{ nodeId: 'wi_4942', isDone: false }],
+        }),
+      ],
+      'parent_1',
+    );
+
+    // Both relocated cards are on the level…
+    expect(level.nodes.map((n) => n.id)).toEqual(['wi_existing', 'wi_4942', 'wi_4925']);
+    // …and so is the arrow between them, BEFORE anybody approves anything.
+    expect(level.deps).toEqual([{ from: 'wi_4942', to: 'wi_4925', variant: 'pending' }]);
+  });
+
+  it('draws it as a COMMITTED edge — `firm` once the blocker is done, never a proposal', () => {
+    // Approving creates nothing here, so the edge must not be drawn the way an
+    // edge approving WOULD create is drawn. `buildWorkItemLevel`'s rule for every
+    // within-level committed edge is status-derived, and this is the same rule:
+    // a `done` blocker draws `firm`. The proposed loop, by contrast, pushes
+    // `pending` unconditionally — which is what makes the two distinguishable.
+    const level = mergePlanLevel(
+      committed([]),
+      [
+        item({ planItemId: 'p_a', nodeId: 'wi_a', op: 'modify', parentNodeId: 'parent_1' }),
+        item({
+          planItemId: 'p_b',
+          nodeId: 'wi_b',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          committedBlockedBy: [{ nodeId: 'wi_a', isDone: true }],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'firm' }]);
+  });
+
+  it('does NOT draw one whose other end stays off the level', () => {
+    // The both-ends-present rule the proposed loop already applies. A card moved
+    // in alone keeps a blocker that is still somewhere else, and this level is
+    // not the place to draw it.
+    const level = mergePlanLevel(
+      committed(['wi_existing']),
+      [
+        item({
+          planItemId: 'p_moved',
+          nodeId: 'wi_moved',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          committedBlockedBy: [{ nodeId: 'wi_elsewhere', isDone: false }],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([]);
+  });
+
+  it('still DROPS one the plan removes — MOTIR-4092 / MOTIR-4098 are not regressed', () => {
+    // The property the widening could most easily have broken, and the reason
+    // the new loop runs AFTER the removal filter and consults `removedPairs`
+    // itself: a committed edge that reaches the level through this new door must
+    // be as removable as one that reaches it through `committed.deps`. Without
+    // the second check the edge would be filtered out of the seed list and put
+    // straight back by the loop below it.
+    const level = mergePlanLevel(
+      committed([]),
+      [
+        item({ planItemId: 'p_a', nodeId: 'wi_a', op: 'modify', parentNodeId: 'parent_1' }),
+        item({
+          planItemId: 'p_b',
+          nodeId: 'wi_b',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          committedBlockedBy: [{ nodeId: 'wi_a', isDone: false }],
+          blockedByRemovedNodeIds: ['wi_a'],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([]);
+  });
+
+  it('does not double-draw an edge the committed level already carries', () => {
+    // A `modify` that does NOT re-parent has its target among the level's
+    // committed children, so the same edge arrives from both sources. It is one
+    // arrow, in the variant the committed read gave it — the new loop must not
+    // append a second, nor re-decide the first.
+    const level = mergePlanLevel(
+      committed(['wi_a', 'wi_b'], [{ from: 'wi_a', to: 'wi_b', variant: 'firm' }]),
+      [
+        item({
+          planItemId: 'p_b',
+          nodeId: 'wi_b',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          committedBlockedBy: [{ nodeId: 'wi_a', isDone: false }],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'firm' }]);
+  });
+
+  it('leaves a PROPOSED edge on the same pair as the one arrow the plan means', () => {
+    // A plan may propose an edge that is already wired (the canvas has always
+    // tolerated it). The committed reading wins, because it is the true one:
+    // approving does not create this edge, and drawing it `pending` when its
+    // blocker is done would say it does.
+    const level = mergePlanLevel(
+      committed([]),
+      [
+        item({ planItemId: 'p_a', nodeId: 'wi_a', op: 'modify', parentNodeId: 'parent_1' }),
+        item({
+          planItemId: 'p_b',
+          nodeId: 'wi_b',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          committedBlockedBy: [{ nodeId: 'wi_a', isDone: true }],
+          blockedByNodeIds: ['wi_a'],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'firm' }]);
+  });
+
+  it('ignores a self-edge, as the proposed loop does', () => {
+    const level = mergePlanLevel(
+      committed([]),
+      [
+        item({
+          planItemId: 'p_a',
+          nodeId: 'wi_a',
+          op: 'modify',
+          parentNodeId: 'parent_1',
+          committedBlockedBy: [{ nodeId: 'wi_a', isDone: false }],
+        }),
+      ],
+      'parent_1',
+    );
+
+    expect(level.deps).toEqual([]);
   });
 });
