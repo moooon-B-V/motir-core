@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
@@ -252,6 +253,34 @@ export async function seedIndexWorkspace(
       archived: false,
     })),
   });
+  // ⚠️ EACH PROJECT IS ALSO GIVEN THE REPOSITORIES (MOTIR-4653). Connecting them
+  // to the WORKSPACE used to be enough for a project to see them: the code-context
+  // resolver read the installation grant. It reads the PROJECT's configured set
+  // now, so a fixture that stops at `persistInstallation` leaves every project
+  // code-BLIND — and the suites downstream of this helper (the first-audit
+  // trigger above all) then report `0 submits` rather than a missing link.
+  //
+  // Every project gets every repo, which is what these fixtures have always
+  // MEANT: `seedIndexWorkspace(slug, N, repos)` describes a workspace of N
+  // projects that all work on the same repositories, and the per-project fan-out
+  // assertions are written against exactly that.
+  for (const projectId of projectIds) {
+    for (const repo of repos) {
+      const row = await projectRepoSetService.addRow(
+        projectId,
+        { role: 'web', name: repo.name },
+        { userId: user.id, workspaceId: workspace.id },
+      );
+      const realized = await adminDb.githubRepo.findFirstOrThrow({
+        where: { workspaceId: workspace.id, owner: repo.owner, name: repo.name },
+      });
+      await adminDb.projectRepo.update({
+        where: { id: row.id },
+        data: { githubRepoId: realized.id },
+      });
+    }
+  }
+
   return {
     workspaceId: workspace.id,
     ownerUserId: user.id,
