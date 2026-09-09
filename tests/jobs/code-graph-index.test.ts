@@ -169,19 +169,27 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
       events: [indexEvent(installationId, workspaceId)],
     });
 
-    // ⚠️ STILL `toEqual`, AND STILL EXACT — `coreTimings` (MOTIR-4413) is named
-    // rather than allowed for. `toMatchObject` would have been the one-character
-    // fix and it would have thrown away what these assertions are FOR: §6's
-    // ledger contract is that this row carries `indexed` / `repoRef` /
-    // `projectsIndexed` and nothing a reader has to learn about, so an
-    // assertion that stops noticing extra keys stops guarding the contract on the
-    // very card that adds one. `expect.any(Array)` keeps the shape closed while
-    // recording that a fourth, optional key now exists.
+    // ⚠️ STILL `toEqual`, AND STILL EXACT — `coreTimings` (MOTIR-4413) and
+    // `indexModes` (MOTIR-4945) are named rather than allowed for.
+    // `toMatchObject` would have been the one-character fix and it would have
+    // thrown away what these assertions are FOR: §6's ledger contract is that
+    // this row carries `indexed` / `repoRef` / `projectsIndexed` and nothing a
+    // reader has to learn about, so an assertion that stops noticing extra keys
+    // stops guarding the contract on the very card that adds one.
+    // `expect.any(Array)` keeps the shape closed while recording that a fourth
+    // and now a fifth optional key exist.
+    //
+    // ⚠️ AND THE COST OF THE FIFTH IS THE ARGUMENT FOR KEEPING THIS SHAPE, not
+    // against it: adding `indexModes` turned TWELVE of these assertions red
+    // across three files at once. That is the guard doing precisely its job —
+    // every one of them is a place a reader is promised the row's whole
+    // contents, and a card that widens the row is made to come past all of them.
     expect(result).toEqual({
       indexed: true,
       repoRef: REPO_REF,
       projectsIndexed: 2,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
     expect(composed).toHaveBeenCalled();
     for (const call of composed.mock.calls) {
@@ -278,6 +286,7 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
       repoRef: REPO_REF,
       projectsIndexed: 1,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
     // Teardown was reached — the guarantee the whole shape exists for, now held
     // by an ordinary `finally` rather than by a step reachable from both exits.
@@ -350,6 +359,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
         repoRef: REPO_REF,
         projectsIndexed: projectCount,
         coreTimings: expect.any(Array),
+        indexModes: expect.any(Array),
       });
 
       // ⚠️ AND THE LEDGER DID NOT. Two projects must not become two rows or two
@@ -364,6 +374,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
         repoRef: REPO_REF,
         projectsIndexed: projectCount,
         coreTimings: expect.any(Array),
+        indexModes: expect.any(Array),
       });
     },
     30_000,
@@ -645,6 +656,7 @@ describe('step ids identify the SAME unit of work on every replay', () => {
       repoRef: REPO_REF,
       projectsIndexed: 1,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
   }, 30_000);
 });
@@ -851,6 +863,7 @@ describe('the admission cap queues, and nothing is dropped', () => {
       repoRef: REPO_REF,
       projectsIndexed: 1,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
     const projectId = projectIds[0]!;
     const ids = stepIds(ctx);
@@ -1012,6 +1025,7 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
       repoRef: REPO_REF,
       projectsIndexed: 1,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
     // The re-execution was NOT refused, and it was not a second slot either.
     expect(seen.map((v) => v.outcome)).toEqual(['admitted', 'already_held']);
@@ -1108,6 +1122,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
       repoRef: REPO_REF,
       projectsIndexed: 2,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
@@ -1208,6 +1223,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
       repoRef: REPO_REF,
       projectsIndexed: 2,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
     // ⚠️ THE PARITY IS OVER THE CONTRACT, NOT OVER THE NUMBERS. `coreTimings`
     // (MOTIR-4413) is a MEASUREMENT of two different runs, so comparing the two

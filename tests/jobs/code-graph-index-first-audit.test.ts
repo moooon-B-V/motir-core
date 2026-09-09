@@ -164,6 +164,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
       repoRef: REPO_REF,
       projectsIndexed: 1,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
     // ONE pair. `refreshCodeAudit` is the call that submits BOTH jobs — motir-ai
     // returns an `auditJobId` and a `conventionJobId` from the one request — so
@@ -276,6 +277,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
       repoRef: REPO_REF,
       projectsIndexed: 1,
       coreTimings: expect.any(Array),
+      indexModes: expect.any(Array),
     });
     const runs = await indexJobRuns();
     expect(runs).toHaveLength(1);
