@@ -101,16 +101,21 @@ const runBlockOf = (workflow: string, stepName: string): string => {
 
 describe('the @motir/cli publish metadata', () => {
   it('carries the SAME version in src/version.ts — nothing else keeps them together', () => {
-    // Two hand-maintained copies of one number, and until MOTIR-2131 nothing
-    // compared them. `src/version.ts` says "kept in sync with package.json"
-    // in a comment; a comment is not a check.
+    // What a divergence would ship is the exact defect MOTIR-2131 is about, one
+    // level down: the release lane reads package.json to TAG the images
+    // (`:claude-0.1.1`) while `motir --version` inside them prints CLI_VERSION.
+    // Bump one and you publish an image whose own version string contradicts its
+    // tag — and the tag-vs-package guard below would pass, because it never
+    // looks at this file.
     //
-    // What the divergence would have shipped is the exact defect that card is
-    // about, one level down: the release lane reads package.json to TAG the
-    // images (`:claude-0.1.1`) while `motir --version` inside them prints
-    // CLI_VERSION. Bump one and you publish an image whose own version string
-    // contradicts its tag — and the tag-vs-package guard below would pass,
-    // because it never looks at this file.
+    // ⚠️ THIS NO LONGER GUARDS TWO HAND-MAINTAINED COPIES, AND THAT IS THE POINT.
+    // It once did: `src/version.ts` held a literal kept in step by a comment,
+    // and MOTIR-2131 added this check because a comment is not one. A literal
+    // survives only while a person cuts releases and edits both files, so the
+    // first release through the Changesets lane (MOTIR-3967) desynced it on the
+    // spot — `changeset version` writes package.json and nothing else. The file
+    // now DERIVES the number, so what this asserts is that the derivation is
+    // still wired: it fails again the moment someone re-introduces a copy.
     expect(CLI_VERSION).toBe(pkg.version);
   });
 
