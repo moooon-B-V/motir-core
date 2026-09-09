@@ -130,6 +130,7 @@ describe('the sandbox smoke harness', () => {
     'env-credential-smoke.sh',
     'login-smoke.sh',
     'readonly-login-smoke.sh',
+    'entrypoint-bypass-smoke.sh',
     'fake-agent.sh',
     'failing-agent.sh',
     'stub-server.mjs',
@@ -203,6 +204,25 @@ describe('the sandbox smoke harness', () => {
     // The credential it wrote must then be USED — a file appearing proves less
     // than a read that succeeds because of it.
     expect(loginSh).toContain('motir ready');
+  });
+
+  it('runs the entrypoint-bypass guard on EVERY profile leg (MOTIR-4956)', () => {
+    // The defect this reproduces is invisible to every other check in this
+    // workflow: the image builds, `motir --version` runs, the liveness command
+    // runs — all through the ENTRYPOINT, which is precisely the thing a
+    // devcontainer replaces. The guard has to launch the container the way the
+    // published recipe does, or it asserts nothing about that route.
+    expect(images).toContain('packages/cli/sandbox/smoke/entrypoint-bypass-smoke.sh');
+    expect(images).toContain('--profile ${{ matrix.profile.id }}');
+    const guard = read(join(SMOKE_DIR, 'entrypoint-bypass-smoke.sh'));
+    expect(guard).toContain('--entrypoint /bin/bash');
+    // Both shell shapes a devcontainer produces, and the failure names the card.
+    expect(guard).toContain("check 'login shell' -lc");
+    expect(guard).toContain("check 'bashrc' -c '. ~/.bashrc; '");
+    expect(guard).toContain('MOTIR-4956');
+    // It must demand the image-owned home, not merely a non-empty value: the
+    // read-only mount is a perfectly non-empty path and is the wrong answer.
+    expect(guard).toContain('EXPECTED_PREFIX=/home/node/.motir-sandbox/agent-config');
   });
 
   it('asserts the read-only login fails as ONE SENTENCE, never as a stack', () => {
