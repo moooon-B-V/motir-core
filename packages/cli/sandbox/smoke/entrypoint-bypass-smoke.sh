@@ -64,9 +64,11 @@ fail() {
 }
 
 check() {
-    local what="$1" flags="$2" prefix="${3:-}" observed
-    observed=$(docker run --rm --entrypoint /bin/bash "$IMAGE" "$flags" \
-        "${prefix}printf '%s' \"\${$VAR:-UNSET}\"")
+    local what="$1" flags="$2" observed
+    # `-i` keeps stdin open, which an interactive shell wants; no `-t`, because
+    # a CI runner has no tty and bash does not need one to run `-c`.
+    observed=$(docker run --rm -i --entrypoint /bin/bash "$IMAGE" "$flags" \
+        "printf '%s' \"\${$VAR:-UNSET}\"")
 
     if [ "$observed" = UNSET ]; then
         fail "$what: $VAR is UNSET with the entrypoint bypassed — this is MOTIR-4956. The agent would fall back to its read-only mount and could neither read a credential nor write one."
@@ -83,8 +85,16 @@ check() {
 check 'login shell' -lc
 
 # An INTERACTIVE NON-LOGIN shell reads ~/.bashrc and NOT /etc/profile.d, and it
-# is what a VS Code devcontainer terminal usually opens. Sourced explicitly
-# rather than via `bash -i`, which needs a tty and would make this leg flaky.
-check 'bashrc' -c '. ~/.bashrc; '
+# is what a VS Code devcontainer terminal usually opens.
+#
+# ⚠️ IT MUST BE `bash -i`, NOT `bash -c '. ~/.bashrc; …'`. Debian's stock
+# .bashrc opens with `case $- in *i*) ;; *) return;; esac`, so a NON-interactive
+# shell sourcing it returns before reaching anything appended below — including
+# the line the image adds. That reads as UNSET and blames the product for the
+# check's own shape, which is exactly what it did on the first run of this
+# guard: the login-shell arm passed with the right path while this one failed.
+# `-i` needs no tty — it warns "no job control in this shell" on stderr and
+# carries on, and stderr is not what is captured here.
+check 'interactive non-login shell' -ic
 
 echo "== $PROFILE: the agent config survives an entrypoint bypass"

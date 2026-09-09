@@ -218,7 +218,16 @@ describe('the sandbox smoke harness', () => {
     expect(guard).toContain('--entrypoint /bin/bash');
     // Both shell shapes a devcontainer produces, and the failure names the card.
     expect(guard).toContain("check 'login shell' -lc");
-    expect(guard).toContain("check 'bashrc' -c '. ~/.bashrc; '");
+    // ⚠️ The second arm must be INTERACTIVE. Debian's stock ~/.bashrc opens
+    // with `case $- in *i*) ;; *) return;; esac`, so `bash -c '. ~/.bashrc'`
+    // returns before the line the image appends and the guard reports UNSET —
+    // blaming the product for the check's own shape. That is exactly what this
+    // guard did on its first CI run, with the login-shell arm passing beside it.
+    expect(guard).toContain("check 'interactive non-login shell' -ic");
+    // …and stdin stays open for it, while no `-t` is asked for: a CI runner has
+    // no tty, and bash needs none to run `-c`.
+    expect(guard).toContain('docker run --rm -i --entrypoint /bin/bash');
+    expect(guard).not.toContain('docker run --rm -it');
     expect(guard).toContain('MOTIR-4956');
     // It must demand the image-owned home, not merely a non-empty value: the
     // read-only mount is a perfectly non-empty path and is the wrong answer.
