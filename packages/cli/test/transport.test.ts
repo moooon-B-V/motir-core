@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -12,6 +15,8 @@ import {
   PermissionError,
 } from '../src/errors.js';
 import { describeField, isVersionBehind, V1Transport } from '../src/transport.js';
+import { CLIENT_VERSION_HEADER } from '../src/transport.js';
+import { CLI_VERSION } from '../src/version.js';
 import { GENERATED_AGAINST } from '../src/api/index.js';
 
 // The `/api/v1` transport core, driven against a REAL stub HTTP server over a
@@ -37,6 +42,8 @@ interface Recorded {
   method: string;
   url: string;
   authorization: string | undefined;
+  /** Every header, so a TRANSPORT-level field can be asserted on the wire. */
+  headers: Record<string, string | string[] | undefined>;
   body: string;
 }
 
@@ -57,6 +64,7 @@ class StubServer {
           method: req.method ?? '',
           url: req.url ?? '',
           authorization: req.headers.authorization,
+          headers: req.headers,
           body: Buffer.concat(chunks).toString('utf8'),
         });
         const reply = this.replies.shift() ?? this.fallback;
@@ -607,5 +615,46 @@ describe('the version-skew gate', () => {
     await expect(
       client.request('getProject', { path: { projectKey: 'MOTIR' } }),
     ).rejects.toBeInstanceOf(ResponseShapeError);
+  });
+});
+
+describe('the CLI reports its version on a dedicated field (MOTIR-4974)', () => {
+  it('carries it on a command that is NOT dispatch', async () => {
+    // ⚠️ THE POINT OF ASSERTING IT HERE is that the coverage is TRANSPORT-level
+    // rather than per-operation. `listProjects` is an ordinary read that knows
+    // nothing about versions; if the field rides on it, it rides on everything,
+    // including the operations nobody has written yet. A per-tool field would
+    // have to be remembered by each new one, and the one it was forgotten on is
+    // the one a stale client would use.
+    stub.queue({ status: 200, body: { items: [PROJECT], nextCursor: null } });
+    await transport().request('listProjects', {});
+
+    const sent = stub.received[0]?.headers[CLIENT_VERSION_HEADER];
+    expect(sent).toBe(CLI_VERSION);
+  });
+
+  it('reports it on the field the SERVER reads — the two literals must agree', () => {
+    // ⚠️ READ AS TEXT, NOT IMPORTED. `packages/cli` does not depend on the app's
+    // `lib/` (ADR `public-api-conventions.md` Amendment 9 Q3 permits exactly one
+    // module in the other direction, and none in this one), so the field name is
+    // a literal on both sides and this is the guard that keeps them one string.
+    //
+    // The failure it catches is SILENT: rename either side and the server simply
+    // never sees a version, which reads exactly like a fleet that is up to date.
+    // A floor that never fires is indistinguishable from a floor nobody needs.
+    const serverSource = readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        '..',
+        '..',
+        '..',
+        'lib',
+        'api',
+        'v1',
+        'clientVersion.ts',
+      ),
+      'utf8',
+    );
+    expect(serverSource).toContain(`CLIENT_VERSION_HEADER = '${CLIENT_VERSION_HEADER}'`);
   });
 });

@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CACHE_TTL_MS,
@@ -449,5 +450,39 @@ describe('the recipe is TRANSCRIBED, and the unattended lanes are never prompted
     expect(text).toContain('-v motir-auth:/home/node/.config/motir');
     expect(text).not.toContain('--name');
     expect(text).not.toContain('docker start');
+  });
+});
+
+describe('the version field is a NEW one — MOTIR-2419 stays fixed (MOTIR-4974)', () => {
+  it('leaves the dispatch close-out reporting `byok`, with no `motir-cli/` stamp', () => {
+    // ⚠️ THE TEMPTING SHORTCUT THIS FORBIDS. The CLI already sent its version
+    // once: as the dispatch HARNESS. MOTIR-2447 removed that because it
+    // overwrote the agent name and model `mark_integrated` had recorded during
+    // the run — undoing MOTIR-2419's fix at the very next step of the lifecycle.
+    //
+    // Version is telemetry about the CLIENT; harness and model are provenance
+    // about the WORK. Re-using that field would have fixed MOTIR-4970 and
+    // silently re-broken MOTIR-2419, in a diff that looked like one line. So the
+    // version rides on a transport header, and this asserts the field it did NOT
+    // go back to.
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'commands', 'dispatch.ts'),
+      'utf8',
+    );
+    expect(source).toContain("const CLOSE_OUT_SOURCE = 'byok' as const;");
+    expect(source).toContain('implementationSource: CLOSE_OUT_SOURCE');
+
+    // Comments are STRIPPED before the negative assertions: `dispatch.ts` keeps
+    // MOTIR-2447's reasoning in prose, and that paragraph naming the retired
+    // `motir-cli/<version>` stamp is exactly what a later reader should find.
+    // The assertion is about CODE — that nothing puts a version back on the
+    // harness — not about whether the history may be written down.
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    expect(code).not.toContain('motir-cli/');
+    expect(code).not.toContain('CLI_VERSION');
   });
 });
