@@ -2462,6 +2462,20 @@ Three rows would publish "no credential mount" for a profile the image does moun
 one for, and `opencode` would publish one of its two. A derivation is only worth
 having if it derives the fact the reader is being told.
 
+> **⚠️ CORRECTED 2026-09-10 (MOTIR-4957) — the LEFT column has moved, and the
+> decision is unchanged because of it, not despite it.** The three
+> directory-shaped probes above were a defect: a config directory exists on any
+> machine that has ever LAUNCHED the agent, so `PASS Agent credential` was true
+> for someone who had never signed in — and in the sandbox `~/.claude` is the
+> read-only mount itself, so the check could not fail there at all. They now
+> read `~/.claude/.credentials.json` (following `CLAUDE_CONFIG_DIR`),
+> `~/.codex/auth.json` (following `CODEX_HOME`), and — for `kimi` — _(none; its
+> credential is `credentials/<profile>.json`, whose name follows the active
+> profile)_. **The table is kept as the evidence it was**, and the divergence it
+> argues for is now wider rather than narrower: `credentialPaths` and
+> `sandboxMounts` differ on SEVEN of the eight profiles, so deriving the mount
+> column from the probe would publish an even worse table today.
+
 **A second card-level correction, recorded so it is not re-derived:** the cards
 say "nine profiles including `base`". `AGENT_PROFILES` has **eight**, and
 `sandbox/smoke/profiles.json` has the same eight; the README's matrix says

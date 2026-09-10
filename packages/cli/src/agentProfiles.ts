@@ -18,17 +18,35 @@ import { basename, join } from 'node:path';
 //
 // The matrix pins a MOUNT, which is not always proof of AUTH — the two diverge
 // wherever the mounted location also exists on a machine that never signed in.
-// Where they diverge the profile tests the narrower thing (opencode's `auth.json`
-// rather than its config dir) or declines to test a path at all (cursor, whose
-// matrix path is also the install tree), with the reason written beside the
-// entry. **A false PASS is worse than a false FAIL**: it tells the user their
-// unattended run is ready when it will stop at a sign-in prompt.
+// Where they diverge the profile tests the narrower thing — the credential FILE
+// inside the mounted dir (`claude`'s `.credentials.json`, `codex`'s `auth.json`,
+// opencode's `auth.json` under the DATA home) — or declines to test a path at
+// all where the mounted dir is also the install tree (`cursor`; `kimi`, whose
+// own binary lives in it), with the reason written beside the entry.
+// **A false PASS is worse than a false FAIL**: it tells the user their
+// unattended run is ready when it will stop at a sign-in prompt. A DIRECTORY is
+// never proof of a sign-in (MOTIR-4957) — every path here is a file.
 //
 // `binaries` is a LOOKUP KEY LIST, not a claim: the binary actually probed always
 // comes from the user's own agent command (`--agent` / `MOTIR_AGENT` / config),
 // and a name that matches nothing here simply falls through to the tier-3
 // generic path. Motir is agent-agnostic — an unlisted agent is supported, just
 // not enriched with a remediation hint.
+
+/**
+ * The env vars an agent uses to RELOCATE its whole config home, credential
+ * included. A closed union rather than an open string: the probe hands back the
+ * VALUE of these (a directory path, never a credential), so the set of names it
+ * will answer for is pinned here where it can be read in one glance.
+ *
+ * Both were verified against the shipped CLIs rather than their docs — `claude`
+ * 2.1.267 and `codex` 0.153.4 each carry the name in their own binary, and
+ * `sandbox/agent-config.sh` exports both because the sandbox redirects each
+ * agent out of its read-only mount.
+ */
+export const AGENT_CONFIG_HOME_VARS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME'] as const;
+
+export type AgentConfigHomeVar = (typeof AGENT_CONFIG_HOME_VARS)[number];
 
 /**
  * The directories a credential path is resolved against. Passed as one object
@@ -43,6 +61,16 @@ export interface CredentialDirs {
   xdgConfigHome: string;
   /** `XDG_DATA_HOME`, or `~/.local/share`. Where opencode + cursor keep auth. */
   xdgDataHome: string;
+  /**
+   * The VALUE of an agent's own config-home override, or `undefined` when the
+   * environment does not set it. A DIRECTORY, never a credential — the same
+   * carve-out `agentEnvOverride` has (see doctor.ts's structural note).
+   *
+   * A profile that ignores this looks in the wrong place inside the sandbox,
+   * where `agent-config.sh` redirects the agent to an image-owned home so the
+   * read-only mount can be seeded and written to.
+   */
+  configHome: (name: AgentConfigHomeVar) => string | undefined;
 }
 
 export interface AgentProfile {
@@ -63,9 +91,16 @@ export interface AgentProfile {
   /** Where the agent's own CLI comes from (the missing-binary remediation). */
   installSource: string;
   /**
-   * Credential locations to test for PRESENCE — a directory the agent creates
-   * on sign-in, or the credential FILE itself where the directory alone would
-   * not prove authentication.
+   * Credential locations to test for PRESENCE — always the credential FILE
+   * itself, never the directory that holds it.
+   *
+   * ⚠️ A DIRECTORY IS NEVER A CREDENTIAL (MOTIR-4957). An agent's config dir
+   * appears the first time anybody LAUNCHES it, sign-in or not, so probing one
+   * is a check that cannot fail: `~/.kimi-code` is created by the installer (it
+   * is where the `kimi` binary lands), and inside the sandbox `~/.claude` is the
+   * read-only mount itself. Where the credential file cannot be VERIFIED
+   * against the shipped CLI, this is `[]` and the profile declares
+   * `credentialKnown: false` — an honest WARN beats a PASS nobody can earn.
    */
   credentialPaths: (dirs: CredentialDirs) => string[];
   /**
@@ -77,9 +112,10 @@ export interface AgentProfile {
    * `credentialPaths` is what `motir doctor` PROBES to prove a sign-in
    * happened, deliberately narrowed wherever a mounted location is not proof of
    * auth (see the header note). This is what the image BINDS. They diverge on
-   * four of the eight profiles: `cursor`, `aider` and `goose` probe nothing at
-   * all while the compose file mounts a path for each, and `opencode` probes one
-   * file where two directories are mounted. Anything PUBLISHING the mount — the
+   * SEVEN of the eight profiles, and `antigravity` agrees only because both are
+   * empty: `cursor`, `aider`, `goose` and `kimi` probe nothing at all while the
+   * compose file mounts a path for each, and `claude`, `codex` and `opencode`
+   * each probe one credential FILE inside a mounted directory. Anything PUBLISHING the mount — the
    * `/docs/sandbox` guide derives its table from here — must read this field;
    * deriving it from `credentialPaths` would tell three profiles they need no
    * mount. `test/sandbox.test.ts` pins every value against the compose file.
@@ -177,7 +213,16 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     tier: 1,
     binaries: ['claude'],
     installSource: 'npm install -g @anthropic-ai/claude-code',
-    credentialPaths: ({ home }) => [join(home, '.claude')],
+    // The CREDENTIAL is `.credentials.json` inside the config dir, not the dir
+    // itself — verified against claude 2.1.267, whose binary carries both this
+    // filename and `CLAUDE_CONFIG_DIR`, and named first in `agent-config.sh`'s
+    // CLAUDE_SEED_ENTRIES because it is the file the sandbox seeding exists to
+    // carry. `CLAUDE_CONFIG_DIR` moves the whole dir, credential included, so
+    // the probe follows it or it looks in the mount the sandbox redirected away
+    // from.
+    credentialPaths: ({ home, configHome }) => [
+      join(configHome('CLAUDE_CONFIG_DIR') ?? join(home, '.claude'), '.credentials.json'),
+    ],
     sandboxMounts: ['~/.claude'],
     credentialEnv: ['ANTHROPIC_API_KEY'],
     credentialKnown: true,
@@ -208,7 +253,15 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     tier: 1,
     binaries: ['codex'],
     installSource: 'npm install -g @openai/codex',
-    credentialPaths: ({ home }) => [join(home, '.codex')],
+    // `auth.json` under CODEX_HOME — VERIFIED against the shipped codex 0.153.4
+    // binary, which carries the filename beside its own sign-in and logout
+    // copy ("It will be stored locally in auth.json", "Failed to remove
+    // auth.json") as well as `CODEX_HOME`. `install-agent.sh` and
+    // `agent-config.sh` both state the same pairing; this comment records that
+    // the CLI itself was read, not only our own notes about it.
+    credentialPaths: ({ home, configHome }) => [
+      join(configHome('CODEX_HOME') ?? join(home, '.codex'), 'auth.json'),
+    ],
     sandboxMounts: ['~/.codex'],
     credentialEnv: ['OPENAI_API_KEY'],
     credentialKnown: true,
@@ -267,11 +320,22 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     tier: 1,
     binaries: ['kimi'],
     installSource: 'npm (@moonshot-ai/kimi-code) — needs Node ≥ 22.19',
-    credentialPaths: ({ home }) => [join(home, '.kimi-code')],
+    // UNKNOWN on purpose, and the reading is what makes it unknown rather than
+    // unexamined. kimi 0.41.0 resolves its credential as
+    // `<config home>/credentials/<PROFILE>.json` — its own error text says so:
+    // "requires authentication.credentials_path (or load via a profile so it
+    // defaults to <config_dir>/credentials/<profile>.json)". So the FILENAME is
+    // the active profile's, and `authentication.credentials_path` in config.toml
+    // can move it anywhere; there is no fixed path to probe. Probing the
+    // DIRECTORY is worse here than anywhere else: `~/.kimi-code/bin/kimi` is
+    // where the installer puts the binary, so the dir exists before anyone has
+    // signed in at all.
+    credentialPaths: () => [],
     sandboxMounts: ['~/.kimi-code'],
     credentialEnv: [],
-    credentialKnown: true,
-    credentialHint: 'Run `kimi` once to sign in — it writes ~/.kimi-code.',
+    credentialKnown: false,
+    credentialHint:
+      'Run `kimi` once to sign in — it writes <KIMI_CODE_HOME or ~/.kimi-code>/credentials/<profile>.json, whose name follows the active profile, so Motir cannot confirm it.',
     codegraphTarget: null,
     codegraphConfig: null,
   },

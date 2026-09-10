@@ -193,6 +193,11 @@ export function defaultDoctorProbe(): DoctorProbe {
     home: () => homedir(),
     xdgConfigHome: () => process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config'),
     xdgDataHome: () => process.env['XDG_DATA_HOME'] || join(homedir(), '.local', 'share'),
+    // A DIRECTORY the user chose, not a credential — and only for the closed
+    // AGENT_CONFIG_HOME_VARS set. The sandbox exports both of these to move an
+    // agent out of its read-only mount, so a probe that ignored them would
+    // report on a directory the agent has stopped reading.
+    configHomeOverride: (name) => process.env[name] || undefined,
   };
 }
 

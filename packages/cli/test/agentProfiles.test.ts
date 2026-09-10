@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_PROFILES,
@@ -114,6 +115,10 @@ const DIRS = {
   home: '/home/tester',
   xdgConfigHome: '/home/tester/.config',
   xdgDataHome: '/home/tester/.local/share',
+  // No agent config-home override set — the DEFAULT resolution every
+  // assertion below is about. The override is exercised on its own, further
+  // down.
+  configHome: () => undefined,
 };
 
 describe('AGENT_PROFILES', () => {
@@ -157,17 +162,66 @@ describe('AGENT_PROFILES', () => {
     }
   });
 
-  it('pins each credential from the sandbox matrix — auth FILE where a dir is not proof', () => {
+  it('pins each credential as a FILE — never the directory that holds it', () => {
     const paths = (id: string): string[] =>
       AGENT_PROFILES.find((p) => p.id === id)?.credentialPaths(DIRS) ?? [];
-    expect(paths('claude')).toEqual(['/home/tester/.claude']);
-    expect(paths('codex')).toEqual(['/home/tester/.codex']);
-    expect(paths('kimi')).toEqual(['/home/tester/.kimi-code']);
+    // MOTIR-4957: every pinned path is a credential FILE. A config directory
+    // exists on any machine that has ever LAUNCHED the agent, so probing one is
+    // a check that cannot fail.
+    expect(paths('claude')).toEqual(['/home/tester/.claude/.credentials.json']);
+    expect(paths('codex')).toEqual(['/home/tester/.codex/auth.json']);
     // The bug this suite exists for: OpenCode's config dir is NOT its
     // credential. `~/.config/opencode` holds configuration; the credential is
     // auth.json under the XDG DATA home.
     expect(paths('opencode')).toEqual(['/home/tester/.local/share/opencode/auth.json']);
     expect(paths('opencode')[0]).not.toContain('/.config/');
+    // The invariant, stated over the whole table rather than per profile: no
+    // pinned path may be a bare agent home.
+    for (const profile of AGENT_PROFILES) {
+      for (const path of profile.credentialPaths(DIRS)) {
+        expect(basename(path), `${profile.id} probes a file`).toContain('.json');
+      }
+    }
+  });
+
+  it('follows an agent config-home override, and falls back to $HOME without one', () => {
+    // Inside the sandbox `agent-config.sh` redirects each agent out of its
+    // read-only mount, so a probe that ignored the override would report on a
+    // directory the agent has stopped reading (MOTIR-4957).
+    const relocated = (name: string, dir: string) => ({
+      ...DIRS,
+      configHome: (asked: string) => (asked === name ? dir : undefined),
+    });
+    const claude = AGENT_PROFILES.find((p) => p.id === 'claude');
+    expect(claude?.credentialPaths(relocated('CLAUDE_CONFIG_DIR', '/agent-home/.claude'))).toEqual([
+      '/agent-home/.claude/.credentials.json',
+    ]);
+    // The OTHER agent's variable must not move it.
+    expect(claude?.credentialPaths(relocated('CODEX_HOME', '/agent-home/.codex'))).toEqual([
+      '/home/tester/.claude/.credentials.json',
+    ]);
+
+    const codex = AGENT_PROFILES.find((p) => p.id === 'codex');
+    expect(codex?.credentialPaths(relocated('CODEX_HOME', '/agent-home/.codex'))).toEqual([
+      '/agent-home/.codex/auth.json',
+    ]);
+    expect(codex?.credentialPaths(relocated('CLAUDE_CONFIG_DIR', '/agent-home/.claude'))).toEqual([
+      '/home/tester/.codex/auth.json',
+    ]);
+  });
+
+  it('leaves kimi UNKNOWN — its credential filename follows the active PROFILE', () => {
+    // kimi 0.41.0 resolves `<config home>/credentials/<profile>.json`, and
+    // `authentication.credentials_path` can move it anywhere, so there is no
+    // fixed path to probe. Probing `~/.kimi-code` is worse than useless: the
+    // installer puts the `kimi` binary inside it, so the directory exists
+    // before anybody has signed in (MOTIR-4957).
+    const kimi = AGENT_PROFILES.find((p) => p.id === 'kimi');
+    expect(kimi?.credentialPaths(DIRS)).toEqual([]);
+    expect(kimi?.credentialKnown).toBe(false);
+    expect(kimi?.credentialHint).toContain('credentials/');
+    // It still MOUNTS the dir — the probe narrowing must not touch that.
+    expect(kimi?.sandboxMounts).toEqual(['~/.kimi-code']);
   });
 
   it('honours a relocated XDG data home for the OpenCode credential', () => {
