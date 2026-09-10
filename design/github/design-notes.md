@@ -774,3 +774,136 @@ chip is `Pill tone="neutral"`, the same treatment `Never indexed` already uses) 
 `ProviderSwitch`) · `SectionLabel` · the settings-area shell. The inventory table is a composition
 of `Card` + rows, not a new primitive; the disclosure is `Card` + `Button`s, not a new dialog
 component.
+
+# 18. MOTIR-4953 — THE PROJECT ROOM DRAWS PROJECT LINKS, NOT THE ORGANISATION INVENTORY
+
+**Amendment (2026-09-09).** Panels 8–11 in `github.mock.html` replace the project-room reading in
+`design/repository-set/` §17. That earlier amendment made the organisation tier explicit but then
+layered the organisation's full inventory into the project page. The result is a room headed
+_Repositories_ that answers the broader question _what can this organisation dispatch into?_ rather
+than the room's question _what does this project work on?_
+
+This amendment does not change the organisation inventory in Panel 6. It changes where that inventory
+is allowed to appear from a project context: **inside Add repository, never as page rows.**
+
+## 18.1 · The answer in one line
+
+The project Repositories room is a view of explicit project links. The Add repository picker is the
+place where the organisation's available inventory is offered, and
+`See every repository in {org}` is the one navigation route to the organisation's whole inventory.
+
+## 18.2 · Drawn against shipped reality
+
+The real `/settings/project/repositories` page was rendered in an isolated E2E database before this
+amendment was drawn. The walk established three concrete facts:
+
+1. A new project with no `project_repository` link rendered every repository in the organisation
+   under `From your organisation` and summarized them as `0 moving · 0 hosted by Motir · 6 yours`.
+2. The Add repository dialog offered those same six repositories as the already-connected pick list.
+3. Picking one produced a removable project-link row **and left the layered copy below it**, so the
+   same `moooon-e2e/motir-demo` repository appeared twice and the summary still described the
+   organisation-sized list.
+
+The target therefore is not a cosmetic de-duplication. Panel 8 removes the layered rows from the page
+contract; Panel 10 retains the organisation inventory at the moment it is useful.
+
+## 18.3 · Placement and panels
+
+| Panel                          | Surface                         | Contract                                                                                                                                    |
+| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **8 · Project-scoped room**    | Project settings → Repositories | Four page rows mean four project links. Two came from the organisation; two are Motir-hosted. Nothing else in the organisation is drawn.    |
+| **9 · Empty project**          | The same room, with zero links  | The summary is all zeroes and the page says the project is empty even when the organisation is not. Both Add affordances stay in this flow. |
+| **10 · Add from organisation** | `Add a repository` dialog       | Unlinked organisation repositories are choices, a linked one is marked `already in this project`, and connect-new is the second segment.    |
+| **11 · Organisation has none** | The same dialog                 | No search and no empty list. Connect-new is the available action and establishes the organisation connection plus project link together.    |
+
+The project settings rail remains the permanent door. The Add action is promoted to the page header
+because it applies equally when the page has organisation-owned links, hosted links, or no links.
+
+## 18.4 · The summary counts links only
+
+`{moving} moving · {hosted} hosted by Motir · {yours} yours` partitions the repositories linked to
+the current project. The words mean:
+
+| Count             | Meaning                                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `moving`          | A Motir-hosted project link whose takeover is in progress (`requested`, `awaiting_acceptance`, `transferring`, or `awaiting_reinstall`). |
+| `hosted by Motir` | A settled Motir-hosted project link that Motir still owns and pays CI for.                                                               |
+| `yours`           | An organisation-owned project link, or a Motir-hosted link whose takeover completed.                                                     |
+
+They are mutually exclusive. An organisation repository that has not been added to this project is
+in none of the counts. Panel 8 intentionally shows four links as `1 moving · 1 hosted by Motir · 2
+yours`; Panel 9 shows `0 · 0 · 0` even though the organisation has choices available in Panel 10.
+
+The Motir-hosted section is retained because it is already project-scoped: its rows are the project's
+hosted links and carry the takeover action. A moving row stays in that section while its summary
+bucket changes from `hosted` to `moving`; on completion it counts as `yours` but remains in this
+origin section, where the takeover history and its finished state stay legible.
+
+## 18.5 · Copy contract — replacements, not parallel strings
+
+The old pair was internally contradictory:
+
+- `repositoryPicker.section.hint` said the rows were repositories “this project works on”.
+- `repositoryPicker.section.provenance` immediately said they were connected to the organisation,
+  “not to this project alone”.
+
+Both were accurate descriptions of different collections because the page had merged those
+collections. Replace them together:
+
+| Key                                   | Replacement                                                                                                                   |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `repositoryTakeover.lead`             | `Only the repositories {projectName} works on — whether Motir hosts them or {org} does.`                                      |
+| `repositoryTakeover.leadConnected`    | **Retire.** One lead describes every non-loading state.                                                                       |
+| `repositoryTakeover.empty`            | `No repositories in this project yet. Add one {org} already has, or connect a new repository.`                                |
+| `repositoryPicker.section.hint`       | `Repositories from {org} that are linked to this project.`                                                                    |
+| `repositoryPicker.section.provenance` | **Retire.** Organisation provenance is not a footer for a project-link list.                                                  |
+| `repositoryPicker.section.seeAll`     | `See every repository in {org}` — unchanged words, moved into the standalone navigation block after both project sections.    |
+| `repositoryPicker.subtitle`           | `Pick one {org} already has, or connect a new one.`                                                                           |
+| `repositoryPicker.firstTimeLead`      | `{org} has no repositories connected yet. Connect the first one and it lands in {org} and in {projectName} at the same time.` |
+
+The new lead requires `{org}` and the first-time lead requires `{projectName}`. Those values already
+belong to the room/picker render context; they are not inferred client-side.
+
+## 18.6 · `See every repository in {org}` is navigation
+
+The link appears after both project sections in a neutral navigation block with the prompt
+_“Looking for a repository that is not linked to {projectName}?”_ It points to
+`/settings/organization/git`, whose inventory remains Panel 6.
+
+It is not:
+
+- a way to add a repository (Panels 10–11 own that action);
+- provenance for the rows immediately above it;
+- permission recovery copy; or
+- a disclosure that expands organisation rows on this page.
+
+This placement preserves the only route to the whole inventory without letting that inventory become
+the project page's content again.
+
+## 18.7 · Primitives, tokens and accessibility
+
+Panels 8–11 compose shipped `Card`, `Button`, `Pill`, `SectionLabel`, `Modal`, input, listbox-option,
+EmptyState and settings-shell patterns. No new design-system primitive is proposed.
+
+- Page, card, input, option, code-chip and scrim colours use only semantic `--el-*` roles.
+- Shape uses `--radius-card`, `--radius-modal`, `--radius-input`, `--radius-control`,
+  `--radius-badge` and `--radius-btn`; spacing and control heights use their semantic tokens.
+- The dialog is named `Add a repository`; the input is named `Search repositories`; section labels
+  are headings, not visual-only captions.
+- `already in this project` is text as well as a disabled treatment. `Moving` uses text plus the
+  clock glyph. Neither distinction relies on colour.
+- The inventory navigation is a `nav` with the accessible name `Organisation repository inventory`.
+- Keyboard focus enters the search field when choices exist; when the organisation has none it lands
+  on `Connect a new one on GitHub`. Escape closes either dialog and returns focus to the Add button.
+
+The light and dark PNG exports are both required review surfaces for this amendment.
+
+## 18.8 · Runtime boundary and follow-on
+
+MOTIR-4954 implements these panels. This design does **not** change repository-domain resolution,
+dispatch, the fallback ladder, indexing, or persistence. It changes only the project settings room's
+read/display contract and the placement of inventory choices.
+
+The workspace-rung leak is a separate runtime defect owned by MOTIR-4955. Nothing in this asset asks
+MOTIR-4954 to repair or preserve that ladder behavior as a side effect; the implementation must use
+the explicit project-link set for this surface while leaving the broader runtime domain untouched.
