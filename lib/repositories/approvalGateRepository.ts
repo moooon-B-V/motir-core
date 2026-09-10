@@ -184,6 +184,49 @@ export const approvalGateRepository = {
     return tx.approvalGate.update({ where: { id }, data });
   },
 
+  /**
+   * RETIRE every `awaiting` gate of one kind on one work item — the product
+   * withdrawing its own question because the subject it asked about is no longer
+   * the current one (MOTIR-4913; ADR §6b).
+   *
+   * ⚠️ IT WRITES `state` AND NOTHING ELSE. No actor, no authority, no note, no
+   * `decided_at`. That is the entire reason `superseded` is a separate state
+   * rather than a flag beside `changes_requested`: the audit must never be able
+   * to read a withdrawn question as a decision somebody made, and the only thing
+   * that keeps those two apart on the row is that this write leaves every column
+   * a decision fills untouched.
+   *
+   * ⚠️ KEYED ON `(workItemId, kind)`, NOT on the superseded subject's id — and
+   * that is a fact about the DOMAIN, not a shortcut. `design_evidence` carries
+   * one CURRENT row per work item (the
+   * `design_evidence_one_current_per_item` partial unique index), so an
+   * `awaiting` `design_result` gate on this item is by construction asking about
+   * the version a publish is replacing. Keying on the prior row's id would need
+   * that row read FIRST, which puts this write AFTER the
+   * `design_evidence` lock — and the decide door takes those two locks in the
+   * opposite order (gate, then evidence). One of the two orders has to give, and
+   * the caller's own comment records why this one does.
+   *
+   * ⚠️ NO `decided`-state rows are touched: the `state: 'awaiting'` predicate is
+   * the whole guard, and MOTIR-4912's `BEFORE UPDATE` trigger refuses an update
+   * of an `approved` / `changes_requested` row at the database anyway. A gate
+   * whose decision has landed is somebody's answer and outlives its subject.
+   *
+   * Returns the count, which is 0 on every publish that had no prior version —
+   * the ordinary first publish.
+   */
+  async supersedeAwaitingByWorkItem(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: { workItemId, kind, state: 'awaiting' },
+      data: { state: 'superseded' },
+    });
+    return result.count;
+  },
+
   /** The routing read: a workspace's `awaiting` gates (whose Approvals tab).
    *  Served by the `approval_gate_workspace_id_state_idx` index. */
   async findAwaitingByWorkspace(

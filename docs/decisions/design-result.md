@@ -725,6 +725,21 @@ is still unfinished until the evidence id is on it.
 > reference this `DesignEvidence` version?"_ and must NOT read the gate's
 > `kind`.** Read `approval-gates.md` §6c's own amendment for the full statement.
 
+> **⚠️ SHIPPED (MOTIR-4913, 2026-09-10), and the pointer above is CORRECTED in
+> one clause.** §4's supersede path now tests **`pinned_at` on the
+> `DesignEvidence` row**, not _"does an approved gate on this work item reference
+> this version?"_ — a `pull_request_approval` gate's `subject_id` is a PULL
+> REQUEST, so a gate-side join can only ever find a `design_result` gate, which is
+> the kind-keying MOTIR-4911's amendment exists to remove. The decide door writes
+> the marker at DECISION time, when the product still knows which version was
+> current, and the supersede path reads it. Everything else the paragraph above
+> says is unchanged and is what shipped: the pin is keyed on the subject, it does
+> not read the gate's kind, and it PINS rather than FREEZES — §4's supersede still
+> proceeds, it simply stops unlinking an approved row's attachments. §6b's
+> `superseded` state is written by §4's own supersede path, so a gate whose
+> subject it retires is retired with it. `approval-gates.md` §6b / §6c carry the
+> shipped notes.
+
 ~~Story 9.2 keeps the runtime human-in-the-loop semantics in full: the "for
 review" state, HOLDING the `depends_on` dependents, the revise-chat re-dispatch,
 Approve, and the per-project toggle.~~ **Superseded by the amendment above** —
