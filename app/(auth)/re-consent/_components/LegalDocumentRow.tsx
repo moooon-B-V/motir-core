@@ -74,8 +74,9 @@ export function LegalDocumentRow({
           whatever host the operator publishes — another application — so
           prefetching and client navigation are wrong for it, and a cross-origin
           `next/link` looks identical until it is used. The external-link glyph
-          is the shipped treatment (`components/github/DevelopmentSection.tsx`,
-          `components/planning/repositories/RepositoryRow.tsx`), drawn in the
+          is the shipped treatment (`components/github/DevelopmentSection.tsx`;
+          the establish step's `RepositoryRow` was the second instance until
+          MOTIR-5014 deleted it with the technical path), drawn in the
           link's OWN colour so it reads as part of the link rather than as an
           adjacent control (`design/auth/legal-agreement.mock.html` panel 13).
         */}

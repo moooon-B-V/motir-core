@@ -8,7 +8,6 @@ import {
   ExternalLink,
   Loader2,
   Lock,
-  Plus,
   RefreshCw,
   TriangleAlert,
 } from 'lucide-react';
@@ -16,20 +15,12 @@ import { Button } from '@/components/ui/Button';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { GithubMark } from '@/components/icons/GithubMark';
 import { IdentityHeader } from '@/app/(authed)/settings/workspace/_components/gitSettingsPrimitives';
-import { RepositoryRow } from '@/components/planning/repositories/RepositoryRow';
 import type { PlanCodeOutcome } from '@/components/planning/PlanReviewRail';
 import {
-  addRepositoryRow,
-  connectRepositoryRow,
   establishRepositorySet,
   fetchRepositorySet,
   grantRepositoryAccess,
-  moveRepositoryRow,
-  patchRepositoryRow,
   refreshRepositoryAccess,
-  removeRepositoryRow,
-  replanRepositoryRow,
-  skipRepositoryRow,
 } from '@/lib/planning/repositorySetClient';
 import type { ProjectRepoDto, ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 
@@ -69,10 +60,18 @@ const POLL_MS = 1500;
  *  approval, nothing is adopted, and there is nothing to decline. */
 type DefaultState = 'idle' | 'working' | 'ready' | 'failed';
 
-/** Which surface the step is showing. `own` is the short confirmation behind "I
- *  already have code"; `set` is the technical path's editable rows; `access` is
- *  the step that gets the user INTO the code Motir just made (MOTIR-1900). */
-type Mode = 'default' | 'own' | 'set' | 'access';
+/** Which surface the step is showing. `access` is the step that gets the user
+ *  INTO the code Motir just made (MOTIR-1900).
+ *
+ *  ⚠️ `own` (the short confirmation behind "I already have code") and `set` (the
+ *  technical path's editable rows) were REMOVED by MOTIR-5014 · Story MOTIR-5010.
+ *  Connecting a repository the user already owns is ONBOARDING's — a project with
+ *  no repository cannot be planned at all (`parseRoutingVerdict` refuses
+ *  `continue` when `!baseline.hasRepository`), so a user standing at plan approval
+ *  has already answered that question and this step was offering a second answer
+ *  to it. `design/repository-set/design-notes.md` §6 records where each panel
+ *  went; `design/onboarding-migrate/` Panel 1 draws the connect flow now. */
+type Mode = 'default' | 'access';
 
 export interface RepositorySetStepProps {
   /** The project's key — how the repository-set API is addressed. */
@@ -107,19 +106,10 @@ export function RepositorySetStep({
   connectHref,
   onOutcomeChange,
 }: RepositorySetStepProps) {
-  const t = useTranslations('repositorySet');
   const [view, setView] = useState(initialView);
   const [busy, setBusy] = useState(false);
-  const [failedAction, setFailedAction] = useState(false);
   const [establishing, setEstablishing] = useState(false);
   const [accessFailed, setAccessFailed] = useState(false);
-  const [connectingRows, setConnectingRows] = useState<readonly string[]>([]);
-  // The technical path needs GRANT 2 (the installation): it is what lets Motir
-  // read a repository the user already owns, and what fills the picker. Grant 1
-  // (the identity) only supplies the login the lead greets them by — an
-  // installation another admin performed leaves it null, which is why the lead
-  // has an anonymous form rather than a gate.
-  const connected = view.hasInstallation;
   const [mode, setMode] = useState<Mode>('default');
 
   const rows = view.set.rows;
@@ -173,36 +163,16 @@ export function RepositorySetStep({
     onOutcomeChange?.(outcome);
   }, [rows, onOutcomeChange]);
 
-  /** Run one mutation, keep the response AS the confirmation, and re-read the set
-   *  (the set is a list — a sibling row's state can legitimately have moved). */
-  const run = useCallback(
-    async (action: () => Promise<unknown>) => {
-      setBusy(true);
-      setFailedAction(false);
-      try {
-        await action();
-        return await refetch();
-      } catch {
-        setFailedAction(true);
-        // A failed WRITE leaves the server as it was, but a rejected move is
-        // usually a lost race, so re-read rather than keep a stale optimistic view.
-        await refetch().catch(() => {});
-        return null;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [refetch],
-  );
-
   const establish = useCallback(
     async (rowId?: string) => {
-      setFailedAction(false);
       setEstablishing(true);
       try {
         await establishRepositorySet(projectKey, rowId);
       } catch {
-        setFailedAction(true);
+        // The set's own state is the report: `establish` persists PER ROW, so a
+        // request that failed part-way has committed real outcomes, and the
+        // authoritative re-read below renders them as the `failed` panel. The
+        // technical path's separate `actionError` line went with it (MOTIR-5014).
       } finally {
         setEstablishing(false);
         // The authoritative read, always — the run persists per row, so even a
@@ -259,35 +229,6 @@ export function RepositorySetStep({
     return () => ctrl.abort();
   }, [mode, projectKey]);
 
-  const setConnecting = useCallback((rowId: string, on: boolean) => {
-    setConnectingRows((prev) =>
-      on ? [...new Set([...prev, rowId])] : prev.filter((id) => id !== rowId),
-    );
-  }, []);
-
-  const onReplan = useCallback(
-    async (rowId: string, thenConnect: boolean) => {
-      // Not routed through `run`, because the intent has to follow the row's new
-      // IDENTITY: re-planning replaces the row, and the response is the only place
-      // the replacement's id appears. Reading it from the response beats guessing
-      // which of the re-read rows is the new one.
-      setBusy(true);
-      setFailedAction(false);
-      try {
-        const replacement = await replanRepositoryRow(projectKey, rowId);
-        setConnecting(rowId, false);
-        if (thenConnect) setConnecting(replacement.id, true);
-        await refetch();
-      } catch {
-        setFailedAction(true);
-        await refetch().catch(() => {});
-      } finally {
-        setBusy(false);
-      }
-    },
-    [projectKey, refetch, setConnecting],
-  );
-
   // ── The DEFAULT path ─────────────────────────────────────────────────────
   if (mode === 'default') {
     return (
@@ -297,7 +238,6 @@ export function RepositorySetStep({
           busy={busy || running}
           backlogHref={backlogHref}
           onContinue={() => void establish()}
-          onIHaveCode={() => setMode(connected ? 'set' : 'own')}
           onGetAccess={() => setMode('access')}
         />
       </StepShell>
@@ -305,151 +245,23 @@ export function RepositorySetStep({
   }
 
   // ── The ACCESS step — the main line continues here (MOTIR-1900) ──────────
-  if (mode === 'access') {
-    return (
-      <StepShell>
-        <AccessStep
-          login={view.githubLogin}
-          avatarUrl={view.githubAvatarUrl}
-          rows={rows}
-          busy={busy}
-          failed={accessFailed}
-          backlogHref={backlogHref}
-          connectHref={connectHref}
-          onGrant={() => void grantAccess()}
-          onLater={() => setMode('default')}
-        />
-      </StepShell>
-    );
-  }
-
-  // ── The escape hatch: one short confirmation, then the SHIPPED connect pane ──
-  if (mode === 'own') {
-    return (
-      <StepShell>
-        <div className="flex flex-col gap-3">
-          <SectionLabel label={t('overline')} />
-          <h2 className="font-serif text-[28px] leading-tight font-semibold text-(--el-text)">
-            {t('ownTitle')}
-          </h2>
-          <p className="text-sm leading-relaxed text-(--el-text-secondary)">{t('ownLead')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-4">
-          <Link
-            href={connectHref}
-            className="inline-flex h-(--height-btn-md) items-center gap-2 rounded-(--radius-btn) bg-(--el-accent) px-(--spacing-btn-x) text-sm font-medium text-(--el-accent-text) hover:opacity-90"
-          >
-            <GithubMark className="size-4" aria-hidden />
-            {t('connectGithub')}
-          </Link>
-          <QuietButton onClick={() => setMode('default')}>{t('letMotirHost')}</QuietButton>
-        </div>
-      </StepShell>
-    );
-  }
-
-  // ── The TECHNICAL path ───────────────────────────────────────────────────
-  const unresolved = rows.filter((r) => r.state === 'proposed' || r.state === 'failed');
-  const partial = rows.some(isSettled) && unresolved.length > 0;
-
+  // The FALLTHROUGH rather than a third `if`: with `own` and `set` gone
+  // (MOTIR-5014) the union has two members, so returning access unconditionally is
+  // what makes the component total. A third branch would need an unreachable
+  // fallback whose only job is to satisfy the checker.
   return (
     <StepShell>
-      <div className="flex flex-col gap-2">
-        <SectionLabel label={t('overline')} />
-        <h2 className="font-serif text-[22px] leading-tight font-semibold text-(--el-text)">
-          {t('setTitle')}
-        </h2>
-        <p className="text-sm leading-relaxed text-(--el-text-secondary)">
-          {view.githubLogin ? t('setLead', { login: view.githubLogin }) : t('setLeadAnon')}
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {rows.map((row, index) => (
-          <RepositoryRow
-            key={row.id}
-            row={row}
-            index={index}
-            total={rows.length}
-            hostOwner={view.hostOwner}
-            candidates={view.connectCandidates}
-            grantMoreHref={connectHref}
-            busy={busy}
-            connecting={connectingRows.includes(row.id)}
-            onConnectingChange={setConnecting}
-            onRename={(rowId, name) =>
-              void run(() => patchRepositoryRow(projectKey, rowId, { name }))
-            }
-            onConnect={(rowId, githubRepoId) =>
-              void run(() => connectRepositoryRow(projectKey, rowId, githubRepoId))
-            }
-            onReplan={(rowId, thenConnect) => void onReplan(rowId, thenConnect)}
-            onSkip={(rowId) => void run(() => skipRepositoryRow(projectKey, rowId))}
-            onRemove={(rowId) => void run(() => removeRepositoryRow(projectKey, rowId))}
-            onMove={(rowId, direction) =>
-              void run(() => moveRepositoryRow(projectKey, rowId, direction))
-            }
-            onRetry={(rowId) => void establish(rowId)}
-            onResendInvitation={(rowId) => void grantAccess(rowId)}
-          />
-        ))}
-      </div>
-
-      {/* Set level — "the plan needs a part Motir didn't infer". Deliberately NOT
-          a sibling of the row-level "Use one of mine": one asks how many, the
-          other asks where, and reading them as two ways of doing the same thing
-          is the ambiguity this layout exists to remove. */}
-      <button
-        type="button"
-        disabled={busy || running}
-        onClick={() =>
-          void run(() =>
-            addRepositoryRow(projectKey, { role: 'other', name: nextName(rows, t('addRowName')) }),
-          )
-        }
-        className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed) disabled:opacity-50"
-      >
-        <Plus className="size-4" aria-hidden="true" />
-        {t('addRow')}
-      </button>
-
-      <div className="flex flex-col gap-2">
-        {failedAction ? (
-          <p role="alert" className="text-sm font-medium text-(--el-danger)">
-            {t('actionError')}
-          </p>
-        ) : null}
-        {partial ? (
-          <p role="status" className="text-sm text-(--el-text-secondary)">
-            {t('summaryPartial', {
-              created: rows.filter((r) => r.state === 'created' || r.state === 'connected').length,
-              skipped: rows.filter((r) => r.state === 'skipped').length,
-              unresolved: unresolved.length,
-            })}
-          </p>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="primary"
-            onClick={() => void establish()}
-            loading={running}
-            disabled={busy || running || unresolved.length === 0}
-            leftIcon={<GithubMark className="size-4" aria-hidden />}
-          >
-            {partial
-              ? t('finishSetup')
-              : unresolved.length === 1
-                ? t('setUpOne')
-                : t('setUpMany', { n: unresolved.length })}
-          </Button>
-          <Button variant="ghost" onClick={() => setMode('default')} disabled={busy || running}>
-            {t('notNow')}
-          </Button>
-        </div>
-        <p className="text-xs text-(--el-text-helper)">
-          {partial ? t('finishHint') : t('setupNote')}
-        </p>
-      </div>
+      <AccessStep
+        login={view.githubLogin}
+        avatarUrl={view.githubAvatarUrl}
+        rows={rows}
+        busy={busy}
+        failed={accessFailed}
+        backlogHref={backlogHref}
+        connectHref={connectHref}
+        onGrant={() => void grantAccess()}
+        onLater={() => setMode('default')}
+      />
     </StepShell>
   );
 }
@@ -460,14 +272,12 @@ function DefaultPath({
   busy,
   backlogHref,
   onContinue,
-  onIHaveCode,
   onGetAccess,
 }: {
   state: DefaultState;
   busy: boolean;
   backlogHref: string;
   onContinue: () => void;
-  onIHaveCode: () => void;
   /** `created` is the one state that CONTINUES: the code now exists, and the next
    *  thing the user needs is a way to reach it (design §4's table). */
   onGetAccess: () => void;
@@ -533,18 +343,13 @@ function DefaultPath({
 
       <div className="flex flex-wrap items-center gap-4">
         {state === 'idle' ? (
-          <>
-            <Button variant="primary" onClick={onContinue} disabled={busy}>
-              {t('continueCta')}
-            </Button>
-            <QuietButton
-              onClick={onIHaveCode}
-              disabled={busy}
-              icon={<GithubMark className="size-4" aria-hidden />}
-            >
-              {t('iHaveCode')}
-            </QuietButton>
-          </>
+          /* ONE action, and no branch. The quiet `iHaveCode` secondary led to the
+             technical path, which left for onboarding (MOTIR-5014) — a user who
+             already has code answered that question there, before any plan
+             existed. */
+          <Button variant="primary" onClick={onContinue} disabled={busy}>
+            {t('continueCta')}
+          </Button>
         ) : null}
         {state === 'ready' ? (
           <>
@@ -571,23 +376,18 @@ function DefaultPath({
           </>
         ) : null}
         {state === 'failed' ? (
-          <>
-            <Button
-              variant="primary"
-              onClick={onContinue}
-              disabled={busy}
-              leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
-            >
-              {t('tryAgain')}
-            </Button>
-            <QuietButton
-              onClick={onIHaveCode}
-              disabled={busy}
-              icon={<GithubMark className="size-4" aria-hidden />}
-            >
-              {t('iHaveCode')}
-            </QuietButton>
-          </>
+          /* The SECOND site the door appeared on, and the one a deletion that
+             reads only the first leaves behind — a dead escape hatch on the error
+             path, which is the state a user is most likely to be looking at when
+             they want one. */
+          <Button
+            variant="primary"
+            onClick={onContinue}
+            disabled={busy}
+            leftIcon={<RefreshCw className="size-4" aria-hidden="true" />}
+          >
+            {t('tryAgain')}
+          </Button>
         ) : null}
       </div>
     </>
@@ -842,15 +642,4 @@ function defaultStateOf(rows: readonly ProjectRepoDto[], running: boolean): Defa
   if (rows.every(isSettled)) return 'ready';
   if (rows.some((r) => r.state === 'failed')) return 'failed';
   return 'idle';
-}
-
-/** A non-colliding name for a hand-added row — the set's `(project, name)` unique
- *  index would otherwise reject the second one before the user can rename it. */
-function nextName(rows: readonly ProjectRepoDto[], base: string): string {
-  const taken = new Set(rows.map((r) => r.name.toLowerCase()));
-  if (!taken.has(base.toLowerCase())) return base;
-  for (let n = 2; ; n += 1) {
-    const candidate = `${base}-${n}`;
-    if (!taken.has(candidate.toLowerCase())) return candidate;
-  }
 }

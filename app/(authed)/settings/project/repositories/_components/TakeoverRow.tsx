@@ -35,8 +35,10 @@ import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 //
 // ⚠️ STATE IS NEVER COLOUR ALONE — icon PLUS word, with the tint on the ROW and
 // never in a `Pill` (a `Pill severity` resolves to the same token as the row tint
-// and would be invisible). The only pill here is the neutral role chip. This is
-// the shipped `RepositoryRow`'s own contract, followed rather than re-invented.
+// and would be invisible). The only pill here is the neutral role chip. That
+// contract came from the establish step's `RepositoryRow`, which was DELETED with
+// the technical path (MOTIR-5014); it is written out here because this row is now
+// the surviving instance of it, not a copy of a file to go and read.
 
 /** How long a wait has to sit before the copy acknowledges it (the design's
  *  "days later" variants). Not a timeout — nothing expires on Motir's side; it

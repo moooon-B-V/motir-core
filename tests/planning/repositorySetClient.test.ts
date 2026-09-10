@@ -1,17 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RepositorySetRequestError,
-  addRepositoryRow,
-  connectRepositoryRow,
   establishRepositorySet,
   fetchRepositorySet,
   grantRepositoryAccess,
-  moveRepositoryRow,
-  patchRepositoryRow,
   refreshRepositoryAccess,
-  removeRepositoryRow,
-  replanRepositoryRow,
-  skipRepositoryRow,
 } from '@/lib/planning/repositorySetClient';
 
 // The establish step's client seam (Story MOTIR-1775 · MOTIR-1782) — the one place
@@ -67,38 +60,13 @@ describe('the repository-set client', () => {
     expect(calls[0]!.url).toBe('/api/projects/a%2Fb/repositories');
   });
 
-  it('sends each edit as its own method + body', async () => {
-    const calls = stub({ json: () => ({ id: 'r1' }) });
-
-    await addRepositoryRow('MOTIR', { role: 'api', name: 'acme-api' });
-    await patchRepositoryRow('MOTIR', 'r1', { name: 'renamed' });
-    await moveRepositoryRow('MOTIR', 'r1', 'up');
-
-    expect(calls.map((c) => [c.method, c.url])).toEqual([
-      ['POST', '/api/projects/MOTIR/repositories'],
-      ['PATCH', '/api/projects/MOTIR/repositories/r1'],
-      ['POST', '/api/projects/MOTIR/repositories/r1/move'],
-    ]);
-    expect(calls[0]!.body).toEqual({ role: 'api', name: 'acme-api' });
-    expect(calls[1]!.body).toEqual({ name: 'renamed' });
-    expect(calls[2]!.body).toEqual({ direction: 'up' });
-  });
-
-  it('routes all three state moves through ONE endpoint, naming the target state', async () => {
-    const calls = stub({ json: () => ({ id: 'r1' }) });
-
-    await connectRepositoryRow('MOTIR', 'r1', 'gh-9');
-    await skipRepositoryRow('MOTIR', 'r1');
-    await replanRepositoryRow('MOTIR', 'r1');
-
-    expect(calls.every((c) => c.url === '/api/projects/MOTIR/repositories/r1/state')).toBe(true);
-    expect(calls.map((c) => c.body)).toEqual([
-      { to: 'connected', githubRepoId: 'gh-9' },
-      { to: 'skipped' },
-      { to: 'proposed' },
-    ]);
-  });
-
+  /* ⚠️ TWO CASES WERE REMOVED HERE, NOT SKIPPED (MOTIR-5014 · Story MOTIR-5010).
+     They drove `addRepositoryRow` / `patchRepositoryRow` / `moveRepositoryRow` and
+     `connectRepositoryRow` / `skipRepositoryRow` / `replanRepositoryRow`, whose only
+     production caller was the step's `set` mode — the technical path, which left for
+     onboarding. The seven functions went with it, so there is no wire left for these
+     to assert. The ROUTES they called are untouched and still serve the repositories
+     room; what is gone is this client's way of reaching them. */
   it('establishes the whole set by default and ONE row when asked', async () => {
     const calls = stub({ json: () => ({ projectId: 'p', rows: [] }) });
 
@@ -109,6 +77,10 @@ describe('the repository-set client', () => {
     expect(calls[0]!.url).toBe('/api/projects/MOTIR/repositories/establish');
   });
 
+  // ⚠️ Driven through `establishRepositorySet` since MOTIR-5014: the case is about
+  // `send`, the SHARED helper, and its previous driver (`removeRepositoryRow`) went
+  // with the technical path. The behaviour is unchanged and still covered — what
+  // moved is which surviving caller exercises it.
   it('treats a 204 as a real answer rather than trying to parse a body', async () => {
     stub({
       status: 204,
@@ -116,15 +88,13 @@ describe('the repository-set client', () => {
         throw new Error('a 204 has no body to parse');
       },
     });
-    await expect(removeRepositoryRow('MOTIR', 'r1')).resolves.toBeUndefined();
+    await expect(establishRepositorySet('MOTIR')).resolves.toBeUndefined();
   });
 
   it('turns a non-2xx into a typed error carrying the status AND the server’s code', async () => {
     stub({ ok: false, status: 409, json: () => ({ code: 'PROJECT_REPO_NAME_TAKEN' }) });
 
-    const err: unknown = await patchRepositoryRow('MOTIR', 'r1', { name: 'taken' }).catch(
-      (e: unknown) => e,
-    );
+    const err: unknown = await establishRepositorySet('MOTIR').catch((e: unknown) => e);
     if (!(err instanceof RepositorySetRequestError)) throw new Error('expected a typed error');
 
     expect(err).toBeInstanceOf(RepositorySetRequestError);

@@ -1,9 +1,4 @@
-import type {
-  AddProjectRepoInput,
-  PatchProjectRepoInput,
-  ProjectRepoDto,
-  ProjectRepoEstablishViewDto,
-} from '@/lib/dto/projectRepos';
+import type { ProjectRepoDto, ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 import type { EstablishSetResult } from '@/lib/services/projectRepoProvisioningService';
 import type { GrantAccessResult } from '@/lib/services/projectRepoAccessService';
 
@@ -58,74 +53,6 @@ export async function fetchRepositorySet(
   const res = await fetch(base(projectKey), { headers: { Accept: 'application/json' }, signal });
   if (!res.ok) throw new RepositorySetRequestError(res.status, await readError(res));
   return (await res.json()) as ProjectRepoEstablishViewDto;
-}
-
-/** Append a row — "the plan needs a part Motir didn't infer". */
-export function addRepositoryRow(
-  projectKey: string,
-  input: AddProjectRepoInput,
-): Promise<ProjectRepoDto> {
-  return send(base(projectKey), { method: 'POST', body: JSON.stringify(input) });
-}
-
-/** Rename a row (or change its role / seed source) — persisted, so the edit
- *  survives a refresh mid-flow. */
-export function patchRepositoryRow(
-  projectKey: string,
-  rowId: string,
-  input: PatchProjectRepoInput,
-): Promise<ProjectRepoDto> {
-  return send(`${base(projectKey)}/${encodeURIComponent(rowId)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(input),
-  });
-}
-
-/** Drop a row the derivation invented. Never touches a repository. */
-export function removeRepositoryRow(projectKey: string, rowId: string): Promise<void> {
-  return send(`${base(projectKey)}/${encodeURIComponent(rowId)}`, { method: 'DELETE' });
-}
-
-/** Point a row at a repository the user already has ("Use one of mine"). */
-export function connectRepositoryRow(
-  projectKey: string,
-  rowId: string,
-  githubRepoId: string,
-): Promise<ProjectRepoDto> {
-  return send(`${base(projectKey)}/${encodeURIComponent(rowId)}/state`, {
-    method: 'POST',
-    body: JSON.stringify({ to: 'connected', githubRepoId }),
-  });
-}
-
-/** Settle a row deliberately WITHOUT a repository ("Skip this one"). */
-export function skipRepositoryRow(projectKey: string, rowId: string): Promise<ProjectRepoDto> {
-  return send(`${base(projectKey)}/${encodeURIComponent(rowId)}/state`, {
-    method: 'POST',
-    body: JSON.stringify({ to: 'skipped' }),
-  });
-}
-
-/** Put a settled-but-empty-handed row back in play — "Create it after all" on a
- *  skipped row, "Let Motir host it" on a connected one. Returns the FRESH row
- *  (a new id: the old decision is over). */
-export function replanRepositoryRow(projectKey: string, rowId: string): Promise<ProjectRepoDto> {
-  return send(`${base(projectKey)}/${encodeURIComponent(rowId)}/state`, {
-    method: 'POST',
-    body: JSON.stringify({ to: 'proposed' }),
-  });
-}
-
-/** Move a row one place up or down — which repository is PRIMARY is a decision. */
-export function moveRepositoryRow(
-  projectKey: string,
-  rowId: string,
-  direction: 'up' | 'down',
-): Promise<ProjectRepoDto> {
-  return send(`${base(projectKey)}/${encodeURIComponent(rowId)}/move`, {
-    method: 'POST',
-    body: JSON.stringify({ direction }),
-  });
 }
 
 /**
