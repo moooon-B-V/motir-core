@@ -1,6 +1,5 @@
 import type { ProjectRepoDto, ProjectRepoEstablishViewDto } from '@/lib/dto/projectRepos';
 import type { EstablishSetResult } from '@/lib/services/projectRepoProvisioningService';
-import type { GrantAccessResult } from '@/lib/services/projectRepoAccessService';
 
 // Client reads/writes of the repository-SET API (Story MOTIR-1775 · MOTIR-1782) —
 // the seam the establish step at plan approval goes through, so no client
@@ -73,22 +72,20 @@ export function establishRepositorySet(
 }
 
 /**
- * Invite the acting member's connected GitHub account to the repositories Motir
- * created — the access step's return trip after **Connect GitHub**, and, with
- * `rowId`, a single row's **Resend invitation** (MOTIR-1900).
+ * ⚠️ `grantRepositoryAccess` WAS HERE, AND IT WAS DELETED RATHER THAN KEPT
+ * (MOTIR-5015 · Story MOTIR-5010).
  *
- * A `login: null` result is the CONNECT PROMPT, not a failure: the user has no
- * GitHub identity for Motir to invite yet.
+ * It POSTed `../repositories/access` for the access step's **Connect GitHub** and
+ * a row's **Resend invitation**. The invitation is now sent SERVER-SIDE by
+ * `projectRepoProvisioningService.establishSet`, in the same run that creates the
+ * repositories, so no client asks for it any more — and after MOTIR-5014 removed
+ * the technical path, the per-row resend had no surface either.
+ *
+ * ⚠️ THE ROUTE IS UNTOUCHED and is not dead: `/settings/project/code-access`
+ * fetches `../repositories/access` and `../repositories/access/team` DIRECTLY
+ * (`CodeAccessSettings.tsx`), which is where resending lives now. What went is
+ * this client's way of reaching it, not the capability.
  */
-export function grantRepositoryAccess(
-  projectKey: string,
-  rowId?: string,
-): Promise<GrantAccessResult> {
-  return send(`${base(projectKey)}/access`, {
-    method: 'POST',
-    body: JSON.stringify(rowId ? { rowId } : {}),
-  });
-}
 
 /** Re-read GitHub for the PENDING invitations and settle the accepted ones.
  *  Its own call, never folded into the poll — see the route's header. */

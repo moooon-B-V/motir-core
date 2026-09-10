@@ -241,6 +241,35 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/**
+ * ⚠️ MOTIR-5015 · Story MOTIR-5010 — THIS BLOCK IS THE CARD'S FIRST HALF, AND IT
+ * WAS ALREADY GREEN BEFORE THE CARD WAS WRITTEN.
+ *
+ * The card asked to "SEND the collaborator invitation at establish", on the
+ * premise that it was still a second thing the user had to ask for. It is not:
+ * `projectRepoSetService.attachRealizedRepo` has called
+ * `projectRepoAccessService.inviteAfterEstablish` post-commit since MOTIR-1900, at
+ * the one seam every establish path goes through — so the trigger had already
+ * moved, and the four behaviours the card asks to prove are each pinned below and
+ * were passing on `origin/main`.
+ *
+ * What was NOT done, and is what MOTIR-5015 actually shipped, is the second half:
+ * the `created` panel still offered **Connect GitHub** — a navigation button
+ * wearing the connect button's name — instead of REPORTING the invitation that
+ * had already gone out. The defect was never in the sending.
+ *
+ * The four criteria, and where each is already proved:
+ *   1. an identity ⇒ one invite per created row, no user action → the first case;
+ *   2. no identity ⇒ nothing sent, nothing thrown, rows `not_invited`
+ *      → `a user who has NOT connected GitHub`;
+ *   3. a refusal on one row does not fail the establish
+ *      → `an invitation failure never damages the repository`;
+ *   4. no re-send over an already-accepted record
+ *      → the `204` case here, and `acceptance is OBSERVED, never assumed`.
+ *
+ * Nothing is added here. Re-asserting a green behaviour to claim a criterion is
+ * how a suite grows without gaining a check.
+ */
 describe('establishing a set invites the approving user', () => {
   it('invites them to EVERY created repository, as an admin, at the realized coordinates', async () => {
     const fx = await makeWorkItemFixture();

@@ -3,7 +3,6 @@ import {
   RepositorySetRequestError,
   establishRepositorySet,
   fetchRepositorySet,
-  grantRepositoryAccess,
   refreshRepositoryAccess,
 } from '@/lib/planning/repositorySetClient';
 
@@ -127,44 +126,17 @@ describe('the repository-set client', () => {
 // look like "we invited you" while nothing was sent.
 
 describe('the collaborator-access client', () => {
-  it('grants access for the WHOLE set with an empty body', async () => {
-    const calls = stub({ json: () => ({ rows: [], login: 'yuezhu', invited: 1, failed: 0 }) });
+  /* ⚠️ FOUR CASES WERE REMOVED HERE, NOT SKIPPED (MOTIR-5015 · Story MOTIR-5010).
+     They drove `grantRepositoryAccess`, the access step's POST — a request no
+     client makes any more, because the invitation is sent SERVER-SIDE at
+     establish and has been since MOTIR-1900
+     (`projectRepoSetService.attachRealizedRepo` → `inviteAfterEstablish`).
 
-    const result = await grantRepositoryAccess('MOTIR');
-
-    expect(calls[0]!.url).toBe('/api/projects/MOTIR/repositories/access');
-    expect(calls[0]!.method).toBe('POST');
-    // No `rowId` at all, rather than `rowId: undefined` — the route reads the
-    // key's presence, so the two are not interchangeable.
-    expect(calls[0]!.body).toEqual({});
-    expect(result.login).toBe('yuezhu');
-  });
-
-  it('narrows the grant to ONE row for a per-row Resend', async () => {
-    const calls = stub({ json: () => ({ rows: [], login: 'yuezhu', invited: 1, failed: 0 }) });
-
-    await grantRepositoryAccess('MOTIR', 'row-1');
-
-    // Rows are independent: a resend on one must not re-send its siblings', and
-    // the row id is the only thing that keeps that true across the wire.
-    expect(calls[0]!.body).toEqual({ rowId: 'row-1' });
-  });
-
-  it('encodes the project key on the access path', async () => {
-    const calls = stub({ json: () => ({ rows: [], login: null, invited: 0, failed: 0 }) });
-    await grantRepositoryAccess('MY PROJ');
-    expect(calls[0]!.url).toBe('/api/projects/MY%20PROJ/repositories/access');
-  });
-
-  it('turns a refused grant into the typed error, carrying the code', async () => {
-    stub({ ok: false, status: 403, json: () => ({ code: 'FORBIDDEN' }) });
-
-    await expect(grantRepositoryAccess('MOTIR')).rejects.toMatchObject({
-      name: 'RepositorySetRequestError',
-      status: 403,
-      code: 'FORBIDDEN',
-    });
-  });
+     The behaviours are pinned where they now live, over real Postgres:
+     `tests/projectRepos/projectRepoAccessService.test.ts` asserts the invite per
+     created row, the no-identity arm, the refusal that does not damage the
+     repository, and the accepted-record skip. The ROUTE is untouched and still
+     serves `/settings/project/code-access`, which fetches it directly. */
 
   it('refreshes the pending invitations with a GET, and returns the rows', async () => {
     const calls = stub({ json: () => [{ id: 'row-1' }] });
