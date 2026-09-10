@@ -719,7 +719,7 @@ seed rests on — **copying the credential to a second path inside the container
 widens nothing**, because the container could always read the mounted file; what
 the `:ro` mount actually guarantees, that the container cannot WRITE the host's
 copy, still holds. What is copied is bounded and explicit
-(`CLAUDE_SEED_ENTRIES` in `entrypoint.sh`): the credential, the state file, your
+(`CLAUDE_SEED_ENTRIES` in `agent-config.sh`): the credential, the state file, your
 settings, your `CLAUDE.md`, and `agents/` `commands/` `skills/` `plugins/`.
 Session archives (`projects/`, `file-history/`, `history.jsonl`, …) are **not**
 copied — they are per-machine state the container regenerates, and they are ~95%
