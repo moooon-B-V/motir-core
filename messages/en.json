@@ -6218,7 +6218,7 @@
       "lead": "Which repositories Motir can read is the GitHub App’s own screen, so the removal happens there. Here is what it will do.",
       "gitlabLead": "It is removed from every project in {org}, not only the one you came from.",
       "projects": "{count, plural, =0 {No project uses this repository yet.} one {# project loses this repository.} other {# projects lose this repository.}}",
-      "alsoReachable": "Any project with no repositories of its own can also reach this one, whether or not it is named here.",
+      "onlyLinked": "These are the only projects affected. A project reaches only the repositories linked to it, so nothing outside this list loses access.",
       "codeIndex": "The code index Motir built from it is kept for {days} days. Re-adding the repository before then cancels the removal; after that, re-adding it means a full index.",
       "continueOnGithub": "Continue on GitHub",
       "confirm": "Disconnect",
@@ -6234,7 +6234,7 @@
     "inventory": {
       "title": "Repositories",
       "caption": "Every repository connected to this organisation. Any project can pick one; the index is built once and shared.",
-      "foot": "A repository no project uses stays connected and stays indexed — the next project that adds it pays nothing. Any project here that has no repositories of its own can also reach the ones connected in its workspace, whether or not it is named above.",
+      "foot": "A repository no project uses stays connected and stays indexed — the next project that adds it pays nothing. A project reaches only the repositories linked to it, so connecting one here makes it available to add rather than automatically in reach.",
       "empty": "No repositories are connected yet. Add one from a project’s Repositories settings.",
       "provider": {
         "github": "GitHub",

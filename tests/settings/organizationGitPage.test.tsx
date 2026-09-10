@@ -128,11 +128,16 @@ describe('the inventory — one row per connected repository', () => {
     expect(screen.getByText('design-system')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Used by 0/ })).toBeNull();
     expect(screen.getByText(/A repository no project uses stays connected/)).toBeTruthy();
-    // …and the same disclosure at rest, said ONCE for the organisation rather
-    // than by naming N projects on every row (MOTIR-4821).
-    expect(
-      screen.getByText(/no repositories of its own can also reach the ones connected/),
-    ).toBeTruthy();
+    // …and the foot says what a connection DOES grant. ⚠️ RE-POINTED BY
+    // MOTIR-4997: this used to assert the foot promised a set-less project
+    // "can also reach the ones connected in its workspace". MOTIR-4955 retired
+    // that rung, so the sentence was false while this assertion held it in
+    // place — it asserted the string was PRESENT, never that it was TRUE, which
+    // is why retiring the mechanism could not go red here. It is turned around
+    // rather than dropped: a foot that says nothing about reach is a third
+    // state, and it should be a decision rather than a side effect.
+    expect(screen.getByText(/A project reaches only the repositories linked to it/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/can also reach/i);
   });
 });
 
@@ -200,18 +205,28 @@ describe('the DISCONNECT dialog', () => {
     expect(body.textContent).toContain(String(CODE_GRAPH_RETENTION_WINDOW_DAYS));
   });
 
-  it('⚠️ discloses the permissive default ONCE, instead of naming projects that never chose (MOTIR-4821)', () => {
-    // The list names projects that CHOSE this repository — a link, or work that
-    // names it. A project with no repositories of its own can still REACH it
-    // through the scope ladder's first rung, and that is a property of the
-    // organisation rather than of any one project. Naming those projects
-    // individually is the over-report this line replaces: the dialogue warned
-    // that a scratch project which had never touched the repository would lose
-    // it, on the disclosure a DESTRUCTIVE act rests on.
+  it('⚠️ says the named list is EXHAUSTIVE — the dialogue is a confirmation, not a revelation (MOTIR-4997)', () => {
+    // ⚠️ RE-POINTED BY MOTIR-4997, and INVERTED rather than deleted.
+    //
+    // It used to assert the opposite sentence: that a project with no
+    // repositories of its own could still REACH this one through the scope
+    // ladder's first rung, so the named list under-reported. MOTIR-4955 retired
+    // that rung — the project link IS the repository isolation boundary — which
+    // makes the named list exactly the affected set, and made the old sentence
+    // false on a DESTRUCTIVE act's own disclosure.
+    //
+    // MOTIR-4821's finding is untouched and is why this line still exists at
+    // all: the fix for over-reporting was one sentence for the organisation
+    // rather than N project names per row. What changed is which sentence is
+    // true. `design/github/design-notes.md` settles the shape — `Used by N
+    // projects` is the whole disclosure mechanism and the dialogue is "a
+    // confirmation rather than a revelation" — and a list can only confirm if
+    // it is complete.
     renderInventory();
     fireEvent.click(screen.getAllByRole('button', { name: /Disconnect/ })[0]!);
 
-    expect(screen.getByText(/no repositories of its own can also reach this one/)).toBeTruthy();
+    expect(screen.getByText(/These are the only projects affected/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/can also reach/i);
   });
 
   it('⚠️ makes NO permanence claim — re-adding inside the window cancels it', () => {

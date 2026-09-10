@@ -306,14 +306,20 @@ export function RepositoryInventory({
           <p className="font-sans text-sm text-(--el-text)">
             {td('projects', { count: confirming?.projects.length ?? 0 })}
           </p>
-          {/* ⚠️ THE PERMISSIVE DEFAULT, SAID ONCE (MOTIR-4821). The list above
-              names projects that CHOSE this repository — a link, or work that
-              names it. A project with no repositories of its own can still reach
-              it through the scope ladder's first rung, and that is true of the
-              ORGANISATION rather than of any one project: naming those projects
-              individually is what made this dialogue warn about a scratch project
-              that had never touched the repository. */}
-          <p className="font-sans text-sm text-(--el-text-secondary)">{td('alsoReachable')}</p>
+          {/* ⚠️ THE LIST IS COMPLETE, AND THIS LINE SAYS SO (MOTIR-4997).
+              It used to widen the list: a project with no repositories of its own
+              was said to reach this one anyway, through the scope ladder's first
+              rung. MOTIR-4955 RETIRED that rung — the project link is the
+              repository isolation boundary, and `resolveEffectiveRepoDomain`
+              returns `layersConnected: false` with an empty `connected` — so a
+              set-less project reaches nothing and the sentence became false on
+              the one surface a DESTRUCTIVE act rests on.
+              It is re-pointed rather than deleted: the dialogue still owes the
+              reader a statement about who is affected, and `design/github/`
+              settles what that is — `Used by N projects` is the disclosure, and
+              this dialogue is "a confirmation rather than a revelation". Saying
+              the named list is exhaustive is what makes it one. */}
+          <p className="font-sans text-sm text-(--el-text-secondary)">{td('onlyLinked')}</p>
           {confirming && confirming.projects.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {confirming.projects.map((project) => (
