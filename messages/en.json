@@ -7887,6 +7887,16 @@
       "approve": "Approve",
       "requestChanges": "Request changes"
     },
+    "port": {
+      "label": "The subject being decided",
+      "expand": "Expand",
+      "collapse": "Collapse",
+      "verbsReturn": "The verbs return when the subject renders.",
+      "failed": {
+        "title": "You cannot approve what cannot be shown.",
+        "next": "Retry above, or ask the agent to republish."
+      }
+    },
     "waitingOn": "Waiting on {name}.",
     "theAssignee": "this work item's assignee",
     "confirm": {

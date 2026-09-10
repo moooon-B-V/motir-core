@@ -7883,6 +7883,16 @@
       "approve": "批准",
       "requestChanges": "要求修改"
     },
+    "port": {
+      "label": "待定的内容",
+      "expand": "展开",
+      "collapse": "收起",
+      "verbsReturn": "内容成功展示后，操作按钮会重新出现。",
+      "failed": {
+        "title": "无法审批无法展示的内容。",
+        "next": "请在上方重试，或要求代理重新发布。"
+      }
+    },
     "waitingOn": "等待 {name} 处理。",
     "theAssignee": "该工作项的负责人",
     "confirm": {
