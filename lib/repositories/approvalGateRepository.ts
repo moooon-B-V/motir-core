@@ -5,7 +5,10 @@ import {
   type ApprovalGateState,
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
-import { ApprovalGateAlreadyAwaitingError } from '@/lib/approvalGates/errors';
+import {
+  ApprovalGateAlreadyAwaitingError,
+  ApprovalGateDecidedImmutableError,
+} from '@/lib/approvalGates/errors';
 
 // Single-op data access for the `approval_gate` table (Story MOTIR-4778 ·
 // Subtask MOTIR-4788; ADR docs/decisions/approval-gates.md). Writes require `tx`
@@ -30,6 +33,17 @@ import { ApprovalGateAlreadyAwaitingError } from '@/lib/approvalGates/errors';
 // one under an already-bound workspace context. `dbRead` (not `db`) is the
 // fallback — `db` would union two whole Prisma clients and tank the
 // type-check (MOTIR-4295).
+//
+// MOTIR-4912 (the AUDIT columns) adds a SECOND database refusal to this edge —
+// the `trg_approval_gate_decided_immutable` trigger, which refuses any UPDATE of
+// an `approved` / `changes_requested` row (ADR §6a: a decided gate is immutable).
+// Both refusals are now produced in ONE place, `translateApprovalGateWriteError`
+// at the foot of this file, so a write method's only obligation is to route its
+// `catch` through it. That matters because the two arrive in different SHAPES: a
+// unique violation is a Prisma `P2002`, while a trigger rejection comes through
+// the pg driver adapter as an error whose `cause.code` is SQLSTATE `23514` and
+// whose message carries the `AG_DECIDED_IMMUTABLE` marker. Keying each on the
+// wrong one is how a raw Postgres error escapes.
 
 export const approvalGateRepository = {
   /**
@@ -53,10 +67,11 @@ export const approvalGateRepository = {
       // non-superuser) PostgreSQL declines to describe the conflicting key, so
       // the P2002 carries no `meta.target` — the code is the only reliable
       // signal, exactly as for `workItemLinkRepository`'s `DuplicateLinkError`.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        throw new ApprovalGateAlreadyAwaitingError();
-      }
-      throw err;
+      //
+      // The translation itself moved to `translateApprovalGateWriteError`
+      // (MOTIR-4912) once a second database refusal existed to translate; it
+      // always throws, which is why this `catch` needs no `throw` of its own.
+      translateApprovalGateWriteError(err);
     }
   },
 
@@ -170,6 +185,19 @@ export const approvalGateRepository = {
    * A DECIDED gate is immutable (ADR §6a — audit evidence that can be edited is
    * not evidence), and that immutability is the service's refusal above plus a
    * DB-level guard a sibling card ships (MOTIR-4912). Nothing else calls this.
+   *
+   * ⚠️ THAT GUARD HAS NOW SHIPPED, AND THIS IS THE CALL IT CAN FIRE ON — so the
+   * `catch` routes through `translateApprovalGateWriteError` (MOTIR-4912). The
+   * paragraph above is unchanged and is why the wrap is needed rather than a
+   * `WHERE`: the state predicate stays the service's, and if its check is ever
+   * absent, bypassed or wrong, the `trg_approval_gate_decided_immutable` trigger
+   * refuses the update. Without the wrap that refusal escapes as a raw pg
+   * `23514` — the one thing this edge exists to prevent. It is the ONLY write in
+   * this repository that can reach the trigger, and the other two cannot for
+   * DIFFERENT reasons: `create` because a BEFORE UPDATE trigger does not fire on
+   * an INSERT, and {@link supersedeAwaitingByWorkItem} (MOTIR-4913) because its
+   * predicate is an equality on the very column the trigger keys on. Its own
+   * note carries that argument in full.
    */
   async decide(
     id: string,
@@ -181,7 +209,11 @@ export const approvalGateRepository = {
     },
     tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate> {
-    return tx.approvalGate.update({ where: { id }, data });
+    try {
+      return await tx.approvalGate.update({ where: { id }, data });
+    } catch (err) {
+      translateApprovalGateWriteError(err);
+    }
   },
 
   /**
@@ -208,9 +240,26 @@ export const approvalGateRepository = {
    * the caller's own comment records why this one does.
    *
    * ⚠️ NO `decided`-state rows are touched: the `state: 'awaiting'` predicate is
-   * the whole guard, and MOTIR-4912's `BEFORE UPDATE` trigger refuses an update
-   * of an `approved` / `changes_requested` row at the database anyway. A gate
-   * whose decision has landed is somebody's answer and outlives its subject.
+   * the whole guard. A gate whose decision has landed is somebody's answer and
+   * outlives its subject.
+   *
+   * ⚠️ AND THAT IS WHY THIS WRITE DOES **NOT** ROUTE THROUGH
+   * {@link translateApprovalGateWriteError}, unlike the other two — the omission
+   * is reasoned, not an oversight, and the reason is not *"a decided row would
+   * be a bug"*. `trg_approval_gate_decided_immutable` (MOTIR-4912) keys on
+   * `OLD.state`, and this statement's predicate is an EQUALITY on that same
+   * column, so the trigger is structurally unreachable from here: under READ
+   * COMMITTED an `updateMany` re-evaluates its `WHERE` against the updated row
+   * version before writing, so a gate a concurrent decide commits mid-statement
+   * stops matching and is skipped rather than refused. A `catch` here would be a
+   * branch no test could honestly exercise, which is the thing this repository's
+   * `tx ?? dbRead` note already refuses to add.
+   *
+   * ⚠️ AND THE ZERO-ROW RESULT IS NOT {@link decide}'S SILENT NO-OP. That method
+   * carries no state predicate precisely because one would report success on a
+   * decision that never landed. Here both causes of a zero count are correct end
+   * states — nothing awaiting to retire, or a decide that won the row first —
+   * and no caller is told anything happened that did not.
    *
    * Returns the count, which is 0 on every publish that had no prior version —
    * the ordinary first publish.
@@ -240,3 +289,75 @@ export const approvalGateRepository = {
     });
   },
 };
+
+/**
+ * Translate an `approval_gate` WRITE-path error into one of this domain's typed
+ * errors, so no raw Prisma / Postgres failure escapes the repository edge (the
+ * concurrency rule in CLAUDE.md). Anything it does not recognise is rethrown
+ * UNCHANGED. **Always throws — the return type is `never`**, which is what lets a
+ * `catch` block end in a bare call to it and still satisfy the method's return
+ * type.
+ *
+ * BOTH writes on this table route their `catch` through here — `create` and
+ * `decide` — and that is the invariant to preserve when a third is added. Two
+ * failures, and they arrive in DIFFERENT shapes, which is the whole reason this
+ * is one function rather than a check copied into each caller:
+ *
+ * | failure | how it arrives | typed as |
+ * | --- | --- | --- |
+ * | a second `awaiting` gate for one `(workItem, kind, subject)` | Prisma `P2002` on the partial unique index | `ApprovalGateAlreadyAwaitingError` |
+ * | an UPDATE of an already-DECIDED row | the `trg_approval_gate_decided_immutable` trigger, via the pg adapter: SQLSTATE `23514` + the `AG_DECIDED_IMMUTABLE` marker in the message | `ApprovalGateDecidedImmutableError` |
+ *
+ * The marker is checked FIRST and the SQLSTATE only CONFIRMS it, mirroring
+ * `workItemLinkRepository.translateWriteError`: the marker is a unique string we
+ * control, while `23514` is the generic `check_violation` class that any future
+ * CHECK constraint on this table would also raise. Either signal alone is
+ * accepted, because a driver upgrade can drop `cause` without changing the
+ * message.
+ *
+ * EXPORTED so a test can assert the pair the guard actually consists of — the
+ * database refusing, and the refusal arriving typed — without either half
+ * standing in for the other. Asserting only the typed error would keep passing if
+ * the trigger were dropped and something else started raising `23514`; asserting
+ * only the raw refusal would not prove it ever reaches a caller as a domain
+ * error.
+ */
+export function translateApprovalGateWriteError(err: unknown): never {
+  const message = extractMessage(err);
+
+  if (message.includes('AG_DECIDED_IMMUTABLE') || extractSqlState(err) === '23514') {
+    throw new ApprovalGateDecidedImmutableError();
+  }
+
+  /* istanbul ignore else -- defensive: an approval_gate write fails either on the partial unique (P2002) or on the immutability trigger, both handled */
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    throw new ApprovalGateAlreadyAwaitingError();
+  }
+
+  /* istanbul ignore next -- defensive rethrow: an unrecognised write failure is not this domain's to name */
+  throw err;
+}
+
+/** SQLSTATE from a pg driver-adapter error's `cause`, if present. */
+function extractSqlState(err: unknown): string | undefined {
+  if (err && typeof err === 'object' && 'cause' in err) {
+    const cause = (err as { cause?: unknown }).cause;
+    if (cause && typeof cause === 'object') {
+      const c = cause as { code?: unknown; originalCode?: unknown };
+      if (typeof c.code === 'string') return c.code;
+      /* istanbul ignore next -- defensive: the @prisma/adapter-pg error exposes `code`; `originalCode` is a fallback for a future driver shape */
+      if (typeof c.originalCode === 'string') return c.originalCode;
+    }
+  }
+  return undefined;
+}
+
+function extractMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  /* istanbul ignore next -- defensive: approval_gate write errors are always Error instances; this guards a non-Error throw */
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message: unknown }).message);
+  }
+  /* istanbul ignore next -- defensive: as above */
+  return '';
+}
