@@ -29,12 +29,22 @@ import { projectKeyField } from './readyFilters';
 
 // `claim_next_ready` (MOTIR-1330) — ATOMIC, race-safe dispatch claim. Unlike
 // `next_ready` (which READS the top ready item without changing it), this CLAIMS:
-// it locks the highest-ranked ready Subtask (`FOR UPDATE SKIP LOCKED`), flips it
+// it locks the highest-ranked ready Subtask (`FOR UPDATE SKIP LOCKED`), ASSIGNS it
+// to the caller, flips it
 // to `in_progress`, and returns the same dispatch payload — all in one
 // transaction. Two concurrent `motir run` sessions therefore never claim the same
 // item: the loser takes the next-best, or gets an empty result and RETRIES. The
 // claim IS the dispatch flip, so the caller must NOT also `transition_status`
-// afterwards. SCOPE: the active sprint is resolved server-side (one per project)
+// afterwards.
+//
+// ⚠️ THE ASSIGNMENT ARRIVED LATE (MOTIR-4996) and the sentence above is why it
+// had to be said out loud: "the claim IS the flip, do not call
+// `transition_status`" reads as *nothing further is owed*, so for as long as this
+// door wrote only the status, a caller obeying it exactly left every card it was
+// handed In Progress with nobody on it. The other two claim doors
+// (`claim_work_item`, the scope claim) had assigned since MOTIR-2958; this one
+// predated the requirement and nothing went back for it.
+// SCOPE: the active sprint is resolved server-side (one per project)
 // and the claim is scoped to it when present; when there is NO active sprint —
 // Motir used without sprint planning (plain Kanban) — the claim widens to the
 // whole project, so a missing sprint is never an error. No sprint id is passed.
@@ -62,7 +72,7 @@ function summarize(
   advisories: WorkItemProseAdvisoryDto[],
 ): string {
   const lines = [
-    `Claimed (now In Progress): ${item.key} [${item.kind}/${item.priority}] ${item.title}${commentCountMarker(commentCount)}`,
+    `Claimed (now In Progress, assigned to you): ${item.key} [${item.kind}/${item.priority}] ${item.title}${commentCountMarker(commentCount)}`,
     `Run: ${item.runCommand}`,
   ];
   if (item.parentKey) lines.push(`Parent: ${item.parentKey}`);
@@ -232,10 +242,13 @@ export function registerClaimNextReady(
       title: 'Claim next ready work item',
       description:
         "ATOMICALLY claim the next ready Subtask in the project's ACTIVE sprint for dispatch: " +
-        'locks the highest-ranked ready item, transitions it to In Progress, and returns the full ' +
+        'locks the highest-ranked ready item, assigns it to you and transitions it to In Progress, ' +
+        'and returns the full ' +
         'dispatch payload (description, context refs, blocker keys, run command). Two concurrent ' +
-        'callers never get the same item — the claim IS the status flip, so do NOT call ' +
-        'transition_status afterwards. Returns an empty result (retry) when nothing is ready or no ' +
+        'callers never get the same item — the claim IS the assignment AND the status flip, so do ' +
+        'NOT call transition_status or update_work_item afterwards to write either. The assignee ' +
+        'is what tells a teammate reading the board who is on this card, and nothing else on a ' +
+        'card says so. Returns an empty result (retry) when nothing is ready or no ' +
         'sprint is active. Also returns `advisories` — always present, `[]` when there are none — ' +
         "each naming a work item the claimed card's ACCEPTANCE CRITERIA reference while carrying " +
         'no blocked_by edge to it (the `likely-missing-edge` tier of the prose-vs-graph check). ' +
