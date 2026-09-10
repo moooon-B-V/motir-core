@@ -1,0 +1,32 @@
+-- RETENTION — an APPROVED design version's bytes are PINNED (Story MOTIR-4778 ·
+-- Subtask MOTIR-4913; ADR docs/decisions/approval-gates.md §6c, with its
+-- MOTIR-4911 amendment keying the pin on the SUBJECT rather than the gate KIND).
+--
+-- One nullable column, and it is the whole schema half of this card. The
+-- supersede path in `designEvidenceService` unlinks a superseded row's
+-- attachments so the orphan-GC reclaims their blobs after the 7-day window
+-- (`lib/jobs/definitions/attachmentGc.ts`). Without a marker on the row itself,
+-- an approval points at nulls a week later — the identical bug the acceptance
+-- domain already paid for once and recorded in `lib/acceptanceEvidence/errors.ts`.
+--
+-- ⚠️ PURELY ADDITIVE. Nullable, no default, no backfill, no index: an existing
+-- row is valid the instant this applies and no row is rewritten. NULL is the
+-- correct value for every version published before approval gates existed —
+-- nobody approved them, so nothing is owed to them.
+--
+-- ⚠️ NO INDEX, deliberately. `pinned_at` is never a search key: it is read as
+-- part of a row the supersede path has already LOCKED by `work_item_id` and
+-- `is_current`. Adding one would also risk the spurious RENAME the partial-index
+-- rule in CLAUDE.md describes (MOTIR-1960), since
+-- `design_evidence_one_current_per_item` is already a hand-written partial index
+-- on this table.
+--
+-- ⚠️ The table's RLS policy is untouched. `design_evidence_active_workspace` is
+-- `FOR ALL` over `workspace_id` (the 20260811145123 migration), so a new column
+-- on an already-policed table needs no policy of its own — and the pin is
+-- written from inside the decide door's own workspace-bound transaction, which
+-- that policy admits for exactly the same reason it admits the publish path's
+-- writes.
+
+-- AlterTable
+ALTER TABLE "design_evidence" ADD COLUMN     "pinned_at" TIMESTAMP(3);

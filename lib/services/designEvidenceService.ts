@@ -361,19 +361,71 @@ async function persistEvidence(
   ctx: ServiceContext,
 ) {
   return withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+    // ⚠️ RETIRE THE PRIOR VERSION'S AWAITING GATE **FIRST** — before the
+    // `design_evidence` lock, and the ORDER is the contract (MOTIR-4913; ADR §6b).
+    //
+    // WHAT it does: the revise loop publishes v2 while v1's gate is still
+    // `awaiting`, and without this the Approvals tab keeps asking about a design
+    // that is no longer current — a question whose answer would pin bytes for a
+    // version the product had already moved past. `superseded` is the product's
+    // own state: no actor, no authority, no note (the repository's own contract).
+    //
+    // WHY HERE rather than beside the supersede below, which is where it reads
+    // as belonging: `approvalGatesService.decide` locks the GATE row and then
+    // writes `design_evidence` (its pin). A publish that locked
+    // `design_evidence` first and reached for the gate afterwards would take the
+    // same two locks in the opposite order, and two transactions doing that is a
+    // deadlock — precisely on the interleaving §6c cares about, an approval
+    // racing a republish. Retiring the gate before the evidence lock makes both
+    // paths take `approval_gate` then `design_evidence`, so the race resolves by
+    // WAITING and each outcome is one of the two legitimate ones:
+    //
+    //   · the publish wins → v1's gate is `superseded`, the decide door re-reads
+    //     it under its own lock and refuses with `ApprovalGateSupersededError`.
+    //     Nothing was approved, so nothing needed pinning.
+    //   · the decide wins → this statement WAITS on its gate-row lock, and by the
+    //     time it returns v1's gate is `approved` and v1 is pinned; it therefore
+    //     matches no `awaiting` row, and the supersede below finds the pin and
+    //     keeps the bytes.
+    //
+    // Unconditional rather than gated on `prior`: a first publish has no gate to
+    // retire, so the predicate matches nothing, and a condition here would have
+    // to be derived from the very read this statement must precede.
+    await approvalGateRepository.supersedeAwaitingByWorkItem(args.item.id, 'design_result', tx);
+
     // Lock BEFORE reading what to supersede — the decision is read-derived, so
     // an unlocked read lets two publishes both target the same current row.
     await designEvidenceRepository.lockCurrentByWorkItem(args.item.id, tx);
     const prior = await designEvidenceRepository.findCurrentByWorkItem(args.item.id, tx);
     if (prior) {
       await designEvidenceRepository.markSupersededByWorkItem(args.item.id, tx);
-      // Unlink the superseded artifacts so the orphan-GC reclaims their blobs
-      // after the safety window (one current result per item).
-      const priorAttachmentIds = prior.assets
-        .map((a) => a.attachmentId)
-        .filter((id): id is string => id !== null);
-      if (priorAttachmentIds.length > 0) {
-        await attachmentRepository.unlinkFromWorkItem(priorAttachmentIds, tx);
+      // ⚠️ PIN, do NOT FREEZE (ADR §6c). The supersede ALWAYS proceeds — a design
+      // legitimately evolves after approval, and 9.2's revise loop depends on
+      // republishing, which is where this deliberately diverges from the
+      // acceptance domain's `AcceptanceEvidenceAlreadyApprovedError` (MOTIR-2764,
+      // `lib/acceptanceEvidence/errors.ts`). What the pin changes is ONE thing:
+      // an approved version's attachments are not handed to the orphan-GC.
+      //
+      // ⚠️ The predicate reads `pinnedAt` ON THE ROW, and that is what makes it
+      // blind to the gate KIND — which is the whole point of §6c's amendment. A
+      // design that opened a pull request is approved through
+      // `pull_request_approval`, so a predicate that went looking for an approved
+      // `design_result` gate would stop pinning for the COMMON case, unlink as it
+      // always did, and surface seven days later as an approval pointing at
+      // nulls. The decide door writes this column for every kind, so nothing here
+      // needs to know which door the decision came through.
+      //
+      // Unpinned — never decided, or `changes_requested` — is the intended loss:
+      // the gate ROW keeps who said what and when; the bytes go.
+      if (prior.pinnedAt === null) {
+        // Unlink the superseded artifacts so the orphan-GC reclaims their blobs
+        // after the safety window (one current result per item).
+        const priorAttachmentIds = prior.assets
+          .map((a) => a.attachmentId)
+          .filter((id): id is string => id !== null);
+        if (priorAttachmentIds.length > 0) {
+          await attachmentRepository.unlinkFromWorkItem(priorAttachmentIds, tx);
+        }
       }
     }
 
@@ -438,11 +490,12 @@ async function persistEvidence(
     // re-pointing an existing gate at a new version would silently change the
     // question under whoever is reading it.
     //
-    // ⚠️ RETIRING THE PRIOR gate to `superseded` is **MOTIR-4913's**,
-    // `blocked_by` this card — as are §6c's pin and the supersede predicate on
-    // the unlink above. Until it lands, a republish leaves the previous version's
-    // gate `awaiting`; the decide door already refuses a `superseded` gate, so
-    // nothing has to change there when that card ships.
+    // ⚠️ RETIRING THE PRIOR version's gate to `superseded` is MOTIR-4913's, and
+    // it has LANDED — it is the first statement of this transaction, above,
+    // rather than a step beside this one, for the lock-order reason recorded
+    // there. So a republish leaves the previous version's gate `superseded` and
+    // the decide door refuses it (`ApprovalGateSupersededError`), which it always
+    // did; what changed is that something now writes the state.
     await approvalGateRepository.create(
       {
         workspaceId: ctx.workspaceId,
@@ -724,6 +777,48 @@ export const designEvidenceService = {
       },
     );
     return toDesignEvidenceDto(row);
+  },
+
+  /**
+   * PIN the work item's CURRENT design version against the orphan-GC, inside a
+   * transaction the caller already owns (MOTIR-4913; ADR §6c and its MOTIR-4911
+   * amendment).
+   *
+   * **Called by `approvalGatesService.decide` on every APPROVAL, whatever the
+   * gate's kind**, which is the correction §6c's amendment exists for: *when a
+   * work item carrying a current design result is approved, pin THAT version —
+   * whichever gate carried the decision.* A design with a pull request is
+   * approved through `pull_request_approval`, so a rule keyed on the
+   * `design_result` gate would stop pinning for the common case, with no error
+   * and no red test, and arrive a week later as an approval pointing at nulls.
+   *
+   * ⚠️ IT TAKES THE CALLER'S `tx`, deliberately, and that is the requirement
+   * rather than a convenience. §6c: *written afterwards, a republish racing an
+   * approval re-opens the window it exists to close.* Same shape as
+   * `workItemsService.applyStatusTransition`, which the design-result handler
+   * calls with the door's transaction for the same reason.
+   *
+   * ⚠️ LOCK BEFORE THE READ-DERIVED WRITE. Which row to pin is READ (`WHERE
+   * is_current`) and then WRITTEN, so it takes the SAME `FOR UPDATE` the
+   * supersede path takes — that is what serialises the two rather than letting
+   * both act on a row the other is replacing.
+   *
+   * Returns the pinned version's id, or **null when there was nothing to pin** —
+   * a card with no design result at all (the ordinary case for most kinds), or a
+   * publish that superseded the current row while this transaction waited for the
+   * lock. Null is an answer, never a failure: the caller records it and the
+   * decision still stands.
+   */
+  async pinCurrentForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string | null> {
+    const lockedIds = await designEvidenceRepository.lockCurrentByWorkItem(workItemId, tx);
+    // At most one by construction — `design_evidence_one_current_per_item`.
+    const currentId = lockedIds[0];
+    if (!currentId) return null;
+    await designEvidenceRepository.pinById(currentId, tx);
+    return currentId;
   },
 
   /**

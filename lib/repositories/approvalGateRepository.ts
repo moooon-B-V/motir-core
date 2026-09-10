@@ -193,8 +193,11 @@ export const approvalGateRepository = {
    * absent, bypassed or wrong, the `trg_approval_gate_decided_immutable` trigger
    * refuses the update. Without the wrap that refusal escapes as a raw pg
    * `23514` — the one thing this edge exists to prevent. It is the ONLY write in
-   * this repository that can reach the trigger; `create` cannot, because a
-   * BEFORE UPDATE trigger does not fire on an INSERT.
+   * this repository that can reach the trigger, and the other two cannot for
+   * DIFFERENT reasons: `create` because a BEFORE UPDATE trigger does not fire on
+   * an INSERT, and {@link supersedeAwaitingByWorkItem} (MOTIR-4913) because its
+   * predicate is an equality on the very column the trigger keys on. Its own
+   * note carries that argument in full.
    */
   async decide(
     id: string,
@@ -211,6 +214,66 @@ export const approvalGateRepository = {
     } catch (err) {
       translateApprovalGateWriteError(err);
     }
+  },
+
+  /**
+   * RETIRE every `awaiting` gate of one kind on one work item — the product
+   * withdrawing its own question because the subject it asked about is no longer
+   * the current one (MOTIR-4913; ADR §6b).
+   *
+   * ⚠️ IT WRITES `state` AND NOTHING ELSE. No actor, no authority, no note, no
+   * `decided_at`. That is the entire reason `superseded` is a separate state
+   * rather than a flag beside `changes_requested`: the audit must never be able
+   * to read a withdrawn question as a decision somebody made, and the only thing
+   * that keeps those two apart on the row is that this write leaves every column
+   * a decision fills untouched.
+   *
+   * ⚠️ KEYED ON `(workItemId, kind)`, NOT on the superseded subject's id — and
+   * that is a fact about the DOMAIN, not a shortcut. `design_evidence` carries
+   * one CURRENT row per work item (the
+   * `design_evidence_one_current_per_item` partial unique index), so an
+   * `awaiting` `design_result` gate on this item is by construction asking about
+   * the version a publish is replacing. Keying on the prior row's id would need
+   * that row read FIRST, which puts this write AFTER the
+   * `design_evidence` lock — and the decide door takes those two locks in the
+   * opposite order (gate, then evidence). One of the two orders has to give, and
+   * the caller's own comment records why this one does.
+   *
+   * ⚠️ NO `decided`-state rows are touched: the `state: 'awaiting'` predicate is
+   * the whole guard. A gate whose decision has landed is somebody's answer and
+   * outlives its subject.
+   *
+   * ⚠️ AND THAT IS WHY THIS WRITE DOES **NOT** ROUTE THROUGH
+   * {@link translateApprovalGateWriteError}, unlike the other two — the omission
+   * is reasoned, not an oversight, and the reason is not *"a decided row would
+   * be a bug"*. `trg_approval_gate_decided_immutable` (MOTIR-4912) keys on
+   * `OLD.state`, and this statement's predicate is an EQUALITY on that same
+   * column, so the trigger is structurally unreachable from here: under READ
+   * COMMITTED an `updateMany` re-evaluates its `WHERE` against the updated row
+   * version before writing, so a gate a concurrent decide commits mid-statement
+   * stops matching and is skipped rather than refused. A `catch` here would be a
+   * branch no test could honestly exercise, which is the thing this repository's
+   * `tx ?? dbRead` note already refuses to add.
+   *
+   * ⚠️ AND THE ZERO-ROW RESULT IS NOT {@link decide}'S SILENT NO-OP. That method
+   * carries no state predicate precisely because one would report success on a
+   * decision that never landed. Here both causes of a zero count are correct end
+   * states — nothing awaiting to retire, or a decide that won the row first —
+   * and no caller is told anything happened that did not.
+   *
+   * Returns the count, which is 0 on every publish that had no prior version —
+   * the ordinary first publish.
+   */
+  async supersedeAwaitingByWorkItem(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.approvalGate.updateMany({
+      where: { workItemId, kind, state: 'awaiting' },
+      data: { state: 'superseded' },
+    });
+    return result.count;
   },
 
   /** The routing read: a workspace's `awaiting` gates (whose Approvals tab).

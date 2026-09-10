@@ -4062,6 +4062,32 @@ model DesignEvidence {
   /// result is wrong are open-ended, and a vocabulary invented up front would
   /// be a guess written into the record this column exists to make honest.
   withdrawnReason String?   @map("withdrawn_reason") @db.Text
+  /// When an APPROVAL pinned this version's bytes (MOTIR-4913; ADR
+  /// docs/decisions/approval-gates.md §6c and its MOTIR-4911 amendment). NULL on
+  /// every version nobody approved, which is the ordinary case.
+  ///
+  /// ⚠️ It is a RETENTION marker, not an audit stamp, and the two are
+  /// deliberately not merged. What was approved, by whom, under what authority
+  /// and through which surface is the `approval_gate` row's — including which
+  /// version, once MOTIR-4912's `subject_version` lands. This column answers ONE
+  /// question, asked by the supersede path: **may these blobs be handed to the
+  /// orphan-GC?** So it carries no actor and no gate FK; a second home for the
+  /// audit is a second thing to keep in agreement with the table an auditor
+  /// trusts.
+  ///
+  /// ⚠️ PIN, do NOT FREEZE. A pinned row still supersedes normally — a design
+  /// legitimately evolves after approval and 9.2's revise loop depends on
+  /// republishing. The only thing the pin changes is that the supersede stops
+  /// unlinking this row's attachments, so the orphan-GC never reaches them. The
+  /// acceptance domain took the opposite decision for a finished story
+  /// (`AcceptanceEvidenceAlreadyApprovedError`, MOTIR-2764) and that divergence
+  /// is on the record rather than an oversight.
+  ///
+  /// ⚠️ PER APPROVED VERSION, never "the approved one" (§6d). Approvals
+  /// accumulate: a card approved, reopened and approved again holds two pinned
+  /// rows, both fetchable. The FIRST pin wins on any one row — re-approving the
+  /// same version keeps the timestamp of the decision that first bought it.
+  pinnedAt        DateTime? @map("pinned_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
