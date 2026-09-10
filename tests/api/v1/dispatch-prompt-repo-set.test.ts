@@ -11,6 +11,7 @@ import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { randomToken } from '../../helpers/random';
+import { linkProjectRepo } from '../../helpers/projectRepoLink';
 import { organizationIdOf } from '../../helpers/organizationOf';
 
 // The dispatch payload carries the WHOLE repository set (Story MOTIR-2731 ·
@@ -71,6 +72,12 @@ async function connectRepo(
       archived: opts.archived ?? false,
       provider: 'github',
     },
+  });
+  await linkProjectRepo({
+    workspaceId: caller.fixture.workspaceId,
+    projectId: caller.fixture.projectId,
+    githubRepoId: repo.id,
+    name,
   });
   return repo.id;
 }

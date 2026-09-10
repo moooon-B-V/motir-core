@@ -15,6 +15,7 @@ import { isSubsumptionAdvisory, type WorkItemProseAdvisoryDto } from '@/lib/dto/
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 
 // THE SUBSUMPTION ADVISORY (MOTIR-2903) — over REAL Postgres.
 //
@@ -100,6 +101,11 @@ async function connectRepo(fx: WorkItemFixture, name = 'motir-core') {
         archived: false,
       },
     ],
+  });
+  await linkWorkspaceReposToProject({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    names: [name],
   });
   return adminDb.githubRepo.findFirstOrThrow({ where: { repoId: `pr-${name}` } });
 }

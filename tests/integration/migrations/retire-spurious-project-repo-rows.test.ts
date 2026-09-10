@@ -15,6 +15,7 @@ import { createTestProject } from '../../fixtures/projectFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { organizationIdOf } from '../../helpers/organizationOf';
+import { linkProjectRepo } from '../../helpers/projectRepoLink';
 
 // MOTIR-3078 — the `retire_spurious_project_repo_rows` forward data migration.
 //
@@ -87,7 +88,7 @@ async function seedOnboardingRun(
 
 /** A repository connected to the WORKSPACE through an installation — the rung
  *  `resolveDomains` falls through to once the project has no set of its own. */
-async function connectWorkspaceRepo(workspaceId: string, name: string): Promise<void> {
+async function connectWorkspaceRepo(workspaceId: string, name: string) {
   const installationId = `inst-3078-${workspaceId}`;
   const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
@@ -100,7 +101,7 @@ async function connectWorkspaceRepo(workspaceId: string, name: string): Promise<
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  return adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId,
@@ -461,19 +462,17 @@ describe('retire_spurious_project_repo_rows — the LIVE MOTIR row, and what rem
     // asserting that the stray row made `motir-core` UNPINNABLE — because the
     // scope ladder chose between two registries on `hasSet`, so the first row a
     // project ever gained did not join its repo list, it BECAME the list.
-    // MOTIR-3086 (#2144) removed exactly that: a set now EXTENDS the workspace's
-    // connected repositories instead of replacing them, so no row can subtract a
-    // repository from the domain — which is the root cause this migration was
-    // sweeping up after.
-    //
-    // The two cards were each green on their own base and red together
-    // (#2144 was reproduced at `fbe5e2cd`, before #2140 added this file). What
-    // the migration is FOR is unchanged and still asserted below: the spurious
-    // row is deleted. What is no longer true is that its presence hides a real
-    // repository, so asserting a rejection here would now pin the defect rather
-    // than the fix.
+    // MOTIR-4955 retired the workspace fallback. The real repository is
+    // explicitly linked, while the old onboarding proposal remains the row this
+    // migration removes.
     const fx = await makeWorkItemFixture();
-    await connectWorkspaceRepo(fx.workspaceId, 'motir-core');
+    const repo = await connectWorkspaceRepo(fx.workspaceId, 'motir-core');
+    await linkProjectRepo({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      githubRepoId: repo.id,
+      name: repo.name,
+    });
     const live = await seedLiveShape(fx);
 
     // BEFORE: pinnable already — the stray row no longer costs the project its
@@ -485,7 +484,7 @@ describe('retire_spurious_project_repo_rows — the LIVE MOTIR row, and what rem
     await runMigration();
 
     // AFTER: the row is gone — the migration's actual subject — and the
-    // repository is still nameable, now through the workspace rung alone.
+    // repository is still nameable through its surviving explicit link.
     expect(await survives(live)).toBe(false);
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),

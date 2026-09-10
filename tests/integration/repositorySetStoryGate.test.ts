@@ -15,6 +15,7 @@ import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
 import { adminDb } from '../helpers/adminDb';
 import { linkPrByIdentifier } from '../helpers/prLink';
 import { truncateAuthTables } from '../helpers/db';
+import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 
 // STORY GATE for MOTIR-2725 — the repository SET (Subtask MOTIR-2417).
 //
@@ -79,6 +80,11 @@ async function scenario(email: string, repos = [CORE, AI]) {
       defaultBranch: r.defaultBranch,
       archived: false,
     })),
+  });
+  await linkWorkspaceReposToProject({
+    workspaceId: workspace.id,
+    projectId: project.id,
+    names: repos.map((repo) => repo.name),
   });
   return { user, workspace, project, ctx: { userId: user.id, workspaceId: workspace.id } };
 }
