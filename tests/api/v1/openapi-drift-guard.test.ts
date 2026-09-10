@@ -40,6 +40,7 @@ import { plansService } from '@/lib/services/plansService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { connectAndLinkRepo } from '../../fixtures/codeContextFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { v1RouteFiles } from '../../helpers/v1RouteAudit';
 import {
@@ -409,6 +410,24 @@ describe('every operation’s REAL response validates against its declared schem
       'deleteWorkItemLink',
       () => import('@/app/api/v1/work-items/[key]/links/route'),
       send(`/api/v1/work-items/${key}/links?toKey=${otherKey}&relationship=relates_to`, 'DELETE'),
+      { key },
+    );
+    // MOTIR-5048 — the delivery LINK. Its one precondition is a repository
+    // CONNECTED to the workspace, which is a different thing from the project's
+    // repo-SET row added below: the link resolves `owner/name` against the
+    // installation mirror, so a proposed set row would not satisfy it.
+    // `connectAndLinkRepo` writes the installation and the established row
+    // together, which is what the fixture exists for.
+    const { repoRef } = await connectAndLinkRepo(caller.fixture);
+    await drive(
+      'linkWorkItemPullRequest',
+      () => import('@/app/api/v1/work-items/[key]/pull-requests/route'),
+      send(`/api/v1/work-items/${key}/pull-requests`, 'POST', {
+        repository: repoRef,
+        number: 4242,
+        headRef: 'subtask/drift-guard',
+        baseRef: 'main',
+      }),
       { key },
     );
     await drive(
