@@ -145,6 +145,16 @@ export default defineConfig({
       // branch is where the script it guards is RUN, and the spec needs neither
       // a database nor a browser.
       'tests/scripts/render-design-mock-boards.test.ts',
+      // `scripts/render-design-mock-git` (MOTIR-4895) guards the HEAD BASELINE
+      // READ in `scripts/render-design-mock.mjs` — the `git show HEAD:<path>`
+      // whose non-zero exit used to throw, making every render after the first
+      // fatal for an asset with no committed baseline. It is here for the same
+      // reason its two siblings above are: a `design/*` branch is where the
+      // script it guards is RUN, and a new asset is exactly the case a design PR
+      // creates. It `git init`s a temp repository (the read is about what git
+      // does with an uncommitted path, so a stub would assert the stub) and
+      // fakes the renderer — no database and no browser.
+      'tests/scripts/render-design-mock-git.test.ts',
     ],
   },
   resolve: {

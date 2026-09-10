@@ -53,7 +53,21 @@
 // which holds the search and is unit-tested in
 // `tests/scripts/render-design-mock-search.test.ts`. The BOARD loop is split out
 // the same way, into `scripts/renderDesignMockBoards.mjs`, and unit-tested in
-// `tests/scripts/render-design-mock-boards.test.ts`.
+// `tests/scripts/render-design-mock-boards.test.ts`. So is the `HEAD` baseline
+// READ, into `scripts/renderDesignMockGit.mjs` — see the next block.
+//
+// ── A MISSING baseline is the `NEW` case, not a crash (MOTIR-4895) ──────────
+// Everything above is written about comparing against a committed export. When
+// there ISN'T one, the comparison is simply not made — and for a stretch this
+// script instead DIED on it. The committed PNG was read with a bare
+// `execFileSync('git', ['show', 'HEAD:<path>'])` whenever the file existed ON
+// DISK, and a new asset's FIRST render is what puts it there, so the second and
+// every later render of a mock you had not committed yet exited on
+// `fatal: path '…' exists on disk, but not in 'HEAD'`. That is exactly the loop
+// a `type: design` card is made of — render, look, fix, render — and the only
+// workaround was to delete the artefact you had just produced. The read now
+// answers `null` for a path `HEAD` does not carry, which is what the board loop
+// already calls `NEW`.
 //
 // ── The DARK board (MOTIR-4868) ─────────────────────────────────────────────
 // Five assets in this tree ship a FOURTH file, `<name>.dark.png` — the same
@@ -95,10 +109,10 @@
 
 import { chromium } from '@playwright/test';
 import { existsSync, writeFileSync, mkdtempSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { boardsFor, darkPngFor, exportMockBoards } from './renderDesignMockBoards.mjs';
+import { readAtHead } from './renderDesignMockGit.mjs';
 
 const argv = process.argv.slice(2);
 const verifyOnly = argv.includes('--verify');
@@ -122,10 +136,6 @@ if (mocks.length === 0) {
   );
   process.exit(2);
 }
-
-/** A path's content AT `HEAD`, which is what every comparison in this script is against. */
-const gitShow = (path) =>
-  execFileSync('git', ['show', `HEAD:${path}`], { maxBuffer: 256 * 1024 * 1024 });
 
 const scratch = mkdtempSync(join(tmpdir(), 'design-mock-'));
 const browser = await chromium.launch();
@@ -182,8 +192,20 @@ for (const mock of mocks) {
   let baselineUrl = null;
   const baseline = () => {
     if (baselineUrl === null) {
+      // Unlike the committed PNG below, a MISSING mock at `HEAD` is fatal here
+      // and has to be: this is only reached when the export IS committed, so
+      // there is a comparison to make and no source to make it against. What
+      // changed is that it now says which — `git`'s own `status: 128` read as a
+      // broken repository (MOTIR-4895).
+      const head = readAtHead(mock);
+      if (head === null) {
+        throw new Error(
+          `${mock} is not committed at HEAD, so there is no baseline to render the ` +
+            `committed export against. Commit the mock, or remove the committed .png.`,
+        );
+      }
       const baselinePath = join(scratch, mock.replace(/\//g, '__'));
-      writeFileSync(baselinePath, gitShow(mock));
+      writeFileSync(baselinePath, head);
       baselineUrl = 'file://' + baselinePath;
     }
     return baselineUrl;
@@ -197,7 +219,15 @@ for (const mock of mocks) {
     // The committed export is read from HEAD, not from the working tree: on a
     // re-run inside a sweep the working-tree PNG is one this script already
     // wrote, and comparing against it would report every asset as EXACT.
-    readCommitted: (png) => (existsSync(png) ? gitShow(png) : null),
+    //
+    // ⚠️ `readAtHead` answers `null` rather than throwing when HEAD does not
+    // carry the path, and that is the whole of MOTIR-4895: a NEW asset's first
+    // render WRITES the PNG, so every render after it sent a file that exists on
+    // disk and in no commit to `git show` and died on the exit code — before the
+    // width search, with `--width` passed, on the one loop (render → look → fix
+    // → render) a design card is made of. A missing baseline is the `NEW` case
+    // the board loop already handles, not an error condition.
+    readCommitted: (png) => (existsSync(png) ? readAtHead(png) : null),
     write: (png, buffer) => {
       if (!verifyOnly) writeFileSync(png, buffer);
     },
