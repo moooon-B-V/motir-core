@@ -19,6 +19,30 @@
 // because each is a business rule the door applies rather than a database error
 // it survives.
 //
+// ⚠️ AND MOTIR-4912 (the AUDIT columns) adds the file's SECOND repository-tier
+// refusal, which is what makes that split worth reading carefully rather than as
+// a one-off: `ApprovalGateDecidedImmutableError`, translated from the
+// `trg_approval_gate_decided_immutable` BEFORE UPDATE trigger. So this file now
+// holds errors from BOTH tiers, and the discriminator is whether a DATABASE
+// refused the write or a RULE refused the request:
+//
+//   * REPOSITORY tier — `ApprovalGateAlreadyAwaitingError` (a `P2002` on the
+//     partial unique) and `ApprovalGateDecidedImmutableError` (the immutability
+//     trigger). Both are raw Postgres failures that must not escape, and both
+//     are produced in ONE place: `translateApprovalGateWriteError` in
+//     `approvalGateRepository`. Nothing else constructs them.
+//   * SERVICE tier — the five below. The door applies each before it writes.
+//
+// ⚠️ `ApprovalGateAlreadyDecidedError` and `ApprovalGateDecidedImmutableError`
+// are about the same FACT and are NOT interchangeable, which is the one confusion
+// this list invites. The first is the door's EXPECTED refusal — a reviewer
+// pressing a button somebody else already pressed, a 409 the control draws in
+// place, raised with the row lock held and before any write is attempted. The
+// second means that check was absent, bypassed or wrong and the database caught
+// what the business rule was supposed to: a 500 and a finding, not a state the
+// UI renders. Mapping them to the same status would hide the second behind the
+// first for ever.
+//
 // Every class carries a string `tag` discriminant so the service layer can
 // `switch (err.tag)` over an `ApprovalGateError` union exhaustively without
 // `instanceof` chains. `code` mirrors `tag` and is what the route layer (the
@@ -26,7 +50,10 @@
 // `lib/workItems/linkErrors.ts`.
 
 export type ApprovalGateErrorTag =
+  // REPOSITORY tier — a database refused the write.
   | 'APPROVAL_GATE_ALREADY_AWAITING'
+  | 'APPROVAL_GATE_DECIDED_IMMUTABLE'
+  // SERVICE tier — the decide door refused the request.
   | 'APPROVAL_GATE_NOT_FOUND'
   | 'APPROVAL_GATE_ALREADY_DECIDED'
   | 'APPROVAL_GATE_SUPERSEDED'
@@ -68,6 +95,42 @@ export class ApprovalGateAlreadyAwaitingError extends ApprovalGateError {
   ) {
     super(message);
     this.name = 'ApprovalGateAlreadyAwaitingError';
+  }
+}
+
+/**
+ * An UPDATE was attempted on a gate that has already been DECIDED (`approved`
+ * or `changes_requested`). The `approval_gate` BEFORE UPDATE trigger
+ * `trg_approval_gate_decided_immutable` refused it; this is that refusal,
+ * translated at the repository's edge so a raw Postgres error never escapes it
+ * (Subtask MOTIR-4912).
+ *
+ * ADR §6a: *"A decided gate is IMMUTABLE. There is no update path for a decided
+ * row — audit evidence that can be edited is not evidence."* So this is NOT a
+ * transient condition to retry and NOT a conflict to resolve — there is no
+ * version of the write that succeeds.
+ *
+ * ⚠️ IT IS NOT {@link ApprovalGateAlreadyAwaitingError}'S COUSIN, AND IT IS NOT
+ * THE DECIDE DOOR'S *already decided* REFUSAL EITHER. The door's own refusal is
+ * the normal, EXPECTED path for a reviewer who pressed a button somebody else
+ * had already pressed — a 409 the control draws in place, reached with the row
+ * lock held and before any write is attempted. Reaching THIS error means the
+ * service's check was absent, bypassed, or wrong, and the database caught what
+ * the business rule was supposed to: a `500` rather than a rendered message, and
+ * a finding rather than a state.
+ *
+ * The state and the decision moment come off `OLD` in the trigger's message, so
+ * the refusal says WHICH decision it is protecting rather than only that one
+ * exists — the same reason the door's refusal names the winner.
+ */
+export class ApprovalGateDecidedImmutableError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_DECIDED_IMMUTABLE' as const;
+  readonly code = 'APPROVAL_GATE_DECIDED_IMMUTABLE' as const;
+  constructor(
+    message = 'This approval gate has already been decided and cannot be changed — a decided gate is immutable audit evidence.',
+  ) {
+    super(message);
+    this.name = 'ApprovalGateDecidedImmutableError';
   }
 }
 
