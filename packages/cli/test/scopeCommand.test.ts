@@ -278,13 +278,32 @@ const SCOPE_DEPS = {
  * `gh` is ever reached — a fixture in which the assertion "no pull request was
  * opened" would pass for the wrong reason.
  */
+/**
+ * ⚠️ STATEFUL ABOUT `gh pr create` (MOTIR-4999). The drain now opens each
+ * repository's pull request at its first landed card, so `pr list` is asked
+ * TWICE per run — once by the eager open and once by the close-out. A fake that
+ * answered the second the way it answered the first would let the close-out
+ * create a SECOND pull request off the same branch, which no live repository can
+ * do: `gh pr list --head <branch> --state open` returns the one that exists.
+ * Registering the create is what lets `openSessionPr`'s list-before-create
+ * no-op be observed here rather than mistaken for a duplicate-PR defect.
+ */
 function recordingGit(): { run: CommandRunner; commands: string[] } {
   const commands: string[] = [];
-  const run: CommandRunner = (bin, args) => {
+  /** `checkout → its open pull request`, grown by every `pr create`. */
+  const open = new Map<string, string>();
+  const run: CommandRunner = (bin, args, cwd) => {
     commands.push([bin, ...args.slice(0, 2)].join(' '));
     if (bin === 'git' && args[0] === 'rev-list' && args[1] === '--count') return okResult('1');
     if (bin === 'gh' && args[1] === 'create') {
-      return okResult('https://github.com/moooon/motir-core/pull/1');
+      const url = 'https://github.com/moooon/motir-core/pull/1';
+      open.set(cwd, url);
+      return okResult(url);
+    }
+    // Draft state is a separate question and nothing here changes it: the
+    // close-out's `gh pr ready` is what these tests are watching for.
+    if (bin === 'gh' && args[1] === 'list' && !args.includes('isDraft')) {
+      return okResult(open.get(cwd) ?? '');
     }
     return GIT(bin, args, '');
   };

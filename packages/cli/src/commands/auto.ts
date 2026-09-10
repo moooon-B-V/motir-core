@@ -410,18 +410,21 @@ export interface LoopInput {
    * Open each repository's pull request at its FIRST implemented card, rather
    * than only at the close-out (Story MOTIR-3655 · MOTIR-3681).
    *
-   * ⚠️ OPT-IN, and `motir auto` is the only caller of this loop. The gate was
-   * once a SAFETY one — the scoped run could finish under a hold (Bug
-   * MOTIR-3268) that an eager open would have defeated — and MOTIR-4967 retired
-   * that hold: every session pull request now opens as a DRAFT, which carries the
-   * same invariant without withholding CI, so nothing about opening early is
-   * unsafe for any lane any more.
+   * ⚠️ NO LONGER A LANE GATE — IT IS A TEST SEAM (MOTIR-4999). It was once a
+   * SAFETY gate: the scoped run could finish under a hold (Bug MOTIR-3268) that
+   * an eager open would have defeated, and MOTIR-4967 retired that hold by
+   * opening every session pull request as a DRAFT. What was left after that was
+   * a plain fact about which loop each lane runs — the scoped run drains through
+   * `commands/scopeDrain.ts`, which has a loop of its own — and MOTIR-4999 gave
+   * THAT loop the same first-implemented-card timing, calling the same
+   * `ensureRepoPullRequest`.
    *
-   * What is left is a plain fact about which loop each lane runs: the scoped run
-   * drains through `commands/scopeDrain.ts`, which has a loop of its own and does
-   * not call `ensureRepoPullRequest` at all. Giving the scoped lane the same
-   * first-implemented-card timing is a change to THAT loop, not a flag flipped
-   * here.
+   * ⚠️ SO BOTH PRODUCTION LANES NOW OPEN EAGERLY, and this flag has no remaining
+   * `false` consumer outside `test/auto.test.ts`, where it is what lets the
+   * harness drive this loop's close-out-only path. Read it as "the tests may ask
+   * for the pull request not to be opened mid-loop", never as "some lane defers
+   * its pull request to the close-out" — nothing does, and a future caller
+   * leaving it unset is choosing the tests' shape rather than a lane's.
    */
   openPrEagerly?: boolean;
   session: ProjectSession;
@@ -1446,7 +1449,7 @@ export async function transitionToImplemented(
 
 /**
  * Make sure THIS repository's session pull request exists — as a DRAFT, mid-run
- * (Story MOTIR-3655 · MOTIR-3681 · MOTIR-4967).
+ * (Story MOTIR-3655 · MOTIR-3681 · MOTIR-4967 · MOTIR-4999).
  *
  * Called after every card that LANDS, so the first implemented card in each
  * repository opens that repository's pull request and every card after it finds
@@ -1454,12 +1457,23 @@ export async function transitionToImplemented(
  * no-op and the run holds no "have I opened it?" state of its own — which is
  * what makes a resumed or re-invoked run safe.
  *
+ * ⚠️ EXPORTED FOR THE SCOPED LANE (MOTIR-4999), alongside `RepoSessions`,
+ * `dispatchOne` and `closeOutRepos`. `commands/scopeDrain.ts` writes its own
+ * iteration and calls this on the same trigger `runAutoLoop` uses, so the two
+ * loops cannot disagree about WHEN a session pull request opens or about what it
+ * is opened WITH. It holds no state, so calling it from a second loop needs
+ * nothing coordinated between them.
+ *
  * ⚠️ A FAILURE HERE IS REPORTED AND SWALLOWED. The agent's work is already
  * committed and pushed; refusing to continue the loop because `gh` was missing
  * would abandon the cards still queued behind a tooling gap. The close-out at
  * the end tries again and reports properly.
  */
-function ensureRepoPullRequest(session: RepoSession, runId: string, run: CommandRunner): void {
+export function ensureRepoPullRequest(
+  session: RepoSession,
+  runId: string,
+  run: CommandRunner,
+): void {
   try {
     if (!sessionBranchHasCommits(session.cwd, session.branch, run)) return;
     const result = openSessionPr(
@@ -1469,9 +1483,13 @@ function ensureRepoPullRequest(session: RepoSession, runId: string, run: Command
         title: sessionPrTitle(runId, []),
         // Deliberately thin: what has landed at THIS moment, and a sentence
         // saying the close-out completes it. Rewritten in full at the end.
+        // ⚠️ IT NAMES THE RUN, NOT THE COMMAND (MOTIR-4999). Both `motir auto`
+        // and the scoped drain open through here now, so a sentence naming one
+        // of them is false on the other lane for as long as the draft carries
+        // the thin body — which is exactly the window a reviewer might open it.
         body:
-          `Opened by \`motir auto\` (run \`${runId}\`) at this repository's first implemented ` +
-          `work item, so its checks run against the work as it lands rather than only at the end.\n\n` +
+          `Opened at this repository's first implemented work item of run \`${runId}\`, ` +
+          `so its checks run against the work as it lands rather than only at the end.\n\n` +
           `Carried so far: ${session.keys.length > 0 ? session.keys.join(', ') : '—'}\n\n` +
           `_This body is rewritten with the full run when the loop finishes._`,
       },
