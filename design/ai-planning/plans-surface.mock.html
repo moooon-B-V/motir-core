@@ -1679,9 +1679,6 @@
         background: var(--el-accent);
         color: var(--el-accent-text);
       }
-      .estep .ebtn-quiet {
-        color: var(--el-info);
-      }
       /* The BAND: the same step, at the top of the pane, on a hairline. */
       .estep.band {
         padding: 14px 18px;
@@ -4169,7 +4166,7 @@
                  took the whole canvas pane. The four cards just approved are
                  nowhere on the page. -->
             <div class="cmp">
-              <div class="cmp-cap bad">Shipped today — the pane is REPLACED</div>
+              <div class="cmp-cap bad">Shipped today (v5) — the pane is REPLACED</div>
               <div class="viewport" style="height: 300px">
                 <div class="estep">
                   <div class="eyebrow">YOUR PROJECT'S CODE</div>
@@ -4187,7 +4184,6 @@
                   </div>
                   <div class="erow">
                     <span class="ebtn ebtn-primary">Continue</span>
-                    <span class="ebtn ebtn-quiet">I already have code</span>
                   </div>
                 </div>
               </div>
@@ -4208,7 +4204,6 @@
                   <h3>Motir will host your code</h3>
                   <div class="erow">
                     <span class="ebtn ebtn-primary">Continue</span>
-                    <span class="ebtn ebtn-quiet">I already have code</span>
                   </div>
                 </div>
                 <div class="bandcanvas">
@@ -4237,8 +4232,16 @@
                 The step keeps its own height and its own content — MOTIR-1782 keeps every decision
                 it made about what the step SAYS. The canvas takes the remainder with
                 <code>min-h-0</code> so it shrinks rather than pushing the band out, and it is never
-                replaced. Once the step settles it collapses to its shipped one-line form and the
-                canvas has the pane, with no extra rule.
+                replaced. <b>⚠️ AMENDED (MOTIR-5050):</b> this note used to end
+                <i
+                  >“once the step settles it collapses to its shipped one-line form and the canvas
+                  has the pane, with no extra rule”</i
+                >
+                — which is false, and is the clause that left this Part with no state for a settled
+                set. The step does not shrink: an all-settled set puts it in its
+                <code>ready</code> arm at full height. For a set Motir just CREATED that is the
+                correct report; for one that ARRIVED settled there is nothing to report, and the
+                rule is panel H·v6 below.
               </div>
             </div>
           </div>
@@ -4269,6 +4272,165 @@
                 canvas has the pane. Panel H changes nothing for a decline — Panel G is the whole of
                 that state's fix.</span
               >
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- PANEL H, v6 (MOTIR-5050) — the SECOND population: a set that
+             ARRIVED settled. The band above is right for a project with code
+             to establish; this is the project that has none, and until v6 the
+             asset had no state for it while the shipped gate drew the band
+             anyway (a row COUNT in app/(authed)/plans/[id]/page.tsx).
+             design/repository-set/design-notes.md §7b is the design of record. -->
+        <!-- ============================================================= -->
+        <div class="panel-cap" style="margin-top: 22px">
+          <span class="n">H·v6</span>
+          <h2>A set that arrived SETTLED draws no band at all — the canvas has the whole pane</h2>
+          <span class="note"
+            >every row <code>connected</code> · the organisation's own repositories, connected at
+            onboarding · nothing for the step to ask and nothing for it to report</span
+          >
+        </div>
+        <div class="frame">
+          <div class="stack">
+            <!-- LEFT: SHIPPED TODAY for the settled population. The band is
+                 drawn because the gate is a row COUNT, and four of its
+                 elements render: three of them are FALSE of a repository the
+                 organisation owns. -->
+            <div class="cmp">
+              <div class="cmp-cap bad">Shipped today — the band is drawn, and it is WRONG</div>
+              <div class="viewport" style="height: 300px">
+                <div class="estep">
+                  <div class="eyebrow">YOUR PROJECT'S CODE</div>
+                  <h3>Motir will host your code</h3>
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 7px;
+                      margin: 10px 0 0;
+                      font-size: 13px;
+                      font-weight: 600;
+                      color: var(--el-text);
+                    "
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--el-success)"
+                      stroke-width="2"
+                      style="width: 15px; height: 15px; flex: none"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+                    </svg>
+                    Your code is ready
+                  </div>
+                  <div class="callout">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <span
+                      ><b>It's yours.</b> Motir keeps it safe and private — move it to your own
+                      GitHub whenever you want.</span
+                    >
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      align-items: flex-start;
+                      gap: 7px;
+                      margin: 10px 0 0;
+                      font-size: 12.5px;
+                      color: var(--el-text-secondary);
+                    "
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="var(--el-warning)"
+                      stroke-width="2"
+                      style="width: 15px; height: 15px; flex: none; margin-top: 1px"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 4 2.5 20h19L12 4Z" />
+                      <path d="M12 10v4.5" />
+                      <path d="M12 17.2v.3" />
+                    </svg>
+                    <span
+                      >Motir doesn't know your GitHub account yet — Finish setting up access</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="cmp-note">
+                Four elements render and <b>three of them are false</b> of a repository the
+                organisation owns: Motir hosts nothing here, it is already in their own GitHub, and
+                the access line nags about a repository they own — four inches from
+                <i>“your code is ready.”</i> Each is individually correct about its own gate, which
+                is why no single component looks broken.
+              </div>
+            </div>
+
+            <!-- RIGHT: v6 — nothing. The canvas fills the pane and the RAIL's
+                 own approved-outcome line is the whole of what the reader is
+                 told about their code. -->
+            <div class="cmp">
+              <div class="cmp-cap good">v6 — no band; the canvas fills the pane</div>
+              <div class="viewport" style="height: 300px">
+                <div class="bandcanvas" style="height: 100%">
+                  <span class="lvlcap decided-ok" style="position: static; margin: 0 0 8px 0"
+                    >Approved · 4 items added to your backlog</span
+                  >
+                  <div class="minirow">
+                    <div class="mini add dec-ok">
+                      <span class="mid">MOTIR-3166</span
+                      ><span class="mchip"><i class="add">add</i><i class="ok">accepted</i></span>
+                    </div>
+                    <div class="mini add dec-ok">
+                      <span class="mid">MOTIR-3167</span
+                      ><span class="mchip"><i class="add">add</i><i class="ok">accepted</i></span>
+                    </div>
+                    <div class="mini modify dec-ok">
+                      <span class="mid">MOTIR-3161</span
+                      ><span class="mchip"
+                        ><i class="modify">change</i><i class="ok">accepted</i></span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="cmp-note">
+                No band, and no residue — not a collapsed one-liner, not an empty seam. The reader
+                is told one thing about their code, by the review rail, which already says it:
+                <b>“Your code is ready”</b> under <b>“Added 4 items to your backlog”</b>. Nothing is
+                added to the rail either; a project's repositories have a durable home in
+                <code>/settings/project/repositories</code>.
+              </div>
+            </div>
+          </div>
+          <div class="whyrow">
+            <div>
+              <strong>Why ABSENCE rather than a third state.</strong> The step does exactly one of
+              two things — ASK Motir to establish code, or REPORT what it established. A row Motir
+              will not create and did not create gives it neither, so any copy drawn here would be
+              filler in the most expensive position on the page: directly above the thing the user
+              just approved. <b>Panel H's stacking rule is untouched</b> — band above, canvas below,
+              never replaced — for every project that has code to establish. v6 narrows WHEN, never
+              HOW.
+            </div>
+            <div>
+              <strong>The predicate, by name.</strong> The band is drawn
+              <b>iff the set holds at least one row Motir ESTABLISHES</b> — <code>state</code> in
+              <code>proposed</code> / <code>creating</code> / <code>created</code> /
+              <code>failed</code> — so a set whose every row is <code>connected</code> or
+              <code>skipped</code> draws none. <b>Not</b> <code>set.ownership</code>, which is null
+              until the step decides and so is null for exactly this population. The shipped gate is
+              <code>rows.length &gt; 0</code>, a row COUNT; closing it is <b>MOTIR-5049</b>, which
+              this card blocks.
             </div>
           </div>
         </div>

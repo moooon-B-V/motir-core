@@ -17,12 +17,20 @@ that gives an approved plan somewhere for its code to live — and then gives th
 it. It is the layout source of truth for **MOTIR-1782** (the approval-step UI) and **MOTIR-1900**
 (collaborator access), and the surface **MOTIR-1785**'s E2E + acceptance video walk.
 
-> **⚠️ READ §0.1's v5 ROW FIRST.** As of 2026-09-10 this asset is **HOSTED-ONLY and SILENT**: the
-> board draws panels **0 · 1 · 1b · 2 · 8** and nothing else. §5's access PROMPT and §6's technical
-> path are superseded — their sections are KEPT, each opening with a box saying what left, where it
-> went, and which of their rules are still live. **Panel numbers 3–7 are retired and not reused**,
-> so every existing citation of them still resolves. A reader arriving from MOTIR-1782 or MOTIR-1900
-> looking for the connect prompt should start at §0.1.
+> **⚠️ READ §0.1's v6 ROW FIRST.** As of 2026-09-10 this asset is **HOSTED-ONLY and SILENT**: the
+> board draws panels **0 · 1 · 1b · 2 · 8 · 9** and nothing else. §5's access PROMPT and §6's
+> technical path are superseded — their sections are KEPT, each opening with a box saying what left,
+> where it went, and which of their rules are still live. **Panel numbers 3–7 are retired and not
+> reused**, so every existing citation of them still resolves. A reader arriving from MOTIR-1782 or
+> MOTIR-1900 looking for the connect prompt should start at §0.1.
+>
+> **⚠️ AND v6 ADDS THE POPULATION THIS STEP IS NOT FOR — read §7b before building anything that
+> renders the step.** A project whose repository set arrived ALREADY SETTLED — every row
+> `connected`, because the repositories are the organisation's and onboarding connected them — gets
+> **no step at all**: the canvas has the whole pane. Until v6 this asset declared that population
+> IMPOSSIBLE (§4's panel-2 table said `connected` _"cannot occur"_), while the shipped surface
+> rendered the step for it on every approval. §7b draws the absence; §4's table row is corrected in
+> place; §2 carries the code read that settles it.
 
 - **Asset of record:** [`repository-set.mock.html`](./repository-set.mock.html) — the source of
   truth, built from the real design system. Its `.png` export
@@ -35,18 +43,35 @@ design/repository-set/repository-set.mock.html` — viewport **1200 × 900** at
   (its render of the asset at `HEAD` was byte-identical to the committed PNG), so the whole
   difference between the old export and this one is this revision's diff and none of it is
   environment drift. The committed height fell from **20176** to **11496** — five panels' worth.
+- **v6 render settings for `repository-set.png`:** the same command and the same viewport
+  **1200 × 900** at `deviceScaleFactor: 2`, exporting **2400 × 15274**. The exporter's baseline
+  verdict was again **EXACT**, so the whole difference between the v5 export and this one is Panel 9
+  and none of it is environment drift. The committed height rose from **11496** to **15274** — one
+  panel's worth. This surface ships no `<name>.dark.png`, so one board is the complete set.
 - **Scope:** pixels and copy only. No React, no route, no `en.json` entries — those are
-  MOTIR-1782's / MOTIR-1900's / MOTIR-1939's.
+  MOTIR-1782's / MOTIR-1900's / MOTIR-1939's. **v6 adds no code and no strings either**: it
+  SPECIFIES `titleMixed` / `promiseMixed` (§10) and the draw predicate (§7b), and MOTIR-5049 builds
+  them.
 
 ---
 
 ## 0. The answer in one line
 
-**Motir hosts your code — for everyone. Then Motir gets you access to it, and tells you it did.**
+**When Motir is establishing code, it hosts it — for everyone; then it gets you access and tells you
+it did. When there is nothing to establish, this surface is not there.**
 One sentence and one button to say yes; the collaborator invitation goes out with the repositories;
 and the state that follows **reports which account it went to**. Nothing on this surface asks the
 user anything about repositories, because by the time they are standing here the product already
 knows.
+
+> **⚠️ v6 — the first clause used to read _"Motir hosts your code — for everyone"_, and the
+> conditional in front of it is the whole of this revision.** _For everyone_ was answering the
+> question **v2** got wrong — whether a founder is asked to curate a repository set — and about that
+> question it is still right: no user, technical or not, is offered a choice here. It was never
+> meant to answer _"does this surface appear for every project?"_, and it was read that way, because
+> an unconditional sentence at the top of an asset is read as the asset's precondition. For a
+> project whose code is its ORGANISATION's, _Motir hosts your code_ is simply false — and it was the
+> sentence on screen. **§7b is the population the conditional names.**
 
 **v5 removed two things and moved neither of them into a new corner of this step.** The access
 PROMPT went, because the invitation is sent at establish. The technical path — "I already have
@@ -58,18 +83,44 @@ code", the rows, the roles, the derivation's "why", the full per-row state machi
 
 ## 0.1 · Revision history — this asset has been re-scoped THREE times, and all three are recorded
 
-| Version                | What it drew                                                                                           | Why it changed                                                                                                                       |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **v1**                 | One question: "where should your code live?", one choice                                               | The repo count is decided by the architecture, not by the user — a single choice cannot express a set                                |
-| **v2**                 | The derived set, as editable rows, as the default surface                                              | Yue at design review: **too technical.** A founder cannot judge whether three repositories is right — `notes.html` #151, second time |
-| **v3**                 | "Motir will host your code" as the default; the rows behind "I already have code"                      | Right shape, wrong era — see below                                                                                                   |
-| **v4 (this revision)** | Same default, plus the **access step**; the account-creation branch deleted; the main line re-inverted | The ADR's ownership amendment (MOTIR-1893) + the access gap it opened (MOTIR-1900) + drawing a post-Epic-9 audience as today's user  |
-| **v5 (current)**       | HOSTED-ONLY and SILENT — panels 0, 1, 1b, 2 and 8; §5 and §6 superseded; `created` REPORTS             | MOTIR-4753 gave the repository question to ONBOARDING in September; nothing swept this asset — MOTIR-5011                            |
+| Version                | What it drew                                                                                                                     | Why it changed                                                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **v1**                 | One question: "where should your code live?", one choice                                                                         | The repo count is decided by the architecture, not by the user — a single choice cannot express a set                                |
+| **v2**                 | The derived set, as editable rows, as the default surface                                                                        | Yue at design review: **too technical.** A founder cannot judge whether three repositories is right — `notes.html` #151, second time |
+| **v3**                 | "Motir will host your code" as the default; the rows behind "I already have code"                                                | Right shape, wrong era — see below                                                                                                   |
+| **v4 (this revision)** | Same default, plus the **access step**; the account-creation branch deleted; the main line re-inverted                           | The ADR's ownership amendment (MOTIR-1893) + the access gap it opened (MOTIR-1900) + drawing a post-Epic-9 audience as today's user  |
+| **v5**                 | HOSTED-ONLY and SILENT — panels 0, 1, 1b, 2 and 8; §5 and §6 superseded; `created` REPORTS                                       | MOTIR-4753 gave the repository question to ONBOARDING in September; nothing swept this asset — MOTIR-5011                            |
+| **v6 (current)**       | **Panel 9 — a SETTLED set draws NO step**; panel 1 gains the MIXED-set arm; panel 2's `connected` _"cannot occur"_ row corrected | v5 removed the step's ability to PRODUCE a `connected` row and read that as the step never being SHOWN one — MOTIR-5050              |
 
 **⚠️ v4's row still says "(this revision)", and it is left standing rather than corrected.** The
 rows are the record of what each revision decided, and editing an earlier one to keep a label
 accurate is how a revision history stops being evidence. Read the LAST row as the current revision;
-v5 is it.
+v6 is it. (v5's row lost only its `(current)` marker, for the same reason: the marker is not part of
+what that revision decided.)
+
+### Why v5 left this gap — the distinction it turned on (kept, because the next reviser will face it)
+
+v5 was ten hours old when this was found, and it was not careless: it re-read the composed components
+file by file, diffed the token block key by key, and corrected a stale _"the diff is empty"_ line.
+The gap is one inference, and it is a good inference that does not hold.
+
+**v5 removed the step's ability to PRODUCE a `connected` row.** The technical path — _"I already have
+code"_, the rows, the per-row picker — left for onboarding (MOTIR-5014), and `connected` was the
+state that path wrote. So _"nothing is adopted here"_ became true, and panel 2's table recorded it as
+`connected` **cannot occur**.
+
+**What does not follow is that the step is never SHOWN a `connected` row.** The step does not own the
+set; it RENDERS one. Rows reach `connected` through doors this step has never been part of —
+onboarding's own connect step, and the Repositories room's `Add repository`
+(`lib/services/organizationRepoService.ts`, which writes `state: 'connected'` +
+`seedSource: 'organization'`). **Removing a WRITER of a state does not remove that state from the
+READ.**
+
+**The tell is grammatical, and worth carrying:** _"cannot occur"_ in a state table is a claim about
+the whole system, but it is almost always written while reasoning about one component's own
+transitions. When a revision removes a path, the honest entry is _"this surface no longer produces
+it"_ — which leaves the reader asking what happens when it arrives anyway, instead of answering that
+question for them by omission.
 
 ### Why v2 was wrong (kept, because it is the load-bearing product rule)
 
@@ -352,6 +403,51 @@ adds the `IdentityHeader` that panel 3b already mirrored from
 The route header, the box, the `grid-cols-[1fr_22rem]` split and every element of the rail are
 **mirrored markup**, not stylized stand-ins. **The step is the only new surface.**
 
+### ⚠️ v6 · WHAT THE STEP RENDERS FOR A SETTLED SET — read off `origin/main` `000b2f56b`
+
+v6 draws an ABSENCE, which cannot be rendered from shipped code: the whole finding is that the
+surface appears where it should not. So what was established is **what the shipped step does for the
+settled population today**, element by element, from the components that decide it. Four elements
+render, and **three of them state something false about a repository the organisation owns**:
+
+| Element                                                                            | Gate in shipped code                                                   | For an all-`connected` set                                                                       |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `SectionLabel` **"Your project's code"** + `<h2>` **"Motir will host your code"**  | **NONE — rendered unconditionally**, outside every `state` branch      | **FALSE.** Motir hosts nothing here                                                              |
+| ✅ **"Your code is ready"**                                                        | `state === 'ready'`                                                    | TRUE, and the only true line of the four                                                         |
+| 🔒 **"It's yours. Motir keeps it safe and private — move it to your own GitHub…"** | `state === 'idle' \|\| state === 'ready'`                              | **FALSE, and absurd** — it already IS in their own GitHub                                        |
+| ⚠️ **"Motir doesn't know your GitHub account yet"** + **Finish setting up access** | `state === 'ready'`, `AccessReport` arm B on `!login \|\| !anyInvited` | **FALSE** — a nag about access to a repository they own, four inches from _"your code is ready"_ |
+
+**Why `state` is `ready` for this population, and why arm B fires with it — the two facts that make
+the table hold together.** `defaultStateOf` returns `ready` when `rows.every(isSettled)`, and
+`isSettled` counts `connected`; so a set that ARRIVED settled is indistinguishable, to the step, from
+one it just finished establishing. Arm B then fires because `anyInvited` is false, and that is not an
+accident of a fixture — it is **guaranteed by the write path**: `needsCollaboratorInvite` is
+`state === 'created'` ONLY, so a `connected` row is never invited to, has no `admin` collaborator
+record, and `deriveAccessState(null)` returns `not_invited`. The product's own comment says why
+inviting would be wrong: _"a `connected` row is a repository the user ALREADY owns and granted Motir;
+inviting anyone to it is at best a no-op and at worst Motir handing out access to a repository that
+was never its to share."_ **So the two lines do not merely co-occur — each is correct about its own
+question, and the pair is what is false.**
+
+**⚠️ THE CO-OCCURRENCE WAS SETTLED FROM THE WRITE PATH, NOT FROM AN ASSEMBLED FIXTURE — deliberately.**
+The claim above is that four elements render TOGETHER for one population, which is exactly the claim a
+hand-built fixture gets wrong: its fields are each individually settable, and a fixture can compose a
+state the product cannot be in. Reading the writer that sets `access.state` is the stronger
+instrument here, and it is what the table rests on.
+
+**No new render was shot for v6 either, and the reason is different from v5's.** A faithful render
+needs a seeded tenant holding an organisation-connected repository AND an approved plan — the
+`pnpm build` + `next start` + seed route of §2's original renders — and what it would show is the
+table above, which the gates settle without it. What a render CANNOT show is the thing v6 decides,
+because no shipped code path produces it. **The cheap disagreement is available to a reviewer:** every
+row names its gate, so one `grep` per row checks it.
+
+**⚠️ AND THE ROW COUNT IS THE OTHER HALF, AND IT IS NOT IN THIS COMPONENT.** The step never asks
+whether it should be on screen — `app/(authed)/plans/[id]/page.tsx` decides, and its condition is
+`repoView && projectKey && repoView.set.rows.length > 0`: a row COUNT, reading neither `state` nor
+`seedSource`. That is MOTIR-5049's fix and not this asset's to make; it is named here because §7b's
+rule is stated as a predicate over rows, and the place that predicate has to LAND is that line.
+
 ---
 
 ## 3. Placement and the access path
@@ -446,7 +542,8 @@ path renders only what the user can act on:
 | `created` · **arm A** (identity known) | **"Your code is ready"** + the ownership promise + the `IdentityHeader` naming the invited account       | **Go to my backlog** · _Open the invitation_ · _Use a different account_ |
 | `created` · **arm B** (no identity)    | the same, plus one `role="status"` line: _"Motir doesn't know your GitHub account yet"_ + its door       | **Go to my backlog** · _Finish setting up access_                        |
 | `failed`                               | **"Motir couldn't finish setting up your code"** + what it costs (nothing yet)                           | **Try again**                                                            |
-| `proposed` · `connected` · `skipped`   | **cannot occur** — nothing is proposed for approval, nothing is adopted, and there is nothing to decline | —                                                                        |
+| `proposed`                             | **cannot occur** — nothing is proposed for approval on this path                                         | —                                                                        |
+| `connected` · `skipped` (v6)           | **THE STEP IS NOT DRAWN.** This path no longer PRODUCES either state, but it is shown them — see **§7b** | none; the canvas has the pane                                            |
 
 **No per-repository progress, no repository name in the error, no GitHub status code** on this path.
 The failure copy names the consequence in the user's terms — _"Your plan is safe in your backlog.
@@ -714,6 +811,130 @@ now, in both eras. MOTIR-5015 does not need a seam here, and should not build on
 
 ---
 
+## 7b. Panel 9 (v6) — a SETTLED set draws NO STEP: the canvas has the whole pane
+
+> **Numbering.** This is the ESTABLISH-STEP surface's panel 9. §17's _Panel 9_ belongs to the
+> REPOSITORIES-ROOM surface (`repositories-room.mock.html`), which numbers its own panels 5–9. The two
+> numbering spaces are per-surface, as the §0 index implies; this note is here so a reader arriving at
+> _"panel 9"_ from either direction lands in the right one. Panels 3–7 stay retired and unreused.
+
+### The answer in one line
+
+**A project whose repository set has nothing left to establish does not see this surface at all.** No
+band, no residue, no collapsed one-liner: the canvas fills the pane, and the only thing the reader is
+told about their code is the review rail's own line, which is already there and already correct.
+
+### Why the step has nothing to say — the argument, not just the rule
+
+The step exists to do exactly one of two things: **ASK** Motir to establish code, or **REPORT** what
+Motir established. A row Motir will not create and did not create gives it neither. §3's own
+justification is the test: _"the default asks one thing they can answer — is it fine for Motir to host
+this?"_ For a repository the organisation already owns, that question has no referent. It is not a
+question the user can answer wrongly; it is a question about nothing.
+
+This is also why the answer is ABSENCE rather than a third state. A state would have to say something,
+and there is nothing true to say that the rail is not already saying — so any copy drawn here would be
+filler in the most expensive position on the page, directly above the thing the user just approved.
+**Part VI §4's stacking decision is untouched**: the band still takes a band and never the pane, for
+every project that has code to establish. v6 adds the population where the band's height is zero
+because the band is not there.
+
+### The PREDICATE, by name — so the card that builds it has nothing to invent
+
+**The band is drawn if and only if the set holds at least one row Motir ESTABLISHES:**
+
+```
+drawBand  ⟺  set.rows.some(r => r.state === 'proposed'  ||
+                               r.state === 'creating'  ||
+                               r.state === 'created'   ||
+                               r.state === 'failed')
+```
+
+Equivalently, and this is the form to read it in: **a set whose every row is `connected` or `skipped`
+draws no band.** Both fields are already on the wire — `ProjectRepoEstablishViewDto.set.rows[]`
+carries `state` and `seedSource` — so nothing new is computed and no new read is needed.
+
+**`state` is the discriminator, and the two plausible alternatives are both WRONG. Stated, because
+each is the kind of thing a builder picks in good faith:**
+
+| candidate                              | why NOT                                                                                                                                                                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set.ownership` (`'user'`/`'motir'`)   | **Null for exactly this population.** Its own doc says `ownership` / `targetAccount` are _"null until the establish step decides"_ — and a settled set never ran the step, so the field is null precisely when it is needed                             |
+| `isOrganizationSeedSource(seedSource)` | **Too narrow, and it answers a different question.** A `skipped` row is not organisation-sourced and still leaves nothing to establish; a `connected` row need not be the organisation's. It IS the right predicate for CUSTODY — see the promise below |
+| `codeOutcomeOf(...) === 'ready'`       | **Cannot distinguish the two populations** — it counts `created` as settled too, so it is `ready` both for a set Motir just built (which DOES owe a report) and for one that arrived settled (which does not)                                           |
+
+**So: `state` decides whether the band APPEARS; `seedSource` decides what the band may CLAIM.** Two
+questions, two predicates, and conflating them is how the mixed set below goes wrong.
+
+### What the reader is told instead — and the answer is "the rail, and that is enough"
+
+**The review rail's existing approved-outcome line is the WHOLE answer.** For a settled set
+`codeOutcomeOf` resolves `ready`, so the rail already renders ✅ **"Your code is ready"** beneath
+_"Added N items to your backlog"_, with **View in backlog** under it. That sentence is true of an
+organisation's own repository, claims nothing about who hosts it, and is in the place a reader is
+already looking after a decision.
+
+**Nothing is added to the rail, and that is a decision.** The tempting addition is one line naming
+where the code lives. It is refused for the reason v2 was refused: it is a technical fact the reader
+did not ask for, in a rail whose job is the DECISION's outcome, and a project's repositories have a
+durable home already (`/settings/project/repositories`, which the room owns). **A reader who wants to
+know where their code is has a room for it; a reader who does not should not be told twice.**
+
+**One consequence to state plainly, because it is the cost:** a user approving a plan on a settled
+project is told nothing NEW about their code at all. That is correct — nothing new happened to it.
+
+### The MIXED set — one row Motir creates beside one the organisation owns
+
+**This shape is reachable by construction, not hypothetically.**
+`lib/services/organizationRepoService.ts` appends a row with `state: 'connected'` +
+`seedSource: 'organization'` to whatever set the project already has (it takes the set's last position
+and appends), so a project can hold an organisation row and a Motir row at once. MOTIR-5017 pins a
+test on the shape.
+
+**The band IS drawn** — there is a row to establish, so the predicate fires, and the step has a real
+question to ask. What changes is what it may claim, and the two set-wide elements are exactly the ones
+that over-claim:
+
+| element                  | today                                                                                  | v6 for a mixed set                                                                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `<h2>` **title**         | _"Motir will host your code"_ — **your code**, set-wide, and half of it is not Motir's | _"Motir will host the new code"_                                                                                   |
+| 🔒 **ownership promise** | _"It's yours. Motir keeps **it** safe and private — move **it** to your own GitHub…"_  | _"It's yours. Motir keeps **the code it hosts** safe and private — move it to your own GitHub whenever you want."_ |
+
+**Both edits are SCOPE, not information** — and that distinction is what keeps v2's rule intact. The
+panel still names **no repository, no role, no account, no count and no rows**; nothing about
+cardinality or about the set's composition reaches the reader. _"the new code"_ and _"the code it
+hosts"_ are narrower subjects for the same two sentences, not a disclosure about the set. A reader
+with an all-Motir set cannot tell the difference, which is the test a scope edit has to pass.
+
+**Why not a second paragraph explaining the split?** Because that is the v2 mistake in miniature: the
+user cannot act on it, and the honest place for _"which repositories does this project have"_ is the
+Repositories room, which already splits its sections on `isOrganizationSeedSource` — the same
+predicate, rendered where a reader went looking for it.
+
+**Which predicate scopes the promise:** `isOrganizationSeedSource(row.seedSource)`. The promise speaks
+for the rows Motir holds; a set with NO organisation row keeps v4's unscoped wording verbatim, so the
+common case is byte-identical and the narrower copy appears only where it is needed.
+
+> **⚠️ AND THE TITLE IS UNCONDITIONAL IN SHIPPED CODE TODAY — which is why this is a design decision
+> and not a copy tweak.** `<h2>{t('title')}</h2>` sits outside every `state` branch, so it asserts
+> _"Motir will host your code"_ in `working`, `ready` and `failed` alike, for every set. The settled
+> population is the case where that is simply false; the mixed set is the case where it is half true.
+> **Both are the same missing scope**, and a builder who fixes only the gate leaves the sentence
+> standing. §2's v6 table is the element-by-element read.
+
+### What this does NOT change
+
+- **Part VI §4's stacking rule** — band above, canvas below, never replaced — for every project with
+  code to establish. v6 narrows WHEN, never HOW.
+- **Panels 1, 1b, 2 and 8** for the establish population: not one pixel, except the two scoped
+  strings above, and those only on a mixed set.
+- **§5 / §6's superseded status, and the retirement of panels 3–7.**
+- **The `failed` arm stays on this surface** (§3's re-entry table): a failure is about repositories
+  this step is creating, so it is still the step's to resume — and a set holding a `failed` row is not
+  settled, so the predicate draws the band for it.
+
+---
+
 ## 8. Primitives — every element, and what it is
 
 | Element                           | Primitive                                                           | Notes                                                                                          |
@@ -807,6 +1028,8 @@ Namespace **`repositorySet`**. MOTIR-1782 / MOTIR-1900 add these to `messages/en
 | `title`              | Motir will host your code                                                                                           |
 | `lead`               | Your project's code lives with Motir, ready for your agents to start work.                                          |
 | `promise`            | **It's yours.** Motir keeps it safe and private — move it to your own GitHub whenever you want.                     |
+| `titleMixed` (v6)    | Motir will host the new code _(the `<h2>` when the set ALSO holds an organisation row — §7b)_                       |
+| `promiseMixed` (v6)  | **It's yours.** Motir keeps the code it hosts safe and private — move it to your own GitHub whenever you want.      |
 | `promiseDoor`        | How moving it works _(the link into MOTIR-711's transfer)_                                                          |
 | `continueCta`        | Continue                                                                                                            |
 | `iHaveCode`          | I already have code                                                                                                 |
@@ -893,6 +1116,11 @@ Namespace **`repositorySet`**. MOTIR-1782 / MOTIR-1900 add these to `messages/en
 | `finishHint`          | Your plan is already in the backlog. Motir will tell you which tasks are waiting on a repository.                                                               |
 | `finishSetupLink`     | Finish setting up repositories                                                                                                                                  |
 
+**Added in v6, and NEITHER IS IN `messages/en.json` YET:** `titleMixed` and `promiseMixed`, the
+mixed-set arm's two scoped strings (§7b). They are specified here and written by the card that builds
+the arm — **this design writes no `en.json` entry**, exactly as §13 says. A builder adding them owes
+the `zh` twins in the same pass.
+
 **Removed in v4:** `createForMe` ("Create for me") and `whereRoleLives` (the `Segmented`'s group
 label) — the control they belonged to no longer exists. `failedLimit` is replaced by
 `failedDeclined`, because the repository limit it named was the user's account limit and creation no
@@ -921,6 +1149,7 @@ looking at.
 | Key                                                                        | Where in v5                                                                                         |
 | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `overline` · `title` · `lead` · `promise` · `promiseDoor` · `continueCta`  | panel 1 / 1b — the whole default screen                                                             |
+| `titleMixed` · `promiseMixed` (v6, **NOT YET IN THE CATALOG**)             | panel 1 — the MIXED-set arm ONLY (§7b); an all-Motir set keeps `title` / `promise` byte for byte    |
 | `working` · `workingDetail`                                                | panel 2 `creating`                                                                                  |
 | `ready` · `goToBacklog`                                                    | panel 2 `created`, BOTH arms                                                                        |
 | `identityCaption` · `useOtherAccount` · `invitedDetail` · `openInvitation` | panel 2 `created` **arm A** — the report                                                            |
