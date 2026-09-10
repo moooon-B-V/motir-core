@@ -403,6 +403,13 @@
         background: var(--el-tint-mint);
         color: var(--el-text-strong);
       }
+      /* MOTIR-4944 — copied from `design/billing/ci-line.mock.html`, the sibling
+         this asset shares its whole `.gico` tint set with. The CI glyph carried
+         `gico ci` and took the base tint, not the peach one its neighbour gives it. */
+      .gico.ci {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
       .gico.ai {
         background: var(--el-tint-lavender);
         color: var(--el-text-strong);

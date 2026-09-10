@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   connectedNotInSet,
+  organizationConnected,
   splitRoomSections,
   summarizeRepositories,
 } from '@/lib/projectRepos/roomSections';
@@ -12,9 +13,10 @@ import type {
 } from '@/lib/dto/projectRepos';
 
 /** The provisioning organisation, as `ProjectRepoRoomViewDto.hostOwner` carries
- *  it. Every call below passes it, because `splitRoomSections` /
- *  `summarizeRepositories` require it — a caller that cannot say who owns the
- *  layered repositories cannot compute the organisation's section. */
+ *  it. ⚠️ MOTIR-4954: `splitRoomSections` and `summarizeRepositories` no longer
+ *  take it — they read the project's links, whose ownership is on the row — so it
+ *  is passed only to `organizationConnected`, the predicate that still classifies
+ *  a LAYERED repository for the callers outside this room. */
 const HOST_OWNER = 'motir-projects';
 
 // THE ROOM'S SECTION SPLIT (MOTIR-3126) — pure, so it is ruled on here rather than
@@ -76,196 +78,164 @@ describe('connectedNotInSet', () => {
 // `Used by <project>`. The two surfaces answered one question two ways, and each
 // was internally consistent, which is why neither page's own tests could see it.
 describe('splitRoomSections', () => {
-  it('puts the LAYERED repositories in the organisation section, beside the links', () => {
-    const { fromOrganization } = splitRoomSections(
-      [orgRow('picked')],
-      [connected('layered')],
-      true,
-      HOST_OWNER,
-    );
-    expect(fromOrganization.map((e) => e.kind)).toEqual(['link', 'domain']);
-    // LINKS FIRST, then the layered half — a stable order, and the same one the
-    // organisation inventory composes its `Used by` list in.
-    expect(fromOrganization.map((e) => e.id)).toEqual(['row-picked', 'acme-inc/layered']);
-  });
+  // ⚠️ RE-POINTED BY MOTIR-4954. These cases used to assert that a LAYERED
+  // repository lands in the organisation section beside the links, that a
+  // set-less project's section is therefore not empty, and that the ladder's own
+  // boolean — never a count — decides whether layering happens at all. All three
+  // were true of the merged shape and all three are now the opposite of the
+  // product's contract: a project-scoped page draws the project's LINKS. So they
+  // are re-pointed at the new rule rather than deleted, and each says what it now
+  // holds.
 
-  it('⚠️ THE DEFECT, as one assertion: a set-less project`s section is NOT empty', () => {
-    // Motir's own project on the day this was filed: no repository SET, seven
-    // repositories connected to the organisation. The section headed `From your
-    // organisation` drew empty above all seven.
-    const { fromOrganization, motirHosted } = splitRoomSections(
-      [],
-      [connected('motir-core'), connected('motir-ai')],
-      true,
-      HOST_OWNER,
-    );
-    expect(fromOrganization.map((e) => e.kind)).toEqual(['domain', 'domain']);
+  it('⚠️ NOW HOLDS THE INVERSE: a set-less project`s section is EMPTY, and that is the card', () => {
+    // The exact fixture the old `⚠️ THE DEFECT` case used — Motir's own project
+    // on the day MOTIR-4820 was filed: no repository SET, repositories connected
+    // to the organisation. That card made the section draw all of them; this one
+    // makes it draw none, because they are not this project's.
+    //
+    // ⚠️ AND THE CONNECTED LIST IS NOT AN ARGUMENT ANY MORE, which is the
+    // strongest form this assertion can take: there is no parameter through which
+    // an organisation repository could reach this page's rows.
+    const { fromOrganization, motirHosted } = splitRoomSections([]);
+    expect(fromOrganization).toEqual([]);
     expect(motirHosted).toEqual([]);
   });
 
-  it('⚠️ reads the LADDER`s boolean, never a count — a project answered by its set alone', () => {
-    // The counterfactual that keeps `layersConnected` honest. A project born in
-    // Motir is answered by its set completely, so nothing is layered even if the
-    // caller hands over a non-empty list.
-    const { fromOrganization } = splitRoomSections(
-      [],
-      [connected('motir-core')],
-      false,
-      HOST_OWNER,
-    );
-    expect(fromOrganization).toEqual([]);
+  it('draws a LINK, and every entry it draws is one', () => {
+    const { fromOrganization } = splitRoomSections([orgRow('picked')]);
+    expect(fromOrganization.map((e) => e.kind)).toEqual(['link']);
+    expect(fromOrganization.map((e) => e.id)).toEqual(['row-picked']);
   });
 
   it('keeps a Motir-HOSTED row out of the organisation section', () => {
-    // `seedSource` still does this job, and only this job: it says which set rows
-    // are links and which are rows Motir created. A hosted row in the org section
-    // would lose its takeover, which is the only action it has.
-    const { fromOrganization, motirHosted } = splitRoomSections(
-      [row({ name: 'hosted' }), orgRow('picked')],
-      [],
-      true,
-      HOST_OWNER,
-    );
+    // `seedSource` still does this job, and now it is the ONLY job the split
+    // consults: it says which set rows are links and which are rows Motir
+    // created. A hosted row in the org section would lose its takeover, which is
+    // the only action it has.
+    const { fromOrganization, motirHosted } = splitRoomSections([
+      row({ name: 'hosted' }),
+      orgRow('picked'),
+    ]);
     expect(motirHosted.map((r) => r.id)).toEqual(['row-hosted']);
     expect(fromOrganization.map((e) => e.id)).toEqual(['row-picked']);
   });
 
   it('the split over the SET is total — no row is lost and none is duplicated', () => {
     const rows = [row({ name: 'a' }), orgRow('b'), row({ name: 'c' })];
-    const { fromOrganization, motirHosted } = splitRoomSections(rows, [], true, HOST_OWNER);
-    const links = fromOrganization.filter((e) => e.kind === 'link');
-    expect(links.length + motirHosted.length).toBe(rows.length);
+    const { fromOrganization, motirHosted } = splitRoomSections(rows);
+    expect(fromOrganization.length + motirHosted.length).toBe(rows.length);
   });
 });
 
 describe('summarizeRepositories', () => {
-  it('counts a connected repository as YOURS — it is', () => {
-    // The header-level form of the defect: a summary read off the set alone
-    // reports `0 yours` for a project holding four repositories of its own.
-    expect(summarizeRepositories([], [connected('a'), connected('b')], HOST_OWNER)).toEqual({
-      moving: 0,
-      hosted: 0,
-      yours: 2,
-    });
+  // ⚠️ RE-POINTED BY MOTIR-4954. The old first case asserted that a connected
+  // repository counts as `yours` — "it is": the user owns it, Motir never bills
+  // its CI, there is nothing to move. Every clause of that is still true about
+  // the repository and the count was still wrong for this HEADER, which sits
+  // above a list of the PROJECT's repositories. A number above a list must count
+  // the things in that list.
+
+  it('⚠️ NOW HOLDS THE INVERSE: an organisation repository this project has not added counts NOWHERE', () => {
+    // §18.2's observed reading, as one assertion. The page reported
+    // `0 moving · 0 hosted by Motir · 6 yours` on a project holding NO links —
+    // six being the size of the organisation. It now reports three zeroes, which
+    // is Panel 9's drawn state.
+    expect(summarizeRepositories([])).toEqual({ moving: 0, hosted: 0, yours: 0 });
   });
 
   it('counts the three ownerships separately — they are legal at once', () => {
-    const counts = summarizeRepositories(
-      [
-        row({ name: 'hosted' }),
-        row({ name: 'moving', takeover: 'transfer_pending' }),
-        row({ name: 'taken', takeover: 'done' }),
-        row({ name: 'brought', state: 'connected' }),
-      ],
-      [connected('own')],
-      HOST_OWNER,
-    );
+    const counts = summarizeRepositories([
+      row({ name: 'hosted' }),
+      row({ name: 'moving', takeover: 'transfer_pending' }),
+      row({ name: 'taken', takeover: 'done' }),
+      row({ name: 'brought', state: 'connected' }),
+    ]);
     // One row moving must never make the whole project read as "moving".
-    expect(counts).toEqual({ moving: 1, hosted: 1, yours: 3 });
+    // `taken` and `brought` are both `yours` by §18.4: a completed takeover and
+    // an organisation-owned link are the same answer to "who owns it now".
+    expect(counts).toEqual({ moving: 1, hosted: 1, yours: 2 });
   });
 
   it('does not count a FAILED takeover as moving — a refused request is not in flight', () => {
-    expect(summarizeRepositories([row({ name: 'x', takeover: 'failed' })], [], HOST_OWNER)).toEqual(
-      {
-        moving: 0,
-        hosted: 1,
-        yours: 0,
-      },
-    );
-  });
-});
-
-// ⚠️ A REPOSITORY MOTIR HOSTS IS NOT THE ORGANISATION'S, AND IT IS NOT `yours`
-// (bug MOTIR-4867).
-//
-// `connected` is `githubRepoRepository.listByWorkspace`, filtered on
-// `github_repo.workspace_id` and nothing else — the read that answers *can this
-// workspace dispatch into it*, which MOTIR-1931 widened on purpose so a
-// repository Motir CREATES for a workspace is a legal `targetRepo`. The room read
-// it as *whose is it*, so a Motir-hosted repository the current project holds no
-// `project_repository` row for was drawn under `From your organisation` and
-// counted in `yours` — whose own promise is *the user owns it, Motir never bills
-// its CI, and there is nothing to move*, all three inverted.
-//
-// Ruled on here because the classification is PURE and is applied on both sides
-// of the wire: the server seeds the room with it, and the island re-applies it on
-// every refetch. `hostOwner` is threaded in rather than read, so the two sides
-// cannot answer it differently.
-describe('a repository under the PROVISIONING organisation', () => {
-  it('is not counted in `yours` — the summary`s own promise is false of it', () => {
-    // AC1. Two layered repositories, one of each ownership, and nothing else on
-    // the project. `yours` is the moooon-B-V one alone.
-    const counts = summarizeRepositories(
-      [],
-      [hostedConnected('motir'), orgConnected('motir-core')],
-      HOST_OWNER,
-    );
-    expect(counts).toEqual({ moving: 0, hosted: 0, yours: 1 });
-  });
-
-  it('is not an entry of `From your organisation` — moooon connected nothing there', () => {
-    // AC2, the same input. The section holds the organisation's repository alone.
-    const { fromOrganization } = splitRoomSections(
-      [],
-      [hostedConnected('motir'), orgConnected('motir-core')],
-      true,
-      HOST_OWNER,
-    );
-    expect(fromOrganization.map((e) => e.id)).toEqual(['moooon-B-V/motir-core']);
-  });
-
-  it('⚠️ does NOT move into the hosted COUNT — that section draws rows, and it has none', () => {
-    // The half of the fix that is a decision rather than a subtraction. `hosted`
-    // is the count of what `Hosted by Motir` DRAWS, and it draws
-    // `project_repository` rows carrying the takeover saga. Counting a mirror row
-    // with no link would put a number above a section that does not contain it —
-    // and the section's hint promises a `Move to my GitHub` such a row cannot
-    // offer.
-    expect(summarizeRepositories([], [hostedConnected('motir')], HOST_OWNER)).toEqual({
+    expect(summarizeRepositories([row({ name: 'x', takeover: 'failed' })])).toEqual({
       moving: 0,
-      hosted: 0,
+      hosted: 1,
       yours: 0,
     });
   });
 
+  it('⚠️ a completed takeover moves BUCKET without moving SECTION', () => {
+    // §18.4's one genuinely surprising definition, and the reason the summary and
+    // the split are asserted against ONE fixture here. The row counts as `yours`
+    // — Motir no longer owns it or pays its CI — while it stays in the hosted
+    // SECTION, where the takeover history and its finished state stay legible.
+    // The section answers "where did this come from"; the count answers "who owns
+    // it now". Reading either off the other is the bug this pins.
+    const rows = [row({ name: 'taken', takeover: 'done' })];
+    expect(summarizeRepositories(rows).yours).toBe(1);
+    expect(splitRoomSections(rows).motirHosted.map((r) => r.id)).toEqual(['row-taken']);
+    expect(splitRoomSections(rows).fromOrganization).toEqual([]);
+  });
+});
+
+// ⚠️ A REPOSITORY MOTIR HOSTS IS NOT THE ORGANISATION'S (bug MOTIR-4867),
+// RE-POINTED BY MOTIR-4954.
+//
+// `connected` is `githubRepoRepository.listByWorkspace`, filtered on
+// `github_repo.workspace_id` and nothing else — the read that answers *can this
+// workspace dispatch into it*, which MOTIR-1931 widened on purpose so a
+// repository Motir CREATES for a workspace is a legal `targetRepo`. Read as
+// *whose is it*, a Motir-hosted repository was drawn under `From your
+// organisation` and counted in `yours` — whose own promise is *the user owns it,
+// Motir never bills its CI, and there is nothing to move*, all three inverted.
+//
+// ⚠️ THE ROOM NO LONGER ASKS THIS QUESTION AT ALL, which is a stronger fix than
+// the classification was: it draws links, and a link's ownership comes from its
+// own row. So these cases move OFF `splitRoomSections` / `summarizeRepositories`
+// and onto `organizationConnected` itself, which is the shared predicate and is
+// still live — `lib/services/projectRepoRoomService.ts` composes the room view
+// with its sibling `connectedNotInSet`, and `hostOwnershipAgreement.test.ts` pins
+// it against the organisation inventory. Deleting these cases with the caller
+// would leave that predicate unguarded on the way to MOTIR-4955, which is the
+// card that retires it.
+describe('a repository under the PROVISIONING organisation', () => {
+  it('is not the organisation`s — the classification MOTIR-4867 added, at its own door', () => {
+    expect(
+      organizationConnected([hostedConnected('motir'), orgConnected('motir-core')], HOST_OWNER).map(
+        (r) => r.repoRef,
+      ),
+    ).toEqual(['moooon-B-V/motir-core']);
+  });
+
   it('matches the owner CASE-INSENSITIVELY — a GitHub login is, and the value is configuration', () => {
-    // AC3, first half. `provisioningOrgLogin()` returns whatever an operator
-    // typed into `GITHUB_FALLBACK_ORG`; the same comparison `isMotirOwnedRepo`
-    // makes for the CI meter's §5.1 gate.
-    const connectedRepos = [hostedConnected('motir', 'MOTIR-Projects')];
-    expect(summarizeRepositories([], connectedRepos, 'motir-projects').yours).toBe(0);
-    expect(splitRoomSections([], connectedRepos, true, 'motir-projects').fromOrganization).toEqual(
-      [],
-    );
+    // `provisioningOrgLogin()` returns whatever an operator typed into
+    // `GITHUB_FALLBACK_ORG`; the same comparison the CI meter's §5.1 gate makes.
+    expect(
+      organizationConnected([hostedConnected('motir', 'MOTIR-Projects')], 'motir-projects'),
+    ).toEqual([]);
   });
 
   it('⚠️ classifies NOTHING when `hostOwner` is null — a deployment that cannot provision hosts nothing', () => {
-    // AC3, second half, and the counterfactual that keeps this rule from
-    // narrowing a self-hosted deployment's room. With no `GITHUB_FALLBACK_ORG`
-    // there is no provisioning org, so the classification is byte-for-byte what
-    // it was before this rule existed: both entries are the organisation's.
-    const connectedRepos = [hostedConnected('motir'), orgConnected('motir-core')];
-    expect(summarizeRepositories([], connectedRepos, null)).toEqual({
-      moving: 0,
-      hosted: 0,
-      yours: 2,
-    });
+    // The counterfactual that keeps this rule from narrowing a self-hosted
+    // deployment. With no `GITHUB_FALLBACK_ORG` there is no provisioning org, so
+    // the answer is byte-for-byte what it was before the rule existed.
     expect(
-      splitRoomSections([], connectedRepos, true, null).fromOrganization.map((e) => e.id),
+      organizationConnected([hostedConnected('motir'), orgConnected('motir-core')], null).map(
+        (r) => r.repoRef,
+      ),
     ).toEqual(['motir-projects/motir', 'moooon-B-V/motir-core']);
   });
 
   it('reads the owner off `repoRef`, and degrades honestly on a ref with no owner', () => {
     // `ProjectRepoConnectedDto` carries no `owner` column — its own doc says why
-    // — so the owner is the `repoRef` segment, cut the same way
-    // `OrganizationRepositories.ownerPrefix` cuts it for the row a reader sees. A
-    // ref that somehow holds no `/` is nobody's provisioning org, so it stays.
+    // — so the owner is the `repoRef` segment. A ref that somehow holds no `/` is
+    // nobody's provisioning org, so it stays.
     const bare: ProjectRepoConnectedDto = {
       name: 'motir',
       repoRef: 'motir',
       defaultBranch: 'main',
     };
-    expect(summarizeRepositories([], [bare], HOST_OWNER).yours).toBe(1);
+    expect(organizationConnected([bare], HOST_OWNER)).toEqual([bare]);
   });
 });
 

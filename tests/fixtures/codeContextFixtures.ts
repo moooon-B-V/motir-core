@@ -1,6 +1,6 @@
 import { adminDb } from '../helpers/adminDb';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
-import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import type { WorkItemFixture } from './workItemFixtures';
 
 // GIVING A PROJECT CODE CONTEXT, in a fixture (Story MOTIR-1754 · MOTIR-1767).
@@ -31,6 +31,16 @@ import type { WorkItemFixture } from './workItemFixtures';
  * Rows are added in the grant mirror's own display order (owner asc, name asc),
  * so a suite that was asserting positionally against the workspace grant keeps
  * the order it had.
+ *
+ * ⚠️ IT WRITES AN *ESTABLISHED* ROW, THROUGH `linkProjectRepo`, AND THAT IS NOT A
+ * SHORTCUT PAST THE SERVICE. `projectRepoSetService.addRow` records a PROPOSED
+ * row — an intent — and `resolveProjectCodeContext` filters proposals out
+ * (`isEstablishedState`). A fixture built on `addRow` therefore leaves the
+ * project code-BLIND at the exact layer this helper exists to feed, and the
+ * symptom is an empty envelope rather than a missing link: the same silent
+ * failure the note above describes, one rung down. `linkProjectRepo` is the
+ * shared helper `main` uses for this, so there is ONE way a fixture states the
+ * link.
  */
 export async function linkAllWorkspaceReposIntoProject(ctx: {
   userId: string;
@@ -42,12 +52,13 @@ export async function linkAllWorkspaceReposIntoProject(ctx: {
     orderBy: [{ owner: 'asc' }, { name: 'asc' }],
   });
   for (const repo of repos) {
-    const row = await projectRepoSetService.addRow(
-      ctx.projectId,
-      { role: 'web', name: repo.name },
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    );
-    await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
+    await linkProjectRepo({
+      workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
+      githubRepoId: repo.id,
+      name: repo.name,
+      role: 'web',
+    });
   }
 }
 
@@ -78,9 +89,17 @@ export async function connectAndLinkRepo(
     where: { workspaceId: fx.workspaceId, owner: 'acme', name },
   });
 
-  // THE SECOND HALF — the project's own set row, realized against that mirror.
-  const row = await projectRepoSetService.addRow(fx.projectId, { role: 'web', name }, fx.ctx);
-  await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
+  // THE SECOND HALF — the project's own set row, ESTABLISHED against that mirror.
+  // See the note on `linkAllWorkspaceReposIntoProject` for why it is not
+  // `addRow`: that writes a PROPOSED row, and a proposal is filtered out of every
+  // code-context read.
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
+    role: 'web',
+  });
 
   return { githubRepoId: repo.id, repoRef: `acme/${name}` };
 }

@@ -3,9 +3,10 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '@/lib/db';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -29,7 +30,7 @@ import { organizationIdOf } from '../helpers/organizationOf';
 //      path reaches the index through the shipped chokepoint with the shipped
 //      payload, proved by driving BOTH producers and comparing what they emit.
 //   3. AI grounding is pinned — and the two halves now answer DIFFERENTLY.
-//      `resolveCodeContext` is PROJECT-scoped as of MOTIR-4653 (the adoption
+//      `resolveProjectCodeContext` is PROJECT-scoped as of MOTIR-4653 (the adoption
 //      this guard was written to defer, arriving on its own card with its own
 //      decision — `code-graph-index-fan-out.md`, MOTIR-2029); its assertions are
 //      INVERTED rather than deleted, so the change is met head-on by the next
@@ -161,7 +162,7 @@ describe('the index chain got no new code', () => {
 
 // ── 3 · AI grounding: the envelope is project-scoped, the index job is not ──
 
-describe('resolveCodeContext is project-scoped and codeGraphIndexService is unchanged', () => {
+describe('resolveProjectCodeContext is project-scoped and codeGraphIndexService is unchanged', () => {
   /** Connect a repo to the workspace's OWN installation — the 7.10.3 mirror the
    *  code-context resolver reads. */
   async function connectRepo(workspaceId: string, name: string): Promise<string> {
@@ -207,14 +208,17 @@ describe('resolveCodeContext is project-scoped and codeGraphIndexService is unch
     const fx = await makeWorkItemFixture();
     const webId = await connectRepo(fx.workspaceId, 'acme-web');
     await connectRepo(fx.workspaceId, 'acme-api');
-    const row = await projectRepoSetService.addRow(
-      fx.projectId,
-      { role: 'web', name: 'acme-web' },
-      fx.ctx,
-    );
-    await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: webId } });
+    // ⚠️ ESTABLISHED, through `linkProjectRepo` — `addRow` writes a PROPOSED row
+    // and `resolveProjectCodeContext` filters proposals out.
+    await linkProjectRepo({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      githubRepoId: webId,
+      name: 'acme-web',
+      role: 'web',
+    });
 
-    const context = await resolveCodeContext({
+    const context = await resolveProjectCodeContext({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -231,12 +235,13 @@ describe('resolveCodeContext is project-scoped and codeGraphIndexService is unch
     const fx = await makeWorkItemFixture();
     const webId = await connectRepo(fx.workspaceId, 'acme-web');
     const siblingApiId = await connectRepo(fx.workspaceId, 'sibling-api');
-    const ownRow = await projectRepoSetService.addRow(
-      fx.projectId,
-      { role: 'web', name: 'acme-web' },
-      fx.ctx,
-    );
-    await adminDb.projectRepo.update({ where: { id: ownRow.id }, data: { githubRepoId: webId } });
+    await linkProjectRepo({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      githubRepoId: webId,
+      name: 'acme-web',
+      role: 'web',
+    });
 
     const sibling = await createTestProject({
       workspaceId: fx.workspaceId,
@@ -245,17 +250,15 @@ describe('resolveCodeContext is project-scoped and codeGraphIndexService is unch
       identifier: 'SIB',
     });
     const siblingFx: WorkItemFixture = { ...fx, project: sibling, projectId: sibling.id };
-    const siblingRow = await projectRepoSetService.addRow(
-      siblingFx.projectId,
-      { role: 'api', name: 'sibling-api' },
-      siblingFx.ctx,
-    );
-    await adminDb.projectRepo.update({
-      where: { id: siblingRow.id },
-      data: { githubRepoId: siblingApiId },
+    await linkProjectRepo({
+      workspaceId: siblingFx.workspaceId,
+      projectId: siblingFx.projectId,
+      githubRepoId: siblingApiId,
+      name: 'sibling-api',
+      role: 'api',
     });
 
-    const context = await resolveCodeContext({
+    const context = await resolveProjectCodeContext({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -277,7 +280,7 @@ describe('resolveCodeContext is project-scoped and codeGraphIndexService is unch
     await connectRepo(fx.workspaceId, 'acme-api');
 
     await expect(
-      resolveCodeContext({
+      resolveProjectCodeContext({
         userId: fx.ownerId,
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -294,7 +297,7 @@ describe('resolveCodeContext is project-scoped and codeGraphIndexService is unch
     await projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme-web' }, fx.ctx);
 
     await expect(
-      resolveCodeContext({
+      resolveProjectCodeContext({
         userId: fx.ownerId,
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,

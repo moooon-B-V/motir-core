@@ -12,6 +12,7 @@ import { createV1ProjectCaller, type V1ProjectCaller } from '../fixtures/apiV1Fi
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { organizationIdOf } from '../helpers/organizationOf';
 
 // The repository SET's READ SEAMS (Story MOTIR-2725 · MOTIR-2728, ADR
@@ -48,7 +49,7 @@ async function connectRepo(caller: V1ProjectCaller, name: string, defaultBranch 
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: caller.fixture.workspaceId,
@@ -60,6 +61,12 @@ async function connectRepo(caller: V1ProjectCaller, name: string, defaultBranch 
       archived: false,
       provider: 'github',
     },
+  });
+  await linkProjectRepo({
+    workspaceId: caller.fixture.workspaceId,
+    projectId: caller.fixture.projectId,
+    githubRepoId: repo.id,
+    name,
   });
 }
 

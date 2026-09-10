@@ -39,14 +39,14 @@ vi.mock('@/lib/ai/motirAiClient', async (importOriginal) => ({
 }));
 
 const { aiGenerationService } = await import('@/lib/services/aiGenerationService');
-const { resolveCodeContext } = await import('@/lib/ai/codeContext');
+const { resolveProjectCodeContext } = await import('@/lib/ai/codeContext');
 const { projectsService } = await import('@/lib/services/projectsService');
-const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
+const { linkProjectRepo } = await import('../../helpers/projectRepoLink');
 const { toProjectDTO } = await import('@/lib/mappers/projectMappers');
 import type { ProjectContext } from '@/lib/projects';
 
 /**
- * A connected GitHub repo THAT THE PROJECT WORKS ON, so `resolveCodeContext`
+ * A connected GitHub repo THAT THE PROJECT WORKS ON, so `resolveProjectCodeContext`
  * resolves it.
  *
  * ⚠️ ONE INSTALLATION PER WORKSPACE, REUSED. The workspace mirror still holds one
@@ -55,7 +55,7 @@ import type { ProjectContext } from '@/lib/projects';
  * wrong reason.
  *
  * ⚠️ AND CONNECTING IT TO THE WORKSPACE IS NO LONGER ENOUGH (MOTIR-4653).
- * `resolveCodeContext` reads the PROJECT's configured set, so a repository the
+ * `resolveProjectCodeContext` reads the PROJECT's configured set, so a repository the
  * workspace connected but nobody added to this project is correctly absent from
  * the envelope. Both halves are done here, together, for the reason
  * `tests/fixtures/codeContextFixtures.ts` gives: apart, the second one is
@@ -86,9 +86,18 @@ async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'wi
       archived: false,
     },
   });
-  // THE SECOND HALF — the project's own set row, realized against that mirror.
-  const row = await projectRepoSetService.addRow(fx.projectId, { role: 'web', name }, fx.ctx);
-  await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
+  // THE SECOND HALF — the project's own set row, ESTABLISHED against that mirror.
+  // ⚠️ `linkProjectRepo`, not `addRow` + a realize. `addRow` records a PROPOSED
+  // row, and `resolveProjectCodeContext` filters proposals out
+  // (`isEstablishedState`), so an `addRow`-built fixture leaves the project
+  // code-blind and its cases read as an empty answer rather than a missing link.
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
+    role: 'web',
+  });
   return `${owner}/${name}`;
 }
 
@@ -132,7 +141,7 @@ describe('the FACT reaches the planner, per repository', () => {
   it('an UNINDEXED repository rides the wire as `indexed: false`', async () => {
     const fx = await makeWorkItemFixture();
     const ref = await seedConnectedRepo(fx);
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -146,7 +155,7 @@ describe('the FACT reaches the planner, per repository', () => {
     const fx = await makeWorkItemFixture();
     const ref = await seedConnectedRepo(fx);
     await seedSucceededIndexJob(fx, ref);
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -159,7 +168,7 @@ describe('the FACT reaches the planner, per repository', () => {
     await seedConnectedRepo(fx, 'acme', 'widgets');
     const apiRef = await seedConnectedRepo(fx, 'acme', 'api');
     await seedSucceededIndexJob(fx, apiRef);
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: fx.ownerId,
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,

@@ -1,7 +1,7 @@
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import {
-  resolveCodeContext,
+  resolveProjectCodeContext,
   resolvePlanningCodeContext,
   withCodeFreshness,
 } from '@/lib/ai/codeContext';
@@ -113,11 +113,11 @@ export const aiGenerationService = {
     // PROJECT-scoped freshness onto a WORKSPACE-scoped grant list, so the
     // freshness side was a strict SUBSET and a repository the project had not
     // been given carried no drift rather than a fabricated one.
-    // `resolveCodeContext` reads the project's configured set now, so the two
+    // `resolveProjectCodeContext` reads the project's configured set now, so the two
     // agree by construction: the join is a join rather than a reconciliation, and
     // there is no longer a member of the outer set it can fail to cover.
     const code = await withCodeFreshness(
-      await resolveCodeContext({
+      await resolveProjectCodeContext({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
         projectId: ctx.projectId,

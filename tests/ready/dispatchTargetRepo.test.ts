@@ -15,6 +15,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 
 // Per-item REPO ATTRIBUTION over real Postgres (Story 7.9 · MOTIR-1804) — the
 // rebuilt producer half of the cancelled 7.7.3 contract that the CLI's repo
@@ -56,12 +57,11 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** Connect one repo to the fixture's workspace (the 7.10.3 installation mirror —
- *  the single repo registry a `targetRepo` validates against). */
+/** Connect one repo and, by default, add it to this fixture project's set. */
 async function connectRepo(
   fx: WorkItemFixture,
   name: string,
-  opts: { owner?: string; provider?: string } = {},
+  opts: { owner?: string; provider?: string; link?: boolean } = {},
 ): Promise<void> {
   const rand = randomToken(8);
   const owner = opts.owner ?? 'moooon';
@@ -77,7 +77,7 @@ async function connectRepo(
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -90,6 +90,14 @@ async function connectRepo(
       provider,
     },
   });
+  if (opts.link !== false) {
+    await linkProjectRepo({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      githubRepoId: repo.id,
+      name,
+    });
+  }
 }
 
 /** A ready (todo, unblocked) leaf. */
@@ -148,8 +156,8 @@ describe('githubRepoRepository.listByWorkspace — the connected repo SET', () =
 describe('listConnectedRepoNames', () => {
   it('de-duplicates by NAME — two owners exposing the same name are one checkout identity', async () => {
     const fx = await makeWorkItemFixture();
-    await connectRepo(fx, 'widgets', { owner: 'acme' });
-    await connectRepo(fx, 'widgets', { owner: 'zeta' });
+    await connectRepo(fx, 'widgets', { owner: 'acme', link: false });
+    await connectRepo(fx, 'widgets', { owner: 'zeta', link: false });
 
     const names = await listConnectedRepoNames(fx.ctx);
     // The CLI resolves BOTH to `<root>/widgets`, so dispatch cannot tell them
@@ -168,8 +176,8 @@ describe('listConnectedRepoNames', () => {
   });
 });
 
-describe('authored-pin validation falls back to the CONNECTED set for a project with no repo set', () => {
-  it('accepts a connected repo by bare name and by `owner/name`', async () => {
+describe('authored-pin validation uses the PROJECT repository set', () => {
+  it('accepts a linked repo by bare name and by `owner/name`', async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'motir-core', { owner: 'moooon' });
 
@@ -181,7 +189,7 @@ describe('authored-pin validation falls back to the CONNECTED set for a project 
     ).toBe('motir-core');
   });
 
-  it("matches case-insensitively but STORES the connected repo's own casing", async () => {
+  it("matches case-insensitively but STORES the linked repo's own casing", async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'Motir-Core');
     // Git-host names are case-insensitive; storing the canonical casing is what
@@ -197,7 +205,7 @@ describe('authored-pin validation falls back to the CONNECTED set for a project 
     expect(await resolveAuthoredTargetRepoInProject('   ', fx.projectId, fx.ctx)).toBeNull();
   });
 
-  it('rejects an unknown repo with a typed error naming the connected set', async () => {
+  it('rejects an unknown repo with a typed error naming the project set', async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'motir-core');
 
@@ -206,14 +214,14 @@ describe('authored-pin validation falls back to the CONNECTED set for a project 
     ).rejects.toBeInstanceOf(UnknownTargetRepoError);
     await expect(
       resolveAuthoredTargetRepoInProject('motir-ai', fx.projectId, fx.ctx),
-    ).rejects.toThrow(/Connected repositories: moooon\/motir-core/);
+    ).rejects.toThrow(/This project's repositories: moooon\/motir-core/);
   });
 
-  it('rejects ANY pin when the workspace has no connected repositories, and says so', async () => {
+  it('rejects ANY pin when the project has no repository links, and says so', async () => {
     const fx = await makeWorkItemFixture();
     await expect(
       resolveAuthoredTargetRepoInProject('motir-core', fx.projectId, fx.ctx),
-    ).rejects.toThrow(/no connected repositories/);
+    ).rejects.toThrow(/repository set is empty/);
   });
 });
 

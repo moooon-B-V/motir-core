@@ -8,6 +8,14 @@ import {
   type operations,
 } from './api/index.js';
 import { normalizeServerUrl } from './config/userConfig.js';
+import { CLI_VERSION } from './version.js';
+
+/**
+ * The field this CLI reports its version on. A LITERAL, transcribed from
+ * `lib/api/v1/clientVersion.ts` — `packages/cli` does not import the app's
+ * `lib/`, and the server asserts the same constant from its own side.
+ */
+export const CLIENT_VERSION_HEADER = 'x-motir-client-version';
 import {
   AuthError,
   CliError,
@@ -302,6 +310,20 @@ export class V1Transport {
         headers: {
           Authorization: `Bearer ${this.token}`,
           Accept: 'application/json',
+          // ⚠️ THE VERSION RIDES AT THE TRANSPORT, ON ITS OWN FIELD (MOTIR-4974).
+          //
+          // Here rather than per-operation because one site then covers every
+          // server-bound call this CLI makes — a per-tool field would have to be
+          // remembered by each new operation, and the one it was forgotten on
+          // would be the one a stale client used.
+          //
+          // ⚠️ AND IT IS A NEW FIELD, NOT THE OLD ONE. The CLI used to send
+          // `motir-cli/<version>` as the dispatch HARNESS; MOTIR-2447 removed
+          // that because it overwrote the agent name and model the run itself
+          // had recorded (MOTIR-2419). Version is telemetry about the CLIENT,
+          // harness/model is provenance about the WORK — re-using that field
+          // would re-open MOTIR-2419 in a diff that looked like one line.
+          [CLIENT_VERSION_HEADER]: CLI_VERSION,
           ...(input.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),

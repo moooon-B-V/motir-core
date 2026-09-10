@@ -139,6 +139,11 @@ const TEST_DIRS = {
   home: '/home/tester',
   xdgConfigHome: '/home/tester/.config',
   xdgDataHome: '/home/tester/.local/share',
+  // Unset on purpose: the mount assertions below are about a profile's DEFAULT
+  // credential path. An agent redirected by CLAUDE_CONFIG_DIR / CODEX_HOME
+  // resolves OUTSIDE the mount by design — that is what the redirect is for —
+  // so pinning the probe against the mount only makes sense with no override.
+  configHome: () => undefined,
 };
 
 /** A profile by id — asserted present so callers get a profile, not undefined. */
@@ -674,6 +679,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     home: '/home/node',
     xdgConfigHome: '/home/node/.config',
     xdgDataHome: '/home/node/.local/share',
+    configHome: () => undefined,
   };
 
   /** The container paths a profile's compose service mounts READ-ONLY. */

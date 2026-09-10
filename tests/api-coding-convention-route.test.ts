@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { adminDb } from './helpers/adminDb';
+import { linkWorkspaceReposToProject } from './helpers/projectRepoLink';
 import type {
   RawConvention,
   RawConventionSurface,
@@ -321,7 +322,7 @@ describe('POST /api/ai/coding-convention/refresh', () => {
   // no-body path pinned unchanged above.
 
   it('forwards a repo scope to the service — one pair for the named repo only', async () => {
-    const { workspace, owner, project } = await signInAtProject();
+    const { workspace, project } = await signInAtProject();
     await githubInstallationService.persistInstallation({
       workspaceId: workspace.id,
       installation: {
@@ -331,12 +332,10 @@ describe('POST /api/ai/coding-convention/refresh', () => {
       },
       repos: ROUTE_REPOS,
     });
-    // MOTIR-4653 — the read resolves repositories from the PROJECT's
-    // configured set, so the fixture states which ones this project works on.
-    await linkAllWorkspaceReposIntoProject({
-      userId: owner.id,
+    await linkWorkspaceReposToProject({
       workspaceId: workspace.id,
       projectId: project.id,
+      names: ROUTE_REPOS.map((repo) => repo.name),
     });
     refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
 

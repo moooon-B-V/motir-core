@@ -4,8 +4,8 @@ import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
-import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
-import { resolveCodeContext, withCodeFreshness } from '@/lib/ai/codeContext';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
+import { resolveProjectCodeContext, withCodeFreshness } from '@/lib/ai/codeContext';
 
 // THE ROUTING DISPATCH CARRIES THE DRIFT (Story MOTIR-1754 · MOTIR-4857).
 //
@@ -80,8 +80,17 @@ function seedRepo(
 }
 
 async function linkIntoProject(githubRepoId: string, name: string) {
-  const row = await projectRepoSetService.addRow(fx.projectId, { role: 'web', name }, fx.ctx);
-  await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId } });
+  // ⚠️ `linkProjectRepo`, not `addRow` + a realize. `addRow` records a PROPOSED
+  // row, and `resolveProjectCodeContext` filters proposals out
+  // (`isEstablishedState`), so an `addRow`-built fixture leaves the project
+  // code-blind and its cases read as an empty answer rather than a missing link.
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId,
+    name,
+    role: 'web',
+  });
 }
 
 /** A succeeded index in the ledger — what makes `stale` reachable at all. */
@@ -100,7 +109,7 @@ async function seedSucceededIndex(repoRef: string) {
   });
 }
 
-// MOTIR-4653 — `resolveCodeContext` reads the PROJECT's configured set, so the
+// MOTIR-4653 — `resolveProjectCodeContext` reads the PROJECT's configured set, so the
 // project is part of the coordinate. Every case in this file already calls
 // `linkIntoProject`, which is what makes them still meaningful: the repository
 // under test is one the project actually works on.
@@ -122,7 +131,7 @@ describe('the drift rides beside `indexed`', () => {
     await linkIntoProject(repo.id, 'web');
     await seedSucceededIndex('moooon/web');
 
-    const thin = await resolveCodeContext(CTX());
+    const thin = await resolveProjectCodeContext(CTX());
     const rich = await withCodeFreshness(thin, fx.projectId, CTX());
 
     expect(rich?.repos[0]).toMatchObject({
@@ -140,7 +149,7 @@ describe('the drift rides beside `indexed`', () => {
     await linkIntoProject(repo.id, 'web');
     await seedSucceededIndex('moooon/web');
 
-    const thin = await resolveCodeContext(CTX());
+    const thin = await resolveProjectCodeContext(CTX());
     const rich = await withCodeFreshness(thin, fx.projectId, CTX());
 
     expect(thin?.repos.map((r) => [r.repoRef, r.indexed])).toEqual(
@@ -165,7 +174,7 @@ describe('the drift rides beside `indexed`', () => {
     // set, so the two sets differed by construction and an un-joined repository
     // carried no drift rather than a fabricated one.
     //
-    // `resolveCodeContext` reads the project's set now, so the sets coincide and
+    // `resolveProjectCodeContext` reads the project's set now, so the sets coincide and
     // there is no un-joined member left to describe: a repository the project
     // has not been given is not in the envelope AT ALL. Absent beats
     // present-with-no-drift for the same reason the original rule preferred an
@@ -174,7 +183,11 @@ describe('the drift rides beside `indexed`', () => {
     const repo = await seedRepo('unlinked', { indexedHeadSha: 'b', defaultBranchHeadSha: 'h' });
     expect(repo.id).toBeTruthy();
 
-    const rich = await withCodeFreshness(await resolveCodeContext(CTX()), fx.projectId, CTX());
+    const rich = await withCodeFreshness(
+      await resolveProjectCodeContext(CTX()),
+      fx.projectId,
+      CTX(),
+    );
 
     expect(rich?.repos.map((r) => r.repoRef) ?? []).not.toContain('moooon/unlinked');
   });
@@ -187,7 +200,11 @@ describe('the drift rides beside `indexed`', () => {
     await linkIntoProject(repo.id, 'web');
     await seedSucceededIndex('moooon/web');
 
-    const rich = await withCodeFreshness(await resolveCodeContext(CTX()), fx.projectId, CTX());
+    const rich = await withCodeFreshness(
+      await resolveProjectCodeContext(CTX()),
+      fx.projectId,
+      CTX(),
+    );
 
     expect(rich?.repos[0]).toMatchObject({ indexState: 'stale', commitsBehind: null });
   });

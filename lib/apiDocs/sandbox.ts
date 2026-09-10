@@ -43,9 +43,37 @@ export const SANDBOX_IMAGE = 'ghcr.io/moooon-b-v/motir-sandbox';
 /** The agent-less tag — an IMAGE, not a profile, and drawn beside the table. */
 export const SANDBOX_BASE_TAG = 'base';
 
-/** The container name the guide tells the reader to use, so step 2 and the
- *  come-back-to-it line cannot disagree about it. */
-export const SANDBOX_CONTAINER_NAME = 'motir-sandbox';
+/**
+ * The named volume the sign-in lives in, so the container can be thrown away.
+ *
+ * ⚠️ THIS CONSTANT IS THE WHOLE FIX FOR MOTIR-4970, and it replaces a container
+ * NAME. The guide used to tell readers `--name motir-sandbox` and to come back
+ * with `docker start -ai`, for one reason: `motir login` wrote into the
+ * container's writable layer, so a `--rm` run threw the sign-in away. Keeping
+ * the container is also what pinned a reader to the image it was built from —
+ * one reader's six-week-old container ran a CLI with no `login` command at all,
+ * which is the defect this fixes. Move the credential OUT of the container and
+ * the name, the `docker rm` and the `docker start` all stop being necessary
+ * together.
+ */
+export const SANDBOX_AUTH_VOLUME = 'motir-auth';
+
+/**
+ * Where that volume mounts INSIDE the container.
+ *
+ * It is `configDir()`'s resolution under the image's pinned `HOME`
+ * (`packages/cli/src/config/userConfig.ts` walks `MOTIR_CONFIG_HOME` →
+ * `XDG_CONFIG_HOME` → `$HOME/.config`; `packages/cli/sandbox/Dockerfile` pins
+ * `ENV HOME=/home/node`). The image already creates this directory owned by
+ * `node` and documents this exact mount in a comment beside its `ENTRYPOINT`,
+ * so Docker seeds the empty named volume from a node-owned directory and it
+ * comes up writable by the runtime user. The mechanism was built; nothing had
+ * ever wired it into the instruction a reader follows.
+ *
+ * Asserted against the Dockerfile literal rather than recomputed, so a change
+ * to `MOTIR_CONFIG_HOME` breaks a test instead of the mount.
+ */
+export const SANDBOX_CONFIG_DIR = '/home/node/.config/motir';
 
 /**
  * One row of the profile table, flattened for rendering.
@@ -94,26 +122,54 @@ export function sandboxProfileRows(): SandboxProfileRow[] {
  *
  * Why the guide needs it at all (MOTIR-2611): `:<profile>` is a MOVING tag, and
  * `docker run` does not go back to the registry for an image the machine already
- * has — nor does `docker start -ai`, which this page explicitly recommends for
- * coming back to the container. So the moving tag only ever reaches a reader who
- * pulls, and someone who followed this guide before a release is pinned to that
- * older CLI permanently, with the page describing a newer one. Step 1's prose has
- * said "there is no build step — you pull" since it shipped; nothing rendered the
- * pull.
+ * has. So the moving tag only ever reaches a reader who pulls, and someone who
+ * followed this guide before a release is pinned to that older CLI permanently,
+ * with the page describing a newer one. Step 1's prose has said "there is no
+ * build step — you pull" since it shipped; nothing rendered the pull.
+ *
+ * ⚠️ MOTIR-4970 made `sandboxRunCommand` carry `--pull=always`, which fetches
+ * the current image on every start — so this command is no longer what STANDS
+ * BETWEEN a reader and a current sandbox. It is KEPT for two reasons: the page
+ * should say out loud what it fetches rather than hiding it in a flag, and a
+ * reader on a slow or metered connection still wants to pre-pull once. What was
+ * retired with the container name is the third reason this comment used to give
+ * — that `docker start -ai` never revisits the registry either. Nothing tells
+ * the reader to `docker start` any more.
  */
 export function sandboxPullCommand(row: SandboxProfileRow): string {
   return `docker pull ${SANDBOX_IMAGE}:${row.id}`;
 }
 
-/** The `docker run` for one profile, as the page prints it filled in. */
+/**
+ * The `docker run` for one profile, as the page prints it filled in.
+ *
+ * ⚠️ IDEMPOTENT BY CONSTRUCTION (MOTIR-4970): the same command is correct for a
+ * first-time reader and for one coming back a month later, so the guide no
+ * longer has two paths and cannot send anyone down the wrong one. Three flags
+ * carry that, and each is load-bearing:
+ *
+ *   `--rm`            nothing accumulates, so there is no name to collide with
+ *                     and nothing to `docker rm`.
+ *   `--pull=always`   `docker run` reuses a local image, so the MOVING
+ *                     `:<profile>` tag reaches a reader only if something
+ *                     fetches it. This is that something.
+ *   the auth volume   what makes the other two safe. The sign-in lives outside
+ *                     the container's writable layer, so throwing the container
+ *                     away no longer throws the sign-in away with it.
+ *
+ * The credential mounts the profile contributes stay `:ro` — the container USES
+ * an agent sign-in and never performs one. The auth volume is the one writable
+ * mount, deliberately, because performing a `motir login` is its whole purpose.
+ */
 export function sandboxRunCommand(row: SandboxProfileRow): string {
   const mounts = row.mounts.map(
     (mount) =>
       `  -v "$HOME/${mount.replace(/^~\//, '')}:/home/node/${mount.replace(/^~\//, '')}:ro" \\`,
   );
   return [
-    `docker run -it --name ${SANDBOX_CONTAINER_NAME} \\`,
+    'docker run -it --rm --pull=always \\',
     '  -v "$PWD:/workspace" \\',
+    `  -v ${SANDBOX_AUTH_VOLUME}:${SANDBOX_CONFIG_DIR} \\`,
     ...mounts,
     `  ${SANDBOX_IMAGE}:${row.id}`,
   ].join('\n');
@@ -273,11 +329,11 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
     blocks: [
       {
         kind: 'prose',
-        text: '**Two commands: pull the image, then start it.** The pull is what makes the second one a **current** sandbox. `docker run` never goes back to the registry for an image this machine already has — and neither does `docker start -ai`, which is how this page tells you to come back to the container later.',
+        text: '**Two commands: pull the image, then start it.** The run below carries `--pull=always`, so it fetches the current image every time on its own — this first command is here so the page says out loud what it is downloading, and so you can pre-pull once on a good connection instead of at the start of every session.',
       },
       {
         kind: 'prose',
-        text: '**That matters because the profile tags move.** `:claude` and its siblings always point at the newest release, so a copy pulled weeks ago is out of date and nothing on your machine will say so — you get an older `motir` with fewer commands than this guide describes. **Returning to a container you set up earlier? A pull on its own is not enough**: the container was made from the old image and keeps it. Pull, then `docker rm motir-sandbox` and run the command again (or give the run a new `--name`). The sign-in from step 4 lives in the old container, so expect to do that step once more.',
+        text: '**The profile tags move.** `:claude` and its siblings always point at the newest release, and `--pull=always` is what makes that reach you: every start checks the registry, so the command below is the same whether this is your first sandbox or your tenth. There is no returning-reader path to get wrong — which there used to be, and which left people running a `motir` months older than the guide they were reading.',
       },
       {
         kind: 'prose',
@@ -285,8 +341,8 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'callout',
-        tone: 'warning',
-        text: 'Note there is **no `--rm`**, and the container has a name. The sign-in in step 4 is written inside the container, so a `--rm` run would throw it away the moment you exit. Set it up once and come back to it with `docker start -ai motir-sandbox`.',
+        tone: 'info',
+        text: 'Note the **`--rm`**: the container is deleted the moment you exit, and that is the point — nothing accumulates and nothing goes stale. **Your sign-in survives it.** Step 4 writes into the `motir-auth` volume, which lives outside the container, so you sign in once and every later run picks it up. To sign out for good, remove the volume: `docker volume rm motir-auth`.',
       },
       {
         kind: 'callout',

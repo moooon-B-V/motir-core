@@ -6,7 +6,8 @@ import { getGitProvider, providerSupportsRepoTarballUrl } from '@/lib/git';
 import type { GitProviderId } from '@/lib/git/types';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import { resolveCodeContextState } from '@/lib/services/codeContextService';
-import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { isEstablishedState } from '@/lib/projectRepos/vocabulary';
 import type { CodeGraphIndexState } from '@/lib/codeGraph/indexState';
 import type { CodeRefreshReason } from '@/lib/codeGraph/refreshReason';
 
@@ -113,7 +114,7 @@ export interface JobCodeContext {
  * onboarding, so a project-scoped version of this gate never opens.
  *
  * ⚠️ NOT FOR A PLANNING ENVELOPE. What a planning job may see is the PROJECT's
- * configured set; reach for {@link resolveCodeContext}.
+ * configured set; reach for {@link resolveProjectCodeContext}.
  */
 export async function resolveWorkspaceConnectedRepos(ctx: {
   userId: string;
@@ -157,14 +158,22 @@ export async function resolveWorkspaceConnectedRepos(ctx: {
  * THE PLANNING ENVELOPE'S `context.code` — *which repositories does THIS project
  * work on?* (MOTIR-4653 · MOTIR-2029).
  *
- * Reads the project's own configured set through `projectRepoSetService`, whose
- * `browse` gate is the access check; a caller that may not browse the project gets
- * that service's typed refusal rather than a quietly empty envelope.
+ * ⚠️ IT IS `resolveProjectCodeContext`, AND THIS CARD DID NOT NAME IT. MOTIR-4653
+ * re-pointed the old `resolveCodeContext` from the workspace's grant to the
+ * project's set
+ * and left the name; `main` reached the same place from the other direction, by
+ * ADDING this function beside the workspace reader. Merging them under ONE name
+ * is the whole of the resolution — two functions answering *which repositories?*
+ * with different filters is precisely the drift the story exists to remove — and
+ * this is the name that says which scope it answers in, beside
+ * `resolveWorkspaceConnectedRepos`.
  *
- * ⚠️ AN UNREALIZED ROW CONTRIBUTES NOTHING. A `project_repository` row is an
- * INTENT until something realizes it, and `realizedRepo` is null until then — a
- * proposed repository has no host, no default branch and no graph, so there is
- * nothing for a planner to read and nothing honest to put on the wire.
+ * ⚠️ AN UNESTABLISHED ROW CONTRIBUTES NOTHING. A `project_repository` row is an
+ * INTENT until something establishes it (`isEstablishedState`, ADR §0.1), and an
+ * unrealized one has no host, no default branch and no graph — so there is
+ * nothing for a planner to read and nothing honest to put on the wire. The state
+ * test is the stricter of the two filters this merge had to choose between, and
+ * it is the one `main` ships.
  *
  * ⚠️ AN EMPTY SET RESOLVES TO `undefined`, NOT TO AN EMPTY `repos` ARRAY. The
  * caller omits `context.code` entirely, so a project with no configured
@@ -172,33 +181,43 @@ export async function resolveWorkspaceConnectedRepos(ctx: {
  * anything. That equivalence is the shipped contract this function has always
  * had, and it is what keeps a start-fresh project's job byte-identical.
  */
-export async function resolveCodeContext(ctx: {
+export async function resolveProjectCodeContext(ctx: {
   userId: string;
   workspaceId: string;
   projectId: string;
 }): Promise<JobCodeContext | undefined> {
-  const serviceCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const rows = await projectRepoSetService.listByProject(ctx.projectId, serviceCtx);
-  const realized = rows
-    .map((row) => row.realizedRepo)
-    .filter((repo): repo is NonNullable<typeof repo> => repo !== null);
-  if (realized.length === 0) return undefined;
-
-  // ⚠️ ONE LEDGER READ FOR THE WHOLE SET, and only when there IS a set — the same
-  // read `resolveWorkspaceConnectedRepos` performs, so the envelope and the
-  // reading state can never tell a user two different things about the same
-  // repository. It stays WORKSPACE-keyed because the ledger is: the index job
-  // writes one row per repo per workspace, and this card moves which repositories
-  // are ASKED about, never how their indexed-ness is recorded.
-  const indexedRefs = await withWorkspaceContext(serviceCtx, (tx) =>
-    jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
+  const { repos, indexedRefs } = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: ctx.projectId },
+    async (tx) => {
+      const linked = await projectRepoRepository.listByProject(ctx.projectId, ctx.workspaceId, tx);
+      const repos = linked.flatMap((row) => {
+        const repo = row.githubRepo;
+        if (!repo || !isEstablishedState(row.state)) return [];
+        return [
+          {
+            provider: repo.provider,
+            repoRef: `${repo.owner}/${repo.name}`,
+            defaultBranch: repo.defaultBranch,
+          },
+        ];
+      });
+      // ⚠️ ONE LEDGER READ FOR THE WHOLE SET, and only when there IS a set — the
+      // same read `resolveWorkspaceConnectedRepos` performs, so the envelope and
+      // the reading state can never tell a user two different things about the
+      // same repository. It stays WORKSPACE-keyed because the ledger is: the
+      // index job writes one row per repo per workspace, and this story moves
+      // which repositories are ASKED about, never how their indexed-ness is
+      // recorded.
+      const indexedRefs = repos.length
+        ? await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx)
+        : [];
+      return { repos, indexedRefs };
+    },
   );
-
+  if (repos.length === 0) return undefined;
   return {
-    repos: realized.map((repo) => ({
-      provider: repo.provider,
-      repoRef: repo.repoRef,
-      defaultBranch: repo.defaultBranch,
+    repos: repos.map((repo) => ({
+      ...repo,
       indexed: indexedRefs.includes(repo.repoRef),
     })),
   };
@@ -206,7 +225,7 @@ export async function resolveCodeContext(ctx: {
 
 // ── The PLANNING-SESSION producer (Story MOTIR-1754 · MOTIR-4604) ────────────
 //
-// `resolveCodeContext` above answers "which repos are connected?". A planning
+// `resolveProjectCodeContext` above answers "which repos are connected?". A planning
 // session needs more: **how current is each graph, why it is behind, and whether
 // anything is actually doing something about it.**
 //
@@ -319,7 +338,7 @@ export function resolveRefreshDisposition(input: {
  * can land mid-conversation is MOTIR-4591's question, and that it must not be
  * waited on is settled here.
  *
- * Returns `undefined` — exactly as `resolveCodeContext` does — when the workspace
+ * Returns `undefined` — exactly as `resolveProjectCodeContext` does — when the workspace
  * has no connected repo, so the caller OMITS `context.code` and a code-less
  * envelope stays byte-identical.
  */
@@ -328,7 +347,7 @@ export async function resolvePlanningCodeContext(ctx: {
   workspaceId: string;
   projectId: string;
 }): Promise<JobPlanningCodeContext | undefined> {
-  const base = await resolveCodeContext(ctx);
+  const base = await resolveProjectCodeContext(ctx);
   if (!base) return undefined;
 
   const state = await resolveCodeContextState(ctx.projectId, {
@@ -431,7 +450,7 @@ async function installationIdForWorkspace(ctx: {
  * The thin grant-list context, with each repository's FRESHNESS joined on
  * (Story MOTIR-1754 · MOTIR-4857).
  *
- * ⚠️ WHY A COMPOSER RATHER THAN A WIDER `resolveCodeContext`. That resolver is
+ * ⚠️ WHY A COMPOSER RATHER THAN A WIDER `resolveProjectCodeContext`. That resolver is
  * WORKSPACE-scoped and has four other callers; freshness is a PROJECT-scoped
  * fact (`resolveCodeContextState` reads the project's configured set). Widening
  * the workspace read to take a project would either give its other callers a

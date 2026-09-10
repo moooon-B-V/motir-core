@@ -44,6 +44,14 @@ export interface AddRepositoryPickerProps {
   options: OrgRepoOptionDto[];
   /** Held already — listed, and unpickable. */
   alreadyHeld: OrgRepoOptionDto[];
+  /**
+   * This project's display name. The first-time lead names BOTH tiers — "it lands
+   * in {org} and in {projectName} at the same time" (design §18.5) — because the
+   * whole point of connect-and-link is that one action settles both, and a
+   * sentence that says "and in this project" makes the reader supply the name of
+   * the thing they are being promised.
+   */
+  projectName: string;
   /** The organisation's display name, for the segment heading. */
   organizationName: string;
   /** Where `Connect a new one` hands off. Null on a deployment with no App. */
@@ -59,6 +67,7 @@ export interface AddRepositoryPickerProps {
 export function AddRepositoryPicker({
   options,
   alreadyHeld,
+  projectName,
   organizationName,
   installHref,
   loading,
@@ -203,7 +212,7 @@ export function AddRepositoryPicker({
           </p>
           {orgHasNothing ? (
             <p className="font-sans text-sm text-(--el-text-secondary)">
-              {t('firstTimeLead', { org: organizationName })}
+              {t('firstTimeLead', { org: organizationName, projectName })}
             </p>
           ) : null}
           {installHref ? (

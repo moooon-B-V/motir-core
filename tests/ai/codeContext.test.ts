@@ -16,13 +16,14 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 import { db } from '@/lib/db';
 import { submitJob } from '@/lib/ai/motirAiClient';
-import { resolveCodeContext, resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
+import { resolveProjectCodeContext, resolveWorkspaceConnectedRepos } from '@/lib/ai/codeContext';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
@@ -110,17 +111,24 @@ async function linkIntoSet(
   const repo = await adminDb.githubRepo.findFirstOrThrow({
     where: { workspaceId: opts.repoWorkspaceId ?? ctx.workspaceId, name },
   });
-  const row = await projectRepoSetService.addRow(
-    ctx.projectId,
-    { role: opts.role ?? 'web', name },
-    { userId: ctx.userId, workspaceId: ctx.workspaceId },
-  );
-  await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
+  // ⚠️ AN ESTABLISHED ROW, THROUGH `linkProjectRepo` — not `addRow` + a realize.
+  // `addRow` records a PROPOSED row, and `resolveProjectCodeContext` filters
+  // proposals out (`isEstablishedState`), so an `addRow`-built fixture is code-
+  // blind however carefully it is realized. The bare `addRow` calls further down
+  // are deliberate and stay: they are the UNESTABLISHED rows whose absence from
+  // the answer is what those cases assert.
+  await linkProjectRepo({
+    workspaceId: ctx.workspaceId,
+    projectId: ctx.projectId,
+    githubRepoId: repo.id,
+    name,
+    role: opts.role ?? 'web',
+  });
 }
 
 // ⚠️ THE WORKSPACE-GRANT READ KEEPS ITS OWN TESTS (MOTIR-4653), and this block
 // exists because moving them was a real coverage regression rather than a
-// tidy-up. `resolveWorkspaceConnectedRepos` IS the read `resolveCodeContext`
+// tidy-up. `resolveWorkspaceConnectedRepos` IS the read `resolveProjectCodeContext`
 // used to perform; when the describe below was re-pointed at the project set,
 // its "no installation" and "no granted repos" cases went with it — and those
 // are branches of the RENAMED function, which nothing else asserts directly.
@@ -145,7 +153,7 @@ describe('resolveWorkspaceConnectedRepos', () => {
     // ⚠️ NO PROJECT SET IS CONFIGURED, deliberately. This read answers "what has
     // the workspace connected?", so it must see all four with the project's own
     // set empty — the exact case that makes it different from
-    // `resolveCodeContext`, which returns `undefined` here.
+    // `resolveProjectCodeContext`, which returns `undefined` here.
     const code = await resolveWorkspaceConnectedRepos({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
@@ -192,7 +200,7 @@ describe('resolveWorkspaceConnectedRepos', () => {
   });
 
   it("is UNAFFECTED by the project's configured set — it answers about the workspace", async () => {
-    // The inverse of `resolveCodeContext`'s central case, and what keeps the two
+    // The inverse of `resolveProjectCodeContext`'s central case, and what keeps the two
     // functions from silently converging: configuring one repository for the
     // project must not narrow the workspace answer.
     const ctx = await seedProjectContext();
@@ -211,7 +219,7 @@ describe('resolveWorkspaceConnectedRepos', () => {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     });
-    const projectAnswer = await resolveCodeContext({
+    const projectAnswer = await resolveProjectCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -227,7 +235,7 @@ describe('resolveWorkspaceConnectedRepos', () => {
 // deferral its subject carried — *"this resolver is DELIBERATELY left at
 // workspace scope … that adoption belongs to MOTIR-1754"* — is discharged, and
 // what a planning job sees is now the set somebody configured for THIS project.
-describe('resolveCodeContext', () => {
+describe('resolveProjectCodeContext', () => {
   it('resolves the PROJECT’s configured set — not every repo the workspace granted', async () => {
     const ctx = await seedProjectContext();
     await githubInstallationService.persistInstallation({
@@ -244,7 +252,7 @@ describe('resolveCodeContext', () => {
     await linkIntoSet(ctx, 'motir-core');
     await linkIntoSet(ctx, 'motir-gateway', { role: 'api' });
 
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -299,12 +307,12 @@ describe('resolveCodeContext', () => {
     await linkIntoSet(alpha, 'motir-core');
     await linkIntoSet(beta, 'motir-ai');
 
-    const alphaCode = await resolveCodeContext({
+    const alphaCode = await resolveProjectCodeContext({
       userId: alpha.userId,
       workspaceId: alpha.workspaceId,
       projectId: alpha.projectId,
     });
-    const betaCode = await resolveCodeContext({
+    const betaCode = await resolveProjectCodeContext({
       userId: beta.userId,
       workspaceId: beta.workspaceId,
       projectId: beta.projectId,
@@ -360,7 +368,7 @@ describe('resolveCodeContext', () => {
     const ctx = { userId: user.id, workspaceId: sibling.id, projectId: project.id };
     await linkIntoSet(ctx, 'motir-core', { repoWorkspaceId: installing.id });
 
-    const code = await resolveCodeContext(ctx);
+    const code = await resolveProjectCodeContext(ctx);
 
     expect(code?.repos.map((r) => r.repoRef)).toEqual(['moooon/motir-core']);
   });
@@ -380,7 +388,7 @@ describe('resolveCodeContext', () => {
     // Four repositories connected and none configured. `undefined`, never an
     // empty `repos` array — the caller omits `context.code` entirely and the
     // envelope stays byte-identical to a code-less one.
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -408,7 +416,7 @@ describe('resolveCodeContext', () => {
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
 
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -434,7 +442,7 @@ describe('resolveCodeContext', () => {
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
 
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -444,7 +452,7 @@ describe('resolveCodeContext', () => {
 
   it('resolves undefined when the workspace has no installation at all', async () => {
     const ctx = await seedProjectContext();
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId: ctx.projectId,
@@ -466,7 +474,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       repos: FOUR_REPOS,
     });
     // ⚠️ THE SET IS CONFIGURED EXPLICITLY NOW (MOTIR-4653). Connecting the four
-    // to the workspace used to be enough, because `resolveCodeContext` read the
+    // to the workspace used to be enough, because `resolveProjectCodeContext` read the
     // grant; it reads the PROJECT's set, so this fixture states which
     // repositories the project works on. All four, to keep the envelope
     // assertion below exactly what it was.
@@ -488,17 +496,22 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
       // `code` as the code-graph view, `repositories` as the configuration view.
       // Neither absorbed the other, which is the thing that was forbidden.
       //
-      // `ref` is a cuid, so it is matched by type; `state: 'proposed'` is what a
-      // row realized by a fixture carries (the same shape
-      // `tests/fixtures/codeContextFixtures.ts` produces), and the resolver keys
-      // on the REALIZED repo rather than on this state.
+      // `ref` is a cuid, so it is matched by type; `state: 'connected'` is what a
+      // row linked by a fixture carries (the same shape
+      // `tests/fixtures/codeContextFixtures.ts` produces). It used to read
+      // `proposed`, because the fixture built its rows with `addRow` and the
+      // resolver keyed on the REALIZED repo rather than on the state — and that
+      // is exactly what changed: `resolveProjectCodeContext` filters on
+      // `isEstablishedState`, so a fixture that leaves its rows proposed is
+      // code-blind. The `repositories` view is the configuration view and reports
+      // the state it finds; both halves moved together.
       repositories: {
         repos: FOUR_REPOS.map((repo) => ({
           ref: expect.any(String),
           name: repo.name,
           role: 'web',
           label: null,
-          state: 'proposed',
+          state: 'connected',
         })),
       },
       // The consent flag rides every planning submit (MOTIR-4343), generation
@@ -543,7 +556,7 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             defaultBranch: 'main',
             // ⚠️ THE UNION OF TWO INDEPENDENT ADDITIONS, and it is a union because
             // `resolvePlanningCodeContext` SPREADS the thin entry: `indexed` is
-            // MOTIR-4826's ledger fact, carried up from `resolveCodeContext`, and
+            // MOTIR-4826's ledger fact, carried up from `resolveProjectCodeContext`, and
             // the five below are MOTIR-4604's freshness. Neither replaced the
             // other and the planning envelope carries both.
             indexed: false,

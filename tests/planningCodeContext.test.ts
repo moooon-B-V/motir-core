@@ -22,7 +22,7 @@ const { resolvePlanningCodeContext, resolveRefreshDisposition } =
   await import('@/lib/ai/codeContext');
 const { createTestWorkspace, createTestProject } = await import('./fixtures');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
-const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
+const { linkProjectRepo } = await import('./helpers/projectRepoLink');
 const { truncateAuthTables } = await import('./helpers/db');
 
 const SHA_A = 'a'.repeat(40);
@@ -91,14 +91,25 @@ async function setIndexed(
   });
 }
 
-/** The project's own set row, realized against the connected mirror — what the
- *  code-context read joins on since MOTIR-1767. */
+/** The project's own set row, ESTABLISHED against the connected mirror — what the
+ *  code-context read joins on since MOTIR-1767.
+ *
+ *  ⚠️ `linkProjectRepo`, not `addRow` + a realize: `addRow` records a PROPOSED
+ *  row, and `resolveProjectCodeContext` filters proposals out
+ *  (`isEstablishedState`), so an `addRow`-built fixture leaves the project
+ *  code-blind and every case here reads as an empty answer rather than as a
+ *  missing link. */
 async function link(projectId: string, ctx: { userId: string; workspaceId: string }) {
   const repo = await adminDb.githubRepo.findFirstOrThrow({
     where: { repoId: REPO.providerRepoId },
   });
-  const row = await projectRepoSetService.addRow(projectId, { role: 'web', name: REPO.name }, ctx);
-  await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
+  await linkProjectRepo({
+    workspaceId: ctx.workspaceId,
+    projectId,
+    githubRepoId: repo.id,
+    name: REPO.name,
+    role: 'web',
+  });
 }
 
 beforeEach(async () => {

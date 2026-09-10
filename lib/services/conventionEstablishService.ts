@@ -1,5 +1,5 @@
 import { submitJob, getPreplanState as fetchPreplanState } from '@/lib/ai/motirAiClient';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 
 // The FRESH-establish coding-convention TRIGGER, motir-core side (Subtask 7.3.10 ·
@@ -14,7 +14,7 @@ import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 //
 // 4-layer (CLAUDE.md): a thin service over the `server-only` 7.1.5 client — no
 // `motir-ai` import, no AI table, no Prisma transaction (the reads go through the
-// existing `resolveCodeContext` / `resolveTenantOrg` / preplan-read helpers). The
+// existing `resolveProjectCodeContext` / `resolveTenantOrg` / preplan-read helpers). The
 // caller fires it BEST-EFFORT after its own transaction commits.
 
 export interface EstablishConventionInput {
@@ -59,7 +59,7 @@ export const conventionEstablishService = {
     // trigger. This mirrors motir-ai's own fresh-vs-migrate auto-selection (it
     // branches on an indexed graph), so firing here for a repo-backed project
     // would otherwise hit the not-yet-wired migrate seam.
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: input.userId,
       workspaceId: input.workspaceId,
       projectId: input.projectId,

@@ -15,6 +15,7 @@ import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkWorkspaceReposToProject } from '../helpers/projectRepoLink';
 
 // MOTIR-3721 — THE READERS WHOSE FAILURE IS SILENT, moved onto
 // `work_item_delivery` (`docs/decisions/delivery-reader-migration.md`).
@@ -68,6 +69,11 @@ async function makeScenario(email: string) {
         archived: false,
       },
     ],
+  });
+  await linkWorkspaceReposToProject({
+    workspaceId: workspace.id,
+    projectId: project.id,
+    names: ['motir-core'],
   });
   return { user, workspace, project, ctx };
 }

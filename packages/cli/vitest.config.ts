@@ -62,6 +62,14 @@ export default defineConfig({
         // than covered or ignored. An unreachable fallback is a branch no test can
         // cover and no reader can classify.
         'src/repoClone.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-4973 — the staleness check. NAMED here on the way in, because
+        // this config's own header says a module it does not name is not held,
+        // and an ungated file at 100% is indistinguishable from a gated one
+        // until the day it regresses. It is a DECISION layer whose every failure
+        // mode is "say nothing", so the arms that must stay covered are the
+        // silent ones: a registry that is down, slow or unparseable, and a
+        // global prefix that cannot be written.
+        'src/staleness.ts': { branches: 90, functions: 90, lines: 90 },
         'src/serverResolve.ts': { branches: 90, functions: 90, lines: 90 },
         'src/session.ts': { branches: 90, functions: 90, lines: 90 },
         'src/transport.ts': { branches: 90, functions: 90, lines: 90 },

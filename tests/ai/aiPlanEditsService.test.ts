@@ -10,7 +10,7 @@ vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
 // suites are about the ENVELOPE, so `undefined` (no connected repo) keeps every
 // assertion below reading exactly as it did.
 vi.mock('@/lib/ai/codeContext', () => ({
-  resolveCodeContext: vi.fn(),
+  resolveProjectCodeContext: vi.fn(),
   resolvePlanningCodeContext: vi.fn(async () => undefined),
 }));
 // The PROJECT's repository set (MOTIR-3044), mocked beside the workspace grant

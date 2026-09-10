@@ -626,6 +626,17 @@
         color: var(--el-text-muted);
         flex: none;
       }
+      /* MOTIR-4944 — copied from
+         `design/work-items/labels-components-watch.mock.html`. This asset declares
+         `.chip`, `.chip .glyph` and every `.chip.t-*` tint; the label inside the
+         chip was the one part with no rule, so a long component name overflowed
+         its pill instead of truncating. */
+      .chip .txt {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .chip.t-sky,
       .chip.t-mint,
       .chip.t-lavender,

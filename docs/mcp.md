@@ -608,10 +608,23 @@ ATOMICALLY **claim** the next ready Subtask for dispatch and return the same
 dispatch payload as `next_ready`. Unlike `next_ready` (which only READS), this is
 the race-safe write that two concurrent `motir run` sessions use: in one
 transaction it locks the highest-ranked ready item (`SELECT … FOR UPDATE SKIP
-LOCKED`), transitions it to **In Progress**, and returns it. Two concurrent
+LOCKED`), **assigns it to you** and transitions it to **In Progress**, and returns
+it. Two concurrent
 callers therefore never claim the same item — the loser takes the next-best, or
-gets an empty result and **retries**. The claim **IS** the dispatch status flip,
-so do NOT call `transition_status` afterwards.
+gets an empty result and **retries**. The claim **IS** the assignment and the
+dispatch status flip, so do NOT call `transition_status` — or `update_work_item`
+to write the assignee — afterwards.
+
+**The assignment (MOTIR-4996), and what it is for.** All three claim doors write
+it now: this one, `claim_work_item`, and the scope claim. It answers _who is
+working on this?_ for a teammate reading the board, and it is the only ownership
+signal a second session can read — it cannot see your working tree, and "In
+Progress" stopped meaning _somebody is on this right now_ once a scoped run began
+claiming a whole subtree up front. It is a **LABEL, not a lock**: a `todo` card
+assigned to somebody else is still claimable, deliberately, and this claim takes
+it — taking a card off a teammate is a decision a person is allowed to make, they
+just have to be able to see they are making it. A re-claim of a card already
+assigned to you writes nothing.
 
 **Scope** — resolved server-side: when the project has an **active sprint**, the
 claim is scoped to it (dispatch only committed work); when there is **no active
@@ -632,15 +645,18 @@ On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
 identically (see `next_ready` above for the project-scoped rule and the null
 semantics). When nothing could be claimed,
 `item` is `null` and `reason` is `"none_ready"` (retry — a sibling may have just
-claimed the last one — or check there is unblocked work to start). Requires
-`work_item:edit` (it flips status).
+claimed the last one — or check there is unblocked work to start). The returned
+`assignee` / `assigneeId` are the POST-claim values — you — not the column as it
+stood before the claim. Requires
+`work_item:edit` (it assigns and flips status).
 
 **`advisories`** — see [the dispatch advisories](#the-dispatch-advisories).
 Always present, `[]` when there are none, on BOTH arms.
 
 #### `claim_work_item`
 
-ATOMICALLY **claim ONE NAMED work item** for dispatch. Same lock as
+ATOMICALLY **claim ONE NAMED work item** for dispatch. Same lock (and the same
+assignment) as
 `claim_next_ready`, for the caller that was **handed a card** rather than asking
 for whatever is next: in one transaction the row is locked, its status is
 re-checked against the **to-do CATEGORY**, and — if that holds — the item is

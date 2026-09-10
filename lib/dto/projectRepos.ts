@@ -491,27 +491,9 @@ export interface ProjectRepoRoomViewDto {
   ciPaused: boolean;
   /** The OTHER projects in this workspace whose code Motir also hosts. */
   otherHostedProjects: OtherHostedProjectDto[];
-  /**
-   * The WORKSPACE-CONNECTED repositories that belong to this project's domain and
-   * are not already named by a row above (MOTIR-3126).
-   *
-   * Resolved through `resolveEffectiveRepoDomain`, so the room renders exactly the
-   * repositories dispatch would accept a pin for — the two used to disagree, which
-   * is the defect this field closes.
-   */
+  /** Compatibility field for the retired workspace-inheritance section. */
   connected: ProjectRepoConnectedDto[];
-  /**
-   * Whether the workspace-connected registry is part of this project's domain AT
-   * ALL — i.e. whether the room owns a `Your own repositories` section.
-   *
-   * ⚠️ NOT `connected.length > 0`, and the two must not be conflated. A project
-   * whose domain includes the workspace rung but whose workspace has nothing
-   * connected yet still owns the section (it is simply empty right now, and the
-   * island's next refetch can fill it); a project answered by its set ALONE does
-   * not own it, and rendering an empty one there would assert an absence that
-   * project never had. The distinction is the LADDER's, decided on the server, and
-   * a client must never re-derive it.
-   */
+  /** Whether the retired workspace-inheritance section is present. Always false. */
   connectedInDomain: boolean;
 }
 

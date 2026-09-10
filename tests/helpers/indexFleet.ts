@@ -3,12 +3,12 @@ import { generateKeyPairSync } from 'node:crypto';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { adminDb } from './adminDb';
+import { linkWorkspaceReposToProject } from './projectRepoLink';
 
 // THE `system.code-graph-index` TEST WORLD (Story MOTIR-1981 · MOTIR-1992) —
 // the fake-orchestrator fixture the index-fleet suites drive the REAL job
@@ -262,25 +262,20 @@ export async function seedIndexWorkspace(
   //
   // Every project gets every repo, which is what these fixtures have always
   // MEANT: `seedIndexWorkspace(slug, N, repos)` describes a workspace of N
-  // projects that all work on the same repositories, and the per-project fan-out
-  // assertions are written against exactly that.
+  // projects that all work on the same repositories.
+  //
+  // ⚠️ THROUGH `linkWorkspaceReposToProject`, which is `main`'s helper and not
+  // this card's hand-rolled `addRow` + realize pair. It lands the row in an
+  // ESTABLISHED state, which is what `resolveProjectCodeContext` now filters on —
+  // a fixture that only realized the row would leave every project code-blind
+  // again, one layer down, with the same silent `0 submits` as the symptom.
   for (const projectId of projectIds) {
-    for (const repo of repos) {
-      const row = await projectRepoSetService.addRow(
-        projectId,
-        { role: 'web', name: repo.name },
-        { userId: user.id, workspaceId: workspace.id },
-      );
-      const realized = await adminDb.githubRepo.findFirstOrThrow({
-        where: { workspaceId: workspace.id, owner: repo.owner, name: repo.name },
-      });
-      await adminDb.projectRepo.update({
-        where: { id: row.id },
-        data: { githubRepoId: realized.id },
-      });
-    }
+    await linkWorkspaceReposToProject({
+      workspaceId: workspace.id,
+      projectId,
+      names: repos.map((repo) => repo.name),
+    });
   }
-
   return {
     workspaceId: workspace.id,
     ownerUserId: user.id,

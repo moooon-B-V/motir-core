@@ -9,6 +9,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 
 // The repository SET through the real write path, over real Postgres (Story
 // MOTIR-2725 · MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md`).
@@ -47,7 +48,7 @@ async function connectRepo(fx: WorkItemFixture, name: string, defaultBranch = 'm
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -59,6 +60,12 @@ async function connectRepo(fx: WorkItemFixture, name: string, defaultBranch = 'm
       archived: false,
       provider: 'github',
     },
+  });
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
   });
 }
 

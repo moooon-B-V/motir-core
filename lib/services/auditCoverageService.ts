@@ -1,6 +1,6 @@
 import { getCodeAudit } from '@/lib/ai/motirAiClient';
 import { MotirAiError } from '@/lib/ai/errors';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import type {
   AuditCoverageDTO,
@@ -87,7 +87,7 @@ export const auditCoverageService = {
     // `ai:configure`, so NO actor's answer changes.
     await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
 
-    const code = await resolveCodeContext({
+    const code = await resolveProjectCodeContext({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
       projectId,
