@@ -1013,3 +1013,109 @@ describe('PlanReviewCanvas — the caption on an ENTIRELY proposed level (bug MO
     expect(screen.queryByTestId('level-caption')).toBeNull();
   });
 });
+
+// ── bug MOTIR-4952 — a blocker the plan MOVES ONTO the level ─────────────────
+//
+// The CONSUMER half. `plan-item-node.test.tsx` holds the builder's own contract;
+// this asserts the wiring, because the option is inert until `PlanReviewCanvas`
+// answers the question — and an unwired option is a green unit suite over a
+// surface that still draws the tangle.
+//
+// The committed level's read says the blocker is somewhere else, because at read
+// time it is: the plan has not been approved. So the level arrived with the whole
+// cross-story treatment — the red flag over the arrow's midpoint, the dependent's
+// "blocked elsewhere" ring, and a ghost anchor — asserting a tangle about the one
+// plan whose purpose is to remove it.
+describe('PlanReviewCanvas — a blocker the plan RELOCATES onto the level (bug MOTIR-4952)', () => {
+  const OFF_ID = 'wi_off_level';
+
+  /** The same tree, with MOTIR-7 blocked by a card that lives on another level. */
+  function stubWithOffLevelBlocker() {
+    const levels: Record<string, unknown> = {
+      ...WIRE_LEVELS,
+      [BUG_ID]: {
+        nodes: [
+          wireNode({
+            id: STORY_ID,
+            parentId: BUG_ID,
+            kind: 'story',
+            identifier: 'MOTIR-7',
+            title: 'AI planning layer',
+            status: 'in_review',
+            hasChildren: true,
+          }),
+        ],
+        edges: [{ blockedId: STORY_ID, blockerId: OFF_ID }],
+        offLevelBlockers: [
+          {
+            id: OFF_ID,
+            identifier: 'MOTIR-99',
+            title: 'The blocker the plan moves in',
+            parentTitle: 'Another story',
+            isDone: false,
+          },
+        ],
+      },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://localhost');
+      if (url.pathname === '/api/work-items/peek') {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      const parentId = url.searchParams.get('parentId') ?? '__root__';
+      const body = levels[parentId] ?? { nodes: [], edges: [], offLevelBlockers: [] };
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  /** The `modify` that re-parents the off-level blocker onto this level. */
+  function relocation(): PlanReviewItemDto {
+    return proposal({
+      planItemId: 'pi_reloc',
+      nodeId: OFF_ID,
+      op: 'modify',
+      identifier: 'MOTIR-99',
+      title: 'The blocker the plan moves in',
+      parentNodeId: BUG_ID,
+      status: 'todo',
+      proposal: {
+        op: 'modify',
+        identifier: 'MOTIR-99',
+        changedFields: [],
+        settableRailFields: [],
+        todos: null,
+      },
+    });
+  }
+
+  beforeEach(() => {
+    stubWithOffLevelBlocker();
+  });
+
+  it('draws no tangle about a card it puts right beside the dependent', async () => {
+    render(
+      <PlanReviewCanvas items={[relocation()]} projectKey="MOTIR" version={0} outcome={null} />,
+    );
+    await screen.findByText('The blocker the plan moves in');
+
+    // Both cards on the level, and the arrow between them in the ordinary
+    // within-level language — no red flag at its midpoint.
+    expect(el(STORY_ID)).toBeTruthy();
+    expect(el(OFF_ID)).toBeTruthy();
+    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(0);
+    // …and the dependent is not wearing the off-level ring either.
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+  });
+
+  it('still draws it for a blocker the plan leaves where it is', async () => {
+    // The control: the same level, the same committed edge, a plan that proposes
+    // something else entirely. Nothing about the cross-story treatment changes —
+    // the narrowing is keyed on the blocker being a proposal AT THIS LEVEL.
+    render(<PlanReviewCanvas items={[proposal()]} projectKey="MOTIR" version={0} outcome={null} />);
+    await screen.findByText('A proposed subtask');
+
+    expect(screen.queryAllByTestId('cross-flag')).toHaveLength(1);
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+  });
+});
