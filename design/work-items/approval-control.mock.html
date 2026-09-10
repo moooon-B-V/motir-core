@@ -1196,21 +1196,27 @@
 
       <!-- U · UNIVERSAL -->
       <section class="panel">
-        <div class="panelLabel">U · Universal — the same frame, a different port</div>
+        <div class="panelLabel">
+          U · Universal — the KIND decides the VERBS; the PORT follows what the card PRODUCED
+        </div>
         <p class="panelNote">
           The proof that the frame is universal: swap the port's contents and nothing else moves —
           same header shape, same verbs, same confirm, same decided treatment.
-          <strong>The merge port's contents are MOTIR-4882's</strong> and are a labelled placeholder
-          here; this asset specifies the frame around them, not what goes inside.
+          <strong>The port is chosen by what the card PRODUCED, not by the gate's kind</strong>
+          (ADR §1, amended by MOTIR-4911). The two frames below carry the SAME kind —
+          <span class="key">pull_request_approval</span> — and different ports, which is the
+          sharpest form the claim takes: a design that opened a pull request is approved through the
+          pull-request gate and <em>still shows its mock</em>.
         </p>
         <div class="grid2">
           <div class="frame">
             <div class="frameHead">
               <div class="frameWhat">
-                <span class="frameKind">Pull request</span>
+                <span class="frameKind">Pull request · code</span>
                 <span class="frameMeta">
-                  <span class="key">motir-core#2715</span> · branch
-                  <span class="key">MOTIR-4789-approval-frame</span> → <span class="key">main</span>
+                  <span class="key">motir-core#2801</span> · branch
+                  <span class="key">MOTIR-4792-approval-control</span> →
+                  <span class="key">main</span>
                 </span>
               </div>
               <span class="pill pill-await"
@@ -1220,14 +1226,51 @@
             <div class="port">
               <button class="portExpand" type="button">Expand ⤢</button>
               <div class="portMock">
-                THE MERGE PORT — the diff, the checks, the branch and base<br />
+                WHAT CHANGED, and HOW TO TEST IT<br />
                 <span class="portCite"
-                  >contents owned by <strong>MOTIR-4882</strong>, not specified here</span
+                  >port contents owned by <strong>MOTIR-4906</strong>; the diff is a link out, not
+                  the lead (ADR §9)</span
                 >
               </div>
             </div>
             <div class="frameFoot">
-              <span class="footWhy">Approving merges this pull request on GitHub.</span>
+              <span class="footWhy"
+                >Approving records your yes; the merge is what finishes the card.</span
+              >
+              <span class="verbs">
+                <button class="btn btn-secondary" type="button">Request changes</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </span>
+            </div>
+          </div>
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Pull request · design</span>
+                <span class="frameMeta">
+                  <span class="key">motir-core#2802</span> · branch
+                  <span class="key">MOTIR-4789-approval-frame</span> →
+                  <span class="key">main</span>
+                </span>
+              </div>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="port">
+              <button class="portExpand" type="button">Expand ⤢</button>
+              <div class="portMock">
+                THE SAME DESIGN PORT AS STATE A — the note, the sandboxed mock, the screenshot<br />
+                <span class="portCite"
+                  >same gate kind as the frame at left, different port — because this card produced
+                  a DESIGN</span
+                >
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy"
+                >Approving records your yes; the merge is what finishes the card.</span
+              >
               <span class="verbs">
                 <button class="btn btn-secondary" type="button">Request changes</button>
                 <button class="btn btn-primary" type="button">Approve</button>
@@ -1254,13 +1297,15 @@
             <div class="anat">
               <span class="anatNum">✓</span
               ><span
-                >Every state above applies unchanged, including X: a diff that will not load is a
-                merge nobody may approve.</span
+                >Every state above applies unchanged, including X: a subject that will not load is a
+                decision nobody may take.</span
               >
             </div>
             <p class="panelNote" style="margin-top: 4px">
               <strong>This is what MOTIR-4796's one-language test asserts</strong> — the same
-              component in both contexts, not two look-alikes.
+              component in every context, not a family of look-alikes. The kind supplies the verb
+              SET, which is how a choice gate's N options (MOTIR-4914) reach the same band without a
+              second control.
             </p>
           </div>
         </div>
