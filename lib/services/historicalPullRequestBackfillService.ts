@@ -129,6 +129,14 @@ interface TargetRow {
    *  would be indistinguishable from a pre-column row and read as UNKNOWN. */
   baseRef: string;
   title: string | null;
+  /** NOT ASSERTED by this sweep (MOTIR-5002), and the type requires it to say so.
+   *  Every row here is MERGED, where draft-ness decides nothing — `merged`
+   *  answers the lifecycle on its first arm, before the draft guard is reached —
+   *  and the sole reader of the column skips merged rows outright. Leaving it
+   *  unwritten also keeps `rowMatches` honest: a sweep that asserted `false` would
+   *  rewrite every historical row once, purely to fill a column nothing here
+   *  reads, and `updated_at` is what the Development surface orders by. */
+  draft: undefined;
 }
 
 function emptyRepoReport(repo: GithubRepo): HistoricalPrRepoReport {
@@ -323,6 +331,8 @@ async function applyOne(
     headRef: cr.headRef,
     baseRef: cr.baseRef,
     title: cr.title,
+    // See `TargetRow.draft`: merged rows only, where the flag decides nothing.
+    draft: undefined,
   };
 
   if (existing && rowMatches(existing, target)) {
@@ -360,6 +370,13 @@ async function applyOne(
  * `linked_manually` in between; MOTIR-4894 stopped this sweep writing that field,
  * so the comparison below no longer names it and a row differing only in it is
  * `unchanged` — correct, since nothing decides on it any more.)
+ *
+ * ⚠️ NOR IS `draft` COMPARED, and that follows from the rule rather than joining
+ * the exceptions (MOTIR-5002). This sweep passes `draft: undefined` — it does not
+ * SET the column — so "every column the upsert sets" reaches it not at all. Had it
+ * asserted `false` instead, this function would owe a clause, and the first
+ * post-migration sweep would have rewritten every historical row to fill a column
+ * no reader of a merged row consults.
  */
 function rowMatches(
   existing: {
