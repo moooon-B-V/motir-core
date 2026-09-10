@@ -200,10 +200,18 @@ test('a card that ships in two repositories holds until BOTH have merged', async
   expect(wsRes.status()).toBe(200);
   const workspaceId = ((await wsRes.json()) as { workspace: { id: string } }).workspace.id;
   const { projectId, userId } = await seedActiveProject(page, 'RSET');
-  await seedGithubInstallation(workspaceId, [E2E_REPO_SECOND]);
+  const installation = await seedGithubInstallation(workspaceId, [E2E_REPO_SECOND]);
   const ctx = { userId, workspaceId };
-  await projectRepoSetService.addRow(projectId, { role: 'other', name: E2E_REPO.name }, ctx);
-  await projectRepoSetService.addRow(projectId, { role: 'other', name: E2E_REPO_SECOND.name }, ctx);
+  for (const repoSpec of [E2E_REPO, E2E_REPO_SECOND]) {
+    const row = await projectRepoSetService.addRow(
+      projectId,
+      { role: 'other', name: repoSpec.name },
+      ctx,
+    );
+    const mirror = installation.repos.find((repo) => repo.name === repoSpec.name);
+    if (!mirror) throw new Error(`missing mirrored repository ${repoSpec.name}`);
+    await projectRepoSetService.attachRealizedRepo(row.id, mirror.id, ctx);
+  }
 
   const twoRepo = await mkItem(page, projectId, 'Ships in two repositories', [
     E2E_REPO.name,

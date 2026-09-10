@@ -243,8 +243,8 @@ describe('2 — the completion gate against a REAL set, driven by real deliverie
     const delivery = await workItemsService.listRepoDelivery(item.id, row!.targetRepos, fx.ctx);
     // The panel's view…
     expect(delivery).toEqual([
-      { repo: 'motir-core', state: 'delivered', primary: true },
-      { repo: 'motir-ai', state: 'awaiting', primary: false },
+      { repo: 'motir-core', state: 'delivered', primary: true, role: 'other' },
+      { repo: 'motir-ai', state: 'awaiting', primary: false, role: 'other' },
     ]);
     // …and the gate's, which is HOLDING the card. They name the same repository.
     // `implemented` rather than `in_review` since MOTIR-2999 — the pull request
@@ -394,7 +394,7 @@ describe('5 — a `decision` card, and 6 — DISPATCH unchanged', () => {
     expect(row!.type).toBe('decision');
     expect(row!.targetRepos).toEqual(['motir-core']);
     expect(await workItemsService.listRepoDelivery(item.id, row!.targetRepos, fx.ctx)).toEqual([
-      { repo: 'motir-core', state: 'awaiting', primary: true },
+      { repo: 'motir-core', state: 'awaiting', primary: true, role: 'other' },
     ]);
   });
 
