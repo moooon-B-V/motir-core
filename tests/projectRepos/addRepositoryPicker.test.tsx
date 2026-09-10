@@ -8,7 +8,7 @@ import { splitRoomSections } from '@/lib/projectRepos/roomSections';
 import { SEED_SOURCE_ORGANIZATION, defaultSeedSourceForRole } from '@/lib/projectRepos/vocabulary';
 import type { OrgRepoOptionDto } from '@/lib/dto/organizationRepos';
 import type { OrgSectionEntry } from '@/lib/projectRepos/roomSections';
-import type { ProjectRepoConnectedDto, ProjectRepoDto } from '@/lib/dto/projectRepos';
+import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 
 // THE `Add repository` PICKER, and the section a picked repository lands in
 // (Story MOTIR-4669 · MOTIR-4681), against
@@ -79,6 +79,7 @@ function renderPicker(over: Partial<Parameters<typeof AddRepositoryPicker>[0]> =
       options={[OPTION('r1', 'moooon/motir-core'), OPTION('r2', 'moooon/motir-ai')]}
       alreadyHeld={[]}
       organizationName="moooon"
+      projectName="Motir"
       installHref="https://github.com/apps/motir/installations/new"
       loading={false}
       error={false}
@@ -135,11 +136,18 @@ describe('⚠️ a FIRST-TIME organisation is a PICKER, not a signpost', () => {
     expect(screen.getByText('Connect a new one')).toBeTruthy();
   });
 
-  it('says what will HAPPEN, rather than sending anyone away', () => {
+  it('says what will HAPPEN, rather than sending anyone away — and NAMES both tiers', () => {
+    // ⚠️ RE-POINTED BY MOTIR-4954 (design §18.5). The sentence used to open on
+    // "Connect the first one" and end on "in this project", leaving the reader to
+    // supply both the state they are in and the name of the thing they are being
+    // promised. It now states the state ("{org} has no repositories connected
+    // yet") and names the PROJECT, because connect-and-link's whole point is that
+    // one action settles both tiers — and a promise about two tiers that names one
+    // of them reads as a promise about one.
     renderPicker({ options: [], alreadyHeld: [] });
     expect(
       screen.getByText(
-        'Connect the first one and it lands in moooon and in this project at the same time.',
+        'moooon has no repositories connected yet. Connect the first one and it lands in moooon and in Motir at the same time.',
       ),
     ).toBeTruthy();
   });
@@ -175,28 +183,21 @@ describe('⚠️ a FIRST-TIME organisation is a PICKER, not a signpost', () => {
   });
 });
 
-/** A connected repository as the room's domain read carries it. */
-const CONNECTED = (
-  name: string,
-  owner = 'moooon',
-  branch: string | null = 'main',
-): ProjectRepoConnectedDto => ({
-  name,
-  repoRef: owner ? `${owner}/${name}` : name,
-  defaultBranch: branch,
-});
+// ⚠️ `CONNECTED` AND `HOST_OWNER` LIVED HERE AND ARE GONE (MOTIR-4954). They
+// built a `ProjectRepoConnectedDto` — a repository the LADDER layers into the
+// project with no `project_repository` row — and named the provisioning
+// organisation that classified one. Both were arguments to `splitRoomSections`,
+// which now takes the project's rows alone, so neither has anything to be an
+// argument to. They are removed rather than left with an underscore: an unused
+// fixture for a shape the type system no longer admits is an invitation to
+// re-derive the section this card removed.
 
-/** The provisioning organisation. Neither case here layers anything, so it only
- *  satisfies the required argument (bug MOTIR-4867). */
-const HOST_OWNER = 'motir-projects';
-
-/** The two halves of the org section, as `splitRoomSections` hands them over. */
+/** The org section's rows, as `splitRoomSections` hands them over.
+ *  ⚠️ MOTIR-4954: there used to be a second constructor here, `DOMAIN`, for a
+ *  ladder-layered repository with no `project_repository` row. That half of the
+ *  union is gone — a project-scoped page draws links — so this is the whole of
+ *  what the section can be handed. */
 const LINK = (row: ProjectRepoDto): OrgSectionEntry => ({ kind: 'link', id: row.id, row });
-const DOMAIN = (repo: ProjectRepoConnectedDto): OrgSectionEntry => ({
-  kind: 'domain',
-  id: repo.repoRef,
-  repo,
-});
 
 describe('the picker`s honest states', () => {
   it('reports a failed load rather than an empty organisation', () => {
@@ -217,12 +218,7 @@ describe('⚠️ THE SECTION SPLIT — a picked repository is not Motir-hosted',
   it('splits on the row`s own seedSource, and the split is TOTAL', () => {
     const picked = ROW('a', SEED_SOURCE_ORGANIZATION);
     const hosted = ROW('b', defaultSeedSourceForRole('api'), 'acme-api');
-    const { fromOrganization, motirHosted } = splitRoomSections(
-      [picked, hosted],
-      [],
-      false,
-      HOST_OWNER,
-    );
+    const { fromOrganization, motirHosted } = splitRoomSections([picked, hosted]);
 
     expect(fromOrganization.map((e) => e.id)).toEqual(['a']);
     expect(motirHosted.map((r) => r.id)).toEqual(['b']);
@@ -236,9 +232,7 @@ describe('⚠️ THE SECTION SPLIT — a picked repository is not Motir-hosted',
     // seed source from every other role, so a split that keyed on "not
     // initialised" would put it on the wrong side.
     const web = ROW('c', defaultSeedSourceForRole('web'), 'acme');
-    expect(splitRoomSections([web], [], false, HOST_OWNER).motirHosted.map((r) => r.id)).toEqual([
-      'c',
-    ]);
+    expect(splitRoomSections([web]).motirHosted.map((r) => r.id)).toEqual(['c']);
   });
 });
 
@@ -249,7 +243,6 @@ describe('the ORGANISATION section, and its ONE action', () => {
       <OrganizationRepositories
         entries={[LINK(ROW('a', SEED_SOURCE_ORGANIZATION))]}
         organizationName="moooon"
-        inventoryHref="/settings/organization/git"
         canAdd
         onRemove={onRemove}
         addButton={<button type="button">Add repository</button>}
@@ -266,10 +259,28 @@ describe('the ORGANISATION section, and its ONE action', () => {
     expect(screen.getByText('From your organisation')).toBeTruthy();
   });
 
-  it('the footer link is a VIEW, not a hand-off — the tier move in one line', () => {
+  it('⚠️ NO LONGER CARRIES THE INVENTORY LINK — it is NAVIGATION now (MOTIR-4954)', () => {
+    // Re-pointed. This used to assert the footer link is a VIEW rather than a
+    // hand-off — the tier move in one line, and still true of the link. What
+    // changed is WHERE it lives: `See every repository in {org}` moved out of this
+    // card's footer into the room's own navigation block after both project
+    // sections (design §18.6), because it is the ONLY route from a project context
+    // to the organisation's inventory and a route is not a footnote to a list.
+    // Asserted from BOTH sides — absent here, present there — so a re-introduction
+    // in either place is caught. The nav block's own case is in
+    // `repositoriesRoomOrgSection.test.tsx`.
     renderSection();
-    const link = screen.getByRole('link', { name: 'See every repository in moooon' });
-    expect(link.getAttribute('href')).toBe('/settings/organization/git');
+    expect(screen.queryByRole('link', { name: 'See every repository in moooon' })).toBeNull();
+  });
+
+  it('⚠️ NOR THE PROVENANCE SENTENCE — it is RETIRED, not relocated (MOTIR-4954)', () => {
+    // "Connected to the organisation, not to this project alone" existed to
+    // explain rows this section could not remove. There are none: every entry is
+    // a link this project chose and may drop. A sentence that outlives the thing
+    // it explained becomes the contradiction it was written to resolve — and it
+    // was one half of exactly the pair §18.5 replaces.
+    renderSection();
+    expect(screen.queryByText(/not to this project alone/)).toBeNull();
   });
 
   it('⚠️ without permission the add door is ABSENT and a sentence says who can', () => {
@@ -297,7 +308,6 @@ describe('⚠️ the two removals do not look alike', () => {
       <OrganizationRepositories
         entries={[LINK(ROW('a', SEED_SOURCE_ORGANIZATION))]}
         organizationName="moooon"
-        inventoryHref="/settings/organization/git"
         canAdd
         onRemove={vi.fn()}
         addButton={null}
@@ -312,7 +322,6 @@ describe('⚠️ the two removals do not look alike', () => {
       <OrganizationRepositories
         entries={[LINK(ROW('a', SEED_SOURCE_ORGANIZATION))]}
         organizationName="moooon"
-        inventoryHref="/settings/organization/git"
         canAdd
         onRemove={vi.fn()}
         addButton={null}
@@ -332,7 +341,6 @@ describe('⚠️ the two removals do not look alike', () => {
       <OrganizationRepositories
         entries={[LINK(ROW('a', SEED_SOURCE_ORGANIZATION))]}
         organizationName="moooon"
-        inventoryHref="/settings/organization/git"
         canAdd
         onRemove={vi.fn()}
         addButton={null}
@@ -347,25 +355,33 @@ describe('⚠️ the two removals do not look alike', () => {
   });
 });
 
-// ⚠️ THE SECTION ANSWERS THE LADDER, NOT THE LINK TABLE (bug MOTIR-4820).
+// ⚠️ THE SECTION HOLDS THE PROJECT'S LINKS (MOTIR-4820, RE-POINTED BY MOTIR-4954).
 //
 // MOTIR-4681 shipped `From your organisation` fed by `seedSource` alone, so on a
 // project with no repository SET it drew EMPTY — directly above the very
 // repositories it is about, which rendered under the old `Your own repositories`
-// heading. `/settings/organization/git` had meanwhile moved onto the ladder
-// (MOTIR-4802) and read `Used by <project>` for each of them. Two surfaces, one
-// question, opposite answers.
+// heading. MOTIR-4820 fixed that by feeding the section the LADDER's answer:
+// links plus everything layered, as one list.
 //
-// The section now takes BOTH halves of the ladder's answer as one list, and the
-// only thing that distinguishes a member is whether there is a LINK to remove.
-describe('⚠️ the org section holds the LADDER`s answer (MOTIR-4820)', () => {
+// ⚠️ THAT FIX IS WHAT THIS CARD REVERSES, AND NOT BECAUSE IT WAS WRONG. It made
+// the room and the organisation inventory agree, which they did not. What it also
+// did was put the ORGANISATION's whole inventory on a PROJECT page: one project
+// holding a single link rendered seven rows, `moooon-B-V/motir-core` drawn twice,
+// and every control on the page operating on the link set while most rows were
+// entries no control could touch (§18.2). The agreement is kept a different way —
+// the room asks *what does this project work on?* and the inventory asks *what can
+// it reach?*, which are different questions with a containment between them.
+//
+// So these cases are re-pointed rather than deleted: each one that asserted a
+// layered entry RENDERS now asserts it CANNOT, at the type level and at the
+// render.
+describe('⚠️ the org section holds the PROJECT`s links (MOTIR-4820 → MOTIR-4954)', () => {
   function renderEntries(entries: OrgSectionEntry[], canAdd = true) {
     const onRemove = vi.fn().mockResolvedValue(undefined);
     renderWithIntl(
       <OrganizationRepositories
         entries={entries}
         organizationName="moooon"
-        inventoryHref="/settings/organization/git"
         canAdd={canAdd}
         onRemove={onRemove}
         addButton={<button type="button">Add repository</button>}
@@ -374,61 +390,37 @@ describe('⚠️ the org section holds the LADDER`s answer (MOTIR-4820)', () => 
     return { onRemove };
   }
 
-  it('renders a LADDER-LAYERED repository the project has no row for', () => {
-    // The defect in one assertion: this repository is the organisation's, the
-    // project works on it, and the section headed `From your organisation` used
-    // to be empty while it rendered thirty pixels lower under another name.
-    renderEntries([DOMAIN(CONNECTED('motir-core'))]);
-    expect(screen.getByText('From your organisation')).toBeTruthy();
-    expect(screen.getByText('motir-core')).toBeTruthy();
-    expect(screen.getByText('moooon/')).toBeTruthy();
-    expect(screen.getByText('main')).toBeTruthy();
-  });
-
-  it('⚠️ and gives it NO remove action — there is no link to delete', () => {
-    // §16.2's rule, kept exactly: an affordance here would be a promise this room
-    // cannot keep. A layered repository has no `project_repository` row, so a
-    // `Remove from this project` would have nothing to remove.
-    renderEntries([DOMAIN(CONNECTED('motir-core'))]);
-    expect(screen.queryByRole('button', { name: 'Remove from this project' })).toBeNull();
-  });
-
-  it('renders LINKS and LAYERED repositories in ONE list, with the action on the link alone', () => {
-    renderEntries([
-      LINK(ROW('a', SEED_SOURCE_ORGANIZATION, 'picked')),
-      DOMAIN(CONNECTED('layered')),
-    ]);
-
+  it('⚠️ NOW HOLDS THE INVERSE: a LAYERED repository cannot be handed to this section at all', () => {
+    // The strongest form this assertion can take, and the reason it is worth more
+    // than a render check: `OrgSectionEntry` is a ONE-MEMBER union now, so the
+    // `{ kind: 'domain', repo }` shape the three deleted cases constructed is a
+    // TYPE ERROR rather than a row that fails to appear. What is asserted at
+    // runtime is the consequence — every row the section draws carries the remove
+    // action, because every row is a link.
+    renderEntries([LINK(ROW('a', SEED_SOURCE_ORGANIZATION, 'picked'))]);
     expect(screen.getByText('picked')).toBeTruthy();
-    expect(screen.getByText('layered')).toBeTruthy();
-    // ONE remove button, on the row that has something to remove.
     expect(screen.getAllByRole('button', { name: 'Remove from this project' })).toHaveLength(1);
   });
 
-  it('⚠️ the footer says whose repositories these are — the tier the old copy got wrong', () => {
-    // The absorbed section carried "Connected for the whole workspace, not for
-    // this project alone": true of a workspace and wrong since MOTIR-4649 moved a
-    // repository's tenancy to the ORGANISATION. It matters more here than it did
-    // there, because this section now holds rows the project cannot remove.
-    renderEntries([DOMAIN(CONNECTED('motir-core'))]);
-    expect(
-      screen.getByText('Connected to the organisation, not to this project alone.'),
-    ).toBeTruthy();
-    expect(screen.queryByText(/whole workspace/)).toBeNull();
+  it('⚠️ EVERY row carries the remove action — the state is no longer carried by an affordance', () => {
+    // §18.2's finding: the presence of `Remove from this project` was the ONLY
+    // signal telling a repository the project works on from one it merely could
+    // reach, and nothing labelled, grouped or ordered the two apart. With one kind
+    // of row the affordance stops carrying a state it never named.
+    renderEntries([
+      LINK(ROW('a', SEED_SOURCE_ORGANIZATION, 'one')),
+      LINK(ROW('b', SEED_SOURCE_ORGANIZATION, 'two')),
+    ]);
+    expect(screen.getAllByRole('button', { name: 'Remove from this project' })).toHaveLength(2);
   });
 
-  it('degrades honestly on a repository with no branch and on a ref with no owner', () => {
-    // Both are absences rather than states to hide: no guessed `main`, and never
-    // a stray slash.
-    renderEntries([
-      DOMAIN(CONNECTED('no-branch', 'moooon', null)),
-      DOMAIN(CONNECTED('bare-ref', '', 'trunk')),
-    ]);
-    expect(screen.getByText('no-branch')).toBeTruthy();
-    expect(screen.queryByText('main')).toBeNull();
-    expect(screen.getByText('bare-ref')).toBeTruthy();
-    expect(screen.getByText('trunk')).toBeTruthy();
-    expect(screen.queryByText('/')).toBeNull();
+  it('⚠️ ZERO links is Panel 9 — a drawn starting condition, not an empty box', () => {
+    // Every project in the estate is in this state today. It says the PROJECT is
+    // empty while the organisation may not be, and it points at the add door
+    // above rather than at another page.
+    renderEntries([]);
+    expect(screen.getByText(/No repositories in this project yet/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add repository' })).toBeTruthy();
   });
 
   it('a LINK that has not realized its repository prints its authored name alone', () => {

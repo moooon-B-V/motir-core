@@ -7091,12 +7091,11 @@
   },
   "repositoryTakeover": {
     "title": "Repositories",
-    "lead": "Where {projectName}'s code lives. Motir hosts the repositories it created for you — move any of them to your own GitHub whenever you want.",
-    "leadConnected": "Where {projectName}'s code lives — the repositories Motir hosts for you, and the ones you connected yourself.",
+    "lead": "Only the repositories {projectName} works on — whether Motir hosts them or {org} does.",
     "hostedHeading": "Hosted by Motir",
     "hostedHint": "Motir created these and pays for their CI. Move any of them to your own GitHub whenever you want.",
     "emptyAction": "Connect a repository",
-    "empty": "No repositories are connected to this project yet. Connect the code you already have on GitHub, or approve a plan and Motir will create them for you.",
+    "empty": "No repositories in this project yet. Add one {org} already has, or connect a new repository.",
     "summary": "{moving} moving · {hosted} hosted by Motir · {yours} yours",
     "pausedTitle": "CI is paused — this organization is out of credits.",
     "pausedBody": "Moving a repository to your own GitHub turns its Actions back on and GitHub bills you for them from then on.",
@@ -7154,7 +7153,9 @@
     "back": "Back",
     "cancel": "Cancel",
     "connectTitle": "Connect GitHub first",
-    "connectWhy": "Motir needs one thing to move a repository to you: the GitHub account it belongs to. It is the same account it invites you to your code with — you'll see which one."
+    "connectWhy": "Motir needs one thing to move a repository to you: the GitHub account it belongs to. It is the same account it invites you to your code with — you'll see which one.",
+    "inventoryNavLabel": "Organisation repository inventory",
+    "inventoryPrompt": "Looking for a repository that is not linked to {projectName}?"
   },
   "apiDocs": {
     "metaTitle": "Motir documentation",
@@ -7868,7 +7869,7 @@
   "repositoryPicker": {
     "add": "Add repository",
     "title": "Add a repository",
-    "subtitle": "Pick one your organisation already has, or connect a new one.",
+    "subtitle": "Pick one {org} already has, or connect a new one.",
     "searchLabel": "Search repositories",
     "searchPlaceholder": "Filter by name…",
     "loading": "Loading your organisation’s repositories…",
@@ -7878,15 +7879,14 @@
     "alreadyInProject": "already in this project",
     "connectNew": "Connect a new one on GitHub",
     "noInstallHref": "Connecting a new repository isn’t available on this deployment.",
-    "firstTimeLead": "Connect the first one and it lands in {org} and in this project at the same time.",
+    "firstTimeLead": "{org} has no repositories connected yet. Connect the first one and it lands in {org} and in {projectName} at the same time.",
     "segment": {
       "organization": "In {org} · already connected",
       "connect": "Connect a new one"
     },
     "section": {
       "heading": "From your organisation",
-      "hint": "Repositories {org} is connected to that this project works on. Picking one never indexes it again.",
-      "provenance": "Connected to the organisation, not to this project alone.",
+      "hint": "Repositories from {org} that are linked to this project.",
       "footNoPermission": "Only owners and admins of your organisation can add a repository. Ask one of them, or add it from Settings → Organisation → Git.",
       "seeAll": "See every repository in {org}"
     },
