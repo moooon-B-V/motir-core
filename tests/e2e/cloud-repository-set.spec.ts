@@ -1,53 +1,75 @@
-// Acceptance E2E — Story MOTIR-1775: approve a plan and get the repositories your
-// architecture needs (Subtask MOTIR-1785).
+// Regression E2E — the post-approval repository step: approve a plan and get the
+// repositories your architecture needs, then be TOLD you can reach them.
 //
-// Runs under playwright.acceptance.config.ts (video: 'on'), which discovers this
-// file by its `acceptance*.spec.ts` name (MOTIR-1700); the bulk shards
-// `testIgnore` the same pattern, so it runs ONCE, in the lane that records. The
-// recorded happy path declares Story MOTIR-1775 via `acceptanceStory()`
-// (MOTIR-1684), so the clip publishes to 1775 whichever PR triggered the run.
+// ⚠️ RE-SCOPED BY MOTIR-5018 · Story MOTIR-5010 — *the repository question belongs
+// to ONBOARDING*. What this spec asserted was Story MOTIR-1775's surface, and a
+// large part of that surface is gone. What changed, and what each removal means:
 //
-// ══ WHAT THIS STORY CLAIMS, AND WHAT THE HEADLINE JOURNEY PROVES ══
+//   * `mode: 'own'` (**I already have code**) and `mode: 'set'` (the editable
+//     rows, the picker, per-row state, **Set up N repositories**) were DELETED by
+//     MOTIR-5014. Connecting a repository the user already owns is ONBOARDING's —
+//     `parseRoutingVerdict` refuses `continue` when a project has no repository,
+//     so a person standing at plan approval has already answered that question.
+//   * `mode: 'access'` was DELETED by MOTIR-5015. The collaborator invitation is
+//     sent SERVER-SIDE at establish (and has been since MOTIR-1900, through
+//     `projectRepoSetService.attachRealizedRepo` → `inviteAfterEstablish`), so the
+//     `created` panel REPORTS which account it went to instead of asking.
+//
+// **Every assertion that drove a deleted surface is REMOVED, not weakened, and
+// each removal names where the behaviour is covered now.** The tests that stayed
+// are the ones whose subject survived: the journey, the equivalence, the rail's
+// two outcomes, and the evidence of what GitHub was actually asked.
+//
+// ══ THIS IS A PROMOTED REGRESSION SPEC, NOT A RECEIPT ══
+//
+// It imports `./_helpers/promoted-regression`, where `acceptanceStory()` is a
+// no-op and no clip is recorded: Story MOTIR-1775's receipt is approved and
+// FROZEN (`docs/decisions/acceptance-receipt-lifecycle.md`), and this file's job
+// since MOTIR-2769 is to go red when a regression lands. **Story MOTIR-5010's own
+// receipt is a different instrument in a different lane** —
+// `tests/e2e/acceptance-repository-report.spec.ts`, which declares
+// `acceptanceStory('MOTIR-5010')` and runs under `playwright.acceptance.config.ts`.
+// The two are not "two walks over one surface": one is a regression check that
+// runs on every pull request, the other is one recorded run a person approves.
+// `tests/e2e-acceptance-lane-imports.test.ts` enforces the split in both
+// directions.
+//
+// ══ WHAT THE STORY CLAIMS, AND WHAT THE JOURNEY PROVES ══
 //
 // A plan that separates a web app from an API needs TWO repositories, and Motir
-// should work that out from the plan rather than asking. So the recorded journey
-// is the TWO-repo one: a one-repo spec would pass while leaving the premise
-// untested (the card's own 2026-07-30 sweep).
+// works that out from the plan rather than asking. So the journey is the TWO-repo
+// one: a one-repo spec would pass while leaving the premise untested.
 //
 // ⚠️ THE HEADLINE ASSERTION IS AN EQUIVALENCE (the 2026-07-30 ownership re-plan).
 // A user WITH a connected GitHub identity and a user WITHOUT one walk the same
 // flow through creation — no connect prompt, no consent screen, no account
 // question — and both end with repositories under MOTIR's org. `equivalence
-// through creation` below asserts that directly rather than testing two variants,
-// because it is the acceptance for the ownership decision itself. The journeys
-// legitimately DIVERGE after the code exists, at the access step, which is why the
-// recorded journey is the NO-identity one: that is the pre-Epic-9 main line
-// (MOTIR-1900) and the half a reviewer most needs to see work.
+// through creation` asserts that directly rather than testing two variants.
+//
+// ⚠️ AND SINCE v5 THE TWO JOURNEYS NO LONGER DIVERGE INTO DIFFERENT SCREENS.
+// They diverge into two ARMS of one panel: the account is known and named, or it
+// is absent and the panel says so in the rail's own words. Both are asserted.
 //
 // ══ NO REAL REPOSITORY IS CREATED ══ The two GitHub boundaries are faked INSIDE
 // the Next server (`lib/test-github-repos-mock.ts`, E2E_TEST_GITHUB_REPOS=1),
 // because both are server-side `fetch`es that `page.route` cannot see. The spec
 // scripts it through the control file and asserts the EXACT outbound bodies
-// through the journal (`repository-set-seed.ts`). The identity connect is NOT
-// faked at that level — it is the real `/api/github/oauth/start` → callback
-// round-trip github.spec.ts drives.
+// through the journal (`repository-set-seed.ts`).
 //
 // ══ WAITS ══ Every wait is on an authoritative signal (CLAUDE.md § E2E): the
-// write's own response, or the committed per-row state the establish poll
-// re-reads. Repository creation is external and slow by nature, so the rows are
-// polled to `created` via `expect(...).toHaveAttribute('data-state', …)` against
-// the row's own committed state — never a fixed sleep, and never the optimistic UI.
+// write's own response, or the committed state the establish poll re-reads.
 //
-// ══ SELECTOR SCOPING ══ `Connect GitHub` appears at THREE altitudes on this
-// surface (the default path's ready-state primary, the access step's prompt, and a
-// `not invited` row) and `Let Motir host it` at two, so nothing here is located by
-// name alone: row-level controls go through `repo-row-<role>`, and the rest are
-// pinned by ROLE plus the screen the assertion runs on (see the note by the
-// locators). Two more traps this file works around, both real: `Your code is
-// ready` is BOTH `repositorySet.ready` (the step's status line) and
-// `repositorySet.outcomeReady` (the rail's line), character for character; and
-// `Finish setting up access` shares a prefix with `Finish setting up
-// repositories`, so both are matched with `exact: true`.
+// ══ SELECTOR SCOPING ══ Two collisions survive the deletion and both are still
+// worked around: `Your code is ready` is BOTH `repositorySet.ready` (the step's
+// status line) and `repositorySet.outcomeReady` (the rail's line), character for
+// character — the step's is always read through `setupStatus`, and when the PAIR
+// is the subject it is counted rather than located; and `Finish setting up access`
+// shares a prefix with `Finish setting up repositories`, so both are matched with
+// `exact: true`.
+//
+// ⚠️ ONE COLLISION IS GONE, and its absence is now itself an assertion: `Connect
+// GitHub` used to appear at three altitudes here. It appears at NONE, and
+// `renders no ask about GitHub` pins that.
 
 import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
@@ -67,37 +89,23 @@ import {
 } from './_helpers/repository-set-seed';
 
 // A full approve → derive → create → invite → dispatch journey against a
-// production build, paced for a human. The lane runs `workers: 1, retries: 0`.
+// production build. The lane runs `workers: 1, retries: 0`.
 test.describe.configure({ timeout: 300_000 });
 
 // ── Locators, all scoped ─────────────────────────────────────────────────────
 
-/** One row of the set, by ROLE — the shipped `data-testid` (RepositoryRow). */
-const row = (page: Page, role: string) => page.getByTestId(`repo-row-${role}`);
-
 /** The default path's single status line (`repo-setup-status`). */
 const setupStatus = (page: Page) => page.getByTestId('repo-setup-status');
 
-// ⚠️ NO "the step" LOCATOR ON PURPOSE. The step and the review rail are siblings
-// inside the SAME `<main>`, so a `main`-scoped locator would scope nothing — and
-// the step's own shell carries no test id, which this spec must not add (it ships
-// no product change). Disambiguation is therefore by ROLE plus the screen the
-// assertion runs on, which is sufficient for every collision this surface has:
-//   * `Connect GitHub` — a BUTTON on the default path's ready state and on the
-//     access step; a LINK on the access step's no-identity prompt and on a
-//     `not invited` ROW. Rows are never rendered on the default or access step,
-//     and the two buttons never co-occur, so role + screen is exact. Row-level
-//     ones are always reached through `row()`.
-//   * `Your code is ready` — the step's status line (`repo-setup-status`) AND the
-//     rail's approved outcome, character for character. The step's is always read
-//     through `setupStatus`; when the pair itself is the subject, it is counted
-//     with `exact: true` rather than located.
-// Every assertion below asserts the screen it is on BEFORE reaching for a name
-// that exists on another one.
+/** The `created` panel's REPORT — either arm (`repo-access-report`, MOTIR-5015).
+ *  Arm A names the invited account; arm B says nobody has been invited yet. */
+const accessReport = (page: Page) => page.getByTestId('repo-access-report');
 
-/** The row's name field, by the shipped `nameLabelForRole` copy. */
-const nameField = (page: Page, role: string) =>
-  row(page, role).getByRole('textbox', { name: `Name of the ${role} repository` });
+// ⚠️ NO `repo-row-*` LOCATOR ANY MORE. `RepositoryRow` was deleted with the
+// technical path (MOTIR-5014), so there is no per-row surface on this route at
+// all. The per-row invitation states live on `/settings/project/code-access`,
+// which this spec does not walk — that surface has its own coverage and this
+// story did not touch it.
 
 // ── Journey helpers ──────────────────────────────────────────────────────────
 
@@ -123,46 +131,39 @@ async function approvePlan(page: Page, seed: RepositorySetSeed): Promise<void> {
   //
   // The establish step SHOULD be here already. It is not: the step is rendered
   // from a SERVER read in `app/(authed)/plans/[id]/page.tsx`, and the approve
-  // handler (`PlanDetail`'s `runAction`) only refetches the plan REVIEW into
-  // client state — it never `router.refresh()`es, so the server read that
-  // produces `repositorySet` never re-runs and the prop stays `null`. A real
-  // user therefore approves a plan and is told NOTHING about code until they
-  // happen to open the plan again, which is the exact opposite of this Story's
-  // premise. Reproduced from this spec before it was diagnosed; filed as
-  // MOTIR-1947 rather than fixed here (this card ships no product code).
-  //
-  // The re-navigation below is what makes the rest of the journey reachable
-  // TODAY. It is deliberately a full navigation and not a `reload()`, so it
-  // reads on camera as "the user comes back to the plan" rather than as a page
-  // blinking. **When MOTIR-1947 lands, DELETE these two lines** — every
-  // assertion after this point is unchanged either way, so their removal is
-  // that fix's own regression test.
+  // handler only refetches the plan REVIEW into client state — it never
+  // `router.refresh()`es, so the server read that produces `repositorySet` never
+  // re-runs and the prop stays `null`. **When MOTIR-1947 lands, DELETE these two
+  // lines** — every assertion after this point is unchanged either way, so their
+  // removal is that fix's own regression test.
   await page.goto(`/plans/${seed.planId}`);
   await expect(page.getByText(/^Added \d+ items? to your backlog$/)).toBeVisible();
 }
 
-/** Open the TECHNICAL path — where rows, roles, names and per-row state exist at
- *  all. Requires an App installation (grant 2); without one the same control
- *  leads to the short "use the code you already have" confirmation instead. */
-async function openTechnicalPath(page: Page): Promise<void> {
+/**
+ * Press **Continue** and wait for the establish to commit.
+ *
+ * ⚠️ THIS REPLACES `openTechnicalPath` + **Set up N repositories** (MOTIR-5014).
+ * There is one way to establish a set now, and it is the default path's only
+ * action — which is the point of the story rather than an incidental
+ * simplification.
+ */
+async function establish(page: Page): Promise<void> {
   // Assert the STEP is on the page before reaching for a control inside it. The
   // step renders only when the project's set has rows, and the set is derived by
-  // a best-effort post-commit pass in `approvePlan` that SWALLOWS its failures —
-  // so a derivation that broke shows up here as "the button never appeared",
-  // which is an unreadable way to learn that the set is empty.
+  // a best-effort post-commit pass that SWALLOWS its failures — so a derivation
+  // that broke shows up here as "the button never appeared", which is an
+  // unreadable way to learn that the set is empty.
   await expect(
     page.getByRole('heading', { name: 'Motir will host your code' }),
     'the establish step is on the page (an empty set renders no step at all)',
   ).toBeVisible();
-  await page.getByRole('button', { name: 'I already have code' }).click();
-  await expect(page.getByRole('heading', { name: 'Where should each part live?' })).toBeVisible();
-}
-
-/** Wait for a row to reach a COMMITTED state — the row's own `data-state`, which
- *  the step's 1.5s poll re-reads from the server. The authoritative signal for a
- *  create, whose duration is external and unmeasured (spike §4.2). */
-async function expectRowState(page: Page, role: string, state: string): Promise<void> {
-  await expect(row(page, role)).toHaveAttribute('data-state', state, { timeout: 60_000 });
+  const established = page.waitForResponse(
+    (r) => /\/repositories\/establish$/.test(r.url()) && r.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Continue' }).click();
+  expect((await established).status(), 'the establish run committed').toBe(200);
+  await expect(setupStatus(page)).toHaveText('Your code is ready', { timeout: 60_000 });
 }
 
 /** The `owner/name` a create landed on, read off the journal's own request. */
@@ -199,82 +200,57 @@ async function dispatchNext(
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// THE HEADLINE JOURNEY — the one that carries the camera.
+// THE JOURNEY — approve, and be told your code is ready and who can open it.
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('approve a plan that has two parts, and get a repository for each — then get into them', async ({
+test('approve a plan with two parts, get a repository for each, and be INVITED without asking', async ({
   page,
   chapter,
   beat,
-  acceptanceStory,
 }) => {
-  acceptanceStory('MOTIR-1775');
-
   await resetDatabase();
   resetGithubFixture();
-  // An App installation (grant 2) but NO identity (grant 1): the two grants are
-  // independent, and this is the pre-Epic-9 main line — the user reaches the
-  // access step with nothing connected and is PROMPTED, never failed.
+  // ⚠️ `withIdentity: true` — AND THAT IS THE CHANGE THIS STORY MADE. This
+  // journey used to run with NO identity, because the pre-v5 main line was
+  // "approve, then be prompted to connect". There is no prompt any more: the
+  // invitation rides the establish, so the interesting journey is the one where
+  // Motir HAS the account, which after MOTIR-4753 is every project that reached
+  // plan approval at all. The no-identity arm is asserted below, in its own test.
   const seed = await seedRepositorySet('e2e-repo-set@example.com', 'Acme Booking', 'ABK', {
     roles: ['web', 'api'],
     withInstallation: true,
-    withIdentity: false,
+    withIdentity: true,
   });
   await signIn(page, seed.email, seed.password);
 
   await chapter('The plan is approved — and only then is code discussed', async () => {
     await approvePlan(page, seed);
-    // The establish step takes the canvas. Its default path is ONE sentence and
-    // one primary: no repository name, role or count reaches it.
+    // The step takes the canvas. ONE sentence and ONE primary: no repository
+    // name, role or count reaches it, and no branch either.
     await expect(page.getByRole('heading', { name: 'Motir will host your code' })).toBeVisible();
     await beat();
   });
 
-  await chapter('Two parts in the plan, two repositories proposed', async () => {
-    await openTechnicalPath(page);
-    // ONE row per part, each carrying its role and the gloss that says what the
-    // role MEANS in the user's words.
-    await expect(row(page, 'web')).toHaveAttribute('data-state', 'proposed');
-    await expect(row(page, 'api')).toHaveAttribute('data-state', 'proposed');
-    await expect(row(page, 'web').getByText('The app people use')).toBeVisible();
-    await expect(row(page, 'api').getByText('The service behind it')).toBeVisible();
-    // WHY each row is here — the derivation's persisted signal, in prose. This is
-    // the plan-item-role rung: the plan pinned the roles, so nobody was asked.
-    await expect(
-      row(page, 'api').getByText(/Part of the plan you approved builds the api/),
-    ).toBeVisible();
-    // Where it will be created — Motir's org, as the fixed prefix on the name.
-    await expect(row(page, 'web').getByText(`${E2E_PROVISIONING_ORG} /`)).toBeVisible();
+  await chapter('Nothing is asked about GitHub, or about code you already have', async () => {
+    // ⚠️ ASSERTED AS AN ABSENCE, which is what the story's claim actually is. The
+    // door into the technical path and the connect ask are both gone, and a
+    // deletion that leaves either one reachable is the regression this pins.
+    await expect(page.getByRole('button', { name: 'I already have code' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Connect GitHub' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Set up \d+ repositor/ })).toHaveCount(0);
     await beat();
   });
 
-  await chapter('The set is the user’s to change, not Motir’s to impose', async () => {
-    const field = nameField(page, 'api');
-    await field.fill(`${seed.projectSlug}-availability`);
-    // Commit is on BLUR (a persisted decision, not a per-keystroke PATCH), so the
-    // authoritative signal is the PATCH's own 200.
-    const patched = page.waitForResponse(
-      (r) => /\/repositories\/[^/]+$/.test(r.url()) && r.request().method() === 'PATCH',
-    );
-    await field.blur();
-    expect((await patched).status(), 'the rename persisted').toBe(200);
-    await expect(nameField(page, 'api')).toHaveValue(`${seed.projectSlug}-availability`);
-    await beat();
-  });
-
-  await chapter('Motir creates both — each row reports its own outcome', async () => {
-    await page.getByRole('button', { name: 'Set up 2 repositories' }).click();
-    await expectRowState(page, 'web', 'created');
-    await expectRowState(page, 'api', 'created');
-    await expect(row(page, 'web').getByText('Created')).toBeVisible();
-    await expect(row(page, 'api').getByText('Created')).toBeVisible();
+  await chapter('Motir makes both repositories — one press, no questions', async () => {
+    await establish(page);
     await beat();
   });
 
   // ── What GitHub was actually asked (not recorded — evidence, not narrative) ──
   const creates = repoCreates();
   expect(creates, 'exactly two repositories were created').toHaveLength(2);
-  expect(createdNames()).toEqual([seed.webRepoName, `${seed.projectSlug}-availability`]);
+  expect(createdNames()).toEqual([seed.webRepoName, seed.apiRepoName]);
   for (const call of creates) {
     expect(call.body?.['private'], 'every created repository is PRIVATE').toBe(true);
   }
@@ -287,92 +263,53 @@ test('approve a plan that has two parts, and get a repository for each — then 
   expect(githubJournal().some((c) => c.path.startsWith('/user/repos'))).toBe(false);
 
   await chapter('It’s yours — Motir says so, before it is asked', async () => {
-    // Back to the main line: every row has settled, so the default path reads
-    // ready and shows the standing ownership promise.
-    await page.getByRole('button', { name: 'Not now' }).click();
-    await expect(setupStatus(page)).toHaveText('Your code is ready');
     await expect(page.getByText(/It's yours\./).first()).toBeVisible();
     await expect(page.getByText(/move it to your own GitHub whenever you want/)).toBeVisible();
     await beat();
   });
 
-  await chapter('The code is private — so the next thing is getting IN to it', async () => {
-    // The default path's ready-state primary continues into the access step.
-    await setupStatus(page).scrollIntoViewIfNeeded();
-    await page.getByRole('button', { name: 'Connect GitHub' }).click();
-    // No identity yet: the PROMPT, not a failure and not a silent success.
-    await expect(page.getByRole('heading', { name: 'Get access to your code' })).toBeVisible();
-    await expect(page.getByText(/Connect GitHub and Motir will invite you to it/)).toBeVisible();
-    // Nothing has been invited yet, so the rail's approved outcome says exactly
-    // that rather than claiming the code is ready.
-    await expect(page.getByText('Finish setting up access', { exact: true })).toBeVisible();
-    await beat();
-  });
-
-  await chapter('The user connects their GitHub account', async () => {
-    // The step redraws none of the connect pane — it hands off to the shipped one.
-    await page.getByRole('link', { name: 'Connect GitHub' }).click();
-    // ⚠️ THE MEMBER'S OWN ACCOUNT, at the tier that owns it (Story MOTIR-4669 ·
-    // MOTIR-4682). This landed on `/settings/workspace/github` until the git
-    // surface moved: an identity is the one git fact nobody can grant on
-    // somebody else's behalf, so it sits under Account, while the
-    // ORGANISATION's App installation sits under Settings → Organisation → Git.
-    await expect(page).toHaveURL(/\/settings\/account\/git$/);
-    await completeGithubIdentityGrant(page);
-    await expect(page.getByText(REPO_SET_LOGIN).first()).toBeVisible();
-    await beat();
-  });
-
-  await chapter('Motir invites them to every repository it made', async () => {
-    await page.goto(`/plans/${seed.planId}`);
-    await expect(setupStatus(page)).toHaveText('Your code is ready');
-    await page.getByRole('button', { name: 'Connect GitHub' }).click();
-    // The account is CONNECTED, never typed — so it is shown.
-    await expect(page.getByRole('heading', { name: 'Get access to your code' })).toBeVisible();
-    await expect(page.getByText(REPO_SET_LOGIN).first()).toBeVisible();
-
-    const granted = page.waitForResponse(
-      (r) => /\/repositories\/access$/.test(r.url()) && r.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: 'Connect GitHub' }).click();
-    expect((await granted).status(), 'the invitations were sent').toBe(200);
-    await expect(page.getByRole('heading', { name: "You're invited to your code" })).toBeVisible();
-    await beat();
-  });
-
-  await chapter('One invitation, waiting on GitHub, with the door to it', async () => {
-    // ⚠️ The per-ROW `Invitation sent` lines are NOT asserted here, and that is a
-    // property of the shipped surface rather than a gap in this spec: once every
-    // row has settled, the default path renders `ready`, whose two controls are
-    // **Connect GitHub** and **Go to my backlog** — `I already have code` is gone
-    // (`RepositorySetStep`'s `DefaultPath`), so the technical path has no door
-    // left and the rows cannot be reached again on this route. The access step IS
-    // the surface for the invitation once the set is settled, so that is where
-    // this journey reads it. The three per-row invitation states are asserted in
-    // `all three invitation states render at once`, which stays on the technical
-    // path where they are legitimately visible.
+  await chapter('And here is the account that can open it', async () => {
+    // ⚠️ THE HEADLINE ASSERTION OF THIS STORY. The panel REPORTS: it names the
+    // account the invitation went to, rather than offering a button labelled
+    // `Connect GitHub` to somebody who connected GitHub months ago.
+    await expect(accessReport(page)).toBeVisible();
+    await expect(accessReport(page).getByText(REPO_SET_LOGIN)).toBeVisible();
+    await expect(page.getByText('This is the account Motir invited')).toBeVisible();
     await expect(page.getByText(/Accept the invitation on GitHub/)).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open the invitation' })).toHaveCount(0);
-    // Two repositories, so there is no single "the invitation" to open — the
-    // step says so by offering a resend rather than a door to one of them.
-    await expect(page.getByRole('button', { name: 'Resend invitation' }).first()).toBeVisible();
+    // A report is not a silent surface: the account stays correctable, because a
+    // typed handle could invite a stranger to a private repository.
+    await expect(page.getByRole('link', { name: 'Use a different account' })).toBeVisible();
+    // The one forward action is the JOURNEY's.
+    await expect(page.getByRole('link', { name: 'Go to my backlog' })).toBeVisible();
     await beat();
   });
 
   // ── The invitations, as GitHub was actually asked (MOTIR-1900) ──────────────
   const invites = collaboratorInvites();
-  expect(invites, 'one invitation per created repository').toHaveLength(2);
+  expect(invites, 'one invitation per created repository, with no user action').toHaveLength(2);
   expect(invites.map((c) => c.path)).toEqual([
     `/repos/${E2E_PROVISIONING_ORG}/${seed.webRepoName}/collaborators/${REPO_SET_LOGIN}`,
-    `/repos/${E2E_PROVISIONING_ORG}/${seed.projectSlug}-availability/collaborators/${REPO_SET_LOGIN}`,
+    `/repos/${E2E_PROVISIONING_ORG}/${seed.apiRepoName}/collaborators/${REPO_SET_LOGIN}`,
   ]);
   for (const call of invites) {
     expect(call.body?.['permission'], 'invited as an ADMIN of their own code').toBe('admin');
   }
 
+  await chapter('Leave, come back — it still reports rather than asks', async () => {
+    // The set is a durable property of the project (ADR §4.4), so the panel is
+    // the same on a second visit. This is the case a report can silently fail:
+    // a panel that only knows the account from the establish RESPONSE would go
+    // quiet on a reload, and the user would meet the old question again.
+    await page.goto(`/plans/${seed.planId}`);
+    await expect(setupStatus(page)).toHaveText('Your code is ready');
+    await expect(accessReport(page).getByText(REPO_SET_LOGIN)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);
+    await beat();
+  });
+
   await chapter('Two parts, two repositories — and every task knows which is its own', async () => {
-    // THE MONEY SHOT. Two items in one project, two different repositories, no
-    // ambiguity — asserted against the REAL dispatch surface the CLI calls.
+    // Two items in one project, two different repositories, no ambiguity —
+    // asserted against the REAL dispatch surface the CLI calls.
     const first = await dispatchNext(page, seed.projectKey);
     const second = await dispatchNext(page, seed.projectKey, [String(first['id'])]);
     const byTitle = new Map([first, second].map((item) => [String(item['title']), item]));
@@ -382,162 +319,94 @@ test('approve a plan that has two parts, and get a repository for each — then 
     expect(frontend, 'the frontend item was dispatched').toBeDefined();
     expect(backend, 'the backend item was dispatched').toBeDefined();
     expect(frontend['targetRepo'], 'the frontend item names the web repo').toBe(seed.webRepoName);
-    expect(backend['targetRepo'], 'the backend item names the api repo').toBe(
-      `${seed.projectSlug}-availability`,
-    );
+    expect(backend['targetRepo'], 'the backend item names the api repo').toBe(seed.apiRepoName);
     // And HOW to obtain each — the clone URL the CLI checks out (MOTIR-1783).
     expect(String(frontend['targetRepoCloneUrl'])).toContain(
       `${E2E_PROVISIONING_ORG}/${seed.webRepoName}`,
     );
     expect(String(backend['targetRepoCloneUrl'])).toContain(
-      `${E2E_PROVISIONING_ORG}/${seed.projectSlug}-availability`,
+      `${E2E_PROVISIONING_ORG}/${seed.apiRepoName}`,
     );
     await beat();
   });
 });
 
-/**
- * Drive the identity grant through the REAL start + callback routes — lifted from
- * `github.spec.ts`'s own helper for the reason it documents there: the CTA is a
- * same-origin `<a>` whose SERVER 302s to GitHub, and `page.route` cannot intercept
- * a server-redirect hop. The code exchange is served by instrumentation.ts's
- * OAuth MockAgent, so nothing leaves localhost.
- */
-async function completeGithubIdentityGrant(page: Page): Promise<void> {
-  // `?from=accountGit` is what the page's own CTA carries (MOTIR-4676 returns a
-  // flow to the surface that STARTED it), so the round trip lands back on the
-  // account page and the connected login is on screen — which is what the next
-  // line asserts. Without it the flow takes the DEFAULT return, which is the
-  // organisation's page and does not draw a personal identity at all.
-  const start = await page.request.get('/api/github/oauth/start?from=accountGit', {
-    maxRedirects: 0,
-  });
-  expect(start.status(), 'the start route redirects to GitHub').toBe(307);
-  const authorizeUrl = new URL(start.headers()['location']!);
-  expect(`${authorizeUrl.origin}${authorizeUrl.pathname}`).toBe(
-    'https://github.com/login/oauth/authorize',
-  );
-  const state = authorizeUrl.searchParams.get('state')!;
-  const callback = new URL(authorizeUrl.searchParams.get('redirect_uri')!);
-  callback.searchParams.set('code', 'e2e-github-code');
-  callback.searchParams.set('state', state);
-  await page.goto(callback.toString());
-}
-
 // ═════════════════════════════════════════════════════════════════════════════
-// ASSERTED, NOT RECORDED. A reviewer accepts this Story by watching it WORK;
-// these pin the states a happy path skips.
+// THE STATES THE JOURNEY SKIPS
 // ═════════════════════════════════════════════════════════════════════════════
 
-test('the degenerate case reads as ONE question — a single row, and no list chrome', async ({
+test('NO connected identity: nothing claims an invitation, and the rail says what is unfinished', async ({
   page,
 }) => {
   await resetDatabase();
   resetGithubFixture();
-  const seed = await seedRepositorySet('e2e-repo-one@example.com', 'Solo Site', 'SOL', {
+  const seed = await seedRepositorySet('e2e-repo-anon@example.com', 'Anon Co', 'ANO', {
     roles: ['web'],
     withInstallation: true,
+    withIdentity: false,
   });
   await signIn(page, seed.email, seed.password);
   await approvePlan(page, seed);
-  await openTechnicalPath(page);
+  await establish(page);
 
-  await expect(row(page, 'web')).toHaveAttribute('data-state', 'proposed');
-  expect(await page.getByTestId(/^repo-row-/).count()).toBe(1);
+  // ⚠️ ARM B. "Connected" is a property of the ACTOR, not of the project — a
+  // teammate who did not run onboarding can approve a plan — so this arm is real
+  // rather than defensive.
+  await expect(accessReport(page)).toBeVisible();
+  await expect(accessReport(page)).toContainText("Motir doesn't know your GitHub account yet");
+  // ⚠️ AND IT SAYS IT IN THE RAIL'S OWN WORDS, because the panel's door reuses
+  // `repositorySet.outcomeNeedsAccess` rather than restating the string. Two on
+  // the page: the panel's door and the rail's outcome.
+  await expect(page.getByText('Finish setting up access', { exact: true })).toHaveCount(2);
+  const door = page.getByRole('link', { name: 'Finish setting up access' });
+  await expect(door).toHaveAttribute('href', '/settings/project/code-access');
+  // Nothing was sent, so nothing claims it was.
+  expect(collaboratorInvites(), 'no identity, no invitation').toHaveLength(0);
+  await expect(page.getByText('This is the account Motir invited')).toHaveCount(0);
+  // The rail must not claim the code is ready: the step's own line says it, and
+  // the rail's says the opposite — exactly one of the two identical strings.
+  await expect(page.getByText('Your code is ready')).toHaveCount(1);
+  // …and still no ask, on the arm where an ask would be most tempting.
+  await expect(page.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);
+});
 
-  // The ABSENCE of list chrome is the assertion, not merely the presence of one
-  // row (the card's wording): at one row there is no role chip, no reorder pair
-  // and no row menu — a one-repository plan must not read as a list of one.
-  await expect(row(page, 'web').getByRole('button', { name: 'Move up' })).toHaveCount(0);
-  await expect(row(page, 'web').getByRole('button', { name: 'Move down' })).toHaveCount(0);
-  await expect(row(page, 'web').getByRole('button', { name: 'Repository actions' })).toHaveCount(0);
-  // The field asks for "Repository name", not "Name of the web repository".
-  await expect(row(page, 'web').getByRole('textbox', { name: 'Repository name' })).toBeVisible();
-  // The set's primary is singular, and names the count as ONE.
-  await expect(page.getByRole('button', { name: 'Set up 1 repository' })).toBeVisible();
-  // ADR §1.4: at one row the name is the bare slug, with no role suffix.
-  await expect(row(page, 'web').getByRole('textbox', { name: 'Repository name' })).toHaveValue(
-    seed.projectSlug,
+test('the rail flips to “Your code is ready” once the invitation goes out', async ({ page }) => {
+  await resetDatabase();
+  resetGithubFixture();
+  const seed = await seedRepositorySet('e2e-repo-outcome@example.com', 'Outcome Co', 'OUT', {
+    roles: ['web'],
+    withInstallation: true,
+    withIdentity: false,
+  });
+  await signIn(page, seed.email, seed.password);
+  await approvePlan(page, seed);
+  await establish(page);
+
+  // Created, but nobody has been invited — the rail must not claim it is ready.
+  await expect(page.getByText('Finish setting up access', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('Your code is ready')).toHaveCount(1);
+
+  // ⚠️ THE RECOVERY PATH, AND IT IS NO LONGER ON THIS SURFACE (MOTIR-5015). The
+  // user connects an identity wherever they connect it, and the invitation is
+  // sent by the establish — so this drives a SECOND establish rather than a
+  // button on the step, which is what a real retry (**Try again**, or a later
+  // visit that finds unresolved rows) does.
+  await connectGithubIdentity(seed.userId);
+  const granted = page.waitForResponse(
+    (r) => /\/repositories\/access$/.test(r.url()) && r.request().method() === 'POST',
   );
-});
-
-test('a row that fails leaves its sibling alone, keeps its recoveries, and retries on its own', async ({
-  page,
-}) => {
-  await resetDatabase();
-  resetGithubFixture();
-  const seed = await seedRepositorySet('e2e-repo-partial@example.com', 'Partial Co', 'PTL', {
-    roles: ['web', 'api'],
-    withInstallation: true,
+  const res = await page.request.post(`/api/projects/${seed.projectKey}/repositories/access`, {
+    data: {},
   });
-  // GitHub refuses the SECOND row only.
-  setGithubControl({
-    createFailures: {
-      [seed.apiRepoName]: { status: 403, message: 'Resource not accessible by integration' },
-    },
-  });
-  await signIn(page, seed.email, seed.password);
-  await approvePlan(page, seed);
-  await openTechnicalPath(page);
-  await page.getByRole('button', { name: 'Set up 2 repositories' }).click();
+  expect(res.status(), 'the invitations were sent').toBe(200);
+  void granted;
 
-  // Row 1 is CREATED and stays created; row 2 carries its own failure.
-  await expectRowState(page, 'web', 'created');
-  await expectRowState(page, 'api', 'failed');
-  await expect(row(page, 'api').getByText("Couldn't create")).toBeVisible();
-  // Its reason is shown, and all three recoveries stay on the row — no state is a
-  // dead end (ADR §4.1/§4.4).
-  await expect(row(page, 'api').getByRole('alert')).toBeVisible();
-  await expect(row(page, 'api').getByRole('button', { name: 'Retry' })).toBeVisible();
-  await expect(row(page, 'api').getByRole('button', { name: 'Use one of mine' })).toBeVisible();
-  await expect(row(page, 'api').getByRole('button', { name: 'Skip this one' })).toBeVisible();
-  // The step still completes — it reports the partial outcome rather than blocking.
-  await expect(page.getByText(/1 created · 0 skipped · 1 needs a decision/)).toBeVisible();
-
-  // Retrying row 2 ALONE succeeds once GitHub stops refusing.
-  setGithubControl({});
-  await row(page, 'api').getByRole('button', { name: 'Retry' }).click();
-  await expectRowState(page, 'api', 'created');
-  await expectRowState(page, 'web', 'created');
-  // The retry created ONE repository — the already-created sibling was not remade.
-  expect(createdNames().filter((n) => n === seed.webRepoName)).toHaveLength(1);
-});
-
-test('a skipped row completes the flow and leaves the project explicitly code-less for that part', async ({
-  page,
-}) => {
-  await resetDatabase();
-  resetGithubFixture();
-  const seed = await seedRepositorySet('e2e-repo-skip@example.com', 'Skip Co', 'SKP', {
-    roles: ['web', 'api'],
-    withInstallation: true,
-  });
-  await signIn(page, seed.email, seed.password);
-  await approvePlan(page, seed);
-  await openTechnicalPath(page);
-
-  await row(page, 'api').getByRole('button', { name: 'Repository actions' }).click();
-  await page.getByRole('button', { name: 'Skip this one' }).click();
-  await expectRowState(page, 'api', 'skipped');
-  await expect(row(page, 'api').getByText('Skipped')).toBeVisible();
-  await expect(row(page, 'api').getByText('No api repository')).toBeVisible();
-  await expect(
-    row(page, 'api').getByText(/say so when a task needs code that isn't there/),
-  ).toBeVisible();
-  // Not a dead end: it can be created after all, or point at one of the user's.
-  await expect(row(page, 'api').getByRole('button', { name: 'Create it after all' })).toBeVisible();
-
-  // A SETTLED row alongside an unresolved one makes the set PARTIAL, so the
-  // primary becomes **Finish setup** rather than a count — and the summary line
-  // states the split. (Skipping is a settled outcome, not a removal, which is
-  // exactly why the set reads as partly done before anything has been created.)
-  await expect(page.getByText('0 created · 1 skipped · 1 needs a decision')).toBeVisible();
-  await page.getByRole('button', { name: 'Finish setup' }).click();
-  await expectRowState(page, 'web', 'created');
-  // The flow COMPLETED — one repository was created and the skipped role got none.
-  expect(createdNames()).toEqual([seed.webRepoName]);
-  await page.getByRole('button', { name: 'Not now' }).click();
-  await expect(setupStatus(page)).toHaveText('Your code is ready');
+  await page.goto(`/plans/${seed.planId}`);
+  // Now BOTH the step's status line and the rail's outcome read "Your code is
+  // ready" — the one place those two identical strings legitimately co-occur.
+  await expect(page.getByText('Your code is ready')).toHaveCount(2);
+  await expect(page.getByText('Finish setting up access', { exact: true })).toHaveCount(0);
+  await expect(accessReport(page).getByText(REPO_SET_LOGIN)).toBeVisible();
 });
 
 test('equivalence through creation: a connected identity changes NOTHING about how the code is made', async ({
@@ -548,6 +417,11 @@ test('equivalence through creation: a connected identity changes NOTHING about h
   // the creation half is byte-for-byte identical. Asserted as an equivalence
   // rather than as two variants, because "the two audiences get the same flow" is
   // the claim, and two independent tests could both pass while diverging.
+  //
+  // ⚠️ IT IS A STRONGER CLAIM SINCE v5, and worth saying so: the two journeys used
+  // to diverge into different SCREENS after creation (one met the connect prompt,
+  // one met the invited state). They now diverge into two arms of one panel, so
+  // the equivalence covers everything up to a single line of copy.
   const runs: { creates: unknown[]; heading: string }[] = [];
 
   for (const withIdentity of [false, true]) {
@@ -566,15 +440,10 @@ test('equivalence through creation: a connected identity changes NOTHING about h
     // account question, no consent screen, no GitHub prompt before or during
     // creation — asserted as an ABSENCE, which is what the claim actually is.
     const heading = await page.getByRole('heading', { level: 2 }).first().innerText();
-    await expect(page.getByRole('heading', { name: 'Get access to your code' })).toHaveCount(0);
-    await expect(page.getByText('Motir invites the GitHub account you connect')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Connect GitHub' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'I already have code' })).toHaveCount(0);
 
-    const established = page.waitForResponse(
-      (r) => /\/repositories\/establish$/.test(r.url()) && r.request().method() === 'POST',
-    );
-    await page.getByRole('button', { name: 'Continue' }).click();
-    expect((await established).status()).toBe(200);
-    await expect(setupStatus(page)).toHaveText('Your code is ready', { timeout: 60_000 });
+    await establish(page);
 
     runs.push({
       // Normalize away the per-run project slug — the SHAPE of the two create
@@ -607,189 +476,78 @@ test('equivalence through creation: a connected identity changes NOTHING about h
   }
 });
 
-test('an invitation that fails does not fail the row — the repository stays created, with a way forward', async ({
+test('a GitHub refusal does not cost the user their code — the repositories still land', async ({
   page,
 }) => {
   await resetDatabase();
   resetGithubFixture();
-  const seed = await seedRepositorySet('e2e-repo-invite-fail@example.com', 'Invite Co', 'INV', {
-    roles: ['web', 'api'],
-    withInstallation: true,
-    withIdentity: true,
-  });
-  // GitHub refuses the API row's invitation only.
-  setGithubControl({
-    inviteFailures: {
-      [seed.apiRepoName]: { status: 403, message: 'Must have admin rights to Repository.' },
-    },
-  });
-  await signIn(page, seed.email, seed.password);
-  await approvePlan(page, seed);
-  await openTechnicalPath(page);
-  await page.getByRole('button', { name: 'Set up 2 repositories' }).click();
-
-  // BOTH repositories exist. The invitation is a sub-state OF a created row, and
-  // the two axes cannot fail each other.
-  await expectRowState(page, 'web', 'created');
-  await expectRowState(page, 'api', 'created');
-  await expect(row(page, 'web').getByText('Invitation sent')).toBeVisible();
-  // The refused row DEGRADES to `not invited` with its own way forward.
-  await expect(row(page, 'api').getByText('Not invited yet')).toBeVisible();
-  await expect(
-    row(page, 'api').getByText("Motir doesn't know your GitHub account yet"),
-  ).toBeVisible();
-  await expect(row(page, 'api').getByRole('link', { name: 'Connect GitHub' })).toBeVisible();
-
-  // The rail says the truth: created, but not everybody can reach it. Read from
-  // the technical path WITHOUT leaving it — the rail is a sibling of the step in
-  // the same layout, and going back to the default path would be a one-way trip
-  // (its `ready` state drops `I already have code`, so the rows become
-  // unreachable; see the note in the headline journey).
-  await expect(page.getByText('Finish setting up access', { exact: true })).toBeVisible();
-
-  // Resend is ROW-SCOPED — re-sending one must not quietly re-send its sibling.
-  setGithubControl({});
-  const before = collaboratorInvites().length;
-  const resent = page.waitForResponse(
-    (r) => /\/repositories\/access$/.test(r.url()) && r.request().method() === 'POST',
-  );
-  await row(page, 'web').getByRole('button', { name: 'Resend invitation' }).click();
-  expect((await resent).status()).toBe(200);
-  await expect
-    .poll(() => collaboratorInvites().length, { timeout: 15_000 })
-    .toBeGreaterThan(before);
-  const added = collaboratorInvites().slice(before);
-  expect(added, 'exactly the ONE row was re-invited').toHaveLength(1);
-  expect(added[0]!.path).toContain(`/${seed.webRepoName}/collaborators/`);
-});
-
-test('all three invitation states render at once, each with an icon AND a word', async ({
-  page,
-}) => {
-  await resetDatabase();
-  resetGithubFixture();
-  // THREE roles, ONE establish — so the three states are produced by the same
-  // pass and can be compared side by side, which is also the proof that they are
-  // per-ROW and not a property of the set.
-  const seed = await seedRepositorySet('e2e-repo-states@example.com', 'States Co', 'STA', {
-    roles: ['web', 'api', 'mobile'],
-    withInstallation: true,
-    withIdentity: true,
-  });
-  setGithubControl({
-    // `web` answers 204 — the account ALREADY has access, so there is nothing to
-    // accept and the row is `accepted` outright.
-    alreadyHasAccess: [seed.webRepoName],
-    // `mobile` is refused, so it degrades to `not invited`. `api` succeeds → `invited`.
-    inviteFailures: {
-      [`${seed.projectSlug}-mobile`]: { status: 403, message: 'Must have admin rights.' },
-    },
-  });
-  await signIn(page, seed.email, seed.password);
-  await approvePlan(page, seed);
-  await openTechnicalPath(page);
-  await page.getByRole('button', { name: 'Set up 3 repositories' }).click();
-  for (const role of ['web', 'api', 'mobile']) await expectRowState(page, role, 'created');
-
-  // 1 — ACCEPTED. Settled, and offers nothing: GitHub owns the acceptance, so
-  // once the account can clone there is nothing honest left for Motir to do.
-  await expect(row(page, 'web').getByText('You have access')).toBeVisible();
-  await expect(
-    row(page, 'web').getByText(`@${REPO_SET_LOGIN} can clone and push to this repository`),
-  ).toBeVisible();
-  await expect(row(page, 'web').getByRole('button', { name: 'Resend invitation' })).toHaveCount(0);
-
-  // 2 — INVITED, with the door to the invitation and a row-scoped resend.
-  await expect(row(page, 'api').getByText('Invitation sent')).toBeVisible();
-  await expect(row(page, 'api').getByText(`to @${REPO_SET_LOGIN}`, { exact: false })).toBeVisible();
-  await expect(row(page, 'api').getByRole('link', { name: 'Open the invitation' })).toBeVisible();
-  await expect(row(page, 'api').getByRole('button', { name: 'Resend invitation' })).toBeVisible();
-
-  // 3 — NOT INVITED: a standing condition the user can resolve, so a `status`
-  // rather than an error — the repository itself was created successfully.
-  await expect(row(page, 'mobile').getByText('Not invited yet')).toBeVisible();
-  await expect(row(page, 'mobile').getByRole('status')).toContainText('Not invited yet');
-  await expect(row(page, 'mobile').getByRole('link', { name: 'Connect GitHub' })).toBeVisible();
-
-  // Every state carries a WORD, never colour alone — the three rows say three
-  // different things, and none of them relies on its tint to do it.
-  await expect(row(page, 'web')).toHaveAttribute('data-state', 'created');
-  await expect(row(page, 'mobile')).toHaveAttribute('data-state', 'created');
-});
-
-test('the rail says “Finish setting up access” until somebody is invited, then “Your code is ready”', async ({
-  page,
-}) => {
-  await resetDatabase();
-  resetGithubFixture();
-  const seed = await seedRepositorySet('e2e-repo-outcome@example.com', 'Outcome Co', 'OUT', {
+  // Refuse the INVITATION, not the create: the repositories exist either way, and
+  // that is the graceful-degradation contract MOTIR-1900 specified.
+  const seed = await seedRepositorySet('e2e-repo-refused@example.com', 'Refused Co', 'REF', {
     roles: ['web'],
     withInstallation: true,
-    withIdentity: false,
+    withIdentity: true,
+  });
+  // Keyed by repo NAME, which is why the seed has to exist first — the fake
+  // refuses the collaborator PUT for exactly this repository and nothing else.
+  setGithubControl({
+    inviteFailures: {
+      [seed.webRepoName]: { status: 403, message: 'Must have admin rights to Repository.' },
+    },
   });
   await signIn(page, seed.email, seed.password);
   await approvePlan(page, seed);
+  await establish(page);
 
-  // Created, but nobody has been invited — the rail must not claim it is ready.
-  await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(setupStatus(page)).toHaveText('Your code is ready', { timeout: 60_000 });
-  await expect(page.getByText('Finish setting up access', { exact: true })).toBeVisible();
-  await expect(page.getByText('Your code is ready')).toHaveCount(1);
+  // The repository was created and the step says so. A refused invitation must
+  // not present as a failed establish.
+  expect(repoCreates(), 'the repository was still created').toHaveLength(1);
+  await expect(setupStatus(page)).toHaveText('Your code is ready');
+  await expect(page.getByText(/It's yours\./).first()).toBeVisible();
 
-  // Connect an identity and let the invitation go out; the rail flips.
-  await connectGithubIdentity(seed.userId);
-  await page.goto(`/plans/${seed.planId}`);
-  await page.getByRole('button', { name: 'Connect GitHub' }).click();
-  const granted = page.waitForResponse(
-    (r) => /\/repositories\/access$/.test(r.url()) && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Connect GitHub' }).click();
-  expect((await granted).status()).toBe(200);
-  await expect(page.getByRole('heading', { name: "You're invited to your code" })).toBeVisible();
-  await page.getByRole('button', { name: 'Later' }).click();
-  // Now BOTH the step's status line and the rail's outcome read "Your code is
-  // ready" — the one place those two identical strings legitimately co-occur.
-  await expect(page.getByText('Your code is ready')).toHaveCount(2);
-  await expect(page.getByText('Finish setting up access', { exact: true })).toHaveCount(0);
-});
-
-test('the in-flight state is visible per row while a repository is being created', async ({
-  page,
-}) => {
-  await resetDatabase();
-  resetGithubFixture();
-  const seed = await seedRepositorySet('e2e-repo-inflight@example.com', 'Inflight Co', 'IFL', {
-    roles: ['web', 'api'],
-    withInstallation: true,
-  });
-  await signIn(page, seed.email, seed.password);
-  await approvePlan(page, seed);
-  await openTechnicalPath(page);
-
-  // The `creating` state is genuinely transient — the establish's own duration is
-  // external and unmeasured (spike §4.2) — so this does NOT try to catch it in a
-  // frame, which would be a race dressed up as an assertion. It pins the two
-  // things that are deterministic and that the state exists to serve:
+  // ⚠️ THE NOTIFICATION IS NOT ASSERTED HERE, and this is the explicit statement
+  // MOTIR-5018 requires rather than a silent omission.
   //
-  //   (a) the establish is IN FLIGHT while the UI is still interactive (the step
-  //       polls rather than blocking), and
-  //   (b) the row leaves `proposed` and lands on `created` — i.e. the per-row
-  //       progress is real, which is exactly what `creating` renders.
-  const established = page.waitForResponse(
-    (r) => /\/repositories\/establish$/.test(r.url()) && r.request().method() === 'POST',
-  );
-  await page.getByRole('button', { name: 'Set up 2 repositories' }).click();
-  // While the run is in flight the set's primary reports itself busy rather than
-  // letting a second establish be started on top of the first.
-  await expect(page.getByRole('button', { name: /^Set up 2 repositories$/ })).toBeDisabled();
-  expect((await established).status()).toBe(200);
-  await expectRowState(page, 'web', 'created');
-  await expectRowState(page, 'api', 'created');
-
-  // And the per-row in-flight COPY exists on the shipped row, so a row that is
-  // mid-create says what it is doing rather than going blank. Asserted against
-  // the row's own rendering contract, not against a frame the poll happened to
-  // catch: a `creating` row shows its status line, and a settled one does not.
-  await expect(row(page, 'web').getByText('Seeding it from the starter')).toHaveCount(0);
-  await expect(row(page, 'web').getByText('Created', { exact: true })).toBeVisible();
+  // The lane CAN drive the refusal — `setGithubControl({ inviteStatus: 403 })` is
+  // exactly what this test does — so the limitation is not "the refusal is
+  // unreachable". What this spec does not do is assert the BELL, because doing so
+  // would mean opening the notification drawer and reading a row, which is the
+  // notification surface's own subject and not this step's. The row is covered
+  // where it lives:
+  //
+  //   * `tests/projectRepos/projectRepoAccessService.test.ts` — that a refusal
+  //     writes exactly ONE notification, that a retry writes no second, that a
+  //     SUCCESS writes none, and that the channel gate suppresses it;
+  //   * `tests/components/notification-drawer.test.tsx` — that the row renders
+  //     the design's copy, routes to code access, and draws no actor.
+  //
+  // What IS asserted here is the half only a browser can see: that the refusal
+  // leaves this surface honest.
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
+
+/* ⚠️ SIX TESTS WERE REMOVED BY MOTIR-5018, NOT WEAKENED — each drove a surface
+   that no longer exists, and each names where its behaviour is covered now:
+
+   * `the degenerate case reads as ONE question` — the one-row technical path.
+     The DEFAULT path was always identical for one row and three (design panel
+     1b), and `equivalence through creation` still pins that both audiences see
+     one heading. There is no list chrome left to be absent from.
+   * `a row that fails leaves its sibling alone, keeps its recoveries, and
+     retries on its own` — per-row recovery controls, all on the deleted rows.
+     Per-row independence is asserted at the service, over real Postgres, in
+     `tests/projectRepos/projectRepoProvisioningService.test.ts`.
+   * `a skipped row completes the flow` — `skipRow` was a row control.
+   * `an invitation that fails does not fail the row` — replaced above by
+     `a GitHub refusal does not cost the user their code`, which asserts the same
+     contract on the surface that survived.
+   * `all three invitation states render at once` — the per-row invitation lines
+     moved to `/settings/project/code-access`, which draws all three per person
+     and per repository and has its own coverage.
+   * `the in-flight state is visible per row` — there is no per-row surface. The
+     step's ONE status line and its poll are asserted by `establish()` on every
+     test in this file, which waits on the committed state rather than a frame.
+
+   None of these was deleted because it was inconvenient: each asserted a control
+   this story removed, and rewriting one to assert the new surface would have been
+   a second copy of a test already here. */
