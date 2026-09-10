@@ -145,6 +145,22 @@ const merge = (
     }),
   );
 
+/** CLOSE a pull request WITHOUT merging it — the third state, and the one the
+ *  gate used to read as "still open" for ever (MOTIR-5004). */
+const abandon = (identifier: string, repo: RepoSpec, number: number, anonymous = false) =>
+  githubWebhookService.handleEvent(
+    'pull_request',
+    prPayload({
+      action: 'closed',
+      identifier,
+      repo,
+      number,
+      state: 'closed',
+      merged: false,
+      anonymous,
+    }),
+  );
+
 /** Declare a delivery the way an agent does after `gh pr create`. */
 async function declare(
   s: Awaited<ReturnType<typeof makeScenario>>,
@@ -249,6 +265,58 @@ describe('the delivery-SET gate — a card is done when EVERY delivery has lande
 
     expect(second).toMatchObject({ outcome: 'transitioned' });
     expect(await statusOf(s.item.id)).toBe('done');
+  });
+
+  it('COMPLETES when the only unmerged sibling was CLOSED, never merged (MOTIR-5004)', async () => {
+    // THE INCIDENT, at its own scale. MOTIR-4789 was delivered twice in ONE
+    // repository: `motir-core#2715` closed unmerged, then `#2747` merged onto
+    // `main`. The merge did not complete the card, and the note called the
+    // closed pull request "still open". Nothing re-decides such a card — this
+    // gate runs only on a change-request event, and a closed pull request emits
+    // no further merge — so the hold was permanent and a human had to override
+    // the status by hand.
+    const s = await makeScenario('abandoned-sibling@example.com', [CORE]);
+    await open(s.item.identifier, CORE, 2715, true);
+    await declare(s, CORE, 2715);
+    await abandon(s.item.identifier, CORE, 2715, true);
+
+    await open(s.item.identifier, CORE, 2747, true);
+    await declare(s, CORE, 2747);
+    const replacement = await merge(s.item.identifier, CORE, 2747, undefined, true);
+
+    expect(replacement).toMatchObject({ outcome: 'transitioned' });
+    expect(await statusOf(s.item.id)).toBe('done');
+    // And it says nothing about the abandoned one — a hold note posted here is
+    // the defect, whatever the status ended up being.
+    expect(await commentBodies(s.item.id)).not.toContain(
+      expect.stringContaining('Merged, but this item is not complete'),
+    );
+  });
+
+  it('still HOLDS for a genuinely open sibling while an abandoned one is ignored', async () => {
+    // The other half of the pair, and the one that proves the fix NARROWS the
+    // hold rather than removing it. Three deliveries: one abandoned, one merged,
+    // one still open. The open one must still hold the card.
+    const s = await makeScenario('abandoned-and-open@example.com', [CORE, AI]);
+    await open(s.item.identifier, CORE, 2715, true);
+    await declare(s, CORE, 2715);
+    await abandon(s.item.identifier, CORE, 2715, true);
+
+    await open(s.item.identifier, AI, 3, true);
+    await declare(s, AI, 3);
+
+    await open(s.item.identifier, CORE, 2747, true);
+    await declare(s, CORE, 2747);
+    const result = await merge(s.item.identifier, CORE, 2747, undefined, true);
+
+    expect(result).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
+    expect(await statusOf(s.item.id)).toBe('implemented');
+
+    const notes = await commentBodies(s.item.id);
+    expect(notes).toHaveLength(1);
+    // It names the OPEN one and is silent about the abandoned one.
+    expect(notes[0]).toContain('moooon/motir-ai#3');
+    expect(notes[0]).not.toContain('#2715');
   });
 
   it('is ORDER-INDEPENDENT — the smaller half landing first ends identically', async () => {

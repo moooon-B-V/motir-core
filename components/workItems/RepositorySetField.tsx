@@ -225,7 +225,11 @@ function RepositoryCountCaption({
   const members = deliveries.map((d) => ({
     repoLabel: d.pullRequest.repo,
     number: d.pullRequest.number,
-    merged: d.pullRequest.state === 'merged',
+    // The DTO's own three-valued collapse, passed through (MOTIR-5004). It used
+    // to be flattened to `merged: state === 'merged'`, which made this caption
+    // report an ABANDONED pull request as one the card is still waiting for —
+    // the same defect as the gate's, on the same shared predicate.
+    state: d.pullRequest.state,
     baseRef: d.baseRef,
     defaultBranch: d.defaultBranch,
   }));
@@ -233,15 +237,23 @@ function RepositoryCountCaption({
   // words on the rail and the words in the comment cannot describe different
   // sets.
   const shortfall = deliverySetShortfall(members);
-  const mergedCount = members.filter(
-    (m) => m.merged && m.baseRef !== null && m.baseRef === m.defaultBranch,
+  // ⚠️ THE DENOMINATOR IS THE SET THE GATE REASONS ABOUT, which excludes an
+  // ABANDONED delivery (MOTIR-5004). This function's whole premise is that the
+  // rail and the gate's comment cannot describe different sets, and counting a
+  // closed-unmerged pull request in the total breaks exactly that: the gate
+  // stops waiting for it, while the caption keeps saying `1 of 2 merged` about
+  // a card where the one thing that had to land, landed. Identical to today's
+  // behaviour wherever no delivery was abandoned — which is nearly every card.
+  const countable = members.filter((m) => m.state !== 'closed');
+  const mergedCount = countable.filter(
+    (m) => m.state === 'merged' && m.baseRef !== null && m.baseRef === m.defaultBranch,
   ).length;
   if (shortfall.outstanding.length > 0) {
     return (
       <CaptionLine
         text={t('deliveriesMergedOpen', {
           merged: mergedCount,
-          total: members.length,
+          total: countable.length,
           pr: shortfall.outstanding.join(', '),
         })}
       />
@@ -255,7 +267,7 @@ function RepositoryCountCaption({
       <CaptionLine
         text={t('deliveriesMergedStranded', {
           merged: mergedCount,
-          total: members.length,
+          total: countable.length,
           pr: shortfall.strandedBase.join(', '),
           base: stranded?.baseRef ?? '',
         })}

@@ -140,6 +140,13 @@ export function normalizeHistoricalPullRequest(
       headRef,
       baseRef,
       title: readString(pr['title']),
+      // A MERGED pull request is not a draft — GitHub refuses to merge one — and
+      // the draft flag decides nothing here in any case: this path only ever
+      // produces `merged: true`, which the lifecycle answers `done` on its first
+      // arm, before the draft guard is reached (MOTIR-4968). Stated as a literal
+      // for the same reason `state` above is, rather than read from the payload:
+      // this backfill has exactly one shape and says so.
+      draft: false,
     },
     mergedAt,
   };

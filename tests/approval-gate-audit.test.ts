@@ -208,6 +208,42 @@ describe('a DECIDED gate is IMMUTABLE', () => {
     return gate.id;
   }
 
+  it('⚠️ THE PRODUCTION PATH — a SECOND `approvalGateRepository.decide` on the same gate is refused', async () => {
+    const gate = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.create(baseGate('subj-decide-twice'), tx),
+    );
+    const decision = {
+      state: 'approved' as const,
+      decidedById: fx.ownerId,
+      decidedAt: new Date(),
+      noteMd: 'Ships as drawn.',
+    };
+
+    // The real door's write, through the real repository method. `decide` carries
+    // no `WHERE state = 'awaiting'` by design — a predicate there would turn the
+    // refusal into a silent no-op reporting success — so the trigger is the only
+    // thing standing between a bypassed service check and an edited audit row.
+    const first = await withWorkspaceContext(fx.ctx, (tx) =>
+      approvalGateRepository.decide(gate.id, decision, tx),
+    );
+    expect(first.state).toBe('approved');
+
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) =>
+        approvalGateRepository.decide(
+          gate.id,
+          { ...decision, state: 'changes_requested', noteMd: 'Changed my mind.' },
+          tx,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(ApprovalGateDecidedImmutableError);
+
+    // The first decision stands, unedited — which is the whole claim.
+    const after = await adminDb.approvalGate.findUnique({ where: { id: gate.id } });
+    expect(after?.state).toBe('approved');
+    expect(after?.noteMd).toBe('Ships as drawn.');
+  });
+
   it('an update of an APPROVED gate is refused with the typed domain error', async () => {
     const id = await decidedGate('subj-approved', 'approved');
 

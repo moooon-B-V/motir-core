@@ -71,8 +71,28 @@ const PROVIDER: GitProviderId = 'github';
 
 /** PR actions that drive the status machine. Other actions (`synchronize`,
  *  `edited`, `labeled`, …) are ignored — they carry no lifecycle change the card
- *  syncs. */
-const HANDLED_PR_ACTIONS = new Set(['opened', 'reopened', 'closed']);
+ *  syncs.
+ *
+ *  ⚠️ `ready_for_review` IS one, since MOTIR-4968, and it is the other half of
+ *  the draft rule. With the seam's draft guard in place a draft's `opened`
+ *  delivery resolves to NO lifecycle, so without this action nothing would ever
+ *  mark such a card `implemented`: the moment the pull request is offered for
+ *  review would be the one moment nobody is listening. It resolves correctly on
+ *  arrival with no special case — the pull request is `state: 'open'` and no
+ *  longer `draft`, so the shared lifecycle returns `implemented`, which is
+ *  exactly what the moment means. (It has been in `LINK_CHECK_PR_ACTIONS` below
+ *  since MOTIR-3675, for the unrelated reason that it ends the link check's
+ *  draft exemption; that set does not drive status.)
+ *
+ *  ⚠️ THIS SET ALSO BOUNDS THE FILE-LISTING CAPTURE in `handlePullRequest`, whose
+ *  own header prices itself off this list — so adding a member is a cost change,
+ *  not only a behaviour change. It stays bounded PER PULL REQUEST rather than per
+ *  push, which is the property that mattered: `synchronize` is still absent, so a
+ *  pull request opened as a draft now costs at most FOUR captures over its life
+ *  (`opened`, `ready_for_review`, `closed`, and `reopened` if it happens) against
+ *  three before, and a never-drafted pull request never fires `ready_for_review`
+ *  at all and is unchanged. */
+const HANDLED_PR_ACTIONS = new Set(['opened', 'reopened', 'closed', 'ready_for_review']);
 
 export type GithubWebhookResult =
   | { event: 'ignored'; reason: string }
@@ -365,15 +385,21 @@ export const githubWebhookService = {
     // ⚠️ THE LINK CHECK RUNS ABOVE THE `HANDLED_PR_ACTIONS` GATE, ON ITS OWN
     // ACTION SET (MOTIR-3675). It must see `synchronize` — a check run belongs
     // to a COMMIT, so one written at `opened` disappears from view on the first
-    // push — and `ready_for_review` / `labeled` / `unlabeled`, which are the
-    // draft exemption and the escape hatch arriving.
+    // push — and `labeled` / `unlabeled`, which are the escape hatch arriving.
     //
-    // Widening `HANDLED_PR_ACTIONS` to cover them was the obvious shape and is
+    // Widening `HANDLED_PR_ACTIONS` to cover THOSE was the obvious shape and is
     // wrong: that set bounds the file-listing capture below, whose own header
-    // says it is affordable BECAUSE `synchronize` is not in it (three deliveries
+    // says it is affordable BECAUSE `synchronize` is not in it (a few deliveries
     // per pull request, not one per push). So this takes its own list and runs
     // neither the status sync nor the capture. Best-effort, and awaited only so
     // a test can observe it — its failure can never reach the caller.
+    //
+    // ⚠️ THE TWO SETS NOW OVERLAP ON `ready_for_review`, and that is not the
+    // widening this paragraph argues against (MOTIR-4968). It reaches the two
+    // sets for two unrelated reasons — here it ends the link check's DRAFT
+    // EXEMPTION, below it is the moment a draft becomes `implemented` — and it
+    // fires at most ONCE per pull request either way, so the per-push cost the
+    // argument turns on is untouched.
     await writeLinkCheckForDelivery(body);
 
     if (!HANDLED_PR_ACTIONS.has(String(body['action']))) {
@@ -387,6 +413,12 @@ export const githubWebhookService = {
     // MOTIR-3005: an open pull request means the code exists and CI has not
     // spoken for it, and In Review now has exactly one writer — the CI-feedback
     // consumer, on a green run.
+    //
+    // ⚠️ AND `null` FOR AN OPEN DRAFT (MOTIR-4968) — a fourth answer meaning NO
+    // lifecycle change, which the sync honours by recording the delivery and
+    // transitioning nothing. Passed straight through: this service does not
+    // second-guess the seam, and a draft that is CLOSED or MERGED still carries a
+    // real lifecycle, which is why there is no draft check here.
     const lifecycle = provider.changeRequestLifecycle(cr);
 
     // Drive the linked work item through THE shared status-sync state machine
@@ -420,9 +452,12 @@ export const githubWebhookService = {
     // two land together.
     //
     // ⚠️ AND THE COST IS BOUNDED BY `HANDLED_PR_ACTIONS`, which is what makes this
-    // affordable: `opened` · `reopened` · `closed` — three deliveries per pull
-    // request, not one per push, because `synchronize` is not handled. So this adds
-    // at most ONE file listing per pull request opened. The honest limitation, since
+    // affordable: `opened` · `reopened` · `closed` · `ready_for_review` — a handful
+    // of deliveries per pull request, not one per push, because `synchronize` is not
+    // handled. So this adds at most ONE file listing per pull request opened, and one
+    // more for a pull request that was opened as a DRAFT and later marked ready
+    // (MOTIR-4968 added that member; a never-drafted pull request never fires it).
+    // The honest limitation, since
     // nothing else states it: the open-time capture is a SNAPSHOT, refreshed only at
     // merge, so a path added by a later push is not visible until the merge
     // delivery. For the question the open arm answers — *is somebody working here

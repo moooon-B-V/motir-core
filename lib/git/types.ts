@@ -84,6 +84,33 @@ export interface NormalizedChangeRequest {
    */
   baseRef: string;
   title: string | null;
+  /**
+   * Whether the change request is a DRAFT — explicitly not offered for review
+   * (MOTIR-4968). GitHub's `pull_request.draft`, GitLab's `draft` /
+   * `work_in_progress` on the MR's `object_attributes`.
+   *
+   * ⚠️ ORTHOGONAL to `state`, exactly as `merged` is, and that is the whole
+   * reason this field has to exist: the host reports a draft as `state: 'open'`,
+   * so before this field the seam could not tell "open and awaiting review" from
+   * "open and explicitly NOT". `changeRequestLifecycle` reads it to answer
+   * neither — see its own note.
+   *
+   * REQUIRED rather than optional-with-a-default, decided on MOTIR-4968: an
+   * optional field lets one provider's normalizer omit it, the type checker
+   * stays quiet, and every draft on THAT host silently resolves to
+   * `implemented` while nothing anywhere goes red. Required turns the omission
+   * into a compile error at the one moment somebody is looking — the same
+   * argument this repository already makes for a required `tx` on a repository
+   * write.
+   *
+   * ⚠️ NOT PERSISTED, and deliberately so. `github_pull_request` models
+   * draft-ness nowhere, so a draft is an OPEN linked pull request to every
+   * reader — the `deferred_open_pr` defer included, which is what holds a
+   * multi-repository parent open while one repository's chain is still stopped.
+   * This field decides ONE thing (the lifecycle a delivery carries) and is not
+   * a fact the rest of the product reasons over.
+   */
+  draft: boolean;
 }
 
 /** The canonical, provider-agnostic lifecycle signal a change request maps to —
@@ -99,7 +126,15 @@ export interface NormalizedChangeRequest {
  *  Review is now written by ONE writer, the CI-feedback consumer, when the checks
  *  go green (MOTIR-3006); a webhook that set it on `opened` would assert a green
  *  run that has not happened, and would also drag back the card the agent just
- *  reported as implemented (the two writers must name the same state). */
+ *  reported as implemented (the two writers must name the same state).
+ *
+ *  ⚠️ THIS UNION IS EXACTLY THE SET OF SIGNALS THAT HAVE A TARGET STATUS, and it
+ *  is kept that way on purpose (MOTIR-4968). A delivery that carries NO lifecycle
+ *  change — an OPEN DRAFT — is expressed as `null` in the SEAM'S RETURN TYPE
+ *  (`GitProvider.changeRequestLifecycle` returns `ChangeRequestLifecycle | null`),
+ *  never as a fourth member here, so `LIFECYCLE_TARGET` in the consumer stays a
+ *  TOTAL `Record` over this union and cannot acquire an arm with no status to
+ *  resolve. */
 export type ChangeRequestLifecycle = 'implemented' | 'done' | 'todo';
 
 /** A CI / pipeline conclusion, normalized across providers. */

@@ -6,7 +6,10 @@ UI + repo selection (**MOTIR-895**) and the work-item PR/CI status surface. The
 GitLab sibling (**MOTIR-1472**) mirrors this layout against the `GitProvider`
 seam. **Extended by MOTIR-1595 (Panel 5):** the explicit item→PR link affordance
 — the manual override of the MOTIR-892 auto-resolver — built by **MOTIR-1596**
-on top of the Development display surface **MOTIR-1579** ships.
+on top of the Development display surface **MOTIR-1579** ships. **Extended by
+MOTIR-5007 (Panels 5d–5f):** the door back OUT — REMOVING a linked pull request
+from a row, its confirm, and the copy that says the pull request is untouched;
+built by **MOTIR-5005**.
 
 - **Asset of record:** [`github.mock.html`](./github.mock.html) — the source of
   truth (built from the real design system; the `--el-*` + shape tokens are
@@ -231,13 +234,41 @@ this also avoids the combobox-in-dialog clipping class entirely):
     taken from another card by picking, so there is nothing to warn about — which
     is also why the chip needed no confirm step before and needs none now.
   - **Re-linking is consequently NOT the correction path, and a per-row unlink
-    EXISTS.** The old argument — that an unlink would be undone by the next
+    is OWED.** The old argument — that an unlink would be undone by the next
     webhook delivery — died with the title/branch parse (MOTIR-3674): nothing
     re-resolves an unlinked pull request any more. `unlinkPullRequest` ships on
-    the service, this surface's row menu reaches it, and MOTIR-3756 adds the
-    `unlink_pull_request` MCP tool for an agent that mis-linked one. Correcting a
-    mis-link means REMOVING the wrong delivery; linking the right card only adds
-    a second one beside it.
+    the service, and MOTIR-3756 adds the `unlink_pull_request` MCP tool for an
+    agent that mis-linked one. Correcting a mis-link means REMOVING the wrong
+    delivery; linking the right card only adds a second one beside it.
+
+    **⚠️ CORRECTED (MOTIR-5007).** Where this bullet now reads _"ships on the
+    service, and MOTIR-3756 adds…"_, it carried one more clause between those
+    two halves: ~~this surface's row menu reaches it~~. **That clause was FALSE
+    on the day it was written, and it stayed false for two weeks.**
+    There was no row menu and no remove control: `PullRequestRow` drew one
+    trailing action, the GitHub link-out, and
+    `githubPullRequestService.unlinkPullRequest`'s only non-test caller was
+    `lib/mcp/tools/unlinkPullRequest.ts`. The struck words are kept rather than
+    deleted, because this is not a claim that drifted — it is one that was never
+    true, and the next reader who meets `unlinkPullRequest` in the service needs
+    to know that its presence there says nothing about this surface.
+    - **How it got in, which is the part worth carrying.** MOTIR-3756's
+      amendment was correcting a genuine error in the ARGUMENT above it, and it
+      was correct to. What rode along in the same sentence was a claim about the
+      SURFACE, written from inside MCP work where `unlink_pull_request` really
+      had just shipped. Two facts, one sentence, one of them reasoned about:
+      `unlinkPullRequest` on the service was real, and the row menu was not.
+    - **What it cost.** The completion gate holds a card and tells the reader,
+      in `changeRequestStatusSync.ts`, _"if one of them does not in fact deliver
+      this item, unlink it"_ — an instruction a person could not follow. The only
+      move left was to override the status by hand, which records that somebody
+      disagreed with a gate rather than that a pull request was wrong
+      (MOTIR-5005, found on MOTIR-4789). And a `motir run` that reached
+      MOTIR-5005 met this bullet's confident prose beside a Panel 5a that drew
+      none of it — which is worse than an asset that says nothing: silence stops
+      a runner at the design gate, a claim sends them off to invent a glyph, a
+      placement, a confirm and its copy.
+    - **Panels 5d–5f below are the specification this sentence stood in for.**
 
   (MOTIR-1596 encodes: pick allowed, no confirm dialog — unchanged, and now for a
   simpler reason than the one it was written for.)
@@ -291,12 +322,181 @@ Organisation → Git." · `development.autoLinkCaption` "Link with + Link pull r
 with `link_pull_request` over the MCP." (cancel = the shared
 `common.cancel`).
 
+**Plus the four REMOVE keys (MOTIR-5007):** `development.unlinkAria`
+"Remove the link to {target}" · `development.unlinkConfirmBefore` "Remove the
+link to" · `development.unlinkConfirmAfter` "? The pull request isn't touched on
+GitHub — only the link." · `development.unlinkAction` "Remove link" — their `zh`
+twins are in the en/zh table under _Panels 5d–5f_ below.
+
 **Build seam (for MOTIR-1596):** MOTIR-1579 ships the pr-row component + the
 peek read path; 1596 mounts the Development `ContentSectionCard` on the detail
 page (server-rendered, `router.refresh()` page-state) and adds the
 door + form + Server Action. The shipped `LinkAddForm` box uses a legacy raw
 `rounded-md` — the new form uses the element-semantic token (`--radius-card`,
 as mocked); do not copy the raw utility forward.
+
+### Panels 5d–5f — REMOVING a linked pull request (MOTIR-5007 → gates MOTIR-5005)
+
+Panel 5 gave this surface a door to LINK a pull request. **Nothing ever drew the
+door back out**, and the amendment above claimed one existed. These three panels
+are that door, and they invent no interaction either: the gesture is the shipped
+`RemoveLinkButton` — a quiet `×` opening a confirm popover — which the
+relationships panel has used for exactly this since Subtask 2.4.9, and which
+`PullRequestRow`'s own comment already names.
+
+**What was RENDERED before this was drawn.** `design/work-items/delivery-set.mock.html`
+carries the shipped `PullRequestRow` reused markup-for-markup, produced by
+bundling and screenshotting the real `DevelopmentSectionBody` (that asset's
+notes, § _What this COMPOSES_). Its class strings were diffed against
+`components/github/DevelopmentSection.tsx` at `origin/main` `1c5125eec` and match
+byte for byte, so it is a current render, and it — not this asset's own hand-drawn
+`.pr-row` — is the pixel reality the measurements below are taken from.
+
+#### Q1 — WHICH surface carries the control: the detail page ONLY
+
+**This is not a new decision; it is Panel 5's decision applied to the second
+write on the same surface.** The peek's shipped contract is _"Read-only — editing
+lives on the full page"_ (`IssueQuickViewPanel`, whose one write path is _Open
+full page_), and Panel 5 declined to put the LINK affordance there because it
+_"would be a second write path — a per-surface interaction deviation of exactly
+the mistake-#139 class."_ A remove is a write, and a destructive one. Every word
+of that argument applies unchanged and more strongly.
+
+- **Peek (Panels 3 / 4a): unchanged, display only.** A reader who wants to
+  retract a link reaches it the way they reach every other edit — **Open full
+  page**.
+- **Detail page (Panel 5a): the control ships**, on every linked-PR row.
+
+#### Q2 — WHERE it sits, and the measurement that makes it fit
+
+**LAST in the row, after the link-out.** That is the relationships panel's own
+order — the destructive action terminates the row (`links.mock.html` panel 4) —
+and it leaves the link-out where readers already reach for it.
+
+The control is the shipped one, and these are its numbers rather than an
+approximation of them:
+
+| what                | value                                         | source                                                                                                                                                                                                                       |
+| ------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| box                 | **24 × 24**, `inline-flex`, centred           | `RemoveLinkButton.tsx` `h-6 w-6`                                                                                                                                                                                             |
+| radius              | `--radius-control`                            | same                                                                                                                                                                                                                         |
+| glyph               | lucide **`X`** — the PLAIN cross, **15 × 15** | same, `h-[15px] w-[15px]`. ⚠️ NOT lucide `CircleX`, which this mock's sprite carries under the short name `#i-x` and which the _Checks failing_ pill renders; the panels draw this control from a separate `#i-close` symbol |
+| ink at rest         | `--el-text-muted`                             | same                                                                                                                                                                                                                         |
+| hover               | `--el-tint-rose` fill + `--el-danger` ink     | same                                                                                                                                                                                                                         |
+| focus               | 2px `--focus-ring-color` ring, no outline     | same                                                                                                                                                                                                                         |
+| accessible name     | **`aria-label`, never an `sr-only` span**     | `PullRequestRow`'s own comment — an `sr-only` span is `position:absolute` and stretches the root scroller                                                                                                                    |
+| gap to the link-out | the row's existing `10px`                     | `.pr-row` / shipped `gap-2.5`                                                                                                                                                                                                |
+
+**The row does not change height, and that is why this placement is free.** The
+link-out beside it is a 16px glyph in `p-1` — a 24px box — and the remove control
+is a 24px box. The row's height is set by the two-line title/meta block, not by
+its trailing controls.
+
+#### Q3 — what a SECOND trailing action does to a crowded row (Panel 5f, right)
+
+The widest a row gets today is **three pills** — `Merged` + `Not on trunk` +
+`Checks passing` — plus the meta line's `· into <base>` suffix. (Those elements
+are decided in `design/work-items/delivery-set.mock.html`, not here; Panel 5f
+draws them only to test this control against the worst case it must survive.)
+
+**The trailing controls and the pills never shrink; the TITLE absorbs it.** The
+title/meta block is `min-w-0 flex-1` and both lines truncate, so adding ~34px of
+trailing content (a 24px box plus the row gap) costs the title ~34px and nothing
+reflows or wraps. That is the shipped behaviour, not a new rule — it is what
+`min-w-0 flex-1` beside `shrink-0` siblings already does — and Panel 5f draws it
+at the detail card's real **620px**, where the title truncates to about 170px and
+stays readable.
+
+**⚠️ Drawn at 440px it does NOT truncate — it COLLAPSES**, title and meta both to
+zero width, and the remove control clips off the row's right edge. That is real
+behaviour of `min-w-0 flex-1` beside five `shrink-0` siblings, and it was the
+first draft of this panel. **It does not arise on any surface this control ships
+on**: the detail page's Development card is 620px and the peek does not carry the
+control (Q1). It is recorded because the number is not obvious from the row's
+markup, and because a future surface narrower than roughly 500px would have to
+answer it — by dropping a pill, not by shrinking the control.
+
+#### Q4 — the reader who may SEE but not EDIT (Panel 5f, left)
+
+**The control is ABSENT. Not disabled, not dimmed, not a tooltip.** The row is
+byte-for-byte the read-only row that shipped before this card. A disabled control
+advertises a capability the reader does not have and invites them to hunt for the
+permission that unlocks it; an absent one says nothing, which is correct.
+
+The gate is the same key the MCP tool asserts — `work_item:edit`
+(`lib/mcp/toolPermissions.ts`) — so the two doors onto one service agree, and the
+LINK control in the card header gates on it already.
+
+#### Q5 — the CONFIRM, and the sentence it has to contain
+
+Removing a delivery is a **destructive edit of the card's own record**, so the
+gesture confirms. The container is the shipped one: `Popover.Content`,
+**300px**, aligned to the trigger's edge, `--radius-card` on `--el-page-bg` with
+`--shadow-elevated`, a 14px pad and a right-aligned action row — **ghost
+`Cancel`** + **danger `Remove link`**, `sm`, exactly `RemoveLinkButton`'s row.
+
+**The copy's job is to answer the fear the reader actually has**, which is not
+_"will this delete a record?"_ but _"will this do something to my pull request on
+GitHub?"_ So the sentence names the pull request, and then says what is NOT
+happening to it:
+
+> Remove the link to `moooon/motir-core · #131`? The pull request isn't touched
+> on GitHub — only the link.
+
+That is deliberately the shape of `issueViews.removeConfirmBefore/After`
+(_"The work item isn't deleted — only the link."_) with the second clause
+corrected for what a pull request is: **you cannot delete one, and the reader is
+not worried that you might** — they are worried the link is a lever on GitHub.
+Keeping the shape and fixing the noun is the point; one gesture, one language.
+
+**⚠️ The error path is the panel's, not the control's** (`RemoveLinkButton`'s
+own header): the row is dropped OPTIMISTICALLY, which unmounts the control, so a
+rejected write's message is held by the panel and handed back to re-open the
+popover. Nothing new is drawn for it — the rose line inside the popover is the
+shipped `.inline-error` treatment.
+
+#### Copy — the `github` i18n namespace (en + zh parity)
+
+`development.unlinkAria` "Remove the link to {target}" ·
+`development.unlinkConfirmBefore` "Remove the link to" ·
+`development.unlinkConfirmAfter` "? The pull request isn't touched on GitHub —
+only the link." · `development.unlinkAction` "Remove link"
+(cancel = the shared `common.cancel`).
+
+| key                   | en                                                          | zh                                                          |
+| --------------------- | ----------------------------------------------------------- | ----------------------------------------------------------- |
+| `unlinkAria`          | Remove the link to {target}                                 | 移除与 {target} 的关联                                      |
+| `unlinkConfirmBefore` | Remove the link to                                          | 移除与                                                      |
+| `unlinkConfirmAfter`  | ? The pull request isn't touched on GitHub — only the link. | 的关联吗？GitHub 上的拉取请求不会受到影响——只会移除此关联。 |
+| `unlinkAction`        | Remove link                                                 | 移除关联                                                    |
+
+`{target}` is the row's own identifier, `owner/repo · #n`, rendered `font-mono`
+inside the sentence exactly as the relationships panel renders its work-item key.
+**`unlinkAction` is the same string as `issueViews.removeLink` on purpose** — one
+gesture, one label — and it is a second key rather than a cross-namespace read
+because `DevelopmentSection` translates under `github`.
+
+#### Referrers — who else renders this row
+
+`design/work-items/repository-set.mock.html` and
+`design/work-items/delivery-set.mock.html` both reuse `PullRequestRow` **verbatim**,
+and both declare the Development section's own content out of scope (_"the
+Development section's other content, the explicit-link affordance … untouched"_).
+**Neither needs re-drawing and neither may be edited by MOTIR-5005**: they compose
+the shipped component, so they inherit the control when it ships. They are named
+here so that the next reader of either asset knows why its rows will not match its
+committed PNG once MOTIR-5005 lands, and re-exports rather than re-designs.
+
+#### Build seam (for MOTIR-5005)
+
+The service is already there — `githubPullRequestService.unlinkPullRequest` /
+`unlinkPullRequestByCoordinates`, with its permission, its idempotence and its
+one-pair-only semantics all built and tested for the MCP tool. What MOTIR-5005
+adds is **an `unlinkPullRequestAction` beside `linkPullRequestAction`** and
+**this control on the row**, following `RemoveLinkButton`'s optimistic-removal
+shape: the PANEL owns the write and the rollback, the control owns the popover.
+Do not give the control its own `useTransition` — `RemoveLinkButton` explains why
+it stopped using one.
 
 ---
 
@@ -395,6 +595,11 @@ these, it does not build new ones:
   inline form + query-driven picker are the shipped link-adding pattern
   (2.4.9 / 6.9.2) applied to PRs, including the Combobox's empty-listbox a11y
   handling. No new picker primitive.
+- ✅ **`RemoveLinkButton` + `Popover` + `Button` (ghost / danger, `sm`)** — the
+  Panels 5d–5f remove control and its confirm are the shipped relationships-panel
+  gesture (2.4.9) applied to a PR row, measurement for measurement. No new
+  primitive, and no new token: the hover pair is `--el-tint-rose` +
+  `--el-danger`, which the tree already uses for exactly this control.
 
 **No new design-system entry is required.** If MOTIR-895 finds it needs one
 (e.g. a distinct merged-PR colour), that is a NEW `design/` subtask — not a code
