@@ -121,6 +121,7 @@ function room(rows: ProjectRepoDto[], canAdd = true) {
       connectHref="/settings/account/git"
       canAddRepositories={canAdd}
       organizationName="moooon"
+      projectName="Motir"
       organizationInventoryHref="/settings/organization/git"
       nowIso="2026-09-06T12:00:00.000Z"
     />,
@@ -139,7 +140,53 @@ describe('the organisation section, and the room’s one add door', () => {
     // The row prints the owner and the name in separate spans, so it is asked
     // for by the half that identifies it.
     expect(screen.getByText('motir-core')).toBeTruthy();
-    expect(screen.getByText('See every repository in moooon')).toBeTruthy();
+  });
+
+  it('⚠️ AC 1 — ONE link renders exactly ONE ROW, counted, not merely present', () => {
+    // The count is the assertion, deliberately. Asserting the link is PRESENT
+    // passed for the whole life of the defect: `moooon-B-V/motir-core` was
+    // present twice on a project holding one repository — once as its link
+    // carrying `Remove from this project`, once as a layered entry carrying
+    // nothing — beneath a summary describing an organisation-sized list (§18.2).
+    // A presence check cannot see a duplicate, and a duplicate was the symptom.
+    room([ORG_ROW('r1', 'motir-core')]);
+    const section = screen.getByRole('region', { name: 'From your organisation' });
+    expect(within(section).getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('⚠️ AC 8 — the inventory route is a NAMED LANDMARK after the sections, not a footnote', () => {
+    // Design §18.6. It is the ONLY route from a project context to the
+    // organisation's whole inventory now, so it is navigation with its own
+    // accessible name — the third landmark on a page with two named sections, and
+    // findable by a reader moving by landmark without reading either list.
+    room([ORG_ROW('r1', 'motir-core')]);
+    const nav = screen.getByRole('navigation', { name: 'Organisation repository inventory' });
+    expect(
+      within(nav).getByText(/Looking for a repository that is not linked to Motir\?/),
+    ).toBeTruthy();
+    const link = within(nav).getByRole('link', { name: 'See every repository in moooon' });
+    expect(link.getAttribute('href')).toBe('/settings/organization/git');
+  });
+
+  it('⚠️ AC 8 — and it is NOT inside the organisation section it used to sit under', () => {
+    // The half that catches a re-introduction: §18.6 says what the link is not —
+    // provenance for the rows above it, or a disclosure that expands organisation
+    // rows back onto this page. Inside that section it reads as the first; this
+    // card removed the second.
+    room([ORG_ROW('r1', 'motir-core')]);
+    const section = screen.getByRole('region', { name: 'From your organisation' });
+    expect(within(section).queryByRole('link', { name: /See every repository/ })).toBeNull();
+  });
+
+  it('⚠️ AC 1 — zero links draws Panel 9, and the summary route out is still there', () => {
+    // Not an error and not an empty box: the state EVERY project in the estate is
+    // in today. It says the PROJECT is empty while the organisation may not be.
+    room([]);
+    expect(screen.getByText(/No repositories in this project yet/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Add repository/i })).toBeTruthy();
+    expect(
+      screen.getByRole('navigation', { name: 'Organisation repository inventory' }),
+    ).toBeTruthy();
   });
 
   it('⚠️ renders it for a project that holds NOTHING, when the actor may add', () => {
@@ -286,11 +333,15 @@ describe('REMOVING from the project — the narrow one of the two removals', () 
 // project's hosted repositories as its own. Deleting the one offending row on
 // the one tenant would clear the screenshot and leave this test failing, which
 // is the point of asserting the predicate rather than the tenant.
-describe('a repository under the provisioning organisation, in the mounted room', () => {
+describe('⚠️ AC 2 — the ORGANISATION`s inventory never reaches a row of this page', () => {
   const HOST_OWNER = 'motir-projects';
 
   /** The six the organisation connected, plus the one Motir created — in the
-   *  order `listByWorkspace` returns them, owner-then-name. */
+   *  order `listByWorkspace` returns them, owner-then-name. This is the exact
+   *  fixture MOTIR-4867 was filed against, kept because the point has inverted
+   *  rather than gone away: it used to prove that ONE of the seven was
+   *  mis-classified into the section, and it now proves that NONE of the seven
+   *  reaches it. */
   const SEVEN: ProjectRepoConnectedDto[] = [
     ...[
       'motir-ai',
@@ -303,71 +354,105 @@ describe('a repository under the provisioning organisation, in the mounted room'
     { name: 'motir', repoRef: `${HOST_OWNER}/motir`, defaultBranch: 'main' },
   ];
 
-  function layeredRoom(connected: ProjectRepoConnectedDto[]) {
+  /** A room whose SERVER VIEW still carries the layered registry and still says
+   *  the ladder layers it. That is deliberate and is the whole strength of these
+   *  cases: `projectRepoRoomService` on `main` ships both fields today, and
+   *  MOTIR-4955's open pull request is what empties them. This card must make the
+   *  page correct WITHOUT that change, so the fixture keeps the fields populated
+   *  and asserts nothing renders from them. It also means these cases keep
+   *  passing after MOTIR-4955 lands, when the fields go empty for real. */
+  function layeredRoom(connected: ProjectRepoConnectedDto[], rows: ProjectRepoDto[] = []) {
     renderWithIntl(
       <RepositoriesRoom
         projectKey="ACME"
-        view={{ ...view([]), connected, connectedInDomain: true, hostOwner: HOST_OWNER }}
+        view={{ ...view(rows), connected, connectedInDomain: true, hostOwner: HOST_OWNER }}
         connectHref="/settings/account/git"
-        canAddRepositories={false}
+        // ⚠️ TRUE, so the ROOM renders rather than the whole-page signpost. With
+        // no links AND no add door the room correctly collapses to the empty
+        // state — which is a different assertion, made in the describe above.
+        // What these cases are about is the SECTION: given a server view that
+        // still carries seven layered repositories, how many rows does it draw?
+        canAddRepositories
         organizationName="moooon"
+        projectName="Motir"
         organizationInventoryHref="/settings/organization/git"
         nowIso="2026-09-08T12:00:00.000Z"
       />,
     );
   }
 
-  it('⚠️ THE DEFECT, as one assertion: it is absent from `From your organisation`', () => {
-    layeredRoom(SEVEN);
+  it('⚠️ THE DEFECT, INVERTED: a project holding ONE link draws ONE row, not seven', () => {
+    // §18.2, observed against the running app: one link, seven rows, and
+    // `moooon-B-V/motir-core` drawn twice. The server view here still says all
+    // seven are layered; exactly one is this project's.
+    layeredRoom(SEVEN, [ORG_ROW('r1', 'motir-core')]);
     const section = screen.getByRole('region', { name: 'From your organisation' });
-    // The six the organisation really did connect are all there…
-    expect(within(section).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(section).getByText('motir-core')).toBeTruthy();
-    // …and the one Motir hosts is not, by NAME and by its owner prefix — the
-    // prefix matters because `motir` is a substring of five of the six names.
-    expect(within(section).queryByText('motir')).toBeNull();
-    expect(within(section).queryByText(`${HOST_OWNER}/`)).toBeNull();
+    expect(within(section).getAllByRole('listitem')).toHaveLength(1);
   });
 
-  it('⚠️ and the summary over the same fixture does not read `7 yours`', () => {
+  it('⚠️ AND THE SURVIVING TWIN IS GONE — the duplicate had no dedup to escape', () => {
+    // The card's own instruction: fix the duplicate by removing its CAUSE, not by
+    // hardening `connectedNotInSet`. The server already applied that dedup and the
+    // twin came from the island's post-mutation recompute. With no second list
+    // there is nothing left to de-duplicate against, so the name appears once by
+    // construction rather than by a rule that can be got wrong again.
+    layeredRoom(SEVEN, [ORG_ROW('r1', 'motir-core')]);
+    const section = screen.getByRole('region', { name: 'From your organisation' });
+    expect(within(section).getAllByText('motir-core')).toHaveLength(1);
+  });
+
+  it('⚠️ a project with NO links draws no organisation row at all', () => {
+    // The state that produced `0 moving · 0 hosted by Motir · 6 yours` above a
+    // list of six repositories the project had never added.
+    layeredRoom(SEVEN);
+    expect(screen.getByText(/No repositories in this project yet/)).toBeTruthy();
+    const section = screen.getByRole('region', { name: 'From your organisation' });
+    expect(within(section).queryAllByRole('listitem')).toHaveLength(0);
+  });
+
+  it('⚠️ and the summary over the same fixture reads three ZEROES, not `6 yours`', () => {
     // The summary is rendered by the PAGE (a server component reading the same
-    // room view), not by this island, so it is measured here through the very
-    // function that page calls rather than by a second render of a server
-    // component this test environment cannot mount. Same fixture, same
-    // `hostOwner`, one assertion apart from the render above.
-    expect(summarizeRepositories([], SEVEN, HOST_OWNER)).toEqual({
-      moving: 0,
-      hosted: 0,
-      yours: 6,
-    });
+    // room view), not by this island, so it is measured through the very function
+    // that page calls rather than by a second render this environment cannot
+    // mount. Same fixture as the render above.
+    expect(summarizeRepositories([])).toEqual({ moving: 0, hosted: 0, yours: 0 });
   });
 
-  it('draws nothing at all for it — the hosted section is the project`s own ROWS', () => {
-    // The disposition this card chose, asserted so a later widening has to
-    // change a test rather than a rendering. `Hosted by Motir` holds
-    // `project_repository` rows carrying the takeover saga; this project has
-    // none, so the section is ABSENT rather than present-and-empty
-    // (`design/repository-set/design-notes.md` §16.1).
+  it('draws nothing at all for a hosted repository the project has no ROW for', () => {
+    // `Hosted by Motir` holds `project_repository` rows carrying the takeover
+    // saga; this project has none, so the section is ABSENT rather than
+    // present-and-empty (`design/repository-set/design-notes.md` §16.1).
     layeredRoom(SEVEN);
     expect(screen.queryByText('Hosted by Motir')).toBeNull();
+    expect(screen.queryByText(`${HOST_OWNER}/`)).toBeNull();
   });
 
-  it('⚠️ leaves a deployment that cannot provision byte-for-byte unchanged', () => {
-    // `hostOwner: null` — self-hosted, no `GITHUB_FALLBACK_ORG`, nothing hosted.
-    // All seven are the organisation's, exactly as before this rule existed.
-    renderWithIntl(
-      <RepositoriesRoom
-        projectKey="ACME"
-        view={{ ...view([]), connected: SEVEN, connectedInDomain: true, hostOwner: null }}
-        connectHref="/settings/account/git"
-        canAddRepositories={false}
-        organizationName="moooon"
-        organizationInventoryHref="/settings/organization/git"
-        nowIso="2026-09-08T12:00:00.000Z"
-      />,
-    );
-    const section = screen.getByRole('region', { name: 'From your organisation' });
-    expect(within(section).getAllByRole('listitem')).toHaveLength(7);
+  it('⚠️ `hostOwner` and `connectedInDomain` change NOTHING now — the page stopped asking', () => {
+    // MOTIR-4867's fix was a CLASSIFICATION: subtract Motir's own repositories
+    // from the layered half before drawing it. This card is the stronger form of
+    // the same fix — the page does not draw a layered half, so there is no
+    // half to classify and no way for the two sides of the wire to disagree
+    // about it. Asserted by varying BOTH inputs across their whole range and
+    // getting one answer.
+    for (const hostOwner of [HOST_OWNER, null]) {
+      for (const connectedInDomain of [true, false]) {
+        renderWithIntl(
+          <RepositoriesRoom
+            projectKey="ACME"
+            view={{ ...view([]), connected: SEVEN, connectedInDomain, hostOwner }}
+            connectHref="/settings/account/git"
+            canAddRepositories
+            organizationName="moooon"
+            projectName="Motir"
+            organizationInventoryHref="/settings/organization/git"
+            nowIso="2026-09-08T12:00:00.000Z"
+          />,
+        );
+        const section = screen.getByRole('region', { name: 'From your organisation' });
+        expect(within(section).queryAllByRole('listitem')).toHaveLength(0);
+        cleanup();
+      }
+    }
   });
 });
 

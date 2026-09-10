@@ -7087,12 +7087,11 @@
   },
   "repositoryTakeover": {
     "title": "代码仓库",
-    "lead": "{projectName} 的代码存放处。Motir 为你创建并托管这些仓库——你随时可以把其中任何一个迁到自己的 GitHub。",
-    "leadConnected": "{projectName} 的代码存放处——既有 Motir 为你托管的仓库，也有你自己接入的仓库。",
+    "lead": "只显示 {projectName} 正在使用的仓库——无论由 Motir 托管，还是由 {org} 持有。",
     "hostedHeading": "由 Motir 托管",
     "hostedHint": "Motir 创建了这些仓库并承担它们的 CI 费用。你随时可以把其中任何一个迁到自己的 GitHub。",
     "emptyAction": "接入一个仓库",
-    "empty": "这个项目还没有接入任何代码仓库。你可以接入自己在 GitHub 上已有的代码，也可以批准一份方案，让 Motir 为你创建仓库。",
+    "empty": "这个项目还没有任何仓库。你可以添加一个 {org} 已有的仓库，或连接一个新仓库。",
     "summary": "{moving} 个迁移中 · {hosted} 个由 Motir 托管 · {yours} 个归你所有",
     "pausedTitle": "CI 已暂停——这个组织的额度已用完。",
     "pausedBody": "把仓库迁到你自己的 GitHub 会重新开启它的 Actions，此后由 GitHub 直接向你计费。",
@@ -7150,7 +7149,9 @@
     "back": "上一步",
     "cancel": "取消",
     "connectTitle": "请先连接 GitHub",
-    "connectWhy": "Motir 要把仓库迁给你，只需要一样东西：它该归属的那个 GitHub 账号。这和邀请你访问代码用的是同一个账号——你会看到是哪一个。"
+    "connectWhy": "Motir 要把仓库迁给你，只需要一样东西：它该归属的那个 GitHub 账号。这和邀请你访问代码用的是同一个账号——你会看到是哪一个。",
+    "inventoryNavLabel": "组织仓库总览",
+    "inventoryPrompt": "在找一个还没有加入 {projectName} 的仓库吗？"
   },
   "apiDocs": {
     "metaTitle": "Motir 文档",
@@ -7864,7 +7865,7 @@
   "repositoryPicker": {
     "add": "添加仓库",
     "title": "添加仓库",
-    "subtitle": "从组织已连接的仓库中挑选一个，或连接一个新的。",
+    "subtitle": "挑选一个 {org} 已有的仓库，或连接一个新的。",
     "searchLabel": "搜索仓库",
     "searchPlaceholder": "按名称筛选…",
     "loading": "正在加载组织的仓库…",
@@ -7874,15 +7875,14 @@
     "alreadyInProject": "已在此项目中",
     "connectNew": "在 GitHub 上连接新仓库",
     "noInstallHref": "此部署暂不支持连接新仓库。",
-    "firstTimeLead": "连接第一个仓库后，它会同时进入 {org} 和这个项目。",
+    "firstTimeLead": "{org} 还没有连接任何仓库。连接第一个仓库后，它会同时进入 {org} 和 {projectName}。",
     "segment": {
       "organization": "在 {org} 中 · 已连接",
       "connect": "连接新仓库"
     },
     "section": {
       "heading": "来自你的组织",
-      "hint": "{org} 已连接、且这个项目正在使用的仓库。挑选它们不会重新建立索引。",
-      "provenance": "这些仓库接入的是整个组织，而不只是这个项目。",
+      "hint": "{org} 中已链接到这个项目的仓库。",
       "footNoPermission": "只有组织的所有者和管理员可以添加仓库。请联系他们，或在「设置 → 组织 → Git」中添加。",
       "seeAll": "查看 {org} 的全部仓库"
     },

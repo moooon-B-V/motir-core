@@ -58,15 +58,20 @@ const HEADING_ID = 'project-repositories-organization';
 
 export interface OrganizationRepositoriesProps {
   /**
-   * The section's rows — links and ladder-layered repositories, already ordered
-   * and de-duplicated by `splitRoomSections`. This component renders what it is
-   * handed and decides nothing about membership.
+   * The section's rows — this project's organisation-owned LINKS, ordered by
+   * `splitRoomSections`. This component renders what it is handed and decides
+   * nothing about membership.
+   *
+   * ⚠️ EVERY ENTRY IS REMOVABLE NOW (MOTIR-4954). The array used to mix links
+   * with ladder-layered entries that carried no action, which is what made the
+   * `Remove from this project` link the ONLY signal telling the two apart —
+   * design §18.2: *"a reader cannot answer 'which repositories does this project
+   * work on?' from the page whose title is Repositories."* An empty array is a
+   * legitimate state and is drawn as such, not hidden.
    */
   entries: OrgSectionEntry[];
-  /** The organisation's display name, for the heading and the confirm copy. */
+  /** The organisation's display name, for the heading, hint and confirm copy. */
   organizationName: string;
-  /** The org inventory — `See every repository in <org>`. */
-  inventoryHref: string;
   /** Whether the actor may ADD. The remove action is NOT gated on this. */
   canAdd: boolean;
   /** Resolves once the row is gone; the caller owns the optimistic update. */
@@ -78,12 +83,15 @@ export interface OrganizationRepositoriesProps {
 export function OrganizationRepositories({
   entries,
   organizationName,
-  inventoryHref,
   canAdd,
   onRemove,
   addButton,
 }: OrganizationRepositoriesProps) {
   const t = useTranslations('repositoryPicker');
+  // The empty sentence belongs to the ROOM's namespace, not the picker's — it is
+  // the page speaking about itself, and it is the same string the whole-room
+  // empty state uses (design §18.5, `repositoryTakeover.empty`).
+  const tRoom = useTranslations('repositoryTakeover');
   const [confirming, setConfirming] = useState<ProjectRepoDto | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -106,62 +114,83 @@ export function OrganizationRepositories({
       <p className="max-w-prose font-sans text-sm text-(--el-text-secondary)">
         {t('section.hint', { org: organizationName })}
       </p>
-      <Card
-        footer={
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* ⚠️ THE PROVENANCE SENTENCE, RE-TIERED (MOTIR-4820). The section it
-                absorbed carried "Connected for the whole workspace, not for this
-                project alone" — a true sentence about the wrong tier, since
-                MOTIR-4649 moved a repository's tenancy to the ORGANISATION. It
-                matters more here than it did there, because this section now
-                holds rows the project cannot remove, and this is what says why.
-                ⚠️ NOT SILENT when the actor cannot add. A room whose one action
-                simply vanishes leaves a reader wondering whether they are looking
-                at a bug; the footer says WHO can do it and WHERE, which is what
-                turns an absence into an answer. And not DISABLED either — an entry
-                point is a promise about a room, and a disabled control is a
-                promise the product then refuses (MOTIR-2468). */}
-            <p className="min-w-0 font-sans text-sm text-(--el-text-secondary)">
-              {canAdd ? t('section.provenance') : t('section.footNoPermission')}
-            </p>
-            {/* ⚠️ THE FOOTER LINK STOPPED BEING A HAND-OFF AND BECAME A VIEW. It
-                read "Choose which repositories Motir can see" — the way to perform
-                an act this room could not. The room performs it now, so the link
-                reads "See every repository in <org>". That single change is the
-                tier move in one line. */}
-            <a
-              href={inventoryHref}
-              className="font-sans text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
-            >
-              {t('section.seeAll', { org: organizationName })}
-            </a>
-          </div>
-        }
-      >
-        <ul className="flex flex-col gap-1">
-          {entries.map((entry) => (
-            <li
-              key={entry.id}
-              className="flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)"
-            >
-              <FolderGit2
-                className="h-[18px] w-[18px] shrink-0 text-(--el-icon-muted)"
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1 truncate font-sans text-sm">
-                <span className="text-(--el-text-muted)">{ownerPrefix(entry)}</span>
-                <span className="font-medium text-(--el-text)">{repoName(entry)}</span>
-              </span>
-              {defaultBranch(entry) ? (
-                <span className="shrink-0 rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-xs text-(--el-code-text)">
-                  {defaultBranch(entry)}
+      {/* ⚠️ THE FOOTER IS GONE, AND BOTH HALVES OF IT WENT SOMEWHERE DIFFERENT
+          (MOTIR-4954 · design §18.5–§18.6).
+
+          `section.provenance` — "Connected to the organisation, not to this
+          project alone" — is RETIRED, not relocated. It was a true sentence that
+          existed to explain rows this section could not remove, and there are no
+          such rows any more: every entry here is a LINK this project chose and
+          may drop. Organisation provenance is not a footer for a project-link
+          list, and a sentence that survives the thing it explained becomes the
+          contradiction it was written to resolve — which is exactly the pair
+          §18.5 replaces it as half of.
+
+          `section.seeAll` — "See every repository in {org}" — MOVES OUT, into the
+          standalone navigation block the room renders after BOTH project sections
+          (§18.6). It stopped being a footnote to a list and became the one route
+          to the organisation's whole inventory, and a route belongs in navigation
+          rather than under the rows it is not about.
+
+          `section.footNoPermission` stays and moves with the heading, because it
+          answers a question about the ADD DOOR — who may use it — and the add
+          door is at the top of this section. */}
+      {/* ⚠️ NOT SILENT WHEN THE ACTOR CANNOT ADD. A room whose one action simply
+          vanishes leaves a reader wondering whether they are looking at a bug, so
+          the sentence that says WHO can add and WHERE moves up here beside the
+          add door it is about — it used to sit in the card footer this card
+          removed. Not DISABLED either: an entry point is a promise about a room,
+          and a disabled control is a promise the product then refuses. */}
+      {canAdd ? null : (
+        <p className="max-w-prose font-sans text-sm text-(--el-text-secondary)">
+          {t('section.footNoPermission')}
+        </p>
+      )}
+      <Card>
+        {/* ⚠️ PANEL 9 — ZERO LINKS IS A NORMAL STARTING CONDITION, NOT AN ERROR
+            AND NOT AN EMPTY BOX (design §18.3). Every project in the estate is in
+            this state today. It says the PROJECT is empty while the organisation
+            may not be, and it points at the add door above rather than at another
+            page: "'Nothing to pick' must never render as a message whose job is to
+            send somebody to another page: that turns one intent into two errands."
+            The `See every repository in {org}` route is still one block below,
+            where a reader looking for it will find it — as navigation, not as the
+            answer to having none. */}
+        {entries.length === 0 ? (
+          <p className="max-w-prose font-sans text-sm text-(--el-text-secondary)">
+            {tRoom('empty', { org: organizationName })}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {entries.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y)"
+              >
+                <FolderGit2
+                  className="h-[18px] w-[18px] shrink-0 text-(--el-icon-muted)"
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate font-sans text-sm">
+                  <span className="text-(--el-text-muted)">{ownerPrefix(entry)}</span>
+                  <span className="font-medium text-(--el-text)">{repoName(entry)}</span>
                 </span>
-              ) : null}
-              {/* ⚠️ ONLY A LINK CARRIES THIS. A ladder-layered repository has no
-                  `project_repository` row, so there is nothing for a remove to
-                  delete — and a control that cannot keep its promise is worse
-                  than its absence (§16.2). */}
-              {entry.kind === 'link' ? (
+                {defaultBranch(entry) ? (
+                  <span className="shrink-0 rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-xs text-(--el-code-text)">
+                    {defaultBranch(entry)}
+                  </span>
+                ) : null}
+                {/* ⚠️ EVERY ROW CARRIES THIS NOW, AND THAT IS THE CARD (MOTIR-4954).
+                  It used to be conditional: a ladder-layered repository had no
+                  `project_repository` row, so there was nothing for a remove to
+                  delete, and a control that cannot keep its promise is worse than
+                  its absence (§16.2). The consequence was that the PRESENCE of
+                  this one link became the only signal distinguishing a repository
+                  the project works on from one it merely can reach — an affordance
+                  carrying a state nothing else labelled, grouped or ordered
+                  (§18.2). With the layered half gone every row is a link, the
+                  action is unconditional, and the distinction it was silently
+                  carrying is now the page's own boundary. */}
                 <Button
                   type="button"
                   variant="ghost"
@@ -171,10 +200,10 @@ export function OrganizationRepositories({
                 >
                   {t('remove.action')}
                 </Button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Modal
@@ -219,32 +248,26 @@ export function OrganizationRepositories({
 }
 
 /**
- * The three things a row PRINTS, read off whichever half of the union it is.
+ * The three things a row PRINTS.
  *
- * A LINK prefers its REALIZED repository — the host's own casing is what a
+ * A row prefers its REALIZED repository — the host's own casing is what a
  * checkout answers to, and it can legitimately differ from the row's authored
- * name once someone renames the repository on GitHub. A DOMAIN entry has only
- * `repoRef`, which is `owner/name` and is that shape's identity, so the owner is
- * split off it rather than carried as its own field: the room's domain read has
- * no owner column to carry.
+ * name once someone renames the repository on GitHub.
  *
- * A ref that somehow holds no `/` renders as just the name — the honest
- * degradation, and never a stray slash.
+ * ⚠️ THERE IS NO SECOND ARM ANY MORE (MOTIR-4954). All three used to branch on
+ * `entry.kind`, because a `domain` entry carried only a `repoRef` and its owner
+ * had to be split back off that string. That half of the union is gone with the
+ * section it fed, so the branch goes with it rather than standing as a dead
+ * `else` every reader has to evaluate before concluding it is unreachable.
  */
 function repoName(entry: OrgSectionEntry): string {
-  return entry.kind === 'link' ? (entry.row.realizedRepo?.name ?? entry.row.name) : entry.repo.name;
+  return entry.row.realizedRepo?.name ?? entry.row.name;
 }
 
 function ownerPrefix(entry: OrgSectionEntry): string {
-  if (entry.kind === 'link') {
-    return entry.row.realizedRepo ? `${entry.row.realizedRepo.owner}/` : '';
-  }
-  const cut = entry.repo.repoRef.lastIndexOf('/');
-  return cut === -1 ? '' : `${entry.repo.repoRef.slice(0, cut)}/`;
+  return entry.row.realizedRepo ? `${entry.row.realizedRepo.owner}/` : '';
 }
 
 function defaultBranch(entry: OrgSectionEntry): string | null {
-  return entry.kind === 'link'
-    ? (entry.row.realizedRepo?.defaultBranch ?? null)
-    : entry.repo.defaultBranch;
+  return entry.row.realizedRepo?.defaultBranch ?? null;
 }

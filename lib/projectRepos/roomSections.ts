@@ -20,6 +20,29 @@ import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 // `lib/projectRepos/effectiveDomain.ts` on the server). This function is HANDED
 // that boolean; it never re-derives it, and it never reads a count in its place.
 //
+// ── ⚠️ RE-SCOPED TO THE PROJECT'S LINKS (MOTIR-4954) ────────────────────────
+// The block below describes the room as it was between MOTIR-4820 and this card:
+// an org section that answered the LADDER, holding picked LINKS and layered
+// DOMAIN entries as one list. **The domain half is gone.** A project-scoped page
+// draws the project's links and nothing else, and the organisation's inventory is
+// reached from the `Add repository` picker and the `See every repository in {org}`
+// navigation block instead (`design/github/design-notes.md` §18).
+//
+// It is KEPT rather than deleted because the question it answers — *what made the
+// two surfaces disagree?* — is still the reason `/settings/organization/git` and
+// this room have to be read together, and because a reader meeting `connectedNotInSet`
+// below needs to know what it was for.
+//
+// ⚠️ WHICH IS THE OTHER THING TO SAY HERE: `connectedNotInSet`,
+// `organizationConnected` and `isMotirHostedConnectedRepo` SURVIVE THIS CARD AND
+// ARE NOT DEAD. This room no longer calls any of them, but
+// `lib/services/projectRepoRoomService.ts` still applies `connectedNotInSet` when
+// it composes the room view, and `tests/projectRepos/hostOwnershipAgreement.test.ts`
+// pins `organizationConnected` against the two sibling surfaces that share its
+// predicate. Deleting them here would turn `main` red for a caller this card is
+// not allowed to touch. Their last consumer goes with MOTIR-4955, which retires
+// the workspace rung itself — that is the card that gets to delete them.
+
 // ── ⚠️ THE ORG SECTION ANSWERS THE LADDER, NOT `seedSource` (MOTIR-4820) ──────
 // A repository PICKED from the organisation gets a `project_repository` row — it
 // has to, because `@@unique([projectId, githubRepoId])` is the guarantee
@@ -193,47 +216,62 @@ export function organizationConnected(
 }
 
 /**
- * ONE ROW OF THE ORGANISATION SECTION — and which of the two things it is.
+ * ONE ROW OF THE ORGANISATION SECTION.
  *
- * The section renders a single list. This union is what lets it stay one list
- * while remaining honest about the one way its members differ: a `link` is a
- * `project_repository` row this project chose and may drop, a `domain` entry is a
- * repository the ladder hands the project and there is no link to drop.
+ * ⚠️ IT IS A ONE-MEMBER UNION NOW (MOTIR-4954), and it is kept as a union rather
+ * than flattened to `ProjectRepoDto` deliberately. It used to carry a second
+ * arm — a `domain` entry, a repository the LADDER layered into this project with
+ * no `project_repository` row of its own — and the whole point of this card is
+ * that a project-scoped page has no business drawing one. Keeping the shape means
+ * the row renderers keep saying WHICH kind of thing they are printing, so an
+ * attempt to re-introduce a rowless entry has to widen this type in the open
+ * rather than slip in as a differently-shaped object.
+ *
+ * `design/github/design-notes.md` §18.3, Panel 8: *"Four page rows mean four
+ * project links … Nothing else in the organisation is drawn."*
  */
-export type OrgSectionEntry =
-  | { kind: 'link'; id: string; row: ProjectRepoDto }
-  | { kind: 'domain'; id: string; repo: ProjectRepoConnectedDto };
+export type OrgSectionEntry = { kind: 'link'; id: string; row: ProjectRepoDto };
 
 /**
- * THE ROOM'S TWO SECTIONS (MOTIR-4820).
+ * THE ROOM'S TWO SECTIONS (MOTIR-4820; RE-SCOPED TO PROJECT LINKS BY MOTIR-4954).
  *
- * ⚠️ ONE REPOSITORY NEVER APPEARS TWICE, and the split is total: every set row
- * falls on exactly one side, and `connected` has already been de-duplicated
- * against the rows by {@link connectedNotInSet} — which is why the domain half is
- * appended rather than merged again here.
+ * ⚠️ THE PAGE DRAWS THIS PROJECT'S LINKS AND NOTHING ELSE. It used to append a
+ * DOMAIN half — every repository the ladder layers into the project with no
+ * `project_repository` row — and that half is what put the ORGANISATION's whole
+ * inventory on a PROJECT-scoped page: one project holding a single link rendered
+ * SEVEN rows, with `moooon-B-V/motir-core` drawn twice, once carrying
+ * `Remove from this project` and once carrying nothing at all
+ * (`design/github/design-notes.md` §18.2, walked against the running app).
  *
- * `layersConnected` is the LADDER's own boolean, straight from the server
- * (`ProjectRepoRoomViewDto.connectedInDomain`). It is NOT `connected.length > 0`:
- * a project whose domain includes the workspace rung but whose organisation has
- * nothing connected yet still layers it, and conflating the two is the class of
- * bug this module exists to end.
+ * ⚠️ THE DUPLICATE IS FIXED BY REMOVING ITS CAUSE, NOT BY A TIGHTER DEDUP. The
+ * server already applied `connectedNotInSet` and the surviving twin came from the
+ * ISLAND's post-mutation recompute, deduping against a `rowsRef` that did not yet
+ * hold the row just added. A hardened dedup would be dead code guarding a list
+ * that no longer exists — with the domain half gone there is nothing left to
+ * de-duplicate AGAINST, so the duplicate cannot recur.
  *
- * The org side carries `Remove from this project` on its LINK rows only. The
- * hosted side keeps the takeover, which is meaningless for a repository the
- * organisation already owns.
+ * ⚠️ AND THE ORGANISATION'S REPOSITORIES DID NOT BECOME UNREACHABLE — they moved
+ * to the two places a person is actually choosing from them: the `Add repository`
+ * picker (§18.3 Panels 10–11) and the `See every repository in {org}` navigation
+ * block (§18.6). What this function stopped doing is rendering them as PAGE ROWS.
  *
- * ⚠️ `hostOwner` IS REQUIRED, not optional (bug MOTIR-4867). The layered half is
- * the ORGANISATION'S repositories, so a caller that cannot say who owns them
- * cannot compute this section — and a defaulted parameter is a gate one caller
- * away from being missing. `null` is a legitimate ANSWER (a deployment that
- * cannot provision hosts nothing), never an omission.
+ * ⚠️ WHAT THIS FUNCTION NO LONGER TAKES, AND WHY THAT IS THE POINT.
+ * `layersConnected` and `hostOwner` are gone from the signature. The first was
+ * the LADDER's own boolean and the second decided whose the layered half was —
+ * both questions about a list this surface does not draw. A parameter kept "just
+ * in case" is how a retired section grows back; the ladder itself is untouched
+ * and stays exactly where it is, in `lib/projectRepos/effectiveDomain.ts`, for
+ * dispatch (MOTIR-4955 owns that rung's retirement, not this card).
+ *
+ * `seedSource` still decides which rows are organisation LINKS and which are
+ * Motir-hosted takeover rows — a FACT the write records, never a heuristic the
+ * reader infers. The hosted side keeps the takeover, which is meaningless for a
+ * repository the organisation already owns.
  */
-export function splitRoomSections(
-  rows: readonly ProjectRepoDto[],
-  connected: readonly ProjectRepoConnectedDto[],
-  layersConnected: boolean,
-  hostOwner: string | null,
-): { fromOrganization: OrgSectionEntry[]; motirHosted: ProjectRepoDto[] } {
+export function splitRoomSections(rows: readonly ProjectRepoDto[]): {
+  fromOrganization: OrgSectionEntry[];
+  motirHosted: ProjectRepoDto[];
+} {
   const fromOrganization: OrgSectionEntry[] = [];
   const motirHosted: ProjectRepoDto[] = [];
   for (const row of rows) {
@@ -243,47 +281,53 @@ export function splitRoomSections(
       motirHosted.push(row);
     }
   }
-  if (layersConnected) {
-    for (const repo of organizationConnected(connected, hostOwner)) {
-      fromOrganization.push({ kind: 'domain', id: repo.repoRef, repo });
-    }
-  }
   return { fromOrganization, motirHosted };
 }
 
 /**
- * The header summary's three counts, over BOTH registries (MOTIR-3126).
+ * THE HEADER SUMMARY'S THREE COUNTS, OVER THE PROJECT'S LINKS ALONE
+ * (MOTIR-3126; RE-SCOPED BY MOTIR-4954).
  *
- * Three ownerships in one project are LEGAL AT ONCE (MOTIR-711's per-row rule at
- * set scale), so they are counted separately rather than implying the whole
- * project is "moving" because one row is.
+ * `{moving} moving · {hosted} hosted by Motir · {yours} yours` partitions the
+ * repositories LINKED TO THIS PROJECT. The three are mutually exclusive, and
+ * `design/github/design-notes.md` §18.4 states each one's meaning:
  *
- * ⚠️ A CONNECTED REPOSITORY COUNTS AS `yours`, because it is: the user owns it,
- * Motir never bills its CI, and there is nothing to move. A summary computed over
- * the set alone is the header-level form of the very defect this card fixes — it
- * would report `0 yours` on a project holding four repositories of its own.
+ *   moving          · a Motir-hosted link whose takeover is in progress.
+ *   hosted by Motir · a settled Motir-hosted link Motir still owns and pays CI for.
+ *   yours           · an organisation-owned link, OR a Motir-hosted link whose
+ *                     takeover COMPLETED. (Such a row keeps its place in the
+ *                     hosted SECTION, where the takeover history stays legible,
+ *                     while its summary bucket moves — the section answers
+ *                     "where did this come from", the count answers "who owns it
+ *                     now", and those are different questions.)
  *
- * ⚠️ UNLESS MOTIR HOSTS IT, WHEN ALL THREE OF THOSE CLAUSES INVERT (bug
- * MOTIR-4867). The sentence above is the promise `yours` makes, and for a
- * repository under the provisioning organisation Motir owns it, Motir pays its
- * Actions, and moving it is a whole saga — so it is subtracted here by the same
- * {@link organizationConnected} rule that keeps it out of the section, and the
- * two cannot drift because they are one predicate.
+ * ⚠️ AN ORGANISATION REPOSITORY THIS PROJECT HAS NOT ADDED IS IN NONE OF THEM.
+ * This function used to SEED `yours` with `organizationConnected(connected)` —
+ * every repository the ladder layered in — on the reasoning that the user owns
+ * it, Motir never bills its CI and there is nothing to move. All three clauses
+ * are true and the count was still wrong for this header, because the header
+ * sits above a list of the PROJECT's repositories: it reported `0 moving · 0
+ * hosted by Motir · 6 yours` on a project holding **no links at all** (§18.2,
+ * observed). A number above a list must count the things in that list.
  *
- * ⚠️ `hosted` STILL COUNTS ROWS ONLY, deliberately. It is the count of what
- * `Hosted by Motir` DRAWS, and that section draws `project_repository` rows; a
- * hosted repository this project holds no row for is not in it, so counting it
- * would put a number above a section that does not contain it. `0 hosted by
- * Motir` on a project whose set is empty is therefore true, not an omission.
+ * ⚠️ SO THE `connected` AND `hostOwner` PARAMETERS ARE GONE, NOT DEFAULTED. The
+ * only reason this function needed to know who hosts a connected repository was
+ * to subtract Motir's own from that seed (bug MOTIR-4867); with no seed there is
+ * nothing to subtract, and a parameter kept for a subtraction that no longer
+ * happens is how the seed grows back.
+ *
+ * ⚠️ `hosted` STILL COUNTS ROWS, as it always did — it is the count of what the
+ * `Hosted by Motir` section DRAWS. `0 hosted by Motir` on a project whose links
+ * are all the organisation's is therefore true, not an omission.
  */
-export function summarizeRepositories(
-  rows: readonly ProjectRepoDto[],
-  connected: readonly ProjectRepoConnectedDto[],
-  hostOwner: string | null,
-): { moving: number; hosted: number; yours: number } {
+export function summarizeRepositories(rows: readonly ProjectRepoDto[]): {
+  moving: number;
+  hosted: number;
+  yours: number;
+} {
   let moving = 0;
   let hosted = 0;
-  let yours = organizationConnected(connected, hostOwner).length;
+  let yours = 0;
   for (const row of rows) {
     const takeover = row.takeover?.state ?? null;
     if (takeover && takeover !== 'done' && takeover !== 'failed') moving += 1;

@@ -7,7 +7,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
-import { organizationConnected, summarizeRepositories } from '@/lib/projectRepos/roomSections';
+import { summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
 import { RepositoriesRoom } from './_components/RepositoriesRoom';
 import { guardSettingsPage } from '../_guard';
@@ -36,13 +36,20 @@ const ORGANIZATION_GIT_PATH = '/settings/organization/git';
 // island with its own refetch (which `router.refresh()` provably cannot reach).
 // Getting that split wrong is the recurring bug the contract exists to stop.
 //
-// ⚠️ THE HEADER SPEAKS FOR BOTH REGISTRIES (MOTIR-3126). The room renders the
-// project's whole repository DOMAIN — the Motir-hosted set AND the
-// workspace-connected repositories — so the lead sentence and the summary count
-// are computed over both. The old lead ("Motir hosts the repositories it created
-// for you") describes something a project with no hosted rows cannot see, so such
-// a project gets `leadConnected` instead; a summary read off the set alone would
-// report `0 yours` for a project holding four repositories of its own.
+// ⚠️ THE HEADER SPEAKS FOR THE PROJECT'S LINKS (MOTIR-3126, RE-SCOPED BY
+// MOTIR-4954 · design §18.4). The room draws the repositories LINKED to this
+// project, so the lead sentence and the summary count are computed over those and
+// nothing else. A summary seeded from the layered registry reported
+// `0 moving · 0 hosted by Motir · 6 yours` on a project holding NO links at all
+// (§18.2, observed) — a number above a list must count the things in that list.
+//
+// ⚠️ AND THERE IS ONE LEAD NOW, NOT TWO. `leadConnected` existed because the old
+// lead ("Motir hosts the repositories it created for you") described something a
+// project with no hosted rows could not see, so the page chose between two
+// sentences on `view.rows.length`. The replacement — "Only the repositories
+// {projectName} works on — whether Motir hosts them or {org} does" — is true of
+// every non-loading state, and a branch that always resolves the same way is a
+// branch a reader has to check before trusting either arm.
 //
 // ⚠️ THE ORG→PROJECT SCOPE GAP IS DRAWN, NOT PAPERED OVER. The billing door is
 // org-scoped while a takeover is per ROW, so the banner names the OTHER projects
@@ -165,27 +172,21 @@ async function RepositoriesPaneBody({
   // "days later" copy would hydrate differently — this repo's known relative-time
   // hydration-flake class, avoided at the root rather than patched at the leaf.
   const nowIso = new Date().toISOString();
-  const counts = summarizeRepositories(view.rows, view.connected, view.hostOwner);
-  // ⚠️ THE ORGANISATION'S HALF, NOT THE WHOLE LAYERED REGISTRY (bug MOTIR-4867).
-  // `view.connected` is `listByWorkspace`'s answer to *what can this workspace
-  // dispatch into*, which legitimately includes a repository MOTIR hosts. Asking
-  // it *does this project have anything to show* counted such a repository as
-  // something to show and then rendered a summary of all zeros above two absent
-  // sections. `organizationConnected` is the same predicate the summary and the
-  // section split use, so the header and the body cannot disagree about whether
-  // there is anything here.
-  const hasAny =
-    view.rows.length > 0 || organizationConnected(view.connected, view.hostOwner).length > 0;
-
+  const counts = summarizeRepositories(view.rows);
+  // ⚠️ THE SUMMARY RENDERS WHENEVER THE ROOM DOES (MOTIR-4954). `hasAny` used to
+  // ask whether there was anything to show ACROSS BOTH registries, because a
+  // summary of all zeroes above two absent sections is noise. There is one
+  // registry now and `0 moving · 0 hosted by Motir · 0 yours` is Panel 9's own
+  // drawn state: it is the honest answer for a project with no links, it sits
+  // above sections that DO render (the add door, the inventory route), and
+  // suppressing it would leave a reader unable to tell "none" from "not loaded".
   return (
     <>
       <div className="flex flex-col gap-1">
         <p className="font-sans text-sm text-(--el-text-muted)">
-          {view.rows.length > 0 ? t('lead', { projectName }) : t('leadConnected', { projectName })}
+          {t('lead', { projectName, org: organizationName })}
         </p>
-        {hasAny ? (
-          <p className="font-sans text-sm text-(--el-text-helper)">{t('summary', counts)}</p>
-        ) : null}
+        <p className="font-sans text-sm text-(--el-text-helper)">{t('summary', counts)}</p>
       </div>
 
       {view.ciPaused ? (
@@ -237,6 +238,7 @@ async function RepositoriesPaneBody({
         connectHref={GIT_ACCOUNT_PATH}
         canAddRepositories={canAddRepositories}
         organizationName={organizationName}
+        projectName={projectName}
         organizationInventoryHref={ORGANIZATION_GIT_PATH}
         nowIso={nowIso}
       />

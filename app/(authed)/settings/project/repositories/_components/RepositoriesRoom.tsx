@@ -8,18 +8,13 @@ import { FolderGit2, TriangleAlert } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { buttonVariants } from '@/components/ui/Button';
-import { connectedNotInSet, splitRoomSections } from '@/lib/projectRepos/roomSections';
+import { splitRoomSections } from '@/lib/projectRepos/roomSections';
 import { TakeoverRow } from './TakeoverRow';
 import { TakeoverModal } from './TakeoverModal';
 import { OrganizationRepositories } from './OrganizationRepositories';
 import { AddRepositoryButton, AddRepositoryPicker } from './AddRepositoryPicker';
-import type { OrgRepoOptionDto } from '@/lib/dto/organizationRepos';
-import type {
-  ProjectRepoConnectCandidateDto,
-  ProjectRepoConnectedDto,
-  ProjectRepoDto,
-  ProjectRepoRoomViewDto,
-} from '@/lib/dto/projectRepos';
+import type { OrgRepoOptionDto, OrgRepoProviderDto } from '@/lib/dto/organizationRepos';
+import type { ProjectRepoDto, ProjectRepoRoomViewDto } from '@/lib/dto/projectRepos';
 
 // The TAKE-IT-OVER room's ROWS — the client island of
 // `/settings/project/repositories` (Story MOTIR-1775 · MOTIR-1939).
@@ -43,30 +38,34 @@ import type {
 // never a set-level flag — one row's in-flight request leaves its siblings
 // rendering and pressable.
 //
-// ⚠️ TWO REGISTRIES, TWO SECTIONS (MOTIR-3126 · design §16, re-sourced by
-// MOTIR-4820). The room renders the project's whole repository DOMAIN: the
-// Motir-hosted set (these rows) and the ORGANISATION's repositories, which the
-// LADDER answers — the picked `project_repository` links plus everything
-// `connectedInDomain` layers. They are never merged into ONE list, because half
-// its rows would carry a takeover that means nothing for them.
+// ⚠️ THE PAGE DRAWS THIS PROJECT'S LINKS, AND NOTHING THE ORGANISATION MERELY
+// HAS (MOTIR-4954 · design §18). There are two sections and both are the
+// project's own: the organisation-owned LINKS and the Motir-hosted ones. They are
+// never merged into one list, because half its rows would carry a takeover that
+// means nothing for them.
 //
-// ⚠️ THE ORG SECTION IS NOT `seedSource` ANY MORE. It was, and on a project with
-// no repository SET that drew an EMPTY `From your organisation` directly above
-// the same repositories under `Your own repositories`, while
-// `/settings/organization/git` read `Used by <project>` for every one of them
-// (MOTIR-4802 moved that page onto the ladder; this room was the half it did not
-// reach). `splitRoomSections` is now handed the ladder's own boolean, so the two
-// surfaces cannot disagree about which repositories a project has.
+// ⚠️ WHAT WAS REMOVED, AND WHY IT IS NOT COMING BACK AS A SMALLER VERSION. This
+// island used to hold a `connected` list — the repositories the LADDER
+// (`lib/projectRepos/effectiveDomain.ts`) layers into the project's domain with no
+// `project_repository` row — re-read it from `connectCandidates` on every refetch,
+// and append it to the org section. On a project holding ONE link that rendered
+// SEVEN rows, with `moooon-B-V/motir-core` drawn twice: once as its link carrying
+// `Remove from this project`, once as a layered entry carrying nothing (§18.2,
+// walked against the running app). Every control on the page — Add, Remove —
+// operated on the link set while most of the rows were entries no control could
+// touch.
 //
-// ⚠️ AND THE REFETCH KEEPS BOTH HALVES TRUE. The establish-view payload this
-// island already re-reads carries `connectCandidates` — the installation's
-// repositories — and it used to read `set.rows` and throw the rest away, which is
-// how a section fed by the server render alone would go stale beside the rows it
-// sits next to (`router.refresh()` cannot reach this island; contract surface 3).
-// WHETHER the section exists is still the SERVER's answer (`connectedInDomain`,
-// from the ladder in `lib/projectRepos/effectiveDomain.ts`) and is never
-// re-derived here: the client re-reads the LIST, it does not re-decide the
-// domain.
+// The layered list is not a smaller list to draw more carefully. It is the wrong
+// QUESTION for this surface: the room asks *what does this project work on?* and
+// the ladder answers *what can this project reach?*. The organisation's inventory
+// is still reachable, at the two moments a person is choosing from it — the
+// `Add repository` picker (§18.3 Panels 10–11) and the `See every repository in
+// {org}` navigation block (§18.6).
+//
+// ⚠️ AND THE LADDER ITSELF IS UNTOUCHED. This card stops one PAGE from rendering
+// the rung; `resolveEffectiveRepoDomain`, `targetRepo` validation and dispatch
+// behave exactly as before. Retiring the rung is MOTIR-4955, which is a runtime
+// change with a blast radius this one deliberately does not have.
 
 /** How often an in-flight hand-off re-probes. `transfer_pending` and
  *  `awaiting_reinstall` resolve OUT OF BAND — a webhook, or an installation
@@ -98,6 +97,12 @@ export interface RepositoriesRoomProps {
   canAddRepositories: boolean;
   /** The organisation's display name, for the section heading and the picker. */
   organizationName: string;
+  /**
+   * This project's display name — the navigation block asks about it by name
+   * ("Looking for a repository that is not linked to {projectName}?", §18.6).
+   * The prompt only does its job if it names the boundary the reader just hit.
+   */
+  projectName: string;
   /** `See every repository in <org>` — the org's own inventory. */
   organizationInventoryHref: string;
   /** The request's `now`, stamped once on the server (see `TakeoverRow`). */
@@ -110,14 +115,19 @@ export function RepositoriesRoom({
   connectHref,
   canAddRepositories,
   organizationName,
+  projectName,
   organizationInventoryHref,
   nowIso,
 }: RepositoriesRoomProps) {
   const t = useTranslations('repositoryTakeover');
+  // The inventory link keeps its own namespace: the STRING is the picker's
+  // (`section.seeAll`, unchanged words per §18.5) even though its PLACE moved out
+  // of the picker's section. Re-keying it would make the copy diff look like a
+  // rewrite when only the placement changed.
+  const tPicker = useTranslations('repositoryPicker');
   const router = useRouter();
 
   const [rows, setRows] = useState<ProjectRepoDto[]>(view.rows);
-  const [connected, setConnected] = useState<ProjectRepoConnectedDto[]>(view.connected);
   const [busyRowId, setBusyRowId] = useState<string | null>(null);
   // Mirrors `busyRowId` for the poll to read without re-creating the interval on
   // every busy flip. Written from EVENT handlers only — never during render.
@@ -235,40 +245,22 @@ export function RepositoriesRoom({
         cache: 'no-store',
       });
       if (!res.ok) return;
-      const body = (await res.json()) as {
-        set?: { rows?: ProjectRepoDto[] };
-        connectCandidates?: ProjectRepoConnectCandidateDto[];
-      };
+      const body = (await res.json()) as { set?: { rows?: ProjectRepoDto[] } };
       const nextRows = body.set?.rows ?? null;
       if (nextRows) putRows(nextRows);
-      // ⚠️ THE REST OF THE PAYLOAD IS NOT THROWN AWAY ANY MORE (MOTIR-3126). The
-      // establish view has always carried the installation's repositories beside
-      // the set; reading only `set.rows` is what left the connected section frozen
-      // at whatever the server render said, on an island `router.refresh()` cannot
-      // reach.
-      //
-      // Gated on the SERVER's `connectedInDomain`, never on the payload: a project
-      // answered by its set alone does not own this section, and
-      // `connectCandidates` is the picker's grant-2 list, which is populated for it
-      // too. `claimed` is dropped for the same reason `connectedNotInSet` drops a
-      // name a row already holds — a repository that backs a row belongs to the
-      // section above.
-      if (view.connectedInDomain && body.connectCandidates) {
-        const candidates = body.connectCandidates
-          .filter((candidate) => !candidate.claimed)
-          .map((candidate) => ({
-            name: candidate.name,
-            repoRef: candidate.repoRef,
-            defaultBranch: candidate.defaultBranch,
-          }));
-        setConnected(connectedNotInSet(nextRows ?? rowsRef.current, candidates));
-      }
+      // ⚠️ THE REST OF THE PAYLOAD IS DELIBERATELY UNREAD (MOTIR-4954). This
+      // block used to rebuild a `connected` list out of `connectCandidates` and
+      // append it to the org section, because that section held layered entries
+      // the server render alone would leave stale on an island `router.refresh()`
+      // cannot reach. The section holds LINKS now, `set.rows` is the whole of what
+      // it draws, and `connectCandidates` is the PICKER's list — fetched when the
+      // picker opens, which is the only moment anybody is choosing from it.
     } catch {
       // A failed background read leaves the rendered rows alone — they are the
       // last thing the server actually said, which beats an error banner over
       // state that is still correct.
     }
-  }, [projectKey, putRows, view.connectedInDomain]);
+  }, [projectKey, putRows]);
 
   /**
    * The two writes, which are the same endpoint at two moments: naming a target
@@ -339,56 +331,80 @@ export function RepositoriesRoom({
     return () => clearInterval(id);
   }, [inFlight, refetch]);
 
-  // ⚠️ ONE SPLIT, ONE PLACE (MOTIR-4681 · MOTIR-4820). `seedSource` still decides
-  // which set rows are Motir-hosted takeover rows and which are organisation
-  // LINKS — a FACT the write records rather than a heuristic the reader infers.
-  // What it no longer decides is what the ORG SECTION holds: that is the ladder's
-  // `connectedInDomain`, passed in rather than re-derived, so the server and this
-  // island cannot disagree and neither can this room and the org inventory.
-  //
-  // ⚠️ AND `hostOwner` DECIDES WHOSE THE LAYERED HALF IS (bug MOTIR-4867). The
-  // connected registry is workspace-scoped — deliberately, so a repository Motir
-  // CREATES for this workspace is a legal `targetRepo` (MOTIR-1931) — so it can
-  // hold a repository under the PROVISIONING organisation, which is neither the
-  // organisation's nor `yours`. It is passed down from the server view rather
-  // than read here: `provisioningOrgLogin()` is a server env value, and a client
-  // island that read it would answer this question differently from the render
-  // it is replacing.
-  const { fromOrganization, motirHosted } = splitRoomSections(
-    rows,
-    connected,
-    view.connectedInDomain,
-    view.hostOwner,
-  );
+  // ⚠️ ONE SPLIT, ONE PLACE (MOTIR-4681 · MOTIR-4820 · MOTIR-4954). `seedSource`
+  // decides which set rows are Motir-hosted takeover rows and which are
+  // organisation LINKS — a FACT the write records rather than a heuristic the
+  // reader infers. It is now the ONLY thing the split consults: the ladder's
+  // `connectedInDomain` and the `hostOwner` that classified the layered half both
+  // left the signature with the half they were about.
+  const { fromOrganization, motirHosted } = splitRoomSections(rows);
 
-  // ⚠️ THE EMPTY STATE IS FOR A PROJECT WITH NEITHER REGISTRY — nothing else.
-  // Reading it off `rows.length` alone is the defect MOTIR-3126 fixed: it told a
-  // project holding five connected repositories that it had none. A project whose
-  // repositories are workspace-connected has a complete, correct page; only a
-  // project with no set AND nothing connected has nothing to show.
+  // ⚠️ PANEL 10 — THE PICKER LISTS WHAT THIS PROJECT ALREADY HAS, UNPICKABLE.
+  // `AddRepositoryPicker` has always rendered this, under a comment reading
+  // "LISTED AND UNPICKABLE, never filtered out: a reader who came looking for it
+  // should find it and see why it is not offered" — and it has always been fed
+  // `alreadyHeld={[]}`, so the drawn behaviour has never once rendered. The
+  // organisation's repositories are only reachable from a project context through
+  // this dialog now, which is what makes the difference matter: a person opening
+  // it to add the repository they are already looking at should be told that is
+  // why it is not on offer, not left to conclude the list is broken.
   //
-  // ⚠️ AND IT DOES NOT APPLY TO SOMEBODY WHO CAN ADD (MOTIR-4669 · MOTIR-4685).
-  // This empty state is a SIGNPOST — a panel whose one action is a link to another
-  // page — and `design/repository-set/design-notes.md` §17.4 forbids exactly that
+  // ⚠️ DERIVED FROM THE ROWS, NOT FETCHED. `/available` filters held repositories
+  // OUT server-side (`organizationRepoService.listAvailableForProject`), and this
+  // island already holds them: they are the org links it is rendering. Asking the
+  // server for a list it defines by their absence would be a second read that can
+  // disagree with the first — and it would put the answer one network round trip
+  // behind the optimistic insert that `onPick` performs.
+  //
+  // A link with no `realizedRepo` is skipped: it names a repository that has not
+  // been realized on the host yet, so it has no `github_repo` id to match the
+  // picker's options on, and a row the picker cannot identify cannot be marked.
+  const alreadyHeld: OrgRepoOptionDto[] = fromOrganization.flatMap((entry) => {
+    const repo = entry.row.realizedRepo;
+    if (!repo) return [];
+    return [
+      {
+        id: repo.id,
+        owner: repo.owner,
+        name: repo.name,
+        fullName: repo.repoRef,
+        defaultBranch: repo.defaultBranch,
+        provider: repo.provider as OrgRepoProviderDto,
+        archived: repo.archived,
+        connectedFromWorkspaceId: null,
+        hostedByMotir: false,
+      },
+    ];
+  });
+
+  // ⚠️ THE WHOLE-ROOM EMPTY STATE IS FOR A READER WHO CANNOT ADD — nothing else.
+  // The room's ordinary zero case is Panel 9: the sections render, the summary
+  // reads `0 · 0 · 0`, and the add door is right there. That is a normal starting
+  // condition — every project in the estate is in it today — and it belongs in the
+  // page, not behind a signpost.
+  //
+  // ⚠️ IT NO LONGER CONSULTS A SECOND REGISTRY, AND ITS OLD REASON IS RETIRED
+  // (MOTIR-4954). This condition used to guard against telling a project holding
+  // five LAYERED repositories that it had none (MOTIR-3126). That project now
+  // genuinely has none *of its own*, which is the true and useful thing to say —
+  // the organisation's repositories are one block below under
+  // `See every repository in {org}`, and inside the picker, and saying "you have
+  // none linked" while offering both is not the false absence MOTIR-3126 fixed.
+  //
+  // ⚠️ AND IT STILL DOES NOT APPLY TO SOMEBODY WHO CAN ADD (MOTIR-4669 ·
+  // MOTIR-4685). This is a SIGNPOST — a panel whose one action is a link to
+  // another page — and `design/repository-set/design-notes.md` §17.4 forbids that
   // shape for exactly this moment: *"'Nothing to pick' must never render as a
   // message whose job is to send somebody to another page: that turns one intent
-  // into two errands."*
-  //
-  // It survived MOTIR-4681 because that card added the org section BELOW this
-  // early return, so a project with nothing never reached it — the room offered a
-  // link to `/settings/account/git`, a page that cannot connect an organisation's
-  // repository at all. THE ACCEPTANCE WALK IS WHAT FOUND IT (MOTIR-4685, chapter
-  // 1), which is the whole argument for walking a story in a browser.
-  //
-  // So the early return now applies only when there is genuinely nothing to
-  // offer. An actor who may add falls through to the section below, whose own
-  // zero case is the PICKER.
+  // into two errands."* An actor who may add falls through to Panel 9, whose own
+  // zero case is the picker. THE ACCEPTANCE WALK IS WHAT FOUND THAT (MOTIR-4685,
+  // chapter 1), which is the whole argument for walking a story in a browser.
   if (fromOrganization.length === 0 && motirHosted.length === 0 && !canAddRepositories) {
     return (
       <EmptyState
         icon={<FolderGit2 className="h-12 w-12" aria-hidden />}
         title={t('title')}
-        description={t('empty')}
+        description={t('empty', { org: organizationName })}
         action={
           <Link href={connectHref} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>
             {t('emptyAction')}
@@ -424,7 +440,6 @@ export function RepositoriesRoom({
         <OrganizationRepositories
           entries={fromOrganization}
           organizationName={organizationName}
-          inventoryHref={organizationInventoryHref}
           canAdd={canAddRepositories}
           onRemove={onRemoveFromProject}
           addButton={<AddRepositoryButton onClick={openPicker} />}
@@ -461,9 +476,45 @@ export function RepositoriesRoom({
         </section>
       ) : null}
 
+      {/* ⚠️ THE ORGANISATION INVENTORY, AS NAVIGATION — design §18.6, and the one
+          element MOTIR-4954's card never named (amended onto it by the run).
+
+          `See every repository in {org}` used to be a footnote in the org
+          section's card footer, under the rows it was not about. It is now the
+          ONLY route from a project context to the organisation's whole inventory,
+          and a route is navigation: it sits AFTER both project sections, in its
+          own landmark, with a prompt naming the boundary the reader has just hit.
+
+          ⚠️ IT IS NOT AN ADD PATH, and the distinction is the point of drawing it
+          separately. §18.6 lists what it is not: a way to add a repository (Panels
+          10–11 own that), provenance for the rows above it, permission-recovery
+          copy, or a disclosure that expands organisation rows back onto this page.
+          The last of those is what this whole card removed, so a link that reads
+          as "expand to see the rest" would undo it in one click.
+
+          ⚠️ A `nav` WITH ITS OWN ACCESSIBLE NAME, not a bare paragraph. It is the
+          third landmark on a page that already has two named sections, and a
+          screen-reader user moving by landmark is exactly the reader who needs to
+          find the route out without reading both lists first. */}
+      <nav
+        aria-label={t('inventoryNavLabel')}
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-(--el-border-soft) pt-4"
+      >
+        <p className="font-sans text-sm text-(--el-text-secondary)">
+          {t('inventoryPrompt', { projectName })}
+        </p>
+        <Link
+          href={organizationInventoryHref}
+          className="font-sans text-sm font-medium text-(--el-link) hover:text-(--el-link-pressed)"
+        >
+          {tPicker('section.seeAll', { org: organizationName })}
+        </Link>
+      </nav>
+
       <AddRepositoryPicker
         options={options}
-        alreadyHeld={[]}
+        alreadyHeld={alreadyHeld}
+        projectName={projectName}
         organizationName={organizationName}
         installHref={view.installHref}
         loading={optionsLoading}

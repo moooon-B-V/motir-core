@@ -113,17 +113,17 @@ function seedRepo(name: string) {
  */
 async function roomOrgSection(projectId: string): Promise<string[]> {
   const view = await projectRepoRoomService.getRoomView(projectId, ctx);
-  const { fromOrganization } = splitRoomSections(
-    view.rows,
-    view.connected,
-    view.connectedInDomain,
-    view.hostOwner,
-  );
+  // ⚠️ MOTIR-4954 — THE SPLIT TAKES THE ROWS AND NOTHING ELSE. `view.connected`,
+  // `view.connectedInDomain` and `view.hostOwner` are still on the DTO and are
+  // deliberately not passed: the room draws the project's LINKS, so the layered
+  // registry is not part of what this surface answers. That narrows the RELATION
+  // this file asserts, and narrowing it is the point — see the amendment at the
+  // head of the second describe.
+  const { fromOrganization } = splitRoomSections(view.rows);
   return fromOrganization.map(entryRef).sort();
 }
 
 function entryRef(entry: OrgSectionEntry): string {
-  if (entry.kind === 'domain') return entry.repo.repoRef;
   const realized = entry.row.realizedRepo;
   return realized ? `${realized.owner}/${realized.name}` : entry.row.name;
 }
@@ -165,42 +165,85 @@ async function nameRepoOnWork(repoName: string) {
   });
 }
 
+// ── ⚠️ AMENDED 2026-09-10 (MOTIR-4954) — THE CONTAINMENT NOW RUNS THE OTHER WAY ──
+//
+// Everything above describes the relation as it stood between MOTIR-4821 and this
+// card, and it is kept because the reasoning is what matters: two surfaces asking
+// two different questions, with a containment plus a disclosure between them.
+//
+// What changed is which set is bigger. The ROOM used to draw the project's whole
+// DOMAIN — the ladder's answer to *what can this project REACH* — which is the
+// largest of the three sets here, so `chosen ⊆ room` held. It now draws the
+// project's LINKS, which is the smallest, and `Used by` is LINKS ∪
+// WORK-THAT-NAMES-A-REPO. So the invariant is **room ⊆ chosen**, and the gap it
+// guards has moved with it: not a room offering a repository the project may not
+// use (structurally impossible now — every row is an explicit link, so the offer
+// IS the choice) but a repository this project's WORK names appearing as a row of
+// a page that only draws links. That would put a repository nobody linked back on
+// the project page, which is this card's defect returning through the other rung.
+//
+// ⚠️ AND THE DISCLOSURE SENTENCE IS UNTOUCHED AND STILL PINNED BELOW. It is about
+// the ORGANISATION surface — *"any project here that has no repositories of its
+// own can also reach the ones connected in its workspace"* — and the ladder it
+// describes is unchanged by this card. MOTIR-4955 is what retires that rung, and
+// that is the card whose job it is to re-read this sentence.
+
 describe('the room and the organisation inventory — CONTAINMENT, not equality', () => {
-  it('⚠️ THE DEFECT — a set-less project REACHES its organisation`s repositories, and the room says so', async () => {
-    // The shipped Motir project on the day this was filed, in miniature: no
-    // repository SET, repositories connected to the organisation. The ladder
-    // gives such a project the connected registry as its WHOLE domain — and the
-    // room's `From your organisation`, keyed on `project_repository.seedSource`,
-    // had nothing to draw and drew an EMPTY section directly above them.
+  it('⚠️ RE-POINTED — a set-less project draws NOTHING, and that is now the correct answer', async () => {
+    // MOTIR-4820's fixture, kept exactly, with its verdict inverted by
+    // MOTIR-4954. It used to assert that a set-less project's room draws the
+    // repositories it can REACH — the repair for a section that drew empty above
+    // the very repositories it was about.
     //
-    // This is the assertion that fails against the shipped room, and it does not
-    // depend on what the org page counts.
+    // ⚠️ THE REPAIR IS NOT BEING UNDONE; ITS PLACE MOVED. What made the empty
+    // section wrong was an empty LIST beside a live inventory, with nothing on
+    // the page saying why. The room now says the project has no repositories YET
+    // and offers both ways to get one — and the organisation's inventory is one
+    // navigation block below. The absence is answered instead of asserted, which
+    // is what the section could not do while it was a bare empty list.
     await seedRepo('motir-core');
     await seedRepo('motir-ai');
 
-    expect(await roomOrgSection(fx.projectId)).toEqual(['moooon/motir-ai', 'moooon/motir-core']);
+    expect(await roomOrgSection(fx.projectId)).toEqual([]);
   });
 
-  it('⚠️ CHOOSING IMPLIES REACHING — the NAMED rung, on a set-less project', async () => {
-    // The containment, and the direction that is a real invariant: the org page
-    // may legitimately name FEWER projects than can reach a repository, and may
-    // never name one that CANNOT. A project shown a repository it may not use is
-    // the failure this catches, and it is the one a future change to either
-    // question can still introduce.
+  it('⚠️ THE CONTAINMENT INVERTS — the ROOM is now the subset, and the NAMED rung is the gap', async () => {
+    // ⚠️ THIS IS THE FINDING OF THE RE-POINT, and it is worth more than the
+    // three assertions below it.
     //
-    // Work that NAMES a repository is the ONLY way a set-less project can express
-    // a choice (MOTIR-4821's second rung), so this is also the one fixture where
-    // the containment is PROPER: two reachable, one chosen.
+    // The old invariant was `chosen ⊆ room`: the org page may name FEWER projects
+    // than can REACH a repository and may never name one that CANNOT, so a
+    // project shown a repository it may not use was the failure this file caught.
+    // It held because the room drew the whole DOMAIN, which is the largest of the
+    // three sets in play.
+    //
+    // The room now draws LINKS, and `Used by` is LINKS ∪ WORK-THAT-NAMES-A-REPO
+    // (MOTIR-4821's two rungs). So the room became a subset of what it used to
+    // contain, and the containment runs the other way: **room ⊆ chosen**. The
+    // fixture is unchanged and the arrow is opposite.
+    //
+    // ⚠️ AND THE INVERSION IS NOT A REGRESSION — it is the SAME guarantee, now
+    // in the direction that can still be violated. The old one protected against
+    // a room offering a repository the project may not use, and the room can no
+    // longer do that: every row is an explicit link, so the offer IS the choice.
+    // What a future change can still break is the mirror — a repository this
+    // project's WORK names, which the org page counts as used, appearing as a row
+    // of a page that only draws links. That would put a repository nobody linked
+    // back on the project page, which is precisely this card's defect returning
+    // through the other rung.
     await seedRepo('motir-core');
     await seedRepo('motir-ai');
     await nameRepoOnWork('motir-core');
 
-    const room = new Set(await roomOrgSection(fx.projectId));
-    const chosen = await inventorySaysUsedBy(fx.projectId);
+    const room = await roomOrgSection(fx.projectId);
+    const chosen = new Set(await inventorySaysUsedBy(fx.projectId));
 
-    expect(chosen).toEqual(['moooon/motir-core']);
-    expect([...room].sort()).toEqual(['moooon/motir-ai', 'moooon/motir-core']);
-    for (const ref of chosen) expect(room.has(ref)).toBe(true);
+    // The named rung puts the project on the org page…
+    expect([...chosen]).toEqual(['moooon/motir-core']);
+    // …and does NOT put a row on this page, because naming is not linking.
+    expect(room).toEqual([]);
+    // The invariant, in its new direction.
+    for (const ref of room) expect(chosen.has(ref)).toBe(true);
   });
 
   it('⚠️ CHOOSING IMPLIES REACHING — the LINK rung, which also SETTLES the domain', async () => {
@@ -225,15 +268,21 @@ describe('the room and the organisation inventory — CONTAINMENT, not equality'
     for (const ref of chosen) expect(room.has(ref)).toBe(true);
   });
 
-  it('⚠️ THE GAP IS REAL AND DELIBERATE — reaching does NOT imply choosing', async () => {
-    // MOTIR-4821's whole point: a set-less project that has chosen nothing must
-    // not be named on the disclosure a DESTRUCTIVE act rests on. So the room is
-    // populated and the inventory names the project against nothing, and that is
-    // the product being right rather than the two pages disagreeing.
+  it('⚠️ THE GAP CLOSES IN THIS DIRECTION — a project that has chosen nothing shows nothing', async () => {
+    // MOTIR-4821's point stands and is now trivially satisfied: a set-less
+    // project that has chosen nothing must not be named on the disclosure a
+    // DESTRUCTIVE act rests on. The inventory still names it against nothing —
+    // and the room, which used to be POPULATED beside that emptiness, now agrees.
+    //
+    // That disagreement was the last remaining shape of MOTIR-4820's original
+    // complaint: two surfaces, one question, opposite answers. It is gone in the
+    // strongest available way — not by making the two questions equal, which
+    // MOTIR-4821 showed they are not, but by removing the set that made the room
+    // the larger of the two.
     await seedRepo('motir-core');
     await seedRepo('motir-ai');
 
-    expect((await roomOrgSection(fx.projectId)).length).toBe(2);
+    expect(await roomOrgSection(fx.projectId)).toEqual([]);
     expect(await inventorySaysUsedBy(fx.projectId)).toEqual([]);
   });
 
@@ -274,12 +323,7 @@ describe('the room and the organisation inventory — CONTAINMENT, not equality'
     await seedHostedRow(fx.projectId, 'acme-api');
 
     const view = await projectRepoRoomService.getRoomView(fx.projectId, ctx);
-    const { motirHosted } = splitRoomSections(
-      view.rows,
-      view.connected,
-      view.connectedInDomain,
-      view.hostOwner,
-    );
+    const { motirHosted } = splitRoomSections(view.rows);
     expect(motirHosted.map((row) => row.name)).toEqual(['acme-api']);
     expect(await inventorySaysUsedBy(fx.projectId)).not.toContain('acme-api');
   });

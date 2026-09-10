@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { RepositoriesRoom } from '@/app/(authed)/settings/project/repositories/_components/RepositoriesRoom';
 import { renderWithIntl, enMessages } from '../helpers/renderWithIntl';
+import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import type {
   ProjectRepoConnectCandidateDto,
   ProjectRepoConnectedDto,
@@ -95,9 +96,15 @@ describe('the room — which rows offer a move (design §14, panel 1)', () => {
 
   it('renders the empty room rather than an empty list when the project has NEITHER registry', () => {
     renderRoom({ rows: [], connected: [], connectedInDomain: false });
+    // ⚠️ RE-POINTED BY MOTIR-4954 (design §18.5). The old sentence said "No
+    // repositories are CONNECTED to this project yet" and offered to connect code
+    // from GitHub or approve a plan. Both halves were about the wrong tier by
+    // then: a repository is connected at the ORGANISATION and LINKED to a project,
+    // and the first act available here is to add one the organisation already
+    // has. The replacement names both paths in the order a reader will need them.
     expect(
       screen.getByText(
-        'No repositories are connected to this project yet. Connect the code you already have on GitHub, or approve a plan and Motir will create them for you.',
+        'No repositories in this project yet. Add one moooon already has, or connect a new repository.',
       ),
     ).toBeTruthy();
     // The empty state has a way out — and after MOTIR-4669 it is the ACCOUNT's
@@ -133,8 +140,26 @@ describe('the room — which rows offer a move (design §14, panel 1)', () => {
 // Plus the property the sections exist FOR: nothing in the connected list is
 // pressable, because there is nothing to move.
 
-describe('the two registries (MOTIR-3126)', () => {
-  it('renders the connected repositories — not the empty state — for a project whose set is empty', () => {
+// ⚠️ THE TWO REGISTRIES (MOTIR-3126) — RE-POINTED TO ONE BY MOTIR-4954.
+//
+// MOTIR-3126's finding was real and is not being un-fixed: a room reading
+// `project_repository` alone told Motir's own project it had no repositories
+// beside five that were indexed and pinnable right now. The answer it chose was
+// to draw the LADDER's whole domain, and that is the half this card reverses —
+// the ladder answers *what can this project REACH*, and a page headed
+// Repositories on a project is asking *what does this project WORK ON*.
+//
+// So the fix moved rather than went away. The organisation's repositories are
+// reachable from this page at the two moments a person is choosing from them —
+// the `Add repository` picker and the `See every repository in {org}` navigation
+// block — and the ROWS are the project's links. Every case below keeps its
+// original fixture, including a server view that still carries `connected` and
+// still says `connectedInDomain: true`, and asserts the inverse of what it used
+// to. Keeping the fixture is the point: `projectRepoRoomService` on `main` still
+// ships both fields, so these cases prove the page is correct WITHOUT the service
+// change MOTIR-4955 has open — and they keep passing after it lands.
+describe('the ONE registry — the project`s links (MOTIR-3126 → MOTIR-4954)', () => {
+  it('⚠️ draws NO row for a layered repository, however loudly the server view offers one', () => {
     renderRoom({
       rows: [],
       connected: [
@@ -142,21 +167,30 @@ describe('the two registries (MOTIR-3126)', () => {
         connectedRepo('motir-ai', 'moooon-B-V'),
       ],
       connectedInDomain: true,
+      // Panel 9 rather than the signpost: this is a reader who CAN add, so the
+      // room draws its sections and its add door. The signpost case — nothing to
+      // show and no way to add — is asserted in the describe above.
+      canAdd: true,
     });
 
-    expect(screen.queryByText(/No repositories are connected to this project yet/)).toBeNull();
     const section = screen.getByRole('region', { name: 'From your organisation' });
-    expect(within(section).getByText('motir-core')).toBeTruthy();
-    expect(within(section).getByText('motir-ai')).toBeTruthy();
+    expect(within(section).queryByText('motir-core')).toBeNull();
+    expect(within(section).queryByText('motir-ai')).toBeNull();
+    expect(within(section).queryAllByRole('listitem')).toHaveLength(0);
+    // Panel 9: it says the PROJECT is empty, while the organisation is not.
+    expect(screen.getByText(/No repositories in this project yet/)).toBeTruthy();
     // And no hosted section at all — an absence, never an empty-stated one.
     expect(screen.queryByRole('region', { name: 'Hosted by Motir' })).toBeNull();
   });
 
   it('renders BOTH sections, with the move offered only on the hosted one', () => {
+    // Unchanged in intent, re-fixtured: the org section's member is a LINK now
+    // rather than a layered entry. The reason the two are drawn apart is the same
+    // — a repository the organisation already owns has no takeover to offer.
     renderRoom({
-      rows: [hostedRow()],
-      connected: [connectedRepo('design-tokens')],
-      connectedInDomain: true,
+      rows: [hostedRow(), orgRow('design-tokens')],
+      connected: [],
+      connectedInDomain: false,
     });
 
     const hosted = screen.getByRole('region', { name: 'Hosted by Motir' });
@@ -167,44 +201,44 @@ describe('the two registries (MOTIR-3126)', () => {
         name: 'Move motir-projects/acme-booking-web to my GitHub',
       }),
     ).toBeTruthy();
-    // The whole reason the two are drawn apart: a repository the user already owns
-    // carries no action, so the section holding them has no button in it at all.
-    expect(within(yours).queryByRole('button')).toBeNull();
     expect(within(yours).getByText('design-tokens')).toBeTruthy();
-    expect(within(yours).getByText('acme-inc/')).toBeTruthy();
+    expect(within(yours).queryByRole('button', { name: /to my GitHub/ })).toBeNull();
   });
 
-  it('omits the connected section entirely for a project answered by its set alone', () => {
-    renderRoom({ rows: [hostedRow()], connected: [], connectedInDomain: false });
-
-    expect(screen.getByRole('region', { name: 'Hosted by Motir' })).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'From your organisation' })).toBeNull();
+  it('⚠️ NOW HOLDS FOR EVERY PROJECT: `connectedInDomain` does not add a section', () => {
+    // This case used to be the counterfactual — "omits the connected section
+    // entirely for a project answered by its set alone" — and it was the only
+    // arm in which the page was right. It is now the whole behaviour, so the
+    // ladder's boolean is varied across its range and the answer does not move.
+    for (const connectedInDomain of [true, false]) {
+      renderRoom({ rows: [hostedRow()], connected: [connectedRepo('x')], connectedInDomain });
+      expect(screen.getByRole('region', { name: 'Hosted by Motir' })).toBeTruthy();
+      expect(screen.queryByText('x')).toBeNull();
+      cleanup();
+    }
   });
 
-  it('renders a repository Motir knows no branch for, and one whose ref carries no owner', () => {
-    // Both are honest degradations rather than states to hide: the branch chip is
-    // simply absent when Motir does not know it (never a guessed "main"), and a
-    // ref with no `owner/` half renders the name alone rather than a stray slash.
-    renderRoom({
-      rows: [],
-      connected: [
-        { name: 'no-branch', repoRef: 'acme-inc/no-branch', defaultBranch: null },
-        { name: 'bare-ref', repoRef: 'bare-ref', defaultBranch: 'trunk' },
-      ],
-      connectedInDomain: true,
-    });
+  it('renders a link Motir has not realized yet — no guessed branch, no stray slash', () => {
+    // Two honest degradations rather than states to hide. A row that names a
+    // repository not yet created on the host has no branch to print and no owner
+    // to prefix, so both are ABSENT — never a guessed "main", never a bare "/".
+    renderRoom({ rows: [orgRow('not-yet', false)], connected: [], connectedInDomain: false });
 
     const yours = screen.getByRole('region', { name: 'From your organisation' });
-    expect(within(yours).getByText('no-branch')).toBeTruthy();
+    expect(within(yours).getByText('not-yet')).toBeTruthy();
     expect(within(yours).queryByText('main')).toBeNull();
-    expect(within(yours).getByText('bare-ref')).toBeTruthy();
-    expect(within(yours).getByText('trunk')).toBeTruthy();
-    expect(within(yours).queryByText('/')).toBeNull();
+    expect(within(yours).queryByText('moooon-B-V/')).toBeNull();
   });
 
-  it('keeps the connected section TRUE across a refetch — the payload is no longer discarded', async () => {
-    // A failed mutation is the cheapest way to make the island re-read: it calls
-    // `refetch()` rather than trusting a state the server denied.
+  it('⚠️ AC 2 — a REFETCH cannot grow an organisation row, whatever the payload carries', () => {
+    // RE-POINTED, and it is the case that mattered most. It used to assert the
+    // opposite — that the establish view's `connectCandidates` MUST reach this
+    // island, because a section fed by the server render alone went stale on an
+    // island `router.refresh()` cannot reach. That re-read is exactly where the
+    // surviving duplicate came from: it deduped against a `rowsRef` that did not
+    // yet hold the row just added. The island no longer reads that half of the
+    // payload at all, so the staleness and the duplicate are both gone, and
+    // neither can come back through a dedup that is subtly wrong.
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (String(url).includes('/takeover') && init?.method === 'POST') {
         return new Response(JSON.stringify({ code: 'PROJECT_REPO_TAKEOVER_STATE' }), {
@@ -220,90 +254,105 @@ describe('the two registries (MOTIR-3126)', () => {
       connectedInDomain: true,
     });
 
-    // The workspace gains a repository between the render and the re-read — the
-    // establish view is the only thing that can tell this island about it.
+    // The workspace gains a repository between the render and the re-read. Under
+    // the old contract this island was required to show it; under this one it is
+    // required not to.
     currentCandidates = [...currentCandidates, toCandidate(connectedRepo('acme-infra'))];
 
-    await click(screen.getByRole('button', { name: /Check .* again/ }));
-
-    const yours = await screen.findByRole('region', { name: 'From your organisation' });
-    await waitFor(() => expect(within(yours).getByText('acme-infra')).toBeTruthy());
-    expect(within(yours).getByText('design-tokens')).toBeTruthy();
+    return click(screen.getByRole('button', { name: /Check .* again/ })).then(async () => {
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      expect(screen.queryByText('acme-infra')).toBeNull();
+      expect(screen.queryByText('design-tokens')).toBeNull();
+    });
   });
 
-  it('drops a CLAIMED candidate on refetch — a repository that backs a row belongs to the section above', async () => {
+  it('⚠️ AC 2 — after an ADD, exactly one row appears and it is the one that was added', () => {
+    // The post-mutation island state, which is where the duplicate actually
+    // lived: `onPick` inserts optimistically into a list the server render also
+    // seeded, and the old recompute deduped the layered half against a `rowsRef`
+    // that had not caught up. One list cannot disagree with itself.
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (String(url).includes('/takeover') && init?.method === 'POST') {
-        return new Response(JSON.stringify({ code: 'PROJECT_REPO_TAKEOVER_STATE' }), {
-          status: 409,
-        });
+      if (String(url).includes('/repositories/available')) {
+        return jsonOk([
+          {
+            id: 'gh-added',
+            owner: 'moooon-B-V',
+            name: 'motir-core',
+            fullName: 'moooon-B-V/motir-core',
+            defaultBranch: 'main',
+            provider: 'github',
+            archived: false,
+            connectedFromWorkspaceId: null,
+            hostedByMotir: false,
+          },
+        ]);
+      }
+      if (String(url).includes('/repositories/add') && init?.method === 'POST') {
+        return jsonOk(orgRow('motir-core'));
       }
       return jsonOk(defaultFetch(String(url)));
     });
 
     renderRoom({
-      rows: [hostedRow({ takeover: takeover({ state: 'awaiting_reinstall' }) })],
-      connected: [connectedRepo('design-tokens')],
+      rows: [],
+      connected: [connectedRepo('motir-core', 'moooon-B-V')],
       connectedInDomain: true,
+      canAdd: true,
     });
-    currentCandidates = [
-      ...currentCandidates,
-      { ...toCandidate(connectedRepo('acme-booking-web', 'motir-projects')), claimed: true },
-    ];
 
-    await click(screen.getByRole('button', { name: /Check .* again/ }));
-
-    const yours = await screen.findByRole('region', { name: 'From your organisation' });
-    await waitFor(() => expect(within(yours).getByText('design-tokens')).toBeTruthy());
-    // It is the hosted row's own repository — showing it in both sections is the
-    // duplicate the split exists to prevent.
-    expect(within(yours).queryByText('acme-booking-web')).toBeNull();
+    return click(screen.getByRole('button', { name: /Add repository/i })).then(async () => {
+      const option = await screen.findByRole('button', { name: /moooon-B-V\/motir-core/ });
+      await click(option);
+      const section = await screen.findByRole('region', { name: 'From your organisation' });
+      await waitFor(() => expect(within(section).getAllByRole('listitem')).toHaveLength(1));
+      // The name appears ONCE. It appeared twice on the shipped page.
+      expect(within(section).getAllByText('motir-core')).toHaveLength(1);
+    });
   });
 
-  it('never grows a connected section on a project the SERVER said does not own one', async () => {
+  it('⚠️ AC 2 — after a REMOVE, the row goes and nothing layers back in behind it', () => {
+    // The mirror case, and the one the layered half made impossible: removing the
+    // LINK used to leave the same repository rendered as a domain entry, so the
+    // act appeared to do nothing.
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (String(url).includes('/takeover') && init?.method === 'POST') {
-        return new Response(JSON.stringify({ code: 'PROJECT_REPO_TAKEOVER_STATE' }), {
-          status: 409,
-        });
-      }
+      if (init?.method === 'DELETE') return jsonOk({});
       return jsonOk(defaultFetch(String(url)));
     });
 
-    // Born in Motir: the ladder answers with the set alone, and the establish
-    // view's `connectCandidates` is populated for this project all the same — it
-    // is the picker's grant-2 list, not a statement about the domain.
     renderRoom({
-      rows: [hostedRow({ takeover: takeover({ state: 'awaiting_reinstall' }) })],
-      connected: [],
-      connectedInDomain: false,
+      rows: [orgRow('motir-core')],
+      connected: [connectedRepo('motir-core', 'moooon-B-V')],
+      connectedInDomain: true,
+      canAdd: true,
     });
-    currentCandidates = [toCandidate(connectedRepo('someone-elses-repo'))];
 
-    await click(screen.getByRole('button', { name: /Check .* again/ }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(screen.queryByRole('region', { name: 'From your organisation' })).toBeNull();
-    expect(screen.queryByText('someone-elses-repo')).toBeNull();
+    return click(screen.getByRole('button', { name: 'Remove from this project' })).then(
+      async () => {
+        await click(await screen.findByRole('button', { name: 'Remove' }));
+        await waitFor(() => expect(screen.queryByText('motir-core')).toBeNull());
+        expect(screen.getByText(/No repositories in this project yet/)).toBeTruthy();
+      },
+    );
   });
 
-  it('⚠️ the one link in the section is a VIEW of the organisation, not a hand-off', () => {
-    // AMENDED (MOTIR-4820) — it read `Choose which repositories Motir can see`
-    // and pointed at the pane that owned CONNECTING, because this section could
-    // not act on its own rows. §17.2 inverted that: the room performs the add
-    // now, so the link stops being the way to do it and becomes the way to SEE
-    // the organisation's whole inventory. That single change is the tier move in
-    // one line, and it arrives here because the section it was written against
-    // is the one this card folded into the organisation section.
-    renderRoom({ rows: [], connected: [connectedRepo('design-tokens')], connectedInDomain: true });
+  it('⚠️ AC 8 — the inventory route is NAVIGATION, and not inside the section', () => {
+    // AMENDED (MOTIR-4820 → MOTIR-4954). It read `Choose which repositories Motir
+    // can see` and pointed at the pane that owned CONNECTING, because this section
+    // could not act on its own rows; §17.2 made it a VIEW instead. §18.6 then
+    // moved it OUT: it is the only route from a project context to the
+    // organisation's inventory, so it is navigation with its own landmark rather
+    // than a footnote under rows it is not about.
+    renderRoom({ rows: [orgRow('design-tokens')], connected: [], connectedInDomain: false });
 
-    const yours = screen.getByRole('region', { name: 'From your organisation' });
+    const nav = screen.getByRole('navigation', { name: 'Organisation repository inventory' });
     expect(
-      within(yours)
+      within(nav)
         .getByRole('link', { name: 'See every repository in moooon' })
         .getAttribute('href'),
     ).toBe('/settings/organization/git');
-    expect(within(yours).queryByText('Choose which repositories Motir can see')).toBeNull();
+    const yours = screen.getByRole('region', { name: 'From your organisation' });
+    expect(within(yours).queryByRole('link', { name: /See every repository/ })).toBeNull();
+    expect(screen.queryByText('Choose which repositories Motir can see')).toBeNull();
   });
 });
 
@@ -1008,29 +1057,35 @@ function roomView(
   };
 }
 
-function room(view: ProjectRepoRoomViewDto) {
+function room(view: ProjectRepoRoomViewDto, canAdd = false) {
   return (
     <RepositoriesRoom
       projectKey="ACME"
       view={view}
       connectHref="/settings/account/git"
-      // Story MOTIR-4669 · MOTIR-4681 — this file's cases predate the org
-      // section, so the room is rendered here as a NON-admin sees it: the add
-      // door is drawn by `tests/projectRepos/addRepositoryPicker.tsx`, which
-      // owns that axis.
-      canAddRepositories={false}
+      // Story MOTIR-4669 · MOTIR-4681 — most of this file's cases predate the org
+      // section, so the room is rendered here as a NON-admin sees it by default:
+      // the add door is drawn by `tests/projectRepos/addRepositoryPicker.tsx`,
+      // which owns that axis. MOTIR-4954's mutation cases opt IN, because an add
+      // and a remove are the two moments the post-mutation island state — the
+      // thing AC 2 is about — can be observed at all.
+      canAddRepositories={canAdd}
       organizationName="moooon"
+      projectName="Motir"
       organizationInventoryHref="/settings/organization/git"
       nowIso={NOW}
     />
   );
 }
 
-function renderRoom(overrides: Partial<ProjectRepoRoomViewDto> & { rows: ProjectRepoDto[] }) {
-  const view = roomView(overrides);
+function renderRoom(
+  overrides: Partial<ProjectRepoRoomViewDto> & { rows: ProjectRepoDto[]; canAdd?: boolean },
+) {
+  const { canAdd = false, ...viewOverrides } = overrides;
+  const view = roomView(viewOverrides);
   currentRows = view.rows;
   currentCandidates = view.connected.map(toCandidate);
-  return renderWithIntl(room(view));
+  return renderWithIntl(room(view, canAdd));
 }
 
 /** A connected repository as the ESTABLISH view carries it — the shape the island
@@ -1049,6 +1104,29 @@ function toCandidate(repo: ProjectRepoConnectedDto): ProjectRepoConnectCandidate
 
 function connectedRepo(name: string, owner = 'acme-inc'): ProjectRepoConnectedDto {
   return { name, repoRef: `${owner}/${name}`, defaultBranch: 'main' };
+}
+
+/** A set row that arrived through the PICKER — a LINK to an organisation
+ *  repository. `seedSource` is what records that, and it is the only thing the
+ *  section split consults (MOTIR-4954). */
+function orgRow(name: string, realized = true): ProjectRepoDto {
+  const row = hostedRow({ name });
+  return {
+    ...row,
+    id: `row-${name}`,
+    seedSource: SEED_SOURCE_ORGANIZATION,
+    state: 'connected',
+    takeover: null,
+    // ⚠️ `realizedRepo: null` IS THE "no branch yet" FIXTURE, and the only honest
+    // one: `RealizedProjectRepoDto.defaultBranch` is a `string`, so a repository
+    // that EXISTS on the host always has one. A row Motir knows no branch for is a
+    // row that has not been realized — which is also the only row with no owner to
+    // print.
+    realizedRepo:
+      realized && row.realizedRepo
+        ? { ...row.realizedRepo, id: `gh-${name}`, owner: 'moooon-B-V' }
+        : null,
+  };
 }
 
 function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
