@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { notificationsService, NOTIFICATION_PAGE_SIZE } from '@/lib/services/notificationsService';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
 import { toNotificationDto } from '@/lib/mappers/notificationMappers';
+import { isWorkItemNotificationData } from '@/lib/dto/notifications';
 import { NotificationNotFoundError } from '@/lib/notifications/errors';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
@@ -115,11 +116,11 @@ describe('notificationsService.listNotifications', () => {
     expect(page.unreadCount).toBe(2);
     expect(page.nextCursor).toBeNull();
     // Newest first (n3 inserted last).
-    expect(page.notifications.map((n) => n.data.issueKey)).toEqual([
-      s.issue.identifier,
-      s.issue.identifier,
-      s.issue.identifier,
-    ]);
+    // Narrowed since MOTIR-5016 — see the note in `notifications-journey`: the
+    // union now has an arm with no issue key, so reading one is a claim.
+    expect(
+      page.notifications.map((n) => (isWorkItemNotificationData(n.data) ? n.data.issueKey : null)),
+    ).toEqual([s.issue.identifier, s.issue.identifier, s.issue.identifier]);
     expect(page.notifications[0]?.readAt).toBeNull();
     expect(page.notifications[0]?.actor).toEqual({
       id: s.actor.id,

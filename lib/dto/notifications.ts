@@ -95,6 +95,25 @@ export interface NotificationCodeAccessRefusedData {
   repoRef: string;
 }
 
+/**
+ * The arms whose subject is a WORK ITEM — the ones carrying `issueKey` and
+ * `title`. Every arm did until MOTIR-5016 added `code_access_refused`, whose
+ * subject is a PROJECT, so a reader that wants the deep-link key now has to say
+ * which arms it means.
+ *
+ * ⚠️ EXPORTED AS A GUARD RATHER THAN LEFT TO EACH CALLER, because the alternative
+ * is a cast at every site — and a cast is exactly what the 5.7.9 round-trip bug
+ * was: a blind `as NotificationData` let `workItemKey`/`issueKey` drift apart and
+ * come back `undefined`. A predicate narrows instead of asserting, so a future
+ * arm that also lacks an issue key breaks the callers that must care and nothing
+ * else.
+ */
+export function isWorkItemNotificationData(
+  data: NotificationData,
+): data is NotificationMentionedData | NotificationTransitionedData {
+  return data.kind === 'mentioned' || data.kind === 'transitioned';
+}
+
 export interface NotificationDTO {
   id: string;
   /** The event-type discriminator (`mentioned` | `commented` | `assigned` |
