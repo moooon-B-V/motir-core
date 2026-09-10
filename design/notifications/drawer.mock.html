@@ -485,6 +485,38 @@
         width: 10px;
         height: 10px;
       }
+      /* MOTIR-5012 — the ACCESS-REFUSED row's hue. It takes --color-warning, the
+         same hue the plan review rail's `needs_access` outcome and the establish
+         step's arm B already use for an access gap, so one product story is told
+         in one colour. NOT --el-danger: nothing was lost or destroyed — the
+         repository exists and the plan is safe; the user simply cannot open it
+         yet. The token belongs in theme.css's --el-notif-* block, which is the
+         code card's edit; it is DEFINED here against the Tier-0 --color-* it
+         maps to, so no hue is invented in this asset. */
+      :root {
+        --el-notif-access-refused: var(--color-warning);
+      }
+      /* An ACTORLESS row promotes its type glyph INTO the avatar slot: one
+         30px circle in the event's hue holding the glyph, and no small badge.
+         Nobody did this to you, so there is no initial letter to draw and no
+         person for a badge to be attached TO — and the shape reads as
+         "something about your project" at a glance, which is what it is. */
+      .n-avatar.is-actorless {
+        background: var(--el-notif-access-refused);
+        color: var(--el-accent-text);
+      }
+      .n-avatar.is-actorless svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .n-row.is-read .n-avatar.is-actorless {
+        opacity: 0.6;
+      }
       .tb-mention {
         background: var(--el-accent);
       }
@@ -839,6 +871,22 @@
           <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
           <path d="M12 9v4" />
           <path d="M12 17h.01" />
+        </g>
+        <!-- lucide `shield-alert` — the ACCESS-REFUSED glyph (MOTIR-5012), path
+             data verbatim from lucide-react's __iconNode. -->
+        <g
+          id="i-shield-alert"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
         </g>
         <g
           id="i-refresh"
@@ -1481,6 +1529,149 @@
           and the body scrolls within a bounded height; "Show more (N older)" pages the next cursor
           window (finding #57) — the read never loads the whole table, and the badge count is the
           cheap indexed unread aggregate.
+        </p>
+      </section>
+
+      <!-- PANEL 6 — THE ACCESS-REFUSED ROW (MOTIR-5012) -->
+      <section class="panel">
+        <div class="panel-label">
+          6 · <b>Code access couldn't be granted</b> — the first row whose subject is a PROJECT and
+          whose actor is nobody (MOTIR-5012)
+        </div>
+        <div class="drawer">
+          <div class="drawer-head">
+            <span class="drawer-title">Notifications</span>
+            <div class="drawer-head-right">
+              <button class="icon-btn" aria-label="Notification options">
+                <svg viewBox="0 0 24 24"><use href="#i-ellipsis" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="feed">
+            <!-- UNREAD · access refused -->
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar is-actorless" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
+                  </span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Acme booking</strong>'s code is ready, but you can't open it yet —
+                      try sending the invitation again</span
+                    >
+                    <span class="n-time">4m</span>
+                  </span>
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as read">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </button>
+            </div>
+            <!-- an existing row, for comparison at a glance -->
+            <div class="n-rowwrap">
+              <a class="n-row is-unread" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar" aria-hidden="true">O</span>
+                  <span class="n-typebadge tb-assigned" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user-check" /></svg
+                  ></span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Odie</strong> assigned you <strong>PROD-7</strong></span
+                    >
+                    <span class="n-time">1h</span>
+                  </span>
+                  <span class="n-excerpt">Export issues to CSV from the list view</span>
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as read">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </button>
+            </div>
+            <!-- READ · access refused -->
+            <div class="n-rowwrap">
+              <a class="n-row is-read" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar is-actorless" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
+                  </span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Pathfinder</strong>'s code is ready, but you can't open it yet — try
+                      sending the invitation again</span
+                    >
+                    <span class="n-time">3d</span>
+                  </span>
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as unread">
+                <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+              </button>
+            </div>
+            <!-- a read existing row, for comparison -->
+            <div class="n-rowwrap">
+              <a class="n-row is-read" href="#">
+                <span class="n-dot" aria-hidden="true"></span>
+                <span class="n-ava-wrap">
+                  <span class="n-avatar" aria-hidden="true" style="background: var(--el-text-faint)"
+                    >J</span
+                  >
+                  <span class="n-typebadge tb-comment" aria-hidden="true" style="opacity: 0.6"
+                    ><svg viewBox="0 0 24 24"><use href="#i-msg" /></svg
+                  ></span>
+                </span>
+                <span class="n-body">
+                  <span class="n-line1">
+                    <span class="n-summary"
+                      ><strong>Julian</strong> commented on <strong>PROD-12</strong></span
+                    >
+                    <span class="n-time">2d</span>
+                  </span>
+                  <span class="n-excerpt"
+                    >The name-hash avatar tint is much easier to scan now.</span
+                  >
+                </span>
+              </a>
+              <button class="n-toggle" aria-label="Mark as unread">
+                <svg viewBox="0 0 24 24"><use href="#i-check-check" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <b>Four decisions this row makes so the code card does not.</b>
+          <b>Glyph</b> — lucide <code>shield-alert</code>: the row is about a permission that did
+          not land. <code>user-x</code> was rejected because it reads as a PERSON being removed from
+          the project, and <code>key-round</code> because a key reads as access you HAVE.
+          <b>Hue</b> — <code>--el-notif-access-refused</code>, mapping to
+          <code>--color-warning</code>: the same hue the plan review rail's
+          <code>needs_access</code> outcome and the establish step's arm B already use, so one
+          product story is told in one colour. Not <code>--el-danger</code>: nothing was lost — the
+          repository exists and the plan is safe. <b>Actor</b> — there is none, and the row says so
+          by SHAPE: the type glyph is promoted into the avatar slot and the small badge is dropped,
+          so no initial letter and no borrowed face implies a person did this to you.
+          <code>NotificationRow</code>'s <code>actorFallback</code> string is NOT used — a fallback
+          name would put a fictional actor in the summary grammar. <b>Destination</b> —
+          <code>/settings/project/code-access</code>, NOT <code>/items/[key]</code>. That is a
+          change the code card owes: the shipped row routes on <code>issueKey !== null</code>, and
+          this is the first type whose subject is a project, so the route has to be resolved from
+          the TYPE.
+        </p>
+        <p class="panel-note">
+          <b>No excerpt line, deliberately.</b> The shipped row renders one only for
+          <code>kind === 'mentioned'</code>, and this row has nothing to quote — the remedy is where
+          the row GOES, not a second sentence. The summary carries the whole message and stays one
+          line at the drawer's 384px.
         </p>
       </section>
     </div>
