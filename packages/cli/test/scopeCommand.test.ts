@@ -657,6 +657,28 @@ describe('motir run <container> — the close-out RE-READS the child set (MOTIR-
     expect(harness.stderr).toContain('still a DRAFT');
   });
 
+  it('the RUN ID and the CLOCK have real defaults — the arms no injected dep ever reaches', async () => {
+    // ⚠️ THE PRODUCTION ARM OF AN INJECTED SEAM. Every test above hands
+    // `runCommand` a `now` and a `clock`, so `deps.now ?? (() => new Date())`
+    // and `deps.clock ?? Date.now` — the values a real `motir run <scope>`
+    // actually uses — are the two arms nothing exercises. A seam whose default
+    // is never run is a default that can be wrong for a whole release.
+    //
+    // `run` is still injected: the point is the DEFAULTS of the two pure
+    // dependencies, not shelling out to real `git` from a unit test.
+    setup({ detail: (_i, key) => detail({}, key === 'PROD-1' ? ['PROD-2@implemented'] : []) });
+    const git = recordingGit();
+
+    await runCommand('PROD-1', SCOPE_OPTS, { run: git.run });
+
+    // The session branch is derived from the run id, which is derived from the
+    // default clock — so a real timestamp is the observable consequence.
+    const created = git.commands.filter((c) => c === 'gh pr create');
+    expect(created).toHaveLength(1);
+    expect(harness.stderr).toMatch(/motir\/auto-\d{8}-\d{6}/);
+    expect(process.exitCode).toBe(0);
+  });
+
   it('the CONTROL still holds: every child implemented opens ONE pull request and MARKS IT READY', async () => {
     setup({ detail: (_i, key) => detail({}, key === 'PROD-1' ? ['PROD-2@implemented'] : []) });
     const git = recordingGit();
