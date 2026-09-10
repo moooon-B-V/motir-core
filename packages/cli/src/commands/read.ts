@@ -337,7 +337,23 @@ export interface OpenOptions {
   print?: boolean;
 }
 
-export async function openCommand(key: string, opts: OpenOptions): Promise<void> {
+/** Injectable seams; never overridden in production (MOTIR-4980).
+ *
+ *  `openUrl` resolves FALSE only on a box with no display, so a test that wants
+ *  the "could not open a browser" branch was really asserting a property of the
+ *  CI runner: it rendered on Linux and never rendered on a developer's laptop,
+ *  where a browser genuinely is launchable. Injecting the launcher makes both
+ *  branches reachable on any machine — the same seam `LoginDeps` already uses
+ *  for the same call. */
+export interface OpenDeps {
+  openUrl?: typeof openUrl;
+}
+
+export async function openCommand(
+  key: string,
+  opts: OpenOptions,
+  deps: OpenDeps = {},
+): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) throw new CliError('A work item key is required, e.g. `motir open ACME-7`.');
   // No MCP call needed — the canonical URL comes straight from the link config
@@ -346,6 +362,6 @@ export async function openCommand(key: string, opts: OpenOptions): Promise<void>
   const url = issueUrl(link.config.serverUrl, trimmed);
   out(url);
   if (opts.print) return;
-  const launched = await openUrl(url);
+  const launched = await (deps.openUrl ?? openUrl)(url);
   if (!launched) info('(Could not open a browser here — the URL is above.)');
 }
