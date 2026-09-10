@@ -33,7 +33,24 @@ export interface DeliveryMember {
   repoLabel: string;
   /** The pull request's number, so the reader can go and look at it. */
   number: number;
-  merged: boolean;
+  /**
+   * The pull request's state — THREE values, not two (MOTIR-5004).
+   *
+   * ⚠️ THIS WAS `merged: boolean`, AND THE BOOLEAN WAS THE DEFECT. `!merged`
+   * collapses two OPPOSITE situations into one branch: a pull request that has
+   * not merged YET, and one that was CLOSED and never will. The first is the
+   * entire reason this gate exists; the second delivers nothing, so holding a
+   * card for it holds it for ever — nothing re-decides such a card, because the
+   * gate runs only on a change-request event and a closed pull request emits no
+   * further merge. Observed on MOTIR-4789: `motir-core#2715` closed unmerged,
+   * `#2747` merged onto `main`, and the merge did not complete the card.
+   *
+   * `'merged'` is the DISPLAY collapse (`merged` wins over the raw open/closed
+   * pair), which is what `LinkedPullRequestDto.state` already carries — so the
+   * two UI callers pass theirs straight through, and the sync collapses its raw
+   * row with {@link deliveryMemberState}.
+   */
+  state: 'open' | 'merged' | 'closed';
   /** The branch the pull request TARGETS — null on a row mirrored before Motir
    *  recorded base branches. */
   baseRef: string | null;
@@ -41,8 +58,28 @@ export interface DeliveryMember {
   defaultBranch: string;
 }
 
+/**
+ * Collapse a stored pull-request row's RAW pair into the member's three-valued
+ * state (MOTIR-5004).
+ *
+ * `github_pull_request` keeps `state: 'open' | 'closed'` and `merged: boolean`
+ * separately, because that is what the host reports. Every surface that reasons
+ * about a pull request wants the collapse instead, and `LinkedPullRequestDto`
+ * already performs it — this is the same collapse for a caller holding the row
+ * rather than the DTO.
+ */
+export function deliveryMemberState(row: {
+  state: string;
+  merged: boolean;
+}): DeliveryMember['state'] {
+  if (row.merged) return 'merged';
+  return row.state === 'open' ? 'open' : 'closed';
+}
+
 export interface DeliverySetShortfall {
-  /** Members that have not merged at all — the ordinary "still open" case. */
+  /** Members still OPEN — work the card is genuinely waiting for. ⚠️ A CLOSED,
+   *  unmerged member does NOT belong here (MOTIR-5004): it is abandoned, it
+   *  delivers nothing, and it appears in no list at all. */
   outstanding: string[];
   /** Members merged onto a base that is NOT their repository's default branch —
    *  a stranded merge, which delivers nothing to the trunk. Its own list because
@@ -78,7 +115,14 @@ export function deliverySetShortfall(members: readonly DeliveryMember[]): Delive
   const unknownBase: string[] = [];
 
   for (const m of members) {
-    if (!m.merged) {
+    // ⚠️ ABANDONED FIRST, AND THE ORDER IS LOAD-BEARING (MOTIR-5004). A closed
+    // pull request keeps whatever base it targeted, and one mirrored before base
+    // capture has none — so testing its base before excluding it drops it into
+    // `strandedBase` or `unknownBase`, where it holds the card exactly as
+    // `outstanding` used to. The defect would survive its own fix, in a
+    // different list.
+    if (m.state === 'closed') continue;
+    if (m.state === 'open') {
       outstanding.push(label(m));
       continue;
     }
@@ -168,7 +212,9 @@ export function amendRepoDeliveryWithSet(
       mine.map((d) => ({
         repoLabel: d.pullRequest.repo,
         number: d.pullRequest.number,
-        merged: d.pullRequest.state === 'merged',
+        // The DTO already carries the three-valued collapse, so this passes it
+        // straight through (MOTIR-5004) rather than re-deriving a boolean.
+        state: d.pullRequest.state,
         baseRef: d.baseRef,
         defaultBranch: d.defaultBranch,
       })),
