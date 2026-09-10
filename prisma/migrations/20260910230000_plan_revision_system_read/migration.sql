@@ -1,0 +1,51 @@
+-- ===========================================================================
+-- RLS: give `plan_revision` the READ-ONLY `app.system_admin` arm that `plan`
+-- and `plan_item` have carried since 20260819010000 (MOTIR-5034).
+--
+-- `plan_revision` is the plan's content trail — one append-only row per act
+-- (`created` / `appended` / `edited` / `brief_edited` / `withdrawn` / `planned` /
+-- `approved` / `declined`), each carrying the `actor_source · actor_harness ·
+-- actor_model` triple that answers *which agent performed THIS change*. Its
+-- single policy (`plan_revision_active_workspace`, 20260826090000) is the pure
+-- workspace gate, joined through the parent `plan` because the row deliberately
+-- carries no `workspace_id` of its own. That gate is correct and is left exactly
+-- as it stands: nothing about tenant isolation changes here.
+--
+-- ⚠️ WHAT IS MISSING IS THE OTHER READER. `plan` and `plan_item` were armed for
+-- the context-less background runtime (the abandoned-plan sweep); the trail was
+-- created NINE DAYS after that migration and inherited nothing from it. Under
+-- the non-bypass `motir_app` role a read with `app.system_admin` bound and no
+-- `app.workspace_id` compares the parent's workspace against an unset GUC, which
+-- is NULL, which hides every row — and NOTHING IS RAISED. The answer is an empty
+-- result set, which is indistinguishable from *"this plan has no history."*
+--
+-- That is not hypothetical. Reading production under a system context returned
+-- `0` trail rows for one plan, `0` across all 248 plans, and `0` for the 171
+-- created since the trail shipped. Three consistent zeroes supported a confident
+-- and entirely wrong diagnosis; `pg_class.reltuples`, which does not go through
+-- RLS, reported ~2085, and the identical query with `app.workspace_id` bound
+-- returned 26 correctly-attributed rows for that one plan. The affected reader
+-- is a person doing forensics or support, which is why no scanner models it:
+-- `systemContextScan` (MOTIR-2959) checks that a bound GUC is read by a policy
+-- on the tables a PRODUCT code path touches under that context, and no product
+-- path reads this table under a system context — the trail is written and read
+-- under the workspace binding, correctly, on both sides.
+--
+-- ⚠️ `FOR SELECT` ONLY, exactly like `plan_system_read` / `plan_item_system_read`
+-- and for the reason MOTIR-2865 established: the tenant-root WRITE refusal is
+-- load-bearing. The trail is append-only and every writer runs inside
+-- `withWorkspaceServiceContext`, so no `WITH CHECK` is owed and adding one would
+-- trade a visible bug for an invisible hole. `tests/rls/plan-revision-rls.test.ts`
+-- asserts a system context still cannot INSERT or UPDATE a row here.
+--
+-- Tenant paths are unchanged: a request binds only app.user_id /
+-- app.workspace_id / app.project_id via withWorkspaceContext, and
+-- `app.system_admin` is bound exclusively by withSystemContext (a constant, never
+-- user input — lib/workspaces/context.ts), so a tenant cannot elevate itself into
+-- this branch. Permissive policies combine with OR, so the new arm ADMITS the
+-- out-of-band reader and narrows nothing for anyone else.
+-- ===========================================================================
+
+CREATE POLICY "plan_revision_system_read" ON "plan_revision"
+  FOR SELECT
+  USING (current_setting('app.system_admin', true) = 'true');
