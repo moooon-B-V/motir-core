@@ -1,7 +1,9 @@
 # Notifications — design notes
 
 Design reference for the `notifications` UI area (Story 5.7 — in-app
-notifications). Each surface names the design asset it lives in, the primitives
+notifications), **extended 2026-09-10 by Story MOTIR-5010 · MOTIR-5012 with the
+ACCESS-REFUSED row** (its own section below — the first notification whose
+subject is a PROJECT and whose actor is nobody). Each surface names the design asset it lives in, the primitives
 it composes from, copy strings, placement, and the decisions a code subtask
 must honour. Produced by **Subtask 5.7.1** (the design subtask that gates the
 UI code subtasks **5.7.5** the bell + drawer and **5.7.6** the preferences
@@ -262,6 +264,128 @@ kind of update. These apply to you across every workspace.`
 Each switch carries an explicit `aria-label` naming its event + channel (e.g.
 `Email for Mentioned`) so the matrix is fully screen-reader-legible; disabled
 rows carry `aria-disabled`.
+
+---
+
+## The ACCESS-REFUSED row (Story MOTIR-5010 · MOTIR-5012 → the code card it gates)
+
+**The one access outcome nobody else tells the user about: GitHub refused the
+collaborator invitation.**
+
+Every other outcome already has a carrier. An invitation that SENDS is carried by
+GitHub's own email, straight to the account it names. An identity that was never
+connected is carried by the plan review rail's `needs_access` outcome and by
+`/settings/project/code-access`. **A refusal has neither**: no email left the
+building, and the user has private code they cannot reach with nothing on any
+screen saying so. Verified at rung 2 rather than assumed —
+`projectRepoAccessService`'s `inviteOne` catch is a `console.error` and a
+`return false`, deliberately, so the pass survives one member of one row failing.
+That log line is currently the only record.
+
+### ⚠️ The RULE, so the next person adding an access state has one rather than a precedent
+
+**A notification is owed exactly when NO other carrier reaches the user.** Not
+when something failed, and not when something is important: an invitation that
+sends is GitHub's email to tell, and an identity that was never connected is the
+rail's outcome and the code-access surface to tell. A refusal is the only state
+with no carrier at all, which is why it is the only one that gets a row.
+
+### Why it is a drawn row and not a string
+
+`app/(authed)/_components/NotificationRow.tsx` renders a row from three
+type-keyed things — `summaryKey(type, hasKey)`, `TYPE_META[type]` (glyph +
+`--el-notif-*` hue), and `DEFAULT_META` for an unmodelled type. **A new type is a
+new drawn row.** And it is the first one in the product whose subject is a
+**project** and whose actor is **nobody**: the four modelled types
+(`mentioned` · `commented` · `assigned` · `transitioned`) are all work-item
+events with a human actor, so the avatar, the actor line and the summary grammar
+each need a decision rather than an inherited default. Left to be filled in while
+wiring, the two absences become a blank avatar and an actor line reading as
+though somebody did this to you.
+
+### The four decisions
+
+| Axis            | Decision                                                                                                                                        | Why, and what was rejected                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Glyph**       | lucide **`shield-alert`**                                                                                                                       | The row is about a permission that did not land. **`user-x` rejected** — it reads as a PERSON being removed from the project. **`key-round` rejected** — a key reads as access you HAVE                                                                                                                                                                                                                        |
+| **Hue**         | **`--el-notif-access-refused`** → `--color-warning` (a NEW token, added to theme.css's `--el-notif-*` block by the code card)                   | The same hue the review rail's `needs_access` outcome and `design/repository-set/`'s panel-2 arm B already use, so one product story is told in one colour. **Not `--el-danger`**: nothing was lost or destroyed — the repository exists and the plan is safe; the user simply cannot open it yet. It is a NEW slot rather than a reused `--el-notif-*` because none of the four existing hues means "blocked" |
+| **Actor**       | **None, and the row says so by SHAPE**: the type glyph is promoted into the 30px avatar slot in the event's hue, and the small badge is dropped | No initial letter, no borrowed face. `NotificationRow`'s `actorFallback` string is **NOT** used — a fallback name puts a fictional actor into the summary grammar, which is the failure this decision exists to prevent                                                                                                                                                                                        |
+| **Destination** | **`/settings/project/code-access`** for the project the row names                                                                               | Not `/items/[key]` — there is no work item. `Notification.workItemId` is nullable and this row has none                                                                                                                                                                                                                                                                                                        |
+
+### What the code card owes beyond a new `TYPE_META` entry
+
+**The shipped row routes on `issueKey !== null`**, falling to a non-navigating
+`<button>` and `summary.genericNoKey` when there is none. This type has no issue
+key and DOES navigate, so:
+
+- `NotificationDTO.data`'s discriminated union gains an arm carrying the
+  project's key and name;
+- `NotificationRow`'s destination is resolved from the **TYPE**, not from the
+  presence of an issue key;
+- `summaryKey` gains a case that does not depend on `hasKey`.
+
+Each is a consequence of this being the first project-subject row. None of them
+is drawn here because none of them is pixels.
+
+### Copy
+
+**Summary** (`summary.accessRefused`), with the project name bolded through the
+existing `<s>` rich-text tag:
+
+> **{Project}**'s code is ready, but you can't open it yet — try sending the
+> invitation again
+
+It reads as a **consequence** and a **remedy**. It names no GitHub status code,
+no credential, no billing state and no internal cause — a user who cannot open
+their repository does not need to know which API call returned what; they need to
+know they are blocked and what to press. The remedy is also WHERE THE ROW GOES,
+which is why one sentence is enough.
+
+**No excerpt line.** The shipped row renders one only for `kind === 'mentioned'`,
+and this row has nothing to quote.
+
+**Preferences matrix row:** label `Code access couldn't be granted`, description
+`Motir couldn't give you access to a repository it made for your project.`
+
+### Placement in the preferences matrix
+
+**LAST — the fifth row**, which is where `NOTIFICATION_PREFERENCE_EVENT_TYPES`'
+array order puts it: the matrix renders that array, and a new member is appended
+rather than sorted in, so the four rows above keep the positions users have
+learned. **Settable** (not a seam), defaulting **ON for both channels** like every
+other direct event.
+
+**Email ON is a decision, not an oversight.** This event exists because GITHUB's
+invitation email never left the building. Motir's own notification email is a
+second, independent carrier, and defaulting it off would re-create exactly the
+silence the row was added to end. It stays the user's to turn off.
+
+### The bell — CHECKED, and UNCHANGED
+
+`bell.mock.html` and `bell.png` are **not edited**, and that is the deliverable
+rather than an omission. The badge is a **count of unread notifications**, with no
+per-type branch anywhere in its anatomy: the pill renders `n`, caps at `99+`,
+takes `--el-accent` because a count is not an error, and clears on open. A fifth
+type changes none of that — it changes what `n` counts, which is the number the
+badge was already rendering. **The one thing worth stating explicitly**: the badge
+stays `--el-accent` even though this type is the first whose own hue is a warning.
+Per-type tinting of a shared count would be a lie about the other four rows behind
+it.
+
+### A11y
+
+- The summary carries the whole message as **text** — the warning hue is on the
+  avatar glyph only, so nothing about this row is conveyed by colour alone.
+- The promoted glyph is `aria-hidden` like every other avatar in the feed; it is
+  decoration over a sentence that already says everything.
+- White (`--el-accent-text`) on `--color-warning` is the same ink/fill pair the
+  existing badges use on their hues, and the badge is a **graphic** rather than
+  text, so **1.4.11** (3:1 non-text contrast) is the bar it must clear against the
+  row surface — not 4.5:1. The `--el-page-bg` ring the badge grammar already
+  carries is what guarantees it against both the `--el-surface-soft` unread wash
+  and the `--el-surface` hover tint.
+- Both preference switches carry an explicit `aria-label` naming event + channel,
+  as every other cell does.
 
 ---
 
