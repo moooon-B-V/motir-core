@@ -133,6 +133,7 @@ export type ChangeRequestSyncResult = {
     | 'unknown_installation'
     | 'unknown_repo'
     | 'ignored_action'
+    | 'no_lifecycle_change' // an OPEN DRAFT — the delivery is RECORDED, nothing is transitioned (MOTIR-4968)
     | 'malformed';
   workItemId?: string;
   toStatus?: string;
@@ -208,7 +209,7 @@ export type ChangeRequestContextResolution =
  */
 export async function syncChangeRequestStatus(
   cr: NormalizedChangeRequest,
-  lifecycle: ChangeRequestLifecycle,
+  lifecycle: ChangeRequestLifecycle | null,
   resolveContext: (tx: Prisma.TransactionClient) => Promise<ChangeRequestContextResolution>,
 ): Promise<ChangeRequestSyncResult> {
   // Phase 1 — resolve + persist under system context (one transaction): the
@@ -470,6 +471,31 @@ export async function syncChangeRequestStatus(
     return { event: 'pull_request', outcome: 'unknown_installation' };
   if (resolved.kind === 'unknown_repo') return { event: 'pull_request', outcome: 'unknown_repo' };
   if (resolved.kind === 'no_work_item') return { event: 'pull_request', outcome: 'no_work_item' };
+
+  // ⚠️ NO LIFECYCLE TO APPLY — an OPEN DRAFT (MOTIR-4968). The seam returns `null`
+  // for a pull request that exists and is explicitly not offered for review, and
+  // this is where that answer is honoured.
+  //
+  // AFTER phase 1, never instead of it, and that ordering is the point: the
+  // change-request row has ALREADY been upserted above, so the pull request is
+  // recorded with its current state, head, base and title. That matters because a
+  // draft is an OPEN LINKED pull request to every other reader — the
+  // `deferred_open_pr` count that holds a multi-repository parent open, and the
+  // Development surface — and skipping the delivery entirely would make it
+  // invisible to both. What is skipped is the TRANSITION and everything downstream
+  // of it.
+  //
+  // ⚠️ AND SKIPPING THE TRANSITION IS WHAT REMOVES THE SPURIOUS REFUSAL NOTE. A
+  // draft opened by a scoped run is linked to its STORY, so the delivery used to
+  // reach `applyTransition`, be refused by the container gate (`open_children` —
+  // correctly, the children have not landed), and post a note through
+  // `reportTransitionRefusal` describing a state that is entirely normal. There is
+  // now nothing to refuse, so there is no note: a refusal note is worth something
+  // only while it is rare.
+  //
+  // Not `noop`: that outcome means "already in the target status", which is a
+  // different fact and is reached below with a `toStatus` this delivery has none of.
+  if (lifecycle === null) return { event: 'pull_request', outcome: 'no_lifecycle_change' };
 
   // A merge that did NOT land on the default branch leaves the item where it is —
   // In Review, from its own PR-opened delivery (MOTIR-1873). The work merged
@@ -1237,8 +1263,27 @@ export async function resyncLinkedPullRequest(
     headRef: subject.headRef,
     baseRef: subject.baseRef,
     title: subject.title,
+    // ⚠️ ASSUMED, NOT KNOWN — and this is the one field on this synthesized shape
+    // the stored row cannot supply (MOTIR-4968). `github_pull_request` models
+    // draft-ness nowhere, deliberately (a draft must stay an OPEN linked pull
+    // request to the `deferred_open_pr` count), so a resync has no way to tell a
+    // draft from a ready pull request and this path keeps the behaviour it had:
+    // linking a card to an already-open pull request moves it to `implemented`.
+    //
+    // The residual defect that follows is FILED rather than fixed here —
+    // MOTIR-5002 — because fixing it means deciding whether to persist
+    // draft-ness, which is a schema decision this card did not make: a DRAFT
+    // whose `opened` delivery has already landed (a no-op now, correctly) is
+    // still flipped to `implemented` by a later `link_pull_request` — the same
+    // wrong assertion this card removes from the webhook door, reached through
+    // the link door instead.
+    draft: false,
   };
 
+  // The literal is unchanged for the same reason: it is what this path has always
+  // asserted, and the `draft` above is what makes that assertion honest rather
+  // than accidental. It is NOT routed through `changeRequestLifecycle`, which
+  // would only re-derive `'implemented'` from the guess above.
   return syncChangeRequestStatus(cr, 'implemented', async (tx) => {
     // The same bind the providers' own resolvers do, for the same reason: the
     // repo row is where the tenant is learned, and everything the sync reads

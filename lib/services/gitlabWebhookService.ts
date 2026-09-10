@@ -83,6 +83,20 @@ export const gitlabWebhookService = {
    * shared status-sync state machine. Opened → In Review; merged → Done;
    * closed-unmerged → In Progress (the abandoned-work signal). A hook for an
    * unconnected project resolves to `unknown_repo` (a clean no-op).
+   *
+   * ⚠️ AN OPEN DRAFT MR CARRIES NO LIFECYCLE (MOTIR-4968), exactly as on GitHub —
+   * the shared seam decides that, not this dispatcher, so nothing here reads
+   * `draft`. A draft MR that is closed or merged still carries a real lifecycle.
+   *
+   * ⚠️ KNOWN GAP, and it is GitLab-only: the moment a draft MR is marked READY
+   * arrives as `action: 'update'`, which `HANDLED_MR_ACTIONS` deliberately does
+   * NOT handle (it is the analogue of GitHub's `synchronize` and fires on every
+   * push, label and assignee change). So on GitLab a draft MR gets no
+   * `implemented` rung at all — it stays where it is until the `merge` action
+   * completes it. GitHub's half of this is `ready_for_review`, which IS handled.
+   * Closing the gap needs a narrower predicate than the whole `update` action —
+   * `changes.draft` on the payload — which is its own decision and its own card:
+   * MOTIR-5001.
    */
   async handleMergeRequest(body: Record<string, unknown>): Promise<GitlabWebhookResult> {
     const action = asRecord(body['object_attributes'])?.['action'];
