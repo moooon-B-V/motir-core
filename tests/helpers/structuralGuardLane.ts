@@ -149,6 +149,22 @@ export const STRUCTURAL_GUARD_SPECS = [
   // report — and its cost is a function of the tree rather than of what else
   // happens to be running, which is what this lane is for.
   'tests/prisma/typeBoundary.test.ts',
+  // ── tests/jobs/ — the memoized-step RESULT SHAPE guard (MOTIR-5022) ────────
+  // The lane's shape with one difference worth naming: it builds a TYPE-CHECKED
+  // program rather than parsing, because the thing it pins is a step result's
+  // resolved type and `checker.typeToString` on an alias prints the alias. It
+  // reads the same `lib/` + `app/` roots through the same compiler API, opens no
+  // database, renders nothing and imports nothing from `lib/` or `app/`, so it
+  // carries no coverage into the merged report.
+  //
+  // ⚠️ AND IT NEEDS NO `prisma generate`, which is what makes it belong HERE
+  // rather than in the sharded job. Verified rather than assumed on MOTIR-5022:
+  // all 65 pinned shapes are byte-identical with `generated/prisma` present and
+  // with it moved aside, because a step result is a DTO or a service summary and
+  // none of them names a Prisma type. The guard's own `any`/`unknown` assertion
+  // is the standing check on that — a shape that degraded because a module
+  // stopped resolving would otherwise pin a fingerprint that can never move.
+  'tests/jobs/step-result-shape-guard.test.ts',
   // ── tests/packages/ — the package IMPORT-DIRECTION guard (MOTIR-4299) ─────
   // The same shape once more, over one more root: it walks every
   // `packages/<name>/src` tree it discovers plus `lib/` + `app/` +
