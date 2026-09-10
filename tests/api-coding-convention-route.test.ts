@@ -8,7 +8,6 @@ import type {
   RawConventionSurface,
   RawCodeAuditSurface,
 } from '@/lib/ai/motirAiClient';
-import { linkAllWorkspaceReposIntoProject } from './fixtures/codeContextFixtures';
 
 // Transport tests for the /api/ai/coding-convention/* routes (MOTIR-926/1663).
 // The approve/PATCH routes are removed per MOTIR-1660/1663 (convention is
