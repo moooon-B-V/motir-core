@@ -94,7 +94,15 @@ describe('a level named by its MEMBERS', () => {
       ids: [],
     });
 
-    expect(level).toEqual({ nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 });
+    // `levelMemberBlockers` (MOTIR-5043) rides the same DTO and is empty here twice
+    // over: nothing was read, and an ids-named level never claims members at all.
+    expect(level).toEqual({
+      nodes: [],
+      edges: [],
+      offLevelBlockers: [],
+      levelMemberBlockers: [],
+      levelTotal: 0,
+    });
   });
 
   it('an id from ANOTHER project simply does not come back', async () => {
