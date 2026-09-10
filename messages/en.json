@@ -6206,7 +6206,11 @@
         "excluded": "Skipped"
       },
       "repositoryNotCreated": "Repository not created yet",
-      "repositorySkipped": "Skipped for this project"
+      "repositorySkipped": "Skipped for this project",
+      "unlinkAria": "Remove the link to {target}",
+      "unlinkConfirmBefore": "Remove the link to",
+      "unlinkConfirmAfter": "? The pull request isn’t touched on GitHub — only the link.",
+      "unlinkAction": "Remove link"
     },
     "orgDisconnect": {
       "title": "Disconnect {repo} from the organisation",

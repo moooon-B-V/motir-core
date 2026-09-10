@@ -244,3 +244,56 @@ export async function linkPullRequestAction(input: {
   revalidatePath(`/items/${input.identifier}`);
   return { ok: true };
 }
+
+/**
+ * UNLINK one delivery from the current item (Story MOTIR-4878 · MOTIR-5005,
+ * design `design/github/` Panels 5d–5f) — the mirror of
+ * {@link linkPullRequestAction}, and the door a PERSON was missing.
+ *
+ * ── Why it exists ─────────────────────────────────────────────────────────
+ * `githubPullRequestService.unlinkPullRequest` has shipped since MOTIR-3756 with
+ * exactly one caller, the MCP tool. So an agent could retract a delivery and a
+ * person could not — while `incompleteDeliverySetCommentBody` ends by telling the
+ * reader, on the card, *"If one of them does not in fact deliver this item, unlink
+ * it."* The only move left was to override the status by hand, which records that
+ * somebody disagreed with a gate rather than that a pull request was wrong.
+ *
+ * ── What it does NOT do ───────────────────────────────────────────────────
+ * Touch the pull request. It removes one `(work item, pull request)` delivery row
+ * and leaves `github_pull_request` exactly as the webhook last wrote it — which is
+ * what the confirm copy promises the reader, so the two must not drift apart.
+ *
+ * `removed: false` is a SUCCESS: the pull request and the item exist and were
+ * simply not linked (a retry, or a correction somebody else already made). The
+ * service reserves it for that case and raises on a pull request that is unknown
+ * or out of the workspace, which reaches the reader as the typed `prNotFound`
+ * banner — the same map the link arm uses.
+ */
+export async function unlinkPullRequestAction(input: {
+  currentItemId: string;
+  identifier: string;
+  pullRequestId: string;
+}): Promise<LinkActionResult> {
+  const session = await getSession();
+  if (!session) redirect('/sign-in');
+  const ctx = await getActiveProject();
+  if (!ctx) {
+    const te = await getErrorsTranslator();
+    return { ok: false, error: te('actions.pickProjectFirst') };
+  }
+  const tg = await getGithubTranslator();
+  if (!input.pullRequestId) return { ok: false, error: tg('development.prNotFound') };
+  try {
+    await githubPullRequestService.unlinkPullRequest(input.currentItemId, input.pullRequestId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (err) {
+    const msg = prLinkErrorMessage(err, tg);
+    if (msg) return { ok: false, error: msg };
+    throw err;
+  }
+
+  revalidatePath(`/items/${input.identifier}`);
+  return { ok: true };
+}

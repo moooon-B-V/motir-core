@@ -24,6 +24,7 @@ const t = messages.github.development;
 afterEach(cleanup);
 
 const merged: LinkedPullRequestDto = {
+  id: 'pr-merged-2118',
   title: 'feat(work-items): the repository SET',
   repo: 'moooon/motir-core',
   number: 2118,
@@ -105,6 +106,7 @@ describe('a repository with no pull request yet', () => {
 // here uses the real pair. A cross-reference on the raw strings matches nothing
 // and this whole block passes only by accident of matching names.
 const openPr: LinkedPullRequestDto = {
+  id: 'pr-open-2120',
   title: 'feat(advisories): flag a card whose deliverable…',
   repo: 'moooon-B-V/motir-core',
   number: 2120,

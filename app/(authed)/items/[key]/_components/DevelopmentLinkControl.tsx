@@ -3,14 +3,19 @@
 import { createContext, useContext, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { CircleAlert, Plus } from 'lucide-react';
+import { CircleAlert, Plus, X } from 'lucide-react';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
+import { Popover } from '@/components/ui/Popover';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { PR_STATE_META } from '@/components/github/DevelopmentSection';
 import { useLinkCandidateSearch } from '@/hooks/useLinkCandidateSearch';
 import type { PullRequestLinkCandidateDto } from '@/lib/dto/github';
-import { linkPullRequestAction, listPullRequestCandidatesAction } from '../actions';
+import {
+  linkPullRequestAction,
+  listPullRequestCandidatesAction,
+  unlinkPullRequestAction,
+} from '../actions';
 
 // The explicit item→PR link affordance (Story 7.10 · MOTIR-1596, design/github
 // Panel 5) — the manual override of the MOTIR-892 auto-resolver, on the
@@ -35,6 +40,10 @@ interface DevelopmentLinkContextValue {
   search: ReturnType<typeof useLinkCandidateSearch<PullRequestLinkCandidateDto>>;
   error: string | null;
   pending: boolean;
+  /** Retract ONE delivery (MOTIR-5005). The PROVIDER owns the write and the
+   *  refresh — `RemovePullRequestLinkButton` owns only its popover — so the two
+   *  Development writes reconcile the card the same way and cannot drift. */
+  unlink: (pullRequestId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 const DevelopmentLinkContext = createContext<DevelopmentLinkContextValue | null>(null);
@@ -102,6 +111,23 @@ export function DevelopmentLinkProvider({
     });
   }
 
+  // ⚠️ NOT optimistic, and that is a DEPARTURE from the design's build-seam
+  // note — recorded rather than silently taken. `design/github/` § Panels 5d–5f
+  // suggests `RemoveLinkButton`'s optimistic-removal shape, which works there
+  // because the relationships panel HOLDS its rows in client state. The
+  // Development rows do not: `DevelopmentSectionBody` is a Server Component
+  // shared with the read-only peek, so there is no client list to remove from
+  // optimistically. Making one would convert a shared server component into a
+  // client island — a far larger change than this card — and would leave REMOVE
+  // optimistic while LINK, three lines up, still refreshes. So it refreshes,
+  // exactly as the link arm does, and the two writes on this surface stay one
+  // mechanism.
+  async function unlink(pullRequestId: string) {
+    const res = await unlinkPullRequestAction({ currentItemId, identifier, pullRequestId });
+    if (res.ok) router.refresh();
+    return res;
+  }
+
   return (
     <DevelopmentLinkContext.Provider
       value={{
@@ -115,6 +141,7 @@ export function DevelopmentLinkProvider({
         search,
         error,
         pending,
+        unlink,
       }}
     >
       {children}
@@ -233,5 +260,104 @@ export function LinkPullRequestForm() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The per-row REMOVE control (Story MOTIR-4878 · MOTIR-5005, design
+ * `design/github/` Panels 5d–5f) — a quiet `×` after the link-out, LAST in the
+ * row, opening a confirm popover.
+ *
+ * ── It is the SHIPPED gesture, not a new one ──────────────────────────────
+ * `RemoveLinkButton` has drawn exactly this on the relationships panel since
+ * Subtask 2.4.9, and `PullRequestRow`'s own comment already named it as the
+ * convention this surface should use. Same 24×24 box, same 15px `X`, same muted
+ * ink with a rose tint and danger ink on hover, same `Popover.Content` at 300px
+ * aligned to the trigger's edge, same ghost-Cancel + danger-action row.
+ *
+ * ── `aria-label`, NEVER an `sr-only` span ─────────────────────────────────
+ * The reason is `PullRequestRow`'s, verbatim: an `sr-only` span is
+ * `position:absolute`, and with no positioned ancestor it escapes the shell's
+ * overflow container and stretches the ROOT scroller — the "empty space past the
+ * bottom of the page" bug.
+ *
+ * ── What the COPY has to say ──────────────────────────────────────────────
+ * The reader's fear is not *will this delete a record?* — it is *will this do
+ * something to my pull request on GitHub?* So the sentence names the pull
+ * request and then says what is NOT happening to it. That promise is only true
+ * because `unlinkPullRequest` deletes one delivery row and leaves the mirror
+ * untouched; if that ever changes, this copy is what goes stale.
+ *
+ * The control renders only where the host passes it — the detail page, for an
+ * actor holding `work_item:edit`. The read-only peek passes nothing, so the row
+ * has no trailing control at all rather than a disabled one (design Q1 / Q4).
+ */
+export function RemovePullRequestLinkButton({
+  pullRequestId,
+  target,
+}: {
+  pullRequestId: string;
+  /** `owner/repo · #n` — the row's own identifier, named in the aria-label and
+   *  rendered `font-mono` inside the confirm sentence. */
+  target: string;
+}) {
+  const t = useTranslations('github');
+  const tc = useTranslations('common');
+  const { unlink } = useDevelopmentLink();
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function confirm() {
+    setError(null);
+    setPending(true);
+    void (async () => {
+      try {
+        const res = await unlink(pullRequestId);
+        if (res.ok) setOpen(false);
+        else setError(res.error);
+      } finally {
+        setPending(false);
+      }
+    })();
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setError(null);
+      }}
+    >
+      <Popover.Trigger
+        className="text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        aria-label={t('development.unlinkAria', { target })}
+      >
+        <X className="h-[15px] w-[15px]" aria-hidden />
+      </Popover.Trigger>
+      <Popover.Content width={300} align="end">
+        <div className="flex flex-col gap-3 p-3.5">
+          <p className="text-(--el-text) font-sans text-sm leading-snug">
+            {t('development.unlinkConfirmBefore')}{' '}
+            <span className="font-mono text-xs whitespace-nowrap">{target}</span>
+            {t('development.unlinkConfirmAfter')}
+          </p>
+          {error ? (
+            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-2.5 py-1.5 font-sans text-xs">
+              {error}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+              {tc('cancel')}
+            </Button>
+            <Button size="sm" variant="danger" onClick={confirm} loading={pending}>
+              {t('development.unlinkAction')}
+            </Button>
+          </div>
+        </div>
+      </Popover.Content>
+    </Popover>
   );
 }

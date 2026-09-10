@@ -19,6 +19,7 @@ import type { LinkedPullRequestDto } from '@/lib/dto/github';
 afterEach(cleanup);
 
 const webhookPr: LinkedPullRequestDto = {
+  id: 'pr-webhook-11',
   title: 'Ingested by the webhook',
   repo: 'moooon/motir-core',
   number: 11,
@@ -27,6 +28,7 @@ const webhookPr: LinkedPullRequestDto = {
   url: 'https://github.com/moooon/motir-core/pull/11',
 };
 const pickerPr: LinkedPullRequestDto = {
+  id: 'pr-picker-57',
   title: 'Linked from the picker',
   repo: 'moooon/motir-gateway',
   number: 57,

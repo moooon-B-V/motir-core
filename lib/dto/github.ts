@@ -46,6 +46,18 @@ export interface GithubInstallationDTO {
  * resolved server-side so the client stays purely presentational.
  */
 export interface LinkedPullRequestDto {
+  /**
+   * Motir's own id for the pull-request row (MOTIR-5005) — what the REMOVE
+   * control addresses the delivery by.
+   *
+   * `githubPullRequestService.unlinkPullRequest` takes the internal cuid rather
+   * than GitHub coordinates, and its own header says why: *"the item page
+   * addresses a pull request by Motir's internal cuid because it is rendering a
+   * row it already read"*. That row is this DTO, and until this card it was the
+   * one thing the row did not carry — so the surface the service was written for
+   * could not call it.
+   */
+  id: string;
   /** The PR title, falling back to its head branch for rows ingested before
    *  title capture (MOTIR-1579). */
   title: string;
