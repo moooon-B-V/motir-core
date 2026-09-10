@@ -7,6 +7,8 @@ import {
   attachmentSchema,
   commentThreadSchema,
   createWorkItemBodySchema,
+  linkPullRequestBodySchema,
+  linkedPullRequestSchema,
   relationshipSchema,
   transitionListSchema,
   updateWorkItemBodySchema,
@@ -275,6 +277,43 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
       description: 'The created edge.',
     },
     errorStatuses: [404, 409, 422],
+  }),
+  // ── LINKING a pull request (Task MOTIR-5048) ────────────────────────────
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/pull-requests',
+    operationId: 'linkWorkItemPullRequest',
+    summary: 'Declare which pull request delivers this work item',
+    description:
+      'DECLARE that a pull request delivers this work item — the only thing that associates the ' +
+      'two. There is no title parse and no branch fallback: a pull request nobody links moves no ' +
+      'work item when it merges, and carries a failing check saying so. ' +
+      '⚠️ IT ADDS, IT DOES NOT MOVE. The link is a DELIVERY ROW, and calling this again ' +
+      'naming a DIFFERENT work item leaves the first delivery exactly where it was and writes a ' +
+      'second. Both directions are expressible — many pull requests to one work item (which is ' +
+      'what holds a part-delivered one open) and one pull request to many work items — so the ' +
+      'response reports no moved-from, because nothing moves. ' +
+      'Address the pull request as `repository` + `number`, or as the `url` `gh pr create` printed; ' +
+      'give both and they must AGREE. ' +
+      'It works BEFORE any webhook delivery has arrived — the case it exists for — writing ' +
+      'the row from the `headRef` / `baseRef` / `title` supplied, and `created` says whether it did. ' +
+      'A later delivery refreshes those and leaves the links alone.',
+    permission: 'work_item:edit',
+    parameters: [keyParameter],
+    requestBody: {
+      schema: linkPullRequestBodySchema,
+      description: 'The pull request’s address, and the refs the row is seeded from.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: linkedPullRequestSchema },
+      description:
+        'The work item, the pull request the link resolved to, and whether this call created its row.',
+    },
+    // 404 for an unknown or cross-workspace key, and for a repository that is not
+    // connected to this workspace — neither is an existence oracle (§4). 422 for a
+    // malformed key, an unparseable address, or two addresses that disagree.
+    errorStatuses: [404, 422],
   }),
   defineOperation({
     method: 'DELETE',

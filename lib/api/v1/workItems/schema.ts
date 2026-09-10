@@ -12,7 +12,7 @@ import type {
   WorkItemSummaryDto,
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
-import type { WorkItemDeliveryDto } from '@/lib/dto/github';
+import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 
 // The v1 WORK-ITEM resource, declared once (Story 11.2 · Subtask 11.2.2 —
 // MOTIR-2040). Every sibling endpoint — list, detail, create, update,
@@ -389,6 +389,93 @@ const workItemDeliverySchema = z.object({
   defaultBranch: z.string(),
 });
 export type WorkItemDelivery = z.infer<typeof workItemDeliverySchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LINKING a pull request (Task MOTIR-5048)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The ADDRESS of a pull request, in the two forms a caller actually holds.
+ *
+ * Deliberately the SAME pair `link_pull_request` accepts, because the two doors
+ * write the same row through the same service and a client that learned one
+ * address form must not find the other door speaks a different one. The MCP
+ * tool's `resolveCoordinate` is the shared parser — imported by the ROUTE rather
+ * than re-implemented here would be the obvious move and is FORBIDDEN
+ * (`tests/api/v1/story-gate.test.ts` refuses any v1 reach into `lib/mcp/tools/**`),
+ * so the route re-derives the two regexes from this schema's own shape. The
+ * identity that matters is behavioural and is pinned by a test asserting both
+ * doors resolve one `url` to one row.
+ *
+ * ⚠️ NEITHER FORM IS RANKED. Supplying both is legal and they are CROSS-CHECKED;
+ * a disagreement is a 422 rather than a silent pick, because picking one lands
+ * the link on a real pull request that is not the one the caller meant, under a
+ * success response.
+ */
+export const linkPullRequestBodySchema = z
+  .object({
+    /** `owner/name`, exactly as the repository is connected. With `number`. */
+    repository: z.string().trim().min(1).optional(),
+    /** The pull-request number. With `repository`. */
+    number: z.number().int().positive().optional(),
+    /** The full URL — the line `gh pr create` prints, passed through verbatim. */
+    url: z.string().trim().min(1).optional(),
+    /** The branch the pull request is FROM. Seeds the row when no webhook
+     *  delivery has arrived; a later delivery overwrites it. */
+    headRef: z.string().trim().min(1),
+    /** The branch it TARGETS. Same rule as `headRef`. */
+    baseRef: z.string().trim().min(1),
+    /** The title, for the row this call may have to create. The first delivery
+     *  supplies the real one either way. */
+    title: z.string().trim().optional(),
+  })
+  .strict();
+export type LinkPullRequestBody = z.infer<typeof linkPullRequestBodySchema>;
+
+/**
+ * What a link RESOLVED to.
+ *
+ * ⚠️ NO INTERNAL ID. `LinkedPullRequestDto` carries Motir's own cuid for the
+ * pull-request row, and §7 keeps the cuid off the wire — v1 addresses things by
+ * the names the world uses. A caller already holds the coordinate it sent, so
+ * the id would buy it nothing it could legally use.
+ *
+ * `created` is the one fact the caller cannot derive: whether this call WROTE
+ * the pull-request row because no webhook delivery had arrived yet. That is the
+ * case the operation exists for, so it is reported rather than left implicit.
+ */
+export const linkedPullRequestSchema = z.object({
+  key: workItemKeySchema,
+  created: z.boolean(),
+  pullRequest: z.object({
+    repo: z.string(),
+    number: z.number().int(),
+    title: z.string(),
+    url: z.string(),
+    state: z.enum(['open', 'merged', 'closed']),
+    ci: z.enum(['passing', 'failing', 'running']).nullable(),
+  }),
+});
+export type LinkedPullRequest = z.infer<typeof linkedPullRequestSchema>;
+
+/** Shape the service's result for the wire — field by field, never a spread. */
+export function presentLinkedPullRequest(
+  key: string,
+  result: { link: LinkedPullRequestDto; created: boolean },
+): LinkedPullRequest {
+  return {
+    key,
+    created: result.created,
+    pullRequest: {
+      repo: result.link.repo,
+      number: result.link.number,
+      title: result.link.title,
+      url: result.link.url,
+      state: result.link.state,
+      ci: result.link.ci,
+    },
+  };
+}
 
 /** The single-item READ: the work item's fields plus everything a detail adds. */
 export const workItemDetailSchema = workItemFieldsSchema.extend({

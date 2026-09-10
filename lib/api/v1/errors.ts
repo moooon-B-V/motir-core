@@ -156,6 +156,22 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 11.2.2 (MOTIR-2040) — the single-item read.
   WORK_ITEM_NOT_FOUND: 404,
   PROJECT_NOT_FOUND: 404,
+
+  // MOTIR-5048 — `POST …/work-items/{key}/pull-requests` naming a repository
+  // that is not CONNECTED to the caller's workspace.
+  //
+  // 404, and for the same reason as every other row here rather than by
+  // analogy: a 403 would confirm the repository exists somewhere, over a
+  // resource belonging to another tenant. `owner/name` is a name the caller
+  // chose, so "there is no such repository *for you*" is the whole of the
+  // honest answer.
+  //
+  // ⚠️ IT WAS A 500 UNTIL THIS ROW EXISTED, which is why the row is here rather
+  // than left to the wrapper's default: an unmapped domain error is an internal
+  // error, and this one is entirely ordinary — a typo in a repository name is
+  // the commonest way to call this operation wrong. Driven through the wrapper
+  // by `work-item-pull-requests-route.test.ts`, per the note above.
+  GITHUB_REPO_NOT_FOUND: 404,
   // ⚠️ 404, NOT 403. A 403 on a project the caller cannot browse confirms that
   // the project EXISTS — the same existence-oracle argument ADR §4 makes for
   // cross-tenant access, applied WITHIN a tenant. A caller who may not browse a
