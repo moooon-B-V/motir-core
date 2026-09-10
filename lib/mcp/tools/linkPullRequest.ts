@@ -6,6 +6,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
 import { exempt } from '../payloads/define';
+import { resolveCoordinate as resolveCoordinateImpl } from '@/lib/github/pullRequestCoordinate';
 import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 
 // `link_pull_request` (Story MOTIR-3525 · Subtask MOTIR-3526) — the door an
@@ -68,17 +69,20 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 export const LINK_PULL_REQUEST_TOOL_NAME = 'link_pull_request';
 
 /**
- * A pull-request URL as `gh pr create` prints it —
- * `https://github.com/<owner>/<name>/pull/<number>`.
+ * ⚠️ `resolveCoordinate` MOVED to `lib/github/pullRequestCoordinate.ts`
+ * (MOTIR-5048) and is RE-EXPORTED here so this module's own importers —
+ * `unlinkPullRequest.ts` — are unchanged.
  *
- * Host-agnostic on purpose (a GitHub Enterprise deployment serves the same path
- * shape under its own hostname), and the segment count is pinned so a URL that
- * merely CONTAINS `/pull/` somewhere cannot be misread as a coordinate.
+ * It moved because there are two doors onto the coordinate now: this tool and
+ * `POST /api/v1/work-items/{key}/pull-requests`. A v1 route may not import from
+ * `@/lib/mcp/` (the planning story gate enforces it), and the alternative —
+ * re-deriving the parse in the v1 layer — is the one shape that must not be
+ * copied: a key parse that drifts yields a 404 the caller sees, while a
+ * coordinate parse that drifts links the WRONG pull request under a success
+ * response. So the parser went DOWN to a leaf both transports may import,
+ * rather than sideways into a second copy.
  */
-const PULL_REQUEST_URL_RE = /^https?:\/\/[^/\s]+\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)(?:[/?#].*)?$/;
-
-/** `owner/name`, as a repository is connected. */
-const REPOSITORY_RE = /^([^/\s]+)\/([^/\s]+)$/;
+export { resolveCoordinate, type Coordinate } from '@/lib/github/pullRequestCoordinate';
 
 const inputSchema = {
   key: workItemKeyField,
@@ -132,80 +136,6 @@ const inputSchema = {
     ),
 };
 
-/** The coordinate a call resolved to, or the argument fault that stopped it. */
-type Coordinate =
-  | { ok: true; owner: string; name: string; number: number }
-  | { ok: false; message: string };
-
-/**
- * Resolve `(owner, name, number)` from either address form.
- *
- * Both forms are accepted and CROSS-CHECKED rather than ranked, because a
- * disagreement between them is a caller mistake with a silent wrong answer: pick
- * one arbitrarily and the link lands on a real pull request that is not the one
- * the caller meant, under a success message.
- */
-export function resolveCoordinate(args: {
-  repository?: string;
-  number?: number;
-  url?: string;
-}): Coordinate {
-  let fromUrl: { owner: string; name: string; number: number } | null = null;
-  if (args.url !== undefined) {
-    const m = PULL_REQUEST_URL_RE.exec(args.url);
-    if (!m) {
-      return {
-        ok: false,
-        message:
-          '`url` is not a pull-request URL. Expected ' +
-          '"https://<host>/<owner>/<name>/pull/<number>", the form `gh pr create` prints.',
-      };
-    }
-    fromUrl = { owner: m[1]!, name: m[2]!, number: Number(m[3]!) };
-  }
-
-  let fromPair: { owner: string; name: string; number: number } | null = null;
-  if (args.repository !== undefined || args.number !== undefined) {
-    if (args.repository === undefined || args.number === undefined) {
-      return {
-        ok: false,
-        message: '`repository` and `number` go together — give both, or give `url` instead.',
-      };
-    }
-    const m = REPOSITORY_RE.exec(args.repository);
-    if (!m) {
-      return { ok: false, message: '`repository` must be "owner/name", e.g. "acme/web".' };
-    }
-    fromPair = { owner: m[1]!, name: m[2]!, number: args.number };
-  }
-
-  const resolved = fromUrl ?? fromPair;
-  if (!resolved) {
-    return {
-      ok: false,
-      message:
-        'Address the pull request: either `url`, or `repository` + `number`. ' +
-        'After `gh pr create`, `url` is the line it printed.',
-    };
-  }
-  if (
-    fromUrl &&
-    fromPair &&
-    (fromUrl.number !== fromPair.number ||
-      fromUrl.owner.toLowerCase() !== fromPair.owner.toLowerCase() ||
-      fromUrl.name.toLowerCase() !== fromPair.name.toLowerCase())
-  ) {
-    return {
-      ok: false,
-      message:
-        `\`url\` names ${fromUrl.owner}/${fromUrl.name}#${fromUrl.number} but ` +
-        `\`repository\` + \`number\` name ${fromPair.owner}/${fromPair.name}#${fromPair.number}. ` +
-        'Send one address, not two that disagree.',
-    };
-  }
-  return { ok: true, ...resolved };
-}
-
 /** The adapter: resolve the item + the coordinate, then declare the link. */
 export async function runLinkPullRequest(
   args: {
@@ -220,7 +150,7 @@ export async function runLinkPullRequest(
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
-    const coordinate = resolveCoordinate(args);
+    const coordinate = resolveCoordinateImpl(args);
     // A TOOL error, not a throw: the agent can fix this in one hop, and an
     // opaque internal error would tell it nothing about which argument is wrong.
     if (!coordinate.ok) return toolError('INVALID_PULL_REQUEST_REF', coordinate.message);

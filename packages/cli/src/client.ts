@@ -1651,6 +1651,50 @@ export class MotirClient {
   }
 
   /**
+   * DECLARE which pull request delivers a work item (MOTIR-5048).
+   *
+   * ⚠️ THE ONLY THING THAT ASSOCIATES THE TWO. There is no title parse and no
+   * branch fallback — MOTIR-3674 retired both — so an unlinked pull request
+   * moves no work item when it merges and carries a failing
+   * `Motir / work item link` check saying so.
+   *
+   * ⚠️ IT ADDS, IT DOES NOT MOVE. The link is a `work_item_delivery` ROW, and
+   * calling this again naming a DIFFERENT work item leaves the first delivery
+   * where it was and writes a second. Both directions are expressible — many
+   * pull requests to one work item, one pull request to many — so nothing here
+   * reports a moved-from, because nothing moves. A mistaken link is retracted
+   * deliberately; re-linking the right work item does not undo it.
+   *
+   * It works BEFORE any webhook delivery has arrived, which is the case it
+   * exists for: `headRef` / `baseRef` / `title` seed the row when this call is
+   * what creates it, and a later delivery overwrites them and leaves the links
+   * alone.
+   *
+   * Returns nothing, for the reason {@link transitionStatus} states: the
+   * operation answers with the link it resolved, no caller reads it, and handing
+   * back a wire shape nothing consumes would put it in reach of a renderer with
+   * no mapper between them.
+   */
+  async linkPullRequest(
+    args: { key: string; headRef: string; baseRef: string; title?: string } & (
+      | { repository: string; number: number; url?: undefined }
+      | { url: string; repository?: undefined; number?: undefined }
+    ),
+  ): Promise<void> {
+    await this.v1.request('linkWorkItemPullRequest', {
+      path: { key: args.key },
+      body: {
+        headRef: args.headRef,
+        baseRef: args.baseRef,
+        ...(args.title === undefined ? {} : { title: args.title }),
+        ...(args.url === undefined
+          ? { repository: args.repository, number: args.number }
+          : { url: args.url }),
+      },
+    });
+  }
+
+  /**
    * CLAIM a work item for the token owner — ONE locked call (MOTIR-3048).
    *
    * This used to be a plain `PATCH { assigneeId }` that the caller followed with

@@ -245,8 +245,15 @@ describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => 
     const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
       scope: 'sprint',
     });
-    // `levelTotal` rides the same DTO (MOTIR-3490) — an empty level is `0 of 0`.
-    expect(roadmap).toEqual({ nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 });
+    // `levelTotal` rides the same DTO (MOTIR-3490) — an empty level is `0 of 0`;
+    // so does `levelMemberBlockers` (MOTIR-5043), empty for want of a read at all.
+    expect(roadmap).toEqual({
+      nodes: [],
+      edges: [],
+      offLevelBlockers: [],
+      levelMemberBlockers: [],
+      levelTotal: 0,
+    });
   });
 
   it('case 6 — tenant gate is NOT bypassed by sprint scope', async () => {
@@ -258,5 +265,49 @@ describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => 
     await expect(
       workItemsService.getProjectRoadmap(fx.projectId, null, other.ctx, { scope: 'sprint' }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+});
+
+// ── MOTIR-5043 · the sprint arm is NOT where the cap defect lives ─────────────
+// The project arm treats every off-level blocker as the cross-story tangle, which
+// is what a cap-dropped SIBLING is now kept out of. The sprint arm asks a different
+// question — is this blocker done, or in the sprint? — and its answer about a
+// sibling outside the sprint ("blocker not in sprint") is TRUE.
+//
+// It is also the arm where a parent comparison means nothing, and the ROOT level is
+// where that bites: `findProjectTreeLevel` re-roots a sprint level at the topmost
+// IN-SPRINT rows, so a level requested with `parentId: null` comes back holding rows
+// with real parents — while a blocker that IS parentless matches that null exactly.
+// The member test would then claim a parentless out-of-sprint blocker as a member of
+// a level it is not on, and the sprint-validity signal about it would vanish. It
+// needs no 200-row level to reproduce, which is why it is pinned here.
+describe('sprint scope claims no level members (MOTIR-5043)', () => {
+  it('a PARENTLESS out-of-sprint blocker stays off-level at the re-rooted root, keeping its signal', async () => {
+    const fx = await makeFixture();
+    const sprintId = await createActiveSprint(fx);
+    const story = await createWorkItem(fx, { kind: 'story', title: 'Story S' });
+    const inSprint = await createWorkItem(fx, {
+      kind: 'subtask',
+      title: 's1 (in sprint)',
+      parentId: story.id,
+    });
+    // A root-level defect nobody put in the sprint — `parentId` null, exactly like
+    // the null the root level is requested with.
+    const outOfSprint = await createWorkItem(fx, { kind: 'bug', title: 'Parentless blocker' });
+    await setSprint(inSprint.id, sprintId);
+    await link(fx, inSprint.id, outOfSprint.id);
+
+    const level = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      scope: 'sprint',
+    });
+    // The re-rooted level is the in-sprint subtask, whose own parent is the story.
+    expect(level.nodes.map((n) => n.id)).toEqual([inSprint.id]);
+    const stub = level.offLevelBlockers.find((b) => b.id === outOfSprint.id);
+    expect(stub).toBeTruthy();
+    expect(stub!.isDone).toBe(false);
+    expect(stub!.inActiveSprint).toBe(false);
+    // …and nothing was reclassified as a level member, so the canvas still draws
+    // "blocker not in sprint" rather than silence.
+    expect(level.levelMemberBlockers).toEqual([]);
   });
 });

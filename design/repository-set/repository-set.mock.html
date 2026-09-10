@@ -1974,6 +1974,214 @@
         anything swappable — which is what §7 asked MOTIR-1782 to preserve and what this revision
         retires.
       </p>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANEL 9 (v6, MOTIR-5050) — THE POPULATION THIS STEP IS NOT FOR
+           A set that ARRIVED settled draws no step at all; a MIXED set draws
+           it with its two set-wide sentences SCOPED. §7b is the design of
+           record. (This is the ESTABLISH-STEP surface's panel 9; §17's panel 9
+           belongs to repositories-room.mock.html.)
+           ══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 9 · <b>A SETTLED set draws no step</b> — and a MIXED set scopes what the step claims
+      </div>
+      <p class="panel-note">
+        Until v6 this asset had no state for a project whose repository set arrived
+        <b>already settled</b> — every row <code class="mono">connected</code>, because the
+        repositories are the organisation's and onboarding connected them. It had something stronger
+        and worse: panel 2's table declared that population <b>impossible</b> (<i
+          >"<code class="mono">connected</code> … cannot occur"</i
+        >), while the shipped surface rendered the step for it on every approval, because the gate
+        in <code class="mono">app/(authed)/plans/[id]/page.tsx</code> is a row COUNT (<code
+          class="mono"
+          >rows.length &gt; 0</code
+        >) and reads neither <code class="mono">state</code> nor
+        <code class="mono">seedSource</code>. Since MOTIR-4753 a project cannot be planned at all
+        without a repository, so this is not an edge case — it is
+        <b>every BYOK project, on every approval</b>.
+      </p>
+      <p class="panel-note">
+        <b>The step does exactly one of two things</b> — ASK Motir to establish code, or REPORT what
+        it established — so a row Motir will not create and did not create gives it neither.
+        <b
+          >The band is drawn iff the set holds at least one row Motir ESTABLISHES:
+          <code class="mono">state</code> in <code class="mono">proposed</code> /
+          <code class="mono">creating</code> / <code class="mono">created</code> /
+          <code class="mono">failed</code></b
+        >. Not <code class="mono">set.ownership</code>, which is null until the step decides and so
+        is null for exactly this population; and not
+        <code class="mono">codeOutcomeOf() === 'ready'</code>, which counts
+        <code class="mono">created</code> as settled too and so cannot tell a set Motir just built
+        (which DOES owe a report) from one that arrived settled (which does not).
+        <b
+          ><code class="mono">state</code> decides whether the step APPEARS;
+          <code class="mono">seedSource</code> decides what it may CLAIM.</b
+        >
+      </p>
+      <div class="panel route">
+        <div class="route-header">
+          <span class="back"
+            ><svg class="i"><use href="#i-chevron-left" /></svg
+          ></span>
+          <h2>Acme booking</h2>
+        </div>
+        <div class="shell">
+          <div class="workspace">
+            <div
+              class="step-pane"
+              style="flex-direction: column; gap: 6px; text-align: center; padding: 32px 28px"
+            >
+              <p style="margin: 0; font-size: 13px; color: var(--el-text-secondary)">
+                the approved CANVAS, filling the pane
+              </p>
+              <p style="margin: 0; font-size: 12px; color: var(--el-text-secondary)">
+                composed exactly as <code class="mono">plans-surface.mock.html</code> panels G / H
+                draw it — redrawn nowhere
+              </p>
+            </div>
+
+            <!-- PlanReviewRail — REUSED, not redrawn. Its approved-outcome
+                 block is the WHOLE of what the reader is told about their
+                 code, and nothing is added to it. -->
+            <aside class="rail" aria-label="Plan review">
+              <div class="rail-head">
+                <div class="rail-title-row">
+                  <h4 class="rail-title">Acme booking</h4>
+                  <span class="pill pill-done">Approved</span>
+                </div>
+                <p class="rail-sub">24 proposed items</p>
+              </div>
+              <section style="display: flex; flex-direction: column; gap: 8px">
+                <h5 class="rail-h3">History</h5>
+                <ol class="hist">
+                  <li>
+                    <span class="dot"></span
+                    ><span>Plan ready<span class="when">Sep 10, 2026, 11:56 AM</span></span>
+                  </li>
+                  <li>
+                    <span class="dot"></span
+                    ><span>Approved · Zhu Yue<span class="when">Sep 10, 2026, 12:02 PM</span></span>
+                  </li>
+                </ol>
+              </section>
+              <div class="outcome">
+                <p>
+                  <svg class="i sm" style="color: var(--el-success)">
+                    <use href="#i-sparkles" />
+                  </svg>
+                  Added 24 items to your backlog
+                </p>
+                <p style="font-weight: 500; font-size: 13px">
+                  <svg class="i sm" style="color: var(--el-success)">
+                    <use href="#i-circle-check-big" />
+                  </svg>
+                  Your code is ready
+                </p>
+                <a class="link" style="font-size: 12px" href="#">View in backlog</a>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+      <p class="panel-note" style="margin-top: 14px">
+        <b>No band, and no residue</b> — not a collapsed one-liner, not an empty seam, not a
+        hairline where the step used to be. The reader is told exactly one thing about their code,
+        by the review rail, which already says it: <b>"Your code is ready"</b> under
+        <b>"Added 24 items to your backlog"</b>. <b>Nothing is added to the rail either.</b> The
+        tempting addition is one line naming where the code lives, and it is refused for the reason
+        v2 was refused — it is a technical fact the reader did not ask for, in a rail whose job is
+        the DECISION's outcome, and a project's repositories have a durable home already at
+        <code class="mono">/settings/project/repositories</code>. <b>The cost, stated plainly:</b> a
+        user approving a plan on a settled project is told nothing NEW about their code at all. That
+        is correct — nothing new happened to it.
+      </p>
+      <div class="panel twoup">
+        <figure>
+          <figcaption>All-Motir set — panel 1, unchanged, byte for byte</figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 28px 24px">
+              <div class="step hero">
+                <div class="step-head">
+                  <div class="eyebrow">Your project's code</div>
+                  <h3 class="hero-h">Motir will host your code</h3>
+                  <p class="hero-p">
+                    Your project's code lives with Motir, ready for your agents to start work.
+                  </p>
+                </div>
+                <div class="promise">
+                  <svg class="i lg"><use href="#i-lock" /></svg>
+                  <span>
+                    <b>It's yours.</b> Motir keeps it safe and private — move it to your own GitHub
+                    whenever you want.
+                    <a class="link door" href="#">How moving it works</a>
+                  </span>
+                </div>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>
+            Mixed set — the step IS drawn, with both set-wide sentences SCOPED
+          </figcaption>
+          <div class="shell">
+            <div class="step-pane" style="padding: 28px 24px">
+              <div class="step hero">
+                <div class="step-head">
+                  <div class="eyebrow">Your project's code</div>
+                  <h3 class="hero-h">Motir will host the new code</h3>
+                  <p class="hero-p">
+                    Your project's code lives with Motir, ready for your agents to start work.
+                  </p>
+                </div>
+                <div class="promise">
+                  <svg class="i lg"><use href="#i-lock" /></svg>
+                  <span>
+                    <b>It's yours.</b> Motir keeps the code it hosts safe and private — move it to
+                    your own GitHub whenever you want.
+                    <a class="link door" href="#">How moving it works</a>
+                  </span>
+                </div>
+                <div class="hero-cta">
+                  <button class="btn btn-primary" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+      <p class="panel-note" style="margin-top: 14px">
+        <b>The mixed frame differs from panel 1 in exactly two strings, and in nothing else.</b>
+        <code class="mono">title</code> → <code class="mono">titleMixed</code> (<i
+          >"Motir will host the new code"</i
+        >) and <code class="mono">promise</code> → <code class="mono">promiseMixed</code> (<i
+          >"Motir keeps the code it hosts safe and private"</i
+        >). Both edits are <b>SCOPE, not information</b>: the panel still names no repository, no
+        role, no account, no count and no rows, so nothing about the set's composition reaches the
+        reader, and a project with an all-Motir set sees panel 1 byte for byte. That is the test a
+        scope edit has to pass — and it is why the fix is not a second paragraph explaining the
+        split, which would be v2's mistake in miniature. The honest home for
+        <i>"which repositories does this project have"</i>
+        is the Repositories room, which already splits its sections on
+        <code class="mono">isOrganizationSeedSource</code> — the same predicate, rendered where a
+        reader went looking for it.
+      </p>
+      <p class="panel-note">
+        <b
+          >And the <code class="mono">h2</code> is UNCONDITIONAL in shipped code today, which is why
+          this is a design decision and not a copy tweak.</b
+        >
+        The title element sits outside every <code class="mono">state</code> branch, so
+        <i>"Motir will host your code"</i> is asserted in <code class="mono">working</code>,
+        <code class="mono">ready</code> and <code class="mono">failed</code> alike, for every set.
+        For the settled population that is simply false; for a mixed set it is half true.
+        <b>Both are the same missing scope</b>, and a builder who fixes only the gate leaves the
+        sentence standing — so §2's v6 table reads the four rendered elements one by one, and three
+        of them are false of a repository the organisation owns.
+      </p>
     </div>
   </body>
 </html>

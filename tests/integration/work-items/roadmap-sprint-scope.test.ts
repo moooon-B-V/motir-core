@@ -219,8 +219,15 @@ describe('getProjectRoadmap — service-owned sprint-scope branches', () => {
     const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
       scope: 'sprint',
     });
-    // `levelTotal` rides the same DTO (MOTIR-3490) — an empty level is `0 of 0`.
-    expect(roadmap).toEqual({ nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 });
+    // `levelTotal` rides the same DTO (MOTIR-3490) — an empty level is `0 of 0`;
+    // so does `levelMemberBlockers` (MOTIR-5043), empty for want of a read at all.
+    expect(roadmap).toEqual({
+      nodes: [],
+      edges: [],
+      offLevelBlockers: [],
+      levelMemberBlockers: [],
+      levelTotal: 0,
+    });
   });
 
   it('whole-project parity: scope omitted === scope:project (and both show the epics)', async () => {

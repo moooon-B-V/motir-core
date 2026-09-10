@@ -555,8 +555,16 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // taking a plan id instead would have made the bound a check on
     // caller-supplied data. Its journey is `work-item-plan-approval-route.test.ts`,
     // and the drift guard drives it end to end.)
+    // (`…/pull-requests` joined them in MOTIR-5048 — it DECLARES which pull
+    // request delivers a work item, which is the delivery half of the same act
+    // `…/integration` and `…/implementation` record, and its caller is a RUN.
+    // It hangs off a work item for the reason every member of this group does:
+    // the CARD is what the declaration is ABOUT. Its journey is
+    // `work-item-pull-requests-route.test.ts`, and the drift guard drives it end
+    // to end — so excluding it here hides nothing, exactly as the attachment
+    // note below argues for its own door.)
     const WORK_LOOP_SUBRESOURCES =
-      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval)\//;
+      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval|pull-requests)\//;
     // ⚠️ Story MOTIR-3000's attachment door is excluded for the SAME reason as
     // the two groups above, and the reason is worth stating rather than
     // inheriting: `…/attachments` hangs off a work item because that is what the

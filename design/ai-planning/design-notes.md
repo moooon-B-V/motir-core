@@ -1055,6 +1055,26 @@ Nothing already drawn is redrawn. The three shipped `op` frames, Panel E's level
 view, Part IV's status overline and Part III's attribution rows are all untouched and composed as they
 stand.
 
+> **⚠️ AMENDED 2026-09-10 (MOTIR-5050) — Panel H gains a THIRD frame, `H·v6`: the population that
+> draws NO band.** §4's amendment carries the decision and the predicate;
+> `design/repository-set/design-notes.md` §7b is the design of record for the step itself. Both
+> ai-planning assets that draw the band were re-exported in the same pass, and the two frames whose
+> band still showed the retired `I already have code` secondary were refreshed to the shipped v5 step
+> (one action, no branch — MOTIR-5014).
+>
+> **Re-export, with the exporter's baseline verdict per asset** —
+> `node scripts/render-design-mock.mjs <mock>`, viewport **1200 × 900** at `deviceScaleFactor: 2`:
+>
+> | asset                       | baseline verdict | committed → new         |
+> | --------------------------- | ---------------- | ----------------------- |
+> | `plans-surface.png`         | **EXACT**        | 2400×14950 → 2400×16326 |
+> | `plan-detail-list-view.png` | **EXACT**        | 2400×7360 → 2400×7784   |
+>
+> `EXACT` means the exporter's render of each asset **at `HEAD`** was byte-identical to the committed
+> PNG, so the whole difference between the old export and the new one is this revision's diff and none
+> of it is environment drift. Neither surface ships a `<name>.dark.png`, so one board each is the
+> complete set.
+
 | Surface                                         | Panel | Gates                  |
 | ----------------------------------------------- | ----- | ---------------------- |
 | The **accepted** / **declined** node treatments | **G** | MOTIR-3161             |
@@ -1090,11 +1110,11 @@ bundled and rendered headless off `origin/main` `c57daef8` — the actual compon
 light theme, in the three states below. The harness was deleted before the design lane was run; the
 screenshots are attached to the pull request.
 
-| State                                   | What the render SHOWS (not what the source suggests)                                                                                                                                                                                                                                        |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `planned` (the baseline)                | Four proposal nodes on the level in their three op frames; rail reads **Ready to review · 4 proposed items**, Approve / Decline beneath.                                                                                                                                                    |
-| `approved` (+ a one-row repository set) | The canvas pane is **entirely** the establish step — _"YOUR PROJECT'S CODE / Motir will host your code"_, the it's-yours callout, **Continue** + _I already have code_. Rail reads **Approved · 4 proposed items · Added 4 items to your backlog**. The four cards are nowhere on the page. |
-| `declined`                              | The pane holds the roadmap's own empty state — **"Nothing on the roadmap yet / Work items will appear here as the plan takes shape."** Rail reads **Declined · 0 proposed items**, with the correct outcome line _"Plan declined — your tree was left untouched"_ beneath it.               |
+| State                                                     | What the render SHOWS (not what the source suggests)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `planned` (the baseline)                                  | Four proposal nodes on the level in their three op frames; rail reads **Ready to review · 4 proposed items**, Approve / Decline beneath.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `approved` (+ a one-row repository set **Motir creates**) | The canvas pane is **entirely** the establish step — _"YOUR PROJECT'S CODE / Motir will host your code"_, the it's-yours callout, **Continue** + _I already have code_. Rail reads **Approved · 4 proposed items · Added 4 items to your backlog**. The four cards are nowhere on the page. **⚠️ AMENDED 2026-09-10 (MOTIR-5050) — the parenthesis used to read "(+ a one-row repository set)" and the set it was rendered with was one Motir CREATES. That is one of two populations; see §4's v6 amendment for the other, which this render does not describe.** |
+| `declined`                                                | The pane holds the roadmap's own empty state — **"Nothing on the roadmap yet / Work items will appear here as the plan takes shape."** Rail reads **Declined · 0 proposed items**, with the correct outcome line _"Plan declined — your tree was left untouched"_ beneath it.                                                                                                                                                                                                                                                                                      |
 
 Two things only a render settles, and both shaped the panels below:
 
@@ -1240,6 +1260,35 @@ reasonable when the pane held a spent artifact and is not once it holds a record
 for as long as it is unanswered. The canvas takes the remainder and is **never replaced**. When the step
 reaches its settled state it collapses to its shipped one-line form and the canvas has effectively the
 whole pane — no extra rule needed, because the step's own design already shrinks.
+
+> **⚠️ AMENDED 2026-09-10 (MOTIR-5050) — THE LAST SENTENCE IS FALSE, AND IT IS THE CLAUSE THAT LEFT
+> THIS PART WITH NO STATE FOR A SETTLED SET.** _"The step's own design already shrinks"_ is what made
+> a second rule look unnecessary, and the step does not shrink: a set whose rows are all settled puts
+> `RepositorySetStep` in its **`ready`** arm, which renders the overline, the `<h2>` _"Motir will host
+> your code"_, the ✅ ready line, the 🔒 ownership promise and the access report — four elements at the
+> step's full height, not a one-liner. For a set Motir just CREATED that is correct and is the report
+> MOTIR-5015 specified. **For a set that ARRIVED settled — every row `connected`, because the
+> repositories are the organisation's and onboarding connected them — there is nothing to report and
+> three of those four elements are false.**
+>
+> **The stacking decision above is UNCHANGED and is not what this amendment touches.** Band above,
+> canvas below, never replaced, for every project with code to establish. What is added is the
+> population where the band is **not drawn at all**, and the predicate that decides it:
+>
+> ```
+> drawBand  ⟺  set.rows.some(r => r.state is 'proposed' | 'creating' | 'created' | 'failed')
+> ```
+>
+> so **a set whose every row is `connected` or `skipped` draws no band and the canvas has the whole
+> pane.** `design/repository-set/design-notes.md` **§7b (Panel 9)** is the design of record for it —
+> the element-by-element read of what the shipped step says for that population, why `state` is the
+> discriminator and `set.ownership` cannot be, what the reader is told instead (the rail's own line,
+> and nothing added), and the MIXED set's two scoped strings. Panel H's third frame in
+> `plans-surface.mock.html` draws the absence.
+>
+> **And the shipped gate is a row COUNT, not this predicate** —
+> `app/(authed)/plans/[id]/page.tsx` reads `repoView.set.rows.length > 0` — which is why a person sees
+> the band today. Closing that is **MOTIR-5049**, which this card blocks.
 
 **Nothing inside the step changes.** Panel H moves its container and touches no pixel of its content,
 its copy, its primary, its secondary or its states. MOTIR-1782 keeps every decision it made about what
