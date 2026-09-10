@@ -129,9 +129,18 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
       repoRef: 'moooon/acme',
       providerId: 'github',
       organizationId: workspace.organizationId,
-      projectIds: expect.arrayContaining([projectA.id, projectB.id]),
+      // ⚠️ ONE ANCHOR, NOT A LIST (MOTIR-4652 · Story MOTIR-4642). This used to be
+      // `projectIds: [projectA.id, projectB.id]` — the fan-out's work list, one
+      // container per entry, N byte-identical graphs. The graph is keyed to the
+      // ORGANISATION now, so the projects are not what is being indexed; exactly
+      // one of them is still named, and only to resolve the run credential
+      // motir-ai mints per project. Asserted as "one of the workspace's" rather
+      // than as `projectA.id`, because WHICH one is not a contract.
+      anchorProjectId: expect.any(String),
     });
-    expect(target.indexed && target.projectIds).toHaveLength(2);
+    expect(target.indexed && [projectA.id, projectB.id]).toContain(
+      target.indexed && target.anchorProjectId,
+    );
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/tarball/'))).toHaveLength(0);
 
     // ⚠️ AND THERE IS NO PHASE 2 IN THIS SERVICE ANY MORE (MOTIR-2057). It owned

@@ -135,6 +135,36 @@ become configuration:
 | 10  | **`ProjectRepo.githubRepoId` is `@unique`**                                                                                              | dropped — a repository in two projects is the ordinary case                         |
 | 11  | `GithubRepo.workspaceId` is the repo's tenancy column (MOTIR-1931)                                                                       | the org owns the repository; workspace must not constrain which projects may use it |
 
+### AMENDMENT 2026-09-10 (MOTIR-4642 run) — the disposition of rows 6 and 7
+
+**Row 6 — STRUCK AS VACUOUS.** `GET /v1/code-graph/status` was never built. MOTIR-1765 was archived
+2026-09-07 having produced no commit on any ref, and its parent MOTIR-1754 merged without it. The
+re-keying card (MOTIR-4658) is CANCELLED, and not merely because the route is absent — building it now
+would make the product worse:
+
+- The UI's index freshness comes entirely from motir-core's OWN `GithubRepo` columns
+  (`defaultBranchHeadSha`, `indexedHeadSha`, `indexedAt`, `commitsBehind`), through
+  `codeContextService` → `deriveCodeGraphIndexState`. There is no call to motir-ai in that path and
+  there never was.
+- `GithubRepo` already carries `organizationId` (MOTIR-4649), so that freshness is ALREADY
+  organisation-shaped: two projects of one organisation see one row and one staleness — the same shape
+  as the one shared graph this decision creates. Nothing to re-key.
+- ⚠️ **And the two sources would disagree in the UNSAFE direction.** motir-core stamps
+  `indexedHeadSha` with the head observed when a run STARTS, deliberately, so a push landing mid-run
+  reads `stale`. motir-ai stamps `CodeRepo.indexedAt` at PUBLISH. A status route exposing the latter
+  would answer `indexed` for exactly the graph motir-core reports `stale` — a second, less conservative
+  answer to a question `tests/codeGraph/indexState.test.ts` already asserts must have only ONE
+  implementation. Recorded on MOTIR-4804.
+
+**Row 7 — MET, by MOTIR-4654.** The observation was correct and the test it warned about existed — just
+not in the file this row named. `motir-ai/tests/codeRepoService.test.ts` carried _"is keyed per (project,
+repoRef) — never a shared global graph"_, asserting the same `repoRef` in a different PROJECT gets its own
+isolated row. That is exactly this row's shape: an assertion that would have gone on passing for ever
+after the re-key, for the wrong reason, because two projects of DIFFERENT organisations still cannot see
+each other. MOTIR-4654 inverted it into the two assertions this row asks for — projects of one
+organisation converging on the same row `id`, and two organisations not — each carrying a comment naming
+the card so it is not restored.
+
 **Row 10 blocks the model outright** and is a one-line schema fact rather than a judgement: while
 `githubRepoId` is `@unique`, _"an org admin adds this repository to a second project"_ is
 inexpressible. **Row 7 is the one most likely to be missed**, because the test passes today and will

@@ -258,16 +258,21 @@ describe('the planning-job ENVELOPE', () => {
         },
       ],
     });
-    const web = await addRow(ctx, { name: 'motir-core', role: 'web' });
+    // REALIZED (MOTIR-4653): `context.code` is drawn from the project's set now,
+    // so a row the project merely INTENDS contributes no grounding entry. The
+    // unrealized case is the guard two tests down.
+    const web = await addRow(ctx, { name: 'motir-core', role: 'web', realizedName: 'motir-core' });
 
     await aiGenerationService.startGeneration(ctx, { prompt: 'extend the tracker' });
 
     const [jobKind, , context] = vi.mocked(submitJob).mock.calls[0]!;
     expect(jobKind).toBe('plan');
-    // The WHOLE bag, exact shape. The two repository fields are DIFFERENT things
-    // at different scopes and both are present, unmerged: `code` is the
-    // workspace's grant list (an `owner/name` ref, for code-graph reads),
-    // `repositories` is the project's set (an identity, a role, a state).
+    // The WHOLE bag, exact shape. The two repository fields are DIFFERENT VIEWS
+    // of one set and both are present, unmerged: `code` is the code-graph view
+    // (an `owner/name` ref plus index state, for grounding), `repositories` is the
+    // configuration view (an identity, a role, a state). Since MOTIR-4653 they
+    // are drawn from the same PROJECT set — which is why keeping them distinct is
+    // asserted here rather than assumed.
     expect(context).toEqual({
       prompt: 'extend the tracker',
       generateExplanations: false,
@@ -305,7 +310,10 @@ describe('the planning-job ENVELOPE', () => {
         ],
       },
       repositories: {
-        repos: [{ ref: web, name: 'motir-core', role: 'web', label: null, state: 'proposed' }],
+        // `connected`, not `proposed`: the row is REALIZED (MOTIR-4653), which is
+        // what puts its repository into `context.code` above. `addRow` derives the
+        // state from realization exactly as the establish path does.
+        repos: [{ ref: web, name: 'motir-core', role: 'web', label: null, state: 'connected' }],
       },
     });
   });
@@ -375,11 +383,21 @@ describe('the planning-job ENVELOPE', () => {
     }
   });
 
-  it('leaves the WORKSPACE grant list byte-identical for a job that carried one before', async () => {
-    // The boundary MOTIR-3044 must not cross: `context.code` is MOTIR-1598's and
-    // is not RE-SCOPED here, however tempting the adjacency. (MOTIR-4604 later
-    // widened each entry with that repo's freshness — a different act, and the
-    // set itself is still the workspace's grant list. See the assertion below.)
+  it('keeps `context.code` and `context.repositories` DISTINCT — an unrealized row is in neither grounding', async () => {
+    // ⚠️ RE-EXPRESSED BY MOTIR-4653, and the boundary it guards is UNCHANGED.
+    // It used to read "leaves the WORKSPACE grant list byte-identical", because
+    // `context.code` was MOTIR-1598's workspace grant and the thing MOTIR-3044
+    // forbade was RE-SCOPING it to the project. That re-scoping has now happened,
+    // deliberately, on its own card with its own decision
+    // (`code-graph-index-fan-out.md`, MOTIR-2029) — so the old sentence is no
+    // longer the boundary, and pinning it would pin a model the product left.
+    //
+    // What MOTIR-3044 actually forbade is still forbidden and is still asserted:
+    // the two fields must not be MERGED. They are two VIEWS of one set now — the
+    // code-graph view and the configuration view — and this case proves they stay
+    // distinct where they most easily would not: an UNREALIZED row is a real
+    // member of `context.repositories` and must appear in NEITHER grounding entry,
+    // because it names no host, no branch and no graph.
     const seed = await seedWorkspace();
     const ctx = await seedProject(seed, 'THETA');
     await githubInstallationService.persistInstallation({
@@ -399,8 +417,14 @@ describe('the planning-job ENVELOPE', () => {
         },
       ],
     });
-    // A project row that names something ENTIRELY different from the grant list —
-    // if the two were merged, this is where it would show.
+    // The repository the project actually works on, REALIZED — what `context.code`
+    // is drawn from. Note it is NOT the one the grant above names: that is the
+    // re-scoping this card performed, and asserting it here means the grant list
+    // is demonstrably not what the planner reads any more.
+    await addRow(ctx, { name: 'motir-core', role: 'web', realizedName: 'motir-core' });
+    // …and an UNREALIZED row beside it, naming something entirely different. It
+    // belongs to `context.repositories`; if it ever reaches `context.code` the two
+    // views have been merged, or an intent has been mistaken for a repository.
     await addRow(ctx, { name: 'unrelated-service', role: 'infra' });
 
     await aiGenerationService.startGeneration(ctx, { prompt: 'go' });
@@ -425,12 +449,14 @@ describe('the planning-job ENVELOPE', () => {
       repos: [
         {
           provider: 'github',
-          repoRef: 'moooon/motir-ai',
-          defaultBranch: 'trunk',
+          // The project's REALIZED row — not `moooon/motir-ai`, which the
+          // workspace granted and this project does not work on.
+          repoRef: 'moooon/motir-core',
+          defaultBranch: 'main',
           // `indexed` is the LEDGER fact (MOTIR-4826); the five below are the
-          // freshness join (MOTIR-4604). The grant list names this repository and
-          // the project's set does not, so the join finds nothing and the state is
-          // `never` — never `indexed`, which would claim a currency nothing observed.
+          // freshness join (MOTIR-4604). Nothing has indexed this repository, so
+          // the state is `never` — never `indexed`, which would claim a currency
+          // nothing observed.
           indexed: false,
           indexState: 'never',
           reason: 'never_indexed',

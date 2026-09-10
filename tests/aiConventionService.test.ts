@@ -6,6 +6,7 @@ import type {
   RawConventionSurface,
   RawCodeAuditSurface,
 } from '@/lib/ai/motirAiClient';
+import { linkAllWorkspaceReposIntoProject } from './fixtures/codeContextFixtures';
 
 // The Code-health surface service (MOTIR-926/1663). The motir-ai HTTP client is
 // the one sanctioned boundary mock; the rest — workspace / project / membership —
@@ -564,7 +565,11 @@ describe('aiConventionService — project-admin gate', () => {
   // scoped fan-out, the two typed rejections, and — the one that matters most —
   // that the UNSCOPED call still submits exactly what it submitted before.
 
-  async function connectThreeRepos(workspaceId: string, installationId: string) {
+  async function connectThreeRepos(
+    workspaceId: string,
+    installationId: string,
+    linkInto?: { userId: string; projectId: string },
+  ) {
     await githubInstallationService.persistInstallation({
       workspaceId,
       installation: {
@@ -574,6 +579,13 @@ describe('aiConventionService — project-admin gate', () => {
       },
       repos: THREE_REPOS,
     });
+    // MOTIR-4653 — the reaudit fan-out resolves its repositories from the
+    // PROJECT's configured set, so a caller that wants the project to SEE these
+    // three says so. Optional, because one case below deliberately asserts the
+    // unconfigured answer.
+    if (linkInto) {
+      await linkAllWorkspaceReposIntoProject({ ...linkInto, workspaceId });
+    }
   }
 
   async function connectAndLinkThreeRepos(

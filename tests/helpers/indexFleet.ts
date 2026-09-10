@@ -253,6 +253,22 @@ export async function seedIndexWorkspace(
       archived: false,
     })),
   });
+  // ⚠️ EACH PROJECT IS ALSO GIVEN THE REPOSITORIES (MOTIR-4653). Connecting them
+  // to the WORKSPACE used to be enough for a project to see them: the code-context
+  // resolver read the installation grant. It reads the PROJECT's configured set
+  // now, so a fixture that stops at `persistInstallation` leaves every project
+  // code-BLIND — and the suites downstream of this helper (the first-audit
+  // trigger above all) then report `0 submits` rather than a missing link.
+  //
+  // Every project gets every repo, which is what these fixtures have always
+  // MEANT: `seedIndexWorkspace(slug, N, repos)` describes a workspace of N
+  // projects that all work on the same repositories.
+  //
+  // ⚠️ THROUGH `linkWorkspaceReposToProject`, which is `main`'s helper and not
+  // this card's hand-rolled `addRow` + realize pair. It lands the row in an
+  // ESTABLISHED state, which is what `resolveProjectCodeContext` now filters on —
+  // a fixture that only realized the row would leave every project code-blind
+  // again, one layer down, with the same silent `0 submits` as the symptom.
   for (const projectId of projectIds) {
     await linkWorkspaceReposToProject({
       workspaceId: workspace.id,

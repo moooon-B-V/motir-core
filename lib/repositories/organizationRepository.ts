@@ -53,6 +53,40 @@ export const organizationRepository = {
     return tx.organization.findUnique({ where: { id } });
   },
 
+  /**
+   * Of the organisation ids given, which still have a row — the liveness read
+   * motir-ai's code-graph reconciler subtracts from its own bucket enumeration
+   * (MOTIR-4647). Answers about the ids it is GIVEN and never enumerates, so a
+   * leak can never be larger than what the caller already knew.
+   *
+   * ⚠️ NO HOP TO A CHILD ROW, and that is the substantive difference from
+   * `projectRepository.findLivePairs`. That read asserts the project's workspace
+   * still exists, because a project without one is not a live tenancy. An
+   * organisation is the ROOT tier: it is live because its own row is there, and
+   * an org with zero workspaces and zero projects is a live org that has not
+   * been used yet. Joining anything here would report a real customer `absent`
+   * and delete their graphs.
+   *
+   * ⚠️ `tx` IS REQUIRED, AND REQUIRED IS THE SAFETY PROPERTY — not a layering
+   * formality. `organization` is RLS-protected and the only arm that admits a
+   * cross-tenant read is `organization_system_read`
+   * (`20260817120000_system_admin_read_arms_workspace_organization`), which reads
+   * the `app.system_admin` GUC bound by `withSystemContext` for the life of ONE
+   * transaction. Called on the `db` singleton this method would return ZERO ROWS
+   * AND RAISE NOTHING — every organisation reported `absent`, which is the
+   * delete-everything answer. That migration exists because the project-shaped
+   * read had exactly this bug; taking a required `tx` makes it unreachable here
+   * rather than merely documented.
+   */
+  async findLiveIds(ids: string[], tx: Prisma.TransactionClient): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const rows = await tx.organization.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
   async create(
     data: { name: string; slug: string },
     tx: Prisma.TransactionClient,

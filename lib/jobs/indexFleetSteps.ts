@@ -28,12 +28,13 @@ import type {
 //   step  resolve-target                 DB reads only — UNCHANGED
 //     ↓   (the three no-op verdicts return here, exactly as before)
 //         assert-fleet-configured        the gate, BEFORE anything is spent
-//   for each projectId of target.projectIds:
+//   ONE container, for the ORGANISATION (MOTIR-4652 — this was a fan-out over
+//   every project of the workspace, and the loop is gone):
 //           codeGraphIndexDispatchService.advanceIndexContainer(runId, …, { steps })
-//             step  index-admit:<pid>    the CAP — the whole backoff, memoized once
-//             step  index-boot:<pid>     mint + resolve + provision
+//             step  index-admit:<org>    the CAP — the whole backoff, memoized once
+//             step  index-boot:<org>     mint + resolve + provision
 //                   …then ONE poll, and a DEFER of this very run (MOTIR-3828)
-//             step  index-settle:<pid>   teardown + the typed outcome
+//             step  index-settle:<org>   teardown + the typed outcome
 //   step  cancel-offboarding
 //
 // ⚠️ WHAT THIS FILE USED TO SAY, AND WHY IT NO LONGER SAYS IT (MOTIR-3484).
@@ -306,7 +307,16 @@ async function indexEveryProject(
   // above for why being local is what makes it safe.
   const indexModes: IndexModeRecord[] = [];
 
-  for (const projectId of target.projectIds) {
+  // ⚠️ ONE DISPATCH, NOT A LOOP (MOTIR-4652). The graph belongs to the
+  // ORGANISATION, so a second container for a second project of the same
+  // organisation would produce a byte-identical graph at twice the cost — to the
+  // organisation's index allowance and to Motir's own container time.
+  //
+  // `anchorProjectId` rides along because motir-ai resolves a run credential
+  // through an `AiProject` spine; it selects no work and scopes no graph. See
+  // `codeGraphIndexService`'s `no_projects` note.
+  {
+    const projectId = target.anchorProjectId;
     const dispatchInput = {
       installationId: input.installationId,
       providerId: target.providerId,
@@ -415,7 +425,9 @@ async function finishIndexRun(
   await ctx.step.run('cancel-offboarding', async () => ({
     cancelled: await codeGraphOffboardingService.cancelQuietly({
       coreWorkspaceId: input.workspaceId,
-      coreProjectIds: target.projectIds,
+      // The organisation's anchor — the offboarding queue is still project-keyed
+      // in motir-core (MOTIR-4657 moved motir-ai's side).
+      coreProjectIds: [target.anchorProjectId],
       repoRefs: [target.repoRef],
     }),
   }));
@@ -446,7 +458,9 @@ async function finishIndexRun(
   return {
     indexed: true,
     repoRef: target.repoRef,
-    projectsIndexed: target.projectIds.length,
+    // Always 1 since MOTIR-4652 — one container per (organisation, repoRef). The
+    // field is kept rather than retired; see its doc on `IndexRepoResult`.
+    projectsIndexed: 1,
     ...(coreTimings.length > 0 ? { coreTimings } : {}),
     // MOTIR-4945 — a FIFTH key, spread in on the same terms as the fourth: §6's
     // three fields are untouched, and this one is absent entirely on a run that

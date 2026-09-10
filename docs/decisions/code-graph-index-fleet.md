@@ -237,6 +237,27 @@ path where it is.
   become container count rather than a bigger number in `fly.toml`.
 - No DB credential and no object-storage credential ever enter a container (§4).
 
+### §5.2 — AMENDMENT 2026-09-10 (MOTIR-4652 · MOTIR-4642): the tarball is no longer re-fetched PER PROJECT
+
+This section reasoned about a fan-out that no longer exists. Under the shape it was written for, one
+repository connected in an organisation booted **one container per project of its workspace**, so the
+tarball was fetched — and the graph built, and the snapshot uploaded — once per project, producing
+byte-identical output each time.
+
+**MOTIR-2029 decided against that model and MOTIR-4652 retired it.** There is now ONE index per
+`(organisation, repoRef)`: `codeGraphIndexService.resolveIndexTarget` resolves the repo's workspace to
+its `organizationId` and `indexFleetSteps` dispatches once. The per-project loop is gone from the code.
+
+Nothing in §5's own argument changes — the container still builds, motir-ai is still control plane only,
+the bytes still go container → object storage — but the **units** it quotes are now per organisation
+rather than per project. An organisation with three projects sharing a repository spends one upload, not
+three.
+
+⚠️ **The saving is an INDEX ALLOWANCE and internal COGS.** Indexing is ABSORBED: the allowance is
+included in the organisation's tier and is invisible to the customer, so the cost is real and internal
+rather than customer-facing (MOTIR-4541). The old shape drew that allowance once per project and consumed
+Motir's own container time once per project, for one output.
+
 ### §5.1 — REJECTED: the container calls motir-ai's tarball ingest route, and motir-ai builds
 
 **Pinned, then reversed.** The container would fetch the repo and POST the bytes to
@@ -825,6 +846,41 @@ says the snapshots and caches are then _"rebuildable-only."_ **That sentence is 
 replaces with a decision.** It is not wrong about the engineering; it simply never asked whether
 rebuildable and disposable are the same thing, and nobody had to answer because no code depended on it.
 
+### §14.1a — AMENDMENT 2026-09-10 (MOTIR-4657 · MOTIR-4642): the cascade this section argues from is now the ORGANISATION's, and the argument has to be MADE AGAIN rather than re-pointed
+
+§14.1's finding survives the re-key. Its **sentence** does not, and the difference matters more than it
+looks — which is why this amendment restates the argument instead of substituting a word.
+
+**What the old argument said.** `CodeRepo` hung off `AiProject` with `onDelete: Cascade`. Deleting a
+project therefore destroyed the coordination rows, which are the only inventory of which snapshot keys
+exist, leaving the objects under `codegraph/<aiProjectId>/<repoRef>/<commitSha>.db.gz` reachable only by a
+bucket-wide diff against live **projects**.
+
+**Why substituting "organisation" for "project" would have been wrong.** It would read correctly and
+describe a relation nobody had checked. Three things are different, not one:
+
+1. **The edge is different.** `CodeRepo.aiOrganizationId` is a second FK, added by MOTIR-4650 and
+   cascading from `AiOrganization` — it did not replace `aiProjectId`, it joined it. For the width of the
+   re-key BOTH relations point at the same rows and BOTH cascade, so a project delete still destroys
+   coordination rows even though a project no longer owns a graph. MOTIR-4666 drops the old column in a
+   release of its own; until it does, the inventory has _two_ ways to vanish, not one.
+2. **The prefix is different, and so is what a diff can find.** The key is
+   `codegraph/<aiOrganizationId>/<repoRef>/<commitSha>.db.gz` since MOTIR-4657, and the enumeration that
+   reads it was RENAMED — `listProjectSegments` → `listOrganizationSegments` — precisely because a
+   method whose name says _project_ returning organisations is how the next reader gets it wrong. Both
+   ids are cuids, so nothing downstream could have refused the mismatched pair.
+3. **The blast radius of getting it wrong is different, and it was measured.** Under the old model a
+   mismatched diff found some orphans. Under the new one, a reconciler still resolving segments as
+   projects finds that EVERY segment is an orphan — MOTIR-4646 read production on 2026-09-09 and
+   recorded 2 segments, 2 live, **both orphaned the instant the key space moves**. An applied pass would
+   have deleted every live graph Motir holds.
+
+**So the restated finding:** the coordination row is still the only inventory of which object keys belong
+to a repo, and it can still be destroyed by a cascade — now from either end. What changed is that the
+diff which could recover from that must ask motir-core about ORGANISATIONS
+(`POST /api/internal/ai/live-organizations`, MOTIR-4647), and that the cost of asking the wrong question
+went from partial to total.
+
 ### §14.2 — Why "it is a rebuildable cache, keep it" was rejected
 
 It is the cheaper answer and it is defensible on the engineering: every artifact really can be rebuilt
@@ -890,6 +946,34 @@ defect strictly worse.
 partial run followed by a re-run converges. Offboarding is therefore a **re-runnable sweep keyed by
 (aiProjectId, repoRef)**, never a one-shot fired at the trigger.
 
+#### §14.4a — AMENDMENT 2026-09-10 (MOTIR-4657 · MOTIR-4642): the sweep's key, and the one step that is now a NO-OP
+
+The ORDER is unchanged and is still the load-bearing part. Two things around it changed.
+
+**The key is `(aiOrganizationId, repoRef)`.** `graphSnapshotStore.removeAll`,
+`graphCacheManager.removeLocal` and `codeRepoRepository.deleteByOrgAndRepoRef` all take the organisation
+now, and the per-machine cache path moved with them —
+`<CACHE_DIR>/<layout>/<aiOrganizationId>/<repoRef>/…` (MOTIR-4655, which also versions the layout so the
+project-keyed trees already on disk are swept once rather than stranded for ever; nothing else would ever
+have reclaimed them, because the LRU evicts handles and leaves files).
+
+**⚠️ AND A PROJECT-SCOPED OFFBOARD NOW REMOVES NOTHING.** This is a semantics change, not a rename, and
+it is the one a reader is most likely to miss. Before the re-key, deleting a project deleted its graph —
+right, while the graph was the project's. Now the graph belongs to the organisation, and the same call
+would delete something a SIBLING PROJECT is still reading. The sibling would not error: a read against a
+missing graph returns the empty answer by design, so it would simply plan without code.
+
+So `offboard({ coreWorkspaceId, coreProjectId })` returns
+`skipped: 'project-scope-no-longer-owns-graph'` and removes nothing, reported rather than silent because
+motir-core's retention sweep deletes its queue row on success and "removed nothing, correctly" has to be
+distinguishable from "removed everything" six months later. What DOES remove a graph is
+`offboardOrganization`, and the reconciler drives it against ORGANISATION liveness.
+
+**The trade, stated:** a project delete no longer reclaims anything. Retaining a graph the organisation
+still owns costs storage; deleting one a sibling still reads costs that sibling its code context,
+silently. §14's retention obligation is about the customer's data, and the customer here is the
+organisation — so the obligation is discharged when the organisation goes.
+
 ### §14.5 — The SEAM, pinned
 
 **Trigger → `CodeGraphOffboarding` queue row (motir-core) → `system.code-graph-offboard-sweep` cron
@@ -920,6 +1004,25 @@ terms the product controls.
 be lost. That is what the reconciliation backstop (MOTIR-2169) is for, and it is also the only thing that
 can ever find the graphs the FK cascade has **already** orphaned — the bucket-wide sweep MOTIR-2162 named
 as not existing.
+
+#### §14.5a — AMENDMENT 2026-09-10 (MOTIR-4657 · MOTIR-4642): the backstop subtracts ORGANISATION liveness
+
+§14.5's three properties are unchanged: the queue row is still not foreign-keyed, the clock still lives in
+motir-core, and the queue is still the retry.
+
+What changed is the **backstop's question**. `codeGraphReconcileService` derives deletion scope by
+subtracting a motir-core liveness read from a storage enumeration, and both halves moved together — by
+necessity, in ONE pull request, because a deploy window in which the prefix had moved and the reconciler
+had not is the total-loss window (§14.1a, point 3).
+
+- the enumeration is `listOrganizationSegments` (renamed, not re-pointed);
+- the liveness read is `POST /api/internal/ai/live-organizations` (MOTIR-4647), not
+  `/api/internal/ai/live-projects`.
+
+**The three safety properties this section rests on are unchanged and were re-asserted rather than
+assumed:** `apply` still defaults to `false`; `unknown` is still never `absent`; a liveness read that
+throws still aborts the pass and deletes nothing. The first is now pinned by a test that FINDS a
+candidate and still removes nothing, so it cannot pass by finding nothing.
 
 ### §14.6 — What this does NOT decide, and the card for each
 

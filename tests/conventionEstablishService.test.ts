@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // aiJobsService / aiPreplanService service tests use. The helpers themselves are
 // covered by tenantOrg.test.ts / codeContext.test.ts.
 vi.mock('@/lib/ai/motirAiClient', () => ({ submitJob: vi.fn(), getPreplanState: vi.fn() }));
-vi.mock('@/lib/ai/codeContext', () => ({ resolveCodeContext: vi.fn() }));
+vi.mock('@/lib/ai/codeContext', () => ({ resolveProjectCodeContext: vi.fn() }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
 
 import {
@@ -13,7 +13,7 @@ import {
   platformToStackHint,
 } from '@/lib/services/conventionEstablishService';
 import { submitJob, getPreplanState } from '@/lib/ai/motirAiClient';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 
@@ -51,7 +51,7 @@ describe('platformToStackHint', () => {
 
 describe('conventionEstablishService.establishForFreshProject — FRESH gate', () => {
   it('does NOT submit when the workspace has a connected repo (the migrate path owns the convention)', async () => {
-    vi.mocked(resolveCodeContext).mockResolvedValue({
+    vi.mocked(resolveProjectCodeContext).mockResolvedValue({
       repos: [{ provider: 'github', repoRef: 'acme/app', defaultBranch: 'main', indexed: true }],
     });
 
@@ -69,7 +69,7 @@ describe('conventionEstablishService.establishForFreshProject — FRESH gate', (
 describe('conventionEstablishService.establishForFreshProject — FRESH submit', () => {
   beforeEach(() => {
     // No connected repo → fresh establish-only path.
-    vi.mocked(resolveCodeContext).mockResolvedValue(undefined);
+    vi.mocked(resolveProjectCodeContext).mockResolvedValue(undefined);
     vi.mocked(resolveTenantOrg).mockResolvedValue({
       organizationId: 'org_1',
       isMeta: false,

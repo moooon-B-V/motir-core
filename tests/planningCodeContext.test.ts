@@ -22,7 +22,7 @@ const { resolvePlanningCodeContext, resolveRefreshDisposition } =
   await import('@/lib/ai/codeContext');
 const { createTestWorkspace, createTestProject } = await import('./fixtures');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
-const { projectRepoSetService } = await import('@/lib/services/projectRepoSetService');
+const { linkProjectRepo } = await import('./helpers/projectRepoLink');
 const { truncateAuthTables } = await import('./helpers/db');
 
 const SHA_A = 'a'.repeat(40);
@@ -91,14 +91,25 @@ async function setIndexed(
   });
 }
 
-/** The project's own set row, realized against the connected mirror — what the
- *  code-context read joins on since MOTIR-1767. */
+/** The project's own set row, ESTABLISHED against the connected mirror — what the
+ *  code-context read joins on since MOTIR-1767.
+ *
+ *  ⚠️ `linkProjectRepo`, not `addRow` + a realize: `addRow` records a PROPOSED
+ *  row, and `resolveProjectCodeContext` filters proposals out
+ *  (`isEstablishedState`), so an `addRow`-built fixture leaves the project
+ *  code-blind and every case here reads as an empty answer rather than as a
+ *  missing link. */
 async function link(projectId: string, ctx: { userId: string; workspaceId: string }) {
   const repo = await adminDb.githubRepo.findFirstOrThrow({
     where: { repoId: REPO.providerRepoId },
   });
-  const row = await projectRepoSetService.addRow(projectId, { role: 'web', name: REPO.name }, ctx);
-  await adminDb.projectRepo.update({ where: { id: row.id }, data: { githubRepoId: repo.id } });
+  await linkProjectRepo({
+    workspaceId: ctx.workspaceId,
+    projectId,
+    githubRepoId: repo.id,
+    name: REPO.name,
+    role: 'web',
+  });
 }
 
 beforeEach(async () => {
@@ -227,6 +238,85 @@ describe('resolveRefreshDisposition — a TOTAL mapping, two arms shipping unrea
 
 // ── The producer, end to end ────────────────────────────────────────────────
 describe('resolvePlanningCodeContext', () => {
+  it('a STALE graph whose INSTALLATION is gone enqueues nothing, and does not throw', async () => {
+    // ⚠️ THE `installationIdForWorkspace` NULL PATH, and the `if (installationId)`
+    // arm behind it — the state left when the GitHub App is uninstalled while the
+    // repository rows it created survive. The graph is stale, so the read WANTS
+    // to enqueue a refresh; there is no installation to mint a token from, so it
+    // cannot. It must say so quietly rather than throw, because this runs on the
+    // PLANNING SUBMIT path and a person's plan must not fail over a connection
+    // somebody removed.
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await connect(workspace.id);
+    await setHead(SHA_B);
+    await setIndexed(workspace.id, SHA_A);
+    await link(project.id, { userId: owner.id, workspaceId: workspace.id });
+    // The installation stops belonging to THIS workspace while its mirror rows
+    // stay — which is the state that matters and the one a delete cannot
+    // reproduce (deleting the installation cascades the repository away, and then
+    // there is no repository left to report). `GithubRepo.workspaceId` is the
+    // repository's own tenancy column since MOTIR-1931, so the row survives the
+    // installation moving.
+    const { workspace: elsewhere } = await createTestWorkspace();
+    await adminDb.githubInstallation.updateMany({
+      where: { workspaceId: workspace.id },
+      data: { workspaceId: elsewhere.id },
+    });
+
+    const code = await resolvePlanningCodeContext({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+    });
+
+    // The repository is still reported — it is still the project's — and it is
+    // still honestly stale.
+    expect(code?.repos[0]).toMatchObject({ repoRef: 'acme/web', indexState: 'stale' });
+    // But nothing was enqueued: there is no installation to act through.
+    expect(enqueueMock).not.toHaveBeenCalled();
+  });
+
+  it('an UNREGISTERED provider cannot be indexed, and says so instead of throwing on the submit path', async () => {
+    // ⚠️ THE `catch` IN `resolvePlanningCodeContext`, which nothing reached.
+    // `getGitProvider` THROWS on a provider id no provider registered, and this
+    // read runs on the PLANNING SUBMIT path — so the throw would fail a person's
+    // plan over a repository row nobody can index anyway. The code answers
+    // `canIndex = false` instead, and the disposition then reports
+    // `provider_unsupported`, which is the same verdict a registered-but-
+    // incapable host gets.
+    //
+    // `resolveRefreshDisposition` is already asserted directly with
+    // `canIndex: false` further up this file; that pins the DISPOSITION and
+    // cannot reach the computation of `canIndex`, which is the branch here.
+    const { workspace, owner } = await createTestWorkspace();
+    const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });
+    await connect(workspace.id);
+    // A provider string no provider is registered under — the row shape a
+    // future host, or a bad backfill, would leave behind.
+    await adminDb.githubRepo.updateMany({
+      where: { repoId: REPO.providerRepoId },
+      data: { provider: 'bitbucket' },
+    });
+    await setHead(SHA_B);
+    await setIndexed(workspace.id, SHA_A);
+    await link(project.id, { userId: owner.id, workspaceId: workspace.id });
+
+    const code = await resolvePlanningCodeContext({
+      userId: owner.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+    });
+
+    expect(code?.repos[0]).toMatchObject({
+      repoRef: 'acme/web',
+      reason: 'provider_unsupported',
+      refreshInFlight: false,
+    });
+    // …and NOTHING was enqueued: there is no container that could index it.
+    expect(enqueueMock).not.toHaveBeenCalled();
+  });
+
   it('a STALE graph enqueues a refresh THROUGH the shipped debounced path, and says so', async () => {
     const { workspace, owner } = await createTestWorkspace();
     const project = await createTestProject({ workspaceId: workspace.id, actorUserId: owner.id });

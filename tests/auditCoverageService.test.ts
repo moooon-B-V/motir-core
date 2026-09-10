@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
 import { adminDb } from './helpers/adminDb';
+import { linkAllWorkspaceReposIntoProject } from './fixtures/codeContextFixtures';
 
 // The audit-COVERAGE read (MOTIR-2248) — "which connected repos have no derived
 // audit". The motir-ai HTTP client is the one sanctioned boundary mock; the
@@ -76,6 +77,14 @@ async function projectWithThreeRepos(installationId: string) {
     workspaceId: workspace.id,
     installation: { installationId, accountLogin: 'moooon', accountType: 'Organization' },
     repos: THREE_REPOS,
+  });
+  // MOTIR-4653 — connecting to the workspace is no longer enough: the coverage
+  // read resolves its repositories from the PROJECT's configured set, so the
+  // fixture states that this project works on all three.
+  await linkAllWorkspaceReposIntoProject({
+    userId: owner.id,
+    workspaceId: workspace.id,
+    projectId: project.id,
   });
   return { workspace, owner, project };
 }
