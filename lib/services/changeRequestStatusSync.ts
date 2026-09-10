@@ -9,6 +9,7 @@ import { changeRequestNoun } from '@/lib/git/labels';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
+  deliveryMemberState,
   deliverySetShortfall,
   hasDeliverySetShortfall,
   EMPTY_DELIVERY_SHORTFALL,
@@ -394,7 +395,12 @@ export async function syncChangeRequestStatus(
               (await workItemDeliveryRepository.listByWorkItem(item.id, tx)).map((d) => ({
                 repoLabel: `${d.repo.owner}/${d.repo.name}`,
                 number: d.pullRequest.number,
-                merged: d.pullRequest.merged,
+                // ⚠️ THE COLLAPSE, not the raw `merged` flag (MOTIR-5004). The
+                // stored row keeps `state` and `merged` apart; passing only the
+                // boolean threw away the difference between a pull request that
+                // has not merged YET and one that was CLOSED and never will, and
+                // the gate then held the card for the latter for ever.
+                state: deliveryMemberState(d.pullRequest),
                 baseRef: d.pullRequest.baseRef,
                 defaultBranch: d.repo.defaultBranch,
               })),
@@ -947,7 +953,21 @@ function missingArtifactEvidenceCommentBody(args: { noun: string; number: number
  *  whether to go and merge something or to fix the card's repository set.
  *
  *  Like both of its siblings it describes what did NOT happen rather than asserting
- *  a status: the sync leaves the item exactly where it was. */
+ *  a status: the sync leaves the item exactly where it was.
+ *
+ *  ⚠️ IT IS SILENT ABOUT AN ABANDONED DELIVERY, AND THAT IS A DECISION (MOTIR-5004).
+ *  A closed, unmerged pull request no longer reaches any of the three lists, so it
+ *  cannot be named here — and it should not be: this note's job is to say what the
+ *  card is WAITING FOR, and the card is not waiting for it. Naming it would add a
+ *  line to every note that cannot be acted on. The full delivery list, each row with
+ *  its own state, is the Development section's job. Asserted in
+ *  `changeRequestDeliverySetGate.test.ts` so the silence is a pinned decision rather
+ *  than an omission a later reader has to guess at.
+ *
+ *  ⚠️ AND IT USED TO SAY "STILL OPEN" ABOUT A CLOSED PULL REQUEST, which is the
+ *  defect MOTIR-5004 fixed one layer down. The sentence is unchanged; what changed is
+ *  that `outstanding` now only ever contains genuinely open deliveries, so the words
+ *  are true of every member it can be handed. */
 function incompleteDeliverySetCommentBody(args: {
   noun: string;
   number: number;
