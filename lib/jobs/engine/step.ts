@@ -33,6 +33,32 @@ import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 // So `roundTrip` is applied to the value we return, not only to the value we
 // store. One behaviour, both paths.
 //
+// ⚠️ AND THE ID NAMES THE RESULT'S SHAPE, NOT ONLY ITS SUBJECT — CHANGE WHAT A
+// STEP RETURNS AND YOU CHANGE ITS ID, IN THE SAME COMMIT
+// (`docs/decisions/job-queue-foundation.md` §13.6). The sentence above has a
+// second consequence, and only the first of the two was ever written down. A
+// resumed run skips work it already did — that is documented at length. It also
+// replays the result the OLD REVISION wrote into the code reading it NOW, and
+// nothing sees that: the reader's static type is the new one, the value is the
+// old one, and the boundary between them is JSON, so `tsc` is checking two ends
+// of an interface that are a deploy apart.
+//
+// MOTIR-4652 replaced `resolve-target`'s `projectIds: string[]` with
+// `anchorProjectId: string` and kept the id. A supervision resumed across that
+// deploy, `JSON.stringify` dropped the absent field, and every code-graph
+// refresh in the estate died at motir-ai's credential mint — each run writing a
+// `succeeded` ledger row, because consuming a stale memo is not failing a step
+// (MOTIR-5020). The window is a DEPLOY, and every deploy has one.
+//
+// Two remedies, and which one you may use is decided by the test below rather
+// than by preference: a step that only READS may take a NEW ID, which makes the
+// stale row unreadable; a step that PROVISIONS may not (a new `index-boot:` id
+// bills a second container instead of re-attaching), so it keeps its id and
+// NARROWS the replayed value where it is read —
+// `requireCurrentIndexTarget` in `lib/services/codeGraphIndexService.ts`.
+// `tests/jobs/step-result-shape-guard.test.ts` pins every step's result shape
+// by id and fails on a shape that moves while its id does not.
+//
 // ⚠️ A STEP THAT THROWS IS NOT MEMOIZED. Persisting a failure would freeze a
 // transient error permanently — the retry would "replay" the exception forever
 // and the run could never recover. The `create` happens only after `fn` has

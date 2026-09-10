@@ -7877,7 +7877,8 @@
       "awaiting": "等待处理",
       "recording": "正在记录",
       "approved": "已批准",
-      "changesRequested": "已要求修改"
+      "changesRequested": "已要求修改",
+      "withdrawn": "已撤回"
     },
     "verb": {
       "approve": "批准",
@@ -7892,7 +7893,16 @@
     },
     "record": {
       "unattributed": "已无法追溯到具体成员",
-      "willRepublish": "代理将发布新版本"
+      "willRepublish": "代理将发布新版本",
+      "version": "版本 {version}",
+      "filesKept": "已保留文件",
+      "filesNotKept": "未保留文件"
+    },
+    "withdrawn": {
+      "port": "已发布更新的设计，因此该问题已被撤回。",
+      "portCite": "没有人对它做出决定。当前版本见上方。",
+      "record": "无决定 · 无归属人",
+      "at": "撤回于 {when}"
     },
     "refusal": {
       "alreadyDecided": {

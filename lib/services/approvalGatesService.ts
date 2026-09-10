@@ -123,8 +123,74 @@ async function actorLabel(userId: string, tx: Prisma.TransactionClient): Promise
 
 export const approvalGatesService = {
   /**
+   * The gate of one KIND the approval FRAME renders, WHATEVER STATE IT IS IN,
+   * plus whether this actor may decide it (Subtask MOTIR-5033).
+   *
+   * ⚠️ THIS IS THE FRAME'S READ NOW, AND `getAwaitingForWorkItem` BELOW IS THE
+   * NARROWER ONE. A decided gate leaves the awaiting set by design (that is
+   * what deciding it means), so a frame reading only the awaiting set lost
+   * states `E`, `F` and `G` at the next page load: the record of who decided,
+   * when, and on WHICH bytes was written and immutable, and unreachable from
+   * the card it was written about. The pin §6c keeps the approved files for is
+   * then invisible, which is the fastest way for a pin to be tidied away by
+   * somebody reclaiming storage.
+   *
+   * ⚠️ A LIVE QUESTION STILL WINS — the repository's ordering, not this
+   * service's choice. A card approved on Monday and republished on Tuesday
+   * holds three gates and exactly one of them can be acted on; showing the
+   * decided one because it is newer would ask a reader to admire a receipt
+   * while a question waits underneath it.
+   *
+   * ⚠️ `canDecide` IS COMPUTED THE SAME WAY IN BOTH STATES, and it is not
+   * redundant on a decided gate: the frame renders no verbs there (a decided
+   * gate is immutable — ADR §6a), so the flag is the AUTHORITY answer the
+   * caller may use for anything else it draws, and the verb-gating is the
+   * frame's own.
+   *
+   * ⚠️ NO LOCK AND NO TRANSACTION OF ITS OWN. This is a render read: the
+   * decision it feeds re-derives every field under the lock in `decide` below,
+   * and nothing here may be carried into that write.
+   */
+  async getForWorkItem(
+    input: { workItemId: string; kind: ApprovalGateKindDTO },
+    ctx: ServiceContext,
+  ): Promise<WorkItemGateRead> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(input.workItemId, tx);
+      // A cross-workspace row is indistinguishable from one that never existed,
+      // exactly as the decide door has it — no existence leak through a read.
+      if (!item || item.workspaceId !== ctx.workspaceId) return { gate: null, canDecide: false };
+
+      const row = await approvalGateRepository.findLatestByWorkItem(
+        input.workItemId,
+        input.kind,
+        tx,
+      );
+      if (!row) return { gate: null, canDecide: false };
+
+      // The SAME composition the decide door applies, and composed the same way
+      // — the admin arm is ASKED of `projectAccessService`, never derived here
+      // (the second-policy-path rule this service already records). A surface
+      // that derived its own answer would draw verbs the door then refuses.
+      const canDecide =
+        item.assigneeId === ctx.userId ||
+        item.reporterId === ctx.userId ||
+        (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
+
+      return { gate: toApprovalGateDto(row), canDecide };
+    });
+  },
+
+  /**
    * The AWAITING gate of one KIND on one work item, plus whether this actor may
-   * decide it — the read the approval FRAME renders from (Subtask MOTIR-4792).
+   * decide it (Subtask MOTIR-4792).
+   *
+   * ⚠️ NARROWER THAN `getForWorkItem` ABOVE, AND STILL A DIFFERENT QUESTION:
+   * *what is somebody being ASKED?* rather than *what does the frame show?* A
+   * surface that lists outstanding work — the Approvals tab, a routing read —
+   * wants this one, because a decided gate is not something anybody is waiting
+   * on. It is expressed OVER the general read rather than beside it, so the two
+   * cannot drift about the authority composition or the existence leak.
    *
    * ⚠️ SCOPED BY KIND, and that is not a convenience. A card carrying a
    * repository SET legitimately holds SEVERAL simultaneous awaiting gates — ADR
@@ -145,27 +211,12 @@ export const approvalGatesService = {
     input: { workItemId: string; kind: ApprovalGateKindDTO },
     ctx: ServiceContext,
   ): Promise<WorkItemGateRead> {
-    return withWorkspaceContext(ctx, async (tx) => {
-      const item = await workItemRepository.findById(input.workItemId, tx);
-      // A cross-workspace row is indistinguishable from one that never existed,
-      // exactly as the decide door has it — no existence leak through a read.
-      if (!item || item.workspaceId !== ctx.workspaceId) return { gate: null, canDecide: false };
-
-      const gates = await approvalGateRepository.findAwaitingByWorkItem(input.workItemId, tx);
-      const row = gates.find((g) => g.kind === input.kind) ?? null;
-      if (!row) return { gate: null, canDecide: false };
-
-      // The SAME composition the decide door applies, and composed the same way
-      // — the admin arm is ASKED of `projectAccessService`, never derived here
-      // (the second-policy-path rule this service already records). A surface
-      // that derived its own answer would draw verbs the door then refuses.
-      const canDecide =
-        item.assigneeId === ctx.userId ||
-        item.reporterId === ctx.userId ||
-        (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
-
-      return { gate: toApprovalGateDto(row), canDecide };
-    });
+    const read = await this.getForWorkItem(input, ctx);
+    // The general read returns the awaiting gate FIRST when one exists, so a
+    // non-awaiting answer here means this kind has no live question — never
+    // that one was hidden behind a decided row.
+    if (read.gate?.state !== 'awaiting') return { gate: null, canDecide: false };
+    return read;
   },
 
   /**

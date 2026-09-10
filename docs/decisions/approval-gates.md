@@ -46,6 +46,14 @@
   **§8 is the one to read first.** It is the discriminator the other five
   amendments are consequences of.
 
+- **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
+  landed, and **_What SHIPPED — the dated close-out_** below records the three
+  places the implementation diverged from this record, plus what has NOT shipped
+  so this record's silence is not read as delivery. **Read it before building
+  against any section here:** §1's registry shape, §8's Workflow B status write
+  and §6a's routing field each say something the code deliberately does
+  differently.
+
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `acceptance-video.md` / `design-result.md` /
 > `acceptance-receipt-lifecycle.md`): a decision record is a markdown file under
@@ -927,6 +935,109 @@ repositories produce no preview has two paths rather than three, and says so.
 > - **A coding card's deliverable grows a HOW TO TEST section** (§9), written onto
 >   the work item. That is an authoring obligation on every card that produces a
 >   pull request, and it is what the approval port renders.
+
+## What SHIPPED — the dated close-out (MOTIR-4795, 2026-09-10)
+
+Read on `origin/main` @ `d4981d354`, against the code MOTIR-4788 (the record),
+MOTIR-4790 (the decide door and its registry), MOTIR-4792 (the frame), MOTIR-4912
+(the audit columns) and MOTIR-4913 (retention) landed.
+
+**Most of this record shipped as decided**, and where it did the code says so
+itself: §1's registration table, §2's routing and its amended authority rule,
+§6a's audit set, §6b's four states and its `(work_item_id, kind, subject_id)`
+partial unique index over `awaiting`, §6c's pin, §6d's accumulate-don't-replace,
+and §8's discriminator — read from the delivery rows exactly as §8 says, in
+`designResultHandler.approve`. **§6b's and §6c's own SHIPPED notes above carry
+the two clauses whose mechanism changed while they were being built**, including
+the finding that the MOTIR-4911 amendment's restatement of §6c's predicate was
+not implementable; they are not restated here.
+
+**Three places the implementation DIVERGED, and each is a decision rather than a
+shortfall:**
+
+### 1 · §1 and Consequences — the registry is total over the REGISTERED half, and there are THREE holes, not one
+
+§1 says the registry is `Record<ApprovalGateKind, GateHandler>`, and Consequences
+names ONE deliberate hole, _"where `pull_request_merge`'s handler goes"_. Both
+predate MOTIR-4911's amendment, which added `decision_approval` and split the
+pull-request kind in two — so the enum has **four** members and this build
+registers **one**.
+
+A `Record` over the whole enum cannot express that: it would not compile with
+three handlers missing. What shipped (`lib/approvalGates/registry.ts`) is
+`Record<RegisteredGateKind, GateHandler>` plus a declared
+`UnregisteredGateKind = Exclude<ApprovalGateKind, RegisteredGateKind>` and a
+`UNREGISTERED_GATE_KINDS` tuple asserted, at the type level, to enumerate it
+exactly.
+
+**The guarantee §1 asks for is preserved and is strictly stronger:** a new enum
+member fails the build until it is CLASSIFIED (registered, or named as a hole),
+and promoting a kind fails the build until its handler exists. The obvious
+alternative — `Record<ApprovalGateKind, GateHandler | null>` — was considered and
+rejected in the file itself, because `null` is a value, so
+`decision_approval: null` compiles silently and the hole stops being a decision
+anybody made.
+
+### 2 · §8's Workflow B — the design gate writes NO status when a pull request is open. It does not write `approved`
+
+§3's amendment and §8's Workflow B land such a card in the **`approved`
+work-item status**. That status does not exist:
+`lib/workflows/defaultWorkflow.ts` carries eight statuses — `todo`, `blocked`,
+`in_progress`, `implemented`, `planning`, `in_review`, `done`, `cancelled` — and
+no `approved`, and the live tenant's own project workflow carries the same eight.
+§6b's amendment already says the migration is a sibling story's; that sibling is
+**MOTIR-4905**, still `todo`.
+
+So `designResultGateHandler.approve` returns
+`{ statusWritten: null, statusDeferredReason: 'merge_writes_done' }` in that arm.
+Writing the status the ADR names would resolve to `UnknownStatusError` on every
+request that reached it.
+
+**The invariant is untouched, which is why this is a divergence in the WRITE and
+not in the model:** `done` still has exactly one writer, and in this arm it is
+the merge webhook. What is missing is only the intermediate place to pause. When
+MOTIR-4905 ships, the arm gains one `applyStatusTransition` call and nothing else
+moves.
+
+**⚠️ And this arm is not the ordinary path for `design_result` at all.** §1's
+amendment keys the kind to _a design with no pull request_; a design that opened
+one is Workflow B and takes a `pull_request_approval` gate, which this build
+leaves as a registry hole. The arm exists because a gate is created when the
+subject is PUBLISHED and the question is asked at DECISION time — a pull request
+can appear in between — so a door that assumed its own kind's precondition still
+held would write `done` over work that had not merged.
+
+### 3 · §6a — `routedToId` carries NO surviving label, and `decidedById` does
+
+§6a's table asks for _who it was ROUTED to_ and _who decided, surviving their
+departure_ as two separate rows, and says nothing about whether the first also
+needs to survive. Both columns shipped `onDelete: SetNull`; only `decidedById`
+gained the denormalised `decidedByLabel` beside it.
+
+That is deliberate. The harm §6a names for the routing field is the ROUTING
+MOVING — the assignee can change after the gate is created, so the live card
+cannot answer who the product actually ASKED — and a deletion does not cause it.
+The attribution the audit is built around is the DECIDER's, and a null there
+already means something else and something worse: §6b's `superseded` uses exactly
+that shape to mean _the question was withdrawn and nobody decided it_.
+
+---
+
+**What has NOT shipped**, so that this record's silence is not read as delivery:
+the **Approvals tab** (gates are decided on the work item's own page), the
+**merge gate** and everything in §4, **`prMergeMode`** and everything in §7 —
+including the rename and the tier move, which are still pending, so
+`Workspace.subtaskPrMergeMode` stands as it did — the **`decision_approval`** and
+**`pull_request_approval`** handlers, §9's HOW TO TEST section as a rendered
+port, and two states of the frame itself (MOTIR-5032's port floor / ceiling /
+Expand and its `X` state; MOTIR-5033's decided and superseded states). The
+user-facing page carries the same list in the user's own words —
+[`docs/approval-gates.md`](../approval-gates.md) § _What does not exist yet_.
+
+**Consequences' last pointer is discharged:** _"`design-result.md` §7 is amended
+by this record's pull request"_ — it was, by MOTIR-4786, and twice more since
+(MOTIR-4911's re-keying and MOTIR-4913's correction of it). Nothing further is
+owed there.
 
 ### Deliberately NOT decided here
 

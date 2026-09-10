@@ -224,6 +224,7 @@ export async function LateUpperSections({
             isDesignCard={r.isDesignCard}
             gate={r.designGate.gate}
             canDecide={r.designGate.canDecide}
+            subject={r.designGate.subject}
             itemIdentifier={itemIdentifier}
           />
         </ContentSectionCard>

@@ -12,6 +12,7 @@ import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
 import type { AttachmentsPageDTO } from '@/lib/dto/attachments';
+import type { DesignGateSubjectDTO } from '@/lib/dto/designEvidence';
 import type { ActivityTab } from '@/lib/activity/tab';
 
 // The item page's LATE-TIER reads, as ONE promise (Subtask MOTIR-3436).
@@ -59,12 +60,22 @@ export interface LateReads {
   designEvidence: Awaited<ReturnType<typeof designEvidenceService.getCurrentForWorkItem>>;
   isDesignCard: boolean;
   /**
-   * The AWAITING `design_result` approval gate for this card, and whether THIS
-   * actor may decide it (Story MOTIR-4778 · Subtask MOTIR-4792). `gate: null`
-   * when nothing is pending, which is the ordinary case and renders exactly what
-   * the section rendered before the frame existed.
+   * The `design_result` approval gate for this card WHATEVER ITS STATE, whether
+   * THIS actor may decide it, and — once it is decided — the version it was
+   * decided ABOUT (Story MOTIR-4778 · Subtasks MOTIR-4792, MOTIR-5033).
+   * `gate: null` when the card has never had one, which is the ordinary case
+   * and renders exactly what the section rendered before the frame existed.
+   *
+   * ⚠️ `subject` IS READ FROM THE GATE, NOT FROM THE CARD, and that is the
+   * whole of state `E`. `designEvidence` above is the CURRENT design; a decided
+   * gate is about the bytes its decider was looking at, and a republish makes a
+   * different row current. Feeding the port the current row would silently
+   * re-point a finished decision at a version nobody approved — and the screen
+   * would look completely right.
    */
-  designGate: Awaited<ReturnType<typeof approvalGatesService.getAwaitingForWorkItem>>;
+  designGate: Awaited<ReturnType<typeof approvalGatesService.getForWorkItem>> & {
+    subject: DesignGateSubjectDTO | null;
+  };
   /**
    * This card's runs, newest first (MOTIR-1796). `null` on a failed read — the
    * section renders its own state, per this module's containment rule.
@@ -164,12 +175,28 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       // cannot act on.
       (async () => {
         try {
-          return await approvalGatesService.getAwaitingForWorkItem(
+          const read = await approvalGatesService.getForWorkItem(
             { workItemId: itemId, kind: 'design_result' },
             ctx,
           );
+          // The subject is read ONLY for a DECIDED gate, and the two states it
+          // is skipped for are skipped for opposite reasons. `awaiting` renders
+          // the CURRENT design as its port — that is the question — so the
+          // pinned row would be the same row and the read is waste.
+          // `superseded` renders a DEAD port that shows no subject at all, so
+          // fetching one would be a query for something nothing draws.
+          const decided =
+            read.gate?.state === 'approved' || read.gate?.state === 'changes_requested';
+          const subject =
+            decided && read.gate
+              ? await designEvidenceService.getForGateSubject(
+                  { workItemId: itemId, subjectId: read.gate.subjectId },
+                  ctx,
+                )
+              : null;
+          return { ...read, subject };
         } catch {
-          return { gate: null, canDecide: false };
+          return { gate: null, canDecide: false, subject: null };
         }
       })(),
       (async () => {
