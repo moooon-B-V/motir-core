@@ -5,9 +5,11 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { PlanItemNode } from '@/components/planning/PlanItemNode';
 import { WorkItemNode } from '@/components/planning/WorkItemNode';
 import { mergePlanLevel, proposalsAtLevel } from '@/components/planning/planLevel';
+import { buildWorkItemLevel } from '@/components/planning/workItemLevel';
 import { arrivalLevel } from '@/components/planning/PlanReviewCanvas';
 import type { PlanCanvasLevel } from '@/components/planning/planLevel';
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
+import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 
 // Component tests for the plan-detail op treatments (Subtask 7.4.5 / MOTIR-847)
 // under happy-dom. The DTO assembly is covered by the real-DB
@@ -1084,5 +1086,166 @@ describe('mergePlanLevel — a RE-PARENTED card’s committed edges', () => {
     );
 
     expect(level.deps).toEqual([]);
+  });
+});
+
+// ── A BLOCKER THE PLAN MOVES ONTO THE LEVEL (bug MOTIR-4952) ────────────────
+//
+// The block above is the same plan shape with the endpoints the other way round,
+// and it fails differently: not by omission, but by drawing the wrong thing.
+//
+// There the plan re-parents the BLOCKED card, whose committed edges reach no
+// carrier at all. Here it re-parents the BLOCKER, and the edge is already in
+// `committed.deps` — correctly derived, and wrong one step later. `buildWorkItemLevel`
+// asked *is the blocker among this level's children?*, got a truthful NO, and
+// applied the whole cross-story treatment: a red `cross` arrow, the `crossBlocked`
+// ring on the dependent, and a GHOST ANCHOR standing in for the blocker. Then
+// `mergePlanLevel` put the blocker on the level — re-skinning that very anchor,
+// because its node id IS the blocker's work-item id — and revisited none of it.
+//
+// ⚠️ THIS ONE FAILS TOWARD FALSE ALARM, which is the mirror of MOTIR-4951's bias
+// and just as misleading. `cross` is not a neutral skin: this module's own comment
+// calls it *"the CROSS-STORY tangle (a bad plan)"*. So the surface a plan is
+// approved from raised its bad-plan flag in the one case where the plan's whole
+// purpose is to REMOVE that condition by moving the blocker in.
+//
+// The repair is at the SOURCE rather than in `mergePlanLevel`, because two of the
+// three effects are unreachable downstream: the ring is baked into the dependent's
+// rendered `content`, and the anchor has already been minted. Told which blockers
+// are arriving, the builder emits none of the three, and `mergePlanLevel`'s ordinary
+// proposal push supplies the node from the proposal itself.
+describe('buildWorkItemLevel — a blocker the plan MOVES ONTO this level', () => {
+  function level(over: Partial<RoadmapLevelData> = {}): RoadmapLevelData {
+    return {
+      items: [
+        {
+          id: 'wi_committed',
+          parentId: 'parent_1',
+          identifier: 'MOTIR-1',
+          title: 'A committed child',
+          kind: 'subtask',
+          status: 'todo',
+          hasChildren: false,
+        },
+      ],
+      edges: [{ blockedId: 'wi_committed', blockerId: 'wi_relocated' }],
+      offLevelBlockers: [
+        {
+          id: 'wi_relocated',
+          identifier: 'MOTIR-2',
+          title: 'The blocker the plan moves in',
+          parentTitle: null,
+          isDone: false,
+        },
+      ],
+      ...over,
+    };
+  }
+
+  /** The `modify` that relocates the blocker onto `parent_1`. */
+  function relocating(status: string | null = 'todo'): PlanReviewItemDto {
+    return item({
+      planItemId: 'p_relocated',
+      nodeId: 'wi_relocated',
+      op: 'modify',
+      identifier: 'MOTIR-2',
+      title: 'The blocker the plan moves in',
+      parentNodeId: 'parent_1',
+      status,
+    });
+  }
+
+  it('draws the committed edge WITHIN the level, not as the cross-story tangle', () => {
+    const merged = mergePlanLevel(
+      buildWorkItemLevel(level(), {
+        arrivingBlockers: new Map([['wi_relocated', false]]),
+      }),
+      [relocating()],
+      'parent_1',
+    );
+
+    expect(merged.nodes.map((n) => n.id)).toEqual(['wi_committed', 'wi_relocated']);
+    expect(merged.deps).toEqual([{ from: 'wi_relocated', to: 'wi_committed', variant: 'pending' }]);
+  });
+
+  it('draws it `firm` when the relocating blocker is done — the within-level rule', () => {
+    // Status-derived, exactly as every other committed edge is, so the arrow the
+    // reviewer sees before approve is the arrow the tree draws after it.
+    const built = buildWorkItemLevel(level(), {
+      arrivingBlockers: new Map([['wi_relocated', true]]),
+    });
+
+    expect(built.deps).toEqual([{ from: 'wi_relocated', to: 'wi_committed', variant: 'firm' }]);
+  });
+
+  it('leaves the dependent WITHOUT the off-level ring, and mints no ghost anchor', () => {
+    // The two effects `mergePlanLevel` cannot reach: `crossBlocked` is baked into
+    // the dependent's rendered content, and the anchor is a node that already
+    // exists by the time the merge runs. Neither is emitted at all now — the only
+    // node the builder returns is the committed child, and the blocker's node
+    // arrives from the proposal.
+    const built = buildWorkItemLevel(level(), {
+      arrivingBlockers: new Map([['wi_relocated', false]]),
+    });
+
+    expect(built.nodes.map((n) => n.id)).toEqual(['wi_committed']);
+    renderWithIntl(<>{built.nodes[0]!.content}</>);
+    expect(screen.queryByTestId('cross-blocked-flag')).toBeNull();
+
+    // …and the node the reviewer ends up with is the PROPOSAL's, not a re-skinned
+    // anchor: it carries the plan's parent and its own search text, where the
+    // anchor was minted `parentId: null` with the stub's.
+    const merged = mergePlanLevel(built, [relocating()], 'parent_1');
+    const node = merged.nodes.find((n) => n.id === 'wi_relocated')!;
+    expect(node.parentId).toBe('parent_1');
+    expect(node.searchText).toBe('MOTIR-2 The blocker the plan moves in');
+  });
+
+  it('leaves a blocker that genuinely STAYS off the level alone — cross, ring and anchor', () => {
+    // The control criterion 2 asks for. The narrowing keys on the blocker being a
+    // proposal AT THIS LEVEL, never on a node with that id being present: the
+    // ghost anchor has always carried the blocker's own work-item id, so a
+    // presence test would have silenced every cross-story edge on the canvas.
+    const built = buildWorkItemLevel(level());
+
+    expect(built.deps).toEqual([{ from: 'wi_relocated', to: 'wi_committed', variant: 'cross' }]);
+    expect(built.nodes.map((n) => n.id)).toEqual(['wi_committed', 'wi_relocated']);
+    renderWithIntl(<>{built.nodes[0]!.content}</>);
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+  });
+
+  it('is inert for a blocker that is already a committed child of the level', () => {
+    // A `modify` that does NOT re-parent: its target is on the level already, so
+    // the within-level branch answers first and the new map is never consulted.
+    const built = buildWorkItemLevel(
+      {
+        items: [
+          {
+            id: 'wi_a',
+            parentId: 'parent_1',
+            identifier: 'MOTIR-1',
+            title: 'The blocker',
+            kind: 'subtask',
+            status: 'done',
+            hasChildren: false,
+          },
+          {
+            id: 'wi_b',
+            parentId: 'parent_1',
+            identifier: 'MOTIR-2',
+            title: 'The dependent',
+            kind: 'subtask',
+            status: 'todo',
+            hasChildren: false,
+          },
+        ],
+        edges: [{ blockedId: 'wi_b', blockerId: 'wi_a' }],
+        offLevelBlockers: [],
+      },
+      { arrivingBlockers: new Map([['wi_a', false]]) },
+    );
+
+    // `firm` from the level's OWN status read, not `pending` from the map.
+    expect(built.deps).toEqual([{ from: 'wi_a', to: 'wi_b', variant: 'firm' }]);
   });
 });

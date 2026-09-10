@@ -161,6 +161,39 @@ export interface BuildWorkItemLevelOptions {
    * `originCrumbLabel` and `groupCrumbLabel` are supplied rather than looked up.
    */
   runLegs?: ReadonlyMap<string, RunLegBadge>;
+  /**
+   * Blockers that are NOT among this level's committed rows but that a pending
+   * proposal is putting ON it (bug MOTIR-4952), keyed by work-item id — the value
+   * is whether that blocker is `done`. Supplied by the plan-review consumer;
+   * absent / empty everywhere else, which is the pre-MOTIR-4952 behaviour.
+   *
+   * ⚠️ WITHOUT IT THE OFF-LEVEL TEST IS ASKED OF THE WRONG SET. The loop below
+   * decides `on this level?` from the level's COMMITTED rows, which is the right
+   * question for the roadmap and the wrong one for a canvas whose whole subject
+   * is a plan MOVING a card here: the blocker is off-level at read time and on it
+   * the moment the reviewer approves. Answering from the committed rows alone
+   * produced all three halves of the cross-story treatment about a card the plan
+   * draws right beside its dependent — the red `cross` arrow, the blocked node's
+   * `crossBlocked` ring, and a GHOST ANCHOR standing in for a card that is fully
+   * specified in the plan. It is the same COMMITTED-only trap `mergePlanLevel`'s
+   * MOTIR-4266 and MOTIR-4951 comments name for `drillable` and for `deps`, and
+   * the reason it is repaired HERE rather than there is that two of those three
+   * are unreachable downstream: the ring is baked into a node's rendered
+   * `content` and the anchor has already been minted.
+   *
+   * A MAP rather than a Set because the variant is status-derived and this
+   * builder cannot look a status up — the blocker may be a card the plan is
+   * relocating, so it is in the roadmap read for no level. The value must be the
+   * SAME predicate the within-level rule uses (`status === 'done'`), not the
+   * roadmap stub's `isDone`, which is TERMINAL and counts `cancelled` — using the
+   * stub would draw `firm` before approve and `pending` after, which is the
+   * disagreement this family of defects is about.
+   *
+   * It is a MAP rather than a predicate for the same reason `groupExcludeIds` is
+   * a set: this builder is a pure function that knows nothing about plans, and
+   * WHICH blockers are arriving is the consumer's own question.
+   */
+  arrivingBlockers?: ReadonlyMap<string, boolean>;
 }
 
 export function buildWorkItemLevel(
@@ -268,6 +301,22 @@ export function buildWorkItemLevel(
         from: e.blockerId,
         to: e.blockedId,
         variant: statusById.get(e.blockerId) === 'done' ? 'firm' : 'pending',
+      });
+      continue;
+    }
+    // A BLOCKER THE PENDING PLAN IS MOVING ONTO THIS LEVEL IS NOT OFF IT (bug
+    // MOTIR-4952). Checked BEFORE the stub lookup, so none of the three
+    // off-level effects fires: no `cross` arrow, no `crossBlocked` ring on the
+    // dependent, and no ghost anchor — the plan's own node is pushed by
+    // `mergePlanLevel`, carrying the proposal's parent, drillability and search
+    // text rather than an anchor's stand-ins. Before the SPRINT arm too: a card
+    // arriving on the level is on it in either scope.
+    const arrivingIsDone = opts.arrivingBlockers?.get(e.blockerId);
+    if (arrivingIsDone !== undefined) {
+      deps.push({
+        from: e.blockerId,
+        to: e.blockedId,
+        variant: arrivingIsDone ? 'firm' : 'pending',
       });
       continue;
     }

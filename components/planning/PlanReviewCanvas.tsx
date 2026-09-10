@@ -407,6 +407,9 @@ export function PlanReviewCanvas({
           // the whole root level's, epics included, and handing it over whole
           // redraws every root epic as an anonymous "blocked elsewhere" ghost.
           const rowIds = new Set(rows.map((r) => r.id));
+          // No `arrivingBlockers` here (bug MOTIR-4952): this level's id is
+          // synthetic, so no proposal is parented on it — `proposalsAtLevel` is
+          // empty for it by construction, and the map would be inert.
           grouped = buildWorkItemLevel({
             items: rows,
             edges: root.edges.filter((e) => rowIds.has(e.blockedId)),
@@ -451,10 +454,26 @@ export function PlanReviewCanvas({
         const excluded = atRoot
           ? new Set(wi.items.filter((i) => touchedNodeIds.has(i.id)).map((i) => i.id))
           : undefined;
+        // THE BLOCKERS THIS PLAN IS MOVING ONTO THE LEVEL (bug MOTIR-4952). The
+        // roadmap read answers "is this blocker on the level?" from the level's
+        // CURRENT children, and a relocating card is precisely the one that is not
+        // among them yet — so a committed edge into a committed child drew the
+        // whole cross-story treatment about a card this plan puts right beside it.
+        // The consumer owns the question because the builder knows nothing about
+        // plans, exactly as it owns `groupExcludeIds`.
+        //
+        // The value is `status === 'done'` — the SAME predicate `buildWorkItemLevel`
+        // applies to every within-level committed edge, and the same one the
+        // `committedBlockedBy` carrier uses (MOTIR-4951), so the arrow the reviewer
+        // sees before approve is the arrow the tree draws after it.
+        const arrivingBlockers = new Map(
+          proposalsAtLevel(items, parentId).map((i) => [i.nodeId, i.status === 'done']),
+        );
         committed = buildWorkItemLevel(wi, {
           // Grouping is a statement about the PROJECT's roots, so it is the root
           // level's alone — a drilled level's rows are somebody's children.
           groupNonEpicRoots: atRoot,
+          arrivingBlockers,
           ...(excluded ? { groupExcludeIds: excluded } : {}),
           groupCrumbLabel: t('group.title'),
           levelTotal: wi.levelTotal,
