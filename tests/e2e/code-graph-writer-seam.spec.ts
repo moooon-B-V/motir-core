@@ -158,7 +158,7 @@ test('a push drives the index writer to a SUCCEEDED ledger row on the engine @sm
   expect(queued.state).toBe('succeeded');
   const steps = await adminDb.jobStep.findMany({ where: { runId: queued.id } });
   const ids = steps.map((s) => s.stepId).filter((id) => !id.startsWith('job-run:'));
-  expect(ids).toContain('resolve-target');
+  expect(ids).toContain('resolve-target-v2');
   expect(ids.some((id) => id.startsWith('index-admit:'))).toBe(true);
   expect(ids.some((id) => id.startsWith('index-boot:'))).toBe(true);
   expect(ids.some((id) => id.startsWith('index-settle:'))).toBe(true);

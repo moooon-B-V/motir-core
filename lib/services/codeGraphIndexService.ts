@@ -303,6 +303,81 @@ export type IndexTarget =
       anchorProjectId: string;
     };
 
+/**
+ * THE ANCHOR'S CONTRACT, STATED AS A PREDICATE RATHER THAN AS AN EQUALITY
+ * (MOTIR-5020) — and it is motir-ai's predicate, not one of our own choosing.
+ *
+ * The receiving end is `requireString` in motir-ai's `src/app.ts`:
+ * `typeof v !== 'string' || v === ''` ⇒ `'coreProjectId' must be a non-empty
+ * string`. Anything this returns false for is refused THERE, one repository
+ * away from the code that produced it, with a message naming a field the reader
+ * of a `job_run.failure` row has never heard of. So the same test is applied
+ * HERE, where the value is still called what it is.
+ *
+ * ⚠️ THE GUARD IT REPLACES WAS `=== null`, AND WHAT MADE THAT WRONG IS NOT THAT
+ * `null` IS THE ONLY BAD VALUE — it is that a guard which enumerates the bad
+ * values it has thought of reports SAFE for the ones it has not. `?? null`
+ * makes `null` the only bad value the resolver can PRODUCE, which is exactly
+ * what made the pairing look airtight and what made it useless against a value
+ * that arrived from anywhere else (see {@link requireCurrentIndexTarget}).
+ */
+export function isUsableAnchorProjectId(value: unknown): value is string {
+  return typeof value === 'string' && value !== '';
+}
+
+/**
+ * A replayed `resolve-target` memo that does not satisfy the CURRENT
+ * {@link IndexTarget} contract (MOTIR-5020).
+ *
+ * Thrown at the step boundary, before an admission is taken and before a
+ * container is billed, so a shape skew costs nothing but a named failure.
+ */
+export class StaleIndexTargetMemoError extends Error {
+  constructor(readonly detail: string) {
+    super(
+      `The replayed \`resolve-target\` memo does not satisfy the current IndexTarget contract: ${detail}. ` +
+        'A memo is returned WITHOUT re-executing its step, so a run that started before a shape change ' +
+        'replays the OLD shape into the new code. Bump the step id when an `IndexTarget` field changes.',
+    );
+    this.name = 'StaleIndexTargetMemoError';
+  }
+}
+
+/**
+ * NARROW A `resolve-target` RESULT THAT MAY HAVE BEEN WRITTEN BY ANOTHER
+ * VERSION OF THIS CODE (MOTIR-5020) — the check the bare `as IndexTarget` cast
+ * at the call site was not.
+ *
+ * ⚠️ THE CAST AT THAT CALL SITE IS DOCUMENTED AS LAUNDERING `Jsonify<T>`, AND
+ * THAT IS TRUE AND INSUFFICIENT. `step.run` returns a STORED row when one
+ * exists for `(run_id, id)` and does not execute the function at all
+ * (`lib/jobs/engine/step.ts`), so the value crossing this seam was produced by
+ * whichever revision was deployed when the run STARTED — which on a resume
+ * across a deploy is not this one. The cast then asserts the current type over
+ * last week's JSON, and every field the new shape added reads `undefined`.
+ *
+ * That is not hypothetical: MOTIR-4652 replaced `projectIds: string[]` with
+ * `anchorProjectId: string` and kept the step id `resolve-target`. A resumed
+ * run replayed `{ indexed: true, …, projectIds: [...] }`, `!target.indexed` did
+ * not fire because `indexed` was `true`, `target.anchorProjectId` was
+ * `undefined`, `JSON.stringify` DROPPED it from the mint body, and motir-ai
+ * answered `'coreProjectId' must be a non-empty string` — for an ABSENT field,
+ * which its `requireString` reports identically to an empty one.
+ *
+ * ⚠️ AND NOTE WHERE THE OLD GUARD WAS: INSIDE the memoized step. A replay does
+ * not run it, so no widening of it could ever have seen this value. The guard
+ * that has to exist is the one at the BOUNDARY the value actually crosses.
+ */
+export function requireCurrentIndexTarget(value: unknown): IndexTarget {
+  const t = value as IndexTarget;
+  if (t.indexed && !isUsableAnchorProjectId(t.anchorProjectId)) {
+    throw new StaleIndexTargetMemoError(
+      `\`anchorProjectId\` is ${JSON.stringify(t.anchorProjectId)}, not a non-empty string`,
+    );
+  }
+  return t;
+}
+
 /** One repo the first-index sweep found without a code graph. */
 export interface MissingFirstIndexRepo {
   workspaceId: string;
@@ -384,7 +459,13 @@ export const codeGraphIndexService = {
     // See the `no_projects` note on {@link IndexSkipReason}: the organisation owns
     // the graph, but motir-ai still resolves a run credential through an
     // `AiProject`, so an organisation with no project has nothing to anchor one.
-    if (resolved.anchorProjectId === null) return { indexed: false, reason: 'no_projects' };
+    //
+    // ⚠️ THE TEST IS THE CONSUMER'S PREDICATE, NOT `=== null` (MOTIR-5020). See
+    // {@link isUsableAnchorProjectId}: `''` and `undefined` are refused by
+    // motir-ai in exactly the same words as a missing field, so they are refused
+    // here, where the value still has a name and a skip reason.
+    if (!isUsableAnchorProjectId(resolved.anchorProjectId))
+      return { indexed: false, reason: 'no_projects' };
 
     // ⚠️ THE CAPABILITY GATE, AND IT BELONGS HERE — NOT AT THE ENQUEUE (MOTIR-2124).
     //
