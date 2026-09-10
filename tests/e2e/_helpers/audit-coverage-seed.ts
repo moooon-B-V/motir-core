@@ -115,7 +115,7 @@ export async function seedAuditCoverage(prefix: string): Promise<AuditCoverageSe
     );
     await db.projectRepo.update({
       where: { id: row.id },
-      data: { githubRepoId: repo.id },
+      data: { githubRepoId: repo.id, state: 'connected' },
     });
   }
 
