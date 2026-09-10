@@ -8,6 +8,7 @@ import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDisp
 import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
 import { fakeOrchestrator } from '@motir/orchestrator';
 import { adminDb } from './adminDb';
+import { linkWorkspaceReposToProject } from './projectRepoLink';
 
 // THE `system.code-graph-index` TEST WORLD (Story MOTIR-1981 · MOTIR-1992) —
 // the fake-orchestrator fixture the index-fleet suites drive the REAL job
@@ -252,6 +253,13 @@ export async function seedIndexWorkspace(
       archived: false,
     })),
   });
+  for (const projectId of projectIds) {
+    await linkWorkspaceReposToProject({
+      workspaceId: workspace.id,
+      projectId,
+      names: repos.map((repo) => repo.name),
+    });
+  }
   return {
     workspaceId: workspace.id,
     ownerUserId: user.id,

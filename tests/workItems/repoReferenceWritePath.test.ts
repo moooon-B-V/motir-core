@@ -339,32 +339,25 @@ describe('the references on the write path — create', () => {
     }
   });
 
-  it('writes NO reference for a project with no repository set — the compatibility rung', async () => {
-    // Nothing to point at, so the pin stays a NAME validated against the
-    // workspace's connected repos, exactly as it is today.
+  it('rejects a name when the project has no repository set', async () => {
+    // Organisation connectivity is not project membership: there is no
+    // project_repository row this authored pin could legitimately reference.
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'legacy-repo');
 
-    const created = await workItemsService.createWorkItem(
-      {
-        projectId: fx.projectId,
-        kind: 'task',
-        title: 'No set',
-        assigneeId: null,
-        targetRepo: 'legacy-repo',
-      },
-      fx.ctx,
-    );
-
-    expect(await refs(created.id)).toEqual([]);
-    expect(await names(created.id)).toMatchObject({
-      targetRepo: 'legacy-repo',
-      targetRepos: ['legacy-repo'],
-    });
-    // And dispatch answers exactly as it did before the table existed.
-    expect((await resolveItemDispatchRepo('legacy-repo', fx.projectId, fx.ctx))?.name).toBe(
-      'legacy-repo',
-    );
+    await expect(
+      workItemsService.createWorkItem(
+        {
+          projectId: fx.projectId,
+          kind: 'task',
+          title: 'No set',
+          assigneeId: null,
+          targetRepo: 'legacy-repo',
+        },
+        fx.ctx,
+      ),
+    ).rejects.toThrow(/repository set is empty/);
+    expect(await adminDb.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
   });
 });
 
@@ -432,10 +425,14 @@ describe('the references on the write path — update', () => {
         kind: 'task',
         title: 'Named first',
         assigneeId: null,
-        targetRepo: 'motir-core',
       },
       fx.ctx,
     );
+    // Simulate a row written before reference-native validation existed.
+    await adminDb.workItem.update({
+      where: { id: created.id },
+      data: { targetRepo: 'motir-core', targetRepos: ['motir-core'] },
+    });
     expect(await refs(created.id)).toEqual([]);
 
     const core = await adminDb.projectRepo.create({

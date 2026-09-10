@@ -14,6 +14,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 
 // The DISPATCH-PROMPT surface over REAL Postgres (Story 7.9 · MOTIR-1802) — the
 // server-generated prompt the BYOK CLI prints byte-for-byte (MOTIR-881).
@@ -52,8 +53,7 @@ const CARD = [
   '- `lib/dispatch/promptTemplate.ts` — the grammar',
 ].join('\n');
 
-/** Connect one repo to the fixture's workspace — the 7.10.3 installation mirror
- *  that `targetRepo` resolves against (same shape as `dispatchTargetRepo.test.ts`). */
+/** Connect one repo and explicitly add it to the fixture project's set. */
 async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
   const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-${fx.workspaceId}` },
@@ -66,7 +66,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -78,6 +78,12 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
       archived: false,
       provider: 'github',
     },
+  });
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
   });
 }
 
@@ -503,7 +509,7 @@ describe('dispatchPromptService — the GIT WORKFLOW variant is chosen SERVER-SI
 });
 
 describe('dispatchPromptService — targetRepo resolution', () => {
-  it('resolves the workspace’s SINGLE connected repo when the item has no pin', async () => {
+  it('resolves the project’s SINGLE linked repo when the item has no pin', async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'motir-core');
     const item = await workItemsService.createWorkItem(
@@ -520,7 +526,7 @@ describe('dispatchPromptService — targetRepo resolution', () => {
     expect(dto.prompt).toContain('git worktree add ../motir-core-');
   });
 
-  it('honors the item’s explicit pin over the connected-set default', async () => {
+  it('honors the item’s explicit pin over the project-set default', async () => {
     const fx = await makeWorkItemFixture();
     await connectRepo(fx, 'motir-core');
     await connectRepo(fx, 'motir-ai');

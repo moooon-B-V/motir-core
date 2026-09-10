@@ -17,6 +17,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 
 // `validate_work_item` (Subtask 7.8.23) over real Postgres — the single-item
 // analogue of `validate_sprint`: is a work item's whole SUBTREE finishable? We
@@ -960,7 +961,7 @@ async function connectRepo(
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -972,6 +973,12 @@ async function connectRepo(
       archived: false,
       provider: 'github',
     },
+  });
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
   });
 }
 

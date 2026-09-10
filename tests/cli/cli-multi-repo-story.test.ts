@@ -21,6 +21,7 @@ import {
   type LocalRepo,
 } from '../helpers/cliHarness';
 import { randomToken } from '../helpers/random';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // STORY-CLOSING suite for MOTIR-2731 — running a work item that ships in more
@@ -128,6 +129,12 @@ async function connectRepo(
       archived: false,
       provider,
     },
+  });
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
   });
   return repo.id;
 }

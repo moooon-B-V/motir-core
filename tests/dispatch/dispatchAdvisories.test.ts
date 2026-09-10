@@ -11,6 +11,7 @@ import type { ExecutorDto, WorkItemProseAdvisoryDto, WorkItemTypeDto } from '@/l
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { randomToken } from '../helpers/random';
 
 // DISPATCH READS THE ADVISORIES (MOTIR-2079) — over REAL Postgres.
@@ -633,7 +634,7 @@ async function connectRepo(fx: WorkItemFixture, name: string, owner = 'moooon'):
     },
     update: {},
   });
-  await adminDb.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -645,6 +646,12 @@ async function connectRepo(fx: WorkItemFixture, name: string, owner = 'moooon'):
       archived: false,
       provider: 'github',
     },
+  });
+  await linkProjectRepo({
+    workspaceId: fx.workspaceId,
+    projectId: fx.projectId,
+    githubRepoId: repo.id,
+    name,
   });
 }
 

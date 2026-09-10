@@ -44,11 +44,13 @@ function fakeProbe(over: Partial<DoctorProbe> = {}): DoctorProbe {
     }),
     configuredAgentCommand: () => 'claude',
     agentEnvOverride: () => undefined,
-    pathExists: (path) => path === `${HOME}/.claude`,
+    // The credential FILE, not the directory that holds it (MOTIR-4957).
+    pathExists: (path) => path === `${HOME}/.claude/.credentials.json`,
     hasEnv: () => false,
     home: () => HOME,
     xdgConfigHome: () => `${HOME}/.config`,
     xdgDataHome: () => `${HOME}/.local/share`,
+    configHomeOverride: () => undefined,
     ...over,
   };
 }
@@ -359,11 +361,28 @@ describe('runDoctor — agent', () => {
 });
 
 describe('runDoctor — credential (presence only)', () => {
-  it('PASSES on a present credential directory', async () => {
+  it('PASSES on a present credential FILE', async () => {
     const report = await runDoctor({}, fakeProbe());
     expect(check(report, 'credential').status).toBe('pass');
-    expect(check(report, 'credential').detail).toContain(`${HOME}/.claude`);
+    expect(check(report, 'credential').detail).toContain(`${HOME}/.claude/.credentials.json`);
     expect(check(report, 'credential').detail).toContain('never read');
+  });
+
+  it('does NOT pass Claude Code on a bare config DIRECTORY (MOTIR-4957)', async () => {
+    // The defect: `~/.claude` exists on any machine that has ever LAUNCHED the
+    // agent, signed in or not — and inside the sandbox it is the read-only
+    // mount itself, so the check was not merely weak there but constant. A
+    // directory is not a sign-in, so the only honest verdict is a FAIL naming
+    // the file that would have proved one.
+    const directoryOnly = fakeProbe({ pathExists: (path) => path === `${HOME}/.claude` });
+    const report = await runDoctor({}, directoryOnly);
+    const credential = check(report, 'credential');
+    expect(credential.status).not.toBe('pass');
+    expect(credential.status).toBe('fail');
+    expect(credential.remediation).toContain(`${HOME}/.claude/.credentials.json`);
+    expect(doctorExitCode(report)).toBe(1);
+    // Criterion 5: the summary must stop claiming the run is ready.
+    expect(renderDoctorReport(report)).not.toContain('All hard checks passed');
   });
 
   it('PASSES on the env var alone, naming it without its value', async () => {
@@ -386,6 +405,74 @@ describe('runDoctor — credential (presence only)', () => {
     expect(credential.remediation).toContain(`${HOME}/.codex`);
     expect(credential.remediation).toContain('the OPENAI_API_KEY env var');
     expect(doctorExitCode(report)).toBe(1);
+  });
+
+  it.each([
+    {
+      id: 'claude',
+      label: 'Claude Code',
+      file: `${HOME}/.claude/.credentials.json`,
+      dir: `${HOME}/.claude`,
+      agent: 'claude',
+    },
+    {
+      id: 'codex',
+      label: 'Codex CLI',
+      file: `${HOME}/.codex/auth.json`,
+      dir: `${HOME}/.codex`,
+      agent: 'codex',
+    },
+  ])(
+    '$id: PASSES on the file, FAILS on the file absent, FAILS on the DIRECTORY alone',
+    async ({ label, file, dir, agent }) => {
+      const present = await runDoctor({ agent }, fakeProbe({ pathExists: (p) => p === file }));
+      expect(check(present, 'credential').status).toBe('pass');
+      expect(check(present, 'credential').detail).toContain(file);
+
+      const absent = await runDoctor({ agent }, fakeProbe({ pathExists: () => false }));
+      expect(check(absent, 'credential').status).toBe('fail');
+      expect(check(absent, 'credential').detail).toContain(label);
+      expect(check(absent, 'credential').remediation).toContain(file);
+
+      // The defect (MOTIR-4957): the config dir exists on any machine that has
+      // ever launched the agent — and in the sandbox it IS the read-only mount,
+      // so the old probe could not fail there at all.
+      const directoryOnly = await runDoctor({ agent }, fakeProbe({ pathExists: (p) => p === dir }));
+      expect(check(directoryOnly, 'credential').status).toBe('fail');
+      expect(doctorExitCode(directoryOnly)).toBe(1);
+    },
+  );
+
+  it('follows CLAUDE_CONFIG_DIR to the credential the agent actually reads', async () => {
+    // The sandbox redirects Claude Code to an image-owned home and seeds it from
+    // the read-only mount, so the probe must look where the agent looks.
+    const relocated = '/agent-home/.claude';
+    const report = await runDoctor(
+      {},
+      fakeProbe({
+        configHomeOverride: (name) => (name === 'CLAUDE_CONFIG_DIR' ? relocated : undefined),
+        pathExists: (p) => p === `${relocated}/.credentials.json`,
+      }),
+    );
+    expect(check(report, 'credential').status).toBe('pass');
+    expect(check(report, 'credential').detail).toContain(`${relocated}/.credentials.json`);
+  });
+
+  it('WARNS for kimi rather than PASSING on its install directory', async () => {
+    // `~/.kimi-code` holds the `kimi` binary itself, so it exists before anyone
+    // has signed in; and the credential is `credentials/<profile>.json`, whose
+    // name Motir cannot know. An honest WARN, never a PASS (MOTIR-4957).
+    const report = await runDoctor(
+      { agent: 'kimi' },
+      fakeProbe({ pathExists: (p) => p === `${HOME}/.kimi-code` }),
+    );
+    const credential = check(report, 'credential');
+    expect(credential.status).toBe('warn');
+    expect(credential.detail).toContain('cannot confirm a sign-in');
+    expect(credential.remediation).toContain('credentials/');
+    // A WARN never fails the run — `doctor` reports what it could not establish
+    // without blocking a machine that is in fact signed in.
+    expect(report.ok).toBe(true);
   });
 
   it('WARNS for an agent whose credential lives in the OS keyring', async () => {
@@ -475,7 +562,7 @@ describe('runDoctor — credential (presence only)', () => {
         },
       }),
     );
-    expect(pathsAsked).toEqual([`${HOME}/.claude`]);
+    expect(pathsAsked).toEqual([`${HOME}/.claude/.credentials.json`]);
     expect(envAsked).toEqual(['ANTHROPIC_API_KEY']);
     expect(check(report, 'credential').status).toBe('pass');
     expect(renderDoctorReport(report)).not.toMatch(/sk-|token|secret/i);

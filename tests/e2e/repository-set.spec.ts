@@ -9,6 +9,7 @@ import { linkPr } from './_helpers/pr-link';
 import { signUp } from './_helpers/shell-session';
 import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 
 // A work item that ships in MORE THAN ONE repository (Story MOTIR-2725 ·
 // Subtask MOTIR-2730), PROMOTED out of the acceptance lane into the lane that
@@ -66,7 +67,10 @@ import type { Page } from '@playwright/test';
 
 const EMAIL = 'e2e-repository-set@example.com';
 
-async function seedActiveProject(page: Page, identifier: string): Promise<{ projectId: string }> {
+async function seedActiveProject(
+  page: Page,
+  identifier: string,
+): Promise<{ projectId: string; userId: string; workspaceId: string }> {
   // ⚠️ NO `@/lib/db` singleton statements. `tests/rls/test-singleton-statement-guard`
   // ratchets that population DOWN over `tests/e2e/**`, because a direct singleton
   // write is REFUSED under `motir_app` and a direct read returns [] — neither
@@ -102,7 +106,7 @@ async function seedActiveProject(page: Page, identifier: string): Promise<{ proj
     workspaceId: workspace.id,
     projectId: project.id,
   });
-  return { projectId: project.id };
+  return { projectId: project.id, userId: membership.userId, workspaceId: workspace.id };
 }
 
 /** Create a work item through the shipped `_test` route — the spec's data
@@ -195,8 +199,19 @@ test('a card that ships in two repositories holds until BOTH have merged', async
   const wsRes = await page.request.get('/api/workspaces/current');
   expect(wsRes.status()).toBe(200);
   const workspaceId = ((await wsRes.json()) as { workspace: { id: string } }).workspace.id;
-  const { projectId } = await seedActiveProject(page, 'RSET');
-  await seedGithubInstallation(workspaceId, [E2E_REPO_SECOND]);
+  const { projectId, userId } = await seedActiveProject(page, 'RSET');
+  const installation = await seedGithubInstallation(workspaceId, [E2E_REPO_SECOND]);
+  const ctx = { userId, workspaceId };
+  for (const repoSpec of [E2E_REPO, E2E_REPO_SECOND]) {
+    const row = await projectRepoSetService.addRow(
+      projectId,
+      { role: 'other', name: repoSpec.name },
+      ctx,
+    );
+    const mirror = installation.repos.find((repo) => repo.name === repoSpec.name);
+    if (!mirror) throw new Error(`missing mirrored repository ${repoSpec.name}`);
+    await projectRepoSetService.attachRealizedRepo(row.id, mirror.id, ctx);
+  }
 
   const twoRepo = await mkItem(page, projectId, 'Ships in two repositories', [
     E2E_REPO.name,
