@@ -3,7 +3,6 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { NoAccessState } from '@/components/projects/NoAccessState';
 import { FiltersDirectory } from './_components/FiltersDirectory';
 
@@ -33,16 +32,10 @@ export default async function FiltersPage() {
   const t = await getTranslations('savedFilters');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="flex flex-col gap-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>
-        </header>
-        <EmptyState title={t('empty.title')} description={t('empty.description')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // Story 6.4.6 — gate on canBrowse; the same one resolve also yields the
   // share + admin tiers the row actions decide over (one round-trip).

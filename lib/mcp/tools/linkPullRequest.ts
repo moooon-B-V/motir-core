@@ -34,14 +34,15 @@ import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 // (`docs/decisions/unlinked-pull-request-check.md`).
 //
 // ── The model was already right; only the door was missing ────────────────
-// A stored link was already the link and `linked_manually` already recorded HOW
-// it was made, and `syncChangeRequestStatus` already PREFERRED a sticky link
-// over the parse (`lib/services/changeRequestStatusSync.ts`). Since MOTIR-3674
-// there is nothing to prefer it over: the sync reads the stored link and stops,
-// and `linked_manually` is no longer part of that condition — a row the parse
-// linked historically is honoured exactly as an explicit one is. (Where that link
-// is STORED has since moved: `work_item_delivery` is the whole of it, and
-// MOTIR-3757 dropped the `github_pull_request` column that used to hold it.) Motir
+// A stored link was already the link, and `syncChangeRequestStatus` already
+// PREFERRED a sticky link over the parse
+// (`lib/services/changeRequestStatusSync.ts`). Since MOTIR-3674 there is nothing
+// to prefer it over: the sync reads the stored link and stops, and a row the
+// parse linked historically is honoured exactly as an explicit one is. (Where
+// that link is STORED has since moved: `work_item_delivery` is the whole of it,
+// and MOTIR-3757 dropped the `github_pull_request` column that used to hold it.
+// A `linked_manually` flag recorded HOW a link was made and was part of neither
+// question by the end; MOTIR-4894 retired it.) Motir
 // simply never gave the one actor who knows the answer a way to write it down: a
 // human can, from the detail page's "+ Link pull request" picker; the agent that
 // just ran `gh pr create` could not.

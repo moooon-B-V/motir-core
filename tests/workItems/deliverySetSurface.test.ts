@@ -35,7 +35,6 @@ function pr(
     state: 'open',
     ci: null,
     url: `https://github.com/${repoLabel}/pull/${number}`,
-    linkedManually: false,
     ...over,
   };
 }

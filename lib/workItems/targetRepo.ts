@@ -4,6 +4,7 @@ import { repoCloneUrl } from '@/lib/repos/cloneUrl';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import {
   ArchivedTargetRepoError,
+  ConflictingTargetRepoInputError,
   UnknownTargetRepoError,
   type UnknownTargetRepoScope,
 } from './errors';
@@ -311,4 +312,43 @@ export function resolveDispatchTargetRepo(
   domain: ConnectedRepoName[],
 ): string | null {
   return resolveDispatchRepo(pinned, domain)?.name ?? null;
+}
+
+/**
+ * Reject a write that describes the repository axis MORE THAN ONCE — the SHARED
+ * boundary rule (Story MOTIR-2725 · MOTIR-2727, ADR
+ * `docs/decisions/work-item-repository-set.md` §3.4; lifted here by MOTIR-4904).
+ *
+ * `undefined` on any side is "not supplied" and is always fine; a `null`
+ * `targetRepo` beside a `targetRepos` is NOT — clearing the pin is still
+ * describing the field, and a caller who meant to clear the set says
+ * `targetRepos: []`.
+ *
+ * ⚠️ IT LIVES HERE, NOT IN `workItemsService`, BECAUSE TWO DOORS ENFORCE IT.
+ * It was a private function of the direct write path while that path was the
+ * only one that could express a repository SET at all. The PROPOSAL path can
+ * now express one too (MOTIR-4904), and a second copy of this rule is exactly
+ * how the two doors would come to disagree about what a contradiction is — the
+ * failure this module's own scope-free-policy header describes one level down.
+ * One implementation, both callers.
+ */
+export function assertSingleTargetRepoInput(
+  targetRepo: string | null | undefined,
+  targetRepos: readonly (string | null | undefined)[] | null | undefined,
+  targetRepositories?: readonly (string | null | undefined)[] | null | undefined,
+  // The singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924)
+  // is PROPOSAL-ONLY — `create_work_item` expresses a row id as the plural
+  // `targetRepositories`, so the direct door never passes this and the optional
+  // 4th arg is the proposal path's alone. It joins the mutual-exclusivity set for
+  // the same reason the three above are one: a proposal describing the axis twice
+  // is two conflicting decisions, and silently keeping one would choose for the
+  // author on the one field whose whole job is to say where work ships.
+  targetRepositoryRef?: string | null | undefined,
+): void {
+  const supplied =
+    (targetRepo !== undefined ? 1 : 0) +
+    (targetRepos !== undefined ? 1 : 0) +
+    (targetRepositories !== undefined ? 1 : 0) +
+    (targetRepositoryRef !== undefined ? 1 : 0);
+  if (supplied > 1) throw new ConflictingTargetRepoInputError();
 }

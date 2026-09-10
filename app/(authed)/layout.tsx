@@ -366,11 +366,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
           TopNav "Search" trigger and the AppCommandPalette below share one
           context. */}
       <CommandPaletteProvider>
-        <CreateIssueProvider
-          hasProject={Boolean(activeProject)}
-          canEdit={canEdit}
-          aiConfigured={isMotirAiConfigured()}
-        >
+        <CreateIssueProvider canEdit={canEdit} aiConfigured={isMotirAiConfigured()}>
           <ProjectAccessProvider permissions={permissions}>
             {/* ReportProvider (Subtask 6.11.7) owns the in-app report-widget
                 modal + open state, mounted once so the top-nav and inbox-header
@@ -413,7 +409,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       buildingInPublic={buildingInPublic}
                       cloudBilling={cloudBilling}
                       showPlanWithAi={showPlanWithAi}
-                      workspaceTierRevealed={workspaceTierRevealed}
                     />
                   }
                   sidebar={
@@ -427,6 +422,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
                           : null
                       }
+                      workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
                       billingAvailable={cloudBilling}
                       workspaceTierRevealed={workspaceTierRevealed}
                       publicProjectsAvailable={publicProjectsAvailable}
@@ -529,6 +525,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         ? { name: activeOrg.name, isOrgAdmin: isOrgAdminRole(activeOrg.role) }
                         : null
                     }
+                    workspace={activeWorkspaceModel ? { name: activeWorkspaceModel.name } : null}
                     billingAvailable={cloudBilling}
                     workspaceTierRevealed={workspaceTierRevealed}
                     publicProjectsAvailable={publicProjectsAvailable}
@@ -543,7 +540,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   activeWorkspaceId={activeWorkspaceId}
                   projects={projects}
                   activeProjectId={activeProject?.id ?? null}
-                  hasProject={Boolean(activeProject)}
                   settingsPermissions={settingsPermissions}
                   aiPlanningConfigured={aiPlanningConfigured}
                   publicProjectsAvailable={publicProjectsAvailable}

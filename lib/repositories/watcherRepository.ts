@@ -4,13 +4,11 @@ import {
   HOME_SLICE_IN_PROGRESS,
   HOME_SLICE_TODO,
   HOME_SLICE_UNFINISHED,
+  HOME_KIND_SORT_ORDER,
   HOME_WORK_ITEM_SELECT,
-  homeKeysetWhere,
   homeProjectScopeWhere,
-  type HomeCursor,
   type HomeProjectScope,
   type HomeWorkItemRow,
-  type WatchingCursor,
   type WatchingGroup,
 } from '@/lib/repositories/workItemRepository';
 
@@ -136,68 +134,90 @@ export const watcherRepository = {
    * size is `homeService`'s to decide (`HOME_PAGE_SIZE`), and a second default
    * here would be a number nobody reads.
    */
-  async listByUser(
+  async listByUserInGroup(
     userId: string,
     workspaceId: string,
     options: {
       projectScopes: readonly HomeProjectScope[];
+      /** WHICH of the two bands this call reads. The band is a PREDICATE, not a sort key. */
+      group: WatchingGroup;
       take: number;
-      cursor?: WatchingCursor | null;
+      /** How many rows of THIS GROUP to skip — the service splits the page's offset. */
+      skip?: number;
     },
     tx: Prisma.TransactionClient,
   ): Promise<HomeWorkItemRow[]> {
-    const { projectScopes, take, cursor } = options;
-    if (projectScopes.length === 0) return [];
-
-    const page = async (
-      group: WatchingGroup,
-      limit: number,
-      within: HomeCursor | null,
-    ): Promise<HomeWorkItemRow[]> => {
-      if (limit <= 0) return [];
-      const rows = await tx.watcher.findMany({
-        where: {
-          userId,
-          workItem: {
-            workspaceId,
-            archivedAt: null,
-            triagedAt: null, // read-exclusion (6.11.3), same as every list read
-            // ⚠️ BOTH fragments carry an `OR`, so they go in an explicit `AND` —
-            // spreading them would have one overwrite the other. (The keyset used
-            // to be spread here; it was safe only for as long as it was the sole
-            // `OR` in this object, which MOTIR-2758's scope clause ends.)
-            AND: [
-              homeProjectScopeWhere(
-                projectScopes,
-                group === 'in_progress' ? HOME_SLICE_IN_PROGRESS : HOME_SLICE_TODO,
-              ),
-              homeKeysetWhere(within, 'updatedAt'),
-            ],
-          },
+    const { projectScopes, group, take, skip = 0 } = options;
+    if (projectScopes.length === 0 || take <= 0) return [];
+    const rows = await tx.watcher.findMany({
+      where: {
+        userId,
+        workItem: {
+          workspaceId,
+          archivedAt: null,
+          triagedAt: null, // read-exclusion (6.11.3), same as every list read
+          // ⚠️ The fragment carries an `OR`, so it goes in an explicit `AND` — a
+          // spread would have it overwrite anything else `OR`-bearing here. (It
+          // shared this `AND` with the keyset until MOTIR-4852 retired it.)
+          AND: [
+            homeProjectScopeWhere(
+              projectScopes,
+              group === 'in_progress' ? HOME_SLICE_IN_PROGRESS : HOME_SLICE_TODO,
+            ),
+          ],
         },
-        select: { workItem: { select: HOME_WORK_ITEM_SELECT } },
-        orderBy: [{ workItem: { updatedAt: 'desc' } }, { workItem: { id: 'desc' } }],
-        take: limit,
-      });
-      return rows.map((r) => r.workItem);
-    };
+      },
+      select: { workItem: { select: HOME_WORK_ITEM_SELECT } },
+      // The SAME order the work tabs use, one level down the relation: the kind
+      // rank derived from `READY_KIND_RANK`, then the total `id` tiebreak that
+      // makes an offset boundary exact.
+      orderBy: [{ workItem: { kind: HOME_KIND_SORT_ORDER } }, { workItem: { id: 'desc' } }],
+      skip,
+      take,
+    });
+    return rows.map((r) => r.workItem);
+  },
 
-    // Resuming INSIDE the `todo` group means the `in_progress` group is already
-    // behind the reader — re-reading it would repeat every one of its rows.
-    const resumingIn: WatchingGroup = cursor?.group ?? 'in_progress';
-    const within: HomeCursor | null = cursor ? { at: cursor.at, id: cursor.id } : null;
-
-    const moving = resumingIn === 'in_progress' ? await page('in_progress', take, within) : [];
-    const waiting = await page('todo', take - moving.length, resumingIn === 'todo' ? within : null);
-
-    return [...moving, ...waiting];
+  /**
+   * How many watched items are in ONE of the two groups — what
+   * `homeService.listWatching` needs to split a page's offset between them.
+   *
+   * ⚠️ It is the SAME predicate {@link listByUserInGroup} lists with, minus the
+   * window: that is the whole reason this exists rather than the service
+   * counting rows it fetched. A count that can drift from its list is the shape
+   * MOTIR-2758 was filed about.
+   */
+  async countByUserInGroup(
+    userId: string,
+    workspaceId: string,
+    projectScopes: readonly HomeProjectScope[],
+    group: WatchingGroup,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (projectScopes.length === 0) return 0;
+    return tx.watcher.count({
+      where: {
+        userId,
+        workItem: {
+          workspaceId,
+          archivedAt: null,
+          triagedAt: null,
+          AND: [
+            homeProjectScopeWhere(
+              projectScopes,
+              group === 'in_progress' ? HOME_SLICE_IN_PROGRESS : HOME_SLICE_TODO,
+            ),
+          ],
+        },
+      },
+    });
   },
 
   /**
    * How many items the Watching read would return — the tab's count badge
-   * (Subtask MOTIR-2653). Same predicate as {@link listByUser} minus the
+   * (Subtask MOTIR-2653). Same predicate as {@link listByUserInGroup} minus the
    * keyset, so the number beside the tab is the number the tab will show.
-   * Required `tx` for the same RLS reason as {@link listByUser}.
+   * Required `tx` for the same RLS reason as {@link listByUserInGroup}.
    */
   async countByUser(
     userId: string,

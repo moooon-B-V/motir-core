@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { CodeHealthClient } from '@/app/(authed)/code-health/_components/CodeHealthClient';
+import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClient';
 import type { CodeAuditSurfaceDTO, RepoAuditSurfaceDTO } from '@/lib/dto/codeHealth';
 
 // The audit tab, for a MULTI-REPO project (MOTIR-2207 · Panel 7). The island's

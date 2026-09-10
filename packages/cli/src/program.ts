@@ -215,7 +215,9 @@ export function buildProgram(): Command {
 
   register(program, 'open')
     .option('--print', 'Print the URL only; do not launch a browser.')
-    .action(openCommand);
+    // Arity-2 wrapper: commander passes the Command as a third argument, which
+    // must not land in `openCommand`'s injectable browser-launcher parameter.
+    .action((key: string, opts) => openCommand(key, opts));
 
   // ── dispatch (the work loop) ───────────────────────────────────────────────
   // The prompt each of these delivers is generated SERVER-SIDE (dispatch_prompt)

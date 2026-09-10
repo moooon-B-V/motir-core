@@ -13,6 +13,12 @@ import { startSignedOut } from './_helpers/shell-session';
 const PASSWORD = 'projects-flow-pass-123';
 const USER_EMAIL = 'e2e-projects@example.com';
 const SCREENSHOT_DIR = '/tmp/motir-smoke';
+/**
+ * The project the WORKSPACE seeds for itself (MOTIR-4870), named after it. It
+ * exists before step 2 — the first authed request makes it — so it is the
+ * OLDEST project here, which is what decides the archive fallback below.
+ */
+const SEEDED_PROJECT = `${USER_EMAIL.split('@')[0]}'s Workspace`;
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -29,6 +35,12 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
 
+  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871), not on the
+  // signed-in landing. This helper's contract is "leave the caller in the app",
+  // so it settles where the registration actually lands and navigates on — the
+  // same two-step the shared `signUp` and the other local ones use. The retry
+  // loop is about the RATE LIMIT and is unchanged; only the URL it waits for
+  // moved, because the wait is what tells a throttled click from a landed one.
   const createButton = page.getByRole('button', { name: /^(Create account|Creating account…)$/ });
   const rateLimitAlert = page.getByText('Something went wrong. Please try again.');
 
@@ -36,7 +48,7 @@ async function signUp(page: Page, email: string): Promise<void> {
     await createButton.click();
     const landed = await Promise.race([
       page
-        .waitForURL('**/workbench', { timeout: 9_000 })
+        .waitForURL('**/onboarding', { timeout: 9_000 })
         .then(() => true)
         .catch(() => false),
       rateLimitAlert
@@ -44,9 +56,15 @@ async function signUp(page: Page, email: string): Promise<void> {
         .then(() => false)
         .catch(() => false),
     ]);
-    if (landed || page.url().includes('/workbench')) return;
+    if (landed || page.url().includes('/onboarding')) {
+      await page.goto('/workbench');
+      await page.waitForURL('**/workbench');
+      return;
+    }
     await page.waitForTimeout(11_000);
   }
+  await page.waitForURL('**/onboarding');
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench');
 }
 
@@ -61,25 +79,39 @@ async function applyTheme(page: Page, mode: 'light' | 'dark'): Promise<void> {
 test('projects UI happy path with theme parity screenshots', async ({ page }) => {
   await signUp(page, USER_EMAIL);
 
-  // 1) Empty-state surface — light
+  // 1) A fresh account's surface — light
+  //
+  // ⚠️ INVERTED (MOTIR-4876). This was the EMPTY-STATE surface: with zero
+  // projects the page rendered "Create your first project" and the sidebar
+  // rendered the CTA card in place of the switcher (PRODECT_FINDINGS #29.1). A
+  // fresh account has a seeded project now (MOTIR-4870), so the switcher is
+  // what renders and the screenshots below capture that instead. The theme
+  // parity they exist for is unaffected — it is the same two renders of the
+  // same route.
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
-  await expect(page.getByText('Projects group your work items')).toBeVisible();
-  // The project switcher moved to the sidebar in Subtask 1.5.3. With zero
-  // projects the sidebar header renders the "Create your first project" CTA
-  // card in place of the switcher (PRODECT_FINDINGS #29.1) — not the
-  // "Switch project" trigger.
-  await expect(page.getByRole('button', { name: 'Create your first project' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Switch project' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
   await applyTheme(page, 'light');
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-empty-state-light.png`, fullPage: true });
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-fresh-account-light.png`, fullPage: true });
 
-  // 1b) Empty-state surface — dark
+  // 1b) The same fresh-account surface — dark
   await applyTheme(page, 'dark');
-  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-empty-state-dark.png`, fullPage: true });
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/01-fresh-account-dark.png`, fullPage: true });
   await applyTheme(page, 'light');
 
-  // 2) Open create modal from the empty-state CTA
+  // 2) Open the create modal from THE SWITCHER (MOTIR-4876).
+  //
+  // ⚠️ This used to read "open create modal from the empty-state CTA", and the
+  // click below went straight to a `Create project` button that the projectless
+  // `/dashboard` rendered inline. That surface is deleted, not merely unrouted —
+  // creating a project is a workspace-tier act, and the switcher is the door
+  // that owns it (`tests/navigation/no-create-project-screen-guard.test.ts`).
+  // Step 1 above was inverted in the same pass this comment belongs to; the
+  // click was not, so the spec asserted the new world and then drove the old
+  // one. It is the two-step `createFirstProject` performs — open the switcher,
+  // then the create door — spelled out here because this test screenshots the
+  // modal between the steps.
+  await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
   await page.getByLabel('Project name').fill('Mobile App');
@@ -173,15 +205,39 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
   await expect(page.getByText('Project archived', { exact: true }).first()).toBeVisible({
     timeout: 5_000,
   });
-  // Active project should fall back to Marketing Site. The project-settings AREA
-  // (Story 6.5.2) shows the back-to-project/identity header instead of the
-  // ProjectSwitcher, so the fallback surfaces in the settings rail itself (no
-  // extra navigation — this test is already near its time budget).
+  // ⚠️ THE FALLBACK IS THE SEEDED PROJECT, NOT 'Marketing Site' (MOTIR-4876).
+  // `getActiveProject` falls back to the workspace's FIRST non-archived project
+  // by creation, and this workspace now holds THREE: the seeded default, then
+  // Mobile App, then Marketing Site. The old expectation was exactly right when
+  // the only projects were the two this test makes — it named the survivor by
+  // assuming there was one other. The contract it was written for is unchanged;
+  // the population it counted is.
+  //
+  // The project-settings AREA (Story 6.5.2) shows the back-to-project/identity
+  // header instead of the ProjectSwitcher, so the fallback surfaces in the
+  // settings rail itself (no extra navigation — this test is already near its
+  // time budget).
   await expect(page.getByRole('navigation', { name: 'Project settings' })).toContainText(
+    SEEDED_PROJECT,
+  );
+
+  // 7) Archive Marketing Site too — the reader still lands in a project.
+  //
+  // ⚠️ IT HAS TO BE SWITCHED TO FIRST (MOTIR-4876). This step used to read
+  // "archive the remaining project" and go straight to `/settings/project`,
+  // because archiving Mobile App left Marketing Site active. The fallback above
+  // now lands on the seeded project instead, so that route would have opened
+  // the WRONG project's settings and typed MARKE into a confirm field asking
+  // for a different identifier. The switcher does not live in the settings
+  // area, so this goes out to `/items` for it.
+  await page.goto('/items');
+  await page.getByRole('button', { name: 'Switch project' }).click();
+  await page.getByRole('button', { name: /^Marketing Site/ }).click();
+  await page.waitForURL('**/items');
+  await expect(page.getByRole('button', { name: 'Switch project' })).toContainText(
     'Marketing Site',
   );
 
-  // 7) Archive the remaining project — empty state should return
   await page.goto('/settings/project');
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await page.getByLabel(/Type MARKE to confirm/).fill('MARKE');
@@ -190,7 +246,16 @@ test('projects UI happy path with theme parity screenshots', async ({ page }) =>
     timeout: 5_000,
   });
 
-  // Navigate back to dashboard — empty state again
+  // ⚠️ INVERTED (MOTIR-4876). Archiving the last project used to return the
+  // reader to the empty state, and this spec used to BE that reader — with both
+  // of its projects archived the workspace held none. It holds the seeded one,
+  // so the resolver does not even reach the heal here; what this now witnesses
+  // is the plainer half of the same invariant, that a member archiving their
+  // way down still lands in a project rather than on a CTA. The heal itself —
+  // archiving genuinely every project and getting a fresh one back — is
+  // asserted at the service tier, where it can be seen directly
+  // (`tests/default-project-per-workspace.test.ts`, door 3).
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { name: 'Create your first project' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Create your first project' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
 });

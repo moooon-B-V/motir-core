@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { CodeHealthClient } from '@/app/(authed)/code-health/_components/CodeHealthClient';
+import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClient';
 
 // An in-flight audit must SURVIVE the page (MOTIR-2223). `AuditPanel`'s deriving
 // copy invites the user to leave — "You can leave this page — the audit keeps

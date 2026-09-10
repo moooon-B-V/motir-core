@@ -613,7 +613,6 @@ describe('the explicit item→PR link affordance reaches a created repo', () => 
     expect(linked).toMatchObject({
       number: 11,
       repo: `${MOTIR_ORG}/${b.repoName}`,
-      linkedManually: true,
     });
 
     // Tenant A cannot see or link tenant B's PR — the gate still holds the line.

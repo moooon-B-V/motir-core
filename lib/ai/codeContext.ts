@@ -2,6 +2,12 @@ import { githubInstallationRepository } from '@/lib/repositories/githubInstallat
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { getGitProvider, providerSupportsRepoTarballUrl } from '@/lib/git';
+import type { GitProviderId } from '@/lib/git/types';
+import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import type { CodeGraphIndexState } from '@/lib/codeGraph/indexState';
+import type { CodeRefreshReason } from '@/lib/codeGraph/refreshReason';
 
 // Resolve the CODE half of a planning-job context bag (Subtask 7.10.15 ·
 // MOTIR-1598) — the workspace's connected repo SET, read from the persisted
@@ -52,6 +58,27 @@ export interface JobCodeRepo {
    * read reports from, so the three cannot disagree.
    */
   indexed: boolean;
+  /**
+   * HOW CURRENT THAT GRAPH IS (Story MOTIR-1754 · MOTIR-4857) — the four-state
+   * derivation and the drift in COMMITS, beside the ledger fact above.
+   *
+   * ⚠️ OPTIONAL, AND ABSENT MEANS *NOBODY SAID* — never *current*. The set these
+   * entries are built from is the WORKSPACE's installation grant; the freshness
+   * is joined from the PROJECT's configured set, and the second is a subset of
+   * the first. A repository the project has not been given carries no drift
+   * rather than a fabricated one, which is the same three-state discipline
+   * `indexed` itself lands under (MOTIR-4826) and the one motir-ai's reader
+   * already tolerates.
+   *
+   * ⚠️ AND THEY DECIDE NOTHING, exactly as `indexed` decides nothing. What a
+   * drift of three commits MEANS against a drift of three hundred is the
+   * planner's judgement (MOTIR-4590); `motir-core` supplies the number and does
+   * not branch on it. A threshold here would put the decision back in the
+   * repository that five of this story's cards took it out of.
+   */
+  indexState?: CodeGraphIndexState;
+  /** Commits the default branch is ahead of the graph. `null` = not countable. */
+  commitsBehind?: number | null;
 }
 
 /** The `context.code` unit of a planning-job envelope (the plural contract). */
@@ -93,6 +120,264 @@ export async function resolveCodeContext(ctx: {
         defaultBranch: repo.defaultBranch,
         indexed: indexedRefs.includes(repoRef),
       };
+    }),
+  };
+}
+
+// ── The PLANNING-SESSION producer (Story MOTIR-1754 · MOTIR-4604) ────────────
+//
+// `resolveCodeContext` above answers "which repos are connected?". A planning
+// session needs more: **how current is each graph, why it is behind, and whether
+// anything is actually doing something about it.**
+//
+// ⚠️ THE SESSION MUST NOT SAY "FETCHING THE LATEST" WHEN NOTHING IS FETCHING.
+// A graph is rarely stale by accident — with push-driven refresh healthy the drift
+// is minutes, so badly stale means something stopped it. That is why the envelope
+// carries a REASON and an IN-FLIGHT FLAG as two separate facts: the reason
+// EXPLAINS, the flag DECIDES WHICH EXITS EXIST. Collapsing them into one string
+// would force the gate (MOTIR-4601) to parse prose to decide whether it may offer
+// "come back later" — and a session that announces a fetch which is not happening
+// is a new instance of exactly the dishonesty this story exists to remove, wearing
+// the fix's clothes.
+
+/** Why a repo's graph is not current. A TOTAL union — see the mapping below. */
+// ⚠️ THE VOCABULARY MOVED TO `lib/codeGraph/refreshReason.ts` (MOTIR-2105) and is
+// RE-EXPORTED here so every existing import site is unchanged. It is a fact
+// about a code graph, and it now sits beside the other two derivations of the
+// same subject — the state (`indexState.ts`) and the drift (`driftCount.ts`) —
+// where the DTO a UI reads can import it without reaching into `lib/ai/`.
+export type { CodeRefreshReason } from '@/lib/codeGraph/refreshReason';
+
+/** One connected repo as it rides the job envelope, with its freshness. */
+export interface JobCodeRepoState extends JobCodeRepo {
+  /**
+   * The repository's index state, from the ONE derivation
+   * (`lib/codeGraph/indexState.ts`).
+   *
+   * ⚠️ IT IS NO LONGER OPTIONAL, and the reason it WAS is worth keeping: this
+   * field used to be absent when freshness "could not be read", because it came
+   * from motir-ai across the 7.1 boundary and an outage there must not make every
+   * repository announce something false. MOTIR-4724 moved every fact into
+   * motir-core's own columns, so there is no read left that can fail to answer —
+   * the absence had a cause, and the cause is gone.
+   */
+  indexState: CodeGraphIndexState;
+  /** Absent when the graph is CURRENT — there is nothing to explain. */
+  reason?: CodeRefreshReason;
+  /**
+   * Is something actually running? The gate may offer "come back later" if and
+   * only if this is true.
+   *
+   * ⚠️ A DEBOUNCED NO-OP STILL COUNTS AS IN FLIGHT. When the shipped debounce
+   * suppresses this session's enqueue because a refresh is already pending,
+   * something IS running and the wait is honest. Only "nothing will happen"
+   * makes this false. Backwards, it silences the come-back exit exactly when it
+   * is most useful.
+   */
+  refreshInFlight: boolean;
+  /** When the graph was last built — rendered, never used to decide staleness. */
+  indexedAt: Date | null;
+  /** Drift in COMMITS. Always null until its producer ships (MOTIR-4644). */
+  commitsBehind: number | null;
+}
+
+export interface JobPlanningCodeContext {
+  repos: JobCodeRepoState[];
+}
+
+/**
+ * The reason + in-flight flag for one repo — PURE, so every arm is drivable.
+ *
+ * ⚠️ TWO ARMS SHIP UNREACHABLE, DELIBERATELY, and the pattern is MOTIR-4590's:
+ * write the mapping TOTAL with the arm present and its meaning fixed, so the day
+ * its producer lands it becomes reachable and nothing here is rewritten.
+ *
+ *  - `paused` waits on MOTIR-4593, which records the pause reasons.
+ *  - `refresh_failing` waits on a per-repo failure signal. The job ledger cannot
+ *    supply one: a refresh run writes `output.repoRef` only on SUCCESS, so a
+ *    FAILED row cannot be attributed to a repository at all. Deriving it from the
+ *    workspace-aggregate would tell every repo that refreshes are failing because
+ *    one of them is — which is worse than saying nothing.
+ *
+ * Neither is a gap left by accident, and neither may be faked from a signal that
+ * does not mean it.
+ */
+export function resolveRefreshDisposition(input: {
+  indexState: CodeGraphIndexState;
+  canIndex: boolean;
+  paused?: boolean;
+  refreshFailing?: boolean;
+}): { reason?: CodeRefreshReason; refreshInFlight: boolean; enqueue: boolean } {
+  if (input.indexState === 'indexed') return { refreshInFlight: false, enqueue: false };
+  // A host that cannot be indexed at all outranks every other explanation: there
+  // is nothing to enqueue and no wait to offer, whatever else is true.
+  if (!input.canIndex)
+    return { reason: 'provider_unsupported', refreshInFlight: false, enqueue: false };
+  if (input.paused) return { reason: 'paused', refreshInFlight: false, enqueue: false };
+  if (input.refreshFailing)
+    return { reason: 'refresh_failing', refreshInFlight: false, enqueue: false };
+  // Already running — the flag is true and there is nothing to enqueue.
+  if (input.indexState === 'indexing')
+    return { reason: 'refresh_pending', refreshInFlight: true, enqueue: false };
+  // Never indexed is a FIRST index, which the connect path owns. A refresh of a
+  // graph that does not exist is not a thing to enqueue here.
+  if (input.indexState === 'never')
+    return { reason: 'never_indexed', refreshInFlight: false, enqueue: false };
+  // Stale, indexable, nothing stopping it — this session enqueues.
+  return { reason: 'refresh_enqueued', refreshInFlight: true, enqueue: true };
+}
+
+/**
+ * `context.code` for a PLANNING session: the connected set, each repo's freshness
+ * verdict, why it is behind, and whether a refresh is running — enqueuing one
+ * where a refresh can actually run.
+ *
+ * ⚠️ IT NEVER BLOCKS. The enqueue is fire-and-forget through the SHIPPED
+ * `enqueueCodeGraphRefresh`, so the 2-minute debounce and its cap apply and five
+ * sessions in ten minutes coalesce into one refresh RUN. No second trigger with
+ * its own semantics, and the session never awaits the result: whether a refresh
+ * can land mid-conversation is MOTIR-4591's question, and that it must not be
+ * waited on is settled here.
+ *
+ * Returns `undefined` — exactly as `resolveCodeContext` does — when the workspace
+ * has no connected repo, so the caller OMITS `context.code` and a code-less
+ * envelope stays byte-identical.
+ */
+export async function resolvePlanningCodeContext(ctx: {
+  userId: string;
+  workspaceId: string;
+  projectId: string;
+}): Promise<JobPlanningCodeContext | undefined> {
+  const base = await resolveCodeContext(ctx);
+  if (!base) return undefined;
+
+  const state = await resolveCodeContextState(ctx.projectId, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  const byRef = new Map(state.repos.map((r) => [r.repoRef, r]));
+
+  // ⚠️ THE "FRESHNESS UNAVAILABLE" BRANCH IS GONE. It returned an envelope with no
+  // verdicts and one honest flag, because freshness came from motir-ai and an
+  // outage there must not make every repository announce something false.
+  // MOTIR-4724 made every fact a motir-core column, so the read cannot fail to
+  // answer — the branch is not unreachable, it is inexpressible, and a branch
+  // nothing can enter is worse than no branch at all.
+
+  const repos: JobCodeRepoState[] = [];
+  for (const repo of base.repos) {
+    const joined = byRef.get(repo.repoRef);
+    // ⚠️ A REPOSITORY THE PROJECT'S SET DOES NOT NAME, which is a real hole and
+    // not a theoretical one: the base set above is the WORKSPACE's installation
+    // grant, the join is the PROJECT's configured set, and the second is a subset
+    // of the first. The fallback is `never`, NOT `indexed`.
+    //
+    // `indexed` looks like the conservative choice — absence of evidence is not
+    // evidence of drift — and it is the wrong one, for the reason the DTO's own
+    // header gives: `indexed` is a claim that the graph MATCHES the code, made at
+    // the exact moment somebody is deciding whether to trust a plan built from it.
+    // `never` claims only that we know of no graph, which is precisely what a
+    // missing join row establishes. It also disposes correctly — `never_indexed`,
+    // nothing in flight, nothing enqueued — where `indexed` would silently drop
+    // the repository out of every explanation the gate can offer.
+    const indexState = joined?.indexState ?? 'never';
+    let canIndex: boolean;
+    try {
+      canIndex = providerSupportsRepoTarballUrl(getGitProvider(repo.provider as GitProviderId));
+    } catch {
+      // An unregistered provider cannot be indexed, and saying so is better than
+      // throwing on the submit path.
+      canIndex = false;
+    }
+    // ⚠️ `refreshFailing` FINALLY HAS A PRODUCER (MOTIR-2105). The disposition
+    // has been able to SAY a refresh is failing since MOTIR-4604 and nothing
+    // ever told it — so the one explanation a session most needed, *the graph is
+    // behind and nothing is coming*, was structurally unreachable while the
+    // field sat in the signature looking covered.
+    const disposition = resolveRefreshDisposition({
+      indexState,
+      canIndex,
+      refreshFailing: joined?.refreshFailing ?? false,
+    });
+
+    if (disposition.enqueue) {
+      // Best-effort, exactly like the webhook's own enqueue: a queue failure must
+      // never fail a planning submit.
+      try {
+        const installationId = await installationIdForWorkspace(ctx);
+        if (installationId) {
+          await enqueueCodeGraphRefresh({
+            installationId,
+            workspaceId: ctx.workspaceId,
+            repoOwner: repo.repoRef.split('/')[0] ?? '',
+            repoName: repo.repoRef.split('/').slice(1).join('/'),
+            defaultBranch: repo.defaultBranch,
+          });
+        }
+      } catch (err) {
+        console.error('[codeContext] refresh not enqueued at session start; planning proceeds', {
+          repoRef: repo.repoRef,
+          err,
+        });
+      }
+    }
+
+    repos.push({
+      ...repo,
+      indexState,
+      ...(disposition.reason ? { reason: disposition.reason } : {}),
+      refreshInFlight: disposition.refreshInFlight,
+      indexedAt: joined?.indexedAt ?? null,
+      commitsBehind: joined?.commitsBehind ?? null,
+    });
+  }
+
+  return { repos };
+}
+
+/** The workspace's installation id, or null — the enqueue's required key. */
+async function installationIdForWorkspace(ctx: {
+  userId: string;
+  workspaceId: string;
+}): Promise<string | null> {
+  const installation = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    (tx) => githubInstallationRepository.findByWorkspaceId(ctx.workspaceId, tx),
+  );
+  return installation?.installationId ?? null;
+}
+
+/**
+ * The thin grant-list context, with each repository's FRESHNESS joined on
+ * (Story MOTIR-1754 · MOTIR-4857).
+ *
+ * ⚠️ WHY A COMPOSER RATHER THAN A WIDER `resolveCodeContext`. That resolver is
+ * WORKSPACE-scoped and has four other callers; freshness is a PROJECT-scoped
+ * fact (`resolveCodeContextState` reads the project's configured set). Widening
+ * the workspace read to take a project would either give its other callers a
+ * parameter they have no answer for, or invent one. So the join happens here, at
+ * the one call site that has both.
+ *
+ * ⚠️ IT COMPUTES NOTHING. Every field comes from `resolveCodeContextState`,
+ * which is itself an assembler over `lib/codeGraph/indexState.ts` and
+ * `lib/codeGraph/driftCount.ts` — the ONE derivation of each. A second
+ * comparison written here would be a second answer on a different surface.
+ */
+export async function withCodeFreshness(
+  code: JobCodeContext | undefined,
+  projectId: string,
+  ctx: { userId: string; workspaceId: string },
+): Promise<JobCodeContext | undefined> {
+  if (!code || code.repos.length === 0) return code;
+  const state = await resolveCodeContextState(projectId, ctx);
+  const byRef = new Map(state.repos.map((r) => [r.repoRef, r]));
+  return {
+    repos: code.repos.map((repo) => {
+      const joined = byRef.get(repo.repoRef);
+      // ⚠️ NO JOIN ⇒ NO FIELDS. Spreading `undefined` in would put the keys on
+      // the wire carrying nothing, which reads to a consumer as an answer.
+      if (!joined) return repo;
+      return { ...repo, indexState: joined.indexState, commitsBehind: joined.commitsBehind };
     }),
   };
 }

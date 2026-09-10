@@ -43,6 +43,8 @@ import {
   autoPlanCadenceService,
   type CadenceSweepSummary,
 } from '@/lib/services/autoPlanCadenceService';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { E2E_INDEX_REPOS, seedConnectedRepos } from './migrate-index-seed';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { toWorkItemSummaryDto } from '@/lib/mappers/workItemMappers';
@@ -142,6 +144,39 @@ export async function seedAiCadence(email: string): Promise<AiCadenceSeed> {
       workspaceId: workspace.id,
       createdById: owner.id,
     },
+  });
+
+  // ── A CONNECTED REPOSITORY — a PRECONDITION of cadence, not scenery ──────
+  //
+  // ⚠️ WITHOUT THIS THE WHOLE FILE MEASURES NOTHING (Story MOTIR-1754 ·
+  // MOTIR-4603). `autoPlanCadenceService` gate 1 now calls
+  // `codeBlindPauseReason`, which returns `no_connected_repo` when the project
+  // has no repository — and a paused tick fires zero, so every `fired` count in
+  // this spec came back 0 and every cadence assertion in it became vacuous.
+  //
+  // The seed satisfies the precondition rather than the spec asserting the
+  // pause: this file is about CADENCE — packing, auto-fire, the pending-proposal
+  // hold and the resume — and the gate has its own coverage in
+  // `tests/integration/ai/cadenceCodeBlind.test.ts`. A fixture that trips a
+  // precondition tests the precondition, once, and nothing else ever again.
+  //
+  // ⚠️ CONNECTED, NOT INDEXED, and that is enough on purpose. The second half of
+  // the gate is `isBadlyStale`, which reads `commitsBehind` — `null` on a repo
+  // nobody has pushed to, and `null` is not stale. Seeding a graph as well would
+  // add a fact this file does not depend on.
+  const [cadenceRepo] = E2E_INDEX_REPOS;
+  await seedConnectedRepos(workspace.id, [cadenceRepo!]);
+  const connected = await db.githubRepo.findFirstOrThrow({
+    where: { workspaceId: workspace.id, owner: cadenceRepo!.owner, name: cadenceRepo!.name },
+  });
+  const repoRow = await projectRepoSetService.addRow(
+    pid,
+    { role: 'web', name: cadenceRepo!.name },
+    ctx,
+  );
+  await db.projectRepo.update({
+    where: { id: repoRow.id },
+    data: { githubRepoId: connected.id },
   });
 
   // ── The cadence target: a childless, non-terminal story ──────────────────

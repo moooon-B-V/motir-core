@@ -2,6 +2,7 @@ import { CliError } from './errors.js';
 import {
   findAgentProfile,
   parseAgentCommand,
+  type AgentConfigHomeVar,
   type AgentProfile,
   type CredentialDirs,
 } from './agentProfiles.js';
@@ -17,9 +18,11 @@ import type { FoundLink, ResolvedRepo } from './config/linkConfig.js';
 //   1. **No secret is ever read.** The probe exposes `hasEnv(name): boolean`
 //      and `pathExists(path): boolean` — presence predicates. There is no way
 //      for this module to obtain an env VALUE or a file's CONTENTS, so a
-//      credential cannot be read, logged, or printed even by accident. (The one
-//      env value the engine can reach is the agent-command override, which is a
-//      command line, not a credential.)
+//      credential cannot be read, logged, or printed even by accident. (Two env
+//      values the engine can reach, both DIRECTORY-or-command-line and neither a
+//      credential: the agent-command override, and `configHomeOverride`, which
+//      answers only for the closed `AGENT_CONFIG_HOME_VARS` set — a name outside
+//      it is not expressible, so the carve-out cannot widen by accident.)
 //   2. **Nothing is dispatched or mutated.** The probe's only server call is
 //      `probeServer`, whose implementation (commands/doctor.ts) is typed
 //      against a read-only client surface — connect / list tools / whoami /
@@ -106,6 +109,13 @@ export interface DoctorProbe {
   xdgConfigHome(): string;
   /** `XDG_DATA_HOME` (or `~/.local/share`) — where opencode keeps auth.json. */
   xdgDataHome(): string;
+  /**
+   * The VALUE of an agent's config-home override, or undefined when unset. A
+   * DIRECTORY path, never a credential — and only the closed
+   * {@link AgentConfigHomeVar} set may be asked for, which is what keeps the
+   * structural note above true.
+   */
+  configHomeOverride(name: AgentConfigHomeVar): string | undefined;
 }
 
 /** The dirs a profile resolves its credential paths against. */
@@ -114,6 +124,7 @@ function credentialDirs(probe: DoctorProbe): CredentialDirs {
     home: probe.home(),
     xdgConfigHome: probe.xdgConfigHome(),
     xdgDataHome: probe.xdgDataHome(),
+    configHome: (name) => probe.configHomeOverride(name),
   };
 }
 
@@ -420,10 +431,16 @@ function credentialCheck(input: {
     };
   }
   if (!profile.credentialKnown) {
+    // ⚠️ A WARN, never a PASS (MOTIR-4957). This is the branch for a profile
+    // whose credential FILE could not be verified against the shipped CLI — an
+    // OS keyring, or a filename that follows a configurable profile. It says
+    // what could not be established rather than certifying a directory: a hard
+    // check that cannot fail is not a check, and `doctor`'s whole value is that
+    // a green run is permission to stop looking.
     return {
       ...base,
       status: 'warn',
-      detail: `${profile.label}'s credential location is not pinned by the profile matrix.`,
+      detail: `${profile.label}'s credential file is not pinned by the profile matrix — Motir cannot confirm a sign-in.`,
       remediation: profile.credentialHint,
     };
   }

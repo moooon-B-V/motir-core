@@ -159,7 +159,13 @@ describe('the `system.*` schedule is CLUSTERED — the quiet gap the compute sle
     // five-minute cadence; §21's clustering does not sell one, and the job's own
     // header records the trade it made instead (a thirty-minute backstop, with
     // the pane's own *Check again* covering the customer who is watching).
-    expect(jobSchedules().length).toBe(21);
+    //
+    // 22 since `system.code-graph-drift-sweep` (MOTIR-4644), also at
+    // `0,30 * * * *` and also costing NO NEW WAKE — the second job to take both
+    // clustered minutes rather than ask for a third. Derived by the grep above,
+    // not incremented from what the branch said: the 3701/3702 merge is the
+    // reason that distinction is written down.
+    expect(jobSchedules().length).toBe(22);
     expect(wakeMinutes()).toEqual([...SCHEDULE_CLUSTER_MINUTES].sort((a, b) => a - b));
     expect(wakeMinutes()).toEqual([0, 30]);
     expect(longestQuietGapMinutes()).toBe(30);

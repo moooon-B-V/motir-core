@@ -256,6 +256,33 @@ function correctionFrom(
     ...('targetRepo' in b
       ? { targetRepo: typeof b.targetRepo === 'string' ? b.targetRepo : null }
       : {}),
+    // The SET spellings of the same axis (bug MOTIR-4904). Read only when
+    // PRESENT, like everything else here — and they are LISTS, so like
+    // `blockedByRefs` above they replace rather than merge, and `[]` unpins.
+    // A non-array under either key is ignored rather than coerced: an absent key
+    // and a malformed one both mean the correction did not describe the axis, and
+    // the alternative would be inventing an unpin nobody asked for.
+    ...(Array.isArray(b.targetRepos)
+      ? { targetRepos: b.targetRepos.filter((r): r is string => typeof r === 'string') }
+      : {}),
+    ...(Array.isArray(b.targetRepositories)
+      ? {
+          targetRepositories: b.targetRepositories.filter(
+            (r): r is string => typeof r === 'string',
+          ),
+        }
+      : {}),
+    // The singular ROW-ID half of the pin (Story MOTIR-2732 · MOTIR-3045, surfaced
+    // by MOTIR-4924), beside the SET forms above and the ROLE below. Sparse like
+    // them: absent leaves the pin alone, an explicit `null` unpins. A non-string
+    // is ignored rather than coerced, for the same reason a malformed set member
+    // is — the correction did not describe the axis.
+    ...('targetRepositoryRef' in b
+      ? {
+          targetRepositoryRef:
+            typeof b.targetRepositoryRef === 'string' ? b.targetRepositoryRef : null,
+        }
+      : {}),
     // The ROLE half of the pin (MOTIR-3865) — structural, beside the name, and
     // the one a correction could not reach at all. It matters most exactly where
     // `targetRepo` cannot help: an ONBOARDING plan's repositories do not exist

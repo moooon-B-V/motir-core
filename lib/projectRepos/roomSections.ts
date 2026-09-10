@@ -1,4 +1,5 @@
 import type { ProjectRepoConnectedDto, ProjectRepoDto } from '@/lib/dto/projectRepos';
+import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { isOrganizationSeedSource } from '@/lib/projectRepos/vocabulary';
 
 // THE ROOM'S SECTIONS, split by ONE rule each (MOTIR-3126; a THIRD arrived with
@@ -115,10 +116,13 @@ function connectedOwner(repo: ProjectRepoConnectedDto): string | null {
  * exact class of bug this file exists to end. The server puts it on
  * `ProjectRepoRoomViewDto.hostOwner`; both callers pass it down from there.
  *
- * Case-INSENSITIVE, and the same comparison `isMotirOwnedRepo`
- * (`lib/ciMetering/config.ts`) makes for the CI meter's §5.1 gate — a GitHub
- * login is case-insensitive, and the configured value is whatever an operator
- * typed into an environment variable.
+ * ⚠️ AND IT IS LITERALLY THE SAME COMPARISON the organisation's inventory and
+ * the CI meter's §5.1 gate make — {@link isMotirHostedOwner}, since bug
+ * MOTIR-4892 gave the three of them one predicate. It used to be spelled out
+ * here, correctly, and spelled out again in `lib/ciMetering/config.ts`, also
+ * correctly, while `/settings/organization/git` made no such comparison at all —
+ * which is how one row read as the organisation's on one page and as Motir's on
+ * the page thirty pixels of navigation away.
  *
  * **`hostOwner: null` classifies NOTHING.** A deployment that cannot provision
  * (self-hosted, no `GITHUB_FALLBACK_ORG`) hosts no repositories, so there is
@@ -129,10 +133,7 @@ export function isMotirHostedConnectedRepo(
   repo: ProjectRepoConnectedDto,
   hostOwner: string | null,
 ): boolean {
-  if (!hostOwner) return false;
-  const owner = connectedOwner(repo);
-  if (owner === null) return false;
-  return owner.trim().toLowerCase() === hostOwner.trim().toLowerCase();
+  return isMotirHostedOwner(connectedOwner(repo), hostOwner);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -260,6 +260,7 @@ describe('doctorCommand', () => {
       home: () => '/home/tester',
       xdgConfigHome: () => '/home/tester/.config',
       xdgDataHome: () => '/home/tester/.local/share',
+      configHomeOverride: () => undefined,
     };
   }
 
@@ -350,6 +351,12 @@ describe('the real probe, against a temp home', () => {
     'MOTIR_CONFIG_HOME',
     'PATH',
     'MOTIR_AGENT',
+    // The agent config-home overrides. The real probe FOLLOWS these
+    // (MOTIR-4957), so a developer box or CI runner that has one set — this
+    // repo's own devcontainer exports CLAUDE_CONFIG_DIR — would send the probe
+    // straight out of the temp home these tests build.
+    'CLAUDE_CONFIG_DIR',
+    'CODEX_HOME',
   ] as const;
   const savedEnv = new Map(TOUCHED.map((key) => [key, process.env[key]]));
   const savedExitCode = process.exitCode;
@@ -362,9 +369,11 @@ describe('the real probe, against a temp home', () => {
     home = mkdtempSync(join(tmpdir(), 'motir-doctor-home-'));
     bin = join(home, 'bin');
     mkdirSync(bin);
-    // A credential directory holding a secret the report must never surface.
+    // A credential FILE holding a secret the report must never surface. The
+    // leading dot is load-bearing: `.credentials.json` is what Claude Code
+    // writes and what the probe looks for (MOTIR-4957).
     mkdirSync(join(home, '.claude'));
-    writeFileSync(join(home, '.claude', 'credentials.json'), '{"key":"sk-do-not-print-me"}');
+    writeFileSync(join(home, '.claude', '.credentials.json'), '{"key":"sk-do-not-print-me"}');
     const agent = join(bin, 'claude');
     writeFileSync(agent, '#!/bin/sh\necho "claude 1.4.2"\n');
     chmodSync(agent, 0o755);
@@ -373,6 +382,8 @@ describe('the real probe, against a temp home', () => {
     process.env['MOTIR_CONFIG_HOME'] = join(home, '.config');
     process.env['PATH'] = bin;
     process.env['MOTIR_AGENT'] = 'claude --dangerously-skip-permissions';
+    delete process.env['CLAUDE_CONFIG_DIR'];
+    delete process.env['CODEX_HOME'];
     stdout = '';
     write = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
       stdout += String(chunk);
@@ -462,7 +473,8 @@ describe('the real probe, against a temp home', () => {
     expect(probe.configuredAgentCommand()).toBeUndefined();
     expect(probe.hasEnv('MOTIR_AGENT')).toBe(true);
     expect(probe.hasEnv('DEFINITELY_UNSET_VAR')).toBe(false);
-    expect(probe.pathExists(join(home, '.claude'))).toBe(true);
+    expect(probe.pathExists(join(home, '.claude', '.credentials.json'))).toBe(true);
+    expect(probe.configHomeOverride('CLAUDE_CONFIG_DIR')).toBeUndefined();
 
     // Report against the real filesystem probe (no server: the temp config home
     // holds no token, so the auth row fails without a network call).
@@ -470,9 +482,39 @@ describe('the real probe, against a temp home', () => {
     expect(stdout).toContain('PASS  Coding agent');
     expect(stdout).toContain('claude 1.4.2');
     expect(stdout).toContain('PASS  Agent credential');
-    expect(stdout).toContain(join(home, '.claude'));
+    expect(stdout).toContain(join(home, '.claude', '.credentials.json'));
     expect(stdout).not.toContain('sk-do-not-print-me');
     expect(stdout).toContain('FAIL  Auth');
+  });
+
+  it('does NOT report "All hard checks passed" on a bare ~/.claude (MOTIR-4957)', async () => {
+    // The card's own container, reproduced through the REAL filesystem probe:
+    // `~/.claude` present, no `.credentials.json` in it, the agent unable to
+    // sign in — and `doctor` answering "All hard checks passed — 6 passed."
+    rmSync(join(home, '.claude', '.credentials.json'));
+    expect(existsSync(join(home, '.claude'))).toBe(true);
+
+    await doctorCommand({}, defaultDoctorProbe());
+    expect(stdout).toContain('FAIL  Agent credential');
+    expect(stdout).not.toContain('All hard checks passed');
+    expect(stdout).toContain(join(home, '.claude', '.credentials.json'));
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('follows CLAUDE_CONFIG_DIR out of the default home', async () => {
+    // The sandbox exports this to move the agent off its read-only mount. The
+    // probe follows it, so the credential is found where the agent reads it —
+    // and NOT in ~/.claude, which is emptied here to prove which one answered.
+    const relocated = join(home, 'agent-home', '.claude');
+    mkdirSync(relocated, { recursive: true });
+    writeFileSync(join(relocated, '.credentials.json'), '{"key":"sk-do-not-print-me"}');
+    rmSync(join(home, '.claude', '.credentials.json'));
+    process.env['CLAUDE_CONFIG_DIR'] = relocated;
+
+    await doctorCommand({}, defaultDoctorProbe());
+    expect(stdout).toContain('PASS  Agent credential');
+    expect(stdout).toContain(join(relocated, '.credentials.json'));
+    expect(stdout).not.toContain('sk-do-not-print-me');
   });
 
   it('WARNS on a real binary that refuses --version', async () => {

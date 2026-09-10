@@ -296,7 +296,7 @@ describe('guard · a refresh with no scope still fans out over everything', () =
     // The wire contract this depends on, asserted at its source: if the island
     // ever started sending `{}` unconditionally, the whole-set path would change
     // meaning without a single test failing anywhere else.
-    const client = read('app/(authed)/code-health/_components/CodeHealthClient.tsx');
+    const client = read('app/(authed)/code/_components/CodeHealthClient.tsx');
     expect(client).toMatch(/repoKeys === undefined\s*\?\s*\{ method: 'POST' \}/);
   });
 });
@@ -322,7 +322,7 @@ describe('guard · one repo failing never collapses the whole answer', () => {
     // MOTIR-2207 removed the shape where one rejection failed the whole page.
     // Both readers catch INSIDE the per-repo mapper, which is what makes their
     // `Promise.all` safe; this fails if either one loses its catch.
-    const page = read('app/(authed)/code-health/page.tsx');
+    const page = read('app/(authed)/code/_health.ts');
     expect(page).toMatch(/catch\s*\(err\)\s*\{\s*\n?\s*if \(err instanceof MotirAiError\)/);
 
     const service = read('lib/services/auditCoverageService.ts');

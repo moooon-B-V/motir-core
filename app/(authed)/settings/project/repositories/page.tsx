@@ -6,7 +6,6 @@ import { Pause } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { organizationConnected, summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import { GitConnectBanner } from '@/components/settings/GitConnectBanner';
@@ -66,16 +65,12 @@ export default async function ProjectRepositoriesPage({
   if (!session) redirect('/sign-in');
 
   const t = await getTranslations('repositoryTakeover');
-  const ts = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[46rem]">
-        <EmptyState title={ts('project.empty.title')} description={t('empty')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

@@ -179,10 +179,42 @@ before is gone.**
 
 ## 3. REPOSITORIES — and the two different actions behind one old row
 
-**The primary action is `Add or remove repositories`** — a `Button variant="primary"`, not a link.
+> **⚠️ AMENDED 2026-09-07 (MOTIR-4866): THIS SECTION HAS NO ACTION OF ITS OWN.** It read _"The
+> primary action is `Add or remove repositories` — a `Button variant="primary"`, not a link"_, and
+> drew a member's connect row beside it (§3.1). [MOTIR-1768]'s re-scope moved **both off this page**,
+> and this asset absorbed only the first of that re-scope's three removals — §4 retired the `Index`
+> tab and §3 was never swept, so the two halves of this document described two different pages.
+>
+> **The rows are READ-ONLY.** The section's only affordance is a link to
+> **Settings → Project → Repositories**.
+>
+> ⚠️ **§3.1's CAPABILITY RULE IS SATISFIED, NOT WAIVED, and the table below is kept because it is
+> the load-bearing part.** Both actions are carried forward — to surfaces that already ship them,
+> verified in code rather than assumed:
+>
+> | action                                                         | where it lives                   | shipped by                            |
+> | -------------------------------------------------------------- | -------------------------------- | ------------------------------------- |
+> | Configure which repositories this project works on (ORG ADMIN) | `/settings/project/repositories` | `_components/AddRepositoryPicker.tsx` |
+> | Connect YOUR OWN account (ANY MEMBER)                          | `/settings/account/git`          | `page.tsx` + `actions.ts`             |
+>
+> `GithubIdentity` is `userId @unique`, which is why the second is an ACCOUNT-tier surface and not a
+> project one. **Nothing a member could do before is gone** — the test §2.1 sets is still passed,
+> by a different route than this section originally took.
+>
+> ⚠️ **AND THE `code-access` CONSEQUENCE BELOW IS CORRECTED, because as written it instructed a
+> regression.** It said `/settings/project/code-access`'s `connectHref` _"has to be re-pointed at
+> the Code page, or the member's door survives in this design and dies in the build."_ Under this
+> scope that is backwards: the Code page has no connect row, so re-pointing there sends a member to
+> a door that is not there — the exact capability loss §3.1 forbids, arrived at by following §3.
+> **`connectHref` points at Settings → Account → Git.**
+>
+> **What is struck below:** the primary-action sentence, and the two-destination table's claim to be
+> _this section's_ button. **What survives:** why labelling by destination was wrong, which is a real
+> finding about that label and now belongs to the surface that owns the button.
 
-**It replaces `Manage on GitHub`, and the change is not cosmetic.** The old label named a
-_destination_; the new one names the _intent_. That matters because the destination is not one place:
+**The label names the INTENT, not the destination — a finding that travels with the button to
+Settings → Project → Repositories.** `Manage on GitHub` named a _destination_; `Add or remove
+repositories` names the _intent_. That matters because the destination is not one place:
 
 | provider   | where the action goes                                                                              |
 | ---------- | -------------------------------------------------------------------------------------------------- |
@@ -201,19 +233,28 @@ admin may configure into any project (§1).
 This is the capability check the collapse has to pass, and getting it wrong removes something a
 member could do before:
 
-| action                                                 | who                                                                                                                                                   | where it goes now                                                 |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| **Configure which repositories this project works on** | **org admin** — it is visibility configuration                                                                                                        | the `Add or remove repositories` button, in this section's header |
-| **Connect YOUR OWN account**                           | **any member** — `GithubIdentity` is `userId @unique`, and `projectSettingsNav.ts` calls it _"the one action nobody can take on [a member's] behalf"_ | its own row in this section, visible to everyone                  |
+| action                                                 | who                                                                                                                                                   | where it goes now                                                                              |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Configure which repositories this project works on** | **org admin** — it is visibility configuration                                                                                                        | **`/settings/project/repositories`** — `AddRepositoryPicker.tsx` (§3, corrected)               |
+| **Connect YOUR OWN account**                           | **any member** — `GithubIdentity` is `userId @unique`, and `projectSettingsNav.ts` calls it _"the one action nobody can take on [a member's] behalf"_ | **`/settings/account/git`** — an ACCOUNT-tier surface, because the identity is (§3, corrected) |
 
 Both reached `/settings/workspace/github`, which is what the `Git` row pointed at. **So removing that
 row without carrying BOTH forward removes a capability rather than a concept** — the thing an
-audience-preserving move is not allowed to do. Panel R draws the admin view and the member view side
-by side precisely so the second one cannot be forgotten.
+audience-preserving move is not allowed to do.
 
-**A consequence for another surface:** `/settings/project/code-access` uses
-`GITHUB_SETTINGS_PATH` as its `connectHref`. That link has to be re-pointed at the Code page, or the
-member's door survives in this design and dies in the build.
+⚠️ **THE RULE IS UNCHANGED; ONLY THE THIRD COLUMN MOVED (MOTIR-4866).** Both are carried forward, to
+surfaces that already ship them — so the rule is satisfied by a different route than this section
+first took, and the reason to keep this table is that it is the only place a reader can check that
+it still is. It used to read _"Panel R draws the admin view and the member view side by side
+precisely so the second one cannot be forgotten"_; the second is not forgotten, it is at
+Settings → Account → Git, and Panel R no longer draws either.
+
+**A consequence for another surface — CORRECTED 2026-09-07 (MOTIR-4866).**
+`/settings/project/code-access` uses `GITHUB_SETTINGS_PATH` as its `connectHref`. It is re-pointed
+at **Settings → Account → Git**, which is where the member's own-account connect now lives.
+~~_"That link has to be re-pointed at the Code page, or the member's door survives in this design and
+dies in the build."_~~ — struck, and struck because it was the more dangerous half: the Code page
+carries no connect row, so following it would have produced precisely the dead door it warned about.
 
 **Removing a repository here removes it from THIS project.** It does not delete the org's graph,
 which another project may still be using — and the copy says so, because "remove" over a shared asset
@@ -358,7 +399,7 @@ Two rules follow, and they are what stops this becoming a fork:
 ## 8. The connect aside — INHERITED vs NEW
 
 Source of the pattern: `design/coding-convention/design-notes.md` (its §10.3 block and Panel 6 state
-gallery), built in `app/(authed)/code-health/_components/DeepenAuditCard.tsx`.
+gallery), built in `app/(authed)/code/_components/DeepenAuditCard.tsx`.
 
 **Inherited wholesale — do not re-decide any of it:**
 
@@ -393,7 +434,7 @@ the correction is recorded here rather than quietly designed around.**
 
 The shipped precedent persists the flag in **`localStorage`, keyed per project**:
 
-- `app/(authed)/code-health/_components/CodeHealthClient.tsx` defines
+- `app/(authed)/code/_components/CodeHealthClient.tsx` defines
   `dismissKey(projectId) => 'motir:code-health:deepen-dismissed:' + projectId`, reads it through
   `useSyncExternalStore`, and writes `'1'` / removes it on dismiss and re-open.
 - `DeepenAuditCard.tsx` holds `useState` only for `copied` and `expanded`. The **dismissal is the
@@ -642,11 +683,17 @@ the change belongs on the record rather than in a build.
 **Added by the 2026-09-05 rework, and these are larger:**
 
 4. **[MOTIR-1768] is re-scoped and re-sized.** It was _"the code-context UI — connect affordance +
-   freshness indicator on `/planning` and `/code-health`"_. It is now **one `Code` page with three
-   sections, a new primary nav row, and the `Add or remove repositories` action** — and it must read
-   the PROJECT's connected set rather than the workspace's. That is a bigger card than the one that
-   was sized, and a **GIVES is a claim about SIZE**: it is re-estimated on the record in the same
-   pass, and split if the re-estimate crosses the gate.
+   freshness indicator on `/planning` and `/code-health`"_. It is now **one `Code` page with two
+   sections — Repositories and Health — and a new primary nav row**, reading the PROJECT's connected
+   set rather than the workspace's.
+
+   ⚠️ **CORRECTED 2026-09-07 (MOTIR-4866).** This item said _three_ sections _"and the `Add or remove
+repositories` action"_. Both were taken back by that card's own re-scope later the same day — the
+   `Index` section (§4), the add/remove action and the member connect row (§3) — and this asset had
+   absorbed only the first. The card was re-sized DOWN, 8 points to 5, in the same pass, which is the
+   same rule running in the other direction: an estimate is a claim, and it is owed a correction when
+   the claim changes.
+
 5. **[MOTIR-1767] reads the PROJECT's set.** Its service currently resolves repositories from the
    workspace installation, which is the leak §1 names. Corrected on the record.
 6. **[MOTIR-2029]'s decision is MADE, not proposed.** That record asked whether a repository should

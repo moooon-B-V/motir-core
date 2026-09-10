@@ -85,12 +85,15 @@ export function CreateTokenModal({
   onCreated,
   scopeOrgs,
   activeWorkspaceId,
+  activeProjectId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (token: ApiTokenDto) => void;
   scopeOrgs: TokenScopeOrgDTO[];
   activeWorkspaceId: string | null;
+  /** The project the reader is currently in — the picker's default. */
+  activeProjectId: string | null;
 }) {
   const t = useTranslations('settings.apiTokens');
   // The permission LABELS + DESCRIPTIONS are the shipped catalogue copy, so the
@@ -133,7 +136,21 @@ export function CreateTokenModal({
   // no round-trip and the offer can never disagree with what `create` accepts.
   const projectsHere =
     scopeOrgs.flatMap((o) => o.workspaces).find((w) => w.id === scope.workspaceId)?.projects ?? [];
-  const selectedProject = projectsHere.find((p) => p.id === projectId) ?? projectsHere[0] ?? null;
+  // ⚠️ THE DEFAULT IS THE ACTIVE PROJECT, NOT `projectsHere[0]` (MOTIR-4876).
+  // It used to be the first project in the workspace, which was indistinguishable
+  // from "the one you are in" for as long as a workspace could hold exactly one.
+  // A default project is now SEEDED per workspace (MOTIR-4870), so the first
+  // entry is typically the seeded one and a reader working in a project they
+  // made would have minted a token silently BOUND to a different project — the
+  // picker showing the right name only after they opened it. The scope picker
+  // one field up already opens on the active WORKSPACE (`initialScope`); this is
+  // the same rule one tier down, which is why the fallback chain ends the way it
+  // did rather than changing shape.
+  const selectedProject =
+    projectsHere.find((p) => p.id === projectId) ??
+    projectsHere.find((p) => p.id === activeProjectId) ??
+    projectsHere[0] ??
+    null;
   const conferrable = new Set<PermissionKey>(selectedProject?.grantable ?? []);
   const projectOptions: ComboboxOption<string>[] = projectsHere.map((p) => ({
     value: p.id,

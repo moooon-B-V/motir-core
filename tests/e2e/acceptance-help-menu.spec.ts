@@ -1,12 +1,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, adminDb } from './_helpers/db-reset';
-import {
-  createFirstProject,
-  createWorkspace,
-  signUp,
-  POST_AUTH_LANDING,
-} from './_helpers/shell-session';
+import { createWorkspace, signUp, POST_AUTH_LANDING } from './_helpers/shell-session';
 import { readDocsUrl, setDocsUrl } from './_helpers/docs-url';
 import {
   E2E_LEGAL_BASE,
@@ -76,7 +71,6 @@ import {
 test.describe.configure({ timeout: 300_000 });
 
 const EMAIL = 'acceptance-help-menu@example.com';
-const PROJECT = 'Help menu';
 /**
  * A SECOND workspace, and it is load-bearing rather than scenery.
  *
@@ -126,8 +120,38 @@ async function payForTheSecondWorkspace(email: string): Promise<void> {
   });
 }
 
-/** The rail's four surviving bottom rows, in order (`shell.nav.*`). */
-const BOTTOM_SECTION = ['Settings', 'Security', 'Job runs', 'Git'];
+/**
+ * The rail's surviving bottom rows, in order (`shell.nav.*`).
+ *
+ * ⚠️ RE-MEASURED by Story MOTIR-4843 · MOTIR-4849 — from four rows to two.
+ * `Security` and `Job runs` left this section: they were workspace-tier panes
+ * rendered in the PROJECT's rail, and they are now rows in the workspace area's
+ * own rail above the reveal and folded into `/settings/organization` below it.
+ *
+ * ⚠️ AND THIS IS A RE-MEASUREMENT, NOT AN AMENDMENT TO THE RECEIPT'S CLAIM —
+ * which matters, because `motir-core/CLAUDE.md` forbids the second thing:
+ * "when an acceptance spec goes red on a PR that did not change its story, do
+ * NOT update the assertion to match today." What this receipt CLAIMS is the two
+ * `not.toContain` assertions below — Docs and Legal left the rail for the Help
+ * menu — and they are untouched, still asserted over the whole rail, still true.
+ * This constant is the VEHICLE: a positional list of the section those two rows
+ * departed from, which a later story has legitimately changed underneath it.
+ *
+ * Leaving it stale was the other option and is the worse one: MOTIR-4239's
+ * vitest gate carries the identical list and is re-measured in this same PR, so
+ * a stale copy here would put the two homes in disagreement — which is
+ * MOTIR-4130's finding exactly ("a count carried in two places is a count
+ * nobody re-takes").
+ */
+// ⚠️ RE-MEASURED AGAIN (MOTIR-4643). `Git` left this section — the connection
+// LIFECYCLE is an org-admin act at Settings → Organisation → Git, and a member's
+// own account connect is at Settings → Account → Git, so both actions moved off
+// a PROJECT rail rather than being removed. The list is down to the door alone.
+//
+// This is the second re-measure, by the rule the comment above states: the
+// identical list lives in MOTIR-4239's vitest gate and is re-measured in the
+// same commit, because a count carried in two places is a count nobody re-takes.
+const BOTTOM_SECTION = ['Settings'];
 
 /** The Help menu's rows, in the order `HelpMenu` renders them. */
 const HELP_ROWS = ['Docs', 'Keyboard shortcuts', 'Legal documents'];
@@ -158,7 +182,7 @@ async function railRowNames(rail: Locator): Promise<string[]> {
 }
 
 /**
- * The rail's bottom section IS its last four rows, and neither departed row is
+ * The rail's bottom section IS its last rows, and neither departed row is
  * anywhere in it.
  *
  * The section is the LAST one `SidebarNav` pushes (`primary` then `bottom`), and
@@ -170,7 +194,11 @@ async function railRowNames(rail: Locator): Promise<string[]> {
  */
 async function expectRailBottomSection(rail: Locator): Promise<void> {
   const names = await railRowNames(rail);
-  expect(names.slice(-4), 'the rail’s bottom section').toEqual(BOTTOM_SECTION);
+  // Sliced by the CONSTANT's own length, not a literal: the two drifted apart
+  // once already (the list said four rows after MOTIR-4640 took `Git` out of the
+  // design asset), and a hard-coded `-4` beside a two-row list fails describing
+  // the wrong thing.
+  expect(names.slice(-BOTTOM_SECTION.length), 'the rail’s bottom section').toEqual(BOTTOM_SECTION);
   expect(names, 'Docs left the rail for the Help menu').not.toContain('Docs');
   expect(names, 'Legal left the rail for the Help menu').not.toContain('Legal documents');
   expect(names, 'the pre-MOTIR-4239 label is gone too').not.toContain('Legal');
@@ -308,12 +336,18 @@ test('the rail is for daily work — Docs, Keyboard shortcuts and Legal document
     // `payForTheSecondWorkspace`.
     await payForTheSecondWorkspace(EMAIL);
     await createWorkspace(page, SECOND_WORKSPACE);
-    // Back to the landing surface explicitly: the switch lands the new (empty)
-    // workspace wherever the shell decides, and `createFirstProject` drives the
-    // no-project CTA, so the spec says where it is rather than inheriting it.
+    // Back to the landing surface explicitly, so the spec says where it is
+    // rather than inheriting wherever the switch happens to land.
+    //
+    // ⚠️ NO `createFirstProject` HERE ANY MORE (MOTIR-4876). This used to read
+    // "the switch lands the new (EMPTY) workspace … and `createFirstProject`
+    // drives the no-project CTA": the new workspace had no project, so one had
+    // to be made before the rail could show a primary section. A workspace
+    // seeds its own project now (MOTIR-4870), so the rail is already REAL — the
+    // condition this chapter needs — and the call had become a request for a
+    // SECOND project, driving a CTA that no longer exists.
     await page.goto(POST_AUTH_LANDING);
     await expect(page.getByTestId('workbench-page')).toBeVisible({ timeout: 60_000 });
-    await createFirstProject(page, PROJECT);
     await expect(rail).toBeVisible();
 
     await expectRailBottomSection(rail);

@@ -31,22 +31,30 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
 
+  // ⚠️ A REGISTRATION LANDS ON THE ONBOARDING ENTRANCE NOW (MOTIR-4871), not on
+  // the Workbench. This local copy of `signUp` keeps its own contract — leave
+  // the caller in the app — by settling where the registration actually goes
+  // and then navigating on, exactly as the shared helper does.
   const createButton = page.getByRole('button', { name: /^(Create account|Creating account…)$/ });
   for (let attempt = 0; attempt < 3; attempt++) {
     await createButton.click();
     const landed = await page
-      .waitForURL('**/workbench', { timeout: 9_000 })
+      .waitForURL('**/onboarding', { timeout: 9_000 })
       .then(() => true)
       .catch(() => false);
-    if (landed || page.url().includes('/workbench')) return;
+    if (landed || page.url().includes('/onboarding')) break;
     await page.waitForTimeout(11_000);
   }
+  await page.waitForURL('**/onboarding');
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench');
 }
 
 async function createFirstProject(page: Page, name: string): Promise<void> {
-  // The projects-empty-state CTA (on /workbench, where sign-up lands) opens the
-  // create-project modal.
+  // ⚠️ The projects-empty-state CTA is gone (MOTIR-4872) and a fresh account
+  // already HAS a project (MOTIR-4870); the switcher's create door is where an
+  // additional one is made, and it is what this now drives.
+  await page.getByRole('button', { name: 'Switch project' }).click();
   await page.getByRole('button', { name: 'Create project' }).first().click();
   await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
   await page.getByLabel('Project name').fill(name);

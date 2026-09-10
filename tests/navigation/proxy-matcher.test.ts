@@ -127,7 +127,7 @@ describe('proxy config.matcher', () => {
     expect(source).toContain('404-not-403');
   });
 
-  it('the eighteen (authed) segments are the ones measured, not a copied list', async () => {
+  it('the nineteen (authed) segments are the ones measured, not a copied list', async () => {
     // A regression guard on the ENUMERATION, not on the matcher: if this number
     // moves, a segment was added or removed and the first test above is the one
     // that should have failed. Kept because the card's own measurement is the
@@ -135,6 +135,11 @@ describe('proxy config.matcher', () => {
     expect(topLevelSegments('(authed)')).toEqual([
       'backlog',
       'boards',
+      // MOTIR-1768 — the Codebase room, and the NINETEENTH segment. `code-health`
+      // stays beside it rather than being replaced: that route still exists as a
+      // permanent redirect into this one, so the filesystem serves both and the
+      // matcher must cover both.
+      'code',
       'code-health',
       'dashboard',
       'direction',

@@ -2,7 +2,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { CodeHealthClient } from '@/app/(authed)/code-health/_components/CodeHealthClient';
+import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClient';
 import type { CodeAuditSurfaceDTO, RepoAuditSurfaceDTO } from '@/lib/dto/codeHealth';
 
 // The PER-REPO and BULK audit triggers (MOTIR-2249 · design Panel 8), over the

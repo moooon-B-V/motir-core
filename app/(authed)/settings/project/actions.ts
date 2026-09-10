@@ -19,6 +19,7 @@ import {
   ProjectTagsInvalidError,
 } from '@/lib/projects/errors';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // Server Actions for the editable project Details page (Story 6.8 · Subtask
 // 6.8.4). Transport only (per CLAUDE.md, Server Actions are the route-layer
@@ -44,7 +45,12 @@ async function requireProjectContext(): Promise<ResolvedContext> {
   const session = await getSession();
   if (!session) redirect('/sign-in');
   const ctx = await getActiveProject();
-  if (!ctx) redirect('/dashboard');
+  // ⚠️ RE-POINTED at the landing constant (MOTIR-4874). This spelled
+  // `/dashboard` — a route literal under a guard about where a reader with
+  // no project goes, which is the exact shape `landing-owner-guard` exists
+  // to catch. The branch itself is unreachable now (MOTIR-4870); the
+  // literal was reachable by every future reader of this file.
+  if (!ctx) redirect(AUTHED_LANDING_PATH);
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, key: ctx.project.identifier };
 }
 

@@ -1,19 +1,24 @@
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { compile } from 'tailwindcss';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 // MOTIR-4687 — a design mock's STYLESHEET and its MARKUP are two hand-maintained
 // lists that are supposed to be in correspondence, and until this spec nothing
 // checked that they were, in either direction.
 //
-// ── The two directions, and why they are one guard ──────────────────────────
+// ── The four directions, and why they are one guard ─────────────────────────
 // A `*.mock.html` is static HTML with a hand-written "utility shims" `<style>`
 // block. It is not Tailwind output, so an arbitrary-value utility exists only
 // if that block spells it out. Two things then go wrong, and they are exact
 // inverses:
 //
 //   (A) INERT — an element carries a class that no rule declares. The class
-//       does nothing and the element renders at whatever it inherits.
+//       does nothing and the element renders at whatever it inherits. The
+//       predicate is ARBITRARY-VALUE, **or** VARIANT-PREFIXED (MOTIR-4890),
+//       **or** a PLAIN class the project's own Tailwind build can name
+//       (MOTIR-4921 — `utilityVocabulary` below, and `isArbitrary`'s note for
+//       why the first two arms are still split out).
 //       MOTIR-4687's own population: 115 occurrences of 12 un-prefixed
 //       arbitrary-value utilities across 8 assets on `origin/main` `cd77d0225`,
 //       among them a section heading asking for `text-[19px]` and getting the
@@ -30,10 +35,29 @@ import { describe, expect, it } from 'vitest';
 //       assets declared `.text-\(--el-text-faint\)` as
 //       `color: var(--el-text-secondary)`.
 //
+//   (D) UN-ADOPTED — a class ONE mock's shim block declares, that a DIFFERENT
+//       mock carries with no rule of its own (MOTIR-4944). Direction (A) asks
+//       TAILWIND whether a plain class names a style; this asks THE TREE, which
+//       is the only thing that can answer for the mocks' own semantic
+//       vocabulary — `nl`, `ic`, `brand-glyph`, `mini-label`. 165 occurrences of
+//       21 tokens across 28 assets on `origin/main` `1491e9464`, among them
+//       three shell assets whose brand mark painted the inherited ink instead of
+//       `--el-accent-on-surface`, and a settings option row whose NAME line had
+//       no truncation while its own description line did.
+//
 // (A) silently un-styles the ASSET; (B) misleads a READER; (C) survives both,
 // because the class exists and the rule exists and they are in correspondence —
-// the rule is simply not what it says. One cause, three costs, which is why
+// the rule is simply not what it says. (D) is (A) again, arriving through a
+// vocabulary no compiler has an opinion on. One cause, four costs, which is why
 // fixing one alone leaves the set incomplete.
+//
+// ⚠️ (A) AND (D) ARE DISJOINT BY CONSTRUCTION, AND THE REMEDIES ARE WHY. (A)'s
+// is mechanical — the compiler writes the rule, and the only question is whether
+// the element wants it. (D)'s is a JUDGEMENT: the rule already exists, in another
+// file, written by somebody who meant something by the name, and copying it is
+// right only if the two assets mean the same thing. So a token (A) reports is
+// never also reported here, and `TREE_DECLARED_COLLISIONS` is where the answer
+// came out `no`.
 //
 // ── Why no existing guard sees any of them ──────────────────────────────────
 // `design-ink-contrast` and `design-state-ink-contrast` read the ink a rule
@@ -387,15 +411,63 @@ export function cssStructureFindings(html: string): { kind: string; at: number }
 /**
  * An ARBITRARY-VALUE utility — one carrying `[…]` or `(…)`.
  *
- * These are the ones the shim block has to spell out. A plain `.flex` may
- * legitimately be missing from a mock that inherits a stylesheet; an
- * arbitrary-value utility has no such fallback, because nothing generates it.
+ * ⚠️ THE REASON THIS PREDICATE WAS GIVEN IS FALSE HERE, AND IT IS CORRECTED
+ * RATHER THAN DELETED BECAUSE IT IS THE KIND OF SENTENCE A READER RE-DERIVES
+ * (MOTIR-4890). It used to read: *"a plain `.flex` may legitimately be missing
+ * from a mock that inherits a stylesheet; an arbitrary-value utility has no
+ * such fallback, because nothing generates it."* That is true of APPLICATION
+ * code, where a plain utility does come from a shared Tailwind build. **A
+ * `*.mock.html` inherits no stylesheet** — it is a single self-contained
+ * document whose only CSS is its own hand-written shim block, which is the
+ * premise this whole guard is built on, stated at the top of this file. So the
+ * exemption had no referent, and a plain class an asset carries and never
+ * declares is exactly as inert as an arbitrary-value one.
+ *
+ * ⚠️ SO DIRECTION (A) NO LONGER FILTERS ON IT — `inertUtilities` reports a
+ * token that is arbitrary OR variant-prefixed. What the predicate still does is
+ * SPLIT the two arms below, which are different sized problems, and it is the
+ * measurement rather than the argument that decides where the guard stops. Over
+ * `git ls-tree -r origin/main design/` at `a5b443e00`, 176 mocks:
+ *
+ *   • `isVariant` (arbitrary or plain) — **93 occurrences, 6 distinct, 1
+ *     asset**, all of them plain, because the arbitrary half is already at
+ *     zero. Tractable, and dispositioned by MOTIR-4890 (see
+ *     `INERT_VARIANT_DEBT`).
+ *   • EVERY undeclared class — **4512 occurrences, 167 distinct, 46 assets**,
+ *     of which **4116 are `lucide` / `lucide-*`**: the class names Lucide's own
+ *     SVG output stamps on an icon (`class="lucide lucide-menu h-5 w-5"`). They
+ *     are an identity marker, not a utility, and no shim block should ever
+ *     declare one. The residue is **303 occurrences of 50 across 36 assets**
+ *     and does not resolve to a single disposition either — it mixes genuinely
+ *     inert Tailwind utilities (`underline` 24, `underline-offset-2` 24,
+ *     `size-3` 8, `items-stretch` 9) with more hook names (`nl` 21, `ic` 20,
+ *     `seg-ic` 20, `brand-glyph` 19, `ProseMirror` 7, `tiptap` 7).
+ *
+ * **A predicate whose population is 91% one library's identity namespace is not
+ * a widening this guard can hold at zero**, and the honest form of the
+ * remainder is a class test that separates a STYLE utility from a HOOK — which
+ * is its own card, not a filter to guess at here. That is MOTIR-4921, with this
+ * measurement and its command.
+ *
+ * ⚠️ MOTIR-4921 SHIPPED THAT PREDICATE, AND THE ARM ABOVE IS NO LONGER WHERE
+ * DIRECTION (A) STOPS. `utilityVocabulary` below asks the project's own Tailwind
+ * build whether a token is nameable, so a plain `underline` is reported and a
+ * plain `lucide-menu` is not. What `isArbitrary` and `isVariant` still do is
+ * SPLIT the reported set into the three arms below, which are different sized
+ * problems with different remedies — an arbitrary-value class needs a token
+ * decision, a variant needs a state decision, and a plain nameable one is a rule
+ * the compiler already writes.
  */
 export const isArbitrary = (token: string): boolean => token.includes('[') || token.includes('(');
 
 /**
  * A VARIANT-prefixed token — `hover:`, `focus-visible:`, `data-[state=…]:`,
  * `[&_svg]:`.
+ *
+ * ⚠️ SINCE MOTIR-4890 THIS IS THE PREDICATE DIRECTION (A) IS ABOUT, not a
+ * sub-filter of `isArbitrary`: a variant is reported whether or not it carries
+ * `[` or `(`, so `disabled:opacity-50` is a finding on the same terms as
+ * `hover:text-(--el-text)`.
  *
  * Split out because the two halves are DIFFERENT SIZED problems and MOTIR-4687
  * fixed one of them (see `INERT_VARIANT_DEBT`), not because a variant is less
@@ -407,11 +479,146 @@ export const isArbitrary = (token: string): boolean => token.includes('[') || to
  */
 export const isVariant = (token: string): boolean => token.includes(':') || token.includes('&');
 
-/** DIRECTION (A): arbitrary-value classes an asset carries and does not declare. */
-export function inertUtilities(mock: MockSource): { token: string; count: number }[] {
+/**
+ * A STYLE UTILITY, as opposed to a HOOK — MOTIR-4921's predicate, and the third
+ * arm of direction (A).
+ *
+ * ── The question, and why a list cannot answer it ───────────────────────────
+ * Once `isArbitrary`'s exemption was corrected (MOTIR-4890), a PLAIN undeclared
+ * class is inert on exactly the same argument as an arbitrary-value one — but
+ * the population that predicate would report is 4419 occurrences of 161 across
+ * 46 assets, and **4116 of them are `lucide` / `lucide-<icon>`**, the class names
+ * Lucide's own SVG output stamps on an icon. Those are an identity marker: no
+ * shim block should ever declare one, and a guard reporting them would be
+ * reporting on the icon library. The residue mixes real inert utilities
+ * (`underline`, `size-3`) with more hook names (`nl`, `ic`, `ProseMirror`), and a
+ * COUNT cannot separate the two.
+ *
+ * ⚠️ A `lucide-*` / `ProseMirror` PREFIX LIST WOULD SEPARATE THEM TODAY AND NOT
+ * TOMORROW — the next library spliced into a mock would be invisible to it
+ * exactly as these were. So the predicate is DERIVED: **a token is a style
+ * utility iff the project's own stylesheet can produce a rule for it** —
+ * `@import 'tailwindcss'` plus `packages/design-system/theme.css`, compiled by
+ * the Tailwind the app actually builds with. That is the same move
+ * `design-token-layer.test.ts` makes when it reads the legitimate token names out
+ * of `theme.css` rather than allowing a `--color-*` prefix, and the same one
+ * direction (B) makes when it computes deadness from the whole tree.
+ *
+ * ⚠️ AND IT IS ASKED OF THE COMPILER, NOT OF A TRANSCRIPTION OF ITS GRAMMAR.
+ * Tailwind's utility grammar is hundreds of static utilities plus every scale
+ * family; any hand-written approximation of it IS a spelling, with the same
+ * expiry date as the prefix list it replaced. `compile()` is what the app's own
+ * build calls, so the answer moves when the theme moves.
+ *
+ * ── What it measures, on the tree it landed on ──────────────────────────────
+ * Over `git ls-tree -r origin/main design/` at `77ce24c38`, 176 mocks, the 161
+ * distinct PLAIN undeclared tokens split:
+ *
+ *   • UTILITY — **93 occurrences, 16 distinct, 6 assets**. Every one is a
+ *     Tailwind utility with a rule the compiler writes: `underline` 24,
+ *     `underline-offset-2` 24, `items-stretch` 9, `border-s` 9, `size-3` 8,
+ *     `sr-only` 3, `h-14` / `justify-between` / `gap-2` / `min-w-0` / `h-5` /
+ *     `w-5` 2 each, `px-3.5` / `py-3` / `h-3.5` / `w-3.5` 1 each. All were
+ *     DECLARED by MOTIR-4921 — see `INERT_VARIANT_DEBT`.
+ *   • HOOK — **4326 occurrences, 145 distinct, 42 assets**, of which 4116 are
+ *     the Lucide namespace and the rest are the mocks' own semantic classes
+ *     (`nl`, `ic`, `seg-ic`, `brand-glyph`, `ProseMirror`, `tiptap`). Not one is
+ *     a name Tailwind can produce a rule for, which is the predicate saying so
+ *     rather than a list naming them.
+ *
+ * ⚠️ `group` LANDS ON THE HOOK SIDE, AND THAT IS THE PREDICATE BEING RIGHT
+ * ABOUT A CASE A LIST WOULD HAVE GOT WRONG. It is Tailwind's own variant ANCHOR:
+ * the compiler emits no rule for it, because it styles nothing by itself and
+ * exists for `group-hover:` to select through. A class that paints nothing when
+ * declared is not an inert class when undeclared.
+ *
+ * ── WHERE IT STOPS, so the next reader inherits the boundary ────────────────
+ * The predicate is silent about a class the TREE styles and Tailwind does not —
+ * **165 occurrences of 21 tokens across 28 assets** at `1491e9464`. That is
+ * **DIRECTION (D)** now (`foreignDeclaredUtilities` below, MOTIR-4944), not an
+ * open boundary: the tokens are dispositioned, the 14 DECLAREs are in their
+ * assets, and the six the answer came out `no` for are in
+ * `TREE_DECLARED_COLLISIONS` by NAME and by FILE.
+ *
+ * What is still true, and is the reason the two predicates stay separate: this
+ * one answers *can the compiler write a rule for this name*, and it has no
+ * opinion whatsoever about `nl` or `brand-glyph`. Direction (D) answers *does
+ * some other mock in this tree already write one*, which is a question only the
+ * tree can be asked.
+ *
+ * ⚠️ AND IT IS SILENT ABOUT THE 4161 OCCURRENCES IN NEITHER SET — `lucide` and
+ * its 110 icon classes, `ProseMirror`, `tiptap`. Nothing declares them, nothing
+ * should, and no direction of this guard is ever going to report them: direction
+ * (D) asks the tree and the tree says nothing about them either. That is the
+ * boundary being where it belongs rather than a gap left open.
+ */
+export const TAILWIND_ENTRY = "@import 'tailwindcss';\n@import '@motir/design-system/theme.css';\n";
+
+/**
+ * The subset of `tokens` the project's own Tailwind build produces a rule for.
+ *
+ * ONE compile for the whole candidate set, and membership is read off the
+ * emitted SELECTORS with this file's own `CLASS_SELECTOR` / `unescapeCss` — so
+ * `px-3.5` is matched through the `.px-3\.5` the compiler writes, and a token
+ * that only ever appears inside a value is not mistaken for a rule.
+ *
+ * The baseline is NOT subtracted: `theme.css` declares a handful of classes of
+ * its own (`.animate-spin`, `.style-vignette`, the `[data-style]` shape
+ * overrides), and a mock carrying one of those bare is inert on the same terms
+ * as one carrying `underline` bare.
+ */
+export async function utilityVocabulary(tokens: Iterable<string>): Promise<Set<string>> {
+  const candidates = [...tokens];
+  const compiler = await compile(TAILWIND_ENTRY, {
+    base: ROOT,
+    loadStylesheet: async (id: string, base: string) => {
+      const path = id.startsWith('@motir/design-system')
+        ? join(ROOT, 'packages/design-system/theme.css')
+        : id === 'tailwindcss'
+          ? join(ROOT, 'node_modules/tailwindcss/index.css')
+          : resolve(base, id);
+      return { path, base: dirname(path), content: readFileSync(path, 'utf8') };
+    },
+    loadModule: async () => {
+      throw new Error(
+        'the design guard compiles the theme with no Tailwind plugin — a plugin arriving here ' +
+          'means the entry above has drifted from the one app/globals.css builds',
+      );
+    },
+  });
+  const emitted = new Set<string>();
+  for (const match of compiler.build(candidates).matchAll(CLASS_SELECTOR))
+    emitted.add(unescapeCss(match[1]!));
+  return new Set(candidates.filter((token) => emitted.has(token)));
+}
+
+/**
+ * DIRECTION (A): classes an asset carries and does not declare — arbitrary-value,
+ * variant-prefixed, or a plain one `namesUtility` calls a style utility.
+ *
+ * ⚠️ THE PREDICATE IS INJECTED, not read off a module-level set, for the same
+ * reason `deadUtilities` takes the whole tree: it keeps the core PURE, so the
+ * fixtures below can pin both sides of the boundary without a compile, and one
+ * dedicated arm pins the REAL predicate's classification. A guard whose
+ * reporting branch is only ever exercised by the tree failing is a guard nobody
+ * has seen work.
+ *
+ * ⚠️ THE THIRD ARM IS MOTIR-4921's WIDENING; the `isVariant` arm was
+ * MOTIR-4890's. It was `isArbitrary(token)` alone, and that filter could not see
+ * a PLAIN inert class at all. The three arms below then split this set:
+ * un-prefixed (`!isVariant`) and variant, exactly as before — a plain nameable
+ * utility carries neither `[`, `(`, `:` nor `&`, so it joins the un-prefixed arm.
+ */
+export function inertUtilities(
+  mock: MockSource,
+  namesUtility: (token: string) => boolean,
+): { token: string; count: number }[] {
   const declared = declaredClasses(mock.source);
   return [...usedClasses(mock.source)]
-    .filter(([token]) => isArbitrary(token) && !declared.has(token))
+    .filter(
+      ([token]) =>
+        (isArbitrary(token) || isVariant(token) || namesUtility(token)) && !declared.has(token),
+    )
     .map(([token, count]) => ({ token, count }))
     .sort((a, b) => b.count - a.count || a.token.localeCompare(b.token));
 }
@@ -442,6 +649,78 @@ export function deadUtilities(mocks: MockSource[]): Map<string, string[]> {
   return dead;
 }
 
+/**
+ * DIRECTION (D): classes an asset carries, does not declare, and that ANOTHER
+ * mock in the tree DOES declare — MOTIR-4944.
+ *
+ * ── The question, and why the tree is the only thing that can answer it ─────
+ * Direction (A) reports a plain undeclared class when the project's own Tailwind
+ * build can name it (`utilityVocabulary`). That is right about what it claims and
+ * silent about the mocks' OWN semantic vocabulary — `nl`, `ic`, `brand-glyph`,
+ * `mini-label`, `decided-strip` — which no compiler can name and which the shim
+ * blocks are full of, because a block is COPIED between assets rather than
+ * generated. When the copy drops a rule the markup kept, the element renders
+ * unstyled relative to its sibling: the same defect direction (A) exists for,
+ * arriving through a vocabulary Tailwind has no opinion on.
+ *
+ * So the predicate is DERIVED FROM THE TREE, exactly as `deadUtilities` is and
+ * for the same reason: a spelling would expire, and the tree is what the
+ * question is actually about. It is `deadUtilities` pointed the other way —
+ * (B) says a rule NOTHING carries is dead, and (D) says a class NOTHING HERE
+ * declares is inert.
+ *
+ * ⚠️ IT SUBTRACTS DIRECTION (A), WHICH IS WHAT MAKES THE TWO REMEDIES STAY
+ * APART. A Tailwind-nameable token that some mock also declares is (A)'s — the
+ * compiler writes its rule and nobody has to decide anything. Reporting it here
+ * as well would offer a reader two different remedies for one occurrence, and the
+ * one this direction offers is the expensive one. (The overlap is empty today
+ * because (A) is at zero; it is subtracted so that it stays empty when (A) is
+ * next widened.)
+ *
+ * ⚠️ IT READS THE MARKUP VIEW, NOT THE SCRIPT ONE — the same boundary direction
+ * (A) has, deliberately. `usedClasses` is the static attribute scan, so a class a
+ * mock's `<script>` puts on an element at runtime is not reported here even when
+ * a sibling declares it. Direction (B) DOES read `scriptCarriedClasses`, and the
+ * asymmetry is the one `scriptOf`'s note explains: for "is this class inert" the
+ * script block is a template a reader cannot see, and for "is this rule dead" it
+ * is evidence the class is carried. (D) is the first question, so it takes (A)'s
+ * view of the document.
+ *
+ * ⚠️ AND THE MATCH IS ON THE TOKEN, WHILE THE REMEDY IS ON THE COMPOUND
+ * SELECTOR THAT CARRIES IT. `declaredClasses` reads `.shell.compact` and
+ * `.opt .ot .nm` as declaring `compact` and `nm`, which is correct for
+ * "does the tree style this name" and is NOT a rule to copy: what gets copied is
+ * the selector whose OTHER halves the carrying asset also has. Two of the 14
+ * DECLAREs were exactly that shape — `compact` had three declarations and only
+ * `.shell.compact` was the one to take.
+ */
+export function foreignDeclaredUtilities(
+  mocks: MockSource[],
+  namesUtility: (token: string) => boolean,
+): Map<string, { token: string; count: number }[]> {
+  const declaredIn = new Map<string, Set<string>>();
+  for (const mock of mocks)
+    for (const name of declaredClasses(mock.source))
+      declaredIn.set(name, (declaredIn.get(name) ?? new Set()).add(mock.path));
+
+  const findings = new Map<string, { token: string; count: number }[]>();
+  for (const mock of mocks) {
+    const declared = declaredClasses(mock.source);
+    const rows = [...usedClasses(mock.source)]
+      .filter(([token]) => {
+        if (declared.has(token)) return false;
+        // Direction (A)'s, whichever of its three arms reports it.
+        if (isArbitrary(token) || isVariant(token) || namesUtility(token)) return false;
+        const elsewhere = declaredIn.get(token);
+        return elsewhere !== undefined && [...elsewhere].some((path) => path !== mock.path);
+      })
+      .map(([token, count]) => ({ token, count }))
+      .sort((a, b) => b.count - a.count || a.token.localeCompare(b.token));
+    if (rows.length > 0) findings.set(mock.path, rows);
+  }
+  return findings;
+}
+
 /** How many globally-dead rules each mock declares. */
 export function deadCountByFile(mocks: MockSource[]): Map<string, number> {
   const counts = new Map<string, number>();
@@ -452,8 +731,9 @@ export function deadCountByFile(mocks: MockSource[]): Map<string, number> {
 
 // ── DIRECTION (C): the rule agrees with its own NAME (MOTIR-4812) ───────────
 //
-// The two directions above both ask about EXISTENCE — does this class have a
-// rule, does this rule have a class. Neither asks whether the rule DOES what
+// The three directions above all ask about EXISTENCE — does this class have a
+// rule, does this rule have a class, does some OTHER mock have the rule this one
+// is missing. None of them asks whether the rule DOES what
 // its name says, and an arbitrary-value utility's name is a promise about
 // exactly one thing: `.text-\(--el-text-faint\)` paints `--el-text-faint`.
 //
@@ -547,6 +827,13 @@ const BARE_VAR = /^var\(\s*(--[a-z0-9-]+)\s*\)$/;
  * (`box-shadow: var(--tw-inset-shadow), …, var(--tw-shadow)`), so the
  * declaration that carries the promise is the custom property, and the composed
  * one is not a bare `var()` at all.
+ *
+ * ⚠️ TEN PREFIXES LEFT THIS MAP WITH MOTIR-4814, and the map is derived rather
+ * than curated precisely so that they had to: `gap`, `inset-ring`, `min-h`, `mx`,
+ * `outline`, `pb`, `pt`, `rounded-b`, `rounded-t` and `space-y` occurred in the
+ * tree ONLY inside the two swept assets' dead rules, so a sweep that emptied
+ * `DEAD_UTILITY_DEBT` also took the last rule each of them had. The totality arm
+ * caught every one — which is what a map that may only grow could never do.
  */
 export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   bg: ['background-color'],
@@ -555,30 +842,20 @@ export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   divide: ['border-color'],
   duration: ['transition-duration', '--tw-duration'],
   fill: ['fill'],
-  gap: ['gap'],
   h: ['height'],
-  'inset-ring': ['--tw-inset-ring-color'],
   mb: ['margin-bottom'],
-  'min-h': ['min-height'],
   'min-w': ['min-width'],
   mt: ['margin-top'],
-  mx: ['margin-inline'],
-  outline: ['outline-color'],
   p: ['padding'],
-  pb: ['padding-bottom'],
   pl: ['padding-left'],
   pr: ['padding-right'],
-  pt: ['padding-top'],
   px: ['padding-inline', 'padding-left', 'padding-right'],
   py: ['padding-block', 'padding-bottom', 'padding-top'],
   ring: ['--tw-ring-color'],
   'ring-offset': ['--tw-ring-offset-color'],
   rounded: ['border-radius'],
-  'rounded-b': ['border-bottom-left-radius', 'border-bottom-right-radius'],
-  'rounded-t': ['border-top-left-radius', 'border-top-right-radius'],
   shadow: ['--tw-shadow'],
   size: ['width', 'height'],
-  'space-y': ['margin-block-start', 'margin-block-end'],
   stroke: ['stroke'],
   text: ['color'],
   w: ['width'],
@@ -715,79 +992,345 @@ export function misdeclaredUtilities(mock: MockSource): string[] {
  * cards names both, and the first of them to land DECREMENTS the row rather
  * than deleting it — which is what `design/shell/help-menu.mock.html` did here,
  * 34 → 6.
+ *
+ * ⚠️ EMPTY, AND THAT IS THE POINT OF THE TABLE RATHER THAN AN ABSENCE OF ONE.
+ * MOTIR-4810 took 636 → 104 (the structural `[&_…]:` half), MOTIR-4845 took
+ * 104 → 100 without meaning to, and MOTIR-4813 took 100 → 0 (the STATE half),
+ * so direction (A) is now at zero over the WHOLE tree in both halves and the
+ * exact-count arm below holds every mock there.
+ *
+ * The middle step is worth a line because it is the only one nobody planned:
+ * MOTIR-4845 removed the `Workspace settings` row from `account-menu`, which
+ * took that panel's whole conditional AXIS with it, so two of its four frames
+ * collapsed and 4 inert occurrences went with them. Four fewer defects and
+ * not one of them fixed — which is why the row was RE-MEASURED there rather
+ * than decremented by arithmetic.
+ * The table stays because it is the ratchet: an inert variant landing in any
+ * asset now fails with no row to hide behind, and a row added back has to
+ * carry a card that says why.
+ *
+ * ⚠️ ZERO USED TO BE ZERO FOR `isArbitrary` ONLY, WHICH WAS NARROWER THAN IT
+ * READ — MOTIR-4890 WIDENED IT AND TOOK THE REMAINDER TO ZERO. 93 occurrences
+ * of 6 PLAIN inert variants survived the arm reaching zero, all in
+ * `design/ai-chat/plan-change-run-live.mock.html`, because `inertUtilities`
+ * filtered on `isArbitrary` and a plain token carries no `[` or `(`. The
+ * exemption's stated reason was that a plain class may come from an inherited
+ * stylesheet, and a `*.mock.html` inherits none — the correction is at
+ * `isArbitrary`, with the measurement that chose the widening's ceiling.
+ *
+ * What MOTIR-4890 disposed of, per utility, on MOTIR-4813's terms — all six
+ * DECLARE, and the discriminator is that every one is a verbatim transcription
+ * of a class list the SHIPPED component carries, so the rule to copy already
+ * existed rather than being authored here:
+ *
+ *   `disabled:opacity-50` 25 · `disabled:pointer-events-none` 16
+ *   (`packages/design-system/src/components/ui/Button.tsx:34`),
+ *   `focus-visible:ring-offset-2` 16 · `focus-visible:ring-offset-background`
+ *   16 (`Button.tsx:33`), `hover:opacity-90` 11 (`Button.tsx:39`, the primary
+ *   variant), `disabled:opacity-60` 9
+ *   (`components/planning/PlanChangeComposer.tsx:432`, the composer input the
+ *   asset draws). Every rule was copied verbatim from
+ *   `design/shell/context-row.mock.html`, which declares all six — the control
+ *   that rules out "the mocks intend otherwise", the same move MOTIR-4810 made
+ *   with `rail-bottom-section`. The `@property --tw-ring-offset-color` block
+ *   and its `@layer properties` fallback were copied with them, because
+ *   `.focus-visible\:ring-offset-2` writes a shadow that reads that property
+ *   and MOTIR-4813 declared only the ring's width and colour — a DECLARE that
+ *   still renders nothing is not a fix.
+ *
+ * ⚠️ MOTIR-4921 WIDENED DIRECTION (A) A THIRD TIME — the PLAIN half — AND TOOK
+ * ITS POPULATION TO ZERO IN THE SAME PR, so this table is still empty and the
+ * un-prefixed arm now holds all 176 mocks against three predicates rather than
+ * two. 93 occurrences of 16 utilities across 6 assets at `77ce24c38`, every one
+ * DECLARED, none available for a REMOVE — a REMOVE is honest only where the
+ * selector matches no element, and each of these sits on a real one:
+ *
+ *   `design/work-items/repository-set` 29 · `repository-set-quick-view` 12 ·
+ *   `delivery-set` 10 — `underline` 24 and `underline-offset-2` 24 between
+ *   them, three assets whose repository links drew with no underline at all,
+ *   plus `py-3` / `h-3.5` / `w-3.5` 1 each. The control is
+ *   `design/ai-chat/plan-change-planner-speaks`, which declares both in the
+ *   same form; the three assets' own shim blocks use rem literals
+ *   (`.h-4 { height: 1rem }`), so `py-3` / `h-3.5` / `w-3.5` were written that
+ *   way rather than in the `calc(var(--spacing) * n)` form their neighbours in
+ *   other assets use — a shim block is copied from its siblings, not from a
+ *   house style.
+ *   `design/ai-planning/peek-proposal-mode` 27 — `items-stretch` 9 (four
+ *   segmented badges whose halves did not stretch), `border-s` 9 (the same
+ *   badges' trailing halves, with no leading rule between them), `size-3` 8
+ *   (archive / pencil / plus glyphs at the `<svg>` attribute size instead of
+ *   12px), `px-3.5` 1. `border-s` is the ONE with no control anywhere in the
+ *   tree, so it took the compiler's own output — and the file already carries
+ *   `@property --tw-border-style` and the `.border-l` it copies its shape from,
+ *   which is what keeps it from being a DECLARE that renders nothing.
+ *   `design/shell/rail-bottom-section` 12 — `h-14` / `justify-between` /
+ *   `gap-2` / `min-w-0` / `h-5` / `w-5`, 2 each: the section header's own row
+ *   height and layout, and its icon size, in the asset that is the CONTROL for
+ *   two earlier cards' `[&_svg]` declarations.
+ *   `design/work-items/archived` 3 — `sr-only`, on three `Actions` column
+ *   headers that drew as visible text in the export.
+ *
+ * ⚠️ ALL SIX `.png` EXPORTS MOVED, and every one of the four groups above paints
+ * AT REST — this widening has no state-conditional half. That is the difference
+ * between this arm and the two before it: a variant fires in the browser a
+ * reviewer opens the mock in, and a plain utility is in the picture on the board.
+ *
+ * ⚠️ ONE of the six PAINTS AT REST and moved the `.png`: the asset has exactly
+ * one `disabled=""` element, the secondary *Stop* button in the run-live
+ * footer, and declaring `disabled:opacity-50` dims it to 50% — which is what
+ * the shipped Button does and what every reader of the export should see. The
+ * other five are state-conditional and fire in the browser a reviewer opens the
+ * mock in. REMOVE was not available for any of them: a REMOVE is honest only
+ * where the selector matches no element, and every one of these sits on a real
+ * button or input.
+ *
+ * What MOTIR-4813 disposed of, per utility rather than per class — the
+ * judgement the card exists for, since "a static mock is never hovered" is an
+ * answer that ends the enquiry and is false three ways here:
+ *
+ *   DECLARE (7 rules across 2 assets; the class is on a real element that
+ *   wants it) — `focus-visible:ring-(--focus-ring-color)` 34,
+ *   `hover:bg-(--el-surface-soft)` 18, `active:scale-(--active-scale)` 16,
+ *   `hover:text-(--el-text)` 11 and `placeholder:text-(--el-text-secondary)`
+ *   9 in `plan-change-run-live`, `active:bg-(--el-surface-soft)` 2 in
+ *   `peek-proposal-mode`. The placeholder one paints with no interaction at
+ *   all, so it moved that asset's `.png`; the rest fire in the browser a
+ *   reviewer opens the mock in. `focus-visible:ring-2` and
+ *   `focus-visible:outline-none` were declared alongside — they are not
+ *   arbitrary and so are invisible to this guard, but the ring COLOUR alone
+ *   paints nothing without the rule that composes the shadow, and a DECLARE
+ *   that still renders nothing is not a fix. The eight `@property --tw-*`
+ *   blocks that composition reads were copied verbatim from
+ *   `peek-proposal-mode`, which already carried them.
+ *
+ *   REMOVE (5 elements across 2 assets — 2 in `account-menu`, 3 in
+ *   `help-menu`; it was 7 before MOTIR-4845 deleted two of the four frames)
+ *   — `data-[state=open]:animate-in` and
+ *   `data-[state=closed]:animate-out` on the popover panels of `account-menu`
+ *   and `help-menu`, with `fade-in-0` / `fade-out-0` (not arbitrary, so not
+ *   counted here) in the same four-class group. Both are a verbatim
+ *   transcription of `packages/design-system/src/components/ui/Popover.tsx`
+ *   line 98 — and NOTHING in this repository generates them: there is no
+ *   `tailwindcss-animate` / `tw-animate-css` dependency, no `@keyframes enter`
+ *   or `exit`, and no `--tw-enter-*`, so they are inert in the SHIPPED
+ *   component too — filed as MOTIR-4889 against all four sites. There is
+ *   therefore no value in
+ *   `packages/design-system/theme.css` to declare them from, and inventing an
+ *   animation the product does not have is the opposite of designing against
+ *   shipped reality. `data-[state=closed]:` additionally selects nothing here
+ *   under any reading: every panel in both assets carries a literal
+ *   `data-state="open"`.
  */
-const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [
-  { file: 'design/ai-chat/plan-change-run-live.mock.html', count: 88, card: 'MOTIR-4813' },
-  { file: 'design/ai-planning/peek-proposal-mode.mock.html', count: 2, card: 'MOTIR-4813' },
-  // 8 → 4 (MOTIR-4845): the `Workspace settings` row left this menu and took its
-  // whole conditional AXIS with it, so Panel B's four state frames collapsed to
-  // two — the inert variants went with the two deleted frames rather than being
-  // fixed. Re-measured after MOTIR-4810's structural sweep landed, not carried
-  // over: that sweep touched this file's structural half and left its variant
-  // half at 4, which is what this row now pins.
-  { file: 'design/shell/account-menu.mock.html', count: 4, card: 'MOTIR-4813' },
-  { file: 'design/shell/help-menu.mock.html', count: 6, card: 'MOTIR-4813' }, // was 34; 28 structural landed with MOTIR-4810
-];
+const INERT_VARIANT_DEBT: { file: string; count: number; card: string }[] = [];
 
 /**
- * DIRECTION (B) — MOTIR-4814 (the two compiled builds). ⚠️ MOTIR-4811 SWEPT THE
- * HAND-WRITTEN HALF AND ITS 87 ROWS ARE GONE; what stands below is the residue
- * this table was always meant to shrink to.
+ * DIRECTION (B) — EMPTY, and it is meant to stay that way. MOTIR-4811 swept the
+ * hand-written half; MOTIR-4814 swept the 1116 rules its two remaining rows
+ * pinned, and the direction is now enforced at ZERO over every mock in the tree.
  *
- * ⚠️ AND THE POPULATION IT SWEPT WAS SMALLER THAN THE ONE PINNED HERE, because
- * 66 of the 365 hand-written rows were not rules a sweep could dispose of. They
- * are recorded at the three readers that produced them — `uncommented`
- * (34 rows of banner PROSE, read as selectors because a mock says `<style>` in
- * its own header), `scriptCarriedClasses` (27 rows of LIVE classes a script puts
- * on an element at runtime) and `cssStructureFindings` (5 rows behind a
- * broken CSS comment, in FIVE assets where the browser was silently dropping a
- * whole rule). The remaining 299 were vestigial and were deleted; the two
- * compiled rows below moved 255 → 249 and stayed at 873 for the same reason.
+ * ⚠️ MOTIR-4814 WAS FILED TO DECIDE WHETHER MACHINE OUTPUT SHOULD BE EXCUSED BY A
+ * PREDICATE INSTEAD, AND THE MEASUREMENT ANSWERED IT NO. The premise was that the
+ * two rows were the tree's two COMPILED Tailwind builds, for which unused rules
+ * are the normal state of machine output. Both halves of that failed:
  *
- * **A pinned count is a measurement, not a fact**, and the cheapest thing a
- * sweep can do is re-derive it before acting on it — the count agreed exactly
- * with `origin/main` and 17% of what it counted still could not be deleted.
+ *   • The proposed fingerprint does not separate anything, and it fails in BOTH
+ *     directions. `--tw-` appears in 24 of the 176 mocks, three of them
+ *     hand-written (`shell/navigation-pending`, `work-items/detail-arrival`,
+ *     `work-items/pending-plan-indicator`) — a shim block that copies Tailwind's
+ *     own two-property output for `.shadow-\(--shadow-card\)` carries the
+ *     namespace — and it appears NOT ONCE in `design/ai-chat/onboarding.mock.html`,
+ *     one of the two assets the predicate existed to excuse.
+ *   • The real fingerprint, the build's own `tailwindcss v4.3.0` banner, matches
+ *     TWENTY-ONE assets, TWENTY of which this guard already held at zero — and
+ *     EIGHTEEN of the twenty-one were swept by hand in MOTIR-4811, an hour before
+ *     this card was claimed. Excusing compiled builds would therefore un-ratchet
+ *     twenty assets to buy an exemption for one, which is the
+ *     exemption-wider-than-it-reads shape a debt table exists to prevent — and it
+ *     would excuse a class of file the tree has already decided it sweeps.
  *
- * The two mocks that embed a COMPILED Tailwind build
- * (`design/shell/context-row.mock.html` 867, `design/ai-chat/onboarding.mock.html`
- * 249) are what is left. For those two, unused rules
- * are the normal and correct state of machine output — nobody chose them and no
- * sweep can remove them without hand-editing generated CSS. They are held here
- * rather than excused by a rule so the count still cannot grow, and MOTIR-4814
- * is the card that decides between a predicate keyed on the build's own
- * fingerprint and a sweep. That judgement is deliberately NOT made here: this
- * card measured the population, and choosing how a guard treats generated CSS
- * is a decision somebody should make on the record.
+ * And `onboarding` is not a compiled build at all: no banner, no `--tw-`, no
+ * `@layer`, and its 249 dead rules were the mock's OWN semantic classes
+ * (`.adv-knob`, `.dwz-step`, `.diff-add`) left behind by panels that no longer
+ * exist — MOTIR-4811's population exactly, split off by a premise that did not hold.
+ * So both were swept, which is what the rest of the tree already does.
  *
- * ⚠️ THIS TABLE IS A COUNT AND NOT A NAME LIST, and the weakness is worth
- * stating: swapping one dead rule for another inside a file passes. The name
- * list was 1276 rows, and a 1300-line data block in a spec is read by nobody,
- * which is a worse guard than a count somebody maintains. What the count DOES
- * buy is the ratchet the pair of cards was filed for: no asset can gain a dead
- * rule, and the 172 mocks absent from this table are held at zero outright.
+ * ⚠️ A SWEPT RULE IS RENDER-NEUTRAL BY CONSTRUCTION, and that is the whole warrant:
+ * a rule is removed only when its selector REQUIRES a class no element in any mock
+ * carries, so it matched nothing before the edit. In `onboarding` that also took 17
+ * rules whose selector paired a live class with a dead one (`.dfield .dlabel`) —
+ * every one of those still declared in another mock, and none of them reachable
+ * here, since nothing carries the ancestor. Both files' markup and scripts are
+ * byte-identical to what they were, so no `.png` moves.
+ *
+ * ⚠️ THIS TABLE WAS A COUNT AND NOT A NAME LIST, and that is why it is empty rather
+ * than pinned: swapping one dead rule for another inside a file passed. The name
+ * list was 1276 rows, and a 1300-line data block in a spec is read by nobody. What
+ * the count bought was the ratchet, and the ratchet has now reached its floor —
+ * every mock is held at zero outright, which is a stronger statement than any
+ * budget. A row added here is a regression to explain, not a debt to schedule.
  *
  * ⚠️ THE PREDICATE IS TREE-WIDE, WHICH CUTS BOTH WAYS, AND MOTIR-4851 IS THE
  * WORKED EXAMPLE. A rule is dead when NO element in ANY mock carries its class,
  * so a mock that starts CARRYING one changes the answer for every OTHER file
  * that declares it: `design/workbench/`'s pager panels picked up
  * `cursor-not-allowed`, `cursor-default`, `opacity-55`, `select-none`, `min-w-6`
- * and `text-[13px]`, and six rows in this table dropped by one. The table
- * asserts equality in BOTH directions, so a count going DOWN failed exactly as
- * one going up would — the ratchet working, and the number staying a
- * measurement somebody maintains rather than a ceiling that quietly drifts.
+ * and `text-[13px]`, and six rows in this table dropped by one.
  *
- * ⚠️ AFTER MOTIR-4811 THAT SAME MOVE LANDS ON DIRECTION (A) INSTEAD, which is a
- * sharper failure and the reason to say this here. The hand-written half is now
- * swept, so there is no dead rule left for a new element to revive: a mock that
- * begins carrying a class whose declaration this sweep removed is an INERT
- * class, and direction (A) is enforced at ZERO. **So a sweep of this kind is
- * re-derived against the tree it will land on, never against the tree it was
- * planned on** — MOTIR-4811's own population had to be recomputed after
- * MOTIR-4851, MOTIR-4812 and MOTIR-4810 merged under it.
+ * ⚠️ WITH BOTH HALVES SWEPT, THAT SAME MOVE NOW LANDS ON DIRECTION (A), which is a
+ * sharper failure and the reason to keep saying it. There is no dead rule left for
+ * a new element to revive: a mock that begins carrying a class whose declaration
+ * one of these sweeps removed is an INERT class, and direction (A) is enforced at
+ * ZERO. **So a sweep of this kind is re-derived against the tree it will land on,
+ * never against the tree it was planned on** — MOTIR-4811's population had to be
+ * recomputed after MOTIR-4851, MOTIR-4812 and MOTIR-4810 merged under it, and this
+ * card's two rows had moved 873 → 867 and 255 → 249 under MOTIR-4811 in the eleven
+ * minutes between its merge and this card's claim.
+ *
+ * The type and the hold-it-tight arm below survive an empty table so a future row
+ * stays expressible — with a card, a count and a reason — rather than inviting a
+ * `deadBudget` bypass written some other way.
  */
-const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [
-  { file: 'design/ai-chat/onboarding.mock.html', count: 249, card: 'MOTIR-4814' },
-  { file: 'design/shell/context-row.mock.html', count: 867, card: 'MOTIR-4814' },
+const DEAD_UTILITY_DEBT: { file: string; count: number; card: string }[] = [];
+
+/**
+ * DIRECTION (D) — the COLLISIONS, and this table's resting state is NOT empty.
+ *
+ * ⚠️ READ THAT FIRST, BECAUSE IT IS THE ONE PLACE THIS FILE DEPARTS FROM ITS TWO
+ * NEIGHBOURS ABOVE. `INERT_VARIANT_DEBT` and `DEAD_UTILITY_DEBT` are COUNTDOWNS:
+ * every row is a defect somebody will fix, and empty is the intended end state.
+ * These rows are DECISIONS. Each is a name that means two different things in two
+ * assets, where the tree was asked and the answer came out `no` — so there is
+ * nothing to schedule and a row leaving this table means somebody RENAMED one of
+ * the two meanings, not that a defect was repaired.
+ *
+ * ── Why an exclusion at all, when (A)'s two arms reached zero outright ───────
+ * Direction (A)'s remedy is mechanical, so its population resolves to DECLARE or
+ * REMOVE and the arm holds every mock at zero. (D)'s does not: the rule already
+ * exists, in another file, written by somebody who meant something by the name.
+ * MOTIR-4944 dispositioned all 21 tokens — **14 DECLARE (92 occurrences), 1
+ * REMOVE (1), 6 COLLIDES (72)** — and for these six neither remedy is honest:
+ *
+ *   • DECLARE would import a rule the carrying asset's own markup contradicts,
+ *     which is worse than the inert class it replaces — an inert class draws
+ *     nothing and a wrong rule draws something (`plan-rules`' own argument for
+ *     why this was a card and not a fourth arm of the same predicate).
+ *   • REMOVE is honest only where the declaring selector matches NO element
+ *     (MOTIR-4813's terms). For `ic`, `fr` and `helper` it matches one; for
+ *     `seg-ic` and `group` the class is a verbatim transcription of SHIPPED
+ *     markup, and deleting it would diverge the mock from the component it
+ *     draws — the design-against-shipped-reality rule, which outranks tidiness.
+ *
+ * ── KEYED ON (file, token), NOT ON token ────────────────────────────────────
+ * ⚠️ AND THAT IS THE WHOLE DIFFERENCE BETWEEN THIS AND AN ALLOWLIST. Excluding
+ * `ic` by NAME would silence every future asset that carries it bare, which is
+ * the exemption-wider-than-it-reads shape both tables above exist to prevent —
+ * and `ic` is declared in 60 assets, so it is exactly the name a new mock is
+ * likeliest to pick up. A (file, token) row silences the fourteen occurrences
+ * somebody looked at and nothing else. The arm below asserts each row EXACT in
+ * both directions, so a row cannot outlive its file, its token or its count.
+ *
+ * ── The six, with BOTH meanings, per criterion 3 ────────────────────────────
+ *
+ *   `ic` — HERE (`design/runs/*`): a bare marker on an icon the asset sizes with
+ *     its own base rule, `svg { width: 1em; height: 1em; }`, plus contextual
+ *     overrides (`.railRow svg` 16px, `.crumb svg` 14px). ELSEWHERE (14 assets):
+ *     `.ic { width: 16px; height: 16px; flex: none; }` — the class IS the sizing
+ *     mechanism. ⚠️ THE CARD'S OWN PREMISE IS FALSIFIED HERE and the correction
+ *     is on the record: it read *"those three draw an icon slot with no icon slot
+ *     rules"*, and all three have one. Declaring `.ic` would take twenty icons
+ *     from 1em to 16px across three approved assets, for a defect that is not
+ *     there. The rename that would resolve it is the `runs/` family's, not the
+ *     control's.
+ *
+ *   `seg-ic` — HERE (4 assets): a verbatim transcription of
+ *     `packages/design-system/src/components/ui/Segmented.tsx:100`,
+ *     `'seg-ic inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center'`
+ *     with the ink split onto `text-(--el-tabnav-active)` / `text-(--el-text-faint)`
+ *     beside it. `.seg-ic` has NO rule anywhere in the shipped app — it is a
+ *     naming hook, and the utilities on the same element already say what it
+ *     would say. ELSEWHERE (`work-items/type-executor-picker`): a hand-drawn
+ *     segmented control with its own `.seg` idiom —
+ *     `.seg button .seg-ic { display: inline-flex; color: var(--el-text-faint); }`.
+ *     That selector matches nothing in the four carriers: none of them has a
+ *     `.seg` ancestor, because the shipped component's group is
+ *     `<div role="group" class="inline-flex …">`.
+ *
+ *   `group` — HERE (3 shell assets): Tailwind's variant ANCHOR on a button,
+ *     `class="group relative inline-flex …"`, transcribed from the shipped
+ *     component. `utilityVocabulary`'s own note already rules on this name: the
+ *     compiler emits no rule for it, because it styles nothing by itself. None of
+ *     the three carries a single `group-hover:` class, so nothing selects through
+ *     it — which is the anchor being unused, not inert. ELSEWHERE
+ *     (`work-items/links` · `relationships` · `internal-links`): the mocks' own
+ *     semantic class, `.group { display: flex; flex-direction: column; gap: 2px; }`.
+ *     Copying that onto an `inline-flex` button would stack its label under its
+ *     icon.
+ *
+ *   `fr` — HERE (`design/brand/brand-mark`): a **frame** — one cell of the
+ *     `.frames` strip that walks the wave animation, wrapping a 46px glyph.
+ *     ELSEWHERE (2 auth assets): `.flow .fr { font-family: var(--font-mono);
+ *     font-size: 11px; color: var(--el-text-secondary); }` — the caption under a
+ *     flow step. Two words abbreviated the same, and the card predicted this row
+ *     before it was checked.
+ *
+ *   `helper` — HERE (`design/github/github`): two `<p>` that set the same two
+ *     properties INLINE and at deliberately different values —
+ *     `font-size: 12.5px; color: var(--el-text-secondary)`. ELSEWHERE
+ *     (`audit-coverage` · `coding-convention`): `.helper { font-size: 12px;
+ *     color: var(--el-text-muted); margin-top: 6px; }`. A DECLARE would be
+ *     overridden at the same element and paint nothing, and a DECLARE that
+ *     renders nothing is not a fix (MOTIR-4813's own rule).
+ *
+ *   `modal-sm` — HERE (`design/settings/profile`): `<div class="modal modal-sm"
+ *     style="max-width: 25rem">` — the element states its own width and
+ *     contradicts the shared one. ELSEWHERE (`settings/account-settings` ·
+ *     `token-scopes`): `.modal.modal-sm { max-width: 24rem; }`. Same failure as
+ *     `helper`, one property wide: the inline rule wins, so the copy is inert.
+ */
+const TREE_DECLARED_COLLISIONS: {
+  file: string;
+  token: string;
+  count: number;
+  card: string;
+}[] = [
+  {
+    file: 'design/ai-planning/plan-detail-refined.mock.html',
+    token: 'seg-ic',
+    count: 2,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/brand/brand-mark.mock.html', token: 'fr', count: 11, card: 'MOTIR-4944' },
+  { file: 'design/github/github.mock.html', token: 'helper', count: 2, card: 'MOTIR-4944' },
+  {
+    file: 'design/roadmap/roadmap-arrival.mock.html',
+    token: 'seg-ic',
+    count: 2,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/runs/run-modal.mock.html', token: 'ic', count: 9, card: 'MOTIR-4944' },
+  { file: 'design/runs/run-section.mock.html', token: 'ic', count: 9, card: 'MOTIR-4944' },
+  { file: 'design/runs/runs-index.mock.html', token: 'ic', count: 2, card: 'MOTIR-4944' },
+  { file: 'design/settings/profile.mock.html', token: 'modal-sm', count: 1, card: 'MOTIR-4944' },
+  {
+    file: 'design/shell/3d-immersive-shell.mock.html',
+    token: 'group',
+    count: 6,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/shell/account-menu.mock.html', token: 'group', count: 3, card: 'MOTIR-4944' },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    token: 'seg-ic',
+    count: 12,
+    card: 'MOTIR-4944',
+  },
+  { file: 'design/shell/top-bar.mock.html', token: 'group', count: 9, card: 'MOTIR-4944' },
+  {
+    file: 'design/work-items/detail-arrival.mock.html',
+    token: 'seg-ic',
+    count: 4,
+    card: 'MOTIR-4944',
+  },
 ];
 
 // ── The real tree ───────────────────────────────────────────────────────────
@@ -808,6 +1351,39 @@ const MOCKS: MockSource[] = designTree()
 
 const inertBudget = new Map(INERT_VARIANT_DEBT.map((row) => [row.file, row.count]));
 const deadBudget = new Map(DEAD_UTILITY_DEBT.map((row) => [row.file, row.count]));
+/** The direction-(D) exclusions, keyed the way they are asserted: `<file>\u0000<token>`. */
+const collisionKey = (file: string, token: string) => `${file}\u0000${token}`;
+const collisionBudget = new Map(
+  TREE_DECLARED_COLLISIONS.map((row) => [collisionKey(row.file, row.token), row.count]),
+);
+
+/**
+ * Every class the tree carries that its OWN asset does not declare — the only
+ * candidates direction (A) has to classify, so the compile is asked one question
+ * about ~160 tokens rather than about every class in 176 documents.
+ */
+const UNDECLARED_TOKENS = new Set(
+  MOCKS.flatMap(({ source }) => {
+    const declared = declaredClasses(source);
+    return [...usedClasses(source).keys()].filter((token) => !declared.has(token));
+  }),
+);
+
+/** MOTIR-4921's predicate, resolved once against the real Tailwind build. */
+let TREE_UTILITIES = new Set<string>();
+const namesUtility = (token: string): boolean => TREE_UTILITIES.has(token);
+
+/**
+ * A predicate that calls NO plain class a utility — direction (A) as it stood
+ * before MOTIR-4921. The fixtures written for the arbitrary and variant arms pass
+ * it, so each keeps measuring exactly the arm it was written for, and none of
+ * them needs a Tailwind compile to run.
+ */
+const namesNothing = (): boolean => false;
+
+beforeAll(async () => {
+  TREE_UTILITIES = await utilityVocabulary(UNDECLARED_TOKENS);
+}, 30_000);
 
 describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", () => {
   it('walks a design tree that actually has mocks with stylesheets in it', () => {
@@ -840,7 +1416,9 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(declared.has('03em')).toBe(false);
     // The entity decodes, and the template literal in the script is not markup.
     expect([...usedClasses(fixture).keys()].sort()).toEqual(['[&_svg]:h-[18px]', 'text-[19px]']);
-    expect(inertUtilities({ path: 'fixture', source: fixture })).toEqual([]);
+    // `namesNothing` isolates the READER: this fixture is about escapes and
+    // entities, not about MOTIR-4921's third arm, which has its own two arms below.
+    expect(inertUtilities({ path: 'fixture', source: fixture }, namesNothing)).toEqual([]);
   });
 
   it('closes a `<style>` / `<script>` whose end tag carries attribute junk', () => {
@@ -861,7 +1439,7 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(new RegExp(STYLE_BLOCK.source, 'i').test('<style>a</styles>')).toBe(false);
     expect([...declaredClasses(fixture)]).toEqual(['declared']);
     expect([...usedClasses(fixture).keys()].sort()).toEqual(['declared', 'undeclared-[9px]']);
-    expect(inertUtilities({ path: 'fixture', source: fixture })).toEqual([
+    expect(inertUtilities({ path: 'fixture', source: fixture }, namesNothing)).toEqual([
       { token: 'undeclared-[9px]', count: 1 },
     ]);
   });
@@ -878,8 +1456,89 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     // The negative path, on a fixture — the real tree is at zero for direction
     // (A), so nothing else in this file ever exercises the reporting branch.
     const broken = '<style>.text-\\[19px\\] { font-size: 19px; }</style><h2 class="text-[15px]">';
-    expect(inertUtilities({ path: 'fixture', source: broken })).toEqual([
+    expect(inertUtilities({ path: 'fixture', source: broken }, namesNothing)).toEqual([
       { token: 'text-[15px]', count: 1 },
+    ]);
+  });
+
+  it('reports a PLAIN inert variant (MOTIR-4890)', () => {
+    // MOTIR-4890's widening, pinned on a fixture — the real tree is at zero for
+    // direction (A), so nothing else here exercises that reporting branch.
+    //
+    // ⚠️ THIS TEST USED TO ALSO PIN WHERE DIRECTION (A) STOPS — `and stops at a
+    // plain un-prefixed class`, asserting `lucide-menu` is neither arbitrary nor
+    // a variant. It stops somewhere else now (MOTIR-4921): a plain class is
+    // reported when the PREDICATE calls it a utility, and the two tests below own
+    // that boundary. What is left here is the variant arm alone.
+    const fixture = [
+      '<style>.opacity-80 { opacity: 80%; }</style>',
+      '<button class="disabled:opacity-50 opacity-80 lucide lucide-menu"></button>',
+    ].join('\n');
+    // The variant is reported though it carries neither `[` nor `(` — the case
+    // `isArbitrary` alone could not see. `namesNothing` isolates it from the
+    // third arm, so this test still measures exactly what it was written for.
+    expect(inertUtilities({ path: 'fixture', source: fixture }, namesNothing)).toEqual([
+      { token: 'disabled:opacity-50', count: 1 },
+    ]);
+  });
+
+  it('direction (A) reports a plain class the predicate calls a UTILITY, and not a HOOK', () => {
+    // MOTIR-4921's widening, pinned in BOTH directions on one fixture with one
+    // element — so the boundary is exercised rather than inferred from the tree
+    // passing. The predicate is injected, so this arm rules on the WIDENING
+    // without depending on what Tailwind happens to name; the arm below rules on
+    // the predicate itself.
+    const fixture = [
+      '<style>.opacity-80 { opacity: 80%; }</style>',
+      '<a class="underline opacity-80 lucide lucide-menu"></a>',
+    ].join('\n');
+    // A plain undeclared class the predicate calls a utility IS reported —
+    // the case `isArbitrary || isVariant` could not see at all.
+    expect(inertUtilities({ path: 'fixture', source: fixture }, (t) => t === 'underline')).toEqual([
+      { token: 'underline', count: 1 },
+    ]);
+    // And a plain undeclared class it calls a HOOK is NOT — the same element,
+    // the same three undeclared tokens, the predicate the only difference.
+    // 4116 of the 4419 occurrences an every-plain-class predicate would report
+    // are `lucide` / `lucide-*`, which is why this arm exists.
+    expect(inertUtilities({ path: 'fixture', source: fixture }, namesNothing)).toEqual([]);
+  });
+
+  it("separates a style utility from a hook by asking the project's own Tailwind build", async () => {
+    // MOTIR-4921's predicate, on the families the card is about. The point of the
+    // arm is WHY each lands where it does: nothing here is a name the function
+    // knows: it compiles `@import 'tailwindcss'` + `theme.css` and reads back the
+    // selectors that build emits, so `lucide-menu` is a hook because the compiler
+    // writes no rule for it, not because a list says so.
+    const vocabulary = await utilityVocabulary([
+      // Style utilities — the four families the real tree carries.
+      'underline',
+      'underline-offset-2',
+      'size-3',
+      'sr-only',
+      'border-s',
+      // Hooks — an icon library's identity classes, a third-party editor's, and
+      // the mocks' own semantic names.
+      'lucide',
+      'lucide-menu',
+      'ProseMirror',
+      'tiptap',
+      'nl',
+      'seg-ic',
+      'brand-glyph',
+      // ⚠️ `group` is Tailwind's own variant ANCHOR: the compiler emits no rule
+      // for it, because it styles nothing by itself and exists for `group-hover:`
+      // to select through. A class that paints nothing when declared is not an
+      // inert class when undeclared — and a hand-written list of "Tailwind names"
+      // would have got this one wrong in the other direction.
+      'group',
+    ]);
+    expect([...vocabulary].sort()).toEqual([
+      'border-s',
+      'size-3',
+      'sr-only',
+      'underline',
+      'underline-offset-2',
     ]);
   });
 
@@ -950,6 +1609,68 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(kinds(".before\\:content-\\[\\'\\'\\] { color: red; }")).toEqual([]);
   });
 
+  it('direction (D) reports a class ANOTHER mock declares, and stops at one nothing does', () => {
+    // MOTIR-4944's direction, pinned in BOTH directions on one three-mock
+    // fixture — the reporting branch and the stopping point together, so the
+    // boundary is exercised rather than inferred from the tree passing. The
+    // same treatment `namesUtility`'s arm gets above.
+    const mocks = [
+      // The CONTROL: it declares `.nl`, and carries it.
+      {
+        path: 'control.mock.html',
+        source:
+          '<style>.nav-row .nl { flex: 1; }</style><div class="nav-row"><span class="nl">A</span></div>',
+      },
+      // The CARRIER: same markup, and its shim block dropped the rule.
+      {
+        path: 'carrier.mock.html',
+        source:
+          '<style>.nav-row { display: flex; }</style><div class="nav-row"><span class="nl">A</span><i class="lucide lucide-menu"></i><b class="underline"></b></div>',
+      },
+    ];
+    // REPORTED: `nl` is carried bare here and declared by `control`.
+    expect(foreignDeclaredUtilities(mocks, namesNothing).get('carrier.mock.html')).toEqual([
+      { token: 'nl', count: 1 },
+    ]);
+    // STOPPING POINT ONE — a class NO mock in the tree declares is not this
+    // direction's, however plainly inert it looks. `lucide` / `lucide-menu` are
+    // 4116 of the 4419 occurrences an every-plain-class predicate would report,
+    // and nothing should ever declare one.
+    //
+    // STOPPING POINT TWO — a class direction (A) reports is not reported twice.
+    // `underline` is undeclared here and declared by nobody, so it is out on the
+    // first count; the arm below is the one that pins the SUBTRACTION, with a
+    // token the tree does declare.
+    expect(foreignDeclaredUtilities(mocks, namesNothing).get('control.mock.html')).toBeUndefined();
+  });
+
+  it('direction (D) does not report what direction (A) already does', () => {
+    // The subtraction, on its own fixture, because it is the half a reader is
+    // most likely to think is redundant: `underline` is BOTH declared by another
+    // mock AND a name the compiler writes a rule for. It belongs to (A), whose
+    // remedy is mechanical; reporting it here too would offer two remedies for
+    // one occurrence and the expensive one is this direction's.
+    const mocks = [
+      {
+        path: 'control.mock.html',
+        source:
+          '<style>.underline { text-decoration: underline; }</style><a class="underline">A</a>',
+      },
+      {
+        path: 'carrier.mock.html',
+        source: '<style>.x { color: red; }</style><a class="underline">A</a>',
+      },
+    ];
+    expect(foreignDeclaredUtilities(mocks, namesNothing).get('carrier.mock.html')).toEqual([
+      { token: 'underline', count: 1 },
+    ]);
+    // The SAME tree, the predicate the only difference — exactly the shape the
+    // `namesUtility` arm above uses.
+    expect(
+      foreignDeclaredUtilities(mocks, (t) => t === 'underline').get('carrier.mock.html'),
+    ).toBeUndefined();
+  });
+
   it('reports a dead utility when one is actually there', () => {
     // Direction (B)'s negative path, and MOTIR-4150's own shape: a rule present
     // in the stylesheet that no element in the tree carries.
@@ -963,12 +1684,20 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect([...deadUtilities(mocks)]).toEqual([['max-w-md', ['a.mock.html']]]);
   });
 
-  it('direction (A) — no un-prefixed arbitrary-value utility is inert', () => {
+  it('direction (A) — no un-prefixed utility is inert, arbitrary-value or PLAIN', () => {
     // MOTIR-4687's own population, at zero. 115 occurrences of 12 utilities
     // across 8 assets on `origin/main` `cd77d0225`; every group was read at its
     // use site and DECLARED, none was vestigial.
+    //
+    // ⚠️ MOTIR-4921 WIDENED THIS ARM, AND THE TITLE CHANGED WITH IT — a plain
+    // nameable utility carries no `[`, `(`, `:` or `&`, so it lands here rather
+    // than in the variant arm below. Its own population was 93 occurrences of 16
+    // utilities across 6 assets at `77ce24c38`, every one DECLARED, and this arm
+    // is what now holds all 176 mocks at zero for it. The HOOK side — 4326
+    // occurrences the predicate deliberately does not report — is
+    // `utilityVocabulary`'s note, with the command and the ref.
     const findings = MOCKS.flatMap(({ path, source }) =>
-      inertUtilities({ path, source })
+      inertUtilities({ path, source }, namesUtility)
         .filter(({ token }) => !isVariant(token))
         .map(
           ({ token, count }) =>
@@ -983,7 +1712,7 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
   it('direction (A) — the variant half stays inside its pinned budget', () => {
     const findings = MOCKS.map(({ path, source }) => ({
       path,
-      count: inertUtilities({ path, source })
+      count: inertUtilities({ path, source }, namesUtility)
         .filter(({ token }) => isVariant(token))
         .reduce((total, { count }) => total + count, 0),
     })).filter(({ path, count }) => count !== (inertBudget.get(path) ?? 0));
@@ -1018,12 +1747,87 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
     expect(findings).toEqual([]);
   });
 
-  it('holds `DEAD_UTILITY_DEBT` tight — a row that no longer fires fails', () => {
+  it('holds `DEAD_UTILITY_DEBT` tight — and it is EMPTY, which is the point', () => {
+    // The emptiness is asserted FIRST because the loop below says nothing about an
+    // empty table: with no rows it passes whatever the tree looks like, so a spec
+    // that only looped would report green on a table somebody had refilled. The
+    // direction-(B) arm above is what holds every mock at zero; this is what stops
+    // a row being added back without a card, a count and a reason beside it.
+    expect(
+      DEAD_UTILITY_DEBT,
+      'direction (B) is at zero over the whole tree (MOTIR-4811 + MOTIR-4814) — a ' +
+        'new row is a regression to explain, not a debt to schedule',
+    ).toEqual([]);
     const paths = new Set(MOCKS.map(({ path }) => path));
     for (const row of DEAD_UTILITY_DEBT) {
       expect(paths.has(row.file), `${row.file} is gone — drop its row`).toBe(true);
       expect(row.count, row.file).toBeGreaterThan(0);
     }
+  });
+
+  it('direction (D) — no mock carries a class another mock declares, outside the named collisions', () => {
+    // MOTIR-4944's own population: 165 occurrences of 21 tokens across 28 assets
+    // on `origin/main` `1491e9464`, dispositioned per TOKEN — 14 DECLARE (92
+    // occurrences), 1 REMOVE (1), 6 COLLIDES (72). The DECLAREs are in their
+    // assets and the REMOVE is out of its attribute, so what this arm holds at
+    // zero is everything except the thirteen rows of
+    // `TREE_DECLARED_COLLISIONS`, each asserted EXACT.
+    const found = foreignDeclaredUtilities(MOCKS, namesUtility);
+    const findings = [
+      ...MOCKS.flatMap(({ path }) =>
+        (found.get(path) ?? []).map(({ token, count }) => ({
+          key: collisionKey(path, token),
+          path,
+          token,
+          count,
+        })),
+      ),
+      // A row whose occurrences went away is a finding too — otherwise the table
+      // becomes a mute button the moment somebody fixes one of its rows.
+      ...TREE_DECLARED_COLLISIONS.filter(
+        (row) => !(found.get(row.file) ?? []).some(({ token }) => token === row.token),
+      ).map((row) => ({
+        key: collisionKey(row.file, row.token),
+        path: row.file,
+        token: row.token,
+        count: 0,
+      })),
+    ]
+      .filter(({ key, count }) => count !== (collisionBudget.get(key) ?? 0))
+      .map(
+        ({ path, token, count }) =>
+          `${path} carries \`${token}\` ${count}× (pinned: ${collisionBudget.get(collisionKey(path, token)) ?? 0}) ` +
+          `and declares no rule for it, while another mock in this tree does — copy the DECLARING ` +
+          `selector whose other halves this asset also has (\`.shell.compact\`, not \`.compact\`), or ` +
+          `delete the class from the attribute where no declaring selector matches here; if the two ` +
+          `assets mean DIFFERENT things by the name, that is a TREE_DECLARED_COLLISIONS row with both ` +
+          `meanings and a card, never a silent predicate`,
+      )
+      .sort();
+    expect(findings).toEqual([]);
+  });
+
+  it('holds `TREE_DECLARED_COLLISIONS` tight — a row that no longer fires fails', () => {
+    // Same treatment the two tables above get, and it needs BOTH halves for the
+    // same reason they do: the arm above fails a row whose COUNT moved, and this
+    // fails a row whose FILE was deleted or renamed, which that one cannot see.
+    const paths = new Set(MOCKS.map(({ path }) => path));
+    for (const row of TREE_DECLARED_COLLISIONS) {
+      expect(paths.has(row.file), `${row.file} is gone — drop its row`).toBe(true);
+      expect(row.count, `${row.file} \`${row.token}\``).toBeGreaterThan(0);
+      expect(
+        row.card,
+        `${row.file} \`${row.token}\` — an exclusion with no card is an allowlist`,
+      ).toMatch(/^MOTIR-\d+$/);
+    }
+    // ⚠️ AND NO ROW MAY BE KEYED ON THE TOKEN ALONE. The whole difference between
+    // this table and an allowlist is that `ic` is excluded in three named files
+    // and reported everywhere else — `ic` is declared in 60 assets, so a
+    // token-wide row would silence the name a new mock is likeliest to pick up.
+    for (const row of TREE_DECLARED_COLLISIONS)
+      expect(row.file, 'a collision row is keyed on (file, token)').toMatch(
+        /^design\/.+\.mock\.html$/,
+      );
   });
 
   it('reports a mis-declared utility, and leaves a legitimate override alone', () => {
@@ -1107,16 +1911,21 @@ describe("a design mock's stylesheet and its markup correspond (MOTIR-4687)", ()
   it('holds the two tables to a shrinking total', () => {
     // The number a reader checks in one line, and the one that says whether the
     // four follow-up cards are making progress. The ceilings may only be lowered.
-    // 636 -> 104 with MOTIR-4810: the whole structural half landed at once,
-    // which is what the ratchet is for — the ceiling comes DOWN with the fix and
-    // cannot go back up.
-    expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(104);
-    // Direction (B)'s comes down the same way. MOTIR-4851 and MOTIR-4810 each
-    // took rows off the table WITHOUT lowering it, correctly — the per-file rows
-    // are the real ratchet there, each asserted EXACT, so the ceiling is a
-    // backstop rather than the instrument. MOTIR-4811 is the case that does
-    // lower it: the hand-written half is gone, so what remains is the two
-    // compiled builds and nothing can be measured against 1493 again.
-    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(1116);
+    // 636 → 104 with MOTIR-4810 (the structural half), 104 → 100 with
+    // MOTIR-4845 (two frames deleted, not fixed), 100 → 0 with MOTIR-4813 (the
+    // state half), which is what the ratchet is for — the ceiling comes
+    // DOWN with the fix and cannot go back up. At zero it is no longer a budget
+    // but a floor, and the exact-count arm above is what enforces it per file.
+    expect(INERT_VARIANT_DEBT.reduce((n, row) => n + row.count, 0)).toBeLessThanOrEqual(0);
+    // Direction (B)'s came down the same way and has now reached the same floor.
+    // MOTIR-4851 and MOTIR-4810 each took rows off the table WITHOUT lowering it,
+    // correctly — the per-file rows were the real ratchet there, each asserted
+    // EXACT, so the ceiling was a backstop rather than the instrument. MOTIR-4811
+    // took the hand-written half (1493 → 1116) and MOTIR-4814 the two rows left,
+    // so the ceiling is 0 and the per-file arm now holds all 176 mocks at zero
+    // outright rather than 174 of them. **Both tables are empty**: every mock is
+    // held at zero in both directions, which is a stronger statement than any
+    // pair of budgets, and a row appearing in either is a regression to explain.
+    expect(DEAD_UTILITY_DEBT.reduce((n, row) => n + row.count, 0)).toBe(0);
   });
 });

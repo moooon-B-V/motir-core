@@ -3,7 +3,6 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { reportsService } from '@/lib/services/reportsService';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { VelocityChart } from '@/app/(authed)/backlog/_components/VelocityChart';
 import { ReportPageChrome } from '../_components/ReportPageChrome';
 
@@ -22,18 +21,10 @@ export default async function VelocityReportPage() {
 
   const t = await getTranslations('reports');
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <ReportPageChrome
-        backLabel={t('backToReports')}
-        crumb={t('hub.title')}
-        title={t('velocity.title')}
-        subLine=""
-      >
-        <EmptyState title={t('hub.noProjectTitle')} description={t('hub.noProjectBody')} />
-      </ReportPageChrome>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const accessCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const velocity = await reportsService.getVelocity({ projectId: ctx.projectId }, accessCtx);

@@ -454,6 +454,9 @@ export interface JobEventDataMap {
    *  every `plan_target_lock` whose window has run out, so a crashed planner can
    *  never leave an item permanently unplannable. Cross-tenant by design. */
   'system.plan-target-lock-sweep': SystemScheduledData;
+  /** The DRIFT RECOMPUTE sweep (MOTIR-4644) — counts commits between the graph's
+   *  head and the default branch's, off every render path. */
+  'system.code-graph-drift-sweep': SystemScheduledData;
   /** The dispatch-run housekeeping (Story MOTIR-1789 · MOTIR-1792) — nulls
    *  opt-in log bodies past their 30-day window and closes runs nothing is
    *  holding, so a dead run stops rendering as `running`. Cron triggered, so it

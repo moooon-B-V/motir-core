@@ -20,7 +20,6 @@ import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
@@ -75,13 +74,10 @@ export default async function IssueDetailPage({
   const t = await getTranslations('issueViews');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[48rem]">
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectDetailDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const { key } = await params;
   let detail;

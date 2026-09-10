@@ -71,8 +71,14 @@ export function AuditCoverageBanner() {
         <span className="font-semibold">{t('count', { count })}</span> {t('consequence')}
       </span>
       <span className="flex-1" />
+      {/* ⚠️ DEEP-LINKED TO THE HEALTH SECTION (MOTIR-1768). The audit moved from
+          being a page to being the SECOND section of the Code room, so a bare
+          `/code` would land this reader on the repository list — one click short
+          of the thing the banner just told them about. `?section=health` is read
+          by `sectionFromParam`, which falls back rather than throwing, so the
+          link degrades to the default if the parameter is ever retired. */}
       <Link
-        href="/code-health"
+        href="/code?section=health"
         className="shrink-0 font-semibold text-(--el-callout-text) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
       >
         {t('action')}

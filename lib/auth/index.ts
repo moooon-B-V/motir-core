@@ -377,6 +377,28 @@ export const authOptions: BetterAuthOptions & {
               userId: user.id,
               userName: user.name,
             });
+            // ⚠️ THE DEFAULT PROJECT IS **NOT** SEEDED HERE, AND THAT IS A
+            // STRUCTURAL DECISION RATHER THAN AN OMISSION (MOTIR-4870).
+            //
+            // "You are always in a project" is enforced at the WORKSPACE tier
+            // by `projectsService.ensureDefaultProject`, at two call sites: the
+            // create-workspace action, and — the actual guarantee — the lazy
+            // self-heal inside `getActiveProject`. A registering reader's very
+            // next request resolves that context, so the project exists by the
+            // time anything can look for it, which is exactly what this hook's
+            // own best-effort contract promises for the workspace.
+            //
+            // Calling it HERE would import `projectsService` into this module,
+            // and that closes an import CYCLE:
+            //   lib/auth → projectsService → boardsService → workItemsService
+            //   → assignableMembersService → lib/workspaces → lib/auth
+            // Under it `@/lib/auth` is partially initialised when
+            // `lib/workspaces` captures `getSession`, and a test that mocks
+            // this module gets the real one — which surfaced as
+            // `requireCompliantWorkspaceContext` answering 401 instead of 403
+            // across eight Vitest shards. A dynamic import would hide the cycle
+            // rather than remove it, and the eager seed buys nothing the
+            // resolver does not already guarantee.
           } catch (err) {
             // Post-commit best-effort: do not rethrow (the user row is
             // already durably committed; rethrowing only 500s the signup

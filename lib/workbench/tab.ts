@@ -58,12 +58,24 @@ export function parseWorkbenchTab(raw: string | string[] | undefined): Workbench
   return (value !== undefined && BY_PARAM.get(value)) || 'todo';
 }
 
-/** The canonical URL for a tab, optionally resuming at a page cursor. */
-export function workbenchTabHref(tab: WorkbenchTab, cursor?: string | null): string {
+/**
+ * The canonical URL for a tab, optionally at a given PAGE.
+ *
+ * ⚠️ PAGE 1 EMITS NO PARAM, for the same reason To do emits no `?tab=`: one
+ * canonical URL per view (MOTIR-4853). A link to a tab and a link to its first
+ * page are the same link, so nothing has to decide which of two spellings to
+ * share, and the pager's own `1` button navigates to the tab's plain href.
+ *
+ * ⚠️ It took a `cursor` until MOTIR-4852 retired the keyset. The shape is the
+ * same and the meaning is not: a cursor was an opaque POSITION that only the
+ * read that minted it could interpret, so it could only ever be handed back; a
+ * page is a number a person can type, bookmark and share.
+ */
+export function workbenchTabHref(tab: WorkbenchTab, page?: number | null): string {
   const params = new URLSearchParams();
   const param = TAB_PARAM[tab];
   if (param !== null) params.set('tab', param);
-  if (cursor) params.set('cursor', cursor);
+  if (page !== null && page !== undefined && page > 1) params.set('page', String(page));
   const query = params.toString();
   return query ? `${AUTHED_LANDING_PATH}?${query}` : AUTHED_LANDING_PATH;
 }

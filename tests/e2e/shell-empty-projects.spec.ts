@@ -1,9 +1,21 @@
-// E2E smoke: the empty-projects shell state (PRODECT_FINDINGS #29.1). A fresh
-// user's auto-workspace has zero projects, so the sidebar header renders the
-// "Create your first project" CTA card instead of the switcher, the project-
-// scoped nav (Issues/Boards/Reports) is hidden, and Settings/Docs remain.
+// E2E smoke: a FRESH ACCOUNT'S SHELL.
 //
-// @smoke — Subtask 1.5.3.
+// ⚠️ INVERTED, WHOLE (MOTIR-4876). This file was "the empty-projects shell
+// state (PRODECT_FINDINGS #29.1)": a fresh user's auto-workspace had zero
+// projects, so the rail head rendered the "Create your first project" CTA card
+// instead of the switcher and the project-scoped nav was hidden.
+//
+// Every clause of that is now false. A default project is seeded at the
+// WORKSPACE tier (MOTIR-4870), so a fresh account is inside one from its first
+// request; the CTA is retired (MOTIR-4873) and so is the `hasProject` gate that
+// hid the nav.
+//
+// It is INVERTED rather than deleted because its subject survives its premise:
+// what a brand-new account's shell looks like is exactly as worth a smoke test
+// now as it was then — the answer is simply the opposite one, and asserting the
+// opposite is what makes this file a detector rather than a fossil.
+//
+// @smoke — Subtask 1.5.3, inverted by MOTIR-4876.
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
@@ -27,37 +39,51 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
 
+  // ⚠️ A registration lands on the onboarding ENTRANCE now (MOTIR-4871); this
+  // local helper keeps its contract — leave the caller in the app — by settling
+  // there and navigating on.
   const createButton = page.getByRole('button', { name: /^(Create account|Creating account…)$/ });
   for (let attempt = 0; attempt < 3; attempt++) {
     await createButton.click();
     const landed = await page
-      .waitForURL('**/workbench', { timeout: 9_000 })
+      .waitForURL('**/onboarding', { timeout: 9_000 })
       .then(() => true)
       .catch(() => false);
-    if (landed || page.url().includes('/workbench')) return;
+    if (landed || page.url().includes('/onboarding')) break;
     await page.waitForTimeout(11_000);
   }
+  await page.waitForURL('**/onboarding');
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench');
 }
 
-test('@smoke shell: zero-projects sidebar shows the CTA, hides project nav, keeps Settings/Git', async ({
+test('@smoke shell: a fresh account has a project — the switcher, the project nav, Settings/Git', async ({
   page,
 }) => {
   await signUp(page, USER_EMAIL);
   await page.goto('/dashboard');
 
-  // (#29.1) The sidebar header renders the "Create your first project" CTA
-  // card (a button) in place of the project switcher.
-  await expect(page.getByRole('button', { name: 'Create your first project' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Switch project' })).toHaveCount(0);
+  // The rail head renders the project SWITCHER. There is no create-first CTA
+  // anywhere, in the rail or in the bar — the state it served cannot occur.
+  await expect(page.getByRole('button', { name: 'Switch project' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create your first project' })).toHaveCount(0);
 
-  // Project-scoped nav items are hidden when there's no active project.
-  await expect(page.getByRole('link', { name: 'Work Items' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Boards' })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Reports' })).toHaveCount(0);
+  // The project-scoped nav RENDERS. It was hidden by the `hasProject` gate,
+  // which is gone with the state it gated on.
+  await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Boards' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Reports' })).toBeVisible();
 
-  // Settings + Git (the bottom section) stay visible. Docs and Legal
-  // documents left this section for the Help menu (MOTIR-4239).
+  // Settings (the bottom section) stays visible. Docs and Legal documents left
+  // this section for the Help menu (MOTIR-4239) — and `Git` left it too, which
+  // is the half main's copy of this line predates.
   await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Git' })).toBeVisible();
+  // ⚠️ AND `Git` LEFT IT TOO (MOTIR-4643) — asserted as an ABSENCE so the row
+  // cannot silently return. The connection lifecycle is an org-admin act at
+  // Settings → Organisation → Git, and a member's own account connect is at
+  // Settings → Account → Git; neither is gone, and neither belongs on a PROJECT
+  // rail. What answers *what code does Motir know about?* is the `Codebase` row
+  // in the primary section, which this zero-project state does not render at all
+  // because there is no project to have code.
+  await expect(page.getByRole('link', { name: 'Git' })).toHaveCount(0);
 });

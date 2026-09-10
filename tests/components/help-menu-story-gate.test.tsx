@@ -535,35 +535,68 @@ function bottomSectionRowNames(): string[] {
   const separators = [...nav.querySelectorAll('[role="separator"]')];
   const last = separators.at(-1) ?? null;
   const links = [...nav.querySelectorAll('a')];
+  // ⚠️ NO SEPARATOR MEANS NO BOTTOM SECTION, NOT "EVERY ROW IS THE BOTTOM
+  // SECTION" (MOTIR-4643). This fallback returned `links` — the WHOLE rail —
+  // and was dead code for as long as the section always had a row. It is
+  // reachable now: with `Security`, `Job runs` and `Git` all gone, a member
+  // holding no settings door gets no section at all, and `Sidebar` draws the
+  // separator only BETWEEN sections. Returning the primary rows there reports
+  // twelve rows where there are none, which is the opposite of the answer.
   const afterLast = last
     ? links.filter(
         (a) => (last.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
       )
-    : links;
+    : [];
   // Collapsed rows carry the label as `aria-label`; expanded rows carry it as
   // text. Read whichever is there, so one helper serves both widths.
   return afterLast.map((a) => (a.getAttribute('aria-label') ?? a.textContent ?? '').trim());
 }
 
-describe('SEAM — the rail keeps exactly the four rows the two departures left', () => {
-  it('is exactly Settings · Security · Job runs · Git, in that order', () => {
+// ⚠️ AMENDED TWICE, AND THE COUNT IS ONE NOW (MOTIR-4847, then MOTIR-4643).
+//
+// These cases were written for MOTIR-4239's departures (`Docs` and `Legal`) and
+// pinned the survivors as Settings · Security · Job runs · Git. `Security` and
+// `Job runs` left with MOTIR-4847 — relocated, not removed: above the reveal
+// they are rows in the workspace area's own rail, below it they fold into
+// `/settings/organization`. `Git` left with MOTIR-4643, its two actions carried
+// to the organisation and the account tiers.
+//
+// RE-MEASURED rather than deleted, because what they are for is unchanged and is
+// the reason MOTIR-4130 exists: a count carried in a test that nobody re-takes
+// is how a rail's design and its code drift apart for a month without anything
+// going red. `design/shell/design-notes.md` § *The rail's bottom section* is the
+// design of record, amended by MOTIR-4640.
+describe('SEAM — the rail keeps exactly the row the departures left', () => {
+  it('is exactly Settings, and nothing else', () => {
     renderRail({ workspaceTierRevealed: true });
 
-    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs', 'Git']);
+    expect(bottomSectionRowNames()).toEqual(['Settings']);
   });
 
-  it('its FLOOR is exactly Job runs · Git — unchanged by the two departures', () => {
-    // Both departing rows were already conditional, which is why this move costs
-    // an unconfigured deployment nothing: the floor is what it was before.
+  it('⚠️ its FLOOR is EMPTY — and the section is absent, not blank', () => {
+    // The floor used to be `Job runs · Git`, and MOTIR-4239's departures cost an
+    // unconfigured deployment nothing because both departing rows were already
+    // conditional. Two moves later the floor is gone: a MEMBER holds no settings
+    // door, so the last row filters away and `SidebarNav` pushes NO SECTION —
+    // rather than an empty container, which would render the separator above a
+    // row that is not there and read as a loading error.
+    //
+    // Note the second assertion: with `Security` gone this section has no
+    // reveal-gated member left, so both counts render the same. That is the
+    // property MOTIR-4843 was after — the tier stopped leaking into the
+    // project's rail — and it is worth asserting rather than inferring.
     renderRail({ permissions: MEMBER, workspaceTierRevealed: false });
+    expect(bottomSectionRowNames()).toEqual([]);
 
-    expect(bottomSectionRowNames()).toEqual(['Job runs', 'Git']);
+    cleanup();
+    renderRail({ permissions: MEMBER, workspaceTierRevealed: true });
+    expect(bottomSectionRowNames()).toEqual([]);
   });
 
-  it('the section is FOUR rows at most — nothing re-appeared beside them', () => {
+  it('the section is ONE row at most — nothing re-appeared beside it', () => {
     renderRail({ workspaceTierRevealed: true });
 
-    expect(bottomSectionRowNames()).toHaveLength(4);
+    expect(bottomSectionRowNames()).toHaveLength(1);
   });
 
   // ⚠️ THE SWEEP. `SidebarNav-docs-door.test.tsx` and
@@ -735,7 +768,10 @@ describe('CONTRACT — `SidebarNav` carries neither departed prop', () => {
       />,
     );
 
-    expect(bottomSectionRowNames()).toEqual(['Settings', 'Security', 'Job runs', 'Git']);
+    // Re-measured twice with the section (MOTIR-4847, then MOTIR-4643) — the
+    // claim is about the stale props reaching no markup, and the row list is how
+    // it is read.
+    expect(bottomSectionRowNames()).toEqual(['Settings']);
     expect(screen.getByRole('navigation').textContent).not.toMatch(/\b(docs|legal)\b/i);
   });
 });

@@ -31,7 +31,7 @@
 
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { resetDatabase, adminDb, truncateJobTables } from './_helpers/db-reset';
-import { signUp, createFirstProject } from './_helpers/shell-session';
+import { signUp } from './_helpers/shell-session';
 import { postSignedWebhook } from './_helpers/github-seed';
 import { killJobWorker, startJobWorker } from './_helpers/job-worker-process';
 import {
@@ -113,7 +113,13 @@ async function push(request: APIRequestContext, repo: SeedRepo, head: string): P
 async function seedWorkspace(page: Parameters<typeof signUp>[0], repos: SeedRepo[]) {
   const email = `refresh-engine-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.test`;
   await signUp(page, email);
-  await createFirstProject(page, 'Refresh Engine');
+  // ⚠️ NO `createFirstProject` HERE (MOTIR-4876). Registration now SEEDS a
+  // project at the workspace tier, so the workspace already holds exactly one
+  // and creating another made it two — which this test can SEE, because
+  // `projectsIndexed` counts every project in the workspace and the fan-out is
+  // one container per (repo × project). The assertion below is `1`, and it is
+  // the faithful number: a real account that has just registered has one
+  // project, not two.
   const local = email.split('@')[0]!;
   const ws = await adminDb.workspace.findFirstOrThrow({ where: { name: `${local}'s Workspace` } });
   await seedConnectedRepos(ws.id, repos);
@@ -280,7 +286,14 @@ test('the coalesced run is RENDERED on the operator dashboard @smoke', async ({
 
   // The only user-visible thing this story could have broken: the ledger DTOs the
   // jobs surface reads. Unchanged by the collapse, and this is what says so.
-  await page.goto('/settings/workspace/jobs');
+  //
+  // ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
+  // sign-up gets ONE auto-created workspace — the COLLAPSED state — and
+  // `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
+  // workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
+  // settings home instead (`JobRunsFoldInSection`): same component, same reads,
+  // same tabs and filters, with its links built from THIS address.
+  await page.goto('/settings/organization');
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
   const row = page.getByText(REFRESH_JOB, { exact: false }).first();
   await expect(row).toBeVisible();

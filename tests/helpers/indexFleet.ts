@@ -110,7 +110,7 @@ export function stubIndexFleet(): void {
 
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string): Promise<Response> => {
+    vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
       // Matched on the PARSED url, never `includes()` — a substring host check is
       // a HIGH CodeQL alert in this repo, test fixtures included.
       const parsed = new URL(String(url));
@@ -141,9 +141,24 @@ export function stubIndexFleet(): void {
             nextOffset: null,
           });
         }
+        // ⚠️ THE MINT HONOURS `ttlSeconds`, INCLUDING ITS CLAMP (MOTIR-4923).
+        // motir-ai's `clampTtlSeconds` defaults to fifteen minutes and bounds a
+        // request to [60, 3600]; a fixture that answered a flat fifteen minutes
+        // whatever it was asked for is what made a container permitted THIRTY
+        // minutes against a credential minted for fifteen untestable here — the
+        // production defect this transcription exists to keep out.
+        const requested = (
+          typeof init?.body === 'string'
+            ? (JSON.parse(init.body) as { ttlSeconds?: unknown })
+            : null
+        )?.ttlSeconds;
+        const ttlSeconds =
+          typeof requested === 'number' && Number.isFinite(requested)
+            ? Math.min(3600, Math.max(60, Math.floor(requested)))
+            : 15 * 60;
         return json(201, {
           credential: INDEX_RUN_CREDENTIAL,
-          expiresAt: new Date(Date.now() + 900_000).toISOString(),
+          expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
         });
       }
       if (parsed.pathname.endsWith('/access_tokens')) {

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import zhMessages from '@/messages/zh.json';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import type { PermissionKey } from '@/lib/permissions/catalog';
@@ -341,5 +342,34 @@ describe('toArchivedRows', () => {
     expect(row?.statusLabel).toBe('mystery');
     expect(row?.statusCategory).toBeNull();
     expect(row?.archivedByName).toBeNull();
+  });
+});
+
+describe("the /items/archived pager INHERITS the shared control's translation (MOTIR-4853)", () => {
+  // The second of `IssueListPager`'s two pre-existing consumers. Same reason as
+  // the `/items` case: MOTIR-4853 changed the control this surface mounts, in
+  // place, for a story about a different surface entirely.
+  it('renders its footer in `en` and in `zh`, from the same catalogue keys', () => {
+    renderWithIntl(<ArchivedWorkItemsList rows={ROWS} total={1234} page={13} pageSize={50} />);
+    expect(screen.getByRole('navigation', { name: 'Pagination' })).toBeTruthy();
+    expect(
+      screen
+        .getByText(/Showing/)
+        .textContent?.replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('Showing 601–650 of 1,234');
+    cleanup();
+
+    renderWithIntl(<ArchivedWorkItemsList rows={ROWS} total={1234} page={13} pageSize={50} />, {
+      locale: 'zh',
+      messages: zhMessages,
+    });
+    expect(screen.getByRole('navigation', { name: '分页' })).toBeTruthy();
+    expect(
+      screen
+        .getByText(/显示第/)
+        .textContent?.replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('显示第 601–650 项，共 1,234 项');
   });
 });

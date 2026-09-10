@@ -37,6 +37,18 @@ export interface UpsertGithubRepoInput {
   provider?: string;
 }
 
+/** One row the drift sweep may count — projected, not the whole model. */
+export interface DriftRecomputeCandidate {
+  id: string;
+  owner: string;
+  name: string;
+  provider: string;
+  indexedHeadSha: string;
+  defaultBranchHeadSha: string;
+  /** The id the HOST knows — what every provider method takes. */
+  hostInstallationId: string;
+}
+
 export const githubRepoRepository = {
   /** The repos selected on an installation, stable-ordered for display. Runs
    *  inside a context transaction, so it takes `tx`. */
@@ -92,6 +104,110 @@ export const githubRepoRepository = {
     const result = await tx.githubRepo.updateMany({
       where: { id },
       data: { defaultBranchHeadSha: headSha },
+    });
+    return result.count;
+  },
+
+  /**
+   * Repositories whose DRIFT COUNT needs computing (MOTIR-4644) — both shas
+   * known and DIFFERENT, and no stored count for that exact pair.
+   *
+   * ⚠️ BOUNDED, AND THE BOUND IS THE POINT. Every row this returns costs one
+   * provider round-trip, and GitLab.com rate-limits some endpoints at 5
+   * requests/minute — so an unbounded fan-out over a large estate is not slow,
+   * it is a sweep that fails most of its work and retries it for ever. The
+   * caller passes a per-tick ceiling; the oldest-updated rows go first, so no
+   * repository can be starved by a busier neighbour.
+   *
+   * ⚠️ THE PAIR-MATCH FILTER IS THE SAME RULE `needsDriftRecompute` STATES, in
+   * SQL. It is expressed with `IS DISTINCT FROM` rather than `<>` because a NULL
+   * stored sha must count as "does not match" — plain inequality is NULL there,
+   * which drops exactly the never-computed rows this sweep exists to find.
+   *
+   * ⚠️ AND IT DOES NOT TEST `commits_behind IS NULL`. A recorded null means this
+   * pair WAS tried and is not determinable — a force-push has no common ancestor
+   * and never will until a sha moves. Selecting on the count's nullness would
+   * re-select that repository on every tick for ever, spending a provider call
+   * each time to learn the same thing. "Tried" is a property of the PAIR.
+   *
+   * ⚠️ IT TAKES A `tx` BECAUSE IT IS A CROSS-TENANT SYSTEM READ. `github_repo`'s
+   * RLS policy is `system_admin OR workspace_id = app.workspace_id`, and this
+   * sweep belongs to no workspace — so it runs inside `withSystemContext`, and
+   * requiring the handle here is what stops a caller reaching for the unbound
+   * singleton and getting ZERO ROWS WITH NO ERROR.
+   */
+  async listNeedingDriftRecompute(
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<DriftRecomputeCandidate[]> {
+    // ⚠️ EVERY COLUMN IS ALIASED, and that is not cosmetic. `$queryRaw` returns
+    // the DATABASE's column names — Prisma applies no `@map` translation to a raw
+    // result — so an unaliased `indexed_head_sha` arrives as a property no
+    // TypeScript reader would look for, and the typed generic makes the mismatch
+    // invisible: every field reads `undefined`, no error is raised, and the sweep
+    // compares nothing against nothing.
+    //
+    // ⚠️ AND IT JOINS THE INSTALLATION FOR ITS *HOST* ID. `github_repo
+    // .installation_id` is the FK to our own row; every provider method takes the
+    // id the HOST knows (`github_installation.installation_id`). Passing the FK
+    // mints no token and the compare 404s — indistinguishable, at the call site,
+    // from a repository with no common ancestor.
+    return tx.$queryRaw<DriftRecomputeCandidate[]>`
+      SELECT
+        gr."id"                       AS "id",
+        gr."owner"                    AS "owner",
+        gr."name"                     AS "name",
+        gr."provider"                 AS "provider",
+        gr."indexed_head_sha"         AS "indexedHeadSha",
+        gr."default_branch_head_sha"  AS "defaultBranchHeadSha",
+        gi."installation_id"          AS "hostInstallationId"
+      FROM "github_repo" gr
+      JOIN "github_installation" gi ON gi."id" = gr."installation_id"
+      WHERE gr."archived" = false
+        AND gr."indexed_head_sha" IS NOT NULL
+        AND gr."default_branch_head_sha" IS NOT NULL
+        AND gr."indexed_head_sha" <> gr."default_branch_head_sha"
+        AND (
+          gr."commits_behind_base_sha" IS DISTINCT FROM gr."indexed_head_sha"
+          OR gr."commits_behind_head_sha" IS DISTINCT FROM gr."default_branch_head_sha"
+        )
+      ORDER BY gr."updated_at" ASC
+      LIMIT ${limit}
+    `;
+  },
+
+  /**
+   * Store a drift count AGAINST THE PAIR IT WAS COMPUTED FOR (MOTIR-4644).
+   *
+   * ⚠️ THE TWO SHAS ARE WRITTEN WITH THE NUMBER, ALWAYS, and that is what makes
+   * the cache safe rather than merely fast: without them a later read cannot
+   * tell a current count from one about a pair that has since moved, and the two
+   * render identically.
+   *
+   * ⚠️ IT IS CONDITIONAL ON THE PAIR STILL BEING THE ROW'S. A push or an index
+   * run can land while the provider call is in flight, and writing then would
+   * stamp a number computed for the OLD pair with the NEW pair's shas — a
+   * plausible, wrong count that no later read could detect. Losing that race
+   * writes nothing and the next tick recomputes, which is the honest outcome.
+   *
+   * A null `count` is stored as null WITH its pair: it records that this pair was
+   * tried and is not determinable (a force-push, a host that could not answer),
+   * so the sweep does not retry it on every tick for ever.
+   */
+  async setDriftCount(
+    id: string,
+    count: number | null,
+    baseSha: string,
+    headSha: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubRepo.updateMany({
+      where: { id, indexedHeadSha: baseSha, defaultBranchHeadSha: headSha },
+      data: {
+        commitsBehind: count,
+        commitsBehindBaseSha: baseSha,
+        commitsBehindHeadSha: headSha,
+      },
     });
     return result.count;
   },

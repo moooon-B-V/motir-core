@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 // MOTIR-3435 — `/items/[key]`'s GATE and its read SHAPE.
@@ -34,15 +34,46 @@ import { cleanup } from '@testing-library/react';
 // returning JSX — so it is CALLED, not rendered.
 
 const started: string[] = [];
-let release: (() => void) | null = null;
-const gate = new Promise<void>((resolve) => {
-  release = resolve;
-});
-/** Resolves only when the test lets it, and records that it STARTED. */
-const deferred = <T,>(name: string, value: T) =>
+
+// ── THE GATES: ONE PER TIER, REBUILT PER CASE (MOTIR-4919) ──────────────────
+//
+// A promise resolves ONCE. This file used to hold a single module-level gate
+// released by `afterEach`, so the FIRST case's teardown resolved it for the
+// whole file and from the second case onward `deferred` was `immediate`. Every
+// assertion below that reads "in flight while NONE has resolved" was then
+// measuring whether the microtask queue drains before a `setTimeout(0)` — which
+// it always does, for a `Promise.all` and for a serial chain alike. The
+// concurrency assertion could not fail. So the gates are rebuilt in
+// `beforeEach`, and each case gets its own unresolved pair.
+//
+// TWO gates, not one, because the page has two tiers and the late-stack cases
+// need them apart. `app/(authed)/items/[key]/page.tsx` STARTS the late reads
+// (`readLateSections`, :190) and then AWAITS the tier-two `Promise.all` (:226)
+// before it returns. So "the page resolves while the late reads are still
+// pending" is only expressible when tier two can settle while late does not —
+// with one shared gate, holding the late reads also holds tier two, and the
+// page correctly never returns. That is not a defect in the page; it is the
+// tier boundary the page is built around, and a single gate cannot straddle it.
+let releaseTierTwo: (() => void) | null = null;
+let releaseLate: (() => void) | null = null;
+let tierTwoGate: Promise<void> = Promise.resolve();
+let lateGate: Promise<void> = Promise.resolve();
+/** Lets BOTH tiers go — the default teardown, and what a case wants when it is
+ *  not asserting anything about the boundary between them. */
+const releaseAll = () => {
+  releaseTierTwo?.();
+  releaseLate?.();
+};
+/**
+ * Resolves only when the test lets THIS READ'S TIER go, and records that it
+ * STARTED. The tier is required rather than defaulted: which tier a read sits
+ * in is the property this file exists to assert, so it is stated at every mock
+ * rather than inherited.
+ */
+const deferred = <T,>(name: string, value: T, tier: 'tierTwo' | 'late') =>
   vi.fn(async () => {
     started.push(name);
-    await gate;
+    await (tier === 'tierTwo' ? tierTwoGate : lateGate);
     return value;
   });
 /** Resolves immediately; still records the start. */
@@ -68,9 +99,9 @@ const getIssueDetail = vi.fn();
 const getPermissions = vi.fn();
 const resolveAliasedIssueKey = vi.fn(async () => null as string | null);
 
-const rollupForParent = deferred('rollup', null);
-const acceptanceResolve = deferred('acceptanceEligibility', null);
-const acceptanceEvidence = deferred('acceptanceEvidence', null);
+const rollupForParent = deferred('rollup', null, 'tierTwo');
+const acceptanceResolve = deferred('acceptanceEligibility', null, 'late');
+const acceptanceEvidence = deferred('acceptanceEvidence', null, 'late');
 
 vi.mock('next/navigation', () => ({
   redirect: (to: string) => redirected(to),
@@ -89,46 +120,46 @@ vi.mock('@/lib/issues/aliasRedirect', () => ({
 vi.mock('@/lib/services/workItemsService', () => ({
   workItemsService: {
     getIssueDetail: () => getIssueDetail(),
-    listLinkedPullRequests: deferred('pullRequests', []),
+    listLinkedPullRequests: deferred('pullRequests', [], 'late'),
     // ONE call since MOTIR-3660 — `getDeliveryView` returns the repository set
     // already amended by the delivery set, plus the set itself, so the rail and
     // the Development section take their two halves from a single read. That is
     // exactly what this file guards (tier two, read ONCE, not once per tier);
     // what changed is the name of the call, not the property.
-    getDeliveryView: deferred('deliveryView', { repos: [], deliveries: [] }),
-    resolveReferenceSummaries: deferred('workItemRefs', []),
+    getDeliveryView: deferred('deliveryView', { repos: [], deliveries: [] }, 'tierTwo'),
+    resolveReferenceSummaries: deferred('workItemRefs', [], 'tierTwo'),
   },
 }));
 vi.mock('@/lib/services/projectAccessService', () => ({
   projectAccessService: {
     getPermissions: () => getPermissions(),
-    getCommentCapabilities: deferred('commentCaps', {}),
-    getAttachmentCapabilities: deferred('attachmentCaps', {}),
+    getCommentCapabilities: deferred('commentCaps', {}, 'late'),
+    getAttachmentCapabilities: deferred('attachmentCaps', {}, 'late'),
   },
 }));
 vi.mock('@/lib/services/assignableMembersService', () => ({
-  assignableMembersService: { list: deferred('members', []) },
+  assignableMembersService: { list: deferred('members', [], 'tierTwo') },
 }));
 vi.mock('@/lib/services/sprintsService', () => ({
-  sprintsService: { listByProject: deferred('sprints', []) },
+  sprintsService: { listByProject: deferred('sprints', [], 'tierTwo') },
 }));
 // The PENDING-PLAN read (MOTIR-4197): tier two, in the group, CONDITIONAL on
 // `ai:view_plan` — the one member whose condition is a PERMISSION rather than
 // the item's shape, so both arms are asserted below.
-const pendingPlans = deferred('pendingPlans', []);
+const pendingPlans = deferred('pendingPlans', [], 'tierTwo');
 vi.mock('@/lib/services/plansService', () => ({
   plansService: { listPendingProposalsForWorkItem: () => pendingPlans() },
 }));
 vi.mock('@/lib/services/workItemTodosService', () => ({
   workItemTodosService: {
-    listTodos: deferred('todoList', { items: [], progress: { done: 0, total: 0 } }),
+    listTodos: deferred('todoList', { items: [], progress: { done: 0, total: 0 } }, 'tierTwo'),
   },
 }));
 vi.mock('@/lib/services/commentsService', () => ({
-  commentsService: { listComments: deferred('comments', null) },
+  commentsService: { listComments: deferred('comments', null, 'late') },
 }));
 vi.mock('@/lib/services/attachmentsService', () => ({
-  attachmentsService: { listForWorkItem: deferred('attachments', null) },
+  attachmentsService: { listForWorkItem: deferred('attachments', null, 'late') },
 }));
 vi.mock('@/lib/services/acceptanceEvidenceService', () => ({
   acceptanceEvidenceService: { getCurrentForStory: () => acceptanceEvidence() },
@@ -137,21 +168,21 @@ vi.mock('@/lib/services/acceptanceVideoEligibilityService', () => ({
   acceptanceVideoEligibilityService: { resolve: () => acceptanceResolve() },
 }));
 vi.mock('@/lib/services/designEvidenceService', () => ({
-  designEvidenceService: { getCurrentForWorkItem: deferred('designEvidence', null) },
+  designEvidenceService: { getCurrentForWorkItem: deferred('designEvidence', null, 'late') },
 }));
 vi.mock('@/lib/services/estimationService', () => ({
   estimationService: {
-    getEstimationConfig: deferred('estimationConfig', {}),
+    getEstimationConfig: deferred('estimationConfig', {}, 'tierTwo'),
     rollupForParent: () => rollupForParent(),
   },
 }));
 vi.mock('@/lib/services/componentsService', () => ({
-  componentsService: { listComponents: deferred('components', []) },
+  componentsService: { listComponents: deferred('components', [], 'tierTwo') },
 }));
 vi.mock('@/lib/services/activityService', () => ({
   activityService: {
-    listHistory: deferred('history', null),
-    listAll: deferred('all', null),
+    listHistory: deferred('history', null, 'late'),
+    listAll: deferred('all', null, 'late'),
   },
 }));
 vi.mock('@/lib/mentions/workItemRefs', () => ({ parseWorkItemRefs: () => [] }));
@@ -202,7 +233,47 @@ const detailFor = (over: Record<string, unknown> = {}) => ({
   readiness: {},
 });
 
+// ── WHY THE PAGE IS IMPORTED IN A HOOK, AND WHY EVERY CALL IS TRACKED (MOTIR-4902)
+//
+// `import('@/app/(authed)/items/[key]/page')` pulls a 30+ module graph, of which
+// only about half is mocked above. Transforming and evaluating it took **6.0 s**
+// on this box — and when that import sat inside `callPage`, Vitest billed the
+// whole of it to whichever `it()` happened to call first. That case ran at 6.0 s
+// of a 15 s `testTimeout` while the other twelve ran at 0–3 ms, so exactly one
+// case in the file could lose a race against a loaded machine, and it was the
+// most load-bearing one (the gate is in front of EVERY read). A guard whose red
+// might mean "the box was busy" has stopped being evidence.
+//
+// A `beforeAll` is billed against `hookTimeout` (30 s), which is where a
+// module-graph load belongs. `callPage` then reuses the reference.
+//
+// The tracking is the second half, and it is about what a TIMEOUT leaves behind.
+// Vitest fails a timed-out case and moves on; the page invocation that case was
+// awaiting keeps running, reaches its next mock some time later, and consumes a
+// `mockResolvedValueOnce` the NEXT case had queued. The next case then fails
+// with an assertion error about a product surface it never executed
+// (`expected NEXT_PERMANENT_REDIRECT … got NEXT_NOT_FOUND`), which reads as a
+// regression and is not one. `afterEach` runs even for a timed-out case, so
+// draining there is what keeps one case's abandoned work out of the next.
+type PageModule = typeof import('@/app/(authed)/items/[key]/page');
+let pageModule: PageModule;
+
+/** Every page invocation this case started, drained in `afterEach`. */
+const inFlight: Promise<unknown>[] = [];
+
+beforeAll(async () => {
+  pageModule = await import('@/app/(authed)/items/[key]/page');
+});
+
 beforeEach(() => {
+  // A promise resolves once, so a gate is per-CASE or it is spent. Both are
+  // rebuilt here; nothing outside this hook constructs one.
+  tierTwoGate = new Promise<void>((resolve) => {
+    releaseTierTwo = resolve;
+  });
+  lateGate = new Promise<void>((resolve) => {
+    releaseLate = resolve;
+  });
   started.length = 0;
   redirected.mockClear();
   notFoundFn.mockClear();
@@ -214,27 +285,69 @@ beforeEach(() => {
   acceptanceResolve.mockClear();
   acceptanceEvidence.mockClear();
   pendingPlans.mockClear();
+  // One-shot: a queued `mockResolvedValueOnce` that a previous case did not
+  // consume must not be waiting for this one. `mockReset` restores the
+  // implementation `vi.fn()` was constructed with.
+  resolveAliasedIssueKey.mockReset();
 });
-afterEach(() => {
-  release?.();
+afterEach(async () => {
+  releaseAll();
+  // Settle every invocation started by this case — including one Vitest
+  // abandoned on a timeout — BEFORE the next case queues a one-shot mock.
+  await Promise.allSettled(inFlight.splice(0));
   cleanup();
 });
 
-const callPage = async (over: Record<string, unknown> = {}) => {
-  const { default: IssueDetailPage } = await import('@/app/(authed)/items/[key]/page');
-  return IssueDetailPage({
-    params: Promise.resolve({ key: 'MOTIR-1' }),
-    searchParams: Promise.resolve({}),
-    ...over,
-  } as never);
+const callPage = (over: Record<string, unknown> = {}) => {
+  const pending = Promise.resolve(
+    pageModule.default({
+      params: Promise.resolve({ key: 'MOTIR-1' }),
+      searchParams: Promise.resolve({}),
+      ...over,
+    } as never),
+  );
+  inFlight.push(pending);
+  // The case's own assertion still reads `pending`; this only keeps a rejection
+  // the case abandons from surfacing as an unhandled rejection.
+  void pending.catch(() => undefined);
+  return pending;
 };
 
+// ── WHICH READS MAY PRECEDE THE GATE, AND WHY (MOTIR-4898) ──────────────────
+//
+// The two cases below assert the SAME property — the gate is in front of every
+// read — at two different depths of the page, so each one names the EXACT set
+// of reads that may have started by the point it stops. They used to name that
+// set as a FILTER instead, and the two filters disagreed: one tolerated `t`,
+// its sibling four lines later tolerated `t` AND `locale`. A tolerance is a
+// claim about the page, so two different tolerances are two different claims
+// about one property, and at most one of them can be right.
+//
+//   * BEFORE the session settles, NOTHING may have started. An unauthenticated
+//     request redirects at the top of the page, ahead of every read including
+//     the translator, so the set is EMPTY — not "empty apart from `t`".
+//   * `t` (`getTranslations`) is the ONE read that runs after the session check
+//     and ahead of the rest of the gate. It resolves a message catalogue and
+//     reads no project data, so it cannot distinguish a missing item from a
+//     browse-denied one — which is the leak this gate exists to prevent. Every
+//     case that gets past the session check therefore expects exactly `t`.
+//   * `locale` (`getLocale`) is NOT in that set at any depth. The page calls it
+//     inside the tier-two `Promise.all`, which starts only after
+//     `getPermissions` has settled — i.e. after the whole gate. Tolerating it
+//     here bought nothing (no case has ever recorded it) and cost the one thing
+//     the assertion is for: a hoist of `getLocale()` above `getIssueDetail`
+//     would have gone unnoticed.
+//
+// So neither case filters. Anything new in `started` fails, and adding a name
+// to one of these arrays is a deliberate statement that the page now starts
+// that read before the gate has finished.
 describe('the item-detail gate stays in front of every read (MOTIR-3435)', () => {
   it('redirects an unauthenticated request before starting anything', async () => {
     getSession.mockResolvedValue(null);
     await expect(callPage()).rejects.toThrow('NEXT_REDIRECT');
     expect(redirected).toHaveBeenCalledWith('/sign-in');
-    expect(started.filter((s) => s !== 't')).toEqual([]);
+    // Not even the translator: the redirect precedes `getTranslations`.
+    expect(started).toEqual([]);
   });
 
   it('404s a missing or browse-denied item without starting a single page read', async () => {
@@ -248,7 +361,9 @@ describe('the item-detail gate stays in front of every read (MOTIR-3435)', () =>
     // The permission read never ran, and neither did anything after it: a 404
     // must not be distinguishable from a denial by what the server did.
     expect(getPermissions).not.toHaveBeenCalled();
-    expect(started.filter((s) => !['t', 'locale'].includes(s))).toEqual([]);
+    // The translator and nothing else — `locale` belongs to the tier-two group,
+    // which this request never reaches.
+    expect(started).toEqual(['t']);
   });
 
   it('308-redirects an item under a retired project key', async () => {
@@ -272,9 +387,18 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     getPermissions.mockResolvedValue(new Set(['work_item:edit', 'ai:view_plan']));
 
     const pending = callPage();
-    // A real macrotask, not a fixed number of microtask ticks: the gate's own
-    // four awaits resolve on the microtask queue and counting them would couple
-    // this test to how many `await`s the gate happens to have.
+    // A real macrotask, not a fixed number of microtask ticks: the page gate's
+    // own four awaits resolve on the microtask queue and counting them would
+    // couple this test to how many `await`s that gate happens to have.
+    //
+    // ⚠️ AND THE MACROTASK IS WHY THE TEST GATES MUST BE PENDING (MOTIR-4919).
+    // A macrotask runs only after the microtask queue has DRAINED, so if the
+    // mocked reads can settle, they all have by the time this resumes — and a
+    // fully serialised chain reaches this line with every name in `started`,
+    // exactly like a `Promise.all`. The assertion below therefore discriminates
+    // concurrency from serialisation only while the reads are held OPEN. That
+    // is what the per-case gates buy: with the old shared gate, resolved by the
+    // first case's teardown, this assertion could not fail.
     await new Promise((r) => setTimeout(r, 0));
 
     // Every non-conditional member of the group is in flight while NONE has
@@ -304,7 +428,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
       expect(started, `${name} should already be in flight`).toContain(name);
     }
 
-    release?.();
+    releaseAll();
     await pending.catch(() => undefined);
   });
 
@@ -315,9 +439,18 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     getPermissions.mockResolvedValue(new Set());
 
     const pending = callPage();
-    // A real macrotask, not a fixed number of microtask ticks: the gate's own
-    // four awaits resolve on the microtask queue and counting them would couple
-    // this test to how many `await`s the gate happens to have.
+    // A real macrotask, not a fixed number of microtask ticks: the page gate's
+    // own four awaits resolve on the microtask queue and counting them would
+    // couple this test to how many `await`s that gate happens to have.
+    //
+    // ⚠️ AND THE MACROTASK IS WHY THE TEST GATES MUST BE PENDING (MOTIR-4919).
+    // A macrotask runs only after the microtask queue has DRAINED, so if the
+    // mocked reads can settle, they all have by the time this resumes — and a
+    // fully serialised chain reaches this line with every name in `started`,
+    // exactly like a `Promise.all`. The assertion below therefore discriminates
+    // concurrency from serialisation only while the reads are held OPEN. That
+    // is what the per-case gates buy: with the old shared gate, resolved by the
+    // first case's teardown, this assertion could not fail.
     await new Promise((r) => setTimeout(r, 0));
 
     // Not a story at in_review/done → no acceptance reads at all.
@@ -332,7 +465,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     // able to benefit from it never pays for it.
     expect(pendingPlans).not.toHaveBeenCalled();
 
-    release?.();
+    releaseAll();
     await pending.catch(() => undefined);
   });
 
@@ -349,7 +482,7 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     // It is IN the group: in flight while the deferred members are unresolved.
     expect(started).toContain('pendingPlans');
 
-    release?.();
+    releaseAll();
     await pending.catch(() => undefined);
   });
 
@@ -363,16 +496,25 @@ describe('the remaining reads run CONCURRENTLY (MOTIR-3435)', () => {
     getPermissions.mockResolvedValue(new Set());
 
     const pending = callPage();
-    // A real macrotask, not a fixed number of microtask ticks: the gate's own
-    // four awaits resolve on the microtask queue and counting them would couple
-    // this test to how many `await`s the gate happens to have.
+    // A real macrotask, not a fixed number of microtask ticks: the page gate's
+    // own four awaits resolve on the microtask queue and counting them would
+    // couple this test to how many `await`s that gate happens to have.
+    //
+    // ⚠️ AND THE MACROTASK IS WHY THE TEST GATES MUST BE PENDING (MOTIR-4919).
+    // A macrotask runs only after the microtask queue has DRAINED, so if the
+    // mocked reads can settle, they all have by the time this resumes — and a
+    // fully serialised chain reaches this line with every name in `started`,
+    // exactly like a `Promise.all`. The assertion below therefore discriminates
+    // concurrency from serialisation only while the reads are held OPEN. That
+    // is what the per-case gates buy: with the old shared gate, resolved by the
+    // first case's teardown, this assertion could not fail.
     await new Promise((r) => setTimeout(r, 0));
 
     expect(acceptanceResolve).toHaveBeenCalled();
     expect(acceptanceEvidence).toHaveBeenCalled();
     expect(rollupForParent).toHaveBeenCalled();
 
-    release?.();
+    releaseAll();
     await pending.catch(() => undefined);
   });
 });
@@ -391,9 +533,20 @@ describe('the late stack (MOTIR-3436)', () => {
     getIssueDetail.mockResolvedValue(detailFor());
     getPermissions.mockResolvedValue(new Set(['work_item:edit']));
 
-    // `gate` is never released, so every LATE read is stuck. The page must
-    // still return: that is the whole point of the boundary. Before this card
-    // the same conditions would hang forever.
+    // Tier two is let through and the LATE gate is NOT, so every late read is
+    // genuinely stuck at the moment the page returns. That is the whole point
+    // of the boundary, and it is the assertion this case exists to make.
+    //
+    // ⚠️ THE TIER-TWO RELEASE IS LOAD-BEARING, NOT A CONVENIENCE (MOTIR-4919).
+    // The page AWAITS its tier-two `Promise.all` before it returns (page.tsx
+    // :226) and only STARTS the late reads (:190). So holding both tiers would
+    // hang the page CORRECTLY, and this case would be asserting nothing about
+    // the boundary — it would be waiting on the tier the boundary is not for.
+    // This comment used to read "`gate` is never released, so every LATE read
+    // is stuck", which was false twice over: one shared gate had already been
+    // resolved by the first case's `afterEach`, and holding it would have
+    // stopped tier two rather than only the late stack.
+    releaseTierTwo?.();
     const rendered = await callPage();
     expect(rendered).toBeTruthy();
 
@@ -408,6 +561,9 @@ describe('the late stack (MOTIR-3436)', () => {
     getIssueDetail.mockResolvedValue(detailFor());
     getPermissions.mockResolvedValue(new Set());
 
+    // Tier two through, late held — the page returns while the late reads are
+    // still in flight, which is the state this counts them in (MOTIR-4919).
+    releaseTierTwo?.();
     await callPage();
 
     // Two boundaries await the same promise. If each had built its own, every
@@ -433,7 +589,7 @@ describe('the late stack (MOTIR-3436)', () => {
     // read for both halves is the point — `getDeliveryView` returns them
     // together precisely so neither host combines them itself (MOTIR-3660).
     expect(started.filter((s) => s === 'deliveryView').length).toBe(1);
-    release?.();
+    releaseAll();
     await pending.catch(() => undefined);
   });
 });
@@ -453,7 +609,7 @@ describe('error containment survives the move behind a boundary (MOTIR-3436)', (
     // becomes a null page and the panel renders its own ErrorState + retry. A
     // boundary must not turn a caught failure into a thrown one — that is what
     // an `error.tsx` would have done, and why this card adds none.
-    release?.();
+    releaseAll();
     await expect(callPage()).resolves.toBeTruthy();
   });
 });

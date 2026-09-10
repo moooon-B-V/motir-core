@@ -4,21 +4,18 @@ import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  Activity,
   BarChart3,
   CircleDot,
   CirclePlay,
+  Code,
   Columns3,
-  GitBranch,
   History,
   House,
   Inbox,
   LayoutDashboard,
   LayoutList,
-  ListChecks,
   Map,
   Settings,
-  ShieldCheck,
   Sparkles,
   Waypoints,
 } from 'lucide-react';
@@ -53,8 +50,15 @@ import {
   visibleOrganizationSettingsNav,
 } from '@/lib/settings/organizationSettingsNav';
 import { SettingsSidebarHeader } from './SettingsSidebarHeader';
+import {
+  groupWorkspaceSettingsNav,
+  isWorkspaceSettingsEntryActive,
+  isWorkspaceSettingsPath,
+  visibleWorkspaceSettingsNav,
+} from '@/lib/settings/workspaceSettingsNav';
 import { AccountSidebarHeader } from './AccountSidebarHeader';
 import { OrganizationSidebarHeader } from './OrganizationSidebarHeader';
+import { WorkspaceSidebarHeader } from './WorkspaceSidebarHeader';
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 
 // The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with the
@@ -123,6 +127,16 @@ export interface SidebarNavProps {
    * revealing four admin rows to a caller that forgot to thread the prop.
    */
   organization?: { name: string; isOrgAdmin: boolean } | null;
+  /**
+   * The ACTIVE workspace (Story MOTIR-4843 · MOTIR-4846) — drives the
+   * workspace-settings area's rail header, which names the tenant that area
+   * configures, exactly as `organization` drives the organisation area's.
+   *
+   * Optional and nullable for the same reason `organization` is: the rail
+   * renders with no workspace context on the cold-start paths, and the branch
+   * below simply omits the header rather than refusing to render the rail.
+   */
+  workspace?: { name: string } | null;
   /**
    * Whether this build has the commercial surface (`isCloudBilling()`) — gates
    * the organisation nav's `Billing & plans` row, which `notFound()`s off cloud.
@@ -194,6 +208,7 @@ export function SidebarNav({
   user,
   organization = null,
   billingAvailable = false,
+  workspace = null,
   workspaceTierRevealed = false,
   publicProjectsAvailable = false,
   helpMenu,
@@ -226,7 +241,6 @@ export function SidebarNav({
     </div>
   );
 
-  const hasProject = Boolean(activeProject);
   // The actor's keys in membership-test form, used by BOTH the settings-area
   // rail below and the bottom nav's Project settings door. Built once, before
   // the two early returns, so the door and the rows it opens onto can never
@@ -236,6 +250,45 @@ export function SidebarNav({
   // this actor holds. Built here with `held`, for the same reason: the rail and
   // the area door must filter on one answer, not two.
   const availability = { publicProjectsAvailable };
+
+  // WORKSPACE-settings AREA (Story MOTIR-4843 · MOTIR-4846): the FOURTH and last
+  // settings tier to become an area. Like the account and organisation branches
+  // it does NOT gate on an active project — a workspace is configured with no
+  // project selected — and the header names the WORKSPACE.
+  //
+  // ⚠️ ITS ONE FILTER AXIS IS THE REVEAL, AND BELOW IT THE RAIL IS EMPTY. All
+  // three routes `notFound()` below the threshold and their capabilities are
+  // hosted on `/settings/organization`, gated per SECTION (§6d) — so the honest
+  // rendering here is NO rows, not fewer. `visibleWorkspaceSettingsNav` returns
+  // an empty list and `groupWorkspaceSettingsNav` drops every group with it, so
+  // nothing marks the gap: no empty heading, no disabled row.
+  if (isWorkspaceSettingsPath(pathname)) {
+    const workspaceSections: SidebarSection[] = groupWorkspaceSettingsNav(
+      visibleWorkspaceSettingsNav(workspaceTierRevealed),
+    ).map(({ group, entries }) => ({
+      id: `workspace-settings-${group}`,
+      label: ts(`workspace.nav.group.${group}`),
+      items: entries.map((entry) => ({
+        icon: <entry.icon />,
+        label: ts(`workspace.nav.${entry.labelKey}`),
+        href: entry.href,
+        active: isWorkspaceSettingsEntryActive(entry, pathname),
+      })),
+    }));
+    return (
+      <Sidebar
+        aria-label={ts('workspace.eyebrow')}
+        header={
+          workspace ? (
+            <WorkspaceSidebarHeader workspace={workspace} collapsed={collapsed} />
+          ) : undefined
+        }
+        sections={workspaceSections}
+        footer={footer}
+        collapsed={isDrawer ? false : undefined}
+      />
+    );
+  }
 
   // ORGANISATION-settings AREA (Story MOTIR-4669 · MOTIR-4710): the third and
   // last settings tier to become an area. Like the account branch it does NOT
@@ -336,7 +389,10 @@ export function SidebarNav({
 
   const sections: SidebarSection[] = [];
 
-  if (hasProject) {
+  // ⚠️ NO LONGER GATED (MOTIR-4873). This was `if (hasProject)`; every member is
+  // inside a project (MOTIR-4870), so the primary section always renders and
+  // the rail never collapses to its bottom section.
+  {
     const primaryItems: SidebarItem[] = [
       {
         // The signed-in landing surface (Story MOTIR-2649 · MOTIR-2654,
@@ -382,7 +438,8 @@ export function SidebarNav({
         // you dispatch, Runs is where you watch". The glyph is `Waypoints` — a
         // path through ordered nodes, which is what a run over a SET is — chosen
         // because `CirclePlay` is Ready's, `Zap` is the epic issue type's,
-        // `Activity` is Code health's and `History` is Resume onboarding's.
+        // `Code` is the Code room's and `History` is Resume onboarding's.
+        // (`Activity` was Code health's until MOTIR-4643 freed it.)
         icon: <Waypoints />,
         label: t('nav.runs'),
         href: '/runs',
@@ -465,12 +522,24 @@ export function SidebarNav({
         active: isActive(pathname, '/reports'),
       },
       {
-        // Code health (7.14.5) — the code-health audit + coding-convention
-        // review/approve surface; sits after Reports (a top-level project page).
-        icon: <Activity />,
-        label: t('nav.codeHealth'),
-        href: '/code-health',
-        active: isActive(pathname, '/code-health'),
+        // Code (MOTIR-1768 · MOTIR-4643) — the project's repository set and its
+        // index freshness, with the shipped code-health audit as its second
+        // section. Sits after Reports, exactly where `Code health` was.
+        //
+        // ⚠️ ONE ROW APPEARS AND ONE ROW LEAVES. Three surfaces answered one
+        // question — *what code does Motir know about, and is it healthy?* — from
+        // two rail sections with opposite gating, and a user looking for their
+        // repositories had to know the answer was spelled `Git` and lived below a
+        // horizontal rule beside Job runs and Security. This is the door; the
+        // page is MOTIR-1768's.
+        //
+        // ⚠️ THE GLYPH IS `Code`, AND `Activity` IS FREED. `Activity` was Code
+        // health's — a pulse, which named the AUDIT rather than the room. The
+        // room is about code, and its first section is a list of repositories.
+        icon: <Code />,
+        label: t('nav.code'),
+        href: '/code',
+        active: isActive(pathname, '/code'),
       },
     ];
     // The labeled "Resume onboarding" re-entry door (MOTIR-1533; design
@@ -520,100 +589,126 @@ export function SidebarNav({
   // tooltip — an entry point is a promise about a room, and a disabled row is a
   // promise the product then refuses).
   //
-  // With NO active project the row still targets workspace settings and is
-  // ALWAYS rendered: workspace settings are governed by the workspace role,
-  // which this epic does not change, and `held` is empty in that state anyway —
-  // gating on it would hide a door this story has no business touching.
-  const showSettingsDoor = hasProject ? hasVisibleSettingsArea(held, availability) : true;
+  // ⚠️ THE NO-PROJECT ARM IS GONE (MOTIR-4873). It read: "With NO active project
+  // the row still targets workspace settings and is ALWAYS rendered", which was
+  // right for a state the product no longer has. What survives is the arm that
+  // was always taken for a reader with a project.
+  const showSettingsDoor = hasVisibleSettingsArea(held, availability);
 
-  sections.push({
-    id: 'bottom',
-    items: [
-      ...(showSettingsDoor
-        ? [
-            {
-              icon: <Settings />,
-              label: t('nav.settings'),
-              // Deep-link to project settings when a project is active;
-              // otherwise there's nothing project-scoped to configure, so go to
-              // the settings HOME — which one depends on progressive disclosure
-              // (MOTIR-3502 · organization-tier §6d). Below the reveal threshold
-              // the workspace tier is hidden and its sections are folded into
-              // `/settings/organization`, so the door points there. Re-pointed,
-              // not removed: this is the rail's only settings entry with no
-              // active project, and a settings home exists at every count.
-              href: hasProject
-                ? PROJECT_SETTINGS_ROOT
-                : workspaceTierRevealed
-                  ? '/settings/workspace'
-                  : '/settings/organization',
-              // Stay un-highlighted when a more-specific workspace-settings
-              // sub-link (Job runs / GitHub) is the active route, so only one
-              // row reads current.
-              active:
-                isActive(pathname, '/settings') &&
-                !isActive(pathname, '/settings/workspace/security') &&
-                !isActive(pathname, '/settings/workspace/jobs') &&
-                // Git moved to the organisation tier (MOTIR-4680); the clause
-                // follows the row it exists to yield to.
-                !isActive(pathname, '/settings/organization/git'),
-            },
-          ]
-        : []),
-      // Workspace Security (Story MOTIR-1215 · MOTIR-3647) — the require-2FA
-      // policy for this workspace.
-      //
-      // ⚠️ GATED ON THE TIER REVEAL, WHICH THE TWO ROWS BELOW ARE NOT — and the
-      // difference is the rule, not an inconsistency. Job runs and Git are
-      // workspace-SCOPED but not workspace-NAMED, so §6 leaves them alone. This
-      // pane is workspace-NAMED and `notFound()`s below the threshold, so a row
-      // here would point at a 404. Below it the control is reached by scrolling
-      // `/settings/organization`, where `WorkspaceFoldInSection` hosts it.
-      ...(workspaceTierRevealed
-        ? [
-            {
-              icon: <ShieldCheck />,
-              label: t('nav.security'),
-              href: '/settings/workspace/security',
-              active: isActive(pathname, '/settings/workspace/security'),
-            },
-          ]
-        : []),
-      {
-        // Operator surface (Subtask 1.6.5) — the workspace's background-job runs
-        // + dead-letter queue. A workspace-scoped settings sub-page.
-        icon: <ListChecks />,
-        label: t('nav.jobRuns'),
-        href: '/settings/workspace/jobs',
-        active: isActive(pathname, '/settings/workspace/jobs'),
-      },
-      {
-        // Git integration settings (Story 7.10 GitHub + 7.23 GitLab · MOTIR-1478)
-        // — the SHARED connect-settings surface. ONE "Git" row (git-branch
-        // glyph): GitLab does NOT get a second row, because the provider is a
-        // Segmented on the page rather than a second destination.
-        //
-        // ⚠️ IT POINTS AT THE ORGANISATION NOW (Story MOTIR-4669 · MOTIR-4680).
-        // A repository is connected ONCE, to the organisation, so the surface
-        // moved a tier and `/settings/workspace/{github,gitlab}` are deleted.
-        // The ROW stays and is RE-POINTED rather than removed:
-        // `organization-tier.md` §6 — a relocation preserves the door, and this
-        // is the deep link from anywhere in the app, reached the same way Job
-        // runs is. Leaving it on the old path would still have worked, through
-        // the permanent redirect, and would have made every visit pay a hop for
-        // a link the app itself controls.
-        icon: <GitBranch />,
-        label: t('nav.git'),
-        href: '/settings/organization/git',
-        active: isActive(pathname, '/settings/organization/git'),
-      },
-      // Docs and Legal documents LEFT this section for the Help menu
-      // (MOTIR-4239 · design/shell/help-menu.mock.html): the authed shell now
-      // has a footer to put them in, and a bottom section that keeps growing
-      // with every non-product door was the tell, not merely a symptom. The
-      // floor is unchanged — Settings · Security · Job runs · Git.
-    ],
-  });
+  // ⚠️ BOTH WORKSPACE ROWS LEFT THIS SECTION (Story MOTIR-4843 · MOTIR-4847 ·
+  // `design/shell/rail-bottom-section.mock.html`, amended by MOTIR-4845).
+  //
+  // `Security` and `Job runs` were workspace-tier panes rendered as loose rows
+  // in the PROJECT's rail — a tenancy mismatch that taught the wrong model
+  // twice. Both capabilities are RELOCATED, never removed, which is what
+  // `organization-tier.md` §6 requires of a hiding rule: above the reveal they
+  // are rows in the workspace area's own rail (`lib/settings/workspaceSettingsNav.ts`),
+  // and below it they are folded into `/settings/organization` — Security by
+  // `WorkspaceFoldInSection` (MOTIR-3502) and Job runs by `JobRunsFoldInSection`
+  // (MOTIR-4861, the fold-in this card waited on). The door into both is the
+  // workspace SWITCHER's new `Workspace settings` row.
+  //
+  // ⚠️ AND `Git` HAS NOW LEFT IT TOO (Story MOTIR-1754 · MOTIR-1768). MOTIR-4640
+  // took it out of the design asset above; MOTIR-4643 folded Code health + Git
+  // into the one primary `Codebase` entry, and this branch is where that landed.
+  // The consequence is that the note this paragraph used to carry — "this
+  // section always has at least one row" — is FALSE from here on: `Settings` is
+  // conditional, so the section can be empty, and the asset's FLOOR arm (the
+  // section absent entirely) is reachable rather than merely drawn. The guard
+  // below was written ahead of that and is now load-bearing: a section that can
+  // vanish must not ship as an empty container with a stray separator.
+  const bottomItems = [
+    ...(showSettingsDoor
+      ? [
+          {
+            icon: <Settings />,
+            label: t('nav.settings'),
+            // Deep-links to project settings, unconditionally.
+            //
+            // ⚠️ THE NO-PROJECT ARM IS GONE (MOTIR-4873), and this is the ONE
+            // edit MOTIR-4843's restructure needs on this branch. It read
+            // "deep-link to project settings when a project is active;
+            // otherwise there's nothing project-scoped to configure, so go to
+            // the settings HOME — which one depends on progressive disclosure
+            // (MOTIR-3502 · organization-tier §6d)". That reasoning was right
+            // for a reader the product no longer has: every member is inside a
+            // project (MOTIR-4870), so `hasProject` is not a prop of this
+            // component any more and the ternary cannot be written, let alone
+            // taken. `workspaceTierRevealed` still decides the org/workspace
+            // rows below, so the disclosure rule itself is untouched — only its
+            // use HERE, which existed solely to serve the projectless case.
+            href: PROJECT_SETTINGS_ROOT,
+            // Stay un-highlighted when a more-specific row in this same section
+            // is the active route, so only one row ever reads current.
+            //
+            // ⚠️ TWO CLAUSES WENT WITH THEIR ROWS (MOTIR-4847). This predicate
+            // used to negate `/settings/workspace/security` and
+            // `/settings/workspace/jobs` as well. Both are now unreachable from
+            // here in TWO independent ways — the rows they yielded to are gone,
+            // and `isWorkspaceSettingsPath` returns the workspace area's own
+            // Sidebar before this block is ever built — so a clause that can
+            // never fire is not a safe extra: it is an untested branch that
+            // still reads as covered (MOTIR-4368's finding about this very
+            // predicate). Only `Git` still has a row here to yield to.
+            active:
+              isActive(pathname, '/settings') &&
+              // Git moved to the organisation tier (MOTIR-4680); the clause
+              // follows the row it exists to yield to.
+              !isActive(pathname, '/settings/organization/git'),
+          },
+        ]
+      : []),
+    // ⚠️ THE `Git` ROW LEFT THIS SECTION TOO (MOTIR-4643 · design/shell
+    // § *The rail's bottom section*, amended by MOTIR-4640) — so this whole
+    // entry is gone, and with it the last row MOTIR-4847 left standing beside
+    // `Settings`.
+    //
+    // It pointed at the organisation's Git settings — the connection
+    // LIFECYCLE, an org-admin act at the tenant that owns it — while the
+    // question a project member actually brings to the rail is *what code does
+    // Motir know about?*, which the `Codebase` row in the PRIMARY section now
+    // answers.
+    //
+    // ⚠️ REMOVING A ROW MAY REMOVE A CONCEPT AND MAY NOT REMOVE A CAPABILITY,
+    // and both actions that lived behind this one are carried forward, to the
+    // tenant that owns each:
+    //
+    //   · configure which repositories exist — ORG ADMIN — Settings →
+    //     Organisation → Git, still reachable from the settings area's own
+    //     navigation;
+    //   · connect YOUR OWN account — ANY MEMBER — Settings → Account → Git,
+    //     because `GithubIdentity` is `userId @unique` and a personal
+    //     credential belongs beside `/settings/account/tokens`. This is the one
+    //     `projectSettingsNav.ts` calls "the one action nobody can take on [a
+    //     member's] behalf", so it is the one that must not lose its door.
+    //
+    // Neither is gone; both moved off a PROJECT rail that was never the right
+    // place for an administrative door.
+    //
+    // Docs and Legal documents LEFT this section for the Help menu
+    // (MOTIR-4239 · design/shell/help-menu.mock.html): the authed shell now
+    // has a footer to put them in, and a bottom section that keeps growing
+    // with every non-product door was the tell, not merely a symptom.
+    //
+    // ⚠️ THE FLOOR IS NOW `Settings` ALONE. `Security` and `Job runs` left with
+    // MOTIR-4847, `Git` leaves here, and the count is RE-TAKEN rather than
+    // inherited — the previous line in this comment recorded a floor nobody
+    // had re-measured, which is the mistake it warns about.
+  ];
+
+  // NOTHING MARKS THE GAP, INCLUDING THE SECTION ITSELF (MOTIR-4847). When the
+  // last row filters away the section is ABSENT — no heading, no separator, no
+  // empty state — rather than an empty container. Pushing `{ items: [] }` would
+  // render the separator `Sidebar` draws between sections above a row that is
+  // not there, which reads as a loading error rather than as policy.
+  //
+  // ⚠️ AND THAT IS REACHABLE NOW, WHICH IT BARELY WAS BEFORE (MOTIR-4643). With
+  // `Git` gone, `Settings` is the only row left — so an actor without the
+  // settings door gets NO bottom section at all, and this branch stops being
+  // defensive and starts being the ordinary member's rail.
+  if (bottomItems.length > 0) {
+    sections.push({ id: 'bottom', items: bottomItems });
+  }
 
   return (
     <Sidebar

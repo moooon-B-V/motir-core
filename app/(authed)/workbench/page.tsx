@@ -5,8 +5,7 @@ import { Circle, CircleCheck, CircleDot, Inbox, Star } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { isMotirAiConfigured } from '@/lib/ai/availability';
-import { HOME_FINISHED_WINDOW_DAYS, homeService } from '@/lib/services/homeService';
+import { HOME_FINISHED_WINDOW_DAYS, HOME_PAGE_SIZE, homeService } from '@/lib/services/homeService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import type { HomeActorContext } from '@/lib/services/homeService';
@@ -15,7 +14,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
 import { parseWorkbenchTab, workbenchTabHref } from '@/lib/workbench/tab';
-import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
+import { parsePage } from '@/lib/issues/issueListView';
 import { IssueQuickViewController } from '../items/_components/IssueQuickViewController';
 import { WorkbenchTabs } from './_components/WorkbenchTabs';
 import { WorkbenchList } from './_components/WorkbenchList';
@@ -76,22 +75,18 @@ const TAB_LABEL_KEY: Readonly<Record<WorkbenchTab, string>> = {
  * sibling story's (MOTIR-4778). An empty page rather than a fifth query is what
  * makes that boundary visible: there is nothing to read, so nothing is read.
  */
-function readTab(
-  tab: WorkbenchTab,
-  ctx: HomeActorContext,
-  cursor: string | null,
-): Promise<HomePageDto> {
+function readTab(tab: WorkbenchTab, ctx: HomeActorContext, page: number): Promise<HomePageDto> {
   switch (tab) {
     case 'todo':
-      return homeService.listToDo(ctx, { cursor });
+      return homeService.listToDo(ctx, { page });
     case 'in-progress':
-      return homeService.listInProgress(ctx, { cursor });
+      return homeService.listInProgress(ctx, { page });
     case 'finished':
-      return homeService.listRecentlyFinished(ctx, { cursor });
+      return homeService.listRecentlyFinished(ctx, { page });
     case 'watching':
-      return homeService.listWatching(ctx, { cursor });
+      return homeService.listWatching(ctx, { page });
     case 'approvals':
-      return Promise.resolve({ items: [], nextCursor: null });
+      return Promise.resolve({ items: [], total: 0, page: 1, pageSize: HOME_PAGE_SIZE });
   }
 }
 
@@ -179,28 +174,35 @@ export default async function WorkbenchPage({
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  // NO ACTIVE PROJECT — carried from the shipped page UNCHANGED and built on by
-  // nothing. The Workbench has no no-project state and the design draws none;
-  // MOTIR-4815 RETIRES this branch by seeding a default project at
-  // registration, so `getActiveProject()` stops being able to return null. It
-  // survives here only so the two cards can land in either order.
-  if (!ctx) {
-    return (
-      <div data-testid={WORKBENCH_TESTID}>
-        <ProjectsEmptyState aiConfigured={isMotirAiConfigured()} />
-      </div>
-    );
-  }
+  // NO ACTIVE PROJECT — UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a
+  // default project at the WORKSPACE tier, so `getActiveProject()` returns null
+  // on no path a member can take). This used to render `ProjectsEmptyState` — a
+  // Create-project screen inside project chrome — which is the defect MOTIR-4815
+  // removes: the Workbench has ONE empty state, *no work*, and the design draws
+  // no other (`design/workbench/design-notes.md`).
+  //
+  // The guard STAYS because the type does: the only null left is a request with
+  // no session, which the redirect above has already answered. So what remains
+  // for the unreachable case is a redirect, never a rendered screen.
+  if (!ctx) redirect('/sign-in');
 
   const params = await searchParams;
   const tab = parseWorkbenchTab(params['tab']);
-  const cursorParam = params['cursor'];
-  const cursor = (Array.isArray(cursorParam) ? cursorParam[0] : cursorParam) ?? null;
+  // The page rides the URL beside `?tab=`, read with the SHIPPED `parsePage`,
+  // which already answers 1 for absent, non-numeric, zero and negative — the
+  // four degenerate spellings a hand-edited URL or a stale bookmark produces.
+  // The UPPER bound is deliberately NOT clamped here: the parser is scope-blind,
+  // so `homeService` clamps it once it knows the tab's real total, which is the
+  // same division of labour `/items` uses.
+  //
+  // `?cursor=` is neither read nor emitted any more — MOTIR-4852 retired the
+  // keyset and this card took the last reader of the token off the route.
+  const page = parsePage(params['page']);
 
   const t = await getTranslations('workbench');
 
-  const [page, counts, members, workflow] = await Promise.all([
-    readTab(tab, ctx, cursor),
+  const [window, counts, members, workflow] = await Promise.all([
+    readTab(tab, ctx, page),
     homeService.tabCounts(ctx),
     workspacesService.listMembers(ctx.workspaceId, ctx.userId),
     // ONE workflow, for the one project the page reads. This surface used to
@@ -210,7 +212,7 @@ export default async function WorkbenchPage({
     workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId),
   ]);
 
-  const rows = toWorkbenchRowViews(page.items, workflow, members, tab === 'watching');
+  const rows = toWorkbenchRowViews(window.items, workflow, members, tab === 'watching');
   const isEmpty = rows.length === 0;
 
   return (
@@ -238,46 +240,22 @@ export default async function WorkbenchPage({
           </p>
         ) : null}
 
+        {/* ⚠️ AN EMPTY TAB RENDERS ITS EMPTY STATE AND NOTHING ELSE — no list
+            box, and NO PAGER (`design/workbench/` Panel 10). "A pager on every
+            tab", read literally, would put `Showing 0–0 of 0` under an empty
+            state: a second, quieter way of saying what the empty state has just
+            said in a sentence. The pager lives INSIDE `WorkbenchList`, so this
+            branch gets that for free rather than by remembering to suppress it. */}
         {isEmpty ? (
           <EmptyTab tab={tab} />
         ) : (
-          <WorkbenchList rows={rows} label={t(TAB_LABEL_KEY[tab])} tab={tab} />
+          <WorkbenchList
+            rows={rows}
+            label={t(TAB_LABEL_KEY[tab])}
+            tab={tab}
+            pagination={{ total: window.total, page: window.page, pageSize: window.pageSize }}
+          />
         )}
-
-        {/* Paging is a LINK, not a fetch — the cursor rides the URL beside
-            `?tab=`, so a page is bookmarkable and the server re-reads. There is
-            no "previous": a keyset walks forward, and the way back is the tab's
-            own href, which is what `Start over` is. */}
-        {page.nextCursor ? (
-          <div className="flex items-center justify-between gap-3">
-            {cursor ? (
-              <Link
-                href={workbenchTabHref(tab)}
-                className="text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed)"
-              >
-                {t('pager.startOver')}
-              </Link>
-            ) : (
-              <span />
-            )}
-            <Link
-              href={workbenchTabHref(tab, page.nextCursor)}
-              className={buttonVariants({ variant: 'secondary', size: 'sm' })}
-            >
-              {t('pager.next')}
-            </Link>
-          </div>
-        ) : cursor ? (
-          <div className="flex items-center justify-between gap-3">
-            <Link
-              href={workbenchTabHref(tab)}
-              className="text-xs font-medium text-(--el-link) hover:text-(--el-link-pressed)"
-            >
-              {t('pager.startOver')}
-            </Link>
-            <span className="text-xs text-(--el-text-secondary)">{t('pager.end')}</span>
-          </div>
-        ) : null}
       </div>
 
       {/* The quick-view peek — the SAME `?peek=` island /items, /ready and the

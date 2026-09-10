@@ -165,23 +165,24 @@ test.describe('the shell’s context path', () => {
     await expect(rail(page).getByRole('link', { name: 'Work Items' })).toBeVisible();
   });
 
-  test('a workspace with no project shows the create-first door IN the bar', async ({ page }) => {
+  test('a NEWLY CREATED workspace arrives with a project, not with a door', async ({ page }) => {
+    // ⚠️ INVERTED (MOTIR-4876), and this is the spec that PROVED the parent
+    // card's premise false. It was 'a workspace with no project shows the
+    // create-first door IN the bar', on the comment "a fresh workspace has no
+    // projects, and lands active" — a supported flow producing the projectless
+    // state at any time, long after registration. That is the second of the
+    // three doors MOTIR-4870 closes at the workspace tier, and it is why the
+    // seam is not a registration hook.
     await signUp(page, `context-path-empty-${Date.now()}@example.com`);
     await createProjectAndSettle(page, 'Mobile App');
-    // a fresh workspace has no projects, and lands active
     await createWorkspace(page, 'Empty');
 
-    // ── 6 · empty ────────────────────────────────────────────────────────────
-    await expect(bar(page).getByRole('button', { name: 'Switch project' })).toHaveCount(0);
-    const createFirst = bar(page).getByRole('button', { name: 'Create your first project' });
-    await expect(createFirst).toBeVisible();
-
-    await createFirst.click();
-    await expect(page.getByRole('heading', { name: 'Create project' })).toBeVisible();
-    await page.getByLabel('Project name').fill('Docs');
-    await page.getByRole('button', { name: 'Create project', exact: true }).last().click();
-    await expect(page.getByText('Project created', { exact: true }).first()).toBeVisible();
-    await expect(bar(page).getByRole('button', { name: 'Switch project' })).toContainText('Docs');
+    // ── 6 · a new workspace, seeded ─────────────────────────────────────────
+    await expect(bar(page).getByRole('button', { name: 'Create your first project' })).toHaveCount(
+      0,
+    );
+    // Named for its workspace, which is what `ensureDefaultProject` chooses.
+    await expect(bar(page).getByRole('button', { name: 'Switch project' })).toContainText('Empty');
   });
 
   // ── 7 · the ARCHIVED tier — covered at the component level, on purpose ────
@@ -194,8 +195,9 @@ test.describe('the shell’s context path', () => {
   // Reaching the state in a browser needs a SECOND actor. `projectsService`'s
   // archive deliberately moves the ARCHIVING actor on — their active pointer
   // drops and recovers to the next non-archived project, or to null — so a
-  // one-actor spec that archives its only project lands on the create-first
-  // door, which is the correct behaviour and not the state under test. The
+  // one-actor spec that archives its only project lands on a freshly seeded
+  // default project (MOTIR-4870 — it used to land on the create-first door),
+  // which is the correct behaviour and not the state under test. The
   // archived-ACTIVE case (PRODECT_FINDINGS #29.2) is what a DIFFERENT member
   // sees, and standing up a second signed-in member here would be re-testing
   // `projects-flow.spec.ts`'s archive flow to reach a rendering claim the unit

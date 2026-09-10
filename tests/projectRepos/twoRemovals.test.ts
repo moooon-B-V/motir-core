@@ -14,7 +14,10 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { CODE_GRAPH_RETENTION_WINDOW_DAYS } from '@/lib/codeGraph/offboarding';
-import { GithubRemovalHappensOnGithubError } from '@/lib/projectRepos/errors';
+import {
+  GithubRemovalHappensOnGithubError,
+  MotirHostedRepoIsTakenOverError,
+} from '@/lib/projectRepos/errors';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { OrgForbiddenError } from '@/lib/organizations/errors';
 import { withSystemContext } from '@/lib/workspaces/context';
@@ -90,6 +93,10 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // `GITHUB_FALLBACK_ORG` is stubbed by the hosted-repository arm below and is
+  // UNSET everywhere else — which is also the shipped default, so every other
+  // assertion in this file runs against a deployment that hosts nothing.
+  vi.unstubAllEnvs();
 });
 
 afterAll(async () => {
@@ -97,14 +104,20 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-function seedRepo(installationId: string, provider: string, name: string, repoId: string) {
+function seedRepo(
+  installationId: string,
+  provider: string,
+  name: string,
+  repoId: string,
+  owner = 'moooon',
+) {
   return adminDb.githubRepo.create({
     data: {
       installationId,
       workspaceId: fx.workspaceId,
       organizationId: orgId,
       repoId,
-      owner: 'moooon',
+      owner,
       name,
       defaultBranch: 'main',
       provider,
@@ -697,6 +710,72 @@ describe('DISCONNECT FROM THE ORGANISATION — the cascade', () => {
     const [row] = await adminDb.projectRepo.findMany({ where: { projectId: fx.projectId } });
     expect(row?.githubRepoId).toBe(repoGithub);
     expect(enqueueSpy).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ REFUSES a repository MOTIR HOSTS, and names the TAKEOVER as the act (bug MOTIR-4892)', async () => {
+    // ⚠️ THE ORDER IS THE FIX, so the assertion is about WHICH refusal arrives.
+    // `GithubRemovalHappensOnGithubError` is thrown for EVERY `github` row before
+    // any ownership test, and its instruction — *change the Motir App's repository
+    // access on GitHub* — points at the ORGANISATION's own installation. A
+    // repository under the provisioning organisation is not in that installation:
+    // it sits under the SHARED provisioning one, which is `organizationId: null`
+    // because it spans tenants. So the refusal that existed was about the PROVIDER
+    // and the one that was owed is about the OWNER.
+    //
+    // Asserted on the SERVICE, deliberately — the surface withholds the control
+    // (`organizationGitPage.test.tsx`), and this is the half that holds for a
+    // caller that never rendered the page.
+    //
+    // The env value's casing deliberately differs from the row's: a GitHub login
+    // is case-insensitive and `GITHUB_FALLBACK_ORG` is whatever an operator typed.
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'Motir-Projects');
+    const hosted = await seedRepo(
+      installationRowId,
+      'github',
+      'motir',
+      'gh-hosted',
+      'motir-projects',
+    );
+    await link(fx.projectId, hosted.id, fx.ctx, 'hosted');
+    enqueueSpy.mockClear();
+
+    const err = await organizationRepoService.disconnectFromOrganisation(hosted.id, fx.ctx).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(err).toBeInstanceOf(MotirHostedRepoIsTakenOverError);
+    expect(err).not.toBeInstanceOf(GithubRemovalHappensOnGithubError);
+    expect((err as MotirHostedRepoIsTakenOverError).code).toBe('MOTIR_HOSTED_REPO_IS_TAKEN_OVER');
+    // It names the act that DOES apply — the takeover (MOTIR-711) — rather than
+    // sending the reader to an installation the repository is not in.
+    expect((err as Error).message).toMatch(/take it over/i);
+    expect((err as Error).message).not.toMatch(/App's repository access/i);
+
+    // Refused means untouched — the mirror row, the link, and the queue.
+    expect(await adminDb.githubRepo.findUnique({ where: { id: hosted.id } })).not.toBeNull();
+    const rows = await adminDb.projectRepo.findMany({ where: { projectId: fx.projectId } });
+    expect(rows.some((r) => r.githubRepoId === hosted.id)).toBe(true);
+    expect(enqueueSpy).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ classifies NOTHING with no provisioning org configured — the refusal is byte-for-byte today`s', async () => {
+    // The null-safe arm. A deployment that cannot provision (self-hosted, no
+    // `GITHUB_FALLBACK_ORG`) hosts nothing, so the SAME row that is refused above
+    // falls through to the provider refusal exactly as it did before this rule
+    // existed. Asserted so the new gate cannot silently widen.
+    const hosted = await seedRepo(
+      installationRowId,
+      'github',
+      'motir',
+      'gh-hosted-2',
+      'motir-projects',
+    );
+    await link(fx.projectId, hosted.id, fx.ctx, 'hosted-2');
+
+    await expect(
+      organizationRepoService.disconnectFromOrganisation(hosted.id, fx.ctx),
+    ).rejects.toBeInstanceOf(GithubRemovalHappensOnGithubError);
   });
 
   it('is ORG-ADMIN — a plain org member is refused and nothing is cleared', async () => {

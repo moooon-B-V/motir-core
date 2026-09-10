@@ -10,6 +10,7 @@ import {
   INDEX_ADMISSION_BUDGETS,
   INDEX_FLEET_TIME_BUDGETS,
   INITIAL_INDEX_POLL_STATE,
+  runCredentialTtlSeconds,
   type IndexDispatchInput,
   type IndexSession,
 } from '@/lib/services/codeGraphIndexDispatchService';
@@ -29,7 +30,7 @@ import {
 import { RepoTarballUrlNotRedirectedError, RepoTarballUrlUnsupportedError } from '@/lib/git';
 import { inMemorySupervisionStore } from '@/lib/jobs/supervision/driver';
 import { isJobRunDefer } from '@/lib/jobs/engine/defer';
-import { MotirAiUnavailableError } from '@/lib/ai/errors';
+import { CodeGraphRunCredentialTooShortError, MotirAiUnavailableError } from '@/lib/ai/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -138,7 +139,7 @@ interface Call {
 }
 
 let calls: Call[] = [];
-let credentialResponder: () => Response;
+let credentialResponder: (body: unknown) => Response;
 let tarballResponder: () => Response;
 let tarballBodyTouched = false;
 
@@ -163,10 +164,30 @@ function redirectResponse(): Response {
   return res;
 }
 
-function credentialResponse(): Response {
+/**
+ * motir-ai's mint, INCLUDING ITS CLAMP (MOTIR-4923).
+ *
+ * ⚠️ IT HONOURS `ttlSeconds`, and it defaults to FIFTEEN MINUTES when the field
+ * is absent — `motir-ai` `src/codegraph/runCredential.ts`'s
+ * `DEFAULT_TTL_SECONDS` / `clampTtlSeconds`, transcribed. Until this card the
+ * fixture returned a flat fifteen minutes whatever it was asked for, which is
+ * exactly the shape that made the production defect untestable here: the
+ * dispatch sent no TTL, the fixture answered with the default, and both halves
+ * of a mismatch that only bites past fifteen minutes looked identical.
+ */
+const AI_DEFAULT_TTL_SECONDS = 15 * 60;
+const AI_MIN_TTL_SECONDS = 60;
+const AI_MAX_TTL_SECONDS = 60 * 60;
+
+function credentialResponse(body: unknown): Response {
+  const requested = (body as { ttlSeconds?: unknown } | null)?.ttlSeconds;
+  const ttl =
+    typeof requested === 'number' && Number.isFinite(requested)
+      ? Math.min(AI_MAX_TTL_SECONDS, Math.max(AI_MIN_TTL_SECONDS, Math.floor(requested)))
+      : AI_DEFAULT_TTL_SECONDS;
   return json(201, {
     credential: RUN_CREDENTIAL,
-    expiresAt: new Date(Date.now() + 900_000).toISOString(),
+    expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
   });
 }
 
@@ -234,7 +255,7 @@ beforeEach(() => {
       // Matched on the parsed URL, never `includes()` — a substring host check is
       // a HIGH CodeQL alert in this repo, test fixtures included.
       const parsed = new URL(call.url);
-      if (parsed.host === new URL(AI_URL).host) return credentialResponder();
+      if (parsed.host === new URL(AI_URL).host) return credentialResponder(call.body);
       if (parsed.pathname.endsWith('/access_tokens')) {
         return json(201, {
           token: INSTALLATION_TOKEN,
@@ -451,6 +472,9 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
       coreProjectId: 'proj-1',
       repoRef: 'moooon-B-V/motir-core',
       runId: 'run-abc',
+      // Derived from THIS dispatch's own container deadline (MOTIR-4923), never
+      // left to motir-ai's default.
+      ttlSeconds: runCredentialTtlSeconds(FAST.indexTimeoutMs),
     });
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
 
@@ -520,6 +544,80 @@ describe('bootIndexContainer — mint, resolve, boot; a fixed handful of calls',
       ),
     ).rejects.toThrow(RepoTarballUrlUnsupportedError);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
+  });
+
+  // ── The two deadlines are ONE decision (Bug MOTIR-4923) ──────────────────
+  //
+  // The container's hard kill and the credential's expiry are set in two
+  // different repositories, and until this card nothing joined them: the mint
+  // carried no `ttlSeconds`, so motir-ai's fifteen-minute default applied to a
+  // container this side permits thirty minutes. The failure is DETERMINISTIC BY
+  // REPOSITORY SIZE, which is why it survived 830 runs and every test here — a
+  // repo that indexes in two minutes cannot exhibit it.
+
+  it('asks for a credential that OUTLIVES the container deadline it is about to grant', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+
+    // The derivation, not a number typed twice: the request is the container's
+    // own timeout plus the grace, and it is the SAME function the service uses.
+    expect((motirAiCalls()[0]!.body as { ttlSeconds: number }).ttlSeconds).toBe(
+      runCredentialTtlSeconds(FAST.indexTimeoutMs),
+    );
+
+    // And the property that actually matters, asserted against the session the
+    // supervision loop will run on: the credential is still valid at the last
+    // second the container is allowed to work.
+    const deadline = Date.parse(booted.session.bootedAt) + FAST.indexTimeoutMs;
+    expect(Date.parse(booted.session.credentialExpiresAt)).toBeGreaterThan(deadline);
+  });
+
+  it('derives the TTL from the REAL budget too — 30 minutes of container needs more than motir-ai default', () => {
+    // The production fixture as arithmetic. `moooon-B-V/motir-core` ran 19 m 52 s
+    // against a credential minted for 15 m 00 s (2026-09-08T22:31:33Z), and the
+    // ONLY reason it was 15 minutes is that nobody asked for anything else.
+    const ttl = runCredentialTtlSeconds(INDEX_FLEET_TIME_BUDGETS.indexTimeoutMs);
+    expect(ttl * 1000).toBeGreaterThan(INDEX_FLEET_TIME_BUDGETS.indexTimeoutMs);
+    expect(ttl).toBeGreaterThan(AI_DEFAULT_TTL_SECONDS);
+    // Still inside motir-ai's own ceiling, so the clamp cannot silently shorten
+    // it — the case the assertion below exists to catch if that ever changes.
+    expect(ttl).toBeLessThanOrEqual(AI_MAX_TTL_SECONDS);
+  });
+
+  it('REFUSES to boot when the minted credential expires before the container deadline', async () => {
+    // A motir-ai that ignores `ttlSeconds` — an older deploy, or one whose
+    // ceiling has fallen below our timeout. This is the production defect
+    // exactly, and the point of the test is WHEN it is caught: before a machine
+    // exists, rather than 20 minutes and 1 193 billable seconds later as an
+    // exit-`50` `credential_refused` nobody can tell from a scope refusal.
+    credentialResponder = () =>
+      json(201, {
+        credential: RUN_CREDENTIAL,
+        expiresAt: new Date(Date.now() + AI_DEFAULT_TTL_SECONDS * 1000).toISOString(),
+      });
+
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, {
+        ...FAST,
+        indexTimeoutMs: INDEX_FLEET_TIME_BUDGETS.indexTimeoutMs,
+      }),
+    ).rejects.toThrow(CodeGraphRunCredentialTooShortError);
+
+    // Nothing was booted, and the slot went back — the invariant every failure
+    // path in this function owes.
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(fakeOrchestrator.specs).toHaveLength(0);
+    expect(released).toEqual([ADMISSION.slotRef]);
+  });
+
+  it('REFUSES an unparseable expiry rather than treating it as unlimited', async () => {
+    credentialResponder = () => json(201, { credential: RUN_CREDENTIAL, expiresAt: 'soon' });
+
+    await expect(
+      codeGraphIndexDispatchService.bootIndexContainer(INPUT, ADMISSION, FAST),
+    ).rejects.toThrow(CodeGraphRunCredentialTooShortError);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(released).toEqual([ADMISSION.slotRef]);
   });
 
   it('reports a terminal outcome when the provider refuses, leaving no container', async () => {
@@ -1638,5 +1736,145 @@ describe('the CORE-side phase spans survive a JobRunDefer (MOTIR-4413)', () => {
     // count — is still reported. A partial reading is worth more than none.
     expect(timings?.phasesMs.pollToDetect).toBeGreaterThanOrEqual(0);
     expect(timings?.totalMs).toBe(timings?.phasesMs.pollToDetect);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SYNC / REBUILD MODE (MOTIR-4945) — `docs/decisions/code-graph-index-fleet.md` §6
+//
+// ⚠️ THE PROPERTY UNDER TEST IS SURVIVAL, exactly as it is for the spans above,
+// and for a sharper reason. The mode is known at BOOT — `previousSnapshotUrl` is
+// in hand when the spec is built — and it is written at SETTLE, minutes and
+// several invocations later. Nothing in between re-derives it from the world, so
+// the only thing carrying it is the `index-boot:<projectId>` memo. A boolean held
+// in a closure would pass a single-pass test and be `undefined` in production on
+// the second pass, which is the pass that writes the ledger row.
+//
+// So these tests drive MORE THAN ONE PASS through `driveToSettlement`, whose step
+// seam JSON-round-trips every memo — a value that survives only because it stayed
+// in memory fails here rather than in production.
+//
+// ⚠️ THE FAKE CLOCK IS DATED IN THE PAST, and it is not arbitrary. The supervision
+// runs on `clock.ms`, but `credentialResponse` mints `expiresAt` from the REAL
+// `Date.now()` — so a fake clock set to "today" puts the container deadline
+// (`clock.ms + indexTimeoutMs`) BEYOND a credential minted now, and every boot
+// dies on MOTIR-4923's run-credential floor before reaching what is under test.
+// The date matches the span tests above for exactly this reason; keep it behind
+// the wall clock.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A credential response that GRANTS the sync — motir-ai offering a snapshot.
+ *
+ * The TTL is the same default {@link credentialResponse} serves, so a run driven
+ * through here still clears the run-credential floor MOTIR-4923 installed rather
+ * than passing because this suite quietly handed it a different clock.
+ */
+function credentialResponseWithSnapshot(): Response {
+  return json(201, {
+    credential: RUN_CREDENTIAL,
+    expiresAt: new Date(Date.now() + AI_DEFAULT_TTL_SECONDS * 1000).toISOString(),
+    previousSnapshotUrl: SNAPSHOT_URL,
+  });
+}
+
+describe('the sync/rebuild MODE survives a JobRunDefer (MOTIR-4945)', () => {
+  it('records `rebuild` when motir-ai offered NO snapshot', async () => {
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const { outcome, passes } = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    // The supervision really was a state machine over runs, not one call — the
+    // same guard the span tests carry, and for the same reason.
+    expect(passes).toBeGreaterThan(1);
+    expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+    expect((outcome as Extract<typeof outcome, { outcome: 'settled' }>).indexMode).toBe('rebuild');
+  });
+
+  it('records `sync` when motir-ai DID offer one — the same value the spec branched on', async () => {
+    credentialResponder = credentialResponseWithSnapshot;
+
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const { outcome, passes } = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    expect(passes).toBeGreaterThan(1);
+    expect((outcome as Extract<typeof outcome, { outcome: 'settled' }>).indexMode).toBe('sync');
+
+    // ⚠️ AND THE MODE AGREES WITH WHAT THE CONTAINER WAS ACTUALLY HANDED. This is
+    // the assertion that makes the field trustworthy rather than merely present:
+    // the ledger may not claim `sync` for a run that was given no snapshot to
+    // sync against, so the recorded mode is checked against the environment the
+    // boot really produced, not against the response we stubbed.
+    const booted = fakeOrchestrator.specs.at(-1);
+    expect(booted?.env['MOTIR_INDEX_SNAPSHOT_URL']).toBe(SNAPSHOT_URL);
+  });
+
+  it('a LATER pass re-derives the SAME mode — it is not lost by the pass that reads it', async () => {
+    credentialResponder = credentialResponseWithSnapshot;
+
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    const settled = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+    expect(
+      (settled.outcome as Extract<typeof settled.outcome, { outcome: 'settled' }>).indexMode,
+    ).toBe('sync');
+
+    // ── THE REPLAY PASS ──────────────────────────────────────────────────────
+    // An hour later, answering entirely from the memo — and, critically, with the
+    // credential endpoint now REFUSING to offer a snapshot. A mode re-minted from
+    // the world on this pass would come back `rebuild`; one read off the boot memo
+    // comes back `sync`, which is what actually happened.
+    credentialResponder = credentialResponse;
+    clock.ms += 3_600_000;
+    const replayed = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    expect(replayed.passes).toBe(1);
+    expect(
+      (replayed.outcome as Extract<typeof replayed.outcome, { outcome: 'settled' }>).indexMode,
+    ).toBe('sync');
+  });
+
+  it('OMITS the mode — never guesses `rebuild` — when the boot memo predates this card', async () => {
+    // ⚠️ THE REAL CASE THIS COVERS IS A DEPLOYMENT MID-ROLLOUT, not a defensive
+    // hypothetical, and it is the one arm where a wrong answer would be invisible.
+    // A run already in flight holds an `index-boot:<pid>` memo written in the OLD
+    // shape — no `syncGranted` — and replays it for the rest of its life. If the
+    // absence collapsed to `rebuild`, those runs would report the COMMONER mode,
+    // so every wrong row would look exactly right, and the first measurement
+    // anybody takes of what a sync saves would be quietly polluted.
+    const memo = new Map<string, unknown>();
+    const store = inMemorySupervisionStore();
+    const clock = { ms: Date.parse('2026-09-04T12:00:00.000Z') };
+
+    // Drive once to obtain a REAL boot memo, then strip the new field from it —
+    // so the seeded row is the genuine old shape rather than one hand-written to
+    // match today's expectations.
+    const first = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+    expect((first.outcome as Extract<typeof first.outcome, { outcome: 'settled' }>).indexMode).toBe(
+      'rebuild',
+    );
+
+    const bootKey = `index-boot:${INPUT.projectId}`;
+    const booted = memo.get(bootKey) as { session?: Record<string, unknown> } | undefined;
+    expect(booted?.session).toHaveProperty('syncGranted');
+    delete booted!.session!.syncGranted;
+
+    const replayed = await driveToSettlement({ memo, store, clock, exitCode: 0 });
+
+    // The run SETTLED. Nothing threw, and the verdict is untouched — a ledger
+    // field may never fail a run.
+    expect(replayed.outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+    // And the mode is ABSENT, not `rebuild`. Absent means UNKNOWN.
+    const out = replayed.outcome as Extract<typeof replayed.outcome, { outcome: 'settled' }>;
+    expect(out).not.toHaveProperty('indexMode');
+    // The spans beside it are unaffected — the two channels are independent.
+    expect(out.coreTimings).toBeDefined();
   });
 });

@@ -77,6 +77,16 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByPlaceholder('Create a password').fill(ORIGINAL_PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
 
+  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); the
+
+  // helper's contract — leave the caller in the app — is kept by settling
+
+  // there and navigating on.
+
+  await page.waitForURL('**/onboarding');
+
+  await page.goto('/workbench');
+
   await page.waitForURL('**/workbench');
   // Confirm the session bound by opening the top-nav Account menu and
   // checking the rendered email. The old assertion targeted a

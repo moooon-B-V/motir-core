@@ -155,15 +155,52 @@ describe('the two filtered arms, as they RENDER', () => {
 });
 
 describe('the branch does not fire outside the area', () => {
-  it.each([['/dashboard'], ['/settings/workspace'], ['/settings/workspace/jobs']])(
-    'renders the ordinary rail at %s',
+  // ⚠️ AMENDED TWICE OVER BY Story MOTIR-4843, and the case is SPLIT because its
+  // three paths stopped being one situation.
+  //
+  //   · `Job runs` is no longer a row in the ordinary rail at all (MOTIR-4847),
+  //     so it can no longer be the proof of anything. `Git` is what survives
+  //     that section, and it is the cheapest proof now.
+  //   · `/settings/workspace*` no longer renders the ORDINARY rail either
+  //     (MOTIR-4846): the workspace tier has an AREA, so those two paths hit a
+  //     branch of their own — which happens to be the strongest possible
+  //     evidence that the ORGANISATION branch was not taken, and is what this
+  //     describe is actually about.
+  it('renders the ordinary rail at /dashboard', () => {
+    // ⚠️ `Codebase`, NOT `Git` (MOTIR-4643). `Git` left the bottom section with
+    // that card, so it can no longer be the cheapest proof that the ORGANISATION
+    // branch was not taken — this is the third witness this case has had, after
+    // `Job runs` (gone with MOTIR-4847) and `Git`. `Codebase` is a PRIMARY row
+    // and is browse-reachable, which makes it a steadier one than either.
+    pathname = '/dashboard';
+    renderRail(ADMIN_ORG);
+    expect(screen.queryByRole('link', { name: 'Codebase' })).toBeTruthy();
+    expect(screen.queryByText('Organisation settings')).toBeNull();
+  });
+
+  it.each([['/settings/workspace'], ['/settings/workspace/jobs']])(
+    'renders NEITHER rail at %s — the workspace branch answers first',
     (path) => {
       pathname = path;
       renderRail(ADMIN_ORG);
-      // The bottom section is back, which is the cheapest proof the org branch
-      // was not taken.
-      expect(screen.queryByRole('link', { name: 'Job runs' })).toBeTruthy();
+      // ⚠️ THE ASSERTION IS AN ABSENCE ON BOTH SIDES, and that is the honest
+      // reading of this fixture rather than a weakened one.
+      //
+      // `renderRail` here passes neither `workspace` nor `workspaceTierRevealed`
+      // — it is the ORG area's fixture — so the workspace branch renders its
+      // head only when given a workspace, and `visibleWorkspaceSettingsNav`
+      // returns NO rows below the reveal. An empty rail is therefore the correct
+      // output, and asserting the area's eyebrow here would be asserting a prop
+      // this file never threads.
+      //
+      // What the case is FOR is unchanged and is fully carried by the two
+      // absences: the ORGANISATION branch did not fire (no org head), and
+      // neither did the ordinary one (no bottom section). The workspace area's
+      // own rows are `SidebarNav-workspace-area.test.tsx`'s subject, where the
+      // props that render them are threaded.
       expect(screen.queryByText('Organisation settings')).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Git' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull();
     },
   );
 });

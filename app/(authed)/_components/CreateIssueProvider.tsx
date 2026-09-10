@@ -41,12 +41,10 @@ interface CreateIssueContextValue {
 const CreateIssueContext = createContext<CreateIssueContextValue | null>(null);
 
 export function CreateIssueProvider({
-  hasProject,
   canEdit = true,
   aiConfigured = false,
   children,
 }: {
-  hasProject: boolean;
   /**
    * Whether the actor may EDIT the active project (Story 6.4.6). When false (a
    * viewer / a member on a limited project) the create modal is NOT mounted and
@@ -70,7 +68,10 @@ export function CreateIssueProvider({
 
   // "C" opens the modal — but only when NOT typing (so a literal "c" in a text
   // field stays a character) and only when there's a project to create into.
-  useShortcut(SHORTCUTS.createIssue.combo, () => setOpen(true), { enabled: hasProject && canEdit });
+  // ⚠️ `hasProject` was the other half of this gate and is gone (MOTIR-4873):
+  // every member is inside a project, so there is always something to create
+  // into and `canEdit` is the whole question.
+  useShortcut(SHORTCUTS.createIssue.combo, () => setOpen(true), { enabled: canEdit });
 
   // The modal calls this on a successful create; bumping the tick lets
   // client-fetched consumers refetch (the modal's own `router.refresh()` only
@@ -82,17 +83,22 @@ export function CreateIssueProvider({
       open,
       setOpen,
       openCreateIssue: () => setOpen(true),
-      canCreate: hasProject,
+      // Always true now — a project always exists to create into (MOTIR-4870).
+      // Kept on the context rather than deleted because `CreateIssueButton` and
+      // the palette read it, and whether a create is OFFERED is a question that
+      // may acquire a new answer; what it may no longer mean is "is there a
+      // project".
+      canCreate: true,
       issuesChangedAt,
       notifyIssuesChanged: notifyIssueCreated,
     }),
-    [open, hasProject, issuesChangedAt, notifyIssueCreated],
+    [open, issuesChangedAt, notifyIssueCreated],
   );
 
   return (
     <CreateIssueContext.Provider value={value}>
       {children}
-      {hasProject && canEdit && (
+      {canEdit && (
         <CreateIssueModal
           open={open}
           onOpenChange={setOpen}

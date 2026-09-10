@@ -12,7 +12,6 @@ import { componentsService } from '@/lib/services/componentsService';
 import { labelsService } from '@/lib/services/labelsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { collectFilterReferentIds } from '@/lib/filters/registry';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { AutomationSettings } from './_components/AutomationSettings';
 import { guardSettingsPage } from '../_guard';
@@ -36,13 +35,10 @@ export default async function ProjectAutomationPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[46rem]">
-        <EmptyState title={t('area.noProjectTitle')} description={t('area.noProjectDescription')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
   // protection: this page is still one typed URL away once its rail row is

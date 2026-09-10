@@ -106,7 +106,7 @@ async function renderBar(overrides: Partial<TopNavProps> = {}): Promise<RenderRe
   return renderWithIntl(
     <ThemeProvider>
       <CommandPaletteProvider>
-        <CreateIssueProvider hasProject>
+        <CreateIssueProvider>
           <ProjectAccessProvider permissions={['work_item:edit', 'project:administer']}>
             <ReportProvider projectKey="ACME">{bar}</ReportProvider>
           </ProjectAccessProvider>

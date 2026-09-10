@@ -63,6 +63,10 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
+  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); this
+  // helper keeps its contract by settling there and navigating on.
+  await page.waitForURL('**/onboarding', { timeout: 30_000 });
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench', { timeout: 30_000 });
 }
 
@@ -90,8 +94,14 @@ async function sendInvite(page: Page, inviteeEmail: string): Promise<void> {
   ).toBeVisible();
 }
 
+// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861), and it is
+// the SAME address `sendInvite` above already uses, for the same reason: these
+// fixtures use an auto-created single workspace — the COLLAPSED state, where the
+// workspace area 404s and its sections are hosted by the one settings home.
+// `/settings/workspace/jobs` joined its three siblings in doing so, and its
+// dashboard is now a section here (`JobRunsFoldInSection`), links and all.
 async function gotoJobs(page: Page): Promise<void> {
-  await page.goto('/settings/workspace/jobs');
+  await page.goto('/settings/organization');
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 }
 
@@ -319,7 +329,14 @@ test('@smoke role gating: a non-owner member sees a disabled Replay with a toolt
   await seedInviteDlqRow({ workspaceId, to: 'role-gate@example.com', idempotencyKey: 'role-1' });
 
   // The member (now active in the shared workspace) opens the DLQ tab.
-  await memberPage.goto('/settings/workspace/jobs');
+  //
+  // ⚠️ THE ACTOR §6d IS WRITTEN TO PROTECT, at the address that rule gives them.
+  // A workspace invitee is a plain org `member`, and one workspace is the only
+  // count they have — so this page refuses them its ORG-scoped cards and hosts
+  // the workspace sections underneath, this dashboard among them. That the
+  // Replay control below still renders, and still gates, is the whole claim: the
+  // relocation preserved the surface AND its gate.
+  await memberPage.goto('/settings/organization');
   await expect(memberPage.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
   await memberPage.getByRole('link', { name: /Dead letter/ }).click();
 

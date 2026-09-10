@@ -85,11 +85,11 @@ import { CommandPaletteProvider } from '@/app/(authed)/_components/CommandPalett
 import { CommandPaletteTrigger } from '@/app/(authed)/_components/CommandPaletteTrigger';
 import { AppCommandPalette } from '@/app/(authed)/_components/AppCommandPalette';
 
-function Shell({ hasProject = true }: { hasProject?: boolean }) {
+function Shell() {
   return (
     <ToastProvider>
       <CommandPaletteProvider>
-        <CreateIssueProvider hasProject={hasProject}>
+        <CreateIssueProvider>
           <CommandPaletteTrigger />
           <CreateIssueButton />
           <AppCommandPalette
@@ -97,7 +97,6 @@ function Shell({ hasProject = true }: { hasProject?: boolean }) {
             activeWorkspaceId={null}
             projects={[]}
             activeProjectId={null}
-            hasProject={hasProject}
           />
         </CreateIssueProvider>
       </CommandPaletteProvider>
@@ -145,13 +144,13 @@ describe('CreateIssueModal — entry points', () => {
     await waitFor(() => expect(modalHeading()).not.toBeNull());
   });
 
-  it('no entry points when there is no active project', () => {
-    render(<Shell hasProject={false} />);
-    // Button hidden, "C" inert, modal not mounted.
-    expect(screen.queryByRole('button', { name: 'Create work item' })).toBeNull();
-    fireEvent.keyDown(window, { key: 'c' });
-    expect(modalHeading()).toBeNull();
-  });
+  // ⚠️ REMOVED (MOTIR-4873): 'no entry points when there is no active project'.
+  // It rendered the shell with `hasProject={false}` and asserted the button was
+  // hidden, "C" inert and the modal unmounted. Every member is now inside a
+  // project (MOTIR-4870), so the prop is gone and the state it described cannot
+  // be produced — the spec would have had to fabricate it to keep asserting it.
+  // What still gates these three entry points is `canEdit`, which is a
+  // different question and is covered by the permission specs.
 });
 
 describe('CreateIssueModal — validation + submit', () => {

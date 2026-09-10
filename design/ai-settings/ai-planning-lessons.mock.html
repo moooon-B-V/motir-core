@@ -401,6 +401,13 @@
         border-radius: var(--radius-card);
         overflow: hidden;
       }
+      /* MOTIR-4944 — the compact shell's floor, copied from
+         `design/projects/settings-area.mock.html`, the asset this one takes its
+         whole `.shell` / rail chrome from. `<div class="shell compact">` asked
+         for it here and nothing declared it. */
+      .shell.compact {
+        min-height: 460px;
+      }
       .rail {
         flex: none;
         width: 248px;
@@ -506,6 +513,17 @@
       .nav-row .ni svg {
         width: 18px;
         height: 18px;
+      }
+      /* MOTIR-4944 — the nav label's own rule, copied from
+         `design/auth/legal-agreement.mock.html` (and 15 more), which is the form
+         this asset already inherits `.nav-row` and `.nav-row .ni` from. Without
+         it the label does not take the remaining width and does not truncate, so
+         a long row (`Members & access`) pushes its trailing chip out of the rail. */
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .nav-row.active {
         background: var(--el-sidebar-item-bg-active);

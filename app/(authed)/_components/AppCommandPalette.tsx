@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   BarChart3,
+  Code,
   CircleDot,
   Columns3,
   Filter,
@@ -14,7 +15,6 @@ import {
   LayoutList,
   LogOut,
   Plus,
-  Settings,
   ShieldCheck,
   Sparkles,
   SunMoon,
@@ -76,7 +76,6 @@ export interface AppCommandPaletteProps {
   projects: ProjectDTO[];
   activeProjectId: string | null;
   /** Whether an active project exists — gates the project-scoped nav actions. */
-  hasProject: boolean;
   /** Whether AI planning is wired (the cloud/self-host gate) — gates the
    *  "Plan with AI" command, the ⌘K twin of the top-nav hero launcher
    *  (MOTIR-1299). */
@@ -106,7 +105,6 @@ export function AppCommandPalette({
   activeWorkspaceId,
   projects,
   activeProjectId,
-  hasProject,
   settingsPermissions,
   aiPlanningConfigured = false,
   publicProjectsAvailable = false,
@@ -187,7 +185,7 @@ export function AppCommandPalette({
   // universal entrance to the AI planning workspace. Shown only when AI planning
   // is wired AND there's a project to plan into (mirrors the hero pill's mount
   // gate). Project-scoped context, like the header pill.
-  if (aiPlanningConfigured && hasProject) {
+  if (aiPlanningConfigured) {
     const aiActions = [];
     // The "Resume onboarding" twin (MOTIR-1533) — shown ABOVE "Plan with AI",
     // and only when the active project has an in-progress onboarding session,
@@ -260,7 +258,7 @@ export function AppCommandPalette({
   const offerNav = <T extends { id: string }>(href: string, action: T): T[] =>
     canOfferNavDestination(href, held) ? [action] : [];
   const navActions = [];
-  if (hasProject) {
+  {
     navActions.push(
       ...offerNav('/dashboard', {
         id: 'nav-dashboard',
@@ -323,6 +321,18 @@ export function AppCommandPalette({
         icon: <Filter />,
         onSelect: () => go('/filters'),
       }),
+      // ⚠️ THE SAME DESTINATION ON THE SAME GATE (MOTIR-4643). `offerNav` reads
+      // `PROJECT_NAV_ACCESS`, which is the ONE map the rail reads too — so this
+      // entry cannot disagree with the rail about who may be offered the room,
+      // which is the whole reason that map exists rather than a condition beside
+      // each list. The room is browse-reachable and its Health section gates
+      // itself, so every member is offered it here exactly as in the rail.
+      ...offerNav('/code', {
+        id: 'nav-code',
+        label: t('commandPalette.goToCode'),
+        icon: <Code />,
+        onSelect: () => go('/code'),
+      }),
     );
   }
   // Settings: without a project there's nothing project-scoped to configure, so a
@@ -337,22 +347,16 @@ export function AppCommandPalette({
   // home exists at every count, and removing the only ⌘K route to it would be a
   // regression this rule does not ask for. `workspaces` is already the org-scoped
   // list the layout hands `ShellTierNav`, so no new prop and no second predicate.
-  if (!hasProject) {
-    navActions.push({
-      id: 'nav-settings',
-      label: t('commandPalette.goToSettings'),
-      icon: <Settings />,
-      onSelect: () =>
-        go(
-          isWorkspaceTierRevealed(workspaces.length)
-            ? '/settings/workspace'
-            : '/settings/organization',
-        ),
-    });
-  }
+  // ⚠️ THE `!hasProject` SETTINGS FALLBACK IS GONE (MOTIR-4873). It pushed a
+  // "go to settings" action pointing at the workspace or org settings home,
+  // because with no project there was no project-settings deep link to offer
+  // and removing the only ⌘K route to settings would have been a regression.
+  // There is no projectless reader now, so the project-settings entries below
+  // are always generated and that fallback has nothing left to cover.
   // Org SECURITY — the require-2FA policy (Story MOTIR-1215 · MOTIR-3646). Not
-  // gated on `hasProject`: the pane is ORG-scoped, so it is reachable whatever
-  // project is active, and the org menu's own row is the other door onto it.
+  // gated on the active project: the pane is ORG-scoped, so it is reachable
+  // whatever project is active, and the org menu's own row is the other door
+  // onto it.
   // Not gated on the workspace-tier reveal either — an organization exists at
   // every count, unlike the workspace settings home above.
   navActions.push({
@@ -361,11 +365,20 @@ export function AppCommandPalette({
     icon: <ShieldCheck />,
     onSelect: () => go('/settings/organization/security'),
   });
-  // The WORKSPACE half (MOTIR-3647), under the SAME condition as its rail row:
-  // below the tier-reveal threshold `/settings/workspace/security` 404s, so an
-  // entry here would offer a dead address. The control is still reachable at
-  // that count — through the org-settings fold-in, which the entry above lands
-  // beside.
+  // The WORKSPACE half (MOTIR-3647), under the same condition the route itself
+  // applies: below the tier-reveal threshold `/settings/workspace/security`
+  // 404s, so an entry here would offer a dead address. The control is still
+  // reachable at that count — through the org-settings fold-in, which the entry
+  // above lands beside.
+  //
+  // ⚠️ THIS USED TO SAY "the same condition as ITS RAIL ROW", and that row is
+  // gone (Story MOTIR-4843 · MOTIR-4847): `Security` left the project rail's
+  // bottom section for the workspace area's own rail. The ACTION stays, and the
+  // predicate is unchanged — a palette action is a second door, and that story
+  // removes a door only where another covers the same room at the same reveal
+  // arm, which the area rail does. Only the sentence pointing at the departed
+  // row is re-worded, so the condition is stated against the route rather than
+  // against a row that no longer exists.
   if (isWorkspaceTierRevealed(workspaces.length)) {
     navActions.push({
       id: 'nav-workspace-security',
@@ -379,7 +392,7 @@ export function AppCommandPalette({
   // Project settings — per-section deep links generated FROM the settings-nav
   // registry (Subtask 6.5.2), filtered by the actor's access. A new settings page
   // appears here automatically by adding a registry entry (no hand-kept list).
-  if (hasProject) {
+  {
     const settingsEntries = visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES, {
       publicProjectsAvailable,
     });

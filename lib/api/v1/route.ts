@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { stampClientVersionWarning } from '@/lib/api/v1/clientVersion';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -147,6 +148,17 @@ export function withV1Route<P = Record<string, never>>(
       [REQUEST_ID_HEADER]: requestId,
       [API_VERSION_HEADER]: V1_CONTRACT_VERSION,
     });
+
+    // ── IS THE CALLER'S CLI BELOW THE FLOOR? (MOTIR-4974) ─────────────────
+    // Stamped HERE, beside the contract version and before the try, for the
+    // same reason that one is: it then arrives on the 401, the 403, the 429, a
+    // mapped domain error and the 500 as well. A stale client's most likely
+    // outcome is an error, so a verdict that only rode on 2xx would miss the
+    // request that most needed explaining.
+    //
+    // It is a header on a request that otherwise succeeds — a stale client is
+    // DEGRADED, never locked out (`clientVersion.ts` records why).
+    stampClientVersionWarning(responseHeaders, req);
 
     try {
       // ── 1. Authenticate, BEFORE any parsing or reading ──────────────────

@@ -2,6 +2,7 @@ import type { WorkItem } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { fullestContainer } from '@/lib/planning/planShape';
 import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -26,6 +27,7 @@ import type {
 import type { PlanRevision } from '@/generated/prisma/client';
 import { PLAN_ITEM_SETTABLE_RAIL_FIELDS } from '@/lib/dto/planReview';
 import type {
+  PlanCommittedBlockerDto,
   PlanHistoryEventDto,
   PlanItemChangeDto,
   PlanItemChangeField,
@@ -170,6 +172,13 @@ function proposedValue<T>(key: PatchedFieldKey, item: PlanItemDto, addValue: T, 
   return targetValue;
 }
 
+/** An ordered repository set as ONE diff cell — `null` for the empty set, which
+ *  is what an unpinned card looks like on either side of a re-pin. */
+function repoSetCell(repos: readonly string[]): string | null {
+  const named = repos.map((r) => r.trim()).filter((r) => r.length > 0);
+  return named.length === 0 ? null : named.join(', ');
+}
+
 /** The patch keys that name a value a reviewer reads back off the proposal. */
 type PatchedFieldKey = Extract<
   keyof PlanItemPatch,
@@ -180,6 +189,7 @@ type PatchedFieldKey = Extract<
   | 'storyPoints'
   | 'estimateMinutes'
   | 'targetRepo'
+  | 'targetRepos'
   | 'targetRepoRole'
 >;
 
@@ -294,6 +304,41 @@ function buildChanges(
     const from = blankToNull(target?.targetRepo ?? null);
     const to = blankToNull(patch.targetRepo);
     if (from !== to) changes.push({ field: 'targetRepo', from, to });
+  }
+  // …and the SET forms of the same axis (bug MOTIR-4904), on the SAME row. They
+  // are one field in three spellings, mutually exclusive at the append, so at
+  // most one of these three blocks can fire for any one patch.
+  //
+  // Rendered as the joined list rather than as a count: a reviewer approving a
+  // re-pin needs to read WHICH repositories, and "2 repositories" is MOTIR-3191's
+  // `— → updated` with a number in it. `targetRepositories` names ROWS, whose
+  // names this producer cannot resolve without a read it does not make — so the
+  // cell shows the ids and says so, which is worse to read and better than
+  // silence, the failure MOTIR-3868 was filed about.
+  if (patch.targetRepos !== undefined) {
+    const from = repoSetCell(target?.targetRepos ?? []);
+    const to = repoSetCell(patch.targetRepos);
+    if (from !== to) changes.push({ field: 'targetRepo', from, to });
+  }
+  if (patch.targetRepositories !== undefined) {
+    changes.push({
+      field: 'targetRepo',
+      from: repoSetCell(target?.targetRepos ?? []),
+      to: repoSetCell(patch.targetRepositories.map((id) => `row ${id}`)),
+    });
+  }
+  // …and the singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by
+  // MOTIR-4924), the `modify` mirror of the `add` path's `targetRepositoryRef`.
+  // Same presence-triggered row as the SET form directly above: it cannot resolve
+  // the ref to a name without a read it does not make, so the cell shows the id
+  // and says so — worse to read and better than silence, the failure MOTIR-3868
+  // was filed about.
+  if (patch.targetRepositoryRef !== undefined) {
+    changes.push({
+      field: 'targetRepo',
+      from: repoSetCell(target?.targetRepos ?? []),
+      to: patch.targetRepositoryRef == null ? null : `row ${patch.targetRepositoryRef}`,
+    });
   }
   // …and the ROLE, which is emitted on KEY PRESENCE rather than on a difference,
   // because there is NO OLD SIDE TO COMPARE AGAINST.
@@ -436,6 +481,36 @@ export const planReviewService = {
       workItemRepository.findByIdsInWorkspace(lookupIds, ctx.workspaceId, tx),
     );
     const targetById = new Map(targets.map((t) => [t.id, t]));
+
+    // …AND the COMMITTED `blocked_by` EDGES of every target (bug MOTIR-4951).
+    //
+    // The canvas builds a level from the roadmap read of that level's CURRENT
+    // children ∪ this plan's proposals at it. That is complete for a proposal
+    // that stays where it is, and it is silently incomplete for one the plan
+    // RE-PARENTS onto the level: the moving card is not among the destination's
+    // current children, so its committed edges are in `committed.deps` nowhere —
+    // and they are not in the two carriers either, because a relocation proposes
+    // no edge. The card was drawn as a node and never as an endpoint, and a
+    // relocation plan — whose whole subject is moving cards into a container so
+    // they can be worked in some order — rendered as unrelated cards side by
+    // side. Approving made the arrows appear, which is the tell.
+    //
+    // ONE query for the whole plan, on the same "never an N+1" rule the target
+    // read above states. `findBlockerEdgesForItems` already carries the blocker's
+    // STATUS, which is the other half of what the level builder needs: a
+    // committed edge is drawn `firm` or `pending` by whether its blocker is
+    // `done` (`buildWorkItemLevel`), and the level builder cannot look that up —
+    // the blocker may be a card this same plan is relocating, in which case it is
+    // not in the roadmap read for this level either.
+    const committedEdgeRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockerEdgesForItems(targetIds, ctx.workspaceId, tx),
+    );
+    const committedBlockersByItemId = new Map<string, PlanCommittedBlockerDto[]>();
+    for (const row of committedEdgeRows) {
+      const list = committedBlockersByItemId.get(row.fromId) ?? [];
+      list.push({ nodeId: row.blockerId, isDone: row.blockerStatus === 'done' });
+      committedBlockersByItemId.set(row.fromId, list);
+    }
 
     // …AND the LIVE PARENT of every proposal that names a TARGET instead of a
     // parent (bug MOTIR-3191).
@@ -637,6 +712,22 @@ export const planReviewService = {
       return [...new Set(refs.map(resolveNodeRef))];
     };
     /**
+     * What the target ALREADY BRINGS — its committed `blocked_by` edges, as
+     * canvas node ids (bug MOTIR-4951). The third carrier, and the only one the
+     * plan does not state.
+     *
+     * ⚠️ NO REF RESOLUTION HERE, and that is not an omission. The two resolvers
+     * above turn a PLAN's refs into node ids, and a temp-ref has to be followed
+     * to the item it names. These endpoints are committed work items, whose node
+     * id IS their work-item id by the one rule at the top of this function — so
+     * the row's `blockerId` is already the answer.
+     *
+     * `[]` for an un-materialized `add`: no `workItemId`, nothing in the map, and
+     * nothing it could carry — it is not a work item yet.
+     */
+    const committedBlockedByOf = (item: PlanItemDto): PlanCommittedBlockerDto[] =>
+      (item.workItemId ? committedBlockersByItemId.get(item.workItemId) : undefined) ?? [];
+    /**
      * Where this proposal SITS — one rule for all three ops (bug MOTIR-3191).
      *
      * An `add` says so itself, in `parentRef`. A `modify` says so too now — in
@@ -748,6 +839,7 @@ export const planReviewService = {
         parentTrail: committedParent ? trailFor(committedParent.id) : [],
         blockedByNodeIds: blockedByNodeIdsOf(item),
         blockedByRemovedNodeIds: blockedByRemovedNodeIdsOf(item),
+        committedBlockedBy: committedBlockedByOf(item),
         // The target's key, for EVERY op that has a target (MOTIR-3160). An
         // un-materialized `add` still reports null — it has no key and inventing
         // one would be the surface asserting a work item that does not exist —
@@ -823,6 +915,28 @@ export const planReviewService = {
           proposed?.targetRepo ?? null,
           target?.targetRepo ?? null,
         ),
+        // THE SET (bug MOTIR-4904) — patch-or-target on every op, the same rule
+        // `targetRepo` above follows and for the same reason: the quick view has
+        // no diff, so the rail answers what the card WILL BE. A proposal that
+        // pinned the singular reports it as the one-element set it means, so the
+        // row never reads "no repositories" for a card that has one.
+        targetRepos: proposedValue(
+          'targetRepos',
+          item,
+          proposed?.targetRepos ?? (proposed?.targetRepo ? [proposed.targetRepo] : []),
+          target?.targetRepos ?? [],
+        ),
+        // ⚠️ `add`-ONLY, and the reason is at the field on the DTO: these are row
+        // cuids, an authoring form rather than a value a reviewer reads, and the
+        // names they resolve to are what `targetRepos` directly above carries.
+        targetRepositories: item.op === 'add' ? (proposed?.targetRepositories ?? null) : null,
+        // The singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by
+        // MOTIR-4924) — `add`-ONLY for exactly the same reason: a cuid is an
+        // authoring form, not a value a reviewer reads, and the repository it names
+        // is what `targetRepo` / `targetRepos` carry once resolved. On a `modify`
+        // the re-pin is read off the DIFF (`buildChanges`, under `targetRepo`), so
+        // the rail need not repeat it.
+        targetRepositoryRef: item.op === 'add' ? (proposed?.targetRepositoryRef ?? null) : null,
         // ⚠️ NO TARGET FALLBACK, and that is not an omission: `work_item.
         // targetRepoRole` is RETIRED (Story MOTIR-2732 · MOTIR-3040), so a
         // committed card HAS no role to report. A `modify` shows the role only

@@ -508,6 +508,14 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'cli-connect.spec.ts': 17.2,
   'code-graph-refresh-engine.spec.ts': 56.6,
   'code-graph-writer-seam.spec.ts': 14.8,
+  // ⚠️ AN ESTIMATE, NOT A MEASUREMENT, and said so rather than blended into the
+  // table above. `code-index-freshness.spec.ts` (MOTIR-1771) has never run in
+  // this lane, and a spec with no entry is assigned to no leg at all — so an
+  // honest guess that makes it RUN beats an accurate silence that does not.
+  // Sized from its shape: seven cases, each a sign-up plus a small seed and one
+  // or two page loads, which is the expensive part. RE-MEASURE from the first
+  // green run that includes it, per this file's own instructions.
+  'code-index-freshness.spec.ts': 35.0,
   'collab-at-scale.spec.ts': 0,
   'collab-journey.spec.ts': 11.4,
   'comments.spec.ts': 12.1,
@@ -588,6 +596,26 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'public-selfhost.spec.ts': 9.0,
   'quick-view-edit.spec.ts': 16.4,
   'ready.spec.ts': 6.7,
+  // ⚠️ `registration-lands-on-onboarding.spec.ts` (MOTIR-4876) carries the LOCAL
+  // provenance, and the guard caught it with no entry on its FIRST CI run — the
+  // failure this file exists to make loud, working exactly as designed. The spec
+  // passed nothing, because a spec with no entry is assigned to no leg: it had
+  // been silently skipped in every E2E lane since it was written.
+  //
+  // Measured on 2026-09-08 against a production build, on its own port (3987)
+  // and its own database, JSON reporter, per-test `durationMs` summed, workers=1:
+  // **30.4 s** on the first run (11.2 + 9.3 + 9.9) and **11.9 s** on the second.
+  // The HIGHER reading is recorded, rounded up, following
+  // `plan-decision-permission.spec.ts` and `plan-proposal-correction.spec.ts`
+  // above — under-estimating is the direction that unbalances a bin-packer.
+  //
+  // The 2.5x spread is wider than any other local entry here and is worth the
+  // warning: all three tests do a full browser sign-up, and each one resets the
+  // database in a `beforeEach`, so the first run pays connection-pool and
+  // Prisma-client warm-up that the second does not. Expect CI to land nearer the
+  // warm reading than the cold one — RE-MEASURE from the first green CI run that
+  // includes it, and expect this number to come DOWN.
+  'registration-lands-on-onboarding.spec.ts': 31.0,
   'reports.spec.ts': 20.9,
   // ⚠️ A FOURTH provenance (MOTIR-3009): promoted out of the acceptance lane by
   // the story that changed the lifecycle it walks, and measured LOCALLY in this

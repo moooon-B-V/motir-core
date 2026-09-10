@@ -153,12 +153,35 @@ describe('⚠️ ONE derivation — no second implementation of "stale" under li
       .filter(Boolean)
       .sort();
 
-    // The derivation, the two places that WRITE the column, and the DTO that
-    // re-exports the union. Nothing else may read it.
+    // The derivation, the two places that WRITE the column, and the ASSEMBLERS
+    // that hand its facts to `deriveCodeGraphIndexState`. Nothing else may read
+    // it.
+    //
+    // ⚠️ THIS LIST IS AN EXACT MATCH ON PURPOSE — adding a reader is meant to be
+    // a decision somebody makes in a diff, not a thing that happens quietly. The
+    // two assemblers are the ORG-scoped inventory and the PROJECT-scoped code
+    // context (MOTIR-1767): the same four facts, two different questions —
+    // *"what does this organisation have?"* and *"what does this project work
+    // on?"* — and neither of them compares anything, which the second half of
+    // this test is what actually enforces.
+    //
+    // ⚠️ THE DRIFT PAIR (MOTIR-4644) ADDS TWO READERS, AND ONE OF THEM CONTAINS A
+    // SHA COMPARISON THAT IS *NOT* THIS ONE. `driftCount.ts` asks whether a
+    // stored COUNT still belongs to the row's current
+    // `(indexedHeadSha, defaultBranchHeadSha)` pair — a cache-validity question,
+    // answered by comparing each live sha to the sha the count was computed
+    // against. It never compares the two live shas to each other and never
+    // decides whether a graph is behind, which is what this guard is about. It
+    // reads as the forbidden thing at a glance, so it is named here rather than
+    // left for the next reader to re-derive; `codeGraphDriftService.ts` is the
+    // sweep that fills the count and only passes the shas through.
     expect(hits).toEqual([
+      'lib/codeGraph/driftCount.ts',
       'lib/codeGraph/indexState.ts',
       'lib/repositories/githubRepoRepository.ts',
       'lib/repositories/projectRepoRepository.ts',
+      'lib/services/codeContextService.ts',
+      'lib/services/codeGraphDriftService.ts',
       'lib/services/organizationRepoService.ts',
     ]);
 

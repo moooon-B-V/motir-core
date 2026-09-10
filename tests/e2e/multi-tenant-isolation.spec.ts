@@ -50,6 +50,11 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
+  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); the
+  // helper's contract — leave the caller in the app — is kept by settling
+  // there and navigating on.
+  await page.waitForURL('**/onboarding');
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench');
 }
 

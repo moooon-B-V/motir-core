@@ -27,8 +27,9 @@ keeps the idea-first shape described above. Neither surface is changed to match 
 The landing meets a visitor who has committed to nothing, and a symmetric fork is the honest thing to show
 someone still deciding; that page is also answering _what Motir is_, and the co-equal import door is the
 point of the answer. **This entrance is reached by a reader who has already chosen the idea path, by name,
-at the door** — the in-app door is a button reading "Plan a new project with AI" (`ProjectSwitcher` and
-`ProjectsEmptyState`, via `startNewAiProjectAction`), and the cross-origin door carries an idea in the
+at the door** — the in-app door is a button reading "Plan a new project with AI" (`ProjectSwitcher`,
+via `startNewAiProjectAction` — it named `ProjectsEmptyState` as a second door until MOTIR-4872
+retired that screen, and the switcher is the only in-app one now), and the cross-origin door carries an idea in the
 `motir_pending_idea` cookie and renders **Panel 2, which drops the import row entirely.** Re-offering a
 symmetric fork here re-asks a question the reader answered with the click.
 

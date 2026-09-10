@@ -468,6 +468,40 @@ export default defineConfig({
         // 100/100/100/100 apiece before pinning.
         'app/**/workspace/security/actions.ts',
         'app/**/_components/WorkspaceFoldInSection.tsx',
+        // Story MOTIR-4843 · Subtask MOTIR-4848 — the workspace-settings AREA,
+        // and the FOURTH fold-in beside the one above. Measured on this branch
+        // before pinning, `--coverage.include` through the `app/**` form:
+        //
+        //   workspaceSettingsNav.ts     93.33 / 91.66 / 100 / 100
+        //   WorkspaceSidebarHeader.tsx  100   / 100   / 100 / 100
+        //   JobRunsFoldInSection.tsx    100   / 100   / 100 / 100
+        //   WorkspaceSwitcher.tsx        40   /  61.11/  26.66 / 40.42
+        //
+        // The registry's one uncovered line is its `if (!entry.href)` guard, an
+        // arm no entry reaches. The HEADER measured 90 / **60** / 100 / 90 first
+        // — under the branch floor because its COLLAPSED arm and its `'?'`
+        // initial fallback were undriven — and MOTIR-4848 wrote the four missing
+        // cases rather than pinning three axes and leaving the fourth off, which
+        // is the remedy this list's own rule prescribes (MOTIR-4368's precedent
+        // on `SidebarNav`). All three are GATED in `thresholds` below.
+        //
+        // ⚠️ `WorkspaceSwitcher.tsx` IS REPORT-ONLY, deliberately — it is in this
+        // list and NOT in `thresholds`. This story added one row to it and the
+        // spec that drives that row; the 60% it does not reach is the
+        // create-workspace modal, the switch handler and their toast paths —
+        // pre-existing behaviour no card here touched. Pinning it at the
+        // measured number would put a 40 in a list whose floor is 90, and
+        // pinning it AT 90 would fail the build for work this story did not
+        // undertake. It publishes a number until a card owns the gap.
+        'lib/settings/workspaceSettingsNav.ts',
+        'app/**/_components/WorkspaceSidebarHeader.tsx',
+        'app/**/_components/JobRunsFoldInSection.tsx',
+        'app/**/_components/WorkspaceSwitcher.tsx',
+        // ⚠️ `app/**/settings/workspace/layout.tsx` is NOT here. It is an async
+        // Server Component whose whole body is a session check and a redirect,
+        // and this repo has no RSC render harness — the same reason the settings
+        // PAGE files above it stay out. Its behaviour is asserted structurally,
+        // by the area rail's specs and by the route's own 404 arm.
         // Story MOTIR-1215 · Subtask MOTIR-3648 — the enforcement gate and the
         // screen it holds people at. Measured at 100/100/100/100 apiece.
         'lib/auth/twoFactorGate.ts',
@@ -743,6 +777,14 @@ export default defineConfig({
         'components/planning/ProposalPeek.tsx',
         'components/workItems/ProposalPeekMarks.tsx',
         'app/**/items/_components/IssueQuickViewController.tsx',
+        // The SHARED pager (Story MOTIR-4850 · MOTIR-4853). It is mounted by
+        // three surfaces now — `/items`, `/items/archived` and the Workbench —
+        // and MOTIR-4853 translated it IN PLACE, so a regression in it reaches
+        // all three. It was not gated before that card; measured on this branch
+        // with `tests/components/issue-list-pager.test.ts` and its two
+        // consumers' suites: 100 statements / 100 branches / 100 functions /
+        // 100 lines.
+        'app/**/items/_components/IssueListPager.tsx',
         // …and the SEAM the payload widening landed in. `workItemsService.ts`
         // (the other half) is already included + gated above.
         'lib/mappers/quickViewMappers.ts',
@@ -1281,6 +1323,13 @@ export default defineConfig({
         'lib/api/v1/bearer.ts',
         'lib/api/v1/pagination.ts',
         'lib/api/v1/rateLimit.ts',
+        // MOTIR-4974 — the client-version verdict, NAMED on the way in for the
+        // reason the v1 comment above already gives: this file decides what a
+        // third party is told about its own client, and its failure mode is
+        // silence. A floor that never fires reads exactly like a fleet that is
+        // up to date, so the arms that must stay covered are the ones that
+        // return `null`.
+        'lib/api/v1/clientVersion.ts',
         // Story 8.5 · Subtask 8.5.9 (MOTIR-1165) — the SHARED rate limiter and
         // its Postgres store. This is a security control on the pre-auth surfaces
         // (sign-in, sign-up, password reset, public writes) and a cost control on
@@ -1468,7 +1517,7 @@ export default defineConfig({
         // saying the other repos exist at all — an untested branch in either is
         // a project silently showing one repo's grade as if it were its own.
         'lib/codeHealth/repoAuditRows.ts',
-        'app/**/code-health/_components/AuditRepoList.tsx',
+        'app/**/code/_components/AuditRepoList.tsx',
         // Story MOTIR-2244 · Subtask MOTIR-2247 — the repo-SCOPED audit trigger.
         // The scope decides how many derivations a click PAYS for, so an
         // untested branch here is either a fan-out that spends N times what was
@@ -1816,7 +1865,12 @@ export default defineConfig({
         'app/**/settings/project/automation/page.tsx',
         'app/**/plans/\\[id\\]/page.tsx',
         'app/**/items/\\[key\\]/edit/page.tsx',
-        'app/**/code-health/page.tsx',
+        // ⚠️ `code/page.tsx`, NOT `code-health/page.tsx` (MOTIR-1768). The audit
+        // became one section of the Code room and `/code-health` is now a
+        // three-line permanent redirect — a file these numbers would gate
+        // trivially while the surface they were measured against went
+        // unmeasured.
+        'app/**/code/page.tsx',
         'app/**/invite/accept/page.tsx',
         // Story MOTIR-4237 · Subtask MOTIR-4240 — THE HELP MENU, and the context
         // the story widened to give it a door. Both were built by MOTIR-4239 and
@@ -2159,6 +2213,27 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/_components/WorkspaceFoldInSection.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Story MOTIR-4843 · Subtask MOTIR-4848. The three files that MEASURED
+        // above the floor on all four axes; the numbers and the one deliberate
+        // omission are recorded beside their `include` entries.
+        'lib/settings/workspaceSettingsNav.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/WorkspaceSidebarHeader.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'app/**/_components/JobRunsFoldInSection.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -2632,7 +2707,7 @@ export default defineConfig({
         // Story MOTIR-2192 · Subtask MOTIR-2166 — the code-graph offboarding queue.
         // Story MOTIR-1755 · Subtask MOTIR-2207 — the multi-repo audit tab.
         'lib/codeHealth/repoAuditRows.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/**/code-health/_components/AuditRepoList.tsx': {
+        'app/**/code/_components/AuditRepoList.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -3590,6 +3665,11 @@ export default defineConfig({
         // Keyed `app/**/…`, never the literal `app/(authed)/…`: picomatch reads
         // the parentheses as a group, so the literal form matches NO file and
         // the threshold would pass vacuously (MOTIR-2449).
+        'app/**/items/_components/IssueListPager.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/**/items/_components/QuickViewRailEdit.tsx': {
           branches: 90,
           functions: 90,
@@ -3660,7 +3740,6 @@ export default defineConfig({
         // the measured number, so a later refactor has room without the gate
         // being loosened to make a build pass. (MOTIR-4782 renamed
         // `lib/home/` → `lib/workbench/`; the floors are unchanged.)
-        'lib/workbench/cursor.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/workbench/tab.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/homeService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/homeMappers.ts': { branches: 90, functions: 90, lines: 90 },

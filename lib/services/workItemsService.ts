@@ -218,38 +218,19 @@ import {
   resolveDispatchRepoForItem,
   type ResolvedRepoPins,
 } from '@/lib/workItems/dispatchRepo';
-import { primaryTargetRepo } from '@/lib/workItems/targetRepo';
+import { assertSingleTargetRepoInput, primaryTargetRepo } from '@/lib/workItems/targetRepo';
 import { classifyRepoDelivery, type RepoDelivery } from '@/lib/workItems/repoDelivery';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
-import {
-  ConflictingTargetRepoInputError,
-  ContainerRepoSetNotWritableError,
-} from '@/lib/workItems/errors';
+import { ContainerRepoSetNotWritableError } from '@/lib/workItems/errors';
 import { workItemRepoRepository } from '@/lib/repositories/workItemRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
-/**
- * Reject a write that supplies BOTH the scalar pin and the repository SET
- * (Story MOTIR-2725 · MOTIR-2727, ADR `docs/decisions/work-item-repository-set.md`
- * §3.4).
- *
- * `undefined` on either side is "not supplied" and is always fine; a `null`
- * `targetRepo` beside a `targetRepos` is NOT — clearing the pin is still
- * describing the field, and a caller who meant to clear the set says
- * `targetRepos: []`.
- */
-function assertSingleTargetRepoInput(
-  targetRepo: string | null | undefined,
-  targetRepos: readonly (string | null | undefined)[] | null | undefined,
-  targetRepositories?: readonly (string | null | undefined)[] | null | undefined,
-): void {
-  const supplied =
-    (targetRepo !== undefined ? 1 : 0) +
-    (targetRepos !== undefined ? 1 : 0) +
-    (targetRepositories !== undefined ? 1 : 0);
-  if (supplied > 1) throw new ConflictingTargetRepoInputError();
-}
+// ⚠️ `assertSingleTargetRepoInput` MOVED to `lib/workItems/targetRepo.ts`
+// (MOTIR-4904) and is imported above. It was private here while this was the only
+// door that could express a repository SET; the PROPOSAL door can now express one
+// too, and one rule with two copies is how the two doors would come to disagree
+// about what a contradiction is. The contract is unchanged.
 
 /** A validated single pin, as the one-element set it means (`null` → `[]`). The
  *  bridge that lets every existing caller — which sends only the scalar — write a
@@ -6276,7 +6257,7 @@ async function resolveSprintFacet(
  *  asc)`: `READY_KIND_RANK` (subtask first … epic last) is primary, priority
  *  (highest first) breaks the type tie, `key` breaks the rest. The ONE comparator
  *  the list slice and the cursor seek-after share, so they can't drift. */
-function compareReadyRows(
+export function compareReadyRows(
   a: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
   b: { kind: WorkItemKind; priority: WorkItemPriority; key: number },
 ): number {

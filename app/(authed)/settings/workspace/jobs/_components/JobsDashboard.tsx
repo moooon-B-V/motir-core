@@ -30,7 +30,20 @@ import { replayDlqAction } from '../actions';
 
 export type JobsTab = 'runs' | 'dlq' | 'system';
 
-const BASE = '/settings/workspace/jobs';
+/**
+ * ⚠️ THE LINK BASE IS A PROP, NOT A CONSTANT (Story MOTIR-4843 · MOTIR-4849).
+ *
+ * It was `const BASE = '/settings/workspace/jobs'` at module scope, and every
+ * tab, status filter and pagination link was built from it. That was true while
+ * this component had ONE host. MOTIR-4861 gave it a second — the fold-in on
+ * `/settings/organization`, which below the workspace-tier reveal is the ONLY
+ * door onto this surface, because the same card made the workspace route
+ * `notFound()` there. So every link the fold-in rendered pointed at a 404: the
+ * section drew, the DLQ badge showed a count, and nothing in it could be opened.
+ *
+ * The default keeps the standalone route's call sites unchanged.
+ */
+const DEFAULT_BASE = '/settings/workspace/jobs';
 
 const STATUS_FILTER_VALUES: (JobRunStatus | 'all')[] = [
   'all',
@@ -41,6 +54,8 @@ const STATUS_FILTER_VALUES: (JobRunStatus | 'all')[] = [
 ];
 
 export interface JobsDashboardProps {
+  /** Where this dashboard's own links point — the route that renders it. */
+  basePath?: string;
   activeTab: JobsTab;
   status?: JobRunStatus;
   page: number;
@@ -54,13 +69,16 @@ export interface JobsDashboardProps {
   dlq: JobRunDlqDTO[];
 }
 
-function buildHref(params: { tab: JobsTab; status?: JobRunStatus | 'all'; page?: number }): string {
+function buildHref(
+  base: string,
+  params: { tab: JobsTab; status?: JobRunStatus | 'all'; page?: number },
+): string {
   const sp = new URLSearchParams();
   if (params.tab !== 'runs') sp.set('tab', params.tab);
   if (params.status && params.status !== 'all') sp.set('status', params.status);
   if (params.page && params.page > 1) sp.set('page', String(params.page));
   const qs = sp.toString();
-  return qs ? `${BASE}?${qs}` : BASE;
+  return qs ? `${base}?${qs}` : base;
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
@@ -120,10 +138,12 @@ function firstLine(message: string): string {
 
 // ── Tab strip + status filter ───────────────────────────────────────────────
 function TabStrip({
+  basePath,
   activeTab,
   dlqCount,
   showSystemTab,
 }: {
+  basePath: string;
   activeTab: JobsTab;
   dlqCount: number;
   showSystemTab: boolean;
@@ -142,7 +162,7 @@ function TabStrip({
         return (
           <Link
             key={tab}
-            href={buildHref({ tab })}
+            href={buildHref(basePath, { tab })}
             aria-current={active ? 'page' : undefined}
             className={cn(
               'inline-flex items-center gap-2 px-3 py-2 font-sans text-sm font-medium',
@@ -166,7 +186,15 @@ function TabStrip({
   );
 }
 
-function StatusFilter({ activeTab, status }: { activeTab: JobsTab; status?: JobRunStatus }) {
+function StatusFilter({
+  basePath,
+  activeTab,
+  status,
+}: {
+  basePath: string;
+  activeTab: JobsTab;
+  status?: JobRunStatus;
+}) {
   const t = useTranslations('settings');
   return (
     <div
@@ -179,7 +207,7 @@ function StatusFilter({ activeTab, status }: { activeTab: JobsTab; status?: JobR
         return (
           <Link
             key={value}
-            href={buildHref({ tab: activeTab, status: value })}
+            href={buildHref(basePath, { tab: activeTab, status: value })}
             aria-current={active ? 'true' : undefined}
             className={cn(
               'rounded-(--radius-badge) border px-2.5 py-0.5 font-sans text-xs font-medium transition-colors',
@@ -506,11 +534,13 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
 
 // ── Pagination ──────────────────────────────────────────────────────────────
 function Pagination({
+  basePath,
   activeTab,
   status,
   page,
   hasNext,
 }: {
+  basePath: string;
   activeTab: JobsTab;
   status?: JobRunStatus;
   page: number;
@@ -523,14 +553,14 @@ function Pagination({
       <span className="text-(--el-text-muted)">{t('jobs.pageLabel', { page })}</span>
       <div className="flex gap-2">
         {page > 1 ? (
-          <Link href={buildHref({ tab: activeTab, status, page: page - 1 })}>
+          <Link href={buildHref(basePath, { tab: activeTab, status, page: page - 1 })}>
             <Button variant="secondary" size="sm">
               {t('jobs.previous')}
             </Button>
           </Link>
         ) : null}
         {hasNext ? (
-          <Link href={buildHref({ tab: activeTab, status, page: page + 1 })}>
+          <Link href={buildHref(basePath, { tab: activeTab, status, page: page + 1 })}>
             <Button variant="secondary" size="sm">
               {t('jobs.next')}
             </Button>
@@ -542,17 +572,37 @@ function Pagination({
 }
 
 export function JobsDashboard(props: JobsDashboardProps) {
-  const { activeTab, status, page, hasNext, dlqCount, isOwner, showSystemTab, runs, dlq } = props;
+  const {
+    basePath = DEFAULT_BASE,
+    activeTab,
+    status,
+    page,
+    hasNext,
+    dlqCount,
+    isOwner,
+    showSystemTab,
+    runs,
+    dlq,
+  } = props;
   const t = useTranslations('settings');
   const router = useRouter();
   const isDlq = activeTab === 'dlq';
 
   return (
     <div className="flex flex-col gap-4">
-      <TabStrip activeTab={activeTab} dlqCount={dlqCount} showSystemTab={showSystemTab} />
+      <TabStrip
+        basePath={basePath}
+        activeTab={activeTab}
+        dlqCount={dlqCount}
+        showSystemTab={showSystemTab}
+      />
 
       <div className="flex items-center justify-between gap-3">
-        {isDlq ? <div /> : <StatusFilter activeTab={activeTab} status={status} />}
+        {isDlq ? (
+          <div />
+        ) : (
+          <StatusFilter basePath={basePath} activeTab={activeTab} status={status} />
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -575,7 +625,13 @@ export function JobsDashboard(props: JobsDashboardProps) {
         <RunsTable runs={runs} />
       )}
 
-      <Pagination activeTab={activeTab} status={status} page={page} hasNext={hasNext} />
+      <Pagination
+        basePath={basePath}
+        activeTab={activeTab}
+        status={status}
+        page={page}
+        hasNext={hasNext}
+      />
     </div>
   );
 }

@@ -13,10 +13,17 @@ import { describe, expect, it } from 'vitest';
 // meets it before starting; these tests pin the two things that comment claims.
 
 const ROOT = join(__dirname, '..', '..');
-const PAGE = join(ROOT, 'app', '(authed)', 'code-health', 'page.tsx');
-const src = readFileSync(PAGE, 'utf8');
+// ⚠️ THE SURFACE MOVED AND THE MEASUREMENT SPLIT WITH IT (MOTIR-1768).
+// `/code-health` is now a permanent redirect into `/code`; the page's gate and
+// its two dependent awaits live in `app/(authed)/code/page.tsx`, and the
+// concurrent fan-out machinery in `app/(authed)/code/_health.ts`. Both halves
+// are read here, because the claims below are about the READ as a whole and
+// splitting the assertions would let either half lose a property quietly.
+const PAGE = join(ROOT, 'app', '(authed)', 'code', 'page.tsx');
+const HEALTH = join(ROOT, 'app', '(authed)', 'code', '_health.ts');
+const src = readFileSync(PAGE, 'utf8') + readFileSync(HEALTH, 'utf8');
 
-describe('/code-health keeps its concurrent fan-outs (MOTIR-3446)', () => {
+describe('/code keeps its concurrent fan-outs (MOTIR-3446)', () => {
   it('still fans the per-repo work out through allSettledOrThrow, at all three sites', () => {
     // MOTIR-3077 repaired these: under a bare `Promise.all` a rejected audit arm
     // abandoned both the other repos' audits and every convention read, leaving
@@ -31,11 +38,12 @@ describe('/code-health keeps its concurrent fan-outs (MOTIR-3446)', () => {
   });
 });
 
-describe('/code-health takes no route boundary (MOTIR-3446)', () => {
+describe('/code takes no route boundary (MOTIR-3446)', () => {
   // Rule 5 of design/shell/design-notes.md § WHICH SURFACES EARN A FRAME. The
   // page does not call notFound(), so this is a preference rather than a
   // prohibition — but it is still one mechanism, not two.
   it('has no loading.tsx', () => {
+    expect(existsSync(join(ROOT, 'app', '(authed)', 'code', 'loading.tsx'))).toBe(false);
     expect(existsSync(join(ROOT, 'app', '(authed)', 'code-health', 'loading.tsx'))).toBe(false);
   });
 

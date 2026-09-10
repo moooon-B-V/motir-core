@@ -1509,7 +1509,9 @@
                   <b><code>prefers-reduced-motion</code></b> — the pulse is already gated behind
                   <code>@media (prefers-reduced-motion: no-preference)</code>, so a motion-sensitive
                   user never sees it in ANY state; the open-state pause is a no-op for them. The
-                  panel’s own <code>fade-in-0</code> is the primitive’s and stays as-is.
+                  panel itself has no entry animation: overlay motion is the THEME’s, declared per
+                  style against <code>[data-surface='popover']</code> and gated behind
+                  reduced-motion (MOTIR-4889).
                 </li>
               </ul>
             </div>

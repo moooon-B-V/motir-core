@@ -68,13 +68,10 @@ export default async function ProjectPublicAddressPage() {
   const t = await getTranslations('settings');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    return (
-      <div className="mx-auto max-w-[42rem]">
-        <EmptyState title={t('project.empty.title')} description={t('project.empty.description')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   const refused = await guardSettingsPage('public-address', ctx);
   if (refused) return refused;

@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { apiTokensService } from '@/lib/services/apiTokensService';
+import { projectsService } from '@/lib/services/projectsService';
 import { ApiDocsLinkPanel } from '../_components/ApiDocsLinkPanel';
 import { ApiTokensManager } from '../_components/ApiTokensManager';
 import { ConnectCliPanel } from '../_components/ConnectCliPanel';
@@ -27,6 +28,16 @@ export default async function AccountApiTokensPage() {
     apiTokensService.listScopeOptions(session.user.id),
     getWorkspaceContext(),
   ]);
+
+  // The ACTIVE project, for the create modal's default binding (MOTIR-4876). It
+  // is a second round trip because `WorkspaceContext` carries the workspace and
+  // not the project, and it is sequential because it takes the workspace the
+  // read above resolves. A token BINDS to a project (MOTIR-2606), so the default
+  // has to be the project the reader is in rather than the workspace's first —
+  // see `CreateTokenModal`'s note for what those two stopped meaning together.
+  const activeProject = ctx
+    ? await projectsService.getActiveProject(ctx.userId, ctx.workspaceId)
+    : null;
 
   // The tokens TABLE is wide (8 columns incl. the 7.7.19 Scopes column), so this
   // pane uses the table-pane width (the workspace-jobs precedent), NOT the 42rem
@@ -61,6 +72,7 @@ export default async function AccountApiTokensPage() {
         initialTokens={tokens}
         scopeOrgs={scopeOrgs}
         activeWorkspaceId={ctx?.workspaceId ?? null}
+        activeProjectId={activeProject?.id ?? null}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import { mintCodeGraphRunCredential, motirAiContainerBaseUrl } from '@/lib/ai/motirAiClient';
+import { CodeGraphRunCredentialTooShortError } from '@/lib/ai/errors';
 import {
   codeGraphIndexAdmissionService,
   type IndexAdmission,
@@ -11,7 +12,7 @@ import type { GitProviderId } from '@/lib/git/types';
 // half this service is dispatched BY, so a value import would close a cycle. The
 // phase vocabulary lives there because that is where the ledger's result type
 // lives, and both halves must name the same three spans (MOTIR-4413).
-import type { IndexCorePhase } from '@/lib/services/codeGraphIndexService';
+import type { IndexCorePhase, IndexMode } from '@/lib/services/codeGraphIndexService';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
   OrchestratorImageUnpullableError,
@@ -217,6 +218,54 @@ const DEFAULT_BOOT_DEADLINE_MS = 120_000;
  * counter in front of the invoice.
  */
 const DEFAULT_INDEX_TIMEOUT_MS = 1_800_000;
+
+/**
+ * How much longer than the container's own hard kill its motir-ai credential
+ * must live (Bug MOTIR-4923).
+ *
+ * ⚠️ THE CREDENTIAL'S LIFETIME IS DERIVED FROM {@link DEFAULT_INDEX_TIMEOUT_MS},
+ * NOT SET BESIDE IT. Until this card the mint carried no `ttlSeconds` at all, so
+ * motir-ai's own default applied — FIFTEEN MINUTES, against a container this
+ * side permits THIRTY. That is a mismatch that fails BY REPOSITORY SIZE and
+ * therefore only on the big repos: every run that finishes inside fifteen
+ * minutes succeeds, every run that does not builds its whole graph and is
+ * refused at the upload with exit `50`. Measured, twice, on 2026-09-08:
+ * `moooon-B-V/motir-core` ran 19 m 52 s and 19 m 56 s against credentials that
+ * expired at 15 m 00 s, while `moooon-B-V/motir-ai` — 2 m 07 s on the same
+ * deployment, the same public ingress and the same credential scope — uploaded
+ * and recorded its pointer. The two numbers were never one decision, so nobody
+ * had to change one to break the other.
+ *
+ * The grace covers what happens OUTSIDE the container's own clock and after its
+ * last second of work: the mint precedes `bootedAt`, the machine takes seconds
+ * to start, and the upload grant plus the pointer record are two round trips a
+ * container makes at the very END of a run it may have spent the full timeout
+ * on. Five minutes is generous against every one of those and still leaves the
+ * total (35 min) far inside motir-ai's own hour-long ceiling.
+ *
+ * ⚠️ RENEWAL WAS THE OTHER ANSWER AND IS THE WRONG ONE HERE. MOTIR-3288 repaired
+ * the planning job token by RENEWING it while the work runs (`refreshJobToken`),
+ * deliberately not by raising it, because a short blast radius is what a leaked
+ * token's lifetime is for. That answer does not transfer: the holder is a
+ * container that ingests UNTRUSTED SOURCE, and handing it a renewal endpoint
+ * would give it the one thing a fixed expiry denies it — the ability to extend
+ * its own grant. Here the blast radius is bounded by SCOPE instead (one project,
+ * one repo, one run, two operations — `docs/decisions/code-graph-index-fleet.md`
+ * §4), and the deadline to cover is a number this side already owns.
+ */
+const CREDENTIAL_GRACE_MS = 300_000;
+
+/**
+ * The credential lifetime ONE index run needs, derived from the deadline that
+ * run is actually given.
+ *
+ * Exported so the assertion below, the mint and the suite all read the same
+ * derivation — the point of the card is that these numbers stop being written
+ * down twice.
+ */
+export function runCredentialTtlSeconds(indexTimeoutMs: number): number {
+  return Math.ceil((indexTimeoutMs + CREDENTIAL_GRACE_MS) / 1000);
+}
 
 /** How soon after boot supervision first asks the provider what the container is
  *  doing. */
@@ -486,6 +535,26 @@ export interface IndexSession {
    * slot nothing could ever give back.
    */
   readonly slotRef: string;
+  /**
+   * WHETHER motir-ai GRANTED THIS RUN A SYNC (MOTIR-4945) — `true` when the boot
+   * was handed a `previousSnapshotUrl`, `false` when it was not.
+   *
+   * Carried on the SESSION for exactly the reason `slotRef` and
+   * `credentialExpiresAt` are: the grant is known at BOOT and the ledger row is
+   * written at SETTLE, minutes and often several invocations later, and the
+   * session is the only thing that crosses that boundary. A boolean living in a
+   * closure would be a boolean no replay could see.
+   *
+   * ⚠️ OPTIONAL, AND THAT IS NOT DEFENSIVENESS — IT IS THE ROLLOUT. This field
+   * lands in the `index-boot:<projectId>` memo, and every run already in flight
+   * holds a memo written before it existed. Those replay the OLD shape, so this
+   * arrives `undefined` for as long as they live, and a run in that state must
+   * report NO mode rather than a plausible one. Defaulting the absence to
+   * `rebuild` would be the worst available answer: it is the commoner mode, so
+   * the wrong value would look right, and the first measurement anybody takes of
+   * what a sync saves would be polluted by runs that never reported.
+   */
+  readonly syncGranted?: boolean;
   readonly attribution: {
     readonly orgId: string;
     readonly workspaceId: string;
@@ -647,6 +716,22 @@ export type IndexDispatchOutcome =
        * Absent when nothing could be computed — telemetry never fails a run.
        */
       coreTimings?: IndexCoreSpans;
+      /**
+       * WHAT THIS CONTAINER DID — `sync` or `rebuild` (MOTIR-4945).
+       *
+       * ⚠️ ATTACHED BESIDE {@link IndexDispatchOutcome.coreTimings}, by
+       * {@link codeGraphIndexDispatchService.advanceIndexContainer} AFTER the
+       * settle step returns, and for the same reason: the mode belongs to the
+       * DISPATCH, not to the teardown, so widening the `index-settle:<pid>` memo
+       * would freeze it into a `job_step` row whose shape in-flight runs already
+       * hold. It is re-derived on every pass from the memoized SESSION, which
+       * cannot disagree with itself.
+       *
+       * Absent when the session carries no grant — an in-flight run whose
+       * `index-boot` memo predates this card. Absent means UNKNOWN, never
+       * `rebuild`.
+       */
+      indexMode?: IndexMode;
     }
   /**
    * Teardown itself failed, so the container may still be running. Reported
@@ -1017,14 +1102,36 @@ export const codeGraphIndexDispatchService = {
 
       // ── 1 · Mint THIS run's motir-ai credential ────────────────────────────
       // Scoped to one (project, repo, run) for minutes, and the only motir-ai
-      // credential the container is given.
+      // credential the container is given. Its LIFETIME is derived from the
+      // deadline this same call is about to give the container — see
+      // {@link CREDENTIAL_GRACE_MS} for why that derivation exists and why
+      // renewal is not the answer for this holder.
       credential = await mintCodeGraphRunCredential({
         coreOrganizationId: input.organizationId,
         coreWorkspaceId: input.workspaceId,
         coreProjectId: input.projectId,
         repoRef: input.repoRef,
         runId: input.runId,
+        ttlSeconds: runCredentialTtlSeconds(indexTimeoutMs),
       });
+
+      // ⚠️ ASKING IS NOT AGREEING — CHECK WHAT CAME BACK (MOTIR-4923). The TTL
+      // above is a REQUEST: motir-ai clamps it to its own [60, 3600] window and
+      // an older motir-ai ignores the field entirely, so the only thing that
+      // makes the two deadlines one decision is reading the answer against ours.
+      // A shortfall here is the whole defect, twenty minutes earlier and for
+      // nothing: the alternative is a container that builds a graph it will not
+      // be allowed to hand back, and a `credential_refused` an operator cannot
+      // tell from a scope refusal. Nothing is provisioned yet, and the catch
+      // below returns the admission slot.
+      const requiredUntil = now().getTime() + indexTimeoutMs;
+      const grantedUntil = Date.parse(credential.expiresAt);
+      if (!Number.isFinite(grantedUntil) || grantedUntil < requiredUntil) {
+        throw new CodeGraphRunCredentialTooShortError(
+          credential.expiresAt,
+          new Date(requiredUntil).toISOString(),
+        );
+      }
 
       // ── 2 · Resolve the pre-signed tarball URL ─────────────────────────────
       // AFTER the mint, deliberately: the URL is the shorter-lived of the two
@@ -1097,6 +1204,18 @@ export const codeGraphIndexDispatchService = {
         dispatchId: input.dispatchId,
         repoRef: input.repoRef,
         slotRef: admission.slotRef,
+        // MOTIR-4945 — the MODE, recorded at the only moment it is knowable.
+        //
+        // ⚠️ THE SAME PREDICATE THE SPEC BRANCHED ON, deliberately, and it must
+        // stay that way: `buildIndexSpec` above forwards `previousSnapshotUrl`
+        // under a TRUTHINESS test, so a falsy value means the container was NOT
+        // handed a snapshot and did NOT sync. Recording the mode off a different
+        // test (`!== undefined`, say) would let the ledger claim `sync` for a run
+        // that provably rebuilt — a wrong answer that no signal would ever
+        // contradict, on the one field this card exists to make trustworthy.
+        // `motirAiClient` already normalises an empty string to `undefined`, so
+        // today the two tests agree; this line does not depend on that.
+        syncGranted: Boolean(credential.previousSnapshotUrl),
         attribution: {
           orgId: input.organizationId,
           workspaceId: input.workspaceId,
@@ -1648,11 +1767,26 @@ export const codeGraphIndexDispatchService = {
       pollToDetect: indexPollWaitMs(result.pollNumber, options),
     });
 
+    // ── 9 · THE MODE (MOTIR-4945) ─────────────────────────────────────────────
+    // Read off the `index-boot:<projectId>` MEMO, which every pass replays
+    // identically — so this is the same derivation on the pass that did the work
+    // and on every pass that follows it.
+    //
+    // ⚠️ `undefined` PROPAGATES AS `undefined`. A session whose memo predates
+    // this card carries no `syncGranted`, and the honest report is then NO mode
+    // at all. Collapsing that to `rebuild` would be indistinguishable from a run
+    // that really did rebuild, which is exactly the ambiguity this field exists
+    // to remove.
+    const indexMode: IndexMode | undefined =
+      session.syncGranted === undefined ? undefined : session.syncGranted ? 'sync' : 'rebuild';
+
     // ⚠️ ONLY THE `settled` ARM CARRIES THEM, and the guard is a type narrowing
     // rather than a check: the other outcomes are dispatches that never ran a
     // container, so spans over them would describe a boot that did not happen.
+    // The mode rides the same arm for the same reason — a dispatch that never
+    // booted has no mode, not `rebuild`.
     return result.outcome.outcome === 'settled'
-      ? { ...result.outcome, coreTimings }
+      ? { ...result.outcome, coreTimings, ...(indexMode ? { indexMode } : {}) }
       : result.outcome;
   },
 

@@ -166,7 +166,14 @@
     "save": "保存",
     "loading": "加载中…",
     "checked": "已勾选",
-    "notChecked": "未勾选"
+    "notChecked": "未勾选",
+    "pager": {
+      "showing": "显示第 <range>{from}–{to}</range> 项，共 <count>{total}</count> 项",
+      "previousPage": "上一页",
+      "nextPage": "下一页",
+      "page": "第 {page} 页",
+      "pagination": "分页"
+    }
   },
   "planReview": {
     "backToPlans": "返回计划列表",
@@ -966,9 +973,8 @@
       "runs": "运行",
       "boards": "面板",
       "reports": "报表",
-      "codeHealth": "代码健康度",
+      "code": "代码库",
       "settings": "设置",
-      "jobRuns": "任务运行",
       "git": "Git",
       "github": "GitHub",
       "backlog": "待办列表",
@@ -976,8 +982,7 @@
       "roadmap": "路线图",
       "plans": "计划",
       "resumeOnboarding": "继续引导",
-      "resumeOnboardingInProgress": "继续引导，进行中",
-      "security": "安全"
+      "resumeOnboardingInProgress": "继续引导，进行中"
     },
     "topNav": {
       "global": "全局",
@@ -985,8 +990,6 @@
     },
     "pageLoading": "页面加载中",
     "project": {
-      "createFirst": "创建你的第一个项目",
-      "emptyDescription": "项目用于归类你的工作项，并赋予它们类似ACME-1的标识。创建一个即可开始规划。",
       "create": "创建项目",
       "planWithAi": "用 AI 规划新项目",
       "untitled": "未命名项目",
@@ -1005,6 +1008,7 @@
       "switch": "切换工作区",
       "select": "选择工作区",
       "heading": "工作区",
+      "settings": "工作区设置",
       "invite": "邀请团队成员",
       "nameLabel": "工作区名称",
       "namePlaceholder": "我的工作区",
@@ -1026,7 +1030,6 @@
     },
     "userMenu": {
       "account": "账户菜单",
-      "workspaceSettings": "工作区设置",
       "accountSettings": "账户设置",
       "signingOut": "正在退出登录…",
       "platformAdmin": "平台管理",
@@ -1091,6 +1094,7 @@
       "current": "当前",
       "goToBacklog": "前往待办列表",
       "goToFilters": "前往筛选器",
+      "goToCode": "前往代码库",
       "aiHeading": "AI",
       "goToOrgSecurity": "前往组织安全设置",
       "goToWorkspaceSecurity": "前往工作区安全设置"
@@ -1150,9 +1154,6 @@
     "epicPrivacyError": "无法更新可见性，请重试。",
     "watchToggleFailedTitle": "无法更新关注状态",
     "noProjectTitle": "未选择项目",
-    "noProjectListDescription": "从切换器中选择或创建一个项目，以跟踪其工作项。",
-    "noProjectDetailDescription": "从切换器中选择一个项目，以查看其工作项。",
-    "noProjectEditDescription": "从切换器中选择一个项目，以编辑其工作项。",
     "allIssuesIn": "{project} 的全部工作项",
     "filter": "筛选",
     "filterComingSoon": "筛选功能将在后续更新中推出",
@@ -1728,6 +1729,18 @@
       "security": {
         "title": "安全",
         "subtitle": "{workspace} 中所有成员的登录要求。"
+      },
+      "eyebrow": "工作区设置",
+      "back": "返回 Motir",
+      "nav": {
+        "group": {
+          "general": "通用",
+          "access": "访问与权限",
+          "operations": "运维"
+        },
+        "workspace": "工作区",
+        "security": "安全",
+        "jobs": "任务运行"
       }
     },
     "name": {
@@ -3263,6 +3276,7 @@
         "thresholdInvalid": "请输入1或更大的就绪工作项数量。",
         "decreaseAria": "减小阈值",
         "increaseAria": "增大阈值",
+        "pauseConditions": "当 Motir 无法读取你的代码时，自动规划会暂停——例如未连接任何代码仓库，或代码索引已过期。此外，在已提出的方案尚未决定、就绪工作高于你设定的阈值、没有可继续展开的内容，以及你的套餐不包含 AI 规划期间，自动规划也会等待。你的设置不会被更改，条件解除后会自动恢复。",
         "guardrail": "自动规划只会<strong>提议</strong>扩展并交由你批准——未经你同意，它绝不会创建工作。"
       },
       "paused": {
@@ -3569,6 +3583,10 @@
         "security": "安全",
         "usage": "用量与费用",
         "billing": "账单与套餐"
+      },
+      "jobRunsFoldIn": {
+        "title": "任务运行",
+        "subtitle": "该工作区的后台任务——运行了什么、失败了什么，以及死信队列中还有什么在等待。"
       }
     },
     "gitAccounts": {
@@ -4345,8 +4363,7 @@
       "resolutionTimeBody": "工作项从创建到解决所需的时间——团队是否在加速？",
       "workloadTitle": "工作量",
       "workloadBody": "按负责人统计的未完成工作——谁承担得更多。",
-      "noProjectTitle": "尚无项目",
-      "noProjectBody": "创建一个项目以查看其报表。"
+      "noProjectTitle": "尚无项目"
     },
     "period": {
       "day": "按日",
@@ -5863,7 +5880,6 @@
         "buildItAll": "不用，直接开始做产品吧。"
       },
       "noProjectTitle": "没有进行中的项目",
-      "noProjectBody": "请先选择或创建一个项目，Motir 才能和你一起规划。",
       "resuming": "正在恢复…",
       "resumingBody": "正在回到你上次离开的地方。",
       "canvas": {
@@ -6170,7 +6186,6 @@
       "noMatchesHint": "仓库在“设置 → 工作区 → GitHub”中同步。",
       "linkedTo": "已关联到 {key}",
       "deliversN": "交付 {count} 个工作项",
-      "linkedManually": "手动关联",
       "linkAction": "关联",
       "notConnected": "此工作区尚未连接 GitHub。请在“设置 → 工作区 → GitHub”中进行连接。",
       "prNotFound": "找不到该拉取请求。",
@@ -6225,7 +6240,8 @@
       },
       "usedBy": "{count, plural, other {# 个项目在使用}}",
       "usedByNone": "暂无项目使用",
-      "usedByExpanded": "正在使用该仓库的项目"
+      "usedByExpanded": "正在使用该仓库的项目",
+      "hostedByMotir": "由 Motir 托管"
     },
     "organization": {
       "subtitle": "将 {org} 与 GitHub 或 GitLab 连接一次。此后组织中的任何项目都可以使用已连接的仓库——挑选它们不会重新建立索引。",
@@ -6533,8 +6549,6 @@
   "codeHealth": {
     "title": "代码健康度",
     "subtitle": "代码健康度审计，以及 Motir 从你的代码中提取并注入每条提示词的按仓库区分的编码规范。",
-    "noProjectTitle": "没有活动项目",
-    "noProjectDescription": "选择或创建一个项目以查看其代码健康度。",
     "adminOnlyTitle": "仅限项目管理员",
     "adminOnlyDescription": "编码标准会驱动 Motir 派发的每一条提示词。只有项目管理员才能查看。请向项目管理员申请权限。",
     "tabsLabel": "代码健康度视图",
@@ -7337,11 +7351,6 @@
         "title": "没有等待你审批的工作",
         "body": "需要你签字确认才能继续的工作会显示在这里。"
       }
-    },
-    "pager": {
-      "next": "下一页",
-      "startOver": "回到顶部",
-      "end": "已经到底了。"
     }
   },
   "platformAdmin": {
@@ -7883,6 +7892,40 @@
       "body": "它仍与 {org} 保持连接，其他项目继续保留，代码索引不受影响。你可以随时重新添加，且不会重新建立索引。",
       "confirm": "移除",
       "cancel": "取消"
+    }
+  },
+  "code": {
+    "title": "代码库",
+    "subtitle": "本项目所使用的代码仓库，以及 Motir 已读取到的内容。",
+    "noProjectTitle": "没有活动项目",
+    "noProjectDescription": "选择或创建一个项目以查看其代码。",
+    "adminOnlyTitle": "仅限项目管理员",
+    "adminOnlyDescription": "编码标准会驱动 Motir 派发的每一条提示词。只有项目管理员才能查看。请向项目管理员申请权限。",
+    "sectionsLabel": "代码视图",
+    "tabs": {
+      "repositories": "代码仓库",
+      "health": "健康度"
+    },
+    "repositories": {
+      "listLabel": "本项目所使用的代码仓库",
+      "emptyTitle": "尚未配置代码仓库",
+      "emptyDescription": "本项目还没有配置任何代码仓库。添加一个之后，Motir 在规划时就能读取你的代码。",
+      "manageLink": "管理本项目的代码仓库",
+      "notUpdating": "该索引没有在更新。",
+      "provider": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      },
+      "index": {
+        "indexed": "已建立索引",
+        "stale": "已过期",
+        "indexing": "正在建立索引…",
+        "never": "从未建立索引"
+      },
+      "drift": {
+        "commits": "落后 {count} 个提交",
+        "unknown": "落后的提交数未知"
+      }
     }
   }
 }

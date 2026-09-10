@@ -33,14 +33,10 @@ export default async function ReportsPage() {
   const t = await getTranslations('reports');
   const ctx = await getActiveProject();
 
-  if (!ctx) {
-    return (
-      <div className="flex flex-col gap-6">
-        <Header title={t('hub.title')} subtitle={t('hub.subtitle')} />
-        <EmptyState title={t('hub.noProjectTitle')} description={t('hub.noProjectBody')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   if (ctx.project.archivedAt) {
     const ts = await getTranslations('shell');

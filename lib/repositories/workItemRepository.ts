@@ -1,5 +1,9 @@
 import {
   Prisma,
+  // The RUNTIME enum object as well as the type: `Object.keys` on it is the
+  // Postgres DECLARATION order, which is what `deriveKindSortOrder` compares
+  // against `READY_KIND_RANK`. Aliased so the type import below keeps its name.
+  WorkItemKind as WorkItemKindEnum,
   type EstimationStatistic,
   type Executor,
   type WorkItem,
@@ -22,6 +26,9 @@ import { UnknownFilterOperatorError } from '@/lib/filters/errors';
 import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
+// The ONE declaration of the ready order. The Workbench reads it rather than
+// re-typing it — see `deriveKindSortOrder`.
+import { READY_KIND_RANK } from '@/lib/workItems/readyFilter';
 
 /**
  * The `WorkItem` create shape, NAMED BY THE OWNING REPOSITORY
@@ -193,40 +200,65 @@ export const HOME_WORK_ITEM_SELECT = {
 export type HomeSortField = 'updatedAt' | 'completedAt';
 
 /**
- * The keyset a Workbench page resumes after — the exact pair its read ORDERS
- * BY, `(<sortField> DESC, id DESC)`. A keyset rather than an offset or a bare
- * id because rows keep being updated while a reader pages: an offset would
- * repeat and drop rows as items move, and a timestamp alone is not a total
- * order.
+ * WHICH DIRECTION Prisma must sort `kind` in for the Workbench's three work
+ * tabs to come back in the READY order — `subtask → bug → task → story → epic`.
  *
- * ⚠️ `at` IS DELIBERATELY NOT NAMED `updatedAt` ANY MORE. Three of the four
- * reads order by `updatedAt` and Recently-finished orders by `completedAt`, so
- * a field called `updatedAt` carrying a completion time would be a lie in the
- * one place a reader goes to check exactly this. The wire token is unchanged
- * and opaque either way (`lib/workbench/cursor.ts`).
+ * ⚠️ DERIVED FROM {@link READY_KIND_RANK}, NEVER RE-DECLARED (MOTIR-4852). The
+ * Workbench and `/ready` both claim to be "in ready order", and two lists that
+ * derive one order separately will disagree eventually — quietly, because
+ * nothing errors: one page just puts an epic above a subtask. So the rank has
+ * exactly one home (`lib/workItems/readyFilter.ts`) and this reads it.
+ *
+ * Postgres sorts an enum by its DECLARATION order, and `WorkItemKind` is
+ * declared `epic, story, task, bug, subtask` — the ready rank, backwards. So
+ * `desc` is the answer today. **That coincidence is not the contract**, which is
+ * why it is COMPUTED here rather than typed: this function compares the
+ * generated client's declaration order against the rank and answers `null` when
+ * neither direction expresses it — which is what a sixth kind, or a re-declared
+ * enum, would produce.
+ *
+ * `null` is a CI finding, not a runtime branch: `tests/workbench/kind-order-guard.test.ts`
+ * asserts it is non-null AND that the resulting order agrees with
+ * `compareReadyRows` for every pair of kinds, so a re-declaration goes red on the
+ * pull request. Production degrades to today's answer rather than throwing on a
+ * landing page — a 500 on the first screen after signing in is a worse failure
+ * than a list a guard has already caught.
  */
-export interface HomeCursor {
-  at: Date;
-  id: string;
+export function deriveKindSortOrder(
+  rank: Readonly<Record<string, number>> = READY_KIND_RANK,
+  declaration: readonly string[] = Object.keys(WorkItemKindEnum),
+): Prisma.SortOrder | null {
+  const byRank = [...declaration].sort((a, b) => (rank[a] ?? 0) - (rank[b] ?? 0));
+  if (declaration.every((k, i) => k === byRank[i])) return 'asc';
+  if ([...declaration].reverse().every((k, i) => k === byRank[i])) return 'desc';
+  return null;
 }
 
 /**
- * The `WHERE` half of the keyset — "strictly after this position in
- * `(<field> DESC, id DESC)`". Shared by every Workbench read so the tabs page
- * by identical rules. Returns `{}` for the first page.
- *
- * `field` is REQUIRED rather than defaulted: a default would let a read order
- * by `completedAt` and page by `updatedAt` without anybody typing anything
- * wrong, which is precisely the drift {@link HomeSortField} exists to prevent.
+ * The sort direction the Workbench reads actually pass to Prisma. See
+ * {@link deriveKindSortOrder} for why the fallback is a guarded CI finding
+ * rather than a throw.
  */
-export function homeKeysetWhere(
-  cursor: HomeCursor | null | undefined,
-  field: HomeSortField,
-): Prisma.WorkItemWhereInput {
-  if (!cursor) return {};
-  return {
-    OR: [{ [field]: { lt: cursor.at } }, { [field]: cursor.at, id: { lt: cursor.id } }],
-  };
+export const HOME_KIND_SORT_ORDER: Prisma.SortOrder = deriveKindSortOrder() ?? 'desc';
+
+/**
+ * The `orderBy` a Workbench read uses, chosen by its axis.
+ *
+ * The three WORK tabs order by KIND — the question a reader opens the surface
+ * with is *what do I pick up next*, and the most granular work is the work they
+ * can start. Recently finished keeps `completedAt DESC`, because *what did I
+ * just finish* IS a time question.
+ *
+ * ⚠️ The `id DESC` tiebreak is what makes an offset page boundary EXACT. Kind is
+ * a five-valued key, so it leaves large ties; without a total tiebreak after it
+ * two adjacent pages could repeat a row and drop another, and nothing would
+ * error. (Under the keyset this was the cursor's job; the tiebreak is where that
+ * obligation went.)
+ */
+export function homeOrderBy(sortField: HomeSortField): Prisma.WorkItemOrderByWithRelationInput[] {
+  return sortField === 'completedAt'
+    ? [{ completedAt: 'desc' }, { id: 'desc' }]
+    : [{ kind: HOME_KIND_SORT_ORDER }, { id: 'desc' }];
 }
 
 /**
@@ -303,7 +335,7 @@ export type HomeCategorySlice =
  * show and none to hide.
  *
  * Emitted as a `Prisma.WorkItemWhereInput` carrying an `OR`, so every caller
- * must place it inside an explicit `AND` alongside {@link homeKeysetWhere} —
+ * must place it inside an explicit `AND` alongside the membership `OR` —
  * spreading two `OR`-bearing fragments into one object silently drops the first.
  */
 export function homeProjectScopeWhere(
@@ -352,22 +384,24 @@ export const HOME_SLICE_UNFINISHED: HomeCategorySlice = { notIn: ['done'] };
 export const HOME_SLICE_ALL: HomeCategorySlice = { notIn: [] };
 
 /**
- * WHICH of Watching's two groups a page stopped in (Story MOTIR-4777 ·
- * MOTIR-4781).
+ * WHICH of Watching's two groups a row is in (Story MOTIR-4777 · MOTIR-4781,
+ * re-purposed by MOTIR-4852).
  *
- * Watching orders `in_progress`-category rows ahead of `todo`-category ones,
- * and Prisma cannot order by a computed rank — so the read walks the groups in
- * sequence (`watcherRepository.listByUser`). A cursor that recorded only a
- * position would be ambiguous between the two, so it records the group as well:
- * resuming inside `todo` means the `in_progress` group is already behind the
- * reader, and re-reading it would repeat every one of its rows.
+ * Watching orders `in_progress`-category rows ahead of `todo`-category ones, and
+ * **Prisma cannot order by that group at all**: `work_item.status` is a plain
+ * `String` with no relation to `workflow_status`, so the CATEGORY the group is
+ * defined by is not reachable from a `WorkItemOrderByWithRelationInput`. The
+ * group is therefore a PREDICATE — one read per group, ordered identically — and
+ * `homeService.listWatching` splits the offset window across the two using the
+ * moving group's own count. That keeps ONE declaration of the membership and
+ * scope predicate, which a hand-written `ORDER BY CASE` in raw SQL would not.
+ *
+ * ⚠️ It used to name where a CURSOR stopped, and that is what changed: a keyset
+ * position was ambiguous between the two groups, so the token carried the group.
+ * An offset is not ambiguous, so the type is now only what it says — which of the
+ * two a row belongs to.
  */
 export type WatchingGroup = 'in_progress' | 'todo';
-
-/** A {@link HomeCursor} plus the group it was minted in. */
-export interface WatchingCursor extends HomeCursor {
-  group: WatchingGroup;
-}
 
 export interface WorkItemListRow {
   id: string;
@@ -985,7 +1019,7 @@ export const workItemRepository = {
    * (finding #26; RLS is inert under the dev/CI superuser) and
    * `archivedAt`/`triagedAt`-excluded, matching every other list read.
    *
-   * ⚠️ `tx` and `take` are REQUIRED — see `watcherRepository.listByUser`, whose
+   * ⚠️ `tx` and `take` are REQUIRED — see `watcherRepository.listByUserInGroup`, whose
    * twin this is, for both reasons. The pair must stay identical: they back the
    * two tabs of one surface, and a difference between them is a difference the
    * reader would see.
@@ -1001,11 +1035,12 @@ export const workItemRepository = {
        */
       slice: HomeCategorySlice;
       take: number;
-      cursor?: HomeCursor | null;
+      /** How many rows to skip — `(page - 1) * pageSize`, computed by the service. */
+      skip?: number;
       /**
-       * The axis to order AND page by. `completedAt` for the finished window,
-       * `updatedAt` for everything else — one argument for both, because they
-       * are one decision ({@link HomeSortField}).
+       * The axis to order by. `completedAt` for the finished window, `updatedAt`
+       * for everything else — the discriminator {@link homeOrderBy} reads to
+       * choose between the time order and the KIND order.
        */
       sortField?: HomeSortField;
       /**
@@ -1018,7 +1053,7 @@ export const workItemRepository = {
     },
     tx: Prisma.TransactionClient,
   ): Promise<HomeWorkItemRow[]> {
-    const { projectScopes, slice, take, cursor, sortField = 'updatedAt', since } = options;
+    const { projectScopes, slice, take, skip = 0, sortField = 'updatedAt', since } = options;
     if (projectScopes.length === 0) return [];
     return tx.workItem.findMany({
       where: {
@@ -1031,12 +1066,12 @@ export const workItemRepository = {
         AND: [
           { OR: [{ assigneeId: userId }, { reporterId: userId }] },
           homeProjectScopeWhere(projectScopes, slice),
-          homeKeysetWhere(cursor, sortField),
           ...(since ? [{ [sortField]: { gte: since } } as Prisma.WorkItemWhereInput] : []),
         ],
       },
       select: HOME_WORK_ITEM_SELECT,
-      orderBy: [{ [sortField]: 'desc' }, { id: 'desc' }],
+      orderBy: homeOrderBy(sortField),
+      skip,
       take,
     });
   },

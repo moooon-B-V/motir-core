@@ -121,21 +121,43 @@ jobs:
   #     cannot produce an empty commit (or, under the pull-request variant, train
   #     a reviewer to close empty bot PRs unread).
   #
-  # ⚠️ Why a COMMIT and not a pull request. A pull request is the shape that fits
-  # this repo's manual-merge convention, and it is not available: the repository's
+  # ⚠️ Why a PULL REQUEST and not a commit — REVERSED at MOTIR-3967, and the
+  # reasoning it replaces is kept because both of its premises were true when
+  # written and both have since changed.
+  #
+  # It used to commit straight to `main`, justified as: "`main` is unprotected,
+  # the content is machine-derived and machine-checked, and there is nothing in it
+  # for a reviewer to judge". A pull request was ruled out because the repository's
   # Actions permissions have "Allow GitHub Actions to create and approve pull
   # requests" OFF (`GET /repos/:owner/:repo/actions/permissions/workflow` returns
   # `can_approve_pull_request_reviews: false`), so `gh pr create` under the job's
-  # own GITHUB_TOKEN is a 403. Building the PR path anyway would ship a lane that
-  # fails at its last step on every release until someone flips a switch. `main`
-  # is unprotected, the content is machine-derived and machine-checked, and there
-  # is nothing in it for a reviewer to judge — so the record is committed. If that
-  # setting is ever turned on, this becomes a branch push plus one `gh pr create`.
+  # own GITHUB_TOKEN is a 403 — shipping that path would have failed at the last
+  # step of every release until someone flipped a switch.
   #
-  # A GITHUB_TOKEN push deliberately triggers no workflow run, so this commit
-  # starts no CI. That is the same coverage a `docs/*` pull request would have had
-  # (ci.yml skips the heavy lanes on that prefix) and it is why the generated
-  # markdown's SHAPE is pinned by a unit test on every pull request instead.
+  # ⚠️ PREMISE ONE IS GONE: `main` is NOT unprotected. It carries a merge-queue
+  # ruleset, and the first release cut through this lane proved what that means —
+  # the push was refused outright, three times, and the digests went unrecorded:
+  #
+  #   remote: error: GH013: Repository rule violations found for refs/heads/main.
+  #   remote: - Required status check "CI complete" is expected.
+  #   remote: - Changes must be made through the merge queue
+  #
+  # The rebase-and-retry loop below could not help: it was written for the race it
+  # names (a merge landing between checkout and push), and a ruleset is not a race.
+  #
+  # ⚠️ PREMISE TWO NEVER APPLIED TO AN APP TOKEN. That Actions setting is still
+  # OFF — it constrains `GITHUB_TOKEN`, not a GitHub App installation token.
+  # `release.yml` has been opening the Version Packages pull request with the
+  # RELEASE_APP token all along, which is standing proof an App token creates pull
+  # requests here regardless of that switch. So the path the old comment said this
+  # "becomes ... if that setting is ever turned on" is available now, without
+  # turning anything on.
+  #
+  # Using the App token also fixes the coverage note the old comment made a virtue
+  # of: a GITHUB_TOKEN push triggers no workflow run, so the old commit started no
+  # CI. Here that would be fatal rather than merely thin — a pull request whose
+  # checks never run can never satisfy `CI complete` and so can never leave the
+  # queue. The App token triggers them, so this pull request can actually merge.
   readme:
     name: Record the published digests in the sandbox README
     needs: images
@@ -150,13 +172,26 @@ jobs:
     # checks out, rewrites one README table and pushes.
     timeout-minutes: 10
     permissions:
-      # The narrowest grant that can land a commit, and nothing else — no
-      # `packages:` scope, so this job cannot touch the registry it reads. Scoped
-      # HERE, exactly as `packages: write` is scoped to `images`.
-      contents: write
+      # Read only, and nothing else — no `packages:` scope, so this job cannot
+      # touch the registry it reads. It no longer needs `contents: write`: the
+      # branch push and the pull request are both made with the App installation
+      # token below, not with the automatic one. Downloading this run's own
+      # artifacts uses the Actions runtime token and needs no scope here.
+      contents: read
     steps:
+      # The same App the release lane uses (MOTIR-3969). Minted here because the
+      # automatic token cannot open a pull request in this repository — see the
+      # header — and because a pull request pushed with the automatic token would
+      # never run its own checks and so could never leave the merge queue.
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v6
         with:
+          # Persisted for the branch push below.
+          token: ${{ steps.app-token.outputs.token }}
           # `main`, NOT the tag. A tag-triggered run checks out the TAG's tree,
           # and the file this record belongs in is the one on the branch — writing
           # the tag's copy would silently revert whatever main has learned since
@@ -214,10 +249,11 @@ jobs:
             echo "::error::The digest table was RENDERED (the README differs from HEAD) but the commit gate reads '${CHANGED:-<empty>}', so the commit step will be skipped and this release would record no digests. See Bug MOTIR-3989."
             exit 1
           fi
-      - name: Commit it on main
+      - name: Open the digest record as a pull request
         if: ${{ steps.render.outputs.changed == 'true' }}
         env:
           TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           # Authored as Yue with NO co-author trailer: motir-core runs a
@@ -230,15 +266,31 @@ jobs:
             -m "docs(sandbox): record the ${TAG} published image digests" \
             -m "Written by the release lane (MOTIR-2699). Every digest is the one GHCR serves to an ANONYMOUS pull, cross-checked against the digest the push recorded; both invariants the section claims were asserted before it was written." \
             -- packages/cli/sandbox/README.md
-          # A merge landing on main between the checkout and the push is the one
-          # race here. Rebase onto it and retry — never force, and never widen the
-          # commit to whatever else arrived.
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              echo "recorded ${TAG} on main (attempt $attempt)"
-              exit 0
-            fi
-            git pull --rebase origin main
-          done
-          echo "::error::could not land the ${TAG} digest record on main after three attempts. The section is rendered and the run log holds it — commit it by hand, or re-run this job."
-          exit 1
+
+          # One branch per tag, so a re-run of the SAME tag updates its own pull
+          # request instead of opening a second one. Force is correct and confined:
+          # the branch belongs to this tag's record and to nothing else, and the
+          # commit was just built from a fresh checkout of `main`.
+          branch="chore/sandbox-digests-${TAG}"
+          git push --force origin "HEAD:${branch}"
+
+          # `gh pr create` fails when a pull request for the branch already exists,
+          # which is the re-run case and not an error — the force-push above has
+          # already updated it. Ask first rather than parsing the failure.
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "::notice::Updated existing pull request #${existing} with the ${TAG} digest record."
+            exit 0
+          fi
+
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "docs(sandbox): record the ${TAG} published image digests" \
+            --body "$(printf '%s\n' \
+              "Opened by the sandbox release lane for \`${TAG}\` ([run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}))." \
+              '' \
+              'Every digest in this table is the one GHCR serves to an **anonymous** pull, cross-checked against the digest the push recorded. Both invariants the section claims were asserted before it was written, so there is nothing here for a reviewer to re-derive — merging it is the whole review.' \
+              '' \
+              'The images are already published; this is only the record of them. Leaving it unmerged loses no artifact, but the README then understates what was released.')"
+          echo "::notice::Opened the ${TAG} digest record as a pull request."

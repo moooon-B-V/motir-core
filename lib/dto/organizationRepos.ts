@@ -34,6 +34,28 @@ export interface OrgRepoOptionDto {
    * organisation; this is provenance.
    */
   connectedFromWorkspaceId: string | null;
+  /**
+   * WHOSE THIS REPOSITORY IS — `true` when MOTIR hosts it (it sits under the
+   * provisioning organisation), `false` when the organisation connected it.
+   * Bug MOTIR-4892.
+   *
+   * ⚠️ IT IS THE ONE FIELD ON THIS DTO THAT IS NOT A PROPERTY OF THE ROW ALONE,
+   * and it is here because it could not be derived above. Every other field is
+   * read off `github_repo`; this one is a comparison against
+   * `provisioningOrgLogin()`, a SERVER value a client consumer cannot see. Until
+   * it existed, a consumer holding this DTO could not tell a repository Motir
+   * owns and pays the Actions bill for from one the organisation connected —
+   * `connectedFromWorkspaceId` is provenance, and for a hosted row it names the
+   * customer's workspace anyway — so the inventory drew both the same way and
+   * offered both the same act.
+   *
+   * ⚠️ IT DOES NOT CONTRADICT THE FREE-TO-PICK CONTRACT above. This says whose
+   * the repository is, never what picking it COSTS: a hosted repository is
+   * connected and indexed exactly like any other, and linking it is still one
+   * row. The tenancy that makes that true is deliberate (MOTIR-1931,
+   * MOTIR-4649) and is not what this field reports on.
+   */
+  hostedByMotir: boolean;
 }
 
 /**

@@ -1,14 +1,12 @@
 import { redirect } from 'next/navigation';
 import { onboardingReturnHref } from '@/lib/planning/onboardingReturn';
 import { searchParamsToEntries } from '@/lib/navigation/searchParamsToEntries';
-import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { readPendingIdea } from '@/lib/onboarding/pendingIdea';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { readOnboardingSubstrate } from '@/lib/services/onboardingSubstrateService';
 import { shouldRouteToMigrateWizard } from '@/lib/onboarding/migrateHandoff';
-import { EmptyState } from '@/components/ui/EmptyState';
 import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
 
 // The onboarding ENTRANCE route (Subtask 7.22.4 / MOTIR-1462) — the new-vs-existing
@@ -51,14 +49,10 @@ export default async function OnboardingEntrancePage({
   if (!session) redirect('/sign-in');
 
   const ctx = await getActiveProject();
-  if (!ctx) {
-    const t = await getTranslations('onboarding.chat');
-    return (
-      <div className="p-6">
-        <EmptyState title={t('noProjectTitle')} description={t('noProjectBody')} />
-      </div>
-    );
-  }
+  // UNREACHABLE for a signed-in reader (MOTIR-4870 seeds a default project at
+  // the WORKSPACE tier). The guard stays because the type does — the only null
+  // left is a session-less request — and it redirects rather than rendering.
+  if (!ctx) redirect('/sign-in');
 
   // Onboarding-ran gate (Subtask 7.4 / MOTIR-1264): a project whose first plan was
   // approved + materialized has already produced its work-item tree — it never

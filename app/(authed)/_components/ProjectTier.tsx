@@ -1,42 +1,43 @@
 'use client';
 
-import { useState } from 'react';
-import { useTranslations } from 'next-intl';
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/utils/cn';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { ProjectSwitcher } from './ProjectSwitcher';
-import { CreateProjectModal } from './CreateProjectModal';
 
 // The PROJECT tier of the shell's context path — the last crumb of
 // `org › workspace › project` (MOTIR-2556 · design/shell/design-notes.md
 // § *The context row*).
 //
 // This is what became of `SidebarHeader`: the project stopped being the left
-// rail's head and became a tier in the top bar, so the two states that survive
-// the move live here. The rail's third state — the collapsed 40px slot with its
+// rail's head and became a tier in the top bar. The rail's collapsed state — the 40px slot with its
 // icon-only ProjectAvatar — went with the rail head; a horizontal tier has no
 // collapsed form.
 //
-//   (a) an active project (archived or not) → the ProjectSwitcher trigger,
-//       which renders the name + an "Archived" pill itself (it reads
-//       activeProject.archivedAt). The project is excluded from `projects` when
-//       archived, so it is passed through `activeProject` for the trigger to
-//       resolve its name — the PRODECT_FINDINGS #29.2 path, unchanged.
-//   (b) NO project → the create-first door. The rail drew this as a full-width
-//       lavender Card; a card is not a tier in a horizontal row, so the design
-//       re-homed the same action into the ghost-button grammar the org and
-//       workspace tiers already use — the accent `+` square, the label, and the
-//       SAME CreateProjectModal.
+// It renders the ProjectSwitcher trigger, which shows the name + an "Archived"
+// pill itself (it reads activeProject.archivedAt). An archived project is
+// excluded from `projects`, so it is passed through `activeProject` for the
+// trigger to resolve its name — the PRODECT_FINDINGS #29.2 path, unchanged.
+//
+// ⚠️ IT HAD A SECOND BRANCH AND NO LONGER DOES (MOTIR-4873). With NO project it
+// drew the create-first door — an accent `+` square, a label, and the
+// CreateProjectModal — which the rail had drawn before it as a full-width
+// lavender Card. That was the SHELL's own answer to a projectless reader, and
+// the state is gone: every member is inside a project (MOTIR-4870). Creating an
+// ADDITIONAL project is untouched and lives where it belongs, on the switcher
+// this now always renders.
 //
 // The tier is the row's ELASTIC element: everything else in the left cluster is
-// fixed-width, so this is what gives when the row runs out. That is why both
-// branches carry `min-w-0` and a truncating label — without `min-w-0` a flex
+// fixed-width, so this is what gives when the row runs out. That is why the
+// switcher carries `min-w-0` and a truncating label — without `min-w-0` a flex
 // child refuses to shrink below its content and the label is overrun by the
 // next control instead of ellipsizing (measured at 768px; design § *The ladder*).
 
 export interface ProjectTierProps {
+  /**
+   * The active project. Still nullable because `ShellTierNav` above it is, and
+   * re-typing that chain is not what this card is about — but the tier no
+   * longer OFFERS anything in the null case (MOTIR-4873). It renders nothing:
+   * absence, not a state with an affordance in it.
+   */
   activeProject: ProjectDTO | null;
   /** Non-archived projects in the workspace — the switch targets. */
   projects: ProjectDTO[];
@@ -46,39 +47,10 @@ export interface ProjectTierProps {
 }
 
 export function ProjectTier({ activeProject, projects, aiConfigured = false }: ProjectTierProps) {
-  const t = useTranslations('shell');
-  const [createOpen, setCreateOpen] = useState(false);
-
-  if (!activeProject) {
-    return (
-      <>
-        <Button
-          variant="ghost"
-          size="md"
-          aria-label={t('project.createFirst')}
-          onClick={() => setCreateOpen(true)}
-          className="min-w-0 shrink [&>span]:min-w-0"
-        >
-          <span className="flex min-w-0 items-center gap-2">
-            <span
-              className={cn(
-                'bg-(--el-accent) text-(--el-accent-text) flex h-5 w-5 shrink-0',
-                'items-center justify-center rounded-(--radius-control)',
-              )}
-            >
-              <Plus className="h-3 w-3" aria-hidden />
-            </span>
-            {/* font-serif: a tier of the context path wears the headline role,
-                the same as the org, workspace and project names beside it. */}
-            <span className="min-w-0 max-w-[22ch] truncate font-serif">
-              {t('project.createFirst')}
-            </span>
-          </span>
-        </Button>
-        <CreateProjectModal open={createOpen} onOpenChange={setCreateOpen} />
-      </>
-    );
-  }
+  // No project ⇒ nothing here. Not a create-first door, not a placeholder: the
+  // state is not one the product produces for a member, and a tier that draws
+  // something for it is a tier teaching that it can happen.
+  if (!activeProject) return null;
 
   return (
     <ProjectSwitcher

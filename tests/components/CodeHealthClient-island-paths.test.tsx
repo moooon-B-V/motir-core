@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { CodeHealthClient } from '@/app/(authed)/code-health/_components/CodeHealthClient';
+import { CodeHealthClient } from '@/app/(authed)/code/_components/CodeHealthClient';
 import type { CodeAuditFindingDTO, CodeAuditSurfaceDTO } from '@/lib/dto/codeHealth';
 
 // ⚠️ THE PLANNING DOORS READ THE ADDRESS (MOTIR-4730). Every surface that mounts

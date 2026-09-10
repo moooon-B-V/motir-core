@@ -277,6 +277,18 @@ describe('the planning-job ENVELOPE', () => {
       // The onboarding marker (MOTIR-4736) — `true` here because this fixture's
       // project has never had a plan approved (`onboardingRanAt` is null).
       onboarding: true,
+      // ⚠️ AMENDED BY MOTIR-4604, RE-POINTED BY MOTIR-4807 — `context.code`'s repo
+      // entries carry each repo's INDEX STATE beside its coordinates, plus the
+      // reason it is behind and an explicit in-flight flag. The state comes from
+      // the ONE derivation (`lib/codeGraph/indexState.ts`) over motir-core's own
+      // columns; the `freshnessUnknown` flag this block once carried is gone with
+      // the boundary read that made it possible.
+      //
+      // The invariant this assertion was written to protect is UNCHANGED and is
+      // still asserted: `code` is the WORKSPACE grant list, `repositories` is the
+      // PROJECT set, and the two are separate fields with separate scopes. What
+      // MOTIR-3044 forbade was MERGING them; widening a repo's own entry with
+      // facts about that same repo is not that.
       code: {
         repos: [
           {
@@ -284,6 +296,11 @@ describe('the planning-job ENVELOPE', () => {
             repoRef: 'moooon/motir-core',
             defaultBranch: 'main',
             indexed: false,
+            indexState: 'never',
+            reason: 'never_indexed',
+            refreshInFlight: false,
+            indexedAt: null,
+            commitsBehind: null,
           },
         ],
       },
@@ -359,8 +376,10 @@ describe('the planning-job ENVELOPE', () => {
   });
 
   it('leaves the WORKSPACE grant list byte-identical for a job that carried one before', async () => {
-    // The boundary this card must not cross: `context.code` is MOTIR-1598's and
-    // is not re-scoped here, however tempting the adjacency.
+    // The boundary MOTIR-3044 must not cross: `context.code` is MOTIR-1598's and
+    // is not RE-SCOPED here, however tempting the adjacency. (MOTIR-4604 later
+    // widened each entry with that repo's freshness — a different act, and the
+    // set itself is still the workspace's grant list. See the assertion below.)
     const seed = await seedWorkspace();
     const ctx = await seedProject(seed, 'THETA');
     await githubInstallationService.persistInstallation({
@@ -395,13 +414,29 @@ describe('the planning-job ENVELOPE', () => {
     // below still catches exactly that — `unrelated-service` is seeded above and
     // must not appear here. Widening this to `toMatchObject` would have made it
     // stop catching that, which is why the shape is restated in full instead.
+    //
+    // ⚠️ AMENDED BY MOTIR-4604. The guard's subject is unchanged and is what is
+    // still asserted: the grant list is the WORKSPACE's, it names `motir-ai`, and
+    // the project's own unrelated row (`unrelated-service`) is nowhere in it — the
+    // two sets are not merged. What is no longer true is byte-identity, because
+    // each entry now carries that repo's own freshness. `code` was not RE-SCOPED,
+    // which is the boundary this test's original comment drew.
     expect((context as { code: unknown }).code).toEqual({
       repos: [
         {
           provider: 'github',
           repoRef: 'moooon/motir-ai',
           defaultBranch: 'trunk',
+          // `indexed` is the LEDGER fact (MOTIR-4826); the five below are the
+          // freshness join (MOTIR-4604). The grant list names this repository and
+          // the project's set does not, so the join finds nothing and the state is
+          // `never` — never `indexed`, which would claim a currency nothing observed.
           indexed: false,
+          indexState: 'never',
+          reason: 'never_indexed',
+          refreshInFlight: false,
+          indexedAt: null,
+          commitsBehind: null,
         },
       ],
     });

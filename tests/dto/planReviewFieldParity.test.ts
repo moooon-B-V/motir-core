@@ -232,6 +232,28 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
         'MOTIR-4143 — the pin routes dispatch; MOTIR-3868 made a re-pin visible in the diff, ' +
         'and this makes the resulting value visible where it is read.',
     },
+    targetRepos: {
+      everyOp:
+        "MOTIR-4904 — the SET beside `targetRepo`'s primary, and the same answer for the same " +
+        'reason: the quick view has no diff, so the rail answers what the card WILL BE. A ' +
+        'two-repository card whose second repository were invisible here would be approved by ' +
+        'somebody who could not have known it shipped in two.',
+    },
+    targetRepositories: {
+      addOnly:
+        'MOTIR-4904 — these are `project_repository` ROW IDS: an AUTHORING form, not a value a ' +
+        'reviewer reads, and the names they resolve to are exactly what `targetRepos` already ' +
+        "carries on every op. Reporting a committed card's rows here would put cuids on a rail " +
+        'beside the same repositories spelled as names, one row up.',
+    },
+    targetRepositoryRef: {
+      addOnly:
+        'MOTIR-4924 — the singular ROW-ID pin, and it is `add`-ONLY for exactly the reason ' +
+        '`targetRepositories` is: a cuid is an authoring form, not a value a reviewer reads, and ' +
+        'the repository it names is what `targetRepo` / `targetRepos` carry once resolved. A ' +
+        '`modify` that re-pins by ref shows in the DIFF (`buildChanges`, under `targetRepo`), so ' +
+        'the rail need not repeat it.',
+    },
     targetRepoRole: {
       everyOp:
         'MOTIR-4143 — patch-only in practice: `work_item.targetRepoRole` is RETIRED, so the ' +
@@ -303,7 +325,18 @@ describe('PlanReviewItemDto op axis ⟷ planReviewService', () => {
     // other two: not provenance, but that a `modify` has no proposed side AND
     // its target's side is a person's PROGRESS, which must not be drawn on the
     // surface that says what approve will write.
-    expect(addOnly.sort()).toEqual(['explanationSource', 'planningProvenance', 'todos']);
+    // `targetRepositories` is the FOURTH (MOTIR-4904), and it joins for a reason
+    // unlike any of the other three: not provenance and not progress, but that it
+    // is a second SPELLING of a value this DTO already reports as names one field
+    // up — so on a `modify` there is nothing for it to say that `targetRepos` is
+    // not already saying better.
+    expect(addOnly.sort()).toEqual([
+      'explanationSource',
+      'planningProvenance',
+      'targetRepositories',
+      'targetRepositoryRef',
+      'todos',
+    ]);
     expect(everyOp.length).toBeGreaterThan(2);
     // And it reads the file it thinks it does.
     expect(service).toContain('function proposedBody(');
@@ -486,6 +519,14 @@ describe('PlanItemPatch ⟷ PLAN_ITEM_CHANGE_FIELDS totality', () => {
     estimateMinutes: { row: 'estimateMinutes' },
     // The two this bug was filed about.
     targetRepo: { row: 'targetRepo' },
+    // The SET spellings of the SAME axis (bug MOTIR-4904) land on the same row.
+    // They are mutually exclusive with `targetRepo` and with each other at the
+    // append, so at most one of the three can move the row on any one patch —
+    // which is why one row is enough and a second would be a second name for one
+    // change.
+    targetRepos: { row: 'targetRepo' },
+    targetRepositories: { row: 'targetRepo' },
+    targetRepositoryRef: { row: 'targetRepo' },
     targetRepoRole: { row: 'targetRepoRole' },
     parentRef: { row: 'parent' },
     // BOTH edge carriers collapse onto one row — the diff cell reads

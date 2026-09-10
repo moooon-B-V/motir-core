@@ -106,7 +106,17 @@ const PATCH_KEY_RAIL_ROW = {
   storyPoints: 'storyPoints',
   estimateMinutes: 'estimateMinutes',
   targetRepo: 'targetRepo',
+  // The SET forms (bug MOTIR-4904) join the same row: `Repositories` is one rail
+  // row about one axis, and `targetRepo` / `targetRepos` / `targetRepositories`
+  // are that axis in three spellings — mutually exclusive at the boundary, so at
+  // most one of them can move the row on any given patch.
+  targetRepos: 'targetRepo',
+  targetRepositories: 'targetRepo',
   targetRepoRole: 'targetRepo',
+  // The singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by MOTIR-4924)
+  // joins the same row for the same reason: it is the same axis in another spelling,
+  // mutually exclusive with the four above at the append.
+  targetRepositoryRef: 'targetRepo',
   parentRef: 'parent',
 } satisfies Record<keyof PlanItemPatch, PlanItemChangeField | null>;
 
@@ -238,6 +248,23 @@ export interface PlanParentCrumbDto {
   title: string;
 }
 
+/**
+ * One COMMITTED blocked-by edge a proposal's target already carries (bug
+ * MOTIR-4951) — see {@link PlanReviewItemDto.committedBlockedBy}.
+ *
+ * A pair rather than a bare node id, because the canvas's committed treatment is
+ * status-derived and the level builder cannot recover the status: the blocker may
+ * be a card the plan is relocating too, in which case it is not in the roadmap
+ * read for this level either.
+ */
+export interface PlanCommittedBlockerDto {
+  /** The blocker's canvas node id — its work-item id. */
+  nodeId: string;
+  /** The blocker sits at `done`, so the edge draws `firm` rather than `pending` —
+   *  `buildWorkItemLevel`'s rule for every within-level committed edge. */
+  isDone: boolean;
+}
+
 /** A proposed operation, enriched for the canvas + review rail. */
 export interface PlanReviewItemDto {
   /** The PlanItem id — the stable review key. */
@@ -308,6 +335,46 @@ export interface PlanReviewItemDto {
    * `modify` whose patch does not touch the edge set.
    */
   blockedByRemovedNodeIds: string[];
+  /**
+   * The blocked-by edges the TARGET ALREADY CARRIES — committed, untouched by
+   * the plan, resolved to canvas node ids (bug MOTIR-4951).
+   *
+   * ⚠️ THE THIRD CARRIER, AND IT IS THE ONLY ONE THE PLAN DOES NOT STATE. The two
+   * above are what a proposal SAYS about edges — `blockedByRefs` /
+   * `patch.blockedByAdd` for an arriving one, `patch.blockedByRemove` for a
+   * departing one — and both are correct and complete for a proposal that stays
+   * where it is, because `mergePlanLevel` gets everything else from the COMMITTED
+   * level the roadmap read returned.
+   *
+   * A `modify` that RE-PARENTS its target (`patch.parentRef`, MOTIR-3859) breaks
+   * that arrangement, and it breaks it silently. The card is drawn at its new
+   * level — MOTIR-3867 taught the projection WHERE it goes, and
+   * `parentNodeIdOf` puts it there — but the committed level it lands on is the
+   * destination's CURRENT children, which is exactly the set the moving card is
+   * not in yet. So its committed edges are in neither source: not in
+   * `committed.deps` (it is not a child there yet) and not in the two carriers
+   * above (a relocation proposes no edge — the edge already exists). The
+   * relocated card arrived as a NODE and never as an ENDPOINT, and a reviewer
+   * reading the canvas for what blocks what saw a set of unrelated cards.
+   *
+   * That is why this field says what the card BRINGS rather than what the plan
+   * CHANGES, and why it is populated on every op that has a target rather than
+   * on a re-parenting `modify` alone: an already-at-level target's edges are in
+   * `committed.deps` too, so including them is a no-op the level builder
+   * de-duplicates — while a rule keyed on `patch.parentRef` would go quiet the
+   * first time a card reaches a level by some other route.
+   *
+   * `isDone` rides along because the canvas's committed treatment is
+   * status-derived: `buildWorkItemLevel` draws a within-level edge `firm` when
+   * its blocker is `done` and `pending` otherwise, and these edges must be drawn
+   * by that same rule — approving creates nothing here, so the canvas must not
+   * draw them the way it draws an edge approving WOULD create.
+   *
+   * Empty for an un-materialized `add` (it is not a work item yet, so it carries
+   * nothing) and for any target with no committed blockers. ARCHIVED blockers are
+   * excluded, the same rule the readiness reads apply.
+   */
+  committedBlockedBy: PlanCommittedBlockerDto[];
   /** The target's identifier (`PROD-12`) — null for an un-materialized `add`,
    *  which has no key, and the target's real key for every proposal that does. */
   identifier: string | null;
@@ -427,6 +494,37 @@ export interface PlanReviewItemDto {
   storyPoints: number | null;
   estimateMinutes: number | null;
   targetRepo: string | null;
+  /**
+   * EVERY repository the card will ship in (bug MOTIR-4904) — the SET beside
+   * `targetRepo`'s primary, so a reviewer approving a two-repository card can
+   * see the second one.
+   *
+   * Patch-or-target on every op, exactly as `targetRepo` is: the quick view has
+   * no diff to read the change out of, so the rail answers *what the card will
+   * BE*. Empty for a proposal that pins nothing.
+   */
+  targetRepos: string[] | null;
+  /**
+   * The repository axis as `project_repository` ROW IDS, when the proposal
+   * authored it that way (bug MOTIR-4904).
+   *
+   * ⚠️ `add`-ONLY, on purpose, and it is the one repository field that is. These
+   * are cuids: they are an AUTHORING form, not a value a reviewer reads, and the
+   * names they resolve to are what `targetRepos` above already carries. On a
+   * `modify` the committed side would be a second read producing the same names
+   * under different strings — so the honest answer for every other op is that
+   * this field has nothing to say, and the rail draws the names.
+   */
+  targetRepositories: string[] | null;
+  /**
+   * The singular `project_repository` ROW-ID pin (Story MOTIR-2732 · MOTIR-3045,
+   * surfaced by MOTIR-4924) — `add`-ONLY for exactly the reason
+   * {@link targetRepositories} is: a cuid is an authoring form, not a value a
+   * reviewer reads, and the name it resolves to is what {@link targetRepo} /
+   * {@link targetRepos} already carry. The diff row a re-pin by ref produces lives
+   * in `changes` (under `targetRepo`), so the rail need not repeat it.
+   */
+  targetRepositoryRef: string | null;
   targetRepoRole: string | null;
   executor: string | null;
   planningProvenance: { source?: string; harness?: string | null; model?: string | null } | null;

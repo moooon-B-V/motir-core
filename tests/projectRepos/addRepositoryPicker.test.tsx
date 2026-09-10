@@ -37,6 +37,9 @@ const OPTION = (id: string, full: string): OrgRepoOptionDto => ({
   provider: 'github',
   archived: false,
   connectedFromWorkspaceId: 'ws1',
+  // Bug MOTIR-4892 — the picker's segment offers the ORGANISATION's repositories,
+  // and these fixtures are all of that kind.
+  hostedByMotir: false,
 });
 
 const ROW = (id: string, seedSource: string, name = 'motir-core'): ProjectRepoDto =>

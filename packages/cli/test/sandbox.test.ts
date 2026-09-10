@@ -37,6 +37,13 @@ const directivesOf = (source: string): string =>
 const dockerfile = read('Dockerfile');
 const installAgent = read('install-agent.sh');
 const entrypoint = read('entrypoint.sh');
+// MOTIR-4959 moved the agent-config half of the entrypoint into its own script,
+// because `overrideCommand: true` replaces the ENTRYPOINT and a devcontainer
+// therefore never ran it (MOTIR-4956). The guards below follow the code: every
+// assertion that used to read `entrypoint` for this contract now reads
+// `agentConfig`, unchanged in what it asserts.
+const agentConfig = read('agent-config.sh');
+const agentConfigProfile = read('agent-config-profile.sh');
 const compose = read('docker-compose.yml');
 const readme = read('README.md');
 const devcontainerRaw = read(join('devcontainer', 'devcontainer.json'));
@@ -132,6 +139,11 @@ const TEST_DIRS = {
   home: '/home/tester',
   xdgConfigHome: '/home/tester/.config',
   xdgDataHome: '/home/tester/.local/share',
+  // Unset on purpose: the mount assertions below are about a profile's DEFAULT
+  // credential path. An agent redirected by CLAUDE_CONFIG_DIR / CODEX_HOME
+  // resolves OUTSIDE the mount by design — that is what the redirect is for —
+  // so pinning the probe against the mount only makes sense with no override.
+  configHome: () => undefined,
 };
 
 /** A profile by id — asserted present so callers get a profile, not undefined. */
@@ -285,7 +297,10 @@ describe('sandbox entrypoint', () => {
   });
 
   it('keeps stdout clean — every message goes to stderr', () => {
-    const echoes = entrypoint.match(/^\s*echo .*$/gm) ?? [];
+    // Widened with the MOTIR-4959 split: the rule is about what the IMAGE's
+    // startup shell prints, and that is now two files. Narrowing it to the
+    // entrypoint would have stopped covering the half that does the talking.
+    const echoes = `${entrypoint}\n${agentConfig}`.match(/^\s*echo .*$/gm) ?? [];
     expect(echoes.length).toBeGreaterThan(0);
     // `motir next --print | pbcopy` must receive the prompt and nothing else.
     for (const line of echoes) expect(line).toMatch(/>&2$/);
@@ -350,6 +365,58 @@ describe('the credential tiers', () => {
     expect(readme).toMatch(/\*\*Optional\*\*, read-only/);
   });
 
+  it('makes EVERY devcontainer variant run the agent-config setup (MOTIR-4956)', () => {
+    // `overrideCommand: true` replaces the image's ENTRYPOINT as well as its
+    // CMD, so a devcontainer never ran `motir-sandbox-entrypoint` and the agent
+    // was handed an unset CLAUDE_CONFIG_DIR — a read-only `~/.claude` it could
+    // neither read a credential from nor sign in to. `postStart` rather than
+    // `postCreate`: it must also run when a STOPPED container is restarted,
+    // which is the case MOTIR-4959's idempotency work makes safe.
+    //
+    // In the same loop as `remoteEnv` above, deliberately: a profile added later
+    // cannot ship without it.
+    const variants = [
+      'devcontainer.json',
+      ...PROFILE_IDS.map((id) => join(id, 'devcontainer.json')),
+    ];
+    expect(variants).toHaveLength(9);
+    for (const relative of variants) {
+      const variant = JSON.parse(
+        readFileSync(join(SANDBOX_DIR, 'devcontainer', relative), 'utf8'),
+      ) as { postStartCommand?: string; overrideCommand?: boolean };
+      expect(variant.postStartCommand, `${relative} must run the setup`).toContain(
+        'motir-sandbox-agent-config',
+      );
+      // And it STAYS `true`: the image's `CMD ["bash", "-l"]` exits, so dropping
+      // it trades a container nobody can sign in to for one that will not stay
+      // up. The fix is the postStartCommand, never removing this.
+      expect(variant.overrideCommand, `${relative} still needs overrideCommand`).toBe(true);
+    }
+  });
+
+  it('keeps the guide constant and the shipped recipes on the SAME command string', () => {
+    // lib/apiDocs/sandbox.ts is the guide of record the sandbox smoke asserts
+    // against (assert-commands.mjs's DEFAULT_GUIDE_PATH), and no route renders
+    // it any more — which is exactly what makes it easy to leave behind. Two
+    // spellings of the same command would publish one recipe and test another.
+    const base = JSON.parse(read(join('devcontainer', 'devcontainer.json'))) as {
+      postStartCommand?: string;
+    };
+    // Read as TEXT rather than imported: packages/cli does not depend on the
+    // app's lib/, and the repo's other guide guards read it the same way.
+    const guideSource = readFileSync(
+      join(SANDBOX_DIR, '..', '..', '..', 'lib', 'apiDocs', 'sandbox.ts'),
+      'utf8',
+    );
+    const guideLine = /"postStartCommand":\s*"([^"]*)"/.exec(guideSource)?.[1];
+    expect(guideLine, 'the guide constant must carry a postStartCommand').toBeDefined();
+    expect(guideLine).toBe(base.postStartCommand);
+    // `|| true` so an older pinned `:<profile>-<version>` image, which has no
+    // such command on PATH, still starts. The image's own login-shell hook is
+    // what covers that container instead.
+    expect(base.postStartCommand).toContain('|| true');
+  });
+
   it('forwards the env tier into every devcontainer variant too', () => {
     // `remoteEnv` is the devcontainer analogue of compose's `environment:` — a
     // variant without it is the one shape of this image that still demands a
@@ -385,7 +452,14 @@ describe('sandbox mounts and blast radius', () => {
 
   it('never mounts a docker socket anywhere in the sandbox', () => {
     // A container that can drive the host daemon is not confined at all.
-    for (const source of [dockerfile, compose, entrypoint, installAgent]) {
+    for (const source of [
+      dockerfile,
+      compose,
+      entrypoint,
+      agentConfig,
+      agentConfigProfile,
+      installAgent,
+    ]) {
       expect(directivesOf(source)).not.toContain('docker.sock');
     }
     expect(devcontainerRaw).not.toContain('docker.sock');
@@ -572,16 +646,19 @@ describe('the per-agent codegraph MCP wiring', () => {
     expect(installAgent).not.toContain('--no-permissions');
   });
 
-  it('records the resolved target in ONE place for the entrypoint to re-read', () => {
+  it('records the resolved target in ONE place for the startup shell to re-read', () => {
     // The profile -> target map lives in the case arms and nowhere else; a
-    // second copy in the entrypoint could drift out of agreement with the arm
-    // that actually did the install.
+    // second copy in the re-reader could drift out of agreement with the arm
+    // that actually did the install. MOTIR-4959 moved the re-reader from the
+    // entrypoint into agent-config.sh — the ONE-place rule is untouched, and
+    // the entrypoint must not have kept a copy on the way past.
     expect(installAgent).toContain(
       'CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target',
     );
-    expect(entrypoint).toContain(
+    expect(agentConfig).toContain(
       'CODEGRAPH_TARGET_FILE=/usr/local/lib/motir-sandbox/codegraph-target',
     );
+    expect(entrypoint).not.toContain('CODEGRAPH_TARGET_FILE=');
   });
 });
 
@@ -602,6 +679,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     home: '/home/node',
     xdgConfigHome: '/home/node/.config',
     xdgDataHome: '/home/node/.local/share',
+    configHome: () => undefined,
   };
 
   /** The container paths a profile's compose service mounts READ-ONLY. */
@@ -672,7 +750,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
   });
 
   it('redirects exactly the profiles that would otherwise be shadowed, and exports the env var', () => {
-    // A redirect that the entrypoint does not actually export is decoration;
+    // A redirect the setup script does not actually export is decoration;
     // claude, codex and opencode are the three the mount contract shadows.
     const redirected = codegraphWiredProfiles()
       .filter(({ id }) => profileOf(id).codegraphConfig?.redirect)
@@ -680,7 +758,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     expect(redirected.sort()).toEqual(['claude', 'codex', 'opencode']);
     for (const id of redirected) {
       const env = profileOf(id).codegraphConfig?.redirect?.env ?? '';
-      expect(entrypoint, `${id}: entrypoint must export ${env}`).toMatch(
+      expect(agentConfig, `${id}: agent-config.sh must export ${env}`).toMatch(
         new RegExp(`export ${env}=`),
       );
     }
@@ -693,7 +771,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     const home = sandboxAgentConfigHome(CONTAINER_DIRS.home);
     expect(home).toBe('/home/node/.motir-sandbox/agent-config');
     expect(installAgent).toContain('.motir-sandbox/agent-config');
-    expect(entrypoint).toContain('SANDBOX_AGENT_HOME="$HOME/.motir-sandbox/agent-config"');
+    expect(agentConfig).toContain('SANDBOX_AGENT_HOME="$HOME/.motir-sandbox/agent-config"');
     // It must sit outside every profile's mounts, not just the two redirected
     // ones — that is the property that makes it a safe destination at all.
     for (const id of PROFILE_IDS) {
@@ -706,7 +784,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
   it('seeds the redirected codex home from the mount, so the credential survives', () => {
     // CODEX_HOME governs auth.json as well as config.toml, so a bare redirect
     // would trade "no code-graph tools" for "not signed in" — a worse bug.
-    const block = entrypoint.slice(entrypoint.indexOf('redirect_codegraph_config() {'));
+    const block = agentConfig.slice(agentConfig.indexOf('redirect_codegraph_config() {'));
     expect(block).toContain('cp -a "$mounted/." "$private/"');
     expect(block).toMatch(/export CODEX_HOME=/);
   });
@@ -715,7 +793,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     // Same trap as codex, one profile over: CLAUDE_CONFIG_DIR moves
     // .credentials.json along with the settings and the state file, so a bare
     // redirect would sign the agent out.
-    const block = entrypoint.slice(entrypoint.indexOf('redirect_codegraph_config() {'));
+    const block = agentConfig.slice(agentConfig.indexOf('redirect_codegraph_config() {'));
     expect(block).toMatch(/local mounted="\$HOME\/\.claude"/);
     expect(block).toMatch(/export CLAUDE_CONFIG_DIR=/);
     expect(block).toContain('cp -a "$mounted/$entry" "$private/"');
@@ -725,7 +803,7 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     // ~/.claude is ~850 MB on a working machine and all but ~50 MB of it is
     // per-machine session state the container regenerates. A blanket `cp -a`
     // here would tax every container start to copy transcripts nothing reads.
-    const seeded = (/^CLAUDE_SEED_ENTRIES='([^']*)'/m.exec(entrypoint)?.[1] ?? '').split(' ');
+    const seeded = (/^CLAUDE_SEED_ENTRIES='([^']*)'/m.exec(agentConfig)?.[1] ?? '').split(' ');
     expect(seeded).toContain('.credentials.json'); // the credential itself
     expect(seeded).toContain('.claude.json'); // the state file the lift targets
     expect(seeded).toContain('settings.json'); // where the auto-allow list lands
@@ -740,12 +818,12 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     // shipped CLI reads <CLAUDE_CONFIG_DIR>/.claude.json and ignores the legacy
     // sibling entirely. The seeded target holds the user's OWN servers plus the
     // rest of Claude Code's state, so the lift merges a single key into it.
-    const block = entrypoint.slice(entrypoint.indexOf('reconcile_codegraph_config() {'));
+    const block = agentConfig.slice(agentConfig.indexOf('reconcile_codegraph_config() {'));
     expect(block).toMatch(/\[ "\$1" = claude \] \|\| return 0/); // claude-only
     expect(block).toContain('state.mcpServers = { ...(state.mcpServers || {}), ...servers };');
     expect(block).toContain('"$CLAUDE_CONFIG_DIR/.claude.json"');
     // Running it is part of the install step, not a function nobody calls.
-    expect(entrypoint).toContain('elif ! reconcile_codegraph_config "$codegraph_target"; then');
+    expect(agentConfig).toContain('elif ! reconcile_codegraph_config "$codegraph_target"; then');
   });
 
   it('wires claude into the image-owned home, where the redirected config dir looks', () => {
@@ -759,46 +837,46 @@ describe('codegraph config is never shadowed by a read-only credential mount', (
     // `codegraph_home=$(redirect …)` would run the function in a SUBSHELL,
     // where the exported CODEX_HOME / OPENCODE_CONFIG die with it — the agent
     // would then read its unredirected (shadowed) config after all.
-    expect(entrypoint).toContain('redirect_codegraph_config "$codegraph_target" || true');
-    expect(entrypoint).toMatch(/HOME="\$CODEGRAPH_INSTALL_HOME" codegraph install/);
-    expect(entrypoint).not.toMatch(/\$\(redirect_codegraph_config/);
+    expect(agentConfig).toContain('redirect_codegraph_config "$codegraph_target" || true');
+    expect(agentConfig).toMatch(/HOME="\$CODEGRAPH_INSTALL_HOME" codegraph install/);
+    expect(agentConfig).not.toMatch(/\$\(redirect_codegraph_config/);
   });
 });
 
-describe('the entrypoint codegraph step', () => {
+describe('the agent-config codegraph step', () => {
   it('indexes the mounted workspace on start, and re-syncs an already-indexed one', () => {
-    expect(entrypoint).toMatch(/codegraph init "\$WORKSPACE"/);
-    expect(entrypoint).toMatch(/codegraph sync --quiet "\$WORKSPACE"/);
+    expect(agentConfig).toMatch(/codegraph init "\$WORKSPACE"/);
+    expect(agentConfig).toMatch(/codegraph sync --quiet "\$WORKSPACE"/);
   });
 
   it('installs BOTH the post-merge and post-checkout sync hooks', () => {
-    expect(entrypoint).toMatch(/for hook in post-merge post-checkout; do/);
-    expect(entrypoint).toContain('chmod +x "$hooks/$hook"');
+    expect(agentConfig).toMatch(/for hook in post-merge post-checkout; do/);
+    expect(agentConfig).toContain('chmod +x "$hooks/$hook"');
   });
 
   it('never clobbers a hook the user already wrote', () => {
     // .git/hooks is untracked and lives in the HOST repo, so overwriting one
     // would silently destroy the user's own tooling.
-    expect(entrypoint).toContain('CODEGRAPH_HOOK_MARKER=');
-    expect(entrypoint).toMatch(/grep -qF "\$CODEGRAPH_HOOK_MARKER"/);
+    expect(agentConfig).toContain('CODEGRAPH_HOOK_MARKER=');
+    expect(agentConfig).toMatch(/grep -qF "\$CODEGRAPH_HOOK_MARKER"/);
   });
 
   it('follows core.hooksPath, so the hook is not decoration in a redirected repo', () => {
-    expect(entrypoint).toContain('core.hooksPath');
+    expect(agentConfig).toContain('core.hooksPath');
   });
 
   it('writes a hook that is a silent no-op without codegraph and NEVER fails a merge', () => {
     // The hook OUTLIVES the container inside the host repo, where codegraph
     // usually is not installed. It must not error on every merge, and a sync
     // failure must never block one.
-    expect(entrypoint).toContain('command -v codegraph >/dev/null 2>&1 || exit 0');
-    expect(entrypoint).toMatch(/codegraph sync --quiet "\\\$dir" >\/dev\/null 2>&1 \|\| true/);
+    expect(agentConfig).toContain('command -v codegraph >/dev/null 2>&1 || exit 0');
+    expect(agentConfig).toMatch(/codegraph sync --quiet "\\\$dir" >\/dev\/null 2>&1 \|\| true/);
   });
 
   it('treats the graph as an ENHANCEMENT — no codegraph failure aborts the run', () => {
     // `set -e` is on, so every call needs an explicit guard; an unindexable
     // workspace must still dispatch work.
-    const block = entrypoint.slice(entrypoint.indexOf('── CodeGraph'));
+    const block = agentConfig.slice(agentConfig.indexOf('── CodeGraph'));
     expect(block).toMatch(/codegraph init "\$WORKSPACE" >&2 \|\|/);
     expect(block).toMatch(/codegraph sync --quiet "\$WORKSPACE" >&2 \|\|/);
   });
@@ -806,20 +884,172 @@ describe('the entrypoint codegraph step', () => {
   it('keeps codegraph output OFF stdout, which belongs to the prompt alone', () => {
     // The echo-only guard above cannot see a SUBPROCESS writing stdout, and
     // `codegraph init` is chatty.
-    expect(entrypoint).toMatch(/codegraph init "\$WORKSPACE" >&2/);
-    expect(entrypoint).not.toMatch(/^\s*codegraph (init|sync)[^|]*$/m);
+    expect(agentConfig).toMatch(/codegraph init "\$WORKSPACE" >&2/);
+    expect(agentConfig).not.toMatch(/^\s*codegraph (init|sync)[^|]*$/m);
   });
 
   it('says so out loud when a read-only mount masks the wiring, instead of failing silently', () => {
     // A credential dir mounted :ro (compose does this for ~/.codex and
     // ~/.config/opencode) shadows the config the build wrote — the agent would
     // otherwise just quietly have no code-graph tools.
-    expect(entrypoint).toContain('could not refresh the codegraph MCP wiring');
-    expect(entrypoint).toContain('READ-ONLY');
+    expect(agentConfig).toContain('could not refresh the codegraph MCP wiring');
+    expect(agentConfig).toContain('READ-ONLY');
   });
 
   it('can be skipped entirely for a print-only or smoke-test run', () => {
-    expect(entrypoint).toMatch(/\$\{MOTIR_SANDBOX_CODEGRAPH:-1\}/);
+    expect(agentConfig).toMatch(/\$\{MOTIR_SANDBOX_CODEGRAPH:-1\}/);
+  });
+});
+
+// ── Reachable from a shell that never went through the entrypoint ───────────
+// (MOTIR-4959, fixing MOTIR-4956)
+//
+// `"overrideCommand": true` — which every devcontainer recipe needs, because the
+// image's `CMD ["bash", "-l"]` exits — makes Dev Containers replace the
+// container's ENTRYPOINT as well as its CMD. So `motir-sandbox-entrypoint` never
+// ran on that route, CLAUDE_CONFIG_DIR was never exported, and Claude Code fell
+// back to `~/.claude`: the read-only mount, which on a macOS host holds no
+// credential (the OAuth token is in the login Keychain) and cannot be written to
+// sign in either. Both doors shut, with no error naming the cause.
+//
+// These guards pin the three things that fix it and the one thing that must not
+// regress: the work is on PATH, it is safe to run twice, it EMITS the
+// environment it computes, and the `docker run` route still carries that
+// environment into the process it execs.
+
+describe('the agent-config setup is reachable from any shell', () => {
+  it('ships as its own script, installed on PATH under its own name', () => {
+    // On PATH rather than under /usr/local/lib: the callers that need it are a
+    // login shell, a `postStartCommand` and a human typing into a terminal, and
+    // none of them knows an internal path.
+    expect(existsSync(join(SANDBOX_DIR, 'agent-config.sh'))).toBe(true);
+    expect(dockerfile).toContain(
+      'COPY --chmod=0755 packages/cli/sandbox/agent-config.sh /usr/local/bin/motir-sandbox-agent-config',
+    );
+  });
+
+  it('is what the entrypoint DELEGATES to — it does not carry the work itself', () => {
+    // The point of the split. A copy left behind in the entrypoint would drift
+    // from the one the shell hooks call, and the devcontainer route reads only
+    // the latter.
+    expect(entrypoint).toContain('motir-sandbox-agent-config || true');
+    for (const moved of [
+      'redirect_codegraph_config() {',
+      'reconcile_codegraph_config() {',
+      'install_codegraph_hooks() {',
+      'CLAUDE_SEED_ENTRIES=',
+    ]) {
+      expect(entrypoint, `${moved} must live in agent-config.sh alone`).not.toContain(moved);
+      expect(agentConfig, `${moved} must have moved into agent-config.sh`).toContain(moved);
+    }
+  });
+
+  it('runs it as a CHILD, so a codegraph failure still cannot fail the run', () => {
+    // The contract the moved block states in its own words. Sourcing it would
+    // put `set -euo pipefail` and every unguarded call back in the entrypoint's
+    // process, where a failure aborts the dispatch.
+    expect(entrypoint).not.toMatch(/^\s*\.\s+.*motir-sandbox-agent-config/m);
+    expect(entrypoint).toContain('motir-sandbox-agent-config || true');
+  });
+
+  it('still ends in cd + exec, with the env the child computed', () => {
+    // The `docker run` route must be unchanged in BEHAVIOUR: `export` in a child
+    // does not reach this process, so the entrypoint sources the file the child
+    // wrote before handing over. Without this line the split would have MOVED
+    // the defect rather than fixed it.
+    expect(entrypoint).toContain('SANDBOX_AGENT_HOME="$HOME/.motir-sandbox/agent-config"');
+    expect(entrypoint).toContain('. "$SANDBOX_AGENT_HOME/env.sh"');
+    const tail = entrypoint.slice(entrypoint.indexOf('$SANDBOX_AGENT_HOME/env.sh'));
+    expect(tail).toContain('cd "$WORKSPACE"');
+    expect(tail).toContain('exec "$@"');
+  });
+
+  it('is SAFE TO RUN TWICE — neither seeding arm wipes a credential only it holds', () => {
+    // THE idempotency guard. Both arms used to open with an unconditional
+    // `rm -rf "$private"`, which was harmless while the entrypoint was the only
+    // caller and runs exactly once. With a shell hook and a postStartCommand
+    // calling it, a container RESTART would delete the credential an in-container
+    // `motir login` wrote — and on a macOS host that copy is the ONLY one, since
+    // there is no ~/.claude/.credentials.json to mount.
+    const block = agentConfig.slice(agentConfig.indexOf('redirect_codegraph_config() {'));
+    // The unconditional shape was a `rm -rf` on the line directly after the
+    // arm's `local mounted=…`. Pinning THAT is what stops it coming back — a
+    // bare "no rm -rf anywhere" would be satisfied by deleting the wipe
+    // outright, which is a different (and wrong) fix: when the mount DOES carry
+    // the credential the host must stay authoritative.
+    expect(block).not.toMatch(/local mounted=[^\n]*\n\s*rm -rf "\$private"/);
+    expect(block.match(/rm -rf "\$private"/g) ?? [], 'both arms still wipe').toHaveLength(2);
+    expect(
+      block.match(/if ! private_credential_would_be_lost/g) ?? [],
+      'and both wipes are guarded',
+    ).toHaveLength(2);
+    expect(agentConfig).toContain('private_credential_would_be_lost() {');
+    // The predicate itself: a private credential the mount cannot put back.
+    expect(agentConfig).toContain('[ -f "$private_credential" ] && [ ! -f "$mounted_credential" ]');
+    // Both arms ask it, each about ITS OWN credential file — claude keeps one in
+    // .credentials.json, codex in auth.json.
+    expect(block).toContain('"$private/.credentials.json" "$mounted/.credentials.json"');
+    expect(block).toContain('"$private/auth.json" "$mounted/auth.json"');
+  });
+
+  it('WRITES the environment it computes, which is the whole devcontainer fix', () => {
+    // A `postStartCommand` runs in one process; the terminal a human opens is
+    // another. Nothing an export does survives that gap, so the assignments have
+    // to reach the disk.
+    expect(agentConfig).toContain('AGENT_CONFIG_ENV_FILE="$SANDBOX_AGENT_HOME/env.sh"');
+    expect(agentConfig).toContain('write_agent_config_env() {');
+    expect(agentConfig).toMatch(/^write_agent_config_env$/m);
+    // Exactly the three variables a redirect can set, and no line for one that
+    // is unset — an empty export would overwrite whatever the shell already had.
+    expect(agentConfig).toContain('for var in CLAUDE_CONFIG_DIR CODEX_HOME OPENCODE_CONFIG; do');
+    expect(agentConfig).toContain('[ -n "$value" ] || continue');
+  });
+});
+
+describe('the login-shell hooks that repair an already-copied recipe', () => {
+  it('installs a /etc/profile.d snippet AND a ~/.bashrc line', () => {
+    // Two, because they cover different shells and a devcontainer produces both:
+    // /etc/profile.d is read by a LOGIN shell, ~/.bashrc by an interactive
+    // NON-login one, which is what a VS Code terminal usually opens.
+    expect(dockerfile).toContain(
+      'COPY --chmod=0644 packages/cli/sandbox/agent-config-profile.sh /etc/profile.d/motir-sandbox-agent-config.sh',
+    );
+    expect(dockerfile).toContain('>> /home/node/.bashrc');
+    expect(existsSync(join(SANDBOX_DIR, 'agent-config-profile.sh'))).toBe(true);
+  });
+
+  it('SOURCES the snippet rather than executing it, from both hooks', () => {
+    // A child process cannot put CLAUDE_CONFIG_DIR into the shell that needs it,
+    // so an executed hook would be decoration — the exact shape of the bug being
+    // fixed, one level up.
+    expect(dockerfile).toContain('. /etc/profile.d/motir-sandbox-agent-config.sh');
+    expect(agentConfigProfile).toContain('. "${__motir_sandbox_agent_home}/env.sh"');
+    // The snippet is sourced, so it must not be executable or carry a shebang
+    // that invites someone to run it.
+    expect(agentConfigProfile.startsWith('#!')).toBe(false);
+  });
+
+  it('runs the setup ONCE per container, but sources the env on EVERY shell', () => {
+    // The split matters: the sentinel is in the writable layer, so a RESTARTED
+    // container keeps it and does not redo the work — and an unconditional
+    // source is then the only thing that still gives that container's shells the
+    // right CLAUDE_CONFIG_DIR.
+    expect(agentConfig).toContain('AGENT_CONFIG_SENTINEL="$SANDBOX_AGENT_HOME/.setup-done"');
+    expect(agentConfigProfile).toContain('.setup-done');
+    const guarded = agentConfigProfile.slice(agentConfigProfile.indexOf('.setup-done'));
+    expect(guarded).toContain('motir-sandbox-agent-config >/dev/null || true');
+    // The env source sits AFTER the sentinel guard's `fi`, not inside it.
+    const sourceAt = agentConfigProfile.indexOf('${__motir_sandbox_agent_home}/env.sh');
+    const guardEnds = agentConfigProfile.indexOf('fi', agentConfigProfile.indexOf('.setup-done'));
+    expect(sourceAt).toBeGreaterThan(guardEnds);
+  });
+
+  it('never lets a shell FAIL because of it', () => {
+    // A terminal that will not open is a far worse outcome than an agent without
+    // a code graph, and this file runs on every shell in the container.
+    expect(agentConfigProfile).not.toContain('set -e');
+    expect(agentConfigProfile).not.toMatch(/^\s*exit /m);
+    expect(agentConfigProfile).toContain('|| true');
   });
 });
 

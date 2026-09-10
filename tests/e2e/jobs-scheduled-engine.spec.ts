@@ -89,11 +89,21 @@ async function signUp(page: Page, email: string): Promise<void> {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Create a password').fill(PASSWORD);
   await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
+  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); this
+  // helper keeps its contract by settling there and navigating on.
+  await page.waitForURL('**/onboarding', { timeout: 30_000 });
+  await page.goto('/workbench');
   await page.waitForURL('**/workbench', { timeout: 30_000 });
 }
 
+// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
+// sign-up gets ONE auto-created workspace — the COLLAPSED state — and
+// `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
+// workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
+// settings home instead (`JobRunsFoldInSection`): same component, same reads,
+// same tabs and filters, with its links built from THIS address.
 async function gotoJobs(page: Page): Promise<void> {
-  await page.goto('/settings/workspace/jobs');
+  await page.goto('/settings/organization');
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 }
 

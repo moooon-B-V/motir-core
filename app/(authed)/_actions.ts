@@ -82,11 +82,35 @@ export async function createWorkspaceAction(name: string): Promise<WorkspaceSumm
 
   cookieStore.set(WORKSPACE_COOKIE_NAME, workspace.id, COOKIE_OPTIONS);
 
+  // MOTIR-4870 — YOU ARE ALWAYS IN A PROJECT, and this is the second of the
+  // three doors into a project-less workspace (the others are registration and
+  // archiving the last project). Seeded here rather than inside
+  // `createWorkspace` for the same reason the default WORKSPACE is seeded in
+  // the auth hook rather than inside the user insert: the service layer has no
+  // service-to-service edge to spend on it, and `projectsService` already
+  // depends on `workspacesService`.
+  //
+  // BEST-EFFORT, exactly like its workspace analogue: the workspace is already
+  // committed and the cookie already points at it, so a throw here would 500 a
+  // switch that has in fact happened. The guarantee is the lazy self-heal in
+  // `getActiveProject`, which the very next page render goes through.
+  try {
+    await projectsService.ensureDefaultProject({
+      workspaceId: workspace.id,
+      actorUserId: session.user.id,
+    });
+  } catch (err) {
+    console.error(
+      `[workspaces] default-project seed failed for workspace ${workspace.id}; ` +
+        `the lazy self-heal will retry on the next active-project resolution.`,
+      err,
+    );
+  }
+
   // 8.8.28 — a newly created workspace becomes active; record its active project
-  // for the global last-active pointer. A brand-new workspace has no project
-  // yet, so this is a no-op until one exists (recordLastActiveProjectForWorkspace
-  // resolves null → skips); the first-project create then records via
-  // setActiveProject (createProjectAction).
+  // for the global last-active pointer. It resolves a real project now that the
+  // seed above has run (it used to be a no-op here, because a brand-new
+  // workspace had none until the reader created one).
   await projectsService.recordLastActiveProjectForWorkspace(session.user.id, workspace.id);
 
   return toWorkspaceSummaryDTO(workspace);

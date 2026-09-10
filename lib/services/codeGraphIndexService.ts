@@ -42,10 +42,27 @@ import {
 // intended repo, each carrying the realized `GithubRepo` it maps to — read it via
 // `projectRepoSetService.getSet` / `listByProject`. This service is DELIBERATELY
 // still workspace-scoped: narrowing the fan-out is a behaviour change to shipped,
-// working code-graph plumbing, and it belongs to MOTIR-1754 (the BYOK code-index
-// loop), which owns per-repo index freshness end to end. So the association is no
-// longer missing — only unadopted here, and by whom is recorded. Do not read this
-// paragraph as an invitation to fix it in passing.
+// working code-graph plumbing, and it wants its own decision, its own tests and
+// its own review.
+//
+// ⚠️ DECIDED, 2026-09-05 — `docs/decisions/code-graph-index-fan-out.md` (MOTIR-2029).
+// This paragraph named MOTIR-1754 for months and that story's own scope boundary
+// handed the question straight back, which is exactly how a deferral orphans. It
+// is answered now, and NOT by narrowing this fan-out:
+//
+//   THE CODE GRAPH IS KEYED TO THE ORGANISATION. One repository has ONE graph,
+//   built once. Which projects work on it is VISIBILITY CONFIGURATION — an org
+//   admin adds a repository to any project, in any workspace of the org, and
+//   doing so rebuilds nothing. The repository belongs to the org, the org is the
+//   billing unit, so there is no boundary between two of its projects that a
+//   second copy of the same graph would protect.
+//
+// So this fan-out does not get a narrower project list — it stops being a fan-out.
+// The decision record carries the eleven-row tenancy audit and the migration
+// question it deliberately leaves to the implementation story.
+//
+// Do not read this paragraph as an invitation to fix it in passing: the change is
+// a schema move on both sides of the boundary, and it is that story's.
 //
 // SIDE-EFFECTS-OUTSIDE-TX: the DB reads run inside one `withSystemContext`
 // transaction (RLS-safe under the trusted-writer escape, like the webhook); every
@@ -148,13 +165,56 @@ export interface IndexCoreTimings {
 }
 
 /**
+ * WHAT A CONTAINER ACTUALLY DID: synced against a previous snapshot, or rebuilt
+ * the whole tree (MOTIR-4945).
+ *
+ * The two differ by tens of minutes, and until this existed the ledger recorded
+ * neither — so a run that had silently stopped being incremental was
+ * indistinguishable from one that had not, and the only symptom was "indexing got
+ * slow again" on a surface nobody watches.
+ *
+ * ⚠️ IT IS DERIVED AT DISPATCH, FROM A FACT motir-core ALREADY HOLDS, and that is
+ * the whole reason this is cheap: `credential.previousSnapshotUrl` is present
+ * exactly when motir-ai granted this run a sync, so its presence IS the mode. No
+ * second call, no widened credential, nothing new crossing the 7.1 boundary.
+ *
+ * ⚠️ AND IT IS NOT A DIAGNOSIS. `rebuild` says the grant was absent; it does NOT
+ * say why — no snapshot at all, versus an engine version that moved away from the
+ * stored one. motir-ai knows the difference and this side deliberately does not
+ * ask, because carrying that reason changes what crosses the boundary and is its
+ * own decision.
+ */
+export type IndexMode = 'sync' | 'rebuild';
+
+/**
+ * WHICH container ran in WHICH mode — one row per `(repo × project)`, exactly as
+ * {@link IndexCoreTimings} is, and for the same reason: the fan-out is
+ * workspace-scoped, each project gets its own credential, and so each gets its own
+ * grant. An aggregate would hide a repository that syncs for one project and
+ * rebuilds for another.
+ */
+export interface IndexModeRecord {
+  /** WHICH container's mode this is — the second half of `(repo × project)`. */
+  readonly projectId: string;
+  readonly mode: IndexMode;
+}
+
+/**
  * A small JSON-serializable summary persisted on the job_run ledger row.
  *
  * ⚠️ `indexed` / `repoRef` / `projectsIndexed` ARE UNCHANGED AND MUST STAY SO
  * (§6). `jobRunRepository.listSucceededCodeGraphIndexRepoRefs` builds the indexed
  * set from them, and `MigrateIndexRepoDto` / `MigrateIndexStatusDto.allIndexed`
- * gate the onboarding wizard on that set. {@link IndexCoreTimings} rides ALONGSIDE
- * them, optional, and no reader of the three is asked to learn about it.
+ * gate the onboarding wizard on that set. {@link IndexCoreTimings} and
+ * {@link IndexModeRecord} ride ALONGSIDE them, optional, and no reader of the
+ * three is asked to learn about either.
+ *
+ * ⚠️ `indexModes` IS ITS OWN ARRAY RATHER THAN A FIELD ON `coreTimings`, and the
+ * split is deliberate. A timings row is OMITTED when no span could be computed
+ * (`phasesMs` empty), and the mode is knowable in exactly that case — it comes
+ * from the boot memo, not from clock arithmetic — so folding it in would discard
+ * the mode precisely when the timings are unavailable. Two arrays keyed by
+ * `projectId` cost a reader one join and never lose a fact.
  */
 export type IndexRepoResult =
   | { indexed: false; reason: IndexSkipReason }
@@ -164,6 +224,9 @@ export type IndexRepoResult =
       projectsIndexed: number;
       /** MOTIR-4413. Absent when no container produced a computable span. */
       coreTimings?: IndexCoreTimings[];
+      /** MOTIR-4945. Absent when no container reported a mode — which, mid-rollout,
+       *  is every run whose `index-boot` memo predates this card. */
+      indexModes?: IndexModeRecord[];
     };
 
 /**

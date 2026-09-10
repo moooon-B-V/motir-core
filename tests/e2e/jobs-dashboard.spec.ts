@@ -71,19 +71,57 @@ async function seedDlqRow(workspaceId: string): Promise<void> {
   });
 }
 
+// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861).
+//
+// These tests sign up a fresh user, who gets ONE auto-created workspace — the
+// COLLAPSED state. `/settings/workspace/jobs` `notFound()`s there now, exactly
+// as its three sibling workspace routes have since MOTIR-3502, and the dashboard
+// is hosted as a section on `/settings/organization` instead
+// (`JobRunsFoldInSection`). Same component, same reads, same tabs and filters —
+// `basePath` is what differs, so every link inside comes back here.
+//
+// The alternative was to give the fixture a SECOND workspace and keep the old
+// address. Rejected: this suite's whole subject is the dashboard, and the
+// collapsed state is where most tenants will meet it. A fixture that reveals the
+// tier just to reach the older URL would stop testing the arm that matters.
+const JOBS_HOME = '/settings/organization';
+
 async function gotoJobs(page: Page, query = ''): Promise<void> {
-  await page.goto(`/settings/workspace/jobs${query}`);
+  await page.goto(`${JOBS_HOME}${query}`);
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 }
 
 test('@smoke jobs dashboard: empty states + sidebar link', async ({ page }) => {
   await signUp(page, USER_EMAIL);
 
-  // The Settings section grows a "Job runs" sub-link that routes here.
+  // ⚠️ REACHED THROUGH THE PRODUCT, at the address this fixture's tenant has
+  // (MOTIR-4847). This clicked a `Job runs` row in the rail's bottom section
+  // until that row left it: the capability is workspace-tier, the rail is the
+  // PROJECT's, and the tenancy mismatch is what the story removed. At one
+  // workspace the door is the settings home, where the dashboard is folded in;
+  // above the reveal it is a row in the workspace area's own rail
+  // (`tests/components/SidebarNav-workspace-area.test.tsx`).
+  //
+  // Still a navigation rather than a `goto`, because what this case is FOR is
+  // that the surface is reachable without knowing a URL.
   await page.goto('/dashboard');
+  // ⚠️ THROUGH THE ORG MENU, NOT THE RAIL'S `Settings` ROW (MOTIR-4876). That
+  // row reached this surface only because it was RE-POINTED at the settings
+  // home for a reader with no active project — §6d's collapse below the
+  // workspace-tier reveal, which `org-admin.spec.ts` describes from the other
+  // side ("the href now matches TWO elements and strict mode refuses"). Every
+  // member is inside a project now (MOTIR-4870), so the rail's row deep-links to
+  // PROJECT settings and the two hrefs are no longer the same address.
+  //
+  // The org control is the door that survives at every workspace count, and it
+  // keeps what this case is FOR: the surface is reachable without knowing a URL.
+  // Scoped to the menu's own list rather than by href, for the reason that spec
+  // gives — the scope is what the assertion always meant.
+  await page.getByRole('button', { name: 'Organization menu' }).click();
   await page
-    .getByRole('navigation', { name: 'Primary' })
-    .getByRole('link', { name: 'Job runs' })
+    .getByRole('list')
+    .filter({ has: page.locator('a[href="/settings/organization/members"]') })
+    .locator('a[href="/settings/organization"]')
     .click();
   await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
 

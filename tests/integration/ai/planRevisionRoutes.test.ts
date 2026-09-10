@@ -376,6 +376,13 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     parentRef: 'planItem.parentRef',
     blockedByRefs: 'planItem.blockedByRefs',
     targetRepo: 'proposedFields.targetRepo',
+    // The SET spellings (bug MOTIR-4904) — the same landing place, one field
+    // over, and the same transport: `correctionFrom` reads each when PRESENT.
+    targetRepos: 'proposedFields.targetRepos',
+    targetRepositories: 'proposedFields.targetRepositories',
+    // The singular ROW-ID pin (Story MOTIR-2732 · MOTIR-3045, surfaced by
+    // MOTIR-4924) — the same landing place and transport as the SET forms.
+    targetRepositoryRef: 'proposedFields.targetRepositoryRef',
     targetRepoRole: 'proposedFields.targetRepoRole',
     // `modify` ONLY, and mutually exclusive with an `add`'s content bag — the
     // service refuses the two together by design. Its own transport (the
@@ -477,6 +484,55 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     expect(
       (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } })).proposedFields,
     ).toMatchObject({ targetRepoRole: null });
+  });
+
+  it('`targetRepositoryRef` is SPARSE — an explicit `null` unpins, an absent key leaves the pin alone (MOTIR-4924)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Row-pinned', authorSource: 'native', authorHarness: 'Motir' },
+      fx.ctx,
+    );
+    const appended = await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Pinned to a row',
+            kind: 'task',
+            targetRepositoryRef: 'row-one',
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await adminDb.plan.update({ where: { id: plan.id }, data: { sourceJobId: 'job-rowref' } });
+    const itemId = appended.items[0]!.id;
+
+    // ABSENT — a correction that touches something else must not disturb the pin.
+    expect(
+      (
+        await patch(fx, itemId, {
+          jobId: 'job-rowref',
+          mode: 'correct',
+          patch: { title: 'Renamed' },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } })).proposedFields,
+    ).toMatchObject({ targetRepositoryRef: 'row-one' });
+
+    // EXPLICIT `null` — the unpin, which is unsayable if the two collapse.
+    expect(
+      (await patch(fx, itemId, { jobId: 'job-rowref', mode: 'correct', targetRepositoryRef: null }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } })).proposedFields,
+    ).toMatchObject({ targetRepositoryRef: null });
   });
 
   it('an UNKNOWN `targetRepoRole` is a typed 422, never a 500 — the same refusal the append gives', async () => {

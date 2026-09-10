@@ -106,6 +106,14 @@
       picker and its project-side removal (MOTIR-4674,
       design/repository-set/), and the member's own git credential
       (MOTIR-4675, design/settings/). A rail is amended in the area that owns it.
+      ══ AMENDMENT — MOTIR-4953 (Story MOTIR-2200), 2026-09-09 ══
+      THE PROJECT ROOM STOPS DRAWING THE ORGANISATION INVENTORY. Panels 8–11
+      replace the layered-list reading preserved in design/repository-set/ §17:
+      the page contains project links only, while the organisation's unlinked
+      repositories appear only inside Add repository. The org inventory remains
+      reachable through `See every repository in {org}`, explicitly as
+      navigation rather than as a provenance footer for rows the page drew.
+
       Toggle data-theme="dark" on <html> to confirm token parity. Full spec,
       copy strings, and per-element --el-* roles in design-notes.md.
     -->
@@ -588,9 +596,16 @@
         --el-input-border: var(
           --color-hairline-strong
         ); /* input outline (was --el-border-strong) */
+        --el-input-bg: var(--color-background); /* input field surface */
+        --el-input-text: var(--color-foreground); /* input field ink */
         --el-button-border: var(--color-hairline-strong); /* secondary-button outline */
         --el-count-bg: var(--color-muted); /* count-badge fill (shipped value; see note above) */
         --el-count-text: var(--color-slate); /* count-badge ink (was --el-text-secondary) */
+        --el-danger-on-surface: color-mix(
+          in srgb,
+          var(--el-danger) 70%,
+          var(--el-text)
+        ); /* danger action ink on an ordinary surface */
 
         /* ── Issue-type hues (work-item kind identity — finding #54) ────── */
         /* The colour the UI was missing: each issue type renders its icon in its
@@ -1588,7 +1603,7 @@
                every row, so the columns cannot drift apart. */
       .inv-head {
         display: grid;
-        grid-template-columns: minmax(178px, 1fr) 80px 120px 166px 146px;
+        grid-template-columns: minmax(178px, 1fr) 80px 108px 120px 166px 146px;
         align-items: center;
         gap: 12px;
         padding: 8px var(--spacing-card-padding);
@@ -1601,7 +1616,7 @@
       }
       .inv-row {
         display: grid;
-        grid-template-columns: minmax(178px, 1fr) 80px 120px 166px 146px;
+        grid-template-columns: minmax(178px, 1fr) 80px 108px 120px 166px 146px;
         align-items: center;
         gap: 12px;
         padding: var(--spacing-control-y) var(--spacing-card-padding);
@@ -1663,6 +1678,23 @@
         width: 14px;
         height: 14px;
         color: var(--el-icon-muted);
+      }
+      /* ⚠️ THE OWNERSHIP TRACK (MOTIR-4892 shipped the chip; MOTIR-4900 draws
+               it). A per-row FACT — whose this repository is — so it takes a
+               track of its own, between Provider and Index, with an EMPTY head
+               cell: the same convention the actions column already uses for a
+               per-row element that needs no label. It is EMPTY on every row the
+               organisation connected; the chip is a marked exception, not a
+               column every row fills in.
+               ⚠️ AND IT COST WIDTH, WHICH IS WHY THE SHELL GREW. The five-track
+               table was already at this board's budget (1112px shell + the
+               board's 80px padding = 1192, against a 1200px render). A chip
+               folded into a neighbouring cell would have taken the repository
+               name below the floor this grid exists to give it — the very defect
+               the grid replaced a flex row for — so the track is real and the
+               shell is 1232px. */
+      .col-own {
+        min-width: 0;
       }
       .col-index {
         min-width: 0;
@@ -1803,6 +1835,270 @@
         padding: 12px var(--spacing-card-padding);
         border-top: 1px solid var(--el-border-soft);
         background: var(--el-surface-soft);
+      }
+      /* ── THE PROJECT-SCOPED REPOSITORIES ROOM (MOTIR-4953, Panels 8–11) ── */
+      .project-shell {
+        display: flex;
+        width: 1040px;
+        min-height: 620px;
+        background: var(--el-page-bg);
+      }
+      .project-shell .content {
+        padding: 32px 40px 40px;
+      }
+      .project-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 28px;
+      }
+      .project-head h2 {
+        font-family: var(--font-serif, Georgia, serif);
+        font-size: 28px;
+        letter-spacing: -0.015em;
+      }
+      .project-head .sub {
+        max-width: 610px;
+        margin-top: 8px;
+        color: var(--el-text-secondary);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .project-summary {
+        margin-top: 5px;
+        color: var(--el-text-muted);
+        font-size: 13px;
+      }
+      .project-sections {
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+      .project-section-head {
+        margin-bottom: 10px;
+      }
+      .project-section-head .section-label {
+        margin-bottom: 5px;
+      }
+      .project-section-head p {
+        max-width: 650px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .project-repos {
+        display: flex;
+        flex-direction: column;
+      }
+      .project-repo {
+        display: grid;
+        grid-template-columns: minmax(230px, 1fr) 92px 154px;
+        align-items: center;
+        gap: 14px;
+        min-height: 48px;
+        padding: 8px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .project-repo:last-child {
+        border-bottom: 0;
+      }
+      .project-repo-name {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 9px;
+        font-size: 13.5px;
+      }
+      .project-repo-name svg {
+        width: 17px;
+        height: 17px;
+        flex: none;
+        color: var(--el-icon-muted);
+      }
+      .project-repo-name .owner {
+        color: var(--el-text-secondary);
+      }
+      .project-repo-name .name {
+        color: var(--el-text);
+        font-weight: 500;
+      }
+      .branch {
+        justify-self: start;
+        border-radius: var(--radius-control);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono, monospace);
+        font-size: 11px;
+      }
+      .quiet-action {
+        justify-self: end;
+        border: 0;
+        background: transparent;
+        color: var(--el-danger-on-surface);
+        font: inherit;
+        font-size: 12.5px;
+      }
+      .hosted-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .hosted-row:last-child {
+        border-bottom: 0;
+      }
+      .hosted-row .detail {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .hosted-row .repo-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13.5px;
+        font-weight: 500;
+      }
+      .hosted-row .repo-title svg {
+        width: 17px;
+        height: 17px;
+        color: var(--el-icon-muted);
+      }
+      .hosted-row .hosted-detail-copy {
+        color: var(--el-text-muted);
+        font-size: 12px;
+      }
+      .inventory-route {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .inventory-route a {
+        flex: none;
+        color: var(--el-link);
+        font-weight: 500;
+        text-decoration: none;
+      }
+      .project-empty {
+        display: flex;
+        min-height: 290px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        text-align: center;
+      }
+      .project-empty svg {
+        width: 36px;
+        height: 36px;
+        color: var(--el-icon-muted);
+      }
+      .project-empty h3 {
+        font-family: var(--font-serif, Georgia, serif);
+        font-size: 18px;
+      }
+      .project-empty p {
+        max-width: 440px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .picker-stage {
+        display: grid;
+        min-height: 600px;
+        place-items: center;
+        padding: 44px;
+        background: var(--el-overlay-scrim);
+      }
+      .repo-picker {
+        width: 520px;
+        overflow: hidden;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        background: var(--el-card);
+        box-shadow: var(--shadow-modal);
+      }
+      .repo-picker-head {
+        padding: 20px 22px 14px;
+      }
+      .repo-picker-head h3 {
+        font-family: var(--font-serif, Georgia, serif);
+        font-size: 20px;
+      }
+      .repo-picker-head p {
+        margin-top: 5px;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .repo-picker-body {
+        padding: 0 22px 22px;
+      }
+      .picker-search {
+        width: 100%;
+        height: var(--height-input);
+        margin-bottom: 14px;
+        border: 1px solid var(--el-input-border);
+        border-radius: var(--radius-input);
+        background: var(--el-input-bg);
+        color: var(--el-input-text);
+        padding: 0 12px;
+        font: inherit;
+        font-size: 13px;
+      }
+      .picker-group {
+        margin: 12px 0 6px;
+        color: var(--el-text-eyebrow);
+        font-family: var(--font-mono, monospace);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .picker-option {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        min-height: 42px;
+        padding: 7px 10px;
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        font-size: 13px;
+      }
+      .picker-option.active {
+        background: var(--el-option-active-bg);
+      }
+      .picker-option .repo {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .picker-option .state {
+        color: var(--el-text-secondary);
+        font-size: 11.5px;
+      }
+      .picker-option.disabled {
+        color: var(--el-text-muted);
+      }
+      .connect-option {
+        margin-top: 4px;
+        border: 1px solid var(--el-button-border);
       }
       /* annotation for the reader of the BOARD, not product copy */
       .interp {
@@ -2264,6 +2560,14 @@
         the org-level removal for GitHub, where the disclosure happens <b>before</b> the link-out.
         GitLab&rsquo;s in-app confirm is the sibling half in
         <span class="mono">design/gitlab/gitlab.mock.html</span>.
+      </p>
+      <p>
+        <b>AMENDED — MOTIR-4953 (Story MOTIR-2200), 2026-09-09: project means project.</b>
+        Panels 8–11 draw the corrected project Repositories room: only repository links owned by
+        this project appear on the page; the organisation&rsquo;s available inventory moves into the
+        <b>Add repository</b> picker. The room keeps its Motir-hosted section, defines all three
+        summary counts over project links only, and makes
+        <span class="mono">See every repository in moooon</span> unmistakable navigation to Panel 6.
       </p>
     </div>
 
@@ -2748,9 +3052,7 @@
                 <svg class="pr-ic"><use href="#i-git-pr" /></svg>
                 <div style="min-width: 0">
                   <div class="pr-title">Throttle burst traffic on /v1</div>
-                  <div class="pr-meta">
-                    moooon/motir-gateway · #57 · <span class="mono">linked manually</span>
-                  </div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
                 </div>
                 <span class="spacer"></span>
                 <span class="pr-states">
@@ -2914,7 +3216,8 @@
       <div>
         <div class="panel-label">
           Panel 6 · <b>Settings → Organisation → Git</b> — the org&rsquo;s repository INVENTORY, its
-          index state, and <b>Used by N projects</b> drawn at rest (row 2 expanded)
+          index state, and <b>Used by N projects</b> drawn at rest (row 2 expanded; row 5 is the
+          <b>Hosted by Motir</b> state — the ownership chip present, the action cell EMPTY)
         </div>
         <div class="panel">
           <!-- ⚠️ THE RAIL IS BACK, AND THAT IS A REVERSAL — recorded, not hidden.
@@ -2929,7 +3232,7 @@
                it with `Git` active, so the two halves agree about where you are.
                The rail is 232px and the content column is unchanged at 880px — the
                inventory is a five-column table and does not shrink to make room. -->
-          <div class="settings-shell" style="width: 1112px">
+          <div class="settings-shell" style="width: 1232px">
             <aside class="sidebar">
               <div class="side-back">
                 <svg><use href="#i-arrow-left" /></svg>Back to Motir
@@ -3027,6 +3330,7 @@
                     <div class="inv-head">
                       <span>Repository</span>
                       <span class="col-provider">Provider</span>
+                      <span class="col-own"></span>
                       <span class="col-index">Index</span>
                       <span class="col-uses">Used by</span>
                       <span class="col-act"></span>
@@ -3044,9 +3348,10 @@
                       <span class="col-provider">
                         <svg><use href="#i-github" /></svg>GitHub
                       </span>
+                      <span class="col-own"></span>
                       <span class="col-index"
                         ><span class="pill pill-mint"
-                          ><svg><use href="#i-check" /></svg>Current</span
+                          ><svg><use href="#i-check" /></svg>Indexed</span
                         ></span
                       >
                       <span class="col-uses">
@@ -3074,6 +3379,7 @@
                       <span class="col-provider">
                         <svg><use href="#i-github" /></svg>GitHub
                       </span>
+                      <span class="col-own"></span>
                       <span class="col-index"
                         ><span class="pill pill-peach"
                           ><svg><use href="#i-clock" /></svg>Stale</span
@@ -3115,6 +3421,7 @@
                       <span class="col-provider">
                         <svg><use href="#i-gitlab" /></svg>GitLab
                       </span>
+                      <span class="col-own"></span>
                       <span class="col-index"
                         ><span class="pill pill-sky"
                           ><svg><use href="#i-dots" /></svg>Indexing…</span
@@ -3145,6 +3452,7 @@
                       <span class="col-provider">
                         <svg><use href="#i-github" /></svg>GitHub
                       </span>
+                      <span class="col-own"></span>
                       <span class="col-index"
                         ><span class="pill pill-neutral">Never indexed</span></span
                       >
@@ -3157,6 +3465,58 @@
                         </button>
                         <span class="act-note">happens on GitHub</span>
                       </span>
+                    </div>
+
+                    <!-- ⚠️ A REPOSITORY MOTIR HOSTS (MOTIR-4892 shipped this row
+                         state; MOTIR-4900 draws it). It sits under the
+                         PROVISIONING organisation and not under moooon, so the
+                         owner segment reads `motir-projects/` — the same
+                         provisioning login design/repository-set/ uses one tier
+                         down. Two things are different about it, and both are
+                         DRAWN rather than described:
+
+                         1. the neutral `Hosted by Motir` chip in the ownership
+                            track. A FACT about the repository, so a chip and not
+                            a tint (design/repository-set/ §17.3) — the same
+                            neutral treatment `Never indexed` already carries in
+                            the column beside it, so no new tone and no new
+                            primitive. The words are the shipped string
+                            `github.inventory.hostedByMotir`.
+                         2. the ACTION CELL IS EMPTY. `Disconnect` is WITHHELD,
+                            not disabled: the page's `Manage on GitHub` href
+                            points at the organisation's OWN installation, and a
+                            repository Motir hosts is not in it, so the control
+                            could not keep its promise (§16.6). The act for this
+                            row is the TAKEOVER (MOTIR-711), on the project's own
+                            Repositories settings — a different surface, so
+                            nothing is substituted here. The chip on the same row
+                            is what turns the absence into an answer. -->
+                    <div class="inv-row">
+                      <span class="inv-name">
+                        <svg><use href="#i-repo" /></svg>
+                        <span
+                          ><span class="i-owner">motir-projects/</span
+                          ><span class="i-repo">atlas</span></span
+                        >
+                      </span>
+                      <span class="col-provider">
+                        <svg><use href="#i-github" /></svg>GitHub
+                      </span>
+                      <span class="col-own"
+                        ><span class="pill pill-neutral">Hosted by Motir</span></span
+                      >
+                      <span class="col-index"
+                        ><span class="pill pill-mint"
+                          ><svg><use href="#i-check" /></svg>Indexed</span
+                        ></span
+                      >
+                      <span class="col-uses">
+                        <button class="uses" aria-expanded="false">
+                          <svg><use href="#i-chevron-right" /></svg>Used by 1 project
+                        </button>
+                      </span>
+                      <!-- EMPTY, deliberately — see the block above. -->
+                      <span class="col-act"></span>
                     </div>
                   </div>
                   <div class="card-foot">
@@ -3209,6 +3569,27 @@
           screen all along is not — and the dialog naming <i>Atlas, Beacon</i> is then a
           confirmation rather than a revelation. The expanded form (row 2) names the projects; it
           does not link out of this page.
+        </p>
+        <p class="panel-note">
+          <b
+            >⚠️ AMENDED — MOTIR-4900, recording what MOTIR-4892 shipped: the
+            <code>Hosted by Motir</code> row state (row 5).</b
+          >
+          A repository MOTIR hosts is legitimately in this inventory — the organisation's projects
+          dispatch into it and it carries the organisation's tenancy on purpose — but this table
+          drew it as any other row, so telling it apart from a repository the organisation
+          <i>connected</i> meant knowing the provisioning org's login by heart. Under a card heading
+          reading <i>&ldquo;Every repository connected to this organisation&rdquo;</i>, silence is a
+          claim. Two changes, and the second is the one a later card would otherwise remove: an
+          <b>ownership track</b> carrying a neutral <code>Hosted by Motir</code> chip (a FACT about
+          the repository, so a chip and not a tint — <code>design/repository-set/</code> §17.3), and
+          <b>no <code>Disconnect</code> at all</b> on that row, because the page's
+          <code>Manage on GitHub</code> href names the organisation's own installation and this
+          repository is not in it (§16.6 —
+          <i>a control that cannot keep its promise is worse than its absence</i>). The act for a
+          hosted repository is the <b>takeover</b>, on the project's own Repositories settings. The
+          shell grew 1112px → 1232px to pay for the sixth track rather than take the repository name
+          below the floor this grid exists to give it.
         </p>
       </div>
 
@@ -3272,6 +3653,304 @@
           ordinary destructive confirm — drawn in <code>design/gitlab/gitlab.mock.html</code>. The
           PROJECT-level removal is a quiet row action whose copy reassures, and it belongs to
           <code>design/repository-set/</code> (MOTIR-4674), not here.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 8 — THE PROJECT-SCOPED ROOM ═══════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 8 · <b>Project settings → Repositories</b>: ONLY Billing API's four repository links
+          — no layered organisation inventory, and no duplicate row
+        </div>
+        <div class="panel">
+          <div class="project-shell">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>
+                Back to Billing API
+              </div>
+              <div class="breadcrumb">Billing API · Project settings</div>
+              <div class="nav-grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>
+                  Details
+                </div>
+                <div class="nav-row active">
+                  <svg><use href="#i-repo" /></svg>
+                  Repositories
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>
+                  Members &amp; access
+                </div>
+                <div class="nav-row">
+                  <svg><use href="#i-shield" /></svg>
+                  Roles &amp; permissions
+                </div>
+              </div>
+            </aside>
+            <main class="content">
+              <div class="project-head">
+                <div>
+                  <h2>Repositories</h2>
+                  <p class="sub">
+                    Only the repositories Billing API works on — whether Motir hosts them or moooon
+                    does.
+                  </p>
+                  <p class="project-summary">1 moving · 1 hosted by Motir · 2 yours</p>
+                </div>
+                <button class="btn btn-primary">
+                  <svg><use href="#i-plus" /></svg>
+                  Add repository
+                </button>
+              </div>
+
+              <div class="project-sections">
+                <section>
+                  <div class="project-section-head">
+                    <div class="section-label">From your organisation</div>
+                    <p>Repositories from moooon that are linked to Billing API.</p>
+                  </div>
+                  <div class="card project-repos">
+                    <div class="project-repo">
+                      <span class="project-repo-name">
+                        <svg><use href="#i-repo" /></svg>
+                        <span
+                          ><span class="owner">moooon/</span
+                          ><span class="name">billing-web</span></span
+                        >
+                      </span>
+                      <span class="branch">main</span>
+                      <button class="quiet-action">Remove from this project</button>
+                    </div>
+                    <div class="project-repo">
+                      <span class="project-repo-name">
+                        <svg><use href="#i-repo" /></svg>
+                        <span
+                          ><span class="owner">moooon/</span
+                          ><span class="name">design-tokens</span></span
+                        >
+                      </span>
+                      <span class="branch">main</span>
+                      <button class="quiet-action">Remove from this project</button>
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <div class="project-section-head">
+                    <div class="section-label">Hosted by Motir</div>
+                    <p>
+                      Motir created these and pays for their CI. Move any of them to your own GitHub
+                      whenever you want.
+                    </p>
+                  </div>
+                  <div class="card">
+                    <div class="hosted-row">
+                      <div class="detail">
+                        <span class="repo-title">
+                          <svg><use href="#i-github" /></svg>
+                          motir-projects/billing-api
+                        </span>
+                        <span class="hosted-detail-copy"
+                          >Created and running · Motir pays for Actions</span
+                        >
+                      </div>
+                      <button class="btn btn-secondary btn-sm">Move to my GitHub</button>
+                    </div>
+                    <div class="hosted-row">
+                      <div class="detail">
+                        <span class="repo-title">
+                          <svg><use href="#i-github" /></svg>
+                          motir-projects/billing-worker
+                        </span>
+                        <span class="hosted-detail-copy"
+                          >Waiting for you to accept the transfer on GitHub</span
+                        >
+                      </div>
+                      <span class="pill pill-peach"
+                        ><svg><use href="#i-clock" /></svg>Moving</span
+                      >
+                    </div>
+                  </div>
+                </section>
+
+                <nav class="inventory-route" aria-label="Organisation repository inventory">
+                  <span>Looking for a repository that is not linked to Billing API?</span>
+                  <a href="#">See every repository in moooon →</a>
+                </nav>
+              </div>
+            </main>
+          </div>
+        </div>
+        <p class="panel-note">
+          <b>Four rows means four project links.</b> The summary partitions those same links:
+          <i>moving</i> is a hosted link in an unfinished takeover, <i>hosted by Motir</i> is a
+          settled hosted link, and <i>yours</i> is an organisation-owned link or a completed
+          takeover. The other repositories in moooon do not appear and do not count.
+        </p>
+        <p class="panel-note">
+          <b>The inventory link is a navigation block after both sections.</b> It does not sit in a
+          repository card's footer, where “Connected to the organisation” made the rows sound
+          organisation-scoped. Its question makes the boundary explicit: leave this project page
+          only when the repository sought is not linked to the project.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 9 — EMPTY PROJECT ═══════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 9 · <b>An empty project</b>: zero project links, even though moooon has repositories
+        </div>
+        <div class="panel">
+          <div class="project-shell">
+            <aside class="sidebar">
+              <div class="side-back">
+                <svg><use href="#i-arrow-left" /></svg>
+                Back to Mobile refresh
+              </div>
+              <div class="breadcrumb">Mobile refresh · Project settings</div>
+              <div class="nav-grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <svg><use href="#i-sliders" /></svg>
+                  Details
+                </div>
+                <div class="nav-row active">
+                  <svg><use href="#i-repo" /></svg>
+                  Repositories
+                </div>
+              </div>
+              <div class="nav-grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <svg><use href="#i-users" /></svg>
+                  Members &amp; access
+                </div>
+              </div>
+            </aside>
+            <main class="content">
+              <div class="project-head">
+                <div>
+                  <h2>Repositories</h2>
+                  <p class="sub">
+                    Only the repositories Mobile refresh works on — whether Motir hosts them or
+                    moooon does.
+                  </p>
+                  <p class="project-summary">0 moving · 0 hosted by Motir · 0 yours</p>
+                </div>
+                <button class="btn btn-primary">
+                  <svg><use href="#i-plus" /></svg>
+                  Add repository
+                </button>
+              </div>
+              <div class="project-empty">
+                <svg><use href="#i-repo" /></svg>
+                <h3>No repositories in this project yet</h3>
+                <p>
+                  Add one moooon already has, or connect a new repository. Either way, it becomes a
+                  link to Mobile refresh.
+                </p>
+                <button class="btn btn-secondary btn-sm">Add repository</button>
+              </div>
+              <nav
+                class="inventory-route"
+                aria-label="Organisation repository inventory"
+                style="margin-top: 20px"
+              >
+                <span>moooon's repository inventory is separate from this empty project.</span>
+                <a href="#">See every repository in moooon →</a>
+              </nav>
+            </main>
+          </div>
+        </div>
+        <p class="panel-note">
+          <b>Empty means the project has no links.</b> The organisation may hold fifty repositories;
+          none leak onto this page. Both Add buttons open Panel 10, keeping the task in this flow.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 10 — ADD FROM ORGANISATION ═══════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 10 · <b>Add repository</b>: the organisation inventory belongs HERE — available,
+          already-linked, and connect-new in one flow
+        </div>
+        <div class="panel" style="width: 760px">
+          <div class="picker-stage">
+            <div class="repo-picker" role="dialog" aria-label="Add a repository">
+              <div class="repo-picker-head">
+                <h3>Add a repository</h3>
+                <p>Pick one moooon already has, or connect a new one.</p>
+              </div>
+              <div class="repo-picker-body">
+                <input
+                  class="picker-search"
+                  aria-label="Search repositories"
+                  placeholder="Filter by name…"
+                />
+                <div class="picker-group">In moooon · already connected</div>
+                <div class="picker-option active">
+                  <span class="repo">moooon/billing-mobile</span>
+                  <span class="state">already indexed · shared</span>
+                </div>
+                <div class="picker-option">
+                  <span class="repo">moooon/platform-infra</span>
+                  <span class="state">already indexed · shared</span>
+                </div>
+                <div class="picker-option disabled">
+                  <span class="repo">moooon/billing-web</span>
+                  <span class="state">already in this project</span>
+                </div>
+                <div class="picker-group">Connect a new one</div>
+                <div class="picker-option connect-option">
+                  <span class="repo">Connect a new one on GitHub</span>
+                  <span class="state">opens GitHub ↗</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Picking an organisation repository creates the project link immediately and reuses its
+          index. The disabled row is the sole place an already-linked repository remains visible in
+          this flow; it never becomes a second page row.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 11 — ORGANISATION HAS NONE ═══════════ -->
+      <div>
+        <div class="panel-label">
+          Panel 11 · <b>The organisation has none</b>: Add remains a flow, not a detour
+        </div>
+        <div class="panel" style="width: 760px">
+          <div class="picker-stage">
+            <div class="repo-picker" role="dialog" aria-label="Add a repository">
+              <div class="repo-picker-head">
+                <h3>Add a repository</h3>
+                <p>
+                  moooon has no repositories connected yet. Connect the first one and it lands in
+                  moooon and in Mobile refresh at the same time.
+                </p>
+              </div>
+              <div class="repo-picker-body">
+                <div class="picker-group">Connect a new one</div>
+                <div class="picker-option connect-option active">
+                  <span class="repo">Connect a new one on GitHub</span>
+                  <span class="state">opens GitHub ↗</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          No search field and no empty organisation list: there is nothing to search. The one
+          available next action stays inside the picker and returns with both the organisation
+          connection and this project's link established.
         </p>
       </div>
     </div>

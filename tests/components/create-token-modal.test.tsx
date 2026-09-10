@@ -73,6 +73,11 @@ function open(props: Partial<Parameters<typeof CreateTokenModal>[0]> = {}) {
         onCreated={onCreated}
         scopeOrgs={ORGS}
         activeWorkspaceId="ws-1"
+        // The default binding is the ACTIVE project (MOTIR-4876). `null` keeps
+        // every existing case on its old "first project in the workspace"
+        // fallback, so these assertions still measure what they were written
+        // for; the cases that exercise the new arm pass an id through `props`.
+        activeProjectId={null}
         {...props}
       />
     </ToastProvider>,
