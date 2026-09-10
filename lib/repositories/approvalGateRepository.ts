@@ -97,6 +97,59 @@ export const approvalGateRepository = {
   },
 
   /**
+   * The gate the FRAME renders — whatever state it is in (Subtask MOTIR-5033).
+   *
+   * ⚠️ THIS IS NOT `findAwaitingByWorkItem` WITH THE FILTER DROPPED. The
+   * awaiting read answers *what is somebody being asked?*; this one answers
+   * *what does this card's approval frame show?*, and the two differ exactly
+   * once a decision has been made. A decided gate leaves the awaiting set by
+   * design, so before this read a page reload took states `E` (approved), `F`
+   * (changes requested) and `G` (superseded) off the screen entirely — the
+   * record of who decided, when, and on WHICH bytes was written, immutable, and
+   * unreachable from the card it was written about.
+   *
+   * ⚠️ THE ORDERING IS THE CONTRACT, AND ITS FIRST KEY IS NOT RECENCY. A LIVE
+   * question outranks a decided one however old it is: a card that was approved
+   * on Monday and republished on Tuesday holds a `superseded` gate, an
+   * `approved` gate and a new `awaiting` gate, and the only one a reader can
+   * ACT on is the awaiting one. Sorting on `createdAt` alone happens to agree
+   * here — the republish creates its gate after superseding the old one, in the
+   * same transaction — and would stop agreeing the first time a gate is created
+   * out of order, which is not a property this read should depend on.
+   *
+   * So: `awaiting` first (oldest, matching `findAwaitingByWorkItem`'s own
+   * determinism), then the most recent of the rest. Both keys are applied in
+   * SQL, so the answer is one row and one round trip.
+   *
+   * Scoped by KIND for the same reason the awaiting read is: ADR §6b's
+   * uniqueness is `(workItemId, kind, subjectId)`, so *"the gate"* is only a
+   * well-formed question once a kind is named.
+   *
+   * Served by `approval_gate_work_item_id_idx`.
+   */
+  async findLatestByWorkItem(
+    workItemId: string,
+    kind: ApprovalGateKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalGate | null> {
+    const client = tx ?? dbRead;
+    const rows = await client.approvalGate.findMany({
+      where: { workItemId, kind },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (rows.length === 0) return null;
+    // The live question wins, and the OLDEST of those — the same tie-break
+    // `findAwaitingByWorkItem` gives, so a surface reading through either door
+    // is asked about the same row.
+    const awaiting = rows.find((row) => row.state === 'awaiting');
+    if (awaiting) return awaiting;
+    // Otherwise the most recent decision or withdrawal: approvals ACCUMULATE
+    // (ADR §6d), so a card approved, reopened and approved again has several,
+    // and the frame shows the latest without disturbing the earlier rows.
+    return rows[rows.length - 1]!;
+  },
+
+  /**
    * LOCK one gate row and return the fields a DECISION is derived from
    * (MOTIR-4790's decide door, step 1).
    *

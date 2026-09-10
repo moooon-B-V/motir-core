@@ -7881,7 +7881,8 @@
       "awaiting": "Awaiting",
       "recording": "Recording",
       "approved": "Approved",
-      "changesRequested": "Changes requested"
+      "changesRequested": "Changes requested",
+      "withdrawn": "Withdrawn"
     },
     "verb": {
       "approve": "Approve",
@@ -7896,7 +7897,16 @@
     },
     "record": {
       "unattributed": "No longer attributable",
-      "willRepublish": "the agent will publish a new version"
+      "willRepublish": "the agent will publish a new version",
+      "version": "version {version}",
+      "filesKept": "Files kept",
+      "filesNotKept": "Files not kept"
+    },
+    "withdrawn": {
+      "port": "A newer design was published, so this question was withdrawn.",
+      "portCite": "Nobody decided it. The current version is above.",
+      "record": "No decision · no one to attribute",
+      "at": "withdrawn {when}"
     },
     "refusal": {
       "alreadyDecided": {

@@ -7,7 +7,7 @@ import { ApprovalGateControl, type GateVerb } from '@/components/approvals/Appro
 import { DesignResultPanel } from './DesignResultPanel';
 import { decideApprovalGateAction } from '../approvalGateActions';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
-import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
+import type { DesignEvidenceDTO, DesignGateSubjectDTO } from '@/lib/dto/designEvidence';
 import type { GateDecision } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 
@@ -32,9 +32,16 @@ import type { GateRefusal } from '@/lib/approvalGates/refusals';
 export interface DesignResultSectionProps {
   evidence: DesignEvidenceDTO | null;
   isDesignCard: boolean;
-  /** The AWAITING `design_result` gate, or null when nothing is pending. */
+  /** The `design_result` gate WHATEVER its state, or null when the card has
+   *  never had one. */
   gate: ApprovalGateDTO | null;
   canDecide: boolean;
+  /**
+   * The version a DECIDED gate was decided ABOUT, and whether its files were
+   * kept (Subtask MOTIR-5033). Null while the gate is awaiting or withdrawn —
+   * see the port note below for why those two are null for opposite reasons.
+   */
+  subject: DesignGateSubjectDTO | null;
   /** The card's `MOTIR-<n>`, for the sentence saying what approving will DO. */
   itemIdentifier: string;
 }
@@ -44,6 +51,7 @@ export function DesignResultSection({
   isDesignCard,
   gate,
   canDecide,
+  subject,
   itemIdentifier,
 }: DesignResultSectionProps) {
   const t = useTranslations('approvalGate');
@@ -56,9 +64,40 @@ export function DesignResultSection({
   // page-state contract; the `router.refresh()` beside it is the server half.
   const [current, setCurrent] = useState<ApprovalGateDTO | null>(gate);
 
-  const port = <DesignResultPanel evidence={evidence} isDesignCard={isDesignCard} />;
+  // ⚠️ WHICH BYTES THE PORT SHOWS IS DECIDED HERE, AND THE ANSWER IS NOT
+  // ALWAYS `evidence` (MOTIR-5033; ADR §6c).
+  //
+  //   · AWAITING — the CURRENT design. That is the question being asked, and
+  //     the gate's subject IS the current row while it is awaiting.
+  //   · DECIDED — the version that was DECIDED ON, read from the gate's own
+  //     subject by the server. This is what state `E` is for: a design is a
+  //     moving object, so an approval rendered over whatever is current now is
+  //     a claim about nothing, and the pin that keeps the approved files has no
+  //     visible purpose at all — which is the fastest way for a pin to be
+  //     quietly removed by somebody tidying up storage.
+  //   · WITHDRAWN — neither. The frame draws a DEAD port and ignores this prop
+  //     entirely, which is why nothing here special-cases `superseded`.
+  //
+  // ⚠️ THE FALLBACK IS THE SUBJECT'S OWN ABSENCE, NOT THE CURRENT ROW. When a
+  // decided version's bytes are gone — the ordinary outcome for one that was
+  // sent back, since only an approval pins — the panel renders its own
+  // nothing-published state. Falling back to `evidence` there would put the
+  // CURRENT design under a decision that was never made about it.
+  //
+  // ⚠️ BOTH READ THE **SERVER'S** GATE (`gate`), NEVER THE LOCAL ONE
+  // (`current`), AND THAT IS A PAGE-STATE RULE RATHER THAN A STYLE. `subject`
+  // is a server prop: the moment this reader presses Approve, `current` flips
+  // to `approved` while `subject` is still null, and a port keyed on `current`
+  // would blank the design out from under them — in the exact instant the
+  // whole state exists to keep it on screen. Keyed on `gate` the port keeps
+  // showing the current row, which IS the row that was just approved (you can
+  // only approve the current design's gate), and `router.refresh()` then swaps
+  // in the server's pinned answer with nothing visibly changing.
+  const decidedOnServer = gate?.state === 'approved' || gate?.state === 'changes_requested';
+  const portEvidence = decidedOnServer ? (subject?.evidence ?? null) : evidence;
+  const port = <DesignResultPanel evidence={portEvidence} isDesignCard={isDesignCard} />;
 
-  if (!current) return port;
+  if (!current) return <DesignResultPanel evidence={evidence} isDesignCard={isDesignCard} />;
 
   // ⚠️ THE VERB SET IS DATA, AND THIS IS WHERE `design_result` SUPPLIES ITS OWN.
   // A pair is one case, not the shape: the choice gate (MOTIR-4914) hands the
@@ -118,6 +157,11 @@ export function DesignResultSection({
         tDesign('confirm.movesToDone', { key: itemIdentifier }),
       ]}
       routedToLabel={null}
+      // The `design_result` kind's answer to *were the files kept?* —
+      // `design_evidence.pinned_at`, read off the decided row. Null while
+      // awaiting or withdrawn, which renders no line at all rather than a
+      // guess in either direction.
+      filesKept={subject ? subject.filesKept : null}
       onDecide={onDecide}
     />
   );

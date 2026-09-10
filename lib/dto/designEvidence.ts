@@ -56,6 +56,41 @@ export interface DesignUploadTokensDTO {
 }
 
 /**
+ * The design version a DECIDED approval gate was about, plus whether its files
+ * are still there (Subtask MOTIR-5033; ADR docs/decisions/approval-gates.md
+ * §6c).
+ *
+ * ⚠️ IT IS READ BY THE GATE'S `subjectId`, NEVER BY "the card's current
+ * design", and that is the whole of what the approved state is worth. A design
+ * is a moving object — the revise loop republishes it — so a decided gate
+ * rendered over whatever is current now says *somebody approved a design*,
+ * which is a claim about nothing. Rendered over the pinned row it says
+ * *somebody approved THESE bytes*, which is what an auditor came for.
+ */
+export interface DesignGateSubjectDTO {
+  /**
+   * The version that was decided, with its assets — or **null when the row is
+   * gone**, which is a real and expected answer rather than an error: only an
+   * APPROVAL pins its bytes (§6c), so a version that was sent back is
+   * superseded and reclaimed on purpose.
+   */
+  evidence: DesignEvidenceDTO | null;
+  /**
+   * Whether this version's files are RETAINED — `design_evidence.pinned_at`,
+   * read off the row rather than inferred from the gate's state.
+   *
+   * ⚠️ IT IS NOT `state === 'approved'`, and deriving it that way would make
+   * the line an unconditional reassurance on the one surface built to be
+   * checkable. The pin is written in the deciding transaction and can
+   * legitimately be absent from an approved gate — `pinCurrentForWorkItem`
+   * returns null when a republish took the current row while the decision
+   * waited for its lock, and the decision still stands. So the honest answer
+   * comes from the bytes.
+   */
+  filesKept: boolean;
+}
+
+/**
  * The CURRENT design result for a work item, as the Design result panel renders
  * it.
  *
