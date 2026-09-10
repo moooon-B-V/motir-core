@@ -80,6 +80,32 @@ describe('openUrl', () => {
       openUrl('https://app.motir.co', { platform: 'darwin', env: {} }),
     ).resolves.toBeTypeOf('boolean');
   });
+
+  // ⚠️ The NO-ARGUMENT call — `openUrl(url)` — reads the platform and the env
+  // off `process` (MOTIR-4980). Its own callers pass nothing, so the `opts = {}`
+  // default and both `?? process.…` fallbacks are the arms production actually
+  // takes, and until this test they were covered only as a SIDE EFFECT of a
+  // command test calling the real launcher on a Linux runner with no DISPLAY.
+  // That is coverage owned by the runner rather than by a test: it vanished the
+  // moment `openCommand` got an injectable launcher, and it would have vanished
+  // just as silently the day someone ran the suite on a desktop session.
+  //
+  // So `process` is stubbed rather than consulted — which also means no test run
+  // ever launches a real browser on a developer's machine, the exact accident
+  // this card exists to remove one level up.
+  it('reads the platform and env off `process` when called with NO options', async () => {
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    vi.stubEnv('DISPLAY', '');
+    vi.stubEnv('WAYLAND_DISPLAY', '');
+    try {
+      // Headless linux by construction, so it resolves false without spawning.
+      await expect(openUrl('https://app.motir.co/issues/PROD-7')).resolves.toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    }
+  });
 });
 
 // ── coverage gaps closed by 7.9.5 (MOTIR-883) ───────────────────────────────

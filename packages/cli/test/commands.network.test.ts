@@ -1,12 +1,4 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authLogin, authLogout, authStatus } from '../src/commands/auth.js';
@@ -36,6 +28,7 @@ import {
   v1WorkItem,
   type TestServer,
 } from './helpers/testServer.js';
+import { makeTempRoot } from './helpers/tempRoot.js';
 
 /**
  * Peel a `?filter=` parameter back to its compact form.
@@ -83,7 +76,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  const base = mkdtempSync(join(tmpdir(), 'motir-cmd-'));
+  const base = makeTempRoot('motir-cmd-');
   home = join(base, 'config');
   root = join(base, 'workspace');
   mkdirSync(home, { recursive: true });
@@ -703,12 +696,38 @@ describe('motir ready / status / open', () => {
     await linked();
     const io = capture();
 
-    // The test runner is headless, so the launcher is skipped — the printed URL
-    // is the result, and the CLI says why nothing opened.
-    await openCommand('PROD-7', {});
+    // ⚠️ The LAUNCHER is injected, never inferred from the box (MOTIR-4980).
+    // `openUrl` resolves false only where there is no display, so leaving it to
+    // the real one made this an assertion about the RUNNER: green on Linux CI,
+    // red on every macOS laptop, where a browser genuinely does open. The
+    // branch under test is "the launcher said no", so the launcher says no.
+    await openCommand('PROD-7', {}, { openUrl: async () => false });
 
     expect(io.stdout()).toContain('/issues/PROD-7');
     expect(io.stderr()).toContain('Could not open a browser here');
+  });
+
+  it('`open` stays QUIET about the browser when the launcher reports success', async () => {
+    await linked();
+    const io = capture();
+    const opened: string[] = [];
+
+    await openCommand(
+      'PROD-7',
+      {},
+      {
+        openUrl: async (url: string) => {
+          opened.push(url);
+          return true;
+        },
+      },
+    );
+
+    // The URL is still printed — it is the result, not a consolation prize —
+    // and the launcher got the SAME url rather than one rebuilt for it.
+    expect(io.stdout()).toContain('/issues/PROD-7');
+    expect(opened).toEqual([`${server.url}/issues/PROD-7`]);
+    expect(io.stderr()).not.toContain('Could not open a browser here');
   });
 });
 

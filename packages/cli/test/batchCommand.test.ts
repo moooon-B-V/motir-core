@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Command } from 'commander';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +17,7 @@ import {
   type V1Request,
   type V1Script,
 } from './helpers/testServer.js';
+import { makeTempRoot } from './helpers/tempRoot.js';
 
 // `motir batch` as the COMMAND (Subtask 7.9.5b · MOTIR-1829).
 //
@@ -51,7 +51,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  const base = mkdtempSync(join(tmpdir(), 'motir-batchcmd-'));
+  const base = makeTempRoot('motir-batchcmd-');
   root = join(base, 'workspace');
   mkdirSync(join(root, 'motir-core'), { recursive: true });
   vi.stubEnv('MOTIR_CONFIG_HOME', join(base, 'config'));
