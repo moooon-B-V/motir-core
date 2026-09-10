@@ -8,7 +8,7 @@ import { DesignResultPanel } from './DesignResultPanel';
 import { decideApprovalGateAction } from '../approvalGateActions';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
-import type { GateDecision } from '@/lib/services/approvalGatesService';
+import type { GateDecision } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 
 // THE DESIGN RESULT SECTION — the approval frame's FIRST consumer (Story

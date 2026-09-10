@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
-import type { GateDecision } from '@/lib/services/approvalGatesService';
+import type { GateDecision } from '@/lib/dto/approvalGate';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 
 // THE UNIVERSAL APPROVAL FRAME (Story MOTIR-4778 · Subtask MOTIR-4792), built to

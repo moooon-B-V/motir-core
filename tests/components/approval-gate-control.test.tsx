@@ -246,12 +246,13 @@ describe('H · refused — every member of the union renders in place, with a ne
       fireEvent.click(screen.getByRole('button', { name: 'Request changes' }));
 
       const alert = await screen.findByRole('alert');
-      expect(alert.textContent).toMatch(re);
+      const text = alert.textContent ?? '';
+      expect(text).toMatch(re);
       // Every refusal carries a NEXT ACTION — a refusal that only says no is a
-      // dead end on the one surface built to explain itself.
-      expect(alert.textContent!.length).toBeGreaterThan(
-        alert.textContent!.split('.')[0].length + 5,
-      );
+      // dead end on the one surface built to explain itself. The headline is
+      // the first sentence; something has to follow it.
+      const headline = text.split('.')[0] ?? '';
+      expect(text.length).toBeGreaterThan(headline.length + 5);
       // The subject stays readable while the refusal is shown.
       expect(screen.getByTestId('the-port')).toBeTruthy();
     },

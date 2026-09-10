@@ -1,5 +1,5 @@
 import type { ApprovalGateState } from '@/generated/prisma/client';
-import type { ApprovalGateDTO, ApprovalGateKindDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, ApprovalGateKindDTO, GateDecision } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { handlerFor } from '@/lib/approvalGates/registry';
@@ -32,10 +32,10 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // enum, a handler, and a renderer. No second vocabulary, no second control, no
 // second decide door.
 
-/** The two verbs. A kind may later carry a verb SET (ADR §1's amendment,
- *  `decision_choice`), which is why the door takes a decision rather than
- *  exposing `approve()` / `requestChanges()` as separate methods. */
-export type GateDecision = 'approve' | 'request_changes';
+/** The two verbs — DECLARED in `lib/dto/approvalGate.ts` (the client/server
+ *  boundary; see its own note) and re-exported here so every existing caller of
+ *  this service keeps resolving it unchanged. */
+export type { GateDecision };
 
 const DECISION_STATE: Record<
   GateDecision,
