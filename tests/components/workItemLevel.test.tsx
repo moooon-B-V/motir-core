@@ -476,3 +476,125 @@ describe('buildWorkItemLevel — an edge belongs to the level its BLOCKED end is
     expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
   });
 });
+
+// ── MOTIR-5043 · a blocker the level's CAP dropped is not off the level ───────
+// The fourth exclusion in this family, after grouping (MOTIR-3557), archived rows
+// (MOTIR-3927) and a plan's arriving card (MOTIR-4952). `itemIds` is what the READ
+// returned and the read stops at 200 rows key-ASC, so on a level past that a plain
+// SIBLING of the blocked row arrives at the off-level branch and gets the canvas's
+// loudest verdict — whose legend reads "the blocker sits elsewhere in the plan (a
+// bad plan)" — about a tree that is correct.
+//
+// The SERVICE decides membership (it is the only reader that can compare a
+// blocker's parent against the level's own) and says so on the level DTO; the
+// builder's job is only to keep the three off-level effects off it.
+describe('buildWorkItemLevel — a cap-dropped level MEMBER (MOTIR-5043)', () => {
+  /** A truncated level: A1 survives the cap, its blocker M did not; S is a genuine
+   *  cross-parent stranger, so both shapes are exercised on one level. */
+  function truncatedLevel(): RoadmapLevelData {
+    return {
+      items: [item({ id: 'A1', kind: 'subtask', parentId: 'P' })],
+      edges: [
+        { blockedId: 'A1', blockerId: 'M' },
+        { blockedId: 'A1', blockerId: 'S' },
+      ],
+      offLevelBlockers: [
+        { id: 'S', identifier: 'PROD-9', title: 'Cross-story dep', parentTitle: 'Story Z' },
+      ],
+      levelMemberBlockers: [{ id: 'M', isDone: false }],
+    };
+  }
+
+  it('fires NONE of the three off-level effects for it — no cross dep, no anchor, no flag', () => {
+    // The MEMBER alone, so the third effect is readable: `crossBlocked` is a flag on
+    // the BLOCKED node, and the stranger in `truncatedLevel` would raise it on the
+    // same card for its own, legitimate reason.
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [item({ id: 'A1', kind: 'subtask', parentId: 'P' })],
+      edges: [{ blockedId: 'A1', blockerId: 'M' }],
+      offLevelBlockers: [],
+      levelMemberBlockers: [{ id: 'M', isDone: false }],
+    });
+
+    // (1) no `cross` dep to it, and (2) no ghost anchor minted for it — both read
+    // off the builder's return value.
+    expect(deps.filter((d) => d.from === 'M')).toEqual([
+      { from: 'M', to: 'A1', variant: 'pending' },
+    ]);
+    expect(nodes.some((n) => n.id === 'M')).toBe(false);
+    // Nothing is DRAWN for it either: the row is not on the level, so `computeLevel`
+    // drops the dep for want of a node. The truncation tile is what tells the reader
+    // rows are missing — a ghost anchor would be a card standing in for a member,
+    // wearing the flag that means the plan is wrong.
+
+    // (3) no `crossBlocked` entry. It is the one effect that is not a top-level
+    // field: it is applied to the blocked node's `content`, so the node element
+    // the builder returned is where it has to be read.
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.queryByTestId(A1_FLAG)?.textContent ?? '').not.toContain('blocked elsewhere');
+  });
+
+  it('leaves the GENUINE cross-parent blocker on the same level untouched', () => {
+    const { nodes, deps } = buildWorkItemLevel(truncatedLevel());
+    // The same card carries both blockers, which is exactly the frame the defect was
+    // found in: two ghosts that were right and one that was a lie, with nothing on
+    // screen separating them.
+    expect(deps).toContainEqual({ from: 'S', to: 'A1', variant: 'cross' });
+    expect(nodes.some((n) => n.id === 'S')).toBe(true);
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
+  });
+
+  it('draws a FIRM within-level variant when the dropped member is done', () => {
+    const { deps } = buildWorkItemLevel({
+      items: [item({ id: 'A1', kind: 'subtask', parentId: 'P' })],
+      edges: [{ blockedId: 'A1', blockerId: 'M' }],
+      offLevelBlockers: [],
+      levelMemberBlockers: [{ id: 'M', isDone: true }],
+    });
+    expect(deps).toEqual([{ from: 'M', to: 'A1', variant: 'firm' }]);
+  });
+
+  it('SPRINT scope is unchanged — the service sends no members there, so the arm still flags', () => {
+    // `getProjectRoadmap` returns an EMPTY member list in sprint scope: that level is
+    // re-rooted at the topmost in-sprint rows, so a parent comparison says nothing
+    // about membership, and the arm's own verdict about a sibling outside the sprint
+    // ("blocker not in sprint") is true. This is that payload.
+    const { nodes, deps } = buildWorkItemLevel(
+      {
+        items: [item({ id: 'A1', kind: 'subtask', parentId: 'P' })],
+        edges: [{ blockedId: 'A1', blockerId: 'X' }],
+        offLevelBlockers: [
+          {
+            id: 'X',
+            identifier: 'PROD-9',
+            title: 'Sibling outside the sprint',
+            parentTitle: 'Story P',
+            isDone: false,
+            inActiveSprint: false,
+          },
+        ],
+        levelMemberBlockers: [],
+      },
+      { scope: 'sprint' },
+    );
+    expect(deps).toContainEqual({ from: 'X', to: 'A1', variant: 'cross' });
+    expect(nodes.some((n) => n.id === 'X')).toBe(true);
+    render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
+    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocker not in sprint');
+  });
+
+  it('an ABSENT member list is the pre-MOTIR-5043 behaviour, not a crash', () => {
+    // Every synthetic level the client builds itself (the grouped node's, the
+    // pre-plan stations') omits the field, and so does an older server. Membership
+    // there is the rows the client already holds, so an unknown blocker is genuinely
+    // off the level and keeps the signal.
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [item({ id: 'A1', kind: 'subtask', parentId: 'P' })],
+      edges: [{ blockedId: 'A1', blockerId: 'M' }],
+      offLevelBlockers: [],
+    });
+    expect(deps).toEqual([{ from: 'M', to: 'A1', variant: 'cross' }]);
+    expect(nodes.some((n) => n.id === 'M')).toBe(true);
+  });
+});

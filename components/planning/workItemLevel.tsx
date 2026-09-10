@@ -264,6 +264,12 @@ export function buildWorkItemLevel(
     });
   }
 
+  // The level's OWN rows that the capped read could not carry (bug MOTIR-5043) —
+  // see the branch that consumes it in the edge loop below. Absent on a level the
+  // client serves synthetically (the grouped node's, the pre-plan stations') and on
+  // an older server's payload, both of which read as "nothing was dropped".
+  const levelMemberBlockers = new Map((wi.levelMemberBlockers ?? []).map((b) => [b.id, b.isDone]));
+
   const crossBlocked = new Set<string>();
   const deps: ProjectCanvasDep[] = [];
   const anchorNodes: ProjectCanvasNode[] = [];
@@ -275,9 +281,13 @@ export function buildWorkItemLevel(
     // and until the partition above existed that was sufficient BY
     // CONSTRUCTION: `findBlockedByEdges` selects `fromId IN (level rows)`
     // (`lib/repositories/workItemLinkRepository.ts`), so every edge in a level
-    // payload already had its blocked end on that level. Grouping is the first
-    // thing that ever moves a row OFF a level after the read, and it broke the
-    // guarantee in both directions at once:
+    // payload already had its blocked end on that level. Grouping was the first
+    // thing that ever moved a row off a level after the read — ⚠️ CORRECTED
+    // (MOTIR-5043): the CAP did it first, on every level over 200 rows, since
+    // before grouping existed; it was simply never noticed, because a dropped row
+    // takes its own node away with it and only reappears when something else
+    // POINTS at it. Read the sentence as being about the row that is still drawn.
+    // Grouping broke the guarantee in both directions at once:
     //
     //  - at the ROOT, an edge into a row that was just grouped now points at a
     //    node nobody draws — and its blocker still minted a ghost anchor, so a
@@ -317,6 +327,44 @@ export function buildWorkItemLevel(
         from: e.blockerId,
         to: e.blockedId,
         variant: arrivingIsDone ? 'firm' : 'pending',
+      });
+      continue;
+    }
+    // A BLOCKER THE LEVEL READ'S CAP DROPPED IS NOT OFF THE LEVEL EITHER (bug
+    // MOTIR-5043) — the fourth exclusion in this family, and the one nobody came
+    // back for. `itemIds` is what the READ returned, and the read stops at
+    // `TREE_LEVEL_MAX_TAKE` rows sorted key-ASCENDING, so on a level with more
+    // children than that a plain SIBLING of `e.blockedId` arrives here. Firing the
+    // off-level treatment about it puts the canvas's loudest verdict — the legend
+    // reads *"the blocker sits elsewhere in the plan (a bad plan)"* — on a tree that
+    // is correct, and invites the reader to go and move a card that is already where
+    // it belongs.
+    //
+    // ⚠️ THE SERVICE ANSWERS THIS, NOT THE BUILDER, and that is the repair rather
+    // than an implementation detail: membership is a property of the LEVEL, and the
+    // only reader that can compare a blocker's parent against the level's own is the
+    // one that issued the read. `wi.levelMemberBlockers` therefore rides on the level
+    // DTO like `levelTotal` does — every consumer of this builder inherits the answer,
+    // and the next thing that narrows a level inherits it too.
+    //
+    // NOTHING IS DRAWN FOR IT, deliberately. The dep is pushed so the within-level
+    // rule stays stated in one place, and `computeLevel` then drops it because no
+    // node carries that id — which is the correct picture: the row is not on screen,
+    // so neither is its arrow, and the level's own "+ N more" truncation tile is what
+    // tells the reader rows are missing. Minting an anchor instead would be the
+    // opposite trade — a drawn card standing in for a member, wearing the flag that
+    // means the plan is wrong.
+    //
+    // BEFORE the sprint arm, like the two checks above it: a member of the level is
+    // on it in either scope. The service leaves this list EMPTY in sprint scope
+    // (where the level is re-rooted and a parent comparison says nothing), so that
+    // arm's behaviour is unchanged in fact as well as in principle.
+    const memberIsDone = levelMemberBlockers.get(e.blockerId);
+    if (memberIsDone !== undefined) {
+      deps.push({
+        from: e.blockerId,
+        to: e.blockedId,
+        variant: memberIsDone ? 'firm' : 'pending',
       });
       continue;
     }

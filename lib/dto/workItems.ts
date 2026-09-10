@@ -751,6 +751,28 @@ export interface RoadmapBlockerStubDto {
 }
 
 /**
+ * A blocker that IS a member of this level and that the level read did not return
+ * (bug MOTIR-5043) — the level is capped at `TREE_LEVEL_MAX_TAKE`, key-ASCENDING,
+ * so a level with more children than the cap silently drops its highest keys, and
+ * a blocker among them is a plain SIBLING of the row it blocks.
+ *
+ * It carries no naming fields, and that is the point: there is no node on screen
+ * for it and nothing to anchor a chip to, so the canvas draws nothing. What the
+ * canvas needs is only to know that this blocker is NOT the cross-story tangle —
+ * every off-level effect (the red `cross` arrow, the `blocked elsewhere` flag on
+ * the dependent, the ghost anchor) is a verdict about a plan, and about this
+ * blocker it would be false. The reader is already told rows are missing by the
+ * level's own "+ N more" truncation tile, which is the honest signal for it.
+ *
+ * `isDone` is `status === 'done'` — the WITHIN-level arrow's own predicate, not the
+ * terminal (`done`-category, `cancelled`-inclusive) set the off-level stub carries.
+ */
+export interface RoadmapLevelMemberBlockerDto {
+  id: string;
+  isDone: boolean;
+}
+
+/**
  * ONE LEVEL of the project roadmap (Subtask 7.20.4 re-plan, MOTIR-1010): the
  * roots (`parentId = null`) OR one parent's direct children, each with a lazy
  * `hasChildren` drill flag, PLUS the `is_blocked_by` {@link RoadmapEdgeDto}s FROM
@@ -768,6 +790,13 @@ export interface ProjectRoadmapDto {
    *  anchors the canvas draws the red signal to). Empty when the level is a clean
    *  tree (every blocker is an on-level sibling). */
   offLevelBlockers: RoadmapBlockerStubDto[];
+  /**
+   * Blockers this level HAS but the read could not carry — the rows
+   * {@link RoadmapLevelMemberBlockerDto} describes (MOTIR-5043). They are NOT in
+   * {@link offLevelBlockers}, because they are not off the level: the cap dropped
+   * them. Empty on any level that fits under the cap, which is the ordinary case.
+   */
+  levelMemberBlockers: RoadmapLevelMemberBlockerDto[];
   /**
    * How many rows this level actually HAS, independent of how many `nodes`
    * carries (MOTIR-3490). The level read is capped, and until this field existed

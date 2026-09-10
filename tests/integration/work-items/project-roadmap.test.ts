@@ -141,6 +141,9 @@ describe('workItemsService.getProjectRoadmap — per-level read', () => {
       nodes: [],
       edges: [],
       offLevelBlockers: [],
+      // MOTIR-5043 — the level's own rows that the cap dropped. Nothing was read,
+      // so nothing was dropped.
+      levelMemberBlockers: [],
       // MOTIR-3490 — the level's true size rides the same DTO. An empty level
       // is `0 of 0`, which is what makes it honest rather than merely empty.
       levelTotal: 0,
@@ -498,4 +501,101 @@ describe('levelTotal + the Show-all escape (MOTIR-3490)', () => {
     const ids = new Set(all.nodes.map((n) => n.id));
     expect(created.every((id) => ids.has(id))).toBe(true);
   }, 120_000);
+});
+
+// ── MOTIR-5043 · a row the CAP dropped is still a MEMBER of the level ─────────
+// The cap above is not only a row that is missing — it is a row that came BACK,
+// wearing the wrong verdict. `offLevelIds` was derived from the rows the read
+// RETURNED (`levelIds`), so a blocker that is a plain SIBLING of the row it blocks
+// fell out of it the moment the level crossed 200 children, was NAMED by
+// `findRoadmapBlockerStubs`, and reached the canvas as an off-level stub — where
+// the project arm draws the bad-plan tangle about two cards that share a parent.
+//
+// The read is unchanged (the cap is deliberate, MOTIR-3490 decision 7). What
+// changed is that the service now answers the two questions separately: a stub
+// whose `parentId` IS the level's parent is a cap-dropped MEMBER, and the ones
+// that remain in `offLevelBlockers` are the strangers.
+describe('a cap-dropped SIBLING is a level member, not a cross-story blocker (MOTIR-5043)', () => {
+  it('sorts the truncated level’s own blocker into levelMemberBlockers, and keeps the stranger off-level', async () => {
+    const fx = await makeFixture();
+    const parent = await createWorkItem(fx, { kind: 'epic', title: 'Parent epic' });
+    // 202 children, key-ASC: indices 0..199 survive the 200-row cap, 200 and 201
+    // are dropped. The reproduction the card names is the LAST surviving row
+    // depending on one just past the cut.
+    const children: string[] = [];
+    for (let i = 0; i < 202; i += 1) {
+      const c = await createWorkItem(fx, {
+        kind: 'story',
+        title: `Child ${i}`,
+        parentId: parent.id,
+      });
+      children.push(c.id);
+    }
+    const survivor = children[199]!; // the 200th row — the last one the read carries
+    const dropped = children[201]!; // two past the cut
+    // …and a genuine stranger: a blocker under a DIFFERENT parent, which is the
+    // case the signal exists for and which must be untouched.
+    const otherParent = await createWorkItem(fx, { kind: 'epic', title: 'Other epic' });
+    const stranger = await createWorkItem(fx, {
+      kind: 'story',
+      title: 'Cross-story blocker',
+      parentId: otherParent.id,
+    });
+    await link(fx, survivor, dropped);
+    await link(fx, survivor, stranger.id);
+
+    const level = await workItemsService.getProjectRoadmap(fx.projectId, parent.id, fx.ctx);
+
+    // The level is truncated, and the blocker really is absent from it — this is
+    // the precondition, not the defect.
+    expect(level.nodes).toHaveLength(200);
+    expect(level.levelTotal).toBe(202);
+    expect(level.nodes.some((n) => n.id === dropped)).toBe(false);
+
+    // THE DEFECT: the sibling used to arrive here, fully titled, as a cross-story
+    // anchor. It is now named as what it is — a member the read could not carry.
+    expect(level.offLevelBlockers.map((b) => b.id)).not.toContain(dropped);
+    expect(level.levelMemberBlockers.map((b) => b.id)).toContain(dropped);
+    // `isDone` is the WITHIN-level arrow's predicate, not the terminal set.
+    expect(level.levelMemberBlockers.find((b) => b.id === dropped)!.isDone).toBe(false);
+
+    // AND THE STRANGER IS UNCHANGED. One of the two blockers on this one card is a
+    // real cross-parent dependency; separating the pair is the whole point, because
+    // on screen nothing distinguished them.
+    expect(level.offLevelBlockers.map((b) => b.id)).toContain(stranger.id);
+    expect(level.levelMemberBlockers.map((b) => b.id)).not.toContain(stranger.id);
+  }, 120_000);
+
+  it('a level that FITS reports no members at all — the field is empty in the ordinary case', async () => {
+    const fx = await makeFixture();
+    const f = await buildForest(fx);
+    // A2 blocked_by A1, both on Story A's level: an ordinary within-level edge, so
+    // nothing is off-level and nothing was dropped.
+    await link(fx, f.A2.id, f.A1.id);
+
+    const level = await workItemsService.getProjectRoadmap(fx.projectId, f.A.id, fx.ctx);
+    expect(level.levelTotal).toBe(level.nodes.length);
+    expect(level.levelMemberBlockers).toEqual([]);
+    expect(level.offLevelBlockers).toEqual([]);
+  });
+
+  it('an ids-named level answers membership from its id SET, never from a shared parent', async () => {
+    // A level named by its MEMBERS (MOTIR-3895) spans parents and is requested with
+    // `parentId: null`, so a blocker whose parent is also null would match the level
+    // parent by accident. Membership there is the id set — which `levelIds` already
+    // answers exactly — so the parent comparison must not run at all.
+    const fx = await makeFixture();
+    const member = await createWorkItem(fx, { kind: 'bug', title: 'Run member' });
+    const rootBlocker = await createWorkItem(fx, { kind: 'bug', title: 'Parentless blocker' });
+    await link(fx, member.id, rootBlocker.id);
+
+    const level = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
+      ids: [member.id],
+    });
+    expect(level.nodes.map((n) => n.id)).toEqual([member.id]);
+    // Both are parentless. The blocker is NOT in the run's set, so it is genuinely
+    // off this level and keeps the off-level treatment.
+    expect(level.levelMemberBlockers).toEqual([]);
+    expect(level.offLevelBlockers.map((b) => b.id)).toEqual([rootBlocker.id]);
+  });
 });

@@ -3660,7 +3660,7 @@ export const workItemsService = {
     // unbounded one is the whole-tree round-trip wearing a different name.
     const ids = opts.ids === undefined ? undefined : opts.ids.slice(0, ROADMAP_LEVEL_ALL_TAKE);
     if (ids !== undefined && ids.length === 0) {
-      return { nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 };
+      return { nodes: [], edges: [], offLevelBlockers: [], levelMemberBlockers: [], levelTotal: 0 };
     }
 
     let sprintId: string | null = null;
@@ -3669,7 +3669,13 @@ export const workItemsService = {
         sprintRepository.findActiveByProject(projectId, project.workspaceId, tx),
       );
       if (!activeSprint) {
-        return { nodes: [], edges: [], offLevelBlockers: [], levelTotal: 0 };
+        return {
+          nodes: [],
+          edges: [],
+          offLevelBlockers: [],
+          levelMemberBlockers: [],
+          levelTotal: 0,
+        };
       }
       sprintId = activeSprint.id;
     }
@@ -3823,18 +3829,63 @@ export const workItemsService = {
     const offLevelStubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemRepository.findRoadmapBlockerStubs(offLevelIds, tx),
     );
-    const offLevelBlockers = offLevelStubs.map((s) => ({
-      id: s.id,
-      identifier: s.identifier,
-      title: s.title,
-      parentTitle: s.parentTitle,
-      // Terminal (incl. `cancelled`), NOT `doneKeys` — a cancelled blocker is
-      // satisfied and must not be flagged "not in sprint" (MOTIR-1561).
-      isDone: terminalKeys.has(s.status),
-      inActiveSprint: sprintId != null && s.sprintId === sprintId,
-    }));
 
-    return { nodes, edges, offLevelBlockers, levelTotal };
+    // ⚠️ A ROW THE CAP DROPPED IS STILL A MEMBER OF THIS LEVEL (bug MOTIR-5043).
+    // `levelIds` above is the rows the read RETURNED, and `take` is 200 — so on a
+    // level with more children than that, a blocker that is a plain SIBLING of the
+    // row it blocks falls out of `levelIds` and lands in `offLevelIds`, where every
+    // downstream reader treats it as the cross-story tangle: a red `cross` arrow, a
+    // `blocked elsewhere` flag on the dependent, and a ghost anchor for a card that
+    // shares its dependent's parent. The canvas's loudest verdict — its legend reads
+    // *"the blocker sits elsewhere in the plan (a bad plan)"* — fired about a tree
+    // that is correct, and the reader's likeliest repair is to MOVE a card.
+    //
+    // So the two questions are separated here, once, rather than in each arm that
+    // asks one of them: `offLevelBlockers` keeps the blockers that are genuinely on
+    // ANOTHER level, and `levelMemberBlockers` names the ones this level HAS and the
+    // read could not carry. The canvas draws neither — a dropped row has no node —
+    // but only the first deserves the verdict. This is the fourth exclusion in the
+    // family (grouping MOTIR-3557, archived MOTIR-3927, a plan's arriving card
+    // MOTIR-4952), and the first one answered from the LEVEL rather than from the
+    // arm that happened to notice it.
+    //
+    // TWO GUARDS, both because the parent comparison only MEANS membership when the
+    // level is the parent's children:
+    //   * `ids` — a level named by its MEMBERS spans parents (MOTIR-3895) and carries
+    //     `parentId: null` for the request; a blocker's parent being null would then
+    //     match by accident. Membership there is the id set, which `levelIds` already
+    //     answers exactly.
+    //   * SPRINT scope — `findProjectTreeLevel` re-roots the level at the topmost
+    //     IN-SPRINT rows, so a level's rows are not `parentId`'s children at all.
+    //     That arm is also not where the defect is: it suppresses a done / in-sprint
+    //     blocker and flags an out-of-sprint one "blocker not in sprint", which is
+    //     TRUE of a cap-dropped sibling. Leaving it alone keeps it true.
+    const isParentLevel = ids === undefined && opts.scope !== 'sprint';
+    const levelMemberIds = new Set(
+      isParentLevel ? offLevelStubs.filter((s) => s.parentId === parentId).map((s) => s.id) : [],
+    );
+    const offLevelBlockers = offLevelStubs
+      .filter((s) => !levelMemberIds.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        identifier: s.identifier,
+        title: s.title,
+        parentTitle: s.parentTitle,
+        // Terminal (incl. `cancelled`), NOT `doneKeys` — a cancelled blocker is
+        // satisfied and must not be flagged "not in sprint" (MOTIR-1561).
+        isDone: terminalKeys.has(s.status),
+        inActiveSprint: sprintId != null && s.sprintId === sprintId,
+      }));
+    // `isDone` here is `status === 'done'`, NOT the terminal set the stub above
+    // carries — it feeds the WITHIN-level arrow variant, and that arm's own
+    // predicate is `status === 'done'` (the same reason `arrivingBlockers` is a map
+    // of that predicate and not of the stub's `isDone`: a `cancelled` blocker would
+    // otherwise draw `firm` here and `pending` once the row is fetched).
+    const levelMemberBlockers = offLevelStubs
+      .filter((s) => levelMemberIds.has(s.id))
+      .map((s) => ({ id: s.id, isDone: s.status === 'done' }));
+
+    return { nodes, edges, offLevelBlockers, levelMemberBlockers, levelTotal };
   },
 
   /**
