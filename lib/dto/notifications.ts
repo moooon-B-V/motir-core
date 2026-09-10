@@ -39,7 +39,10 @@ export interface NotificationActorDTO {
  * forward dep). `issueKey` is the deep-link target the drawer routes to
  * (`/items/[key]`, per `design/notifications/drawer.mock.html`).
  */
-export type NotificationData = NotificationMentionedData | NotificationTransitionedData;
+export type NotificationData =
+  | NotificationMentionedData
+  | NotificationTransitionedData
+  | NotificationCodeAccessRefusedData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -67,6 +70,48 @@ export interface NotificationTransitionedData {
   /** Status transition nouns. */
   fromStatus: string;
   toStatus: string;
+}
+
+/**
+ * GitHub REFUSED a collaborator invitation (MOTIR-5016 · Story MOTIR-5010) — the
+ * ONE access outcome with no other carrier, which is the whole rule for whether a
+ * notification is owed. An invitation that SENDS is carried by GitHub's own email
+ * to the account it names; an identity that was never connected is carried by the
+ * plan review rail's `needs_access` outcome and by `/settings/project/code-access`.
+ * A refusal has neither: no email left the building, and the user has private code
+ * they cannot reach.
+ *
+ * ⚠️ THE FIRST ARM WHOSE SUBJECT IS A PROJECT, not a work item — `workItemId` is
+ * null on these rows, so the drawer routes from the TYPE rather than from the
+ * presence of an issue key.
+ */
+export interface NotificationCodeAccessRefusedData {
+  kind: 'code_access_refused';
+  /** The project the repository belongs to — the row's deep-link target. */
+  projectKey: string;
+  /** The project's display name, for the summary line. */
+  projectName: string;
+  /** The repository GitHub refused the invitation on, as `owner/name`. */
+  repoRef: string;
+}
+
+/**
+ * The arms whose subject is a WORK ITEM — the ones carrying `issueKey` and
+ * `title`. Every arm did until MOTIR-5016 added `code_access_refused`, whose
+ * subject is a PROJECT, so a reader that wants the deep-link key now has to say
+ * which arms it means.
+ *
+ * ⚠️ EXPORTED AS A GUARD RATHER THAN LEFT TO EACH CALLER, because the alternative
+ * is a cast at every site — and a cast is exactly what the 5.7.9 round-trip bug
+ * was: a blind `as NotificationData` let `workItemKey`/`issueKey` drift apart and
+ * come back `undefined`. A predicate narrows instead of asserting, so a future
+ * arm that also lacks an issue key breaks the callers that must care and nothing
+ * else.
+ */
+export function isWorkItemNotificationData(
+  data: NotificationData,
+): data is NotificationMentionedData | NotificationTransitionedData {
+  return data.kind === 'mentioned' || data.kind === 'transitioned';
 }
 
 export interface NotificationDTO {

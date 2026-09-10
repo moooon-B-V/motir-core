@@ -7,6 +7,7 @@ import {
   type NotificationFanInRegistry,
 } from '@/lib/services/notificationFanInService';
 import type { NotificationData } from '@/lib/dto/notifications';
+import { isWorkItemNotificationData } from '@/lib/dto/notifications';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { notificationPreferencesService } from '@/lib/services/notificationPreferencesService';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
@@ -189,6 +190,13 @@ describe('a real comment mention is fanned in and read back through the feed (5.
     // 5.7.5 drawer reads — the producer and the read mapper share ONE
     // `NotificationData` contract, so the keys round-trip instead of coming back
     // `undefined` from a blind `as` cast.
+    // ⚠️ NARROWED SINCE MOTIR-5016, and the narrowing is the assertion's own
+    // subject rather than a formality: `NotificationData` gained an arm whose
+    // subject is a PROJECT (`code_access_refused`) and which carries no issue key
+    // at all, so "this row deep-links to a work item" is now a claim to make
+    // rather than a shape to assume. A cast would have hidden exactly the drift
+    // the 5.7.9 guard below exists to catch.
+    if (!isWorkItemNotificationData(row.data)) throw new Error('expected a work-item row');
     expect(row.data.issueKey).toBe(j.issueIdentifier);
     expect(row.data.title).toBe(j.issueTitle);
     if (row.data.kind === 'mentioned') {

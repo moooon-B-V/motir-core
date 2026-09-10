@@ -1195,7 +1195,6 @@ export default defineConfig({
         'lib/projectRepos/errorResponse.ts',
         'lib/planning/repositorySetClient.ts',
         'components/planning/repositories/RepositorySetStep.tsx',
-        'components/planning/repositories/RepositoryRow.tsx',
         'app/api/projects/[key]/repositories/route.ts',
         'app/api/projects/[key]/repositories/[rowId]/route.ts',
         'app/api/projects/[key]/repositories/[rowId]/state/route.ts',
@@ -3399,11 +3398,6 @@ export default defineConfig({
         },
         'lib/planning/repositorySetClient.ts': { branches: 90, functions: 90, lines: 90 },
         'components/planning/repositories/RepositorySetStep.tsx': {
-          branches: 90,
-          functions: 90,
-          lines: 90,
-        },
-        'components/planning/repositories/RepositoryRow.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,

@@ -3,7 +3,15 @@
 import type { ComponentType, ReactNode } from 'react';
 import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
-import { AtSign, Bell, Check, GitPullRequest, MessageSquare, UserCheck } from 'lucide-react';
+import {
+  ShieldAlert,
+  AtSign,
+  Bell,
+  Check,
+  GitPullRequest,
+  MessageSquare,
+  UserCheck,
+} from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import type { NotificationDTO } from '@/lib/dto/notifications';
 
@@ -38,11 +46,28 @@ const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; b
   commented: { Icon: MessageSquare, badge: 'bg-(--el-notif-commented)' },
   assigned: { Icon: UserCheck, badge: 'bg-(--el-notif-assigned)' },
   transitioned: { Icon: GitPullRequest, badge: 'bg-(--el-notif-transitioned)' },
+  // MOTIR-5016 · Story MOTIR-5010 — the ACCESS-REFUSED row. `shield-alert`: a
+  // permission that did not land. `user-x` reads as a PERSON removed from the
+  // project and `key-round` as access you HAVE, so neither says this.
+  // `--el-notif-access-refused` maps to `--color-warning` — the same hue the plan
+  // review rail's `needs_access` outcome uses, so one product story is told in one
+  // colour. NOT danger: nothing was lost, the repository exists.
+  code_access_refused: { Icon: ShieldAlert, badge: 'bg-(--el-notif-access-refused)' },
 };
+
+/** Types whose subject is a PROJECT rather than a work item — no actor, and a
+ *  destination resolved from the TYPE. `code_access_refused` is the first
+ *  (MOTIR-5016); `Notification.workItemId` is null on these rows. */
+const ACTORLESS_TYPES = new Set<string>(['code_access_refused']);
 const DEFAULT_META = { Icon: Bell, badge: 'bg-(--el-text-muted)' };
 
 /** Pick the summary i18n key for a notification's type (+ whether it deep-links). */
 function summaryKey(type: string, hasKey: boolean): string {
+  // ⚠️ CHECKED BEFORE `hasKey`, because this type has no issue key BY DESIGN and
+  // the `genericNoKey` fallback would swallow it (MOTIR-5016). The `hasKey` guard
+  // below is for a work-item row whose key is missing — a degraded payload — which
+  // is a different thing from a row that is not about a work item at all.
+  if (type === 'code_access_refused') return 'summary.accessRefused';
   if (!hasKey) return 'summary.genericNoKey';
   switch (type) {
     case 'mentioned':
@@ -78,10 +103,23 @@ export function NotificationRow({
   // `data` is a discriminated union (5.7.9) — narrow on `kind` for the
   // arm-specific nouns; `issueKey` / `title` are shared across arms.
   const data = notification.data;
-  const issueKey = data.issueKey || null;
+  const issueKey = 'issueKey' in data ? data.issueKey || null : null;
   const excerpt = data.kind === 'mentioned' ? data.excerpt : null;
   const toStatus = data.kind === 'transitioned' ? data.toStatus : '';
-  const actorName = notification.actor?.name ?? t('actorFallback');
+  // ⚠️ NO ACTOR, AND NO FALLBACK NAME. Motir tried something on the user's behalf
+  // and GitHub said no, so `actorFallback` would put a FICTIONAL actor into the
+  // summary grammar — the exact failure the design card decided against
+  // (`design/notifications/design-notes.md`, the four decisions).
+  const actorless = ACTORLESS_TYPES.has(notification.type);
+  const actorName = actorless ? '' : (notification.actor?.name ?? t('actorFallback'));
+  // The destination is resolved from the TYPE, never from the presence of an
+  // issue key: this is the first row whose subject is a PROJECT.
+  const href =
+    data.kind === 'code_access_refused'
+      ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
+      : issueKey
+        ? `/items/${issueKey}`
+        : null;
   const createdAt = new Date(notification.createdAt);
 
   // Rich summary: actor + key bolded via the <s> tag, greyed one tier on a
@@ -100,6 +138,7 @@ export function NotificationRow({
     actor: actorName,
     key: issueKey ?? '',
     status: toStatus,
+    project: data.kind === 'code_access_refused' ? data.projectName : '',
     s: strong,
   });
 
@@ -113,25 +152,44 @@ export function NotificationRow({
         )}
       />
       <span className="relative shrink-0">
-        <span
-          aria-hidden
-          className={cn(
-            'inline-flex h-[30px] w-[30px] items-center justify-center rounded-full text-xs font-semibold text-(--el-text-inverted)',
-            read ? 'bg-(--el-text-faint)' : 'bg-(--el-text)',
-          )}
-        >
-          {actorName.charAt(0).toUpperCase()}
-        </span>
-        <span
-          aria-hidden
-          className={cn(
-            'absolute -right-0.5 -bottom-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-(--el-accent-text) ring-2 ring-(--el-page-bg)',
-            meta.badge,
-            read && 'opacity-60',
-          )}
-        >
-          <Icon className="h-2.5 w-2.5" />
-        </span>
+        {actorless ? (
+          /* ⚠️ THE GLYPH IS PROMOTED INTO THE AVATAR SLOT, and the small badge is
+             dropped: nobody did this to you, so there is no initial letter to draw
+             and no person for a badge to be attached TO. The shape is what says so
+             at a glance, which is the design's decision rather than this file's. */
+          <span
+            aria-hidden
+            className={cn(
+              'inline-flex h-[30px] w-[30px] items-center justify-center rounded-full text-(--el-accent-text)',
+              meta.badge,
+              read && 'opacity-60',
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+        ) : (
+          <>
+            <span
+              aria-hidden
+              className={cn(
+                'inline-flex h-[30px] w-[30px] items-center justify-center rounded-full text-xs font-semibold text-(--el-text-inverted)',
+                read ? 'bg-(--el-text-faint)' : 'bg-(--el-text)',
+              )}
+            >
+              {actorName.charAt(0).toUpperCase()}
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                'absolute -right-0.5 -bottom-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full text-(--el-accent-text) ring-2 ring-(--el-page-bg)',
+                meta.badge,
+                read && 'opacity-60',
+              )}
+            >
+              <Icon className="h-2.5 w-2.5" />
+            </span>
+          </>
+        )}
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-baseline gap-2">
@@ -171,12 +229,8 @@ export function NotificationRow({
 
   return (
     <div className="relative border-b border-(--el-border-soft) last:border-b-0">
-      {issueKey ? (
-        <Link
-          href={`/items/${issueKey}`}
-          onClick={() => onActivate(notification)}
-          className={rowClass}
-        >
+      {href ? (
+        <Link href={href} onClick={() => onActivate(notification)} className={rowClass}>
           {body}
         </Link>
       ) : (

@@ -16,6 +16,9 @@ import type {
   ProjectRepoTeamAccessRowDto,
 } from '@/lib/dto/projectRepos';
 import { readProject } from '@/lib/workspaces/tenantRead';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import { notificationFanInService } from '@/lib/services/notificationFanInService';
+import { NOTIFICATION_EVENT_TYPE } from '@/lib/notifications/preferences';
 
 // COLLABORATOR ACCESS — getting the TEAM into the code Motir made them (Story
 // MOTIR-1775 · MOTIR-1900, generalised by MOTIR-1910).
@@ -148,6 +151,7 @@ export const projectRepoAccessService = {
 
     let invited = 0;
     let failed = 0;
+    const refused: { rowId: string; repoRef: string }[] = [];
     for (const row of rows) {
       if (options.rowId !== undefined && row.id !== options.rowId) continue;
       if (!isInvitable(row)) continue;
@@ -167,11 +171,27 @@ export const projectRepoAccessService = {
         ctx,
       });
       if (ok) invited += 1;
-      else failed += 1;
+      else {
+        failed += 1;
+        // ⚠️ THE ONE ACCESS OUTCOME THAT REACHES NOBODY (MOTIR-5016 · Story
+        // MOTIR-5010). An invitation that SENDS is carried by GitHub's own email
+        // to the account it names; an identity that was never connected is carried
+        // by the rail's `needs_access` outcome and by `/settings/project/code-access`.
+        // A REFUSAL has neither — no email left the building — so until this card
+        // the only record was `inviteOne`'s `console.error`, and the user had
+        // private code they could not open with nothing on any screen saying so.
+        //
+        // Collected here and emitted AFTER the loop, so one refusal cannot cost a
+        // sibling row its invitation.
+        refused.push({ rowId: row.id, repoRef: `${realized.owner}/${realized.name}` });
+      }
     }
 
+    const rowsAfter = await projectRepoSetService.listByProject(projectId, ctx);
+    await notifyRefusals(refused, projectId, identity.githubLogin, ctx);
+
     return {
-      rows: await projectRepoSetService.listByProject(projectId, ctx),
+      rows: rowsAfter,
       login: identity.githubLogin,
       invited,
       failed,
@@ -514,4 +534,57 @@ async function resolveCandidates(projectId: string, ctx: ServiceContext): Promis
  *  deleted has no coordinates to invite against. */
 function isInvitable(row: ProjectRepoDto): boolean {
   return needsCollaboratorInvite(row.state) && row.realizedRepo !== null;
+}
+
+/**
+ * One notification per REFUSED invitation (MOTIR-5016 · Story MOTIR-5010), to the
+ * actor whose invitation GitHub turned down.
+ *
+ * ⚠️ IDEMPOTENT BY THE DEDUPE KEY, and that is not optional here. Establishing is
+ * retryable — **Try again** sits on the failed panel — so the key is
+ * `code_access_refused:<rowId>:<login>`: the repository ROW and the invited LOGIN,
+ * both true once per refusal. A key varying by timestamp or attempt would hand a
+ * user one row per retry for one refusal, which `createMany(skipDuplicates)` plus
+ * the `(dedupeKey, recipientUserId)` unique would then be powerless to absorb.
+ *
+ * Best-effort throughout: this runs after the invitations have been attempted and
+ * the repositories exist. A notification that could not be written must not cost
+ * the user their code.
+ */
+async function notifyRefusals(
+  refused: readonly { rowId: string; repoRef: string }[],
+  projectId: string,
+  login: string,
+  ctx: ServiceContext,
+): Promise<void> {
+  if (refused.length === 0) return;
+  try {
+    const project = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+      (tx) => projectRepository.findById(projectId, tx),
+    );
+    if (!project) return;
+    for (const r of refused) {
+      await notificationFanInService.notifyProjectEvent({
+        workspaceId: ctx.workspaceId,
+        recipientUserId: ctx.userId,
+        type: NOTIFICATION_EVENT_TYPE.codeAccessRefused,
+        // DIRECT: it is about the actor's own access, not about something they
+        // are watching.
+        category: 'direct',
+        dedupeKey: `${NOTIFICATION_EVENT_TYPE.codeAccessRefused}:${r.rowId}:${login}`,
+        data: {
+          kind: 'code_access_refused',
+          projectKey: project.identifier,
+          projectName: project.name,
+          repoRef: r.repoRef,
+        },
+      });
+    }
+  } catch (err) {
+    console.error(
+      `[projectRepoAccessService] could not notify about refused invitations on project ${projectId}:`,
+      err,
+    );
+  }
 }

@@ -186,7 +186,11 @@ async function connectGithub(fx: WorkItemFixture, login = LOGIN): Promise<void> 
   );
 }
 
-async function addRow(fx: WorkItemFixture, role: 'web' | 'api', name: string): Promise<string> {
+async function addRow(
+  fx: WorkItemFixture,
+  role: 'web' | 'api' | 'infra',
+  name: string,
+): Promise<string> {
   const row = await projectRepoSetService.addRow(fx.projectId, { role, name }, fx.ctx);
   return row.id;
 }
@@ -241,6 +245,35 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/**
+ * ⚠️ MOTIR-5015 · Story MOTIR-5010 — THIS BLOCK IS THE CARD'S FIRST HALF, AND IT
+ * WAS ALREADY GREEN BEFORE THE CARD WAS WRITTEN.
+ *
+ * The card asked to "SEND the collaborator invitation at establish", on the
+ * premise that it was still a second thing the user had to ask for. It is not:
+ * `projectRepoSetService.attachRealizedRepo` has called
+ * `projectRepoAccessService.inviteAfterEstablish` post-commit since MOTIR-1900, at
+ * the one seam every establish path goes through — so the trigger had already
+ * moved, and the four behaviours the card asks to prove are each pinned below and
+ * were passing on `origin/main`.
+ *
+ * What was NOT done, and is what MOTIR-5015 actually shipped, is the second half:
+ * the `created` panel still offered **Connect GitHub** — a navigation button
+ * wearing the connect button's name — instead of REPORTING the invitation that
+ * had already gone out. The defect was never in the sending.
+ *
+ * The four criteria, and where each is already proved:
+ *   1. an identity ⇒ one invite per created row, no user action → the first case;
+ *   2. no identity ⇒ nothing sent, nothing thrown, rows `not_invited`
+ *      → `a user who has NOT connected GitHub`;
+ *   3. a refusal on one row does not fail the establish
+ *      → `an invitation failure never damages the repository`;
+ *   4. no re-send over an already-accepted record
+ *      → the `204` case here, and `acceptance is OBSERVED, never assumed`.
+ *
+ * Nothing is added here. Re-asserting a green behaviour to claim a criterion is
+ * how a suite grows without gaining a check.
+ */
 describe('establishing a set invites the approving user', () => {
   it('invites them to EVERY created repository, as an admin, at the realized coordinates', async () => {
     const fx = await makeWorkItemFixture();
@@ -541,5 +574,128 @@ describe('concurrency — two grant passes race', () => {
     });
     expect(stored.acceptedAt).not.toBeNull();
     expect((await readRow(fx, rowId)).access.state).toBe('accepted');
+  });
+});
+
+// ── THE REFUSED-INVITATION NOTIFICATION (MOTIR-5016 · Story MOTIR-5010) ───────
+//
+// A REFUSAL is the one access outcome with no other carrier. An invitation that
+// SENDS is carried by GitHub's own email to the account it names; an identity
+// that was never connected is carried by the rail's `needs_access` outcome and by
+// `/settings/project/code-access`. A refusal has neither — no email left the
+// building — so until MOTIR-5016 the only record was a `console.error`.
+//
+// The RULE the notification is owed by: a notification exists exactly when NO
+// other carrier reaches the user. Not "when something failed", which is what the
+// absence tests below are for.
+
+/** Every in-app notification the actor holds, newest first. */
+async function notificationsFor(fx: WorkItemFixture) {
+  return adminDb.notification.findMany({
+    where: { recipientUserId: fx.ownerId },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+describe('a REFUSED invitation reaches the bell', () => {
+  it('writes exactly ONE notification, about the PROJECT, with no work item and no actor', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx);
+    inviteRefusals.set('acme-api', 403);
+    await addRow(fx, 'web', 'acme-web');
+    await addRow(fx, 'api', 'acme-api');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    const rows = await notificationsFor(fx);
+    expect(rows).toHaveLength(1);
+    const n = rows[0]!;
+    expect(n.type).toBe('code_access_refused');
+    expect(n.category).toBe('direct');
+    // ⚠️ THE FIRST NOTIFICATION WHOSE SUBJECT IS A PROJECT. Both columns are null
+    // by design: there is no work item, and nobody did this to the user — Motir
+    // tried something on their behalf and GitHub said no.
+    expect(n.workItemId).toBeNull();
+    expect(n.actorId).toBeNull();
+    const data = n.data as Record<string, unknown>;
+    expect(data['kind']).toBe('code_access_refused');
+    expect(data['repoRef']).toBe(`${MOTIR_ORG}/acme-api`);
+    expect(String(data['projectKey'])).not.toHaveLength(0);
+  });
+
+  it('a RETRY produces no second row — the dedupe key is the row and the login, never the attempt', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx);
+    inviteRefusals.set('acme-web', 403);
+    await addRow(fx, 'web', 'acme-web');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+    // **Try again** is on the failed panel, so this is an ordinary user action —
+    // and a second grant pass over the same refused row is the same event.
+    await projectRepoAccessService.grantAccess(fx.projectId, fx.ctx);
+    await projectRepoAccessService.grantAccess(fx.projectId, fx.ctx);
+
+    expect(await notificationsFor(fx)).toHaveLength(1);
+  });
+
+  it('a SUCCESSFUL invitation notifies NOBODY — GitHub’s own email is the carrier', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx);
+    await addRow(fx, 'web', 'acme-web');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    // The absence IS the assertion: notifying here would be a second, redundant
+    // carrier for a state GitHub already emails about.
+    expect(await notificationsFor(fx)).toHaveLength(0);
+  });
+
+  it('no connected identity notifies NOBODY — nothing was attempted, so nothing failed', async () => {
+    const fx = await makeWorkItemFixture();
+    await addRow(fx, 'web', 'acme-web');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(await notificationsFor(fx)).toHaveLength(0);
+  });
+
+  it('one notification PER REFUSED ROW, and none for the row that succeeded', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx);
+    inviteRefusals.set('acme-api', 403);
+    inviteRefusals.set('acme-infra', 403);
+    await addRow(fx, 'web', 'acme-web');
+    await addRow(fx, 'api', 'acme-api');
+    await addRow(fx, 'infra', 'acme-infra');
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    const rows = await notificationsFor(fx);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => (r.data as Record<string, unknown>)['repoRef']).sort()).toEqual([
+      `${MOTIR_ORG}/acme-api`,
+      `${MOTIR_ORG}/acme-infra`,
+    ]);
+  });
+
+  it('the CHANNEL GATE is honoured — the in-app row is suppressed when the user turned it off', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx);
+    inviteRefusals.set('acme-web', 403);
+    await addRow(fx, 'web', 'acme-web');
+    // The same gate every other event type goes through, which is the whole
+    // reason the emitter consults `isChannelEnabled` rather than writing directly.
+    await adminDb.notificationPreference.create({
+      data: {
+        userId: fx.ownerId,
+        eventType: 'code_access_refused',
+        channel: 'in_app',
+        enabled: false,
+      },
+    });
+
+    await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
+
+    expect(await notificationsFor(fx)).toHaveLength(0);
   });
 });

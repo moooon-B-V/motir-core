@@ -103,7 +103,23 @@ motir-ai boundary mock, the code-health fixture and the GitHub provisioning mock
 | `cloud-cadence.spec.ts`                  | MOTIR-813  | motir-ai                                                              |
 | `cloud-audit-coverage.spec.ts`           | MOTIR-2244 | code-health fixture + motir-ai                                        |
 | `cloud-org-settings-truth.spec.ts`       | MOTIR-2542 | billing — the "no upgrade this org needs" assertion                   |
-| `cloud-repository-set.spec.ts`           | MOTIR-1775 | the GitHub provisioning mock (9 tests, 783 lines)                     |
+| `cloud-repository-set.spec.ts`           | MOTIR-1775 | the GitHub provisioning mock (5 tests since MOTIR-5018 re-scoped it)  |
+
+> **⚠️ `cloud-repository-set.spec.ts` was RE-SCOPED, not retired, by MOTIR-5018
+> (Story MOTIR-5010).** Four of its nine tests drove `RepositorySetStep`'s `own`
+> and `set` modes, which that story DELETED — connecting a repository the user
+> already owns is onboarding's — so each was removed with a note naming where its
+> behaviour is covered now. The spec stays exactly what this table says it is: a
+> promoted regression spec in the cloud lane, publishing no receipt, because
+> MOTIR-1775's is approved and frozen.
+>
+> **Story MOTIR-5010 has its OWN receipt, from its own spec** —
+> `acceptance-repository-report.spec.ts`, in the acceptance lane. That is not a
+> second walk over one surface: a regression check that runs on every pull request
+> and one recorded run a person approves are different instruments, and
+> `tests/e2e-acceptance-lane-imports.test.ts` is what keeps a spec from trying to
+> be both. When MOTIR-5010's receipt is approved, that spec takes one of this
+> document's two routes like any other.
 
 > **The `acceptance-ai-callout` row corrects MOTIR-2765's worked example.** The
 > story cites it as the model retire, on the grounds that `ai-callout-gate.spec.ts`

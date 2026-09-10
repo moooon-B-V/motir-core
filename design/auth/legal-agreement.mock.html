@@ -944,8 +944,8 @@
          The shipped treatment, mirrored: lucide `external-link` at 14px beside
          the label, in the link's own colour so it reads as part of the link
          rather than as an adjacent control. `components/github/DevelopmentSection.tsx`
-         and `components/planning/repositories/RepositoryRow.tsx` are where it
-         ships today. */
+         is where it ships today; a second instance lived in the establish step's
+         repository row until MOTIR-5014 deleted the technical path with it. */
       .lnk-ext svg {
         width: 13px;
         height: 13px;
@@ -1926,9 +1926,9 @@
       external-link treatment: lucide <code>external-link</code> at 13px, inline after the label,
       <strong>in the link's own colour</strong> rather than a muted one, so it reads as part of the
       link and not as an adjacent control. That mirrors
-      <code>components/github/DevelopmentSection.tsx</code> and
-      <code>components/planning/repositories/RepositoryRow.tsx</code>, which is where it ships
-      today. <br /><br />
+      <code>components/github/DevelopmentSection.tsx</code>, which is where it ships today; a second
+      instance lived in the establish step's repository row until MOTIR-5014 deleted the technical
+      path with it. <br /><br />
       <strong>Why it is worth drawing rather than leaving to the build.</strong> The glyph is the
       only thing on this screen that tells a reader the document is somebody else's page rather than
       another screen of the product — and the decision is made ONCE here rather than three times in

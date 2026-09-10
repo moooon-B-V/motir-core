@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { NotificationsPageDTO } from '@/lib/dto/notifications';
+import en from '@/messages/en.json';
 
 // NotificationDrawer (Subtask 5.7.5) — the Watching-tab regression guard for bug
 // 8.8.1. The tab was hardcoded `disabled` as the Story 5.4 seam; with 5.4
@@ -92,5 +93,70 @@ describe('NotificationDrawer — Watching tab (bug 8.8.1)', () => {
         true,
       );
     });
+  });
+});
+
+// ── THE ACCESS-REFUSED ROW (MOTIR-5016 · Story MOTIR-5010) ───────────────────
+//
+// The first notification whose subject is a PROJECT and whose actor is nobody, so
+// the three things the shipped row derives from a work item each need their own
+// answer: the summary, the avatar and the destination.
+
+describe('NotificationDrawer — the access-refused row', () => {
+  const refusedRow = () => ({
+    id: 'n-refused',
+    type: 'code_access_refused',
+    category: 'direct' as const,
+    readAt: null,
+    createdAt: new Date().toISOString(),
+    actor: null,
+    workItemId: null,
+    data: {
+      kind: 'code_access_refused' as const,
+      projectKey: 'ACME',
+      projectName: 'Acme booking',
+      repoRef: 'motir-projects/acme-web',
+    },
+  });
+
+  it('renders the DESIGN’s copy — read from the catalog, never re-typed here', async () => {
+    renderDrawer(pageDTO({ notifications: [refusedRow()] as never, totalCount: 1 }));
+
+    // ⚠️ THE STRING COMES FROM `messages/en.json`, with the rich-text tag stripped
+    // and the placeholder filled the way the row fills it. Re-typing the sentence
+    // here would let the catalog and this assertion drift apart while both stayed
+    // green — and the copy IS the deliverable of the design card.
+    const template = en.notifications.summary.accessRefused;
+    const expected = String(template)
+      .replace(/<\/?s>/g, '')
+      .replace('{project}', 'Acme booking');
+
+    const row = await screen.findByRole('link', { name: new RegExp('Acme booking') });
+    expect(row.textContent).toContain(expected);
+    // A consequence and a REMEDY — and no internal cause anywhere in it.
+    for (const leak of ['403', 'token', 'credential', 'billing', 'status code']) {
+      expect(row.textContent?.toLowerCase()).not.toContain(leak);
+    }
+  });
+
+  it('routes to CODE ACCESS, not to an item — the destination comes from the TYPE', async () => {
+    renderDrawer(pageDTO({ notifications: [refusedRow()] as never, totalCount: 1 }));
+
+    const row = await screen.findByRole('link', { name: new RegExp('Acme booking') });
+    // `Notification.workItemId` is null on this row, so the shipped
+    // `issueKey !== null` routing would have produced a non-navigating button.
+    expect(row.getAttribute('href')).toContain('/settings/project/code-access');
+    expect(row.getAttribute('href')).not.toContain('/items/');
+  });
+
+  it('draws NO actor — no initial letter, and no fallback name in the sentence', async () => {
+    renderDrawer(pageDTO({ notifications: [refusedRow()] as never, totalCount: 1 }));
+
+    const row = await screen.findByRole('link', { name: new RegExp('Acme booking') });
+    // `actorFallback` ("Someone") would put a FICTIONAL actor into the summary
+    // grammar — nobody did this to the user; Motir tried something on their
+    // behalf and GitHub said no.
+    const fallback = en.notifications.actorFallback;
+    expect(row.textContent).not.toContain(fallback);
   });
 });

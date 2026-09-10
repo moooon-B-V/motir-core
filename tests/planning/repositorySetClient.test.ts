@@ -1,17 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   RepositorySetRequestError,
-  addRepositoryRow,
-  connectRepositoryRow,
   establishRepositorySet,
   fetchRepositorySet,
-  grantRepositoryAccess,
-  moveRepositoryRow,
-  patchRepositoryRow,
   refreshRepositoryAccess,
-  removeRepositoryRow,
-  replanRepositoryRow,
-  skipRepositoryRow,
 } from '@/lib/planning/repositorySetClient';
 
 // The establish step's client seam (Story MOTIR-1775 · MOTIR-1782) — the one place
@@ -67,38 +59,13 @@ describe('the repository-set client', () => {
     expect(calls[0]!.url).toBe('/api/projects/a%2Fb/repositories');
   });
 
-  it('sends each edit as its own method + body', async () => {
-    const calls = stub({ json: () => ({ id: 'r1' }) });
-
-    await addRepositoryRow('MOTIR', { role: 'api', name: 'acme-api' });
-    await patchRepositoryRow('MOTIR', 'r1', { name: 'renamed' });
-    await moveRepositoryRow('MOTIR', 'r1', 'up');
-
-    expect(calls.map((c) => [c.method, c.url])).toEqual([
-      ['POST', '/api/projects/MOTIR/repositories'],
-      ['PATCH', '/api/projects/MOTIR/repositories/r1'],
-      ['POST', '/api/projects/MOTIR/repositories/r1/move'],
-    ]);
-    expect(calls[0]!.body).toEqual({ role: 'api', name: 'acme-api' });
-    expect(calls[1]!.body).toEqual({ name: 'renamed' });
-    expect(calls[2]!.body).toEqual({ direction: 'up' });
-  });
-
-  it('routes all three state moves through ONE endpoint, naming the target state', async () => {
-    const calls = stub({ json: () => ({ id: 'r1' }) });
-
-    await connectRepositoryRow('MOTIR', 'r1', 'gh-9');
-    await skipRepositoryRow('MOTIR', 'r1');
-    await replanRepositoryRow('MOTIR', 'r1');
-
-    expect(calls.every((c) => c.url === '/api/projects/MOTIR/repositories/r1/state')).toBe(true);
-    expect(calls.map((c) => c.body)).toEqual([
-      { to: 'connected', githubRepoId: 'gh-9' },
-      { to: 'skipped' },
-      { to: 'proposed' },
-    ]);
-  });
-
+  /* ⚠️ TWO CASES WERE REMOVED HERE, NOT SKIPPED (MOTIR-5014 · Story MOTIR-5010).
+     They drove `addRepositoryRow` / `patchRepositoryRow` / `moveRepositoryRow` and
+     `connectRepositoryRow` / `skipRepositoryRow` / `replanRepositoryRow`, whose only
+     production caller was the step's `set` mode — the technical path, which left for
+     onboarding. The seven functions went with it, so there is no wire left for these
+     to assert. The ROUTES they called are untouched and still serve the repositories
+     room; what is gone is this client's way of reaching them. */
   it('establishes the whole set by default and ONE row when asked', async () => {
     const calls = stub({ json: () => ({ projectId: 'p', rows: [] }) });
 
@@ -109,6 +76,10 @@ describe('the repository-set client', () => {
     expect(calls[0]!.url).toBe('/api/projects/MOTIR/repositories/establish');
   });
 
+  // ⚠️ Driven through `establishRepositorySet` since MOTIR-5014: the case is about
+  // `send`, the SHARED helper, and its previous driver (`removeRepositoryRow`) went
+  // with the technical path. The behaviour is unchanged and still covered — what
+  // moved is which surviving caller exercises it.
   it('treats a 204 as a real answer rather than trying to parse a body', async () => {
     stub({
       status: 204,
@@ -116,15 +87,13 @@ describe('the repository-set client', () => {
         throw new Error('a 204 has no body to parse');
       },
     });
-    await expect(removeRepositoryRow('MOTIR', 'r1')).resolves.toBeUndefined();
+    await expect(establishRepositorySet('MOTIR')).resolves.toBeUndefined();
   });
 
   it('turns a non-2xx into a typed error carrying the status AND the server’s code', async () => {
     stub({ ok: false, status: 409, json: () => ({ code: 'PROJECT_REPO_NAME_TAKEN' }) });
 
-    const err: unknown = await patchRepositoryRow('MOTIR', 'r1', { name: 'taken' }).catch(
-      (e: unknown) => e,
-    );
+    const err: unknown = await establishRepositorySet('MOTIR').catch((e: unknown) => e);
     if (!(err instanceof RepositorySetRequestError)) throw new Error('expected a typed error');
 
     expect(err).toBeInstanceOf(RepositorySetRequestError);
@@ -157,44 +126,17 @@ describe('the repository-set client', () => {
 // look like "we invited you" while nothing was sent.
 
 describe('the collaborator-access client', () => {
-  it('grants access for the WHOLE set with an empty body', async () => {
-    const calls = stub({ json: () => ({ rows: [], login: 'yuezhu', invited: 1, failed: 0 }) });
+  /* ⚠️ FOUR CASES WERE REMOVED HERE, NOT SKIPPED (MOTIR-5015 · Story MOTIR-5010).
+     They drove `grantRepositoryAccess`, the access step's POST — a request no
+     client makes any more, because the invitation is sent SERVER-SIDE at
+     establish and has been since MOTIR-1900
+     (`projectRepoSetService.attachRealizedRepo` → `inviteAfterEstablish`).
 
-    const result = await grantRepositoryAccess('MOTIR');
-
-    expect(calls[0]!.url).toBe('/api/projects/MOTIR/repositories/access');
-    expect(calls[0]!.method).toBe('POST');
-    // No `rowId` at all, rather than `rowId: undefined` — the route reads the
-    // key's presence, so the two are not interchangeable.
-    expect(calls[0]!.body).toEqual({});
-    expect(result.login).toBe('yuezhu');
-  });
-
-  it('narrows the grant to ONE row for a per-row Resend', async () => {
-    const calls = stub({ json: () => ({ rows: [], login: 'yuezhu', invited: 1, failed: 0 }) });
-
-    await grantRepositoryAccess('MOTIR', 'row-1');
-
-    // Rows are independent: a resend on one must not re-send its siblings', and
-    // the row id is the only thing that keeps that true across the wire.
-    expect(calls[0]!.body).toEqual({ rowId: 'row-1' });
-  });
-
-  it('encodes the project key on the access path', async () => {
-    const calls = stub({ json: () => ({ rows: [], login: null, invited: 0, failed: 0 }) });
-    await grantRepositoryAccess('MY PROJ');
-    expect(calls[0]!.url).toBe('/api/projects/MY%20PROJ/repositories/access');
-  });
-
-  it('turns a refused grant into the typed error, carrying the code', async () => {
-    stub({ ok: false, status: 403, json: () => ({ code: 'FORBIDDEN' }) });
-
-    await expect(grantRepositoryAccess('MOTIR')).rejects.toMatchObject({
-      name: 'RepositorySetRequestError',
-      status: 403,
-      code: 'FORBIDDEN',
-    });
-  });
+     The behaviours are pinned where they now live, over real Postgres:
+     `tests/projectRepos/projectRepoAccessService.test.ts` asserts the invite per
+     created row, the no-identity arm, the refusal that does not damage the
+     repository, and the accepted-record skip. The ROUTE is untouched and still
+     serves `/settings/project/code-access`, which fetches it directly. */
 
   it('refreshes the pending invitations with a GET, and returns the rows', async () => {
     const calls = stub({ json: () => [{ id: 'row-1' }] });

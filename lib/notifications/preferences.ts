@@ -34,6 +34,9 @@ export const NOTIFICATION_EVENT_TYPE = {
   commented: 'commented',
   assigned: 'assigned',
   transitioned: 'transitioned',
+  /** GitHub REFUSED a collaborator invitation (MOTIR-5016 · Story MOTIR-5010).
+   *  The first type whose subject is a PROJECT rather than a work item. */
+  codeAccessRefused: 'code_access_refused',
 } as const;
 
 export interface NotificationPreferenceEventTypeMeta {
@@ -74,6 +77,20 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
   // in by 5.7.10 (in_app) + 5.4.5/5.7.11 (email), gated by this row's cells.
   {
     type: NOTIFICATION_EVENT_TYPE.transitioned,
+    settable: true,
+    defaults: { email: true, in_app: true },
+  },
+  // ⚠️ LAST, and appended rather than sorted in: the matrix renders this array in
+  // order, so the four rows above keep the positions users have learned
+  // (`design/notifications/design-notes.md`, the ACCESS-REFUSED row).
+  //
+  // ⚠️ EMAIL ON IS A DECISION, NOT AN OVERSIGHT. This event exists precisely
+  // because GITHUB's invitation email never left the building; Motir's own
+  // notification email is a second, INDEPENDENT carrier, and defaulting it off
+  // would re-create by default the silence the row was added to end. It stays the
+  // user's to turn off.
+  {
+    type: NOTIFICATION_EVENT_TYPE.codeAccessRefused,
     settable: true,
     defaults: { email: true, in_app: true },
   },

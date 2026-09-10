@@ -34,9 +34,11 @@
       ── DRAWN AGAINST SHIPPED REALITY (the design-against-shipped-reality rule) ──
       Three surfaces this composes ALREADY EXIST, so all three were RENDERED before
       anything was drawn — not reasoned from source (notes.html mistake #73):
-        · components/planning/repositories/RepositoryRow.tsx (SHIPPED as code by
-          MOTIR-1782, merged in cefe76c9 — the card's "ships as a mock" premise was
-          stale by the time this ran). Rendered headless from its own source + the
+        · the establish step's repository row (SHIPPED as code by MOTIR-1782, merged
+          in cefe76c9 — the card's "ships as a mock" premise was stale by the time
+          this ran; the component was later DELETED with the technical path by
+          MOTIR-5014, so this records what was rendered, not a file to open).
+          Rendered headless from its own source + the
           real compiled globals.css: the row is a FLEX pair — a `min-w-0 flex-1`
           main column plus a shrink-0 control column — at `p-(--spacing-card-padding)`
           (24px, NOT the 16px the earlier mock drew), `rounded-(--radius-card)`,

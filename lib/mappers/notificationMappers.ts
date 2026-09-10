@@ -40,6 +40,14 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
  */
 function toNotificationData(raw: Notification['data']): NotificationData {
   const d = (raw ?? {}) as Record<string, unknown>;
+  if (d.kind === 'code_access_refused') {
+    return {
+      kind: 'code_access_refused',
+      projectKey: str(d.projectKey),
+      projectName: str(d.projectName),
+      repoRef: str(d.repoRef),
+    };
+  }
   if (d.kind === 'transitioned') {
     return {
       kind: 'transitioned',

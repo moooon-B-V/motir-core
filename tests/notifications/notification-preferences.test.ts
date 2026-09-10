@@ -50,13 +50,23 @@ describe('notificationPreferencesService.getMatrix', () => {
     const matrix = await notificationPreferencesService.getMatrix(user.id);
 
     expect(matrix.channels).toEqual(['email', 'in_app']);
+    // ⚠️ ORDER IS THE ASSERTION, not just membership: the matrix renders
+    // `NOTIFICATION_PREFERENCE_EVENT_TYPES` in array order, so a new member is
+    // APPENDED and never sorted in — the four rows above keep the positions users
+    // have learned (`design/notifications/design-notes.md`, the ACCESS-REFUSED
+    // row's placement).
     expect(matrix.events.map((e) => e.eventType)).toEqual([
       'mentioned',
       'commented',
       'assigned',
       'transitioned',
+      'code_access_refused',
     ]);
-    // Direct/mention events default ON for both channels.
+    // Direct/mention events default ON for both channels — INCLUDING the
+    // access-refused row, and its email arm is a decision rather than an
+    // inherited default: that event exists because GITHUB's invitation email
+    // never left the building, so Motir's own email is a second, independent
+    // carrier and defaulting it off would re-create the silence the row ends.
     for (const event of matrix.events) {
       expect(event.channels.email).toBe(true);
       expect(event.channels.in_app).toBe(true);
