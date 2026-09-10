@@ -350,6 +350,72 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(claim.transitionedBy).toEqual({ id: 'user_them', name: 'Ada' });
   });
 
+  // ── LINKING a pull request (MOTIR-5048) ────────────────────────────────────
+  // The link is the ONLY thing that associates a pull request with a work item —
+  // there is no title parse and no branch fallback — so what is asserted here is
+  // the WIRE: a dropped `headRef` or an address sent under the wrong key is a
+  // link the server cannot make, and nothing downstream would say so.
+
+  it('LINKS a pull request by repository + number, on the work item’s own path', async () => {
+    const client = connected();
+
+    await client.linkPullRequest({
+      key: 'PROD-7',
+      repository: 'acme/web',
+      number: 2291,
+      headRef: 'subtask/PROD-7-widget',
+      baseRef: 'main',
+    });
+
+    expect(server.v1Calls).toHaveLength(1);
+    expect(server.v1Calls[0]?.method).toBe('POST');
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/work-items/PROD-7/pull-requests');
+    expect(server.v1Calls[0]?.body).toEqual({
+      repository: 'acme/web',
+      number: 2291,
+      headRef: 'subtask/PROD-7-widget',
+      baseRef: 'main',
+    });
+  });
+
+  it('sends the `url` form ALONE — never alongside an empty pair', async () => {
+    // The two address forms are cross-checked by the server rather than ranked,
+    // so a client that sent `url` AND `repository: undefined` would be fine, but
+    // one that sent a NULL pair would be refused as two addresses that disagree.
+    const client = connected();
+
+    await client.linkPullRequest({
+      key: 'PROD-7',
+      url: 'https://github.com/acme/web/pull/2291',
+      headRef: 'subtask/PROD-7-widget',
+      baseRef: 'main',
+      title: 'Widget',
+    });
+
+    const body = server.v1Calls[0]?.body as Record<string, unknown>;
+    expect(body).toEqual({
+      url: 'https://github.com/acme/web/pull/2291',
+      headRef: 'subtask/PROD-7-widget',
+      baseRef: 'main',
+      title: 'Widget',
+    });
+    expect(Object.keys(body)).not.toContain('repository');
+    expect(Object.keys(body)).not.toContain('number');
+  });
+
+  it('omits `title` entirely when there is none — never an undefined key', async () => {
+    const client = connected();
+
+    await client.linkPullRequest({
+      key: 'PROD-7',
+      url: 'https://github.com/acme/web/pull/1',
+      headRef: 'h',
+      baseRef: 'main',
+    });
+
+    expect(Object.keys(server.v1Calls[0]?.body as Record<string, unknown>)).not.toContain('title');
+  });
+
   // MOTIR-2398 took the LAST method off MCP. What used to be "these still name
   // their tools" is now a NEGATIVE: no read, no write, no pick makes a tool call
   // at all. Asserted over a run of every shape rather than method by method,
