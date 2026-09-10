@@ -11,13 +11,27 @@
 // service catches the typed error and branches on it; it never inspects a raw
 // Postgres / Prisma code (the 4-layer rule).
 //
+// ⚠️ MOTIR-4790 (the DECIDE door) adds the five refusals the door itself raises
+// — not found, already decided, superseded, not authorised, and an unregistered
+// kind. The paragraph above still describes where the AWAITING-race translation
+// lives, which is unchanged: that one is the REPOSITORY's, because it is a raw
+// `P2002` that must not escape its edge. The five below are the SERVICE's,
+// because each is a business rule the door applies rather than a database error
+// it survives.
+//
 // Every class carries a string `tag` discriminant so the service layer can
 // `switch (err.tag)` over an `ApprovalGateError` union exhaustively without
 // `instanceof` chains. `code` mirrors `tag` and is what the route layer (the
 // decide-door card) maps to an HTTP status. Mirrors the shape of
 // `lib/workItems/linkErrors.ts`.
 
-export type ApprovalGateErrorTag = 'APPROVAL_GATE_ALREADY_AWAITING';
+export type ApprovalGateErrorTag =
+  | 'APPROVAL_GATE_ALREADY_AWAITING'
+  | 'APPROVAL_GATE_NOT_FOUND'
+  | 'APPROVAL_GATE_ALREADY_DECIDED'
+  | 'APPROVAL_GATE_SUPERSEDED'
+  | 'APPROVAL_GATE_NOT_AUTHORISED'
+  | 'APPROVAL_GATE_KIND_UNREGISTERED';
 
 /**
  * Base class for every approval-gate typed error. Concrete subclasses set a
@@ -54,5 +68,124 @@ export class ApprovalGateAlreadyAwaitingError extends ApprovalGateError {
   ) {
     super(message);
     this.name = 'ApprovalGateAlreadyAwaitingError';
+  }
+}
+
+/**
+ * The gate id names no gate this actor can see — missing, or in another
+ * workspace (RLS hides it, so the two are indistinguishable here, which is the
+ * no-existence-leak posture the rest of the product keeps).
+ */
+export class ApprovalGateNotFoundError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_NOT_FOUND' as const;
+  readonly code = 'APPROVAL_GATE_NOT_FOUND' as const;
+  constructor(readonly gateId: string) {
+    super(`No approval gate ${gateId}.`);
+    this.name = 'ApprovalGateNotFoundError';
+  }
+}
+
+/**
+ * The gate is `approved` or `changes_requested` — somebody already decided it.
+ * The ADR calls this `GateAlreadyDecidedError` (§ the decide door's step 3); the
+ * class carries the file's `ApprovalGate*` prefix and the shorthand is the same
+ * error.
+ *
+ * It NAMES the winner and the moment, because the surface's job is to say so in
+ * place rather than to fail generically — ADR §4's *"a gate somebody else
+ * decided while the row was on screen"* is one of the enumerated refusals the
+ * control draws, and it cannot draw it from a bare 409.
+ *
+ * ⚠️ `decidedById` is NULLABLE even here. The FK is `onDelete: SetNull`, so a
+ * decision whose actor has since left the workspace keeps the record that it
+ * happened and loses the attribution — the audit column that survives a
+ * departure is a sibling card's (MOTIR-4912). A null therefore means *we no
+ * longer know who*, never *nobody decided it*.
+ */
+export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_ALREADY_DECIDED' as const;
+  readonly code = 'APPROVAL_GATE_ALREADY_DECIDED' as const;
+  constructor(
+    readonly gateId: string,
+    readonly state: 'approved' | 'changes_requested',
+    readonly decidedById: string | null,
+    readonly decidedAt: Date | null,
+  ) {
+    super(
+      `Approval gate ${gateId} was already decided (${state})${
+        decidedAt ? ` at ${decidedAt.toISOString()}` : ''
+      }.`,
+    );
+    this.name = 'ApprovalGateAlreadyDecidedError';
+  }
+}
+
+/**
+ * The gate's SUBJECT was superseded, so the question was WITHDRAWN — a newer
+ * design result is current and this gate asks about a version the product has
+ * moved past (ADR §6b).
+ *
+ * A SEPARATE error from {@link ApprovalGateAlreadyDecidedError} on purpose, and
+ * the separation is the same one §6b makes in the state set: `superseded` is
+ * **not a decision**. It carries no actor, no permission and no note, so
+ * collapsing the two refusals would make the surface say *"somebody already
+ * decided this"* about a question nobody answered — which is precisely the
+ * sentence the audit must never be able to produce.
+ *
+ * ⚠️ Nothing WRITES `superseded` yet: the supersede predicate and the retirement
+ * of a prior awaiting gate are MOTIR-4913's, `blocked_by` this card. The refusal
+ * ships here regardless, because the state is in the Prisma enum today and a
+ * door that is total over its kinds owes the same totality over its states — the
+ * alternative is a row this door would fall through and decide.
+ */
+export class ApprovalGateSupersededError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_SUPERSEDED' as const;
+  readonly code = 'APPROVAL_GATE_SUPERSEDED' as const;
+  constructor(readonly gateId: string) {
+    super(
+      `Approval gate ${gateId} was superseded — a newer version of its subject has been published, so this question has been withdrawn.`,
+    );
+    this.name = 'ApprovalGateSupersededError';
+  }
+}
+
+/**
+ * The actor may edit the project but holds no RELATIONSHIP to the work item —
+ * they are neither its assignee nor its reporter, and they are not a workspace
+ * owner/admin.
+ *
+ * ADR §2's amendment: **AUTHORITY is assignee OR reporter OR admin**, for both
+ * verbs, applied ON TOP of the kind's permission floor rather than instead of
+ * it. It is deliberately NOT the routing rule — a gate is SHOWN to one person
+ * (`assigneeId ?? reporterId`) and may be PRESSED by three — so this error is
+ * reachable by someone who can see the gate perfectly well.
+ */
+export class ApprovalGateNotAuthorisedError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_NOT_AUTHORISED' as const;
+  readonly code = 'APPROVAL_GATE_NOT_AUTHORISED' as const;
+  constructor(readonly gateId: string) {
+    super(
+      `Only the work item's assignee, its reporter, or a workspace admin may decide approval gate ${gateId}.`,
+    );
+    this.name = 'ApprovalGateNotAuthorisedError';
+  }
+}
+
+/**
+ * The gate's KIND has no handler in this build — one of the registry's
+ * deliberate compile-time holes (`lib/approvalGates/registry.ts`).
+ *
+ * Unreachable through the product today: nothing CREATES a gate of an
+ * unregistered kind, because the only writer is the design-result publish. It
+ * exists so the door's dispatch is total at RUNTIME as well as at compile time —
+ * a row written by a migration, a fixture, or a half-landed future card meets a
+ * named refusal instead of an `undefined` handler and a `TypeError`.
+ */
+export class ApprovalGateKindUnregisteredError extends ApprovalGateError {
+  readonly tag = 'APPROVAL_GATE_KIND_UNREGISTERED' as const;
+  readonly code = 'APPROVAL_GATE_KIND_UNREGISTERED' as const;
+  constructor(readonly kind: string) {
+    super(`No approval-gate handler is registered for kind \`${kind}\` in this build.`);
+    this.name = 'ApprovalGateKindUnregisteredError';
   }
 }
