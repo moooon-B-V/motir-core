@@ -1323,6 +1323,13 @@ export default defineConfig({
         'lib/api/v1/bearer.ts',
         'lib/api/v1/pagination.ts',
         'lib/api/v1/rateLimit.ts',
+        // MOTIR-4974 — the client-version verdict, NAMED on the way in for the
+        // reason the v1 comment above already gives: this file decides what a
+        // third party is told about its own client, and its failure mode is
+        // silence. A floor that never fires reads exactly like a fleet that is
+        // up to date, so the arms that must stay covered are the ones that
+        // return `null`.
+        'lib/api/v1/clientVersion.ts',
         // Story 8.5 · Subtask 8.5.9 (MOTIR-1165) — the SHARED rate limiter and
         // its Postgres store. This is a security control on the pre-auth surfaces
         // (sign-in, sign-up, password reset, public writes) and a cost control on

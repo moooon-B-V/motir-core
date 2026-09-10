@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Command } from 'commander';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +18,7 @@ import {
   type V1Request,
   type V1Script,
 } from './helpers/testServer.js';
+import { makeTempRoot } from './helpers/tempRoot.js';
 
 // `motir auto` as the COMMAND (Subtask 7.9.5 · MOTIR-883).
 //
@@ -52,7 +52,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  const base = mkdtempSync(join(tmpdir(), 'motir-autocmd-'));
+  const base = makeTempRoot('motir-autocmd-');
   root = join(base, 'workspace');
   mkdirSync(join(root, 'motir-core'), { recursive: true });
   configHome = join(base, 'config');
