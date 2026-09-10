@@ -1,4 +1,11 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -160,6 +167,34 @@ describe('the cache — so this does NOT run on every invocation', () => {
     chmodSync(locked, 0o555);
     expect(() => writeVersionCache('0.5.0', 0, join(locked, 'x.json'))).not.toThrow();
     chmodSync(locked, 0o755);
+  });
+
+  it('⚠️ NEVER CREATES the state home — an env-only run must persist NOTHING', () => {
+    // THE INVARIANT THIS BROKE ONCE, and the reason the mkdir is non-recursive.
+    // `motir` on `MOTIR_TOKEN` alone with no config file is the CI / container /
+    // fresh-box shape, and the read-only sandbox mount depends on it writing
+    // nothing at all. `stateDir()` falls back through `MOTIR_CONFIG_HOME`, so a
+    // recursive mkdir here conjures the very directory that run is required not
+    // to have — a version-check courtesy silently becoming the thing that broke
+    // the property. `tests/cli/cli-story.test.ts` asserts the same thing through
+    // the real binary; this asserts it where it is cheap.
+    const absent = join(temp(), 'never-created-config-home');
+    expect(existsSync(absent)).toBe(false);
+
+    expect(() =>
+      writeVersionCache('0.5.0', 0, join(absent, 'motir', 'version-check.json')),
+    ).not.toThrow();
+
+    expect(existsSync(absent), 'the state home must not have been created').toBe(false);
+  });
+
+  it('DOES create the leaf inside a state home that already exists', () => {
+    // The other half: skipping the write entirely would mean re-asking the
+    // registry on every invocation, which is the cost the cache exists to avoid.
+    const stateHome = temp();
+    const path = join(stateHome, 'motir', 'version-check.json');
+    writeVersionCache('0.5.0', 1_000, path);
+    expect(readVersionCache(1_000, path)).toBe('0.5.0');
   });
 
   it('lives in the STATE home, not beside the credential', () => {

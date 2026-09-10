@@ -146,10 +146,34 @@ export function readVersionCache(now: number, path = versionCachePath()): string
   }
 }
 
-/** Remember an answer. A cache that cannot be written is not an error. */
+/**
+ * Remember an answer. A cache that cannot be written is not an error.
+ *
+ * ⚠️ THIS MAY NOT CREATE THE CLI'S STATE HOME, ONLY THE LEAF INSIDE ONE THAT
+ * ALREADY EXISTS — and that is a hard invariant, not a tidiness preference.
+ * `motir` running on `MOTIR_TOKEN` alone, with no config file, must persist
+ * NOTHING: it is the CI / container / fresh-box shape, and the read-only
+ * sandbox mount depends on it (`tests/cli/cli-story.test.ts` asserts it by
+ * ABSENCE, so it holds regardless of uid). `stateDir()` falls back through
+ * `MOTIR_CONFIG_HOME`, so a `recursive: true` here conjures the very directory
+ * that run is required not to have — a version-check courtesy would have
+ * quietly become the thing that broke the property.
+ *
+ * So the `mkdir` is NON-recursive: it creates `<state home>/motir` when the
+ * state home is there, and throws `ENOENT` when it is not, which the catch
+ * turns into "no cache this time". The cost is that a machine with no state
+ * home re-asks the registry — bounded, silent on failure, and far cheaper than
+ * the property this protects.
+ */
 export function writeVersionCache(latest: string, now: number, path = versionCachePath()): void {
   try {
-    mkdirSync(dirname(path), { recursive: true });
+    mkdirSync(dirname(path));
+  } catch (err) {
+    // EEXIST is the ordinary case — the directory is already there, carry on.
+    // ENOENT means the state home does not exist and we may not create it.
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return;
+  }
+  try {
     writeFileSync(path, JSON.stringify({ latest, checkedAt: now } satisfies VersionCache));
   } catch {
     // A read-only state home is a reason to check again next time, not to fail.
