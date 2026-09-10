@@ -5680,7 +5680,8 @@ export const workItemsService = {
    * (or take the WHOLE project when `sprintId` is `null` — Motir used without
    * sprints), keep the dispatch rank, then — in ONE transaction — LOCK the best
    * still-claimable
-   * candidate (`FOR UPDATE SKIP LOCKED`) and flip it `→ in_progress`. Two
+   * candidate (`FOR UPDATE SKIP LOCKED`), ASSIGN it to the caller and flip it
+   * `→ in_progress`. Two
    * concurrent callers therefore claim DIFFERENT items (or one gets the item and
    * the other `null`): there is no read-then-flip-later window for them to both
    * grab the same Subtask, which the old "compute ready set, then
@@ -5689,6 +5690,19 @@ export const workItemsService = {
    * ready set is empty OR every candidate was already locked — the caller RETRIES
    * on `null`. The flip records a revision and emits `work-item/transitioned`
    * AFTER commit, exactly like `updateStatus` (the 5.1.2 rule).
+   *
+   * ⚠️ THE ASSIGNMENT (MOTIR-4996) IS PART OF THE CLAIM, and it was missing here
+   * for as long as this method has existed. `claimWorkItem` below writes it
+   * inside the claim transaction and `scopeClaimService.claimScope` writes it
+   * over a whole subtree; this door — the OLDEST of the three, written before
+   * MOTIR-2958 made the requirement — wrote only the status, so every card it
+   * handed out read In Progress with nobody on it. The tool's own summary tells
+   * its caller the claim IS the flip and not to call `transition_status`
+   * afterwards, which reads as "nothing further is owed", so a caller following
+   * it exactly produced that state on every call. The assignee is the ONLY
+   * ownership signal a second session can read — it cannot see a worktree, and
+   * In Progress stopped meaning "an agent is on this right now" the moment a
+   * scoped run began claiming whole subtrees up front.
    */
   async claimNextReady(
     projectId: string,
@@ -5704,6 +5718,13 @@ export const workItemsService = {
     // transaction, not inside it: a refusal must not consume a candidate, and
     // flipping an item to `in_progress` and then refusing would strand it.
     await ciAllowanceService.assertDispatchAllowed(ctx);
+    // The claim ASSIGNS (MOTIR-4996), and an assignee must be a workspace member
+    // — the same pre-flight `claimWorkItem` runs, in the same place: ahead of the
+    // transaction so a refusal never takes a lock, and ahead of the ready-set
+    // computation so it never pays for one either. In practice the actor is the
+    // token's own resolved user, so this passes; it is here because the write is
+    // real either way.
+    await assertAssigneeMember(ctx.userId, ctx.workspaceId);
     // The project's ready leaves in dispatch rank order (priority encodes the
     // in-sprint leverage `motir plan sprint` re-ranks to — so this rank IS
     // "most-unblocking first"). When an active `sprintId` is given, scope to it
@@ -5718,6 +5739,22 @@ export const workItemsService = {
     const claimed = await withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.claimNextReadyCandidate(orderedIds, tx);
       if (!locked) return null;
+      // THE ASSIGNMENT (MOTIR-4996), inside the transaction the lock is held in
+      // and before the flip — the shape `claimWorkItem` already uses, rather than
+      // a second one invented here. The candidate row carries only its `id`, so
+      // the current assignee is read under that lock with `findClaimStateById`,
+      // the existing post-lock state read; a value read before the lock would be
+      // a snapshot of the past.
+      const state = await workItemRepository.findClaimStateById(locked.id, tx);
+      // The NO-OP SKIP: a card already assigned to the caller is written again by
+      // nobody. An update that changes nothing still bumps `updatedAt`, and
+      // `updatedAt` is what a rollback test reads — the same reason
+      // `claimWorkItem` and `assignManyTo` both skip.
+      /* v8 ignore next -- the row is held by the candidate SELECT's lock, so it cannot vanish between the two statements */
+      if (!state) throw new WorkItemNotFoundError(locked.id);
+      if (state.assigneeId !== ctx.userId) {
+        await workItemRepository.update(locked.id, { assigneeId: ctx.userId }, tx);
+      }
       // `in_progress` is the dispatch state (lib/workflows/defaultWorkflow.ts);
       // `applyStatusTransition` validates the todo|blocked → in_progress edge,
       // records the revision, and re-locks the row under the same tx.
@@ -5738,8 +5775,26 @@ export const workItemsService = {
 
     // Build the dispatch payload from the claimed candidate row, reflecting the
     // post-claim status (now in the `in_progress` category).
+    //
+    // ⚠️ AND THE POST-CLAIM ASSIGNEE (MOTIR-4996), for the same reason the status
+    // is overridden one line down: `chosen` is the candidate row as it was read
+    // BEFORE the claim, so its assignee columns hold the value the claim has just
+    // overwritten — `null` on the ordinary card, the previous holder on a card
+    // taken off somebody. Returning that would make the one response that proves
+    // the claim assigned report that it did not. ONE read, by primary key, for
+    // the caller's own display fields; the id is `ctx.userId` whatever it returns.
+    const [claimer] = await userRepository.findByIds([ctx.userId]);
     const chosen = candidates.find((r) => r.id === claimed.dto.id)!;
-    const dispatch = await buildReadyDispatchDto(chosen, ctx);
+    const dispatch = await buildReadyDispatchDto(
+      {
+        ...chosen,
+        assigneeId: ctx.userId,
+        assigneeName: claimer?.name ?? null,
+        assigneeEmail: claimer?.email ?? null,
+        assigneeImage: claimer?.image ?? null,
+      },
+      ctx,
+    );
     return { ...dispatch, status: { key: claimed.dto.status, category: 'in_progress' } };
   },
 

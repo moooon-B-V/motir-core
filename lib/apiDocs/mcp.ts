@@ -721,8 +721,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   claim_next_ready: {
     summary:
-      'Atomically claim the next ready subtask in the active sprint and flip it to In Progress. Race-safe.',
-    descriptionFingerprint: 'ef64f059efb9',
+      'Atomically claim the next ready subtask in the active sprint: assign it to you and flip it to In Progress.',
+    descriptionFingerprint: 'a09bcdf27287',
   },
   claim_work_item: {
     summary:
