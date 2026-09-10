@@ -11,8 +11,6 @@ import {
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
-import { isWorkspaceManager } from '@/lib/projects/roles';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { toApprovalGateDto } from '@/lib/mappers/approvalGateMappers';
@@ -169,15 +167,19 @@ export const approvalGatesService = {
       //     owns; authority answers *may this press be honoured?*, where the
       //     failure to prevent is the opposite one, a single recipient on leave
       //     and nobody able to unblock the work.
-      const membership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-        ctx.userId,
-        ctx.workspaceId,
-        tx,
-      );
+      //     ⚠️ THE ADMIN ARM IS **ASKED**, NEVER DERIVED HERE. Reading this
+      //     actor's own membership row and testing `isWorkspaceManager(...)` in
+      //     this file is exactly the SECOND POLICY PATH the model forbids —
+      //     `tests/permissions/storyGate.test.ts` guard 1 and
+      //     `memberFacingGate.integration.test.ts` both refuse it by name,
+      //     because such a rule is *"invisible in the grid, un-grantable to a
+      //     custom role, and un-auditable by the guard."* So the question goes to
+      //     `projectAccessService`, which owns the always-pass rail; this service
+      //     composes the answer and derives nothing.
       const authorised =
         item.assigneeId === ctx.userId ||
         item.reporterId === ctx.userId ||
-        isWorkspaceManager(membership?.role);
+        (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
       if (!authorised) throw new ApprovalGateNotAuthorisedError(input.gateId);
 
       // 3 · REFUSE A GATE THAT IS NOT `awaiting`.
