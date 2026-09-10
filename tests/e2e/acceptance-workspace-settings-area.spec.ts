@@ -238,7 +238,19 @@ test('the workspace tier gains a door and a rail — and at one workspace, nothi
     // single settings home that hosts them — walked BY NAME, never inferred
     // from the page rendering.
     await page.goto('/settings/organization');
-    await expect(page.getByLabel('Workspace name')).toBeVisible();
+    // MOTIR-5035 — a LOCATOR change, not an assertion change. The claim is
+    // unchanged (this capability still has a door here); only how the node is
+    // addressed moved, so `docs/decisions/acceptance-receipt-lifecycle.md`'s
+    // prohibition on editing a receipt's CLAIM is not in play.
+    //
+    // `getByLabel('Workspace name')` matched TWICE in the merge queue: React
+    // keeps the outgoing subtree mounted while the new one streams, and
+    // Playwright resolves locators before filtering on visibility, so the
+    // server-rendered and hydrated copies of the same `NameCard` input both
+    // matched. `getByRole` is immune — the accessibility tree excludes the
+    // hidden copy. Two queue entries, one predating the diff under triage:
+    // runs 34518853712 and 34514510627.
+    await expect(page.getByRole('textbox', { name: 'Workspace name' })).toBeVisible();
     await beat();
 
     // Named EXACTLY, and by their own headings where they have one — "asserted
@@ -316,7 +328,9 @@ test('the workspace tier gains a door and a rail — and at one workspace, nothi
     await beat();
 
     // …and every workspace capability is still there, for them.
-    await expect(page.getByLabel('Workspace name')).toBeVisible();
+    // MOTIR-5035 — the second site of the same locator change; see the note at
+    // the first. The claim is untouched, the addressing is by role.
+    await expect(page.getByRole('textbox', { name: 'Workspace name' })).toBeVisible();
     // The same list as chapter 2, asserted the same way — the claim is that
     // these two readers get the same capabilities, so a weaker assertion here
     // is the one place it could quietly stop being true.
