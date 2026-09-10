@@ -1166,6 +1166,16 @@ export const workItemRepository = {
    * node on screen, so the canvas anchors a red edge to a chip that NAMES it: its
    * `identifier` + `title` + the title of the container it lives in (its parent
    * story/epic). ONE query with the parent relation; empty input → `[]`.
+   *
+   * ⚠️ `parentId` RIDES ALONG BECAUSE "OFF THIS LEVEL" IS NOT THE SAME QUESTION AS
+   * "NOT AMONG THE ROWS WE FETCHED" (bug MOTIR-5043). The level read is CAPPED at
+   * `TREE_LEVEL_MAX_TAKE`, key-ASCENDING, so a level past the cap loses its
+   * highest keys — and a blocker that is a genuine SIBLING of the row it blocks then
+   * arrives here and is named as a cross-story anchor. The parent TITLE cannot settle
+   * it (two levels can share a parent title, and the root level's is `null`), so the
+   * `parentId` SCALAR is selected beside it: the caller compares it against the level's
+   * own parent and keeps the members apart from the strangers. It costs nothing —
+   * `parent_id` is already a column on the row this query returns.
    */
   async findRoadmapBlockerStubs(
     ids: string[],
@@ -1175,6 +1185,7 @@ export const workItemRepository = {
       id: string;
       identifier: string;
       title: string;
+      parentId: string | null;
       parentTitle: string | null;
       status: string;
       sprintId: string | null;
@@ -1190,6 +1201,7 @@ export const workItemRepository = {
         title: true,
         status: true,
         sprintId: true,
+        parentId: true,
         parent: { select: { title: true } },
       },
     });
@@ -1197,6 +1209,7 @@ export const workItemRepository = {
       id: r.id,
       identifier: r.identifier,
       title: r.title,
+      parentId: r.parentId,
       parentTitle: r.parent?.title ?? null,
       status: r.status,
       sprintId: r.sprintId,

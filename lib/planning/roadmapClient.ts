@@ -81,10 +81,25 @@ export interface RoadmapBlockerStub {
   inActiveSprint?: boolean;
 }
 
+/** A blocker that IS on this level but that the read's cap dropped (MOTIR-5043) —
+ *  a SIBLING of the row it blocks, not the cross-story tangle. `isDone` is the
+ *  within-level arrow's predicate (`status === 'done'`), not the stub's terminal
+ *  `isDone`. */
+export interface RoadmapLevelMemberBlocker {
+  id: string;
+  isDone: boolean;
+}
+
 export interface RoadmapLevelData {
   items: RoadmapLevelItem[];
   edges: RoadmapEdge[];
   offLevelBlockers: RoadmapBlockerStub[];
+  /** Blockers the level HAS that the capped read could not carry (MOTIR-5043).
+   *  Optional client-side, for the same reason `levelTotal` is: a read that omits
+   *  it (an older server, the best-effort empty level, a level the client serves
+   *  synthetically) degrades to the pre-MOTIR-5043 behaviour, which is a false
+   *  "blocked elsewhere" only on a level past the cap — never a new one. */
+  levelMemberBlockers?: RoadmapLevelMemberBlocker[];
   /** How many rows the level HAS, against `items.length` for how many came back
    *  (MOTIR-3490) — the `M` the canvas's "+ N more" tile reports. Optional
    *  client-side: a read that omits it (an older server, the best-effort empty
@@ -221,12 +236,14 @@ export async function fetchRoadmapLevel(
       nodes?: RoadmapNode[];
       edges?: RoadmapEdge[];
       offLevelBlockers?: RoadmapBlockerStub[];
+      levelMemberBlockers?: RoadmapLevelMemberBlocker[];
       levelTotal?: number;
     };
     return {
       items: (body.nodes ?? []).map(toItem),
       edges: body.edges ?? [],
       offLevelBlockers: body.offLevelBlockers ?? [],
+      levelMemberBlockers: body.levelMemberBlockers ?? [],
       levelTotal: typeof body.levelTotal === 'number' ? body.levelTotal : undefined,
     };
   } catch {
