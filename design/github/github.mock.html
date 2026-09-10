@@ -1286,10 +1286,16 @@
       .pr-title {
         font-size: 13.5px;
         font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .pr-meta {
         font-size: 12px;
         color: var(--el-text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .pr-states {
         display: inline-flex;
@@ -1302,6 +1308,72 @@
       .ext svg {
         width: 15px;
         height: 15px;
+      }
+
+      /* ── The per-row REMOVE control (Panels 5d–5f, MOTIR-5007) ────────────
+         The shipped icon-only convention, reused rather than re-invented:
+         RemoveLinkButton.tsx is the SAME gesture on the relationships panel,
+         and PullRequestRow's own comment already names it. Measurements taken
+         from that component, not approximated — 24x24 box, 15px X glyph, muted
+         at rest, rose tint + danger ink on hover. Its 24px box matches the
+         link-out beside it (a 16px glyph in p-1), so a row that gains this
+         control does not change height.
+         `.is-hover` is a MOCK-ONLY class: a board cannot hover, so the hover
+         state is drawn as a static panel. */
+      .row-remove {
+        flex: none;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-muted);
+        cursor: pointer;
+      }
+      .row-remove svg {
+        width: 15px;
+        height: 15px;
+      }
+      .row-remove.is-hover {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+
+      /* The CONFIRM popover — Popover.Content width={300} align="end", the
+         same container RemoveLinkButton opens. Right-aligned under the row's
+         trailing edge, because that is where the trigger is. */
+      .confirm {
+        width: 300px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-elevated);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .confirm p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.35;
+        color: var(--el-text);
+      }
+      /* The identifier is ONE unit — it must never break across lines, which
+         is what the first draft did ("moooon/motir-core" / "· #131"). The
+         shipped confirm carries a short work-item key and never met this;
+         `owner/repo · #n` is three times longer. See design-notes.md Q5 for
+         the width this holds to. */
+      .confirm-id {
+        white-space: nowrap;
+      }
+      .confirm-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
       }
 
       /* peek header for the issue-detail context in Panels 3/4 */
@@ -2206,6 +2278,25 @@
         >
           <circle cx="12" cy="12" r="9" />
           <path d="m8.5 12 2.3 2.3 4.7-4.7" />
+        </symbol>
+        <!-- lucide `X` — the PLAIN cross, path data taken from the installed
+             `lucide-react` rather than hand-typed. It is a DIFFERENT icon from
+             `#i-x` below, which is lucide `circle-x` under a short name and is
+             what the "Checks failing" pill renders (CI_STATE_META's CircleX).
+             The remove control uses THIS one, because RemoveLinkButton.tsx
+             renders `X`. (MOTIR-5007 — the first draft of these panels reached
+             for `#i-x` on the strength of its name and drew a circled ⊗.) -->
+        <symbol
+          viewBox="0 0 24 24"
+          id="i-close"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
         </symbol>
         <symbol
           viewBox="0 0 24 24"
@@ -3193,6 +3284,222 @@
                   <button class="btn btn-ghost btn-sm">Cancel</button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════════════════
+           PANELS 5d–5f — REMOVING a linked pull request (MOTIR-5007).
+           The other half of Panel 5. Panel 5 gave this surface a door to LINK
+           a pull request; nothing ever drew the door back out. The notes
+           claimed one existed ("this surface's row menu reaches it") and no
+           panel drew it, which is worse than silence: a builder reading the
+           claim has no glyph, no placement, no confirm and no copy, so what
+           they build is invented. See design-notes.md § REMOVING a linked
+           pull request for the decisions these three panels record.
+           ══════════════════════════════════════════════════════════════════ -->
+
+      <div>
+        <div class="panel-label">
+          Panel 5d · the door back out — a quiet <b>×</b> after the link-out, LAST in the row (the
+          relationships panel's grammar, where the destructive action terminates the row). Row 2
+          drawn hovered: rose tint, danger ink.
+        </div>
+        <div class="panel" style="width: 620px">
+          <div class="card" style="margin: 0">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Linked pull requests · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Add per-route rate limiting</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Checks passing</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+                <button class="row-remove" aria-label="Remove the link to moooon/motir-core #131">
+                  <svg aria-hidden="true"><use href="#i-close" /></svg>
+                </button>
+              </div>
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-pr" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Throttle burst traffic on /v1</div>
+                  <div class="pr-meta">moooon/motir-gateway · #57</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-sky"
+                    ><svg><use href="#i-git-pr" /></svg>Open</span
+                  >
+                  <span class="pill pill-peach"
+                    ><svg><use href="#i-dots" /></svg>Checks running</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+                <button
+                  class="row-remove is-hover"
+                  aria-label="Remove the link to moooon/motir-gateway #57"
+                >
+                  <svg aria-hidden="true"><use href="#i-close" /></svg>
+                </button>
+              </div>
+              <p class="muted" style="font-size: 12px; margin-top: 12px">
+                Link with + Link pull request here, or with
+                <span class="mono">link_pull_request</span> over the MCP.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">
+          Panel 5e · the CONFIRM — the same <span class="mono">Popover</span> RemoveLinkButton opens
+          (300px, aligned to the trigger&rsquo;s edge). The copy answers the reader&rsquo;s actual
+          fear: <b>the pull request is not touched on GitHub</b>.
+        </div>
+        <div class="panel" style="width: 620px">
+          <div class="card" style="margin: 0">
+            <div class="card-head">
+              <div>
+                <h3>Development</h3>
+                <p class="hsub">Linked pull requests · live PR and CI status</p>
+              </div>
+              <button class="link-cta">
+                <svg><use href="#i-plus" /></svg>Link pull request
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="pr-row">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Add per-route rate limiting</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Checks passing</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+                <button
+                  class="row-remove is-hover"
+                  aria-label="Remove the link to moooon/motir-core #131"
+                >
+                  <svg aria-hidden="true"><use href="#i-close" /></svg>
+                </button>
+              </div>
+              <div style="display: flex; justify-content: flex-end; margin-top: 8px">
+                <div class="confirm">
+                  <p>
+                    Remove the link to
+                    <span class="mono confirm-id">moooon/motir-core · #131</span>? The pull request
+                    isn&rsquo;t touched on GitHub &mdash; only the link.
+                  </p>
+                  <div class="confirm-actions">
+                    <button class="btn btn-ghost btn-sm">Cancel</button>
+                    <button class="btn btn-danger btn-sm">Remove link</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">
+          Panel 5f · the two rows the control has to survive &mdash; <b>left:</b> a reader who may
+          SEE the item but not edit it, control absent and nothing else moved; <b>right:</b> the
+          widest a row gets (three pills &mdash; the delivery-set pair is decided in
+          <span class="mono">design/work-items/delivery-set.mock.html</span>, not here). The title
+          truncates; the trailing controls never shrink.
+        </div>
+        <div class="sub-grid">
+          <div class="panel w440">
+            <div class="card-body">
+              <div class="pr-row" style="margin-top: 0">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0">
+                  <div class="pr-title">Add per-route rate limiting</div>
+                  <div class="pr-meta">moooon/motir-core · #131</div>
+                </div>
+                <span class="spacer"></span>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+              </div>
+              <p class="muted" style="font-size: 12px; margin-top: 10px">
+                No control, no disabled shadow of one. The row is exactly the read-only row that
+                shipped before this card.
+              </p>
+            </div>
+          </div>
+          <div class="panel" style="width: 620px">
+            <div class="card-body">
+              <div class="pr-row" style="margin-top: 0">
+                <svg class="pr-ic"><use href="#i-git-merge" /></svg>
+                <div style="min-width: 0; flex: 1">
+                  <div class="pr-title">
+                    feat(sync): hold the card until every delivery has merged onto its own trunk
+                  </div>
+                  <div class="pr-meta">moooon/motir-core · #2118 · into release/24.9</div>
+                </div>
+                <span class="pr-states">
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-git-merge" /></svg>Merged</span
+                  >
+                  <span class="pill pill-peach"
+                    ><svg><use href="#i-alert" /></svg>Not on trunk</span
+                  >
+                  <span class="pill pill-mint"
+                    ><svg><use href="#i-check" /></svg>Checks passing</span
+                  >
+                </span>
+                <a class="ext"
+                  ><svg><use href="#i-external" /></svg
+                ></a>
+                <button class="row-remove" aria-label="Remove the link to moooon/motir-core #2118">
+                  <svg aria-hidden="true"><use href="#i-close" /></svg>
+                </button>
+              </div>
+              <p class="muted" style="font-size: 12px; margin-top: 10px">
+                This is the row the control is worth having on: a delivery that merged somewhere
+                else is exactly what a reader needs to retract.
+              </p>
             </div>
           </div>
         </div>
