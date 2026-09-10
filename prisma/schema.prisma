@@ -315,8 +315,14 @@ model User {
   // both sides per the FK-`@relation` rule so `migrate dev` reports no drift.
   withdrawnDesignEvidences         DesignEvidence[]          @relation("DesignEvidenceWithdrawnBy")
   /// Approval gates this user decided (the audit's "who", ADR §6a). `SetNull` on
-  /// the gate keeps the row — the back-relation is the inverse of that.
-  approvalGates                   ApprovalGate[]
+  /// the gate keeps the row — the back-relation is the inverse of that. NAMED
+  /// since MOTIR-4912, because `routedToApprovalGates` is a second relation to
+  /// the same model and an unnamed pair is ambiguous.
+  approvalGates                    ApprovalGate[]            @relation("ApprovalGateDecidedBy")
+  /// Approval gates ROUTED to this user at creation (ADR §6a · MOTIR-4912).
+  /// `SetNull` likewise — the routing is context for the decision, so losing it
+  /// on a departure costs the audit nothing it is built on.
+  routedToApprovalGates            ApprovalGate[]            @relation("ApprovalGateRoutedTo")
   requestedPlans                   Plan[]                    @relation("PlanCreatedBy")
   // Plan CONTENT mutations this user made (Story MOTIR-3532 · MOTIR-3535) — the
   // append-only trail beside the plan's own three party columns. SetNull on the
@@ -1607,7 +1613,7 @@ model Project {
   publicAddresses  PublicAddress[] @relation("ProjectPublicAddresses")
   /// Approval gates scoped to this project (a gate is `workspaceId` + `projectId`,
   /// per the ADR §7 tier — `prMergeMode` lives at the project, not the workspace).
-  approvalGates     ApprovalGate[]
+  approvalGates    ApprovalGate[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -4140,6 +4146,50 @@ enum ApprovalGateState {
   @@map("approval_gate_state")
 }
 
+/// UNDER WHICH PERMISSION a gate was decided (the ADR §6a audit set · Subtask
+/// MOTIR-4912). §2's amendment makes AUTHORITY `assignee OR reporter OR admin`,
+/// and a role is a MOVING fact: a member promoted or demoted after the decision
+/// makes "was this person entitled?" unanswerable from the membership table. So
+/// the answer is FROZEN onto the row at decision time, as an enum rather than a
+/// string, so a reader cannot meet a fourth spelling of `admin`.
+///
+/// It is the authority the decider ACTED under, not every authority they held:
+/// an admin who is also the assignee decides under ONE of them, and the door
+/// records which rung it checked.
+enum ApprovalGateAuthority {
+  /// The work item's assignee — the person the gate was routed to (§2).
+  assignee
+  /// The work item's reporter — the routing fallback when there is no assignee.
+  reporter
+  /// A workspace owner / admin, deciding a gate they were not routed.
+  admin
+
+  @@map("approval_gate_authority")
+}
+
+/// THROUGH WHICH SURFACE a decision arrived (the ADR §6a audit set, with
+/// `github` added by §6b's MOTIR-4911 amendment · Subtask MOTIR-4912). A human
+/// click must be distinguishable from a programmatic call, and both from a
+/// review synced out of GitHub — an audit that cannot tell them apart cannot
+/// answer whether a human was in the loop, which is the whole claim the table
+/// exists to support.
+enum ApprovalGateDecisionSource {
+  /// A person pressed the control in Motir.
+  ui
+  /// A token called the REST API.
+  api
+  /// An agent called the MCP.
+  mcp
+  /// A review approved in GitHub's own UI, synced into the
+  /// `pull_request_approval` gate (§4's amendment, §8 row 4b). None of the three
+  /// above is true of it: nobody clicked in Motir, no token called the API, no
+  /// agent called the MCP — and the approving identity may not resolve to a
+  /// member at all, which is why `decidedByLabel` is not optional context.
+  github
+
+  @@map("approval_gate_decision_source")
+}
+
 /// An APPROVAL GATE — one row per decision that holds work up, the
 /// human-in-the-loop evidence an agent-driven pipeline owes an auditor (ADR
 /// §6a). BASE record (MOTIR-4788): the subject, the kind, the state, who
@@ -4172,18 +4222,86 @@ model ApprovalGate {
   subjectId   String            @map("subject_id")
   state       ApprovalGateState @default(awaiting)
   /// WHO decided. `SetNull` so a departing member loses attribution, never the
-  /// record that a decision happened (mirrors `WorkItemTodo.doneById`).
+  /// record that a decision happened (mirrors `WorkItemTodo.doneById`). Read it
+  /// beside `decidedByLabel`, which is what survives the deletion.
   decidedById String?           @map("decided_by_id")
   decidedAt   DateTime?         @map("decided_at")
   /// Why they said yes, or what they sent back. Free text, not an enum.
   noteMd      String?           @map("note_md") @db.Text
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  // ── THE AUDIT SET (ADR §6a · Subtask MOTIR-4912) ───────────────────────────
+  // Six fields that make this row EVIDENCE rather than a workflow row that
+  // happens to keep a timestamp. Every one is NULLABLE — five are null while
+  // `awaiting` and written by the decision; `routedToId` is written at CREATION
+  // — so the migration adding them is additive and leaves existing rows valid.
+  // They are WRITTEN by the decide door (MOTIR-4790) and the creation path,
+  // never here: this card ships the columns, the DTO that carries them, and the
+  // immutability guard that stops any of them being edited after the fact.
+
+  /// ⚠️ THE ONE THAT CARRIES THE WHOLE CLAIM — the subject's IMMUTABLE VERSION
+  /// at decision time: a `DesignEvidence.commitSha`, a pull request's `headSha`.
+  ///
+  /// Without it the row says somebody approved *a design*, and a design is a
+  /// moving object — republished, superseded, reclaimed (§6c). With it the row
+  /// says they approved *these bytes*, which is a fact that stays true. Opaque
+  /// text rather than an FK, for the same reason `subjectId` is one: the
+  /// version's shape depends on the kind, and a polymorphic FK is worse than
+  /// none.
+  subjectVersion        String?                     @map("subject_version")
+  /// WHO decided, SURVIVING THEIR DEPARTURE — the actor's name and email as at
+  /// the decision, denormalised beside the nullable FK above.
+  ///
+  /// `decidedById` is `SetNull`, which preserves THAT a decision happened and
+  /// destroys WHO made it — the one thing the audit is for. And a null FK
+  /// already means something else, and something worse: §6b's `superseded` uses
+  /// exactly that shape to mean *the question was withdrawn and nobody decided
+  /// it*, so an unattributable decision recorded as a bare null is
+  /// indistinguishable, in the one table an auditor trusts, from a decision that
+  /// never happened. It also carries the GITHUB LOGIN for a synced approval
+  /// whose identity resolves to no member (§6b's amendment) — *"a GitHub
+  /// identity we could not map, and here is the handle"* is true and legible;
+  /// *"nobody"* is neither.
+  decidedByLabel        String?                     @map("decided_by_label")
+  /// WHO THE GATE WAS ROUTED TO at creation — §2's answer, computed once.
+  ///
+  /// The assignee can change afterwards, so the live card cannot answer who the
+  /// product actually ASKED. `SetNull` with NO surviving label, deliberately and
+  /// unlike `decidedById`: the harm §6a names for this field is the ROUTING
+  /// moving, not the person leaving, and the attribution the audit is built
+  /// around is the DECIDER's. A gate can be routed to nobody, hence nullable.
+  routedToId            String?                     @map("routed_to_id")
+  /// UNDER WHICH PERMISSION — the §2 authority rung the door actually checked,
+  /// frozen on the row so *"was this person entitled?"* survives a role that has
+  /// since changed.
+  decidedUnderAuthority ApprovalGateAuthority?      @map("decided_under_authority")
+  /// THROUGH WHICH SURFACE the decision arrived — `ui` / `api` / `mcp`, plus
+  /// `github` for a synced review (§6b's amendment).
+  decisionSource        ApprovalGateDecisionSource? @map("decision_source")
+  /// WHAT IT CAUSED — the merge commit sha, or the transition applied. Closes
+  /// the loop from decision to effect.
+  ///
+  /// ⚠️ Written IN the deciding write, never backfilled, and the immutability
+  /// guard is what holds that. The guard's width is not an accident this field
+  /// has to live with: §4 attempts the merge FIRST and RENDERS a refusal rather
+  /// than recording a decision (*"an approval that does not merge is a note, not
+  /// a gate"*), and §6c requires the retention pin in the decision's own
+  /// transaction for the same reason — so the outcome is known before the row is
+  /// written.
+  outcomeRef            String?                     @map("outcome_ref")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  decidedBy User?     @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+  /// Both relations to `User` carry a NAME because there are two of them now and
+  /// an unnamed pair is ambiguous. A relation name does not change a constraint
+  /// name — the FK is derived from table + column — so `decidedBy`'s existing
+  /// `approval_gate_decided_by_id_fkey` is untouched, and `migrate diff` reports
+  /// only the additions.
+  decidedBy User?     @relation("ApprovalGateDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  routedTo  User?     @relation("ApprovalGateRoutedTo", fields: [routedToId], references: [id], onDelete: SetNull)
 
   /// The routing read: a workspace's gates by state (whose Approvals tab).
   @@index([workspaceId, state])
