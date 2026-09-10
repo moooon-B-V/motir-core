@@ -769,6 +769,10 @@ once, in one place, for both loops.
 > 4. **A step id still names the UNIT OF WORK, never a loop position.** That rule survives the
 >    collapse unchanged and matters more afterwards, because there are far fewer step ids left and
 >    each one carries more.
+> 5. **A step id names its RESULT'S SHAPE as well as its subject, so a change to that result's
+>    TYPE is a change to the id, in the same commit** (MOTIR-5022). Limb 4 is about WHICH work a
+>    row belongs to; this is about whether the row can still be READ. See §13.6 — including the
+>    case where the id may not be bumped, and what stands in for it there.
 >
 > **The test to apply to a step you are about to delete: _if this ran a second time, what would
 > exist twice?_** A container, a runner registration, a slot, a usage row ⇒ keep the step. A wait,
@@ -906,7 +910,7 @@ Recorded per call site so [MOTIR-3484] and [MOTIR-3485] apply a decision rather 
 
 | loop  | today's step                 | disposition           | why                                                                                                                                                                                   |
 | ----- | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| index | `resolve-target`             | **KEEP**              | limb 2 — its `projectIds` are the identity every later step is keyed by; a re-read could re-point the fan-out mid-run                                                                 |
+| index | `resolve-target`             | **KEEP**              | limb 2 — its `projectIds` are the identity every later step is keyed by; a re-read could re-point the fan-out mid-run ⚠️ **now `resolve-target-v2`, see §13.6**                       |
 | index | `assert-fleet-configured`    | **DROP**              | a read of process configuration that throws; a second evaluation leaves nothing behind                                                                                                |
 | index | `index-admit:<pid>:<n>` ×60  | **KEEP, as ONE step** | a CLAIM (limb 1), with the backoff loop inside it — §13.3(c)'s ordering obligation. The per-attempt ids go: they existed only so Inngest would not freeze the first `deferred` answer |
 | index | `index-admit-wait:<pid>:<n>` | **DROP**              | a wait                                                                                                                                                                                |
@@ -944,6 +948,70 @@ rather than inherited:**
 - **Any change to a poll cadence, a backoff or a budget.** Every value in
   `INDEX_FLEET_TIME_BUDGETS`, `INDEX_ADMISSION_BUDGETS` and `FLEET_TIME_BUDGETS` is unchanged by
   this rule; it moves where durability lives, not how long anything waits.
+
+### §13.6 — A step id names its RESULT'S SHAPE as well as its subject (MOTIR-5022)
+
+§13.1 and §13.4 decide **which** calls are memoized. Neither says anything about the stored
+value's **shape**, and the table above is where a careful author looks — so this is the limb that
+was missing rather than the limb that was ignored.
+
+**The rule.**
+
+> **A memoized step's id names the SHAPE of its result as well as its subject. A change to that
+> result's type is a change to the id, in the same commit.**
+
+**Why the id and not the reader.** The memo contract is one sentence (`lib/jobs/engine/step.ts`):
+look up `(run_id, id)` in `job_step`, and if a row exists return its stored result **without
+executing**. A step id therefore identifies a unit of work **across a deploy**, and the stored
+value is only ever as current as the revision that wrote it. So a run that started under revision
+A and resumed under revision B replays **A's result into B's reader** — and the type system cannot
+see it: the reader's static type is B's, the value is A's, and the boundary between them is JSON.
+`tsc` is checking the two halves of an interface whose ends are a week apart.
+
+**The instance, in production.** [MOTIR-4652] replaced `resolve-target`'s `projectIds: string[]`
+with `anchorProjectId: string` and kept the id — a narrow, well-reviewed change; the narrower it
+was, the likelier it was to keep the id. A supervision in flight across that deploy resumed,
+replayed the pre-`83c0e8a34` row, and carried `anchorProjectId: undefined` to motir-ai's
+run-credential mint, which refused it with `'coreProjectId' must be a non-empty string`. Every
+code-graph refresh in the estate failed for the duration — and each run wrote a **`succeeded`**
+ledger row carrying the memo's own `repoRef`, because a run that consumes a stale memo has not
+failed a step. It was found by accident. [MOTIR-5020] is the outage; its fix bumped the id to
+`resolve-target-v2`.
+
+**The window is a DEPLOY, and every deploy has one.** This is not a race and not a rare
+interleaving: any run in flight when a shape change ships is exposed, deterministically, and a
+supervision in this fleet can be in flight for half an hour (§13.2).
+
+**⚠️ AND THE ID MAY NOT ALWAYS BE BUMPED — which is why this limb has two instruments, not one.**
+A new id means the step **re-executes** on a resumed run, and §13.1's own test is what decides
+whether that is allowed:
+
+| the step                                                                                                    | remedy                                                     | why                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a **READ** — nothing provisioned, claimed or torn down (`resolve-target-v2`)                                | **BUMP THE ID**                                            | re-executing costs a few selects and creates nothing twice, so the stale row is simply made unreadable                                                                                                                                                                                        |
+| a **SIDE EFFECT** — limb 1 (`index-admit:`, `index-boot:`, `index-settle:`, `boot-runner`, `settle-runner`) | **KEEP the id, NARROW the replayed value at the boundary** | bumping `index-boot:` would bill a second container rather than re-attach to the first. `requireCurrentIndexTarget` (`lib/services/codeGraphIndexService.ts`) is the worked example: it rejects a replayed value that does not satisfy the CURRENT contract, loudly, at the moment it is read |
+
+The two are not substitutes and they fail at different times: a **bump** removes the hazard before
+the deploy, a **narrowing** catches it at replay, in production, at one boundary. Where a step has
+an external effect, the narrowing is the only one available — and it is then owed at that
+boundary rather than optional.
+
+**What makes it checkable.** `tests/jobs/step-result-shape-guard.test.ts` pins every memoized
+step's result shape by id (`tests/jobs/stepResultShapePins.ts`), recomputed from the tree through
+the TypeScript checker: a shape that moves while its id does not fails the test with both shapes
+side by side, and a **retired** id may never be used again. The pin file is the reviewable record —
+its diff IS the shape change — and the retired list is what survives a revert of the bump.
+
+**Two things the enumeration turned up, recorded so they are not re-derived:**
+
+- **The population is 67 call sites, not the 66 `git grep 'step\.run('` reports** — four of those
+  hits are prose, and the grep misses the five that matter most. A supervision does not call
+  `ctx.step.run`; it calls `steps.run` on a seam it was handed (`SupervisionSteps` /
+  `RunnerSupervisionSteps`), and those five are exactly the limb-1 steps that provision.
+- **22 sites consume the result in-run**, 41 return it as the handler's ledger output, 4 discard
+  it. The consumed ones are the class [MOTIR-5020] belongs to; the returned ones cross the same
+  boundary into the ledger, which is why the pin covers all 65 pinnable sites rather than the
+  consumed slice.
 
 ## §14 — The engine does NOT enforce per-job concurrency, and the type is what says so (MOTIR-3731)
 
@@ -1669,3 +1737,6 @@ reimplementing it.
 [MOTIR-3832]: https://app.motir.co/items/MOTIR-3832
 [Graphile Worker]: https://github.com/graphile/worker
 [pg-boss]: https://github.com/timgit/pg-boss
+[MOTIR-4652]: https://app.motir.co/items/MOTIR-4652
+[MOTIR-5020]: https://app.motir.co/items/MOTIR-5020
+[MOTIR-5022]: https://app.motir.co/items/MOTIR-5022
