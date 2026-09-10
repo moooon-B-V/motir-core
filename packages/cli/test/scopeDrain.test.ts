@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { drainScope, readScopeEdges, type ScopeDrainInput } from '../src/commands/scopeDrain.js';
+import { closeOutRepos } from '../src/commands/auto.js';
 import { orderClaimedSet, unsatisfiedBlockers, type ScopeEdges } from '../src/scopedRun.js';
 import { autoExitCode, renderAutoSummary, type AutoSummary } from '../src/autoLoop.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
@@ -567,5 +568,67 @@ describe('drainScope — the shapes an older or richer server produces', () => {
     await expect(
       readScopeEdges(client, { kind: 'sprint', sprintId: 's1' }, 'PROD'),
     ).resolves.toEqual({ 'PROD-2': [], 'PROD-3': [] });
+  });
+});
+
+// ── the draft/ready seam, from THIS entry point (MOTIR-4967) ───────────────
+//
+// ⚠️ THE POINT IS THE ENTRY POINT, not the behaviour. `openSessionPr` and the
+// close-out are ONE seam shared by `motir auto` (`commands/auto.ts`) and the
+// scoped run (`commands/scopeDrain.ts` → `commands/dispatch.ts`), and the draft
+// lifecycle is one edit inside it rather than four. `test/auto.test.ts` proves
+// the seam from the other caller; this proves a summary built by the DRAIN
+// reaches the same close-out and gets the same draft.
+
+describe('the scoped drain’s summary goes through the same draft close-out', () => {
+  /** A runner that records every call and answers `gh` like a live repository. */
+  function recordingGit(over: { existingPr?: string; isDraft?: string } = {}): {
+    run: CommandRunner;
+    log: string[];
+  } {
+    const log: string[] = [];
+    const run: CommandRunner = (bin, args) => {
+      log.push(`${bin} ${args.join(' ')}`);
+      if (bin === 'gh') {
+        if (args[1] === 'list') {
+          return args.includes('isDraft') ? ok(over.isDraft ?? 'true') : ok(over.existingPr ?? '');
+        }
+        if (args[1] === 'create') return ok('https://github.test/pull/9001');
+      }
+      // The close-out counts the branch's commits with `rev-list --count`; the
+      // shared GIT stub answers every git read with a sha, which parses to NaN
+      // and would report the branch EMPTY before any `gh` ran.
+      if (bin === 'git' && args[0] === 'rev-list') return ok('3');
+      return GIT(bin, args, '/');
+    };
+    return { run, log };
+  }
+
+  it('opens a DRAFT and marks it ready — after the title rewrite', async () => {
+    const { run, log } = recordingGit({ existingPr: 'https://github.test/pull/9001' });
+    const summary = await drive([member('PROD-2')], { 'PROD-2': [] }, { run });
+
+    closeOutRepos(summary, run);
+
+    const edited = log.findIndex((line) => line.includes('gh pr edit'));
+    const readied = log.findIndex((line) => line.includes('gh pr ready'));
+    expect(edited).toBeGreaterThanOrEqual(0);
+    expect(readied).toBeGreaterThan(edited);
+    expect(summary.prs[0]?.draft).toBeUndefined();
+  });
+
+  it('leaves the pull request a DRAFT when the container still has children', async () => {
+    // The scoped run is the lane this matters in: its close-out re-reads the
+    // container (`readOpenChildren`) precisely because a bug filed mid-drain
+    // parents itself under it.
+    const { run, log } = recordingGit();
+    const summary = await drive([member('PROD-2')], { 'PROD-2': [] }, { run });
+
+    closeOutRepos(summary, run, { containerKey: 'PROD-1', openChildren: ['PROD-9'] });
+
+    expect(log.some((line) => line.includes('pr create') && line.includes('--draft'))).toBe(true);
+    expect(log.some((line) => line.includes('gh pr ready'))).toBe(false);
+    expect(summary.prs[0]).toMatchObject({ outcome: 'opened', draft: true });
+    expect(renderAutoSummary(summary)).toContain('PROD-1 is NOT finished');
   });
 });

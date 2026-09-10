@@ -439,6 +439,18 @@ none of them takes a key, so none of them can be handed a scope.
 
 ## AMENDMENT (Bug MOTIR-3268, 2026-08-20) — the CLAIM is not the only stop; the CLOSE-OUT has one too
 
+> **⚠️ SUPERSEDED IN ITS MECHANISM BY MOTIR-4967 — the INVARIANT below stands and
+> its carrier changed.** This amendment's decision was _"opens nothing while any
+> child is below `implemented`"_, and the `held` outcome, `openChildrenHoldReason`
+> and `renderOpenChildrenHold` were how it was expressed. Every session pull
+> request now opens as a DRAFT at the first implemented card, and a draft cannot
+> be merged — so it can neither complete the container nor cascade `done` onto the
+> children that are missing, which is exactly what this amendment set out to
+> prevent, while the finished work still gets CI, which the hold denied it. **The
+> close-out's re-read survives unchanged**; what it decides is no longer whether a
+> pull request is opened but whether that draft is marked READY. Read the reasoning
+> below as current and the `held` mechanism as history.
+
 The outcome map above is total over the **claim**, and it was read as total over
 the run. It is not, and the gap is a shape this ADR could not have seen when it
 was written: the claim is taken at t=0 and the pull request is opened at t=end,
@@ -487,8 +499,11 @@ one of them.
   `ensureInProgress`, `claimAllowsDispatch`, `renderClaimRefusal`,
   `notReadyError`, `refuseAutoOnlyFlag`
 - `packages/cli/src/commandCatalog.ts` — the record this ADR edits
-- `packages/cli/src/scopedRun.ts` — `childrenBelowClaimBar`, `renderOpenChildrenHold`,
-  `openChildrenHoldReason` (the AMENDMENT's close-out gate)
+- `packages/cli/src/scopedRun.ts` — `childrenBelowClaimBar` (the AMENDMENT's
+  close-out re-read; its `renderOpenChildrenHold` / `openChildrenHoldReason`
+  renderers were retired with the `held` outcome by MOTIR-4967)
+- `packages/cli/src/git.ts` — `openSessionPr`, `markSessionPrReady` (the draft
+  lifecycle that carries the AMENDMENT's invariant now)
 - `lib/workItems/statusLadder.ts` — the server's bar the CLI restates by key
 - `packages/cli/src/program.ts` — `register()`, which builds from it
 - `packages/cli/test/commandCatalog.test.ts` — the both-directions, in-order audit

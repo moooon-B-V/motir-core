@@ -578,14 +578,19 @@ describe('motir run <scope> — the leaf-only flags', () => {
   });
 });
 
-describe('motir run <container> — the close-out RE-READS the child set (MOTIR-3268)', () => {
-  // ⚠️ THE CLAIM IS TAKEN AT t=0 AND THE PULL REQUEST IS OPENED AT t=END.
+describe('motir run <container> — the close-out RE-READS the child set (MOTIR-3268 → MOTIR-4967)', () => {
+  // ⚠️ THE CLAIM IS TAKEN AT t=0 AND THE CHILD SET MOVES UNDER IT.
   // `motir run` may file a bug mid-drain (MOTIR-3017) and it parents that bug
   // under the in-flight card's parent — the very container this run is about to
-  // open a pull request for. MOTIR-3229 made the container's own move into
-  // `implemented` refusable, which stops the false CLAIM and not the pull
-  // request: the run opens it FIRST and transitions after, so the 422 lands on a
-  // pull request that already exists. These tests pin the read that prevents it.
+  // open a pull request for. These tests pin the read that catches it.
+  //
+  // ⚠️ WHAT THE READ DECIDES CHANGED, AND THE READ DID NOT (MOTIR-4967). It used
+  // to gate whether a pull request was opened AT ALL, because one opened over an
+  // unfinished container claims the container is built. The pull request is now
+  // a DRAFT either way, and a draft cannot be merged — so it can neither complete
+  // the container nor cascade `done` onto the children that are missing, while
+  // the finished work still gets CI, which the hold denied it. The read now
+  // decides whether the close-out marks that draft READY.
 
   /**
    * A container that acquires two children WHILE the drain is running.
@@ -609,7 +614,7 @@ describe('motir run <container> — the close-out RE-READS the child set (MOTIR-
 
   const containerReads = () => callsTo('get_work_item').filter((c) => c.args === 'PROD-1');
 
-  it('a child filed DURING the drain holds the pull request — none is opened', async () => {
+  it('a child filed DURING the drain leaves the pull request a DRAFT — it is opened, never readied', async () => {
     setup({ detail: growsMidDrain() });
     const git = recordingGit();
 
@@ -617,43 +622,51 @@ describe('motir run <container> — the close-out RE-READS the child set (MOTIR-
 
     // The shape read, the edges, and the CLOSE-OUT re-read this card adds.
     expect(containerReads()).toHaveLength(3);
-    // ⚠️ THE ASSERTION IS AN ABSENCE, and it is the acceptance criterion: no
-    // pull request exists for the transition to be refused on later.
-    expect(git.commands).not.toContain('gh pr create');
-    // The work is not stranded — the branch was pushed either way, because a
-    // hold is a statement about the pull REQUEST and not about the commits.
+    // ⚠️ THE PULL REQUEST IS OPENED, which is the inversion MOTIR-4967 makes:
+    // the hold's assertion here was an ABSENCE. What carries the invariant now
+    // is `--draft` plus the missing `gh pr ready` — a draft cannot be merged, so
+    // it cannot claim the container is built.
+    expect(git.commands).toContain('gh pr create');
+    expect(git.commands).not.toContain('gh pr ready');
+    // The work is not stranded — the branch was pushed, as it was under the hold.
     expect(git.commands).toContain('git push origin');
   });
 
-  it('reports the stop by KEY, with all three dispositions named', async () => {
+  it('names the outstanding children, and prescribes NOTHING', async () => {
     setup({ detail: growsMidDrain() });
     const git = recordingGit();
 
     await runCommand('PROD-1', SCOPE_OPTS, { ...SCOPE_DEPS, run: git.run });
 
+    expect(harness.stderr).toContain('PROD-1 is NOT finished');
     expect(harness.stderr).toContain('PROD-9 — not implemented');
     expect(harness.stderr).toContain('PROD-10 — not implemented');
-    // The implemented child is NOT named: the stop is about what is open.
+    // The implemented child is NOT named: the report is about what is open.
     expect(harness.stderr).not.toContain('PROD-2 — not implemented');
-    // The three dispositions, each a decision about SCOPE that an unattended run
-    // has no standing to make on the operator's behalf.
-    expect(harness.stderr).toContain('LAND them');
-    expect(harness.stderr).toContain('RE-PARENT them out of PROD-1');
-    expect(harness.stderr).toContain('move PROD-1 to Done');
-    // Named in the pull-request block as HELD — not as a failure, which would
+    // ⚠️ NO DISPOSITIONS. The hold offered three because the run had withheld
+    // the pull request on the operator's behalf and they had to undo it to
+    // proceed. Nothing has been withheld: the work is pushed, the pull request
+    // exists, CI is running on it, and re-running the container finishes it.
+    expect(harness.stderr).not.toContain('LAND them');
+    expect(harness.stderr).not.toContain('move PROD-1 to Done');
+    expect(harness.stderr).toContain('motir run PROD-1');
+    // And it is not reported as a failure or as a hold, either of which would
     // send the reader looking for something that went wrong.
-    expect(harness.stderr).toContain('HELD — no pull request opened');
+    expect(harness.stderr).not.toContain('HELD');
     expect(harness.stderr).not.toContain('NOT opened.');
+    expect(harness.stderr).toContain('still a DRAFT');
   });
 
-  it('the CONTROL still holds: every child implemented opens exactly ONE pull request', async () => {
+  it('the CONTROL still holds: every child implemented opens ONE pull request and MARKS IT READY', async () => {
     setup({ detail: (_i, key) => detail({}, key === 'PROD-1' ? ['PROD-2@implemented'] : []) });
     const git = recordingGit();
 
     await runCommand('PROD-1', SCOPE_OPTS, { ...SCOPE_DEPS, run: git.run });
 
     expect(git.commands.filter((c) => c === 'gh pr create')).toHaveLength(1);
+    expect(git.commands).toContain('gh pr ready');
     expect(harness.stderr).not.toContain('HELD');
+    expect(harness.stderr).not.toContain('still a DRAFT');
     expect(process.exitCode).toBe(0);
   });
 

@@ -256,14 +256,18 @@ export interface PrReport {
   repoName: string | null;
   branch: string;
   url: string | null;
+  outcome: 'opened' | 'existing' | 'failed' | 'empty';
   /**
-   * `held` (Bug MOTIR-3268) is the one outcome the RUN chose rather than
-   * observed: the close-out re-read the container's children, found one that had
-   * not reached `implemented`, and did not open a pull request that would have
-   * claimed otherwise. Distinct from `failed`, which means the attempt was made
-   * and `gh` refused it — the operator's next action is different in each case.
+   * The pull request was left a DRAFT (MOTIR-4967) — either because a child of
+   * the claimed container had not landed, or because `gh pr ready` refused.
+   *
+   * ⚠️ THIS REPLACES THE `held` OUTCOME (Bug MOTIR-3268). A hold used to mean
+   * "no pull request was opened at all", because a pull request opened over an
+   * unfinished container claims the container is built. The draft carries that
+   * invariant strictly better — a draft cannot be merged, so nothing can close
+   * the children — while the work still gets CI, which the hold denied it.
    */
-  outcome: 'opened' | 'existing' | 'failed' | 'empty' | 'held';
+  draft?: boolean;
   message?: string;
 }
 
@@ -289,6 +293,19 @@ export interface AutoSummary {
    * block already reports.
    */
   lanes: ReplanLaneRecord[];
+  /**
+   * The claimed container's children that had NOT landed when the close-out
+   * re-read it (MOTIR-4967, retiring Bug MOTIR-3268's `held`).
+   *
+   * ⚠️ IT INFORMS THE SUMMARY; IT NO LONGER GATES THE OPEN. The re-read itself
+   * survives unchanged — the close-out still has to know whether every child
+   * landed, because that is exactly the condition for marking the pull request
+   * READY. What changed is the consequence: the pull request exists either way,
+   * and an unfinished container simply leaves it a draft.
+   *
+   * Absent on a run with no container to re-read (`motir auto`, a sprint scope).
+   */
+  outstanding?: { containerKey: string; keys: string[] };
   stopReason: StopReason;
 }
 
@@ -582,10 +599,36 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
     );
   }
 
+  blocks.push(...renderOutstandingBlock(summary.outstanding));
+
   if (summary.prs.length > 0) {
     blocks.push(['Pull requests:', ...summary.prs.map(prLine)].join('\n'));
   }
   return blocks.join('\n\n');
+}
+
+/**
+ * The children that kept this run's pull requests in DRAFT (MOTIR-4967).
+ *
+ * ⚠️ IT NAMES THEM, AND IT PRESCRIBES NOTHING. Its predecessor
+ * (`renderOpenChildrenHold`) offered an operator three dispositions, because a
+ * hold was a decision the run had made on their behalf and they had to undo it
+ * to proceed. Nothing has been decided here: the work is pushed, the pull request
+ * exists, CI is running on it, and the only thing missing is the children. Re-run
+ * the container and the same close-out marks it ready.
+ */
+function renderOutstandingBlock(outstanding: AutoSummary['outstanding']): string[] {
+  if (!outstanding || outstanding.keys.length === 0) return [];
+  return [
+    [
+      `${outstanding.containerKey} is NOT finished — ${outstanding.keys.length} of its children ` +
+        `${outstanding.keys.length === 1 ? 'has' : 'have'} not landed:`,
+      ...outstanding.keys.map((key) => `  ${key} — not implemented`),
+      'Its pull requests stay DRAFTS until they do, so nothing can merge and claim the container is',
+      `built. The work IS pushed — re-run \`motir run ${outstanding.containerKey}\` to pick these up,`,
+      'or re-parent them out if they are no longer in its scope.',
+    ].join('\n'),
+  ];
 }
 
 /**
@@ -714,11 +757,16 @@ function renderPlanningBlocks(planning: PlanningRecord[], titleWidth: number): s
 
 function prLine(pr: PrReport): string {
   const repo = pr.repoName ?? 'the checkout';
+  // ⚠️ THE DRAFT IS SAID ON THE PR LINE, not only in the outstanding block
+  // below: a reader who skims to "Pull requests:" is deciding whether there is
+  // something to merge, and a draft is not.
+  const draft = pr.draft ? ' — still a DRAFT' : '';
+  const why = pr.draft && pr.message ? `\n    ${pr.message}` : '';
   switch (pr.outcome) {
     case 'opened':
-      return `  ${repo}: ${pr.url ?? pr.branch} (opened)`;
+      return `  ${repo}: ${pr.url ?? pr.branch} (opened${draft})${why}`;
     case 'existing':
-      return `  ${repo}: ${pr.url ?? pr.branch} (already open — updated by this run)`;
+      return `  ${repo}: ${pr.url ?? pr.branch} (already open — updated by this run${draft})${why}`;
     case 'empty':
       return `  ${repo}: no pull request — ${pr.branch} carries no commits beyond main.`;
     case 'failed':
@@ -726,14 +774,6 @@ function prLine(pr: PrReport): string {
         `  ${repo}: NOT opened. ${pr.message ?? ''}\n` +
         `    The work IS pushed to ${pr.branch} — open the pull request by hand, then ` +
         `\`motir done --session ${pr.branch}\`.`
-      );
-    case 'held':
-      // ⚠️ It says HELD, not failed, and names the branch for the same reason
-      // the `failed` arm does: the work is pushed either way, and the operator's
-      // recovery starts from knowing where it is.
-      return (
-        `  ${repo}: HELD — no pull request opened. ${pr.message ?? ''}\n` +
-        `    The work IS pushed to ${pr.branch} — the block above says what to do next.`
       );
   }
 }

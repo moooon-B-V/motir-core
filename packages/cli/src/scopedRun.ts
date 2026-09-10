@@ -404,51 +404,17 @@ export function childrenBelowClaimBar(
     .map((child) => child.identifier);
 }
 
-/**
- * The one-line reason a held pull request carries into the summary's PR block.
- *
- * ⚠️ IT MIRRORS THE SERVER'S OWN SENTENCE (`ContainerHasOpenChildrenError`) on
- * purpose. The two surfaces answer the same question — which children are open —
- * and a run that paraphrased would leave an operator comparing two descriptions
- * of one fact and wondering which is current.
- */
-export function openChildrenHoldReason(
-  containerKey: string,
-  openChildren: readonly string[],
-): string {
-  const named = openChildren.slice(0, 5).join(', ');
-  const rest = openChildren.length > 5 ? ` (+${openChildren.length - 5} more)` : '';
-  return (
-    `${containerKey} cannot claim to be implemented while ${openChildren.length} of its ` +
-    `children ${openChildren.length === 1 ? 'has' : 'have'} not been: ${named}${rest}.`
-  );
-}
-
-/**
- * What a person is told when the close-out re-read found the set had grown.
- *
- * ⚠️ THREE DISPOSITIONS, AND THE RUN PICKS NONE OF THEM. Each is a decision about
- * SCOPE — is this card part of the story or not — which is the one question an
- * unattended run has no standing to answer. Naming all three is what makes this a
- * stop the operator chose rather than a failure they have to diagnose.
- */
-export function renderOpenChildrenHold(
-  containerKey: string,
-  openChildren: readonly string[],
-): string {
-  return [
-    `${containerKey}: NO pull request was opened — its child set grew while this run was working.`,
-    ...openChildren.map((key) => `  ${key} — not implemented`),
-    'A parent pull request is opened on the claim that everything under it is built, and these',
-    'work items were not in the set this run claimed. Nothing was reverted and nothing was lost: the',
-    'work IS pushed, and the branch is named below.',
-    'Three ways forward — this run may not pick one for you:',
-    `  • LAND them — \`motir run ${openChildren[0] ?? '<key>'}\` — then re-run ${containerKey} to open the pull request.`,
-    `  • RE-PARENT them out of ${containerKey} if they are no longer in its scope.`,
-    `  • Take it by hand — open the pull request yourself, or move ${containerKey} to Done, which`,
-    '    completes its children deliberately rather than as a side effect.',
-  ].join('\n');
-}
+// ⚠️ `openChildrenHoldReason` / `renderOpenChildrenHold` USED TO LIVE HERE, and
+// MOTIR-4967 retired them with the `held` outcome they rendered. A container with
+// an unlanded child no longer withholds its pull request; it leaves the DRAFT one
+// it already has unready, which carries Bug MOTIR-3268's invariant (a draft cannot
+// merge, so it cannot complete the container) while the work still gets CI. What
+// the summary now prints is `renderOutstandingBlock` in `autoLoop.ts` — the same
+// children, named, with nothing for the operator to undo.
+//
+// `childrenBelowClaimBar` above is UNCHANGED and is still what computes the set:
+// the close-out has to know whether every child landed, because that is exactly
+// the condition for marking the pull request ready.
 
 /**
  * What a scope with nothing to do is told.
