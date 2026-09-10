@@ -44,6 +44,26 @@ export type ApprovalGateAuthorityDTO = 'assignee' | 'reporter' | 'admin';
 export type ApprovalGateDecisionSourceDTO = 'ui' | 'api' | 'mcp' | 'github';
 
 /**
+ * The two decision VERBS, as the wire carries them.
+ *
+ * ⚠️ IT LIVES HERE, NOT ON THE SERVICE, AND THE CLIENT/SERVER BOUNDARY IS WHY.
+ * The approval frame is a `'use client'` module and this is part of its props,
+ * so importing it from `@/lib/services/*` would make a client module import the
+ * service layer — which `tests/planning/planChangeArchitecture.test.ts` refuses
+ * repo-wide, and rightly: such an import compiles, survives SSR, and then fails
+ * in the browser or bundles the DB client into the page. A type-only import is
+ * erased at build time and would bundle nothing, but the guard reads the import
+ * SITE rather than its erasure, and it is a better guard for doing so — the
+ * remedy is to put the type where the wire vocabulary already lives, not to
+ * teach the guard an exception.
+ *
+ * A kind may later carry a verb SET rather than this pair (ADR §1's amendment,
+ * `decision_choice`), which is why the door takes a decision rather than
+ * exposing `approve()` / `requestChanges()` as separate methods.
+ */
+export type GateDecision = 'approve' | 'request_changes';
+
+/**
  * One approval gate, as the decide control / Approvals tab renders it. The
  * card the gate hangs off (`workItemId`) is the join every surface uses; the
  * `subjectId` is resolved per-`kind` by the registry handler (a `DesignEvidence`

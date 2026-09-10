@@ -1,5 +1,5 @@
 import type { ApprovalGateState } from '@/generated/prisma/client';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, ApprovalGateKindDTO, GateDecision } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { handlerFor } from '@/lib/approvalGates/registry';
@@ -32,10 +32,10 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // enum, a handler, and a renderer. No second vocabulary, no second control, no
 // second decide door.
 
-/** The two verbs. A kind may later carry a verb SET (ADR §1's amendment,
- *  `decision_choice`), which is why the door takes a decision rather than
- *  exposing `approve()` / `requestChanges()` as separate methods. */
-export type GateDecision = 'approve' | 'request_changes';
+/** The two verbs — DECLARED in `lib/dto/approvalGate.ts` (the client/server
+ *  boundary; see its own note) and re-exported here so every existing caller of
+ *  this service keeps resolving it unchanged. */
+export type { GateDecision };
 
 const DECISION_STATE: Record<
   GateDecision,
@@ -58,7 +58,68 @@ export interface DecideGateResult {
   effect: GateEffect;
 }
 
+/**
+ * What a SURFACE needs to render one gate: the gate itself, and whether THIS
+ * actor may press its verbs (Story MOTIR-4778 · Subtask MOTIR-4792).
+ *
+ * ⚠️ `canDecide` is the AUTHORITY answer, not the ROUTING one, and the frame
+ * renders the difference: a gate is SHOWN to one person (`assigneeId ??
+ * reporterId`) and may be PRESSED by three (assignee OR reporter OR admin, ADR
+ * §2's amendment). State `B` — the port live, the verbs absent — is exactly a
+ * reader for whom this is `false`.
+ */
+export interface WorkItemGateRead {
+  gate: ApprovalGateDTO | null;
+  canDecide: boolean;
+}
+
 export const approvalGatesService = {
+  /**
+   * The AWAITING gate of one KIND on one work item, plus whether this actor may
+   * decide it — the read the approval FRAME renders from (Subtask MOTIR-4792).
+   *
+   * ⚠️ SCOPED BY KIND, and that is not a convenience. A card carrying a
+   * repository SET legitimately holds SEVERAL simultaneous awaiting gates — ADR
+   * §6b's uniqueness is `(workItemId, kind, subjectId)` — so *"the awaiting
+   * gate"* is only a well-formed question once a kind is named. The design
+   * result section names `design_result`; the merge section will name its own.
+   * Returns the OLDEST when a kind somehow has more than one, matching the
+   * repository's `createdAt asc`, so the surface is deterministic rather than
+   * arbitrary.
+   *
+   * ⚠️ NO LOCK AND NO TRANSACTION OF ITS OWN. This is a render read: the
+   * decision it feeds re-derives every field under the lock in `decide` below,
+   * and nothing here may be carried into that write. A gate this read reports
+   * `awaiting` can be decided by somebody else a millisecond later, which is
+   * precisely the race state `H` exists to draw.
+   */
+  async getAwaitingForWorkItem(
+    input: { workItemId: string; kind: ApprovalGateKindDTO },
+    ctx: ServiceContext,
+  ): Promise<WorkItemGateRead> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(input.workItemId, tx);
+      // A cross-workspace row is indistinguishable from one that never existed,
+      // exactly as the decide door has it — no existence leak through a read.
+      if (!item || item.workspaceId !== ctx.workspaceId) return { gate: null, canDecide: false };
+
+      const gates = await approvalGateRepository.findAwaitingByWorkItem(input.workItemId, tx);
+      const row = gates.find((g) => g.kind === input.kind) ?? null;
+      if (!row) return { gate: null, canDecide: false };
+
+      // The SAME composition the decide door applies, and composed the same way
+      // — the admin arm is ASKED of `projectAccessService`, never derived here
+      // (the second-policy-path rule this service already records). A surface
+      // that derived its own answer would draw verbs the door then refuses.
+      const canDecide =
+        item.assigneeId === ctx.userId ||
+        item.reporterId === ctx.userId ||
+        (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
+
+      return { gate: toApprovalGateDto(row), canDecide };
+    });
+  },
+
   /**
    * DECIDE one gate. **The only way a gate's state ever changes.**
    *
@@ -200,6 +261,7 @@ export const approvalGatesService = {
           locked.state,
           locked.decidedById,
           locked.decidedAt,
+          locked.decidedByLabel,
         );
       }
 
