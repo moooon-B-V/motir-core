@@ -14,6 +14,7 @@ import type {
   WorkItemTransitionedData,
 } from '@/lib/jobs/types';
 import type { NotificationData } from '@/lib/dto/notifications';
+import type { NotificationCategory } from '@/generated/prisma/client';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // In-app notification fan-in (Story 5.7 · Subtask 5.7.3). The business logic
@@ -418,5 +419,78 @@ export const notificationFanInService = {
     }
 
     return { writtenUserIds };
+  },
+
+  /**
+   * Notify ONE recipient about something whose subject is a PROJECT rather than a
+   * work item (MOTIR-5016 · Story MOTIR-5010) — today only a REFUSED collaborator
+   * invitation, the one access outcome with no other carrier.
+   *
+   * ⚠️ WHY THIS IS A SIBLING OF `fanIn` AND NOT A CALL INTO IT. `fanIn` opens by
+   * resolving `event.workItemId` and returns `NO_OP` when the item does not
+   * exist — the registry, the plan, the dedupe key and the row all assume a work
+   * item. This event has none (`Notification.workItemId` is nullable and null
+   * here), so routing it through `fanIn` would mean widening a mechanism four
+   * shipped types depend on, which MOTIR-5016's own boundary forbids.
+   *
+   * ⚠️ WHAT IT DOES **NOT** DIVERGE ON is the thing that matters: the CHANNEL
+   * GATE. `notificationPreferencesService.isChannelEnabled` is consulted exactly
+   * as `fanIn` consults it, so toggling the row off in the settings matrix
+   * suppresses this type without any change at the emit site — which is the whole
+   * reason the card asked for the shared path. The row is written through the same
+   * repository, on the same workspace bind, with the same
+   * `createMany(skipDuplicates)` idempotency.
+   *
+   * ⚠️ THE DEDUPE KEY IS KEYED ON WHAT IS TRUE ONCE — the repository row and the
+   * invited login — never on a timestamp or an attempt counter. Establishing is
+   * retryable (**Try again** sits on the failed panel), so an attempt-varying key
+   * would give a user one row per retry for one refusal.
+   *
+   * Best-effort and never thrown: a notification that could not be written must
+   * not cost the caller the repositories it just created.
+   */
+  async notifyProjectEvent(args: {
+    workspaceId: string;
+    recipientUserId: string;
+    type: string;
+    category: NotificationCategory;
+    dedupeKey: string;
+    data: NotificationData;
+  }): Promise<boolean> {
+    try {
+      const enabled = await notificationPreferencesService.isChannelEnabled(
+        args.recipientUserId,
+        args.type,
+        'in_app',
+      );
+      if (!enabled) return false;
+
+      await withWorkspaceServiceContext(args.workspaceId, (tx) =>
+        notificationRepository.createMany(
+          [
+            {
+              workspaceId: args.workspaceId,
+              recipientUserId: args.recipientUserId,
+              type: args.type,
+              category: args.category,
+              // NULL — the subject is a project. The drawer resolves this row's
+              // destination from the TYPE, not from an issue key.
+              workItemId: null,
+              actorId: null,
+              data: args.data as unknown as Prisma.InputJsonValue,
+              dedupeKey: args.dedupeKey,
+            },
+          ],
+          tx,
+        ),
+      );
+      return true;
+    } catch (err) {
+      console.error(
+        `[notificationFanInService] could not write a ${args.type} notification for ${args.recipientUserId}:`,
+        err,
+      );
+      return false;
+    }
   },
 };

@@ -2767,6 +2767,10 @@
           "transitioned": {
             "label": "你关注的事项状态变更",
             "desc": "有人变更你关注的事项的状态（包括移至完成或重新打开）。"
+          },
+          "code_access_refused": {
+            "label": "无法授予代码访问权限",
+            "desc": "Motir 无法让你访问它为你的项目创建的代码仓库。"
           }
         },
         "soon": "即将推出",
@@ -4751,7 +4755,8 @@
       "assigned": "<s>{actor}</s> 将 <s>{key}</s> 指派给你",
       "transitioned": "<s>{actor}</s> 将 <s>{key}</s> 移动到 {status}",
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
-      "genericNoKey": "<s>{actor}</s> 给你发送了一条通知"
+      "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
+      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请"
     }
   },
   "orgAdmin": {

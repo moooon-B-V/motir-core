@@ -39,7 +39,10 @@ export interface NotificationActorDTO {
  * forward dep). `issueKey` is the deep-link target the drawer routes to
  * (`/items/[key]`, per `design/notifications/drawer.mock.html`).
  */
-export type NotificationData = NotificationMentionedData | NotificationTransitionedData;
+export type NotificationData =
+  | NotificationMentionedData
+  | NotificationTransitionedData
+  | NotificationCodeAccessRefusedData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -67,6 +70,29 @@ export interface NotificationTransitionedData {
   /** Status transition nouns. */
   fromStatus: string;
   toStatus: string;
+}
+
+/**
+ * GitHub REFUSED a collaborator invitation (MOTIR-5016 · Story MOTIR-5010) — the
+ * ONE access outcome with no other carrier, which is the whole rule for whether a
+ * notification is owed. An invitation that SENDS is carried by GitHub's own email
+ * to the account it names; an identity that was never connected is carried by the
+ * plan review rail's `needs_access` outcome and by `/settings/project/code-access`.
+ * A refusal has neither: no email left the building, and the user has private code
+ * they cannot reach.
+ *
+ * ⚠️ THE FIRST ARM WHOSE SUBJECT IS A PROJECT, not a work item — `workItemId` is
+ * null on these rows, so the drawer routes from the TYPE rather than from the
+ * presence of an issue key.
+ */
+export interface NotificationCodeAccessRefusedData {
+  kind: 'code_access_refused';
+  /** The project the repository belongs to — the row's deep-link target. */
+  projectKey: string;
+  /** The project's display name, for the summary line. */
+  projectName: string;
+  /** The repository GitHub refused the invitation on, as `owner/name`. */
+  repoRef: string;
 }
 
 export interface NotificationDTO {
