@@ -27,23 +27,32 @@ import {
 // what the definition file adds is only the SHAPE (which call is a `step.run`),
 // which is Inngest's concern and belongs with the job, not in here.
 //
-// TENANCY (the RESOLVED current-stage fan-out): a repo belongs to a WORKSPACE
-// (`GithubRepo.workspaceId` since MOTIR-1931 — NOT the installation's, which is
-// NULL for Motir's shared provisioning installation), but motir-ai's code-graph
-// tenant is PROJECT-scoped (the planner resolves `aiProjectId` from a planning
-// job's `projectId`). So this slice takes the repo's workspace off the job
-// payload, resolves its `organizationId` → ALL its projects, and the fan-out
-// dispatches ONE container PER PROJECT for the same repo. A repo connected or
-// created for a workspace is therefore indexed into each of that workspace's
-// projects' stores.
+// TENANCY: ONE INDEX PER `(organisation, repoRef)` (MOTIR-4652 · MOTIR-4642 ·
+// `docs/decisions/code-graph-index-fan-out.md`, MOTIR-2029).
 //
-// The precise repo↔project association this fan-out wanted NOW EXISTS
-// (MOTIR-1780): `project_repository` is a project's repository SET, one row per
-// intended repo, each carrying the realized `GithubRepo` it maps to — read it via
-// `projectRepoSetService.getSet` / `listByProject`. This service is DELIBERATELY
-// still workspace-scoped: narrowing the fan-out is a behaviour change to shipped,
-// working code-graph plumbing, and it wants its own decision, its own tests and
-// its own review.
+// A repo belongs to a WORKSPACE (`GithubRepo.workspaceId` since MOTIR-1931 — NOT
+// the installation's, which is NULL for Motir's shared provisioning
+// installation), and the workspace belongs to an ORGANISATION. The code graph is
+// the ORGANISATION's: one repository has one graph, built once, and which projects
+// work on it is visibility configuration rather than a second build.
+//
+// So this slice resolves the repo's workspace → its `organizationId` and
+// dispatches ONE container. It does not enumerate the workspace's projects and it
+// does not fan out.
+//
+// ⚠️ WHAT THIS REPLACED, AND WHY THE COMMENT MATTERS MORE THAN THE DIFF. Until
+// MOTIR-4652 this paragraph read: *"resolves its `organizationId` → ALL its
+// projects, and the fan-out dispatches ONE container PER PROJECT for the same
+// repo"*, and then asked the next reader NOT to fix it — *"narrowing the fan-out
+// is a behaviour change to shipped, working code-graph plumbing, and it wants its
+// own decision, its own tests and its own review."* It also named MOTIR-1754 as
+// the owner, whose own scope boundary handed the question straight back. That is
+// how a deferral orphans, and it is why MOTIR-2029 exists. This is the narrowing.
+//
+// For an organisation with two projects sharing a repository, the old shape
+// booted two containers to produce byte-identical graphs — drawing the
+// organisation's index allowance twice and consuming Motir's container time
+// twice. The multiplier was live in `moooon`.
 //
 // ⚠️ DECIDED, 2026-09-05 — `docs/decisions/code-graph-index-fan-out.md` (MOTIR-2029).
 // This paragraph named MOTIR-1754 for months and that story's own scope boundary
@@ -108,6 +117,26 @@ export type IndexSkipReason =
   | 'workspace_missing'
   | 'no_projects'
   | 'provider_cannot_index';
+
+// ⚠️ `no_projects` SURVIVED MOTIR-4652, AND ITS MEANING NARROWED. THE CARD ASKED
+// FOR IT TO BE RETIRED; IT CANNOT BE, AND THE REASON IS IN THE OTHER REPOSITORY.
+//
+// It used to mean "this repo has nowhere to be indexed INTO" — with N graphs to
+// build and no project to build them for, there was nothing to do. Under the
+// organisation model that is no longer true: the organisation owns the graph and
+// it is worth building whether or not a project reads it yet.
+//
+// What still requires a project is the RUN CREDENTIAL. motir-ai's
+// `IssueRunCredentialInput` (control plane, `coreProjectId: string`) is required,
+// and `issueRunCredential` resolves the `AiProject` spine through
+// `findOrCreateByCoreIds` before minting — MOTIR-4656 changed what the credential
+// is SCOPED to (the organisation) and deliberately did not change what it is
+// RESOLVED FROM. So an organisation with zero projects has nothing to anchor a
+// credential with, and this verdict is still the honest answer for it.
+//
+// It is therefore no longer "one per project of the workspace, and zero projects
+// means zero work". It is "the organisation has no project to resolve a run
+// credential through". Narrower, still reachable, still terminal.
 
 /**
  * THE CORE-SIDE PHASES OF ONE CONTAINER'S DISPATCH (MOTIR-4413) — the part of a
@@ -221,6 +250,24 @@ export type IndexRepoResult =
   | {
       indexed: true;
       repoRef: string;
+      /**
+       * ⚠️ ALWAYS `1` SINCE MOTIR-4652, AND KEPT RATHER THAN RETIRED.
+       *
+       * It counted the fan-out's containers. There is one container per
+       * `(organisation, repoRef)` now, so the number is a constant — but the field
+       * stays, for two reasons a reader should not have to reconstruct:
+       *
+       *  1. HISTORICAL LEDGER ROWS CARRY OTHER VALUES. `job_run.output` is stored
+       *     JSON; rows written before this card say `projectsIndexed: 2`. Removing
+       *     the field from the TYPE would not remove it from those rows, and a
+       *     reader meeting `2` needs somewhere to find out what it meant.
+       *  2. NOTHING IN PRODUCTION READS IT. The comment above says the three
+       *     fields are what `listSucceededCodeGraphIndexRepoRefs` and the
+       *     onboarding wizard consume — but that read builds its set from
+       *     `output.repoRef` ALONE and never touches this field. So retiring it
+       *     would have been safe and pointless; keeping it at 1 costs nothing and
+       *     keeps the row shape stable.
+       */
       projectsIndexed: number;
       /** MOTIR-4413. Absent when no container produced a computable span. */
       coreTimings?: IndexCoreTimings[];
@@ -241,10 +288,19 @@ export type IndexTarget =
       indexed: true;
       repoRef: string;
       providerId: GitProviderId;
+      /** THE TENANT (MOTIR-4652). One dispatch lands for this organisation. */
       organizationId: string;
-      /** EVERY project of the repo's workspace — the fan-out is workspace-scoped
-       *  (see the TENANCY note above); one index step lands per entry. */
-      projectIds: string[];
+      /**
+       * ⚠️ VESTIGIAL, AND NOT A FAN-OUT (MOTIR-4652). One project of the
+       * organisation, used ONLY to resolve motir-ai's `AiProject` spine when
+       * minting the run credential — see the `no_projects` note on
+       * {@link IndexSkipReason}. Nothing iterates it, nothing indexes "into" it,
+       * and the graph it produces belongs to the organisation.
+       *
+       * It goes when motir-ai's control plane accepts a `coreOrganizationId`
+       * alone.
+       */
+      anchorProjectId: string;
     };
 
 /** One repo the first-index sweep found without a code graph. */
@@ -304,13 +360,20 @@ export const codeGraphIndexService = {
       const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
       if (!workspace) return { kind: 'workspace_missing' as const };
 
+      // ⚠️ READ ONCE, FOR AN ANCHOR — NOT FOR A FAN-OUT (MOTIR-4652). The
+      // dispatch is per ORGANISATION now, so the project list is no longer the
+      // thing being iterated. One project is still needed because motir-ai
+      // resolves a run credential through an `AiProject` spine (see the
+      // `no_projects` note above); `[0]` after the repository's own deterministic
+      // order, so the same repo anchors on the same project across runs and a
+      // memo key stays stable.
       const projects = await projectRepository.findByWorkspace(input.workspaceId, tx);
       return {
         kind: 'resolved' as const,
         providerId: installation.provider as GitProviderId,
         workspaceId: input.workspaceId,
         organizationId: workspace.organizationId,
-        projectIds: projects.map((p) => p.id),
+        anchorProjectId: projects[0]?.id ?? null,
       };
     });
 
@@ -318,7 +381,10 @@ export const codeGraphIndexService = {
       return { indexed: false, reason: 'installation_missing' };
     if (resolved.kind === 'workspace_missing')
       return { indexed: false, reason: 'workspace_missing' };
-    if (resolved.projectIds.length === 0) return { indexed: false, reason: 'no_projects' };
+    // See the `no_projects` note on {@link IndexSkipReason}: the organisation owns
+    // the graph, but motir-ai still resolves a run credential through an
+    // `AiProject`, so an organisation with no project has nothing to anchor one.
+    if (resolved.anchorProjectId === null) return { indexed: false, reason: 'no_projects' };
 
     // ⚠️ THE CAPABILITY GATE, AND IT BELONGS HERE — NOT AT THE ENQUEUE (MOTIR-2124).
     //
@@ -388,7 +454,7 @@ export const codeGraphIndexService = {
       repoRef: repoRefOf({ owner: input.repoOwner, name: input.repoName }),
       providerId: resolved.providerId,
       organizationId: resolved.organizationId,
-      projectIds: resolved.projectIds,
+      anchorProjectId: resolved.anchorProjectId,
     };
   },
 

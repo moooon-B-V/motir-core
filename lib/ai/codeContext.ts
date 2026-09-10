@@ -20,20 +20,32 @@ import type { CodeRefreshReason } from '@/lib/codeGraph/refreshReason';
 // Shared by every PLANNING-job dispatch entry point (`generate_tree` today; the
 // augment / expand_item / replan submits adopt it when they land) so the
 // resolution lives in one place — the exact shape `resolveTenantOrg` set for the
-// org half. Scoping is the WORKSPACE's connected set (a workspace is one
-// product, so its projects share the product's repos), matching the 7.5
-// code-graph index fan-out (`codeGraphIndexService`).
+// org half.
 //
-// A PROJECT-scoped alternative now exists (MOTIR-1780): `project_repository` is
-// the project's repository SET, so `projectRepoSetService.listByProject` can answer
-// "this project's repos" where this function answers "the workspace's". This
-// resolver is DELIBERATELY left at workspace scope — re-pointing it would change
-// which repos a planning job sees, i.e. shipped, working AI-context behaviour, and
-// that adoption belongs to MOTIR-1754 (the BYOK code-index loop) alongside per-repo
-// index freshness. So the association is no longer missing, only unadopted here.
+// ⚠️ SCOPING IS THE PROJECT'S CONFIGURED REPOSITORY SET (MOTIR-4653 · MOTIR-4642 ·
+// the decision is `docs/decisions/code-graph-index-fan-out.md`, MOTIR-2029). It
+// used to be the WORKSPACE's installation grant list — every repository anybody
+// connected, whether or not this project builds any of it — and this comment
+// carried the deferral saying so. That deferral is discharged: `project_repository`
+// is the project's repository SET (MOTIR-1780), and which repositories a project
+// works on is VISIBILITY CONFIGURATION rather than a property of its workspace.
 //
-// A DB read ONLY (the 891 mirror rows) — never a GitHub API round-trip on the
-// submit path. No installation, or an installation with no granted repos,
+// ⚠️ WHAT THAT NARROWING COSTS, STATED HERE BECAUSE IT IS SILENT. A planner given
+// too much code does not fail — it produces a plan that reads fine and is grounded
+// in repositories the project does not own. A planner given too little does not
+// fail either. So the failure mode on BOTH sides of this line is a worse plan and
+// a green pipeline, which is why the set is decided by configuration somebody made
+// rather than inferred from a grant somebody else made.
+//
+// ⚠️ AND IT IS DELIBERATELY NOT THE ONLY QUESTION THIS FILE ANSWERS —
+// {@link resolveWorkspaceConnectedRepos} keeps the WORKSPACE-grant read, because
+// the onboarding wizard asks a genuinely different question (*has this user
+// connected a repository on the host yet?*) and its own step comment says so. That
+// question has no project-scoped answer: nothing populates `project_repository`
+// during onboarding, so re-pointing it would leave the CONNECT step's gate shut
+// for ever. Two readers, two questions, both named.
+//
+// A DB read ONLY — never a GitHub API round-trip on the submit path. An empty set
 // resolves to `undefined` so the caller OMITS `context.code` entirely and a
 // start-fresh project's envelope stays byte-identical to a code-less one.
 
@@ -64,13 +76,15 @@ export interface JobCodeRepo {
    * HOW CURRENT THAT GRAPH IS (Story MOTIR-1754 · MOTIR-4857) — the four-state
    * derivation and the drift in COMMITS, beside the ledger fact above.
    *
-   * ⚠️ OPTIONAL, AND ABSENT MEANS *NOBODY SAID* — never *current*. The set these
-   * entries are built from is the WORKSPACE's installation grant; the freshness
-   * is joined from the PROJECT's configured set, and the second is a subset of
-   * the first. A repository the project has not been given carries no drift
-   * rather than a fabricated one, which is the same three-state discipline
-   * `indexed` itself lands under (MOTIR-4826) and the one motir-ai's reader
-   * already tolerates.
+   * ⚠️ OPTIONAL, AND ABSENT MEANS *NOBODY SAID* — never *current*. It stays
+   * optional even though the two sets now COINCIDE: since MOTIR-4653 these
+   * entries are built from the PROJECT's configured set, which is the same set
+   * the freshness is joined from, so the "a repository the project has not been
+   * given carries no drift" case this note used to describe can no longer arise.
+   * What can still arise is a repository nobody has measured yet, and that is the
+   * same three-state discipline `indexed` itself lands under (MOTIR-4826) and the
+   * one motir-ai's reader already tolerates — so the absence keeps its meaning
+   * and loses one of its two causes.
    *
    * ⚠️ AND THEY DECIDE NOTHING, exactly as `indexed` decides nothing. What a
    * drift of three commits MEANS against a drift of three hundred is the
@@ -88,7 +102,21 @@ export interface JobCodeContext {
   repos: JobCodeRepo[];
 }
 
-export async function resolveCodeContext(ctx: {
+/**
+ * THE WORKSPACE'S CONNECTED SET — *what has this user connected on the host?*
+ *
+ * The read `resolveCodeContext` used to perform, kept under a name that says
+ * which question it answers (MOTIR-4653). Its callers are the ONBOARDING paths,
+ * and they are not a leftover: the migrate wizard's CONNECT step documents its
+ * own exit as *"a connected repository exists for the workspace (the GitHub grant
+ * mirror) … the wizard only observes it"*, which is a question about the GRANT and
+ * has no project-scoped answer — nothing writes `project_repository` during
+ * onboarding, so a project-scoped version of this gate never opens.
+ *
+ * ⚠️ NOT FOR A PLANNING ENVELOPE. What a planning job may see is the PROJECT's
+ * configured set; reach for {@link resolveProjectCodeContext}.
+ */
+export async function resolveWorkspaceConnectedRepos(ctx: {
   userId: string;
   workspaceId: string;
 }): Promise<JobCodeContext | undefined> {
@@ -126,7 +154,33 @@ export async function resolveCodeContext(ctx: {
   };
 }
 
-/** Project-owned job context: only explicit `project_repository` links. */
+/**
+ * THE PLANNING ENVELOPE'S `context.code` — *which repositories does THIS project
+ * work on?* (MOTIR-4653 · MOTIR-2029).
+ *
+ * ⚠️ IT IS `resolveProjectCodeContext`, AND THIS CARD DID NOT NAME IT. MOTIR-4653
+ * re-pointed the old `resolveCodeContext` from the workspace's grant to the
+ * project's set
+ * and left the name; `main` reached the same place from the other direction, by
+ * ADDING this function beside the workspace reader. Merging them under ONE name
+ * is the whole of the resolution — two functions answering *which repositories?*
+ * with different filters is precisely the drift the story exists to remove — and
+ * this is the name that says which scope it answers in, beside
+ * `resolveWorkspaceConnectedRepos`.
+ *
+ * ⚠️ AN UNESTABLISHED ROW CONTRIBUTES NOTHING. A `project_repository` row is an
+ * INTENT until something establishes it (`isEstablishedState`, ADR §0.1), and an
+ * unrealized one has no host, no default branch and no graph — so there is
+ * nothing for a planner to read and nothing honest to put on the wire. The state
+ * test is the stricter of the two filters this merge had to choose between, and
+ * it is the one `main` ships.
+ *
+ * ⚠️ AN EMPTY SET RESOLVES TO `undefined`, NOT TO AN EMPTY `repos` ARRAY. The
+ * caller omits `context.code` entirely, so a project with no configured
+ * repositories produces the SAME envelope as one whose workspace never connected
+ * anything. That equivalence is the shipped contract this function has always
+ * had, and it is what keeps a start-fresh project's job byte-identical.
+ */
 export async function resolveProjectCodeContext(ctx: {
   userId: string;
   workspaceId: string;
@@ -147,6 +201,13 @@ export async function resolveProjectCodeContext(ctx: {
           },
         ];
       });
+      // ⚠️ ONE LEDGER READ FOR THE WHOLE SET, and only when there IS a set — the
+      // same read `resolveWorkspaceConnectedRepos` performs, so the envelope and
+      // the reading state can never tell a user two different things about the
+      // same repository. It stays WORKSPACE-keyed because the ledger is: the
+      // index job writes one row per repo per workspace, and this story moves
+      // which repositories are ASKED about, never how their indexed-ness is
+      // recorded.
       const indexedRefs = repos.length
         ? await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx)
         : [];
@@ -164,7 +225,7 @@ export async function resolveProjectCodeContext(ctx: {
 
 // ── The PLANNING-SESSION producer (Story MOTIR-1754 · MOTIR-4604) ────────────
 //
-// `resolveCodeContext` above answers "which repos are connected?". A planning
+// `resolveProjectCodeContext` above answers "which repos are connected?". A planning
 // session needs more: **how current is each graph, why it is behind, and whether
 // anything is actually doing something about it.**
 //
@@ -277,7 +338,7 @@ export function resolveRefreshDisposition(input: {
  * can land mid-conversation is MOTIR-4591's question, and that it must not be
  * waited on is settled here.
  *
- * Returns `undefined` — exactly as `resolveCodeContext` does — when the workspace
+ * Returns `undefined` — exactly as `resolveProjectCodeContext` does — when the workspace
  * has no connected repo, so the caller OMITS `context.code` and a code-less
  * envelope stays byte-identical.
  */
@@ -286,7 +347,7 @@ export async function resolvePlanningCodeContext(ctx: {
   workspaceId: string;
   projectId: string;
 }): Promise<JobPlanningCodeContext | undefined> {
-  const base = await resolveCodeContext(ctx);
+  const base = await resolveProjectCodeContext(ctx);
   if (!base) return undefined;
 
   const state = await resolveCodeContextState(ctx.projectId, {
@@ -389,7 +450,7 @@ async function installationIdForWorkspace(ctx: {
  * The thin grant-list context, with each repository's FRESHNESS joined on
  * (Story MOTIR-1754 · MOTIR-4857).
  *
- * ⚠️ WHY A COMPOSER RATHER THAN A WIDER `resolveCodeContext`. That resolver is
+ * ⚠️ WHY A COMPOSER RATHER THAN A WIDER `resolveProjectCodeContext`. That resolver is
  * WORKSPACE-scoped and has four other callers; freshness is a PROJECT-scoped
  * fact (`resolveCodeContextState` reads the project's configured set). Widening
  * the workspace read to take a project would either give its other callers a

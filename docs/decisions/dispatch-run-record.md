@@ -160,14 +160,14 @@ The union of `SkipRecord.reason` (`needs_planning` · `needs_human` ·
 
 RUN-scoped (`dispatchRunCardId` is null):
 
-| kind              | emitted when                                                                                                                        |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `run_opened`      | the command starts — its flags, scope label, agent and model                                                                        |
-| `scope_claimed`   | a scope claim returned, with its typed outcome (`claimed` · `mine` · `taken` · `not_claimable` · `wrong_shape` · `not_finishable`)  |
-| `snapshot_frozen` | `motir batch` froze its plan: how many taken, how many skipped                                                                      |
-| `session_pr`      | one repository's session pull request closed out, with its `PrReport.outcome` (`opened` · `existing` · `failed` · `empty` · `held`) |
-| `plan_approved`   | `--auto-approve-replan` approved a plan (`ApprovalRecord`)                                                                          |
-| `run_closed`      | the stop reason                                                                                                                     |
+| kind              | emitted when                                                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `run_opened`      | the command starts — its flags, scope label, agent and model                                                                       |
+| `scope_claimed`   | a scope claim returned, with its typed outcome (`claimed` · `mine` · `taken` · `not_claimable` · `wrong_shape` · `not_finishable`) |
+| `snapshot_frozen` | `motir batch` froze its plan: how many taken, how many skipped                                                                     |
+| `session_pr`      | one repository's session pull request closed out, with its `PrReport.outcome` (`opened` · `existing` · `failed` · `empty`)         |
+| `plan_approved`   | `--auto-approve-replan` approved a plan (`ApprovalRecord`)                                                                         |
+| `run_closed`      | the stop reason                                                                                                                    |
 
 CARD-scoped (`dispatchRunCardId` set):
 

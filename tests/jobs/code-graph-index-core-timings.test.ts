@@ -58,8 +58,8 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('the ledger row carries the CORE-side phases, per (repo × project)', () => {
-  it('records THREE named spans for EVERY project, beside the unchanged three fields', async () => {
+describe('the ledger row carries the CORE-side phases, per CONTAINER', () => {
+  it('records THREE named spans for the container, beside the unchanged three fields', async () => {
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('cgt-rows', 2);
     stubIndexFleet();
     containerExitsWith(0);
@@ -81,13 +81,23 @@ describe('the ledger row carries the CORE-side phases, per (repo × project)', (
     // card that has to prove it did not move the other three.
     expect(output.indexed).toBe(true);
     expect(output.repoRef).toBe(REPO_REF);
-    expect(output.projectsIndexed).toBe(2);
+    // ⚠️ ONE, AND IT USED TO BE `2` (MOTIR-4652 · Story MOTIR-4642). The field
+    // counts CONTAINERS, and the fan-out that made that number equal the project
+    // count is retired — the graph is keyed to the organisation, so two projects
+    // of one workspace share one index rather than booting two byte-identical
+    // ones. The field is kept because historical rows carry other values.
+    expect(output.projectsIndexed).toBe(1);
 
-    // ONE row per container, not one per repo. Two projects means two
-    // containers, two admissions and two boots — and a single aggregated
-    // `phasesMs` would make a slow boot on one of them unreadable.
-    expect(output.coreTimings).toHaveLength(2);
-    expect(output.coreTimings!.map((t) => t.projectId).sort()).toEqual([...projectIds].sort());
+    // ONE row per container — the claim this arm has always made, and the number
+    // it resolves to is now a constant rather than the project count. What it
+    // still forbids is the aggregation: a single `phasesMs` summed across
+    // containers would make a slow boot on one of them unreadable, and that stays
+    // true the day a repository boots more than one again.
+    expect(output.coreTimings).toHaveLength(1);
+    // The record is keyed by the ANCHOR project — one of the workspace's, chosen
+    // to resolve the run credential motir-ai still mints per project. WHICH one
+    // is not a contract, so it is asserted as membership.
+    expect(projectIds).toContain(output.coreTimings![0]!.projectId);
     for (const timing of output.coreTimings!) {
       expect(Object.keys(timing.phasesMs).sort()).toEqual([
         'admissionWait',
@@ -171,8 +181,8 @@ describe('the ledger row carries the CORE-side phases, per (repo × project)', (
 // `indexEveryProject` throws out of its loop on every pass but the last, so "the
 // mode was determined" and "the mode reached the row" are different claims, and
 // only the second is what answers *is incremental indexing working?*
-describe('the ledger row carries the SYNC/REBUILD mode, per (repo × project)', () => {
-  it('records a mode for EVERY project, beside the unchanged three fields', async () => {
+describe('the ledger row carries the SYNC/REBUILD mode, per CONTAINER', () => {
+  it('records a mode for the container, beside the unchanged three fields', async () => {
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('cgm-rows', 2);
     stubIndexFleet();
     containerExitsWith(0);
@@ -193,13 +203,16 @@ describe('the ledger row carries the SYNC/REBUILD mode, per (repo × project)', 
     // this is the card adding a FIFTH key.
     expect(output.indexed).toBe(true);
     expect(output.repoRef).toBe(REPO_REF);
-    expect(output.projectsIndexed).toBe(2);
+    // ⚠️ ONE — see the timings arm above. The fan-out is retired (MOTIR-4652).
+    expect(output.projectsIndexed).toBe(1);
 
-    // ONE row per container. Each project is minted its OWN credential, so each
-    // gets its own grant — a repository can legitimately sync for one project and
-    // rebuild for another, and a single aggregate would hide it.
-    expect(output.indexModes).toHaveLength(2);
-    expect(output.indexModes!.map((m) => m.projectId).sort()).toEqual([...projectIds].sort());
+    // ONE row per container, and one container. The per-container shape is kept
+    // rather than flattened to a single `mode` key: the grant is motir-ai's
+    // decision per credential, so a repository CAN legitimately sync under one
+    // and rebuild under another, and a scalar would have to be re-widened the day
+    // that happens.
+    expect(output.indexModes).toHaveLength(1);
+    expect(projectIds).toContain(output.indexModes![0]!.projectId);
     // `rebuild`, because this suite's motir-ai stub offers no snapshot — which is
     // also the honest default state of a fresh repository.
     for (const record of output.indexModes!) expect(record.mode).toBe('rebuild');

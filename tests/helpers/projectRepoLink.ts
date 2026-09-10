@@ -1,4 +1,5 @@
 import { adminDb } from './adminDb';
+import { keyForAppend } from '@/lib/workItems/positioning';
 
 /**
  * Make an already-mirrored organisation repository part of one project's
@@ -15,7 +16,17 @@ export async function linkProjectRepo(opts: {
   name: string;
   role?: 'web' | 'api' | 'mobile' | 'shared' | 'infra' | 'other';
 }) {
-  const position = await adminDb.projectRepo.count({ where: { projectId: opts.projectId } });
+  // ⚠️ A REAL FRACTIONAL KEY, NOT `test-000000`. The column is a fractional index
+  // and `projectRepoSetService.addRow` appends against the LAST one — so a
+  // synthetic key that `generateKeyBetween` cannot parse makes the next real
+  // `addRow` in the same project throw `invalid order key`. A fixture that writes
+  // a row nothing else can be added after is a trap for whoever mixes the two.
+  const last = await adminDb.projectRepo.findFirst({
+    where: { projectId: opts.projectId },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  const position = keyForAppend(last?.position ?? null);
   return adminDb.projectRepo.create({
     data: {
       workspaceId: opts.workspaceId,
@@ -25,7 +36,7 @@ export async function linkProjectRepo(opts: {
       name: opts.name,
       seedSource: 'blank',
       state: 'connected',
-      position: `test-${String(position).padStart(6, '0')}`,
+      position,
     },
   });
 }

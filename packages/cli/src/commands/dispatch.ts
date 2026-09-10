@@ -21,7 +21,7 @@ import {
   resolveScopeTarget,
   type ScopeRunOptions,
 } from './scope.js';
-import { openChildrenHoldReason, orderClaimedSet, renderOpenChildrenHold } from '../scopedRun.js';
+import { orderClaimedSet } from '../scopedRun.js';
 import { drainScope } from './scopeDrain.js';
 import { autoExitCode, renderAutoSummary } from '../autoLoop.js';
 import { closeOutRepos, parseMax, requireAgent } from './auto.js';
@@ -827,29 +827,25 @@ export async function runCommand(
       // ⚠️ THE CLOSE-OUT RE-READS THE CONTAINER'S CHILDREN FIRST (Bug
       // MOTIR-3268). The claim was taken at t=0; a bug filed mid-drain
       // (MOTIR-3017) parents itself under this very container, so the set this
-      // run holds is a statement about the past by the time it is finished. A
-      // pull request opened over it would claim the story is built while a child
-      // of its own is not — which MOTIR-3229 made REFUSABLE at the transition,
-      // but only after the pull request already exists. One `get_work_item`,
-      // here, is what keeps it from existing.
+      // run holds is a statement about the past by the time it is finished.
+      //
+      // ⚠️ THE READ SURVIVES; ITS CONSEQUENCE CHANGED (MOTIR-4967). It used to
+      // decide whether a pull request was opened AT ALL, because one opened over
+      // an unfinished container claims the story is built. The pull request is
+      // now a DRAFT either way, and a draft cannot be merged — so it cannot
+      // complete the container or cascade `done` onto the children that are
+      // missing. What this read decides now is whether the close-out marks it
+      // READY, which is the same question asked at the only moment it can be
+      // answered.
       const open = await readOpenChildren(client, decision.target);
-      const hold =
-        open && open.openChildren.length > 0
-          ? openChildrenHoldReason(open.containerKey, open.openChildren)
-          : null;
-      if (open && hold) {
-        info('');
-        info(renderOpenChildrenHold(open.containerKey, open.openChildren));
-      }
       // ONE pull request per TOUCHED repo, through the shipped close-out. On a
       // multi-repo scope that is one PER REPO, and the summary names each — "one
       // pull request, one CI run" is exactly true for a single-repo scope only.
-      // Under a hold it still PUSHES every branch and opens none.
-      closeOutRepos(summary, run, hold);
+      closeOutRepos(summary, run, open);
       // Each repository's session pull request, with the outcome the close-out
-      // reported — `opened` · `existing` · `failed` · `empty` · `held`. `held`
-      // is the one the RUN chose rather than observed, and it is the one a person
-      // reading a run page most needs to see.
+      // reported — `opened` · `existing` · `failed` · `empty`. Whether it was
+      // left a DRAFT rides on the report too, and it is the thing a person
+      // reading a run page most needs to see: a draft is not something to merge.
       for (const pr of summary.prs) {
         reporter.event({
           kind: 'session_pr',

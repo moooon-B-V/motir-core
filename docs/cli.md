@@ -1062,10 +1062,10 @@ membership closed, so there is nothing for a shape check to catch.
 The headline is "one pull request, one CI run", and it is exactly true for a
 scope whose cards all ship in one repository. A story **may** span repositories,
 and then it produces one pull request per repository it touched — one branch
-each, opened by the CLI at the end, and the summary names every one of them.
-Nothing here claims a single pull request for a multi-repository scope, and you
-should not either when you go to merge: the container closes when the LAST of
-them merges.
+each, opened by the CLI as a DRAFT at that repository's first implemented card,
+and the summary names every one of them. Nothing here claims a single pull
+request for a multi-repository scope, and you should not either when you go to
+merge: the container closes when the LAST of them merges.
 
 #### When NOT to use it
 
@@ -1365,8 +1365,22 @@ the only part of the record that carries content from your machine.
 A run does **not** open a pull request per item. On the first item routed into a
 given repo, the CLI creates ONE session branch there — `motir/auto-<run-id>`,
 where the run id is a timestamp like `20260729-011830` — and every item's work
-is integrated onto it. At the end the CLI surfaces **one pull request per repo**:
-the run's single human review gate.
+is integrated onto it. The CLI surfaces **one pull request per repo**: the run's
+single human review gate.
+
+**It opens as a DRAFT, at that repository's first implemented card, and the
+close-out marks it ready for review.** Opening early is what puts CI on the work
+as it lands rather than only at the end; the draft is what stops it asking anyone
+to review a run that is still going — the title counts the cards it carries, and
+the one written at card zero would be permanently wrong. Two consequences worth
+knowing before you go looking for a missing pull request:
+
+- **A run that stops early leaves a draft.** Halted, interrupted, or stopped on a
+  re-plan: the work is pushed and reviewable-when-you-say-so, and the summary says
+  the pull request is still a draft.
+- **A container run whose children have not all landed leaves a draft too**, and
+  the summary names the children it is waiting for. Re-run the container and the
+  same close-out marks it ready.
 
 **A card that carries more than one repository gets that branch in EVERY one of
 them, or in none.** The name is the same in each — the run has one id — and the

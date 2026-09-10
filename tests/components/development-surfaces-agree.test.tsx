@@ -58,6 +58,7 @@ const DETAIL_PAGE = 'app/(authed)/items/[key]/_components/LateSections.tsx';
 /** The pull request in the report: OPEN, so its repository is `awaiting`. Its
  *  DTO names the repository `owner/name`; the item's set names it bare. */
 const OPEN_PR: LinkedPullRequestDto = {
+  id: 'pr-open-2120',
   title: 'feat(advisories): flag a card whose deliverable…',
   repo: 'moooon-B-V/motir-core',
   number: 2120,

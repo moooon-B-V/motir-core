@@ -3,9 +3,10 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '@/lib/db';
-import { resolveCodeContext } from '@/lib/ai/codeContext';
+import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
@@ -28,11 +29,16 @@ import { organizationIdOf } from '../helpers/organizationOf';
 //   2. The webhook → reconcile → index chain got NO new code. The repo-creation
 //      path reaches the index through the shipped chokepoint with the shipped
 //      payload, proved by driving BOTH producers and comparing what they emit.
-//   3. `resolveCodeContext` and `codeGraphIndexService` are UNCHANGED — this
-//      Story deliberately left AI grounding workspace-scoped (MOTIR-1754 owns
-//      that adoption). Pinning their current behaviour is what stops a
-//      well-meant "while I'm here, this should be project-scoped too" edit from
-//      silently moving what a planning job sees. (MOTIR-1974 re-pointed the
+//   3. AI grounding is pinned — and the two halves now answer DIFFERENTLY.
+//      `resolveProjectCodeContext` is PROJECT-scoped as of MOTIR-4653 (the adoption
+//      this guard was written to defer, arriving on its own card with its own
+//      decision — `code-graph-index-fan-out.md`, MOTIR-2029); its assertions are
+//      INVERTED rather than deleted, so the change is met head-on by the next
+//      reader. `codeGraphIndexService` is still WORKSPACE-keyed and its
+//      assertion is untouched, because MOTIR-4652 — the card that retires that
+//      fan-out — has not shipped. Pinning both is what stops a well-meant "while
+//      I'm here, these should match" edit from silently moving what a planning
+//      job sees or what the index job dispatches. (MOTIR-1974 re-pointed the
 //      index assertion at `resolveIndexTarget`, the method that now owns the
 //      fan-out after the job was split into per-project steps — the SCOPE it
 //      guards is unchanged, which is the point of re-pointing it rather than
@@ -154,9 +160,9 @@ describe('the index chain got no new code', () => {
   });
 });
 
-// ── 3 · AI grounding stayed workspace-scoped ────────────────────────────────
+// ── 3 · AI grounding: the envelope is project-scoped, the index job is not ──
 
-describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
+describe('resolveProjectCodeContext is project-scoped and codeGraphIndexService is unchanged', () => {
   /** Connect a repo to the workspace's OWN installation — the 7.10.3 mirror the
    *  code-context resolver reads. */
   async function connectRepo(workspaceId: string, name: string): Promise<string> {
@@ -188,26 +194,55 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
     return repo.id;
   }
 
-  it('still answers with the WORKSPACE’s repos, not the project’s narrower set', async () => {
+  it('answers with the PROJECT’s configured set, not the workspace’s wider grant', async () => {
+    // ⚠️ INVERTED BY MOTIR-4653, DELIBERATELY — this assertion used to read
+    // "still answers with the WORKSPACE's repos, not the project's narrower set".
+    // It was written to stop a well-meant drive-by re-pointing while MOTIR-1754
+    // owned the adoption; MOTIR-4653 IS that adoption, arriving on its own card
+    // with its own decision (`code-graph-index-fan-out.md`, MOTIR-2029). The
+    // guard is kept and turned around rather than deleted, so the next reader
+    // meets the change rather than an absence.
+    //
     // The set exists and names ONE repo; the workspace connects TWO. A planning
-    // job must still see both — re-pointing this resolver would change shipped AI
-    // grounding in a Story that never scoped it (MOTIR-1754 owns that).
+    // job must now see only the one this project works on.
     const fx = await makeWorkItemFixture();
-    await connectRepo(fx.workspaceId, 'acme-web');
+    const webId = await connectRepo(fx.workspaceId, 'acme-web');
     await connectRepo(fx.workspaceId, 'acme-api');
-    await projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme-web' }, fx.ctx);
+    // ⚠️ ESTABLISHED, through `linkProjectRepo` — `addRow` writes a PROPOSED row
+    // and `resolveProjectCodeContext` filters proposals out.
+    await linkProjectRepo({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      githubRepoId: webId,
+      name: 'acme-web',
+      role: 'web',
+    });
 
-    const context = await resolveCodeContext({ userId: fx.ownerId, workspaceId: fx.workspaceId });
+    const context = await resolveProjectCodeContext({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
 
-    expect(context!.repos.map((r) => r.repoRef).sort()).toEqual([
-      'moooon/acme-api',
-      'moooon/acme-web',
-    ]);
+    expect(context!.repos.map((r) => r.repoRef)).toEqual(['moooon/acme-web']);
   });
 
-  it('is unaffected by a SIBLING project’s set — it never reads the set at all', async () => {
+  it('is unaffected by a SIBLING project’s set — each project sees only its own', async () => {
+    // Also inverted (MOTIR-4653). The property it guards is the one that
+    // matters either way: one project's configuration must never decide another's
+    // grounding. Before, that held because the resolver read NO set; now it holds
+    // because it reads exactly THIS project's.
     const fx = await makeWorkItemFixture();
-    await connectRepo(fx.workspaceId, 'acme-web');
+    const webId = await connectRepo(fx.workspaceId, 'acme-web');
+    const siblingApiId = await connectRepo(fx.workspaceId, 'sibling-api');
+    await linkProjectRepo({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      githubRepoId: webId,
+      name: 'acme-web',
+      role: 'web',
+    });
+
     const sibling = await createTestProject({
       workspaceId: fx.workspaceId,
       actorUserId: fx.ownerId,
@@ -215,25 +250,58 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
       identifier: 'SIB',
     });
     const siblingFx: WorkItemFixture = { ...fx, project: sibling, projectId: sibling.id };
-    await projectRepoSetService.addRow(
-      siblingFx.projectId,
-      { role: 'api', name: 'sibling-api' },
-      siblingFx.ctx,
-    );
+    await linkProjectRepo({
+      workspaceId: siblingFx.workspaceId,
+      projectId: siblingFx.projectId,
+      githubRepoId: siblingApiId,
+      name: 'sibling-api',
+      role: 'api',
+    });
 
-    const context = await resolveCodeContext({ userId: fx.ownerId, workspaceId: fx.workspaceId });
+    const context = await resolveProjectCodeContext({
+      userId: fx.ownerId,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
 
     expect(context!.repos.map((r) => r.repoRef)).toEqual(['moooon/acme-web']);
   });
 
-  it('still resolves to undefined for a workspace with no installation', async () => {
+  it('resolves to undefined for a project whose set is EMPTY, however much the workspace connected', async () => {
+    // ⚠️ THE OTHER HALF OF THE INVERSION, and the one that is NOT symmetrical.
+    // This used to prove a repo SET is not a code context (an unrealized row must
+    // not become grounding). It now proves the mirror image, which is the shipped
+    // contract the resolver has always carried: an EMPTY answer is `undefined`,
+    // never an empty `repos` array, so the caller omits `context.code` entirely
+    // and a start-fresh project's envelope stays byte-identical to a code-less
+    // one — even in a workspace with two repositories connected.
     const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'acme-web');
+    await connectRepo(fx.workspaceId, 'acme-api');
+
+    await expect(
+      resolveProjectCodeContext({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('an UNREALIZED row contributes nothing — an intent is not a repository', async () => {
+    // The row exists and names a repository that was never realized
+    // (`githubRepoId` null), so there is no host, no default branch and no graph.
+    // Returning it would put a repository on the wire that does not exist.
+    const fx = await makeWorkItemFixture();
+    await connectRepo(fx.workspaceId, 'acme-web');
     await projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme-web' }, fx.ctx);
 
-    // A repo SET is not a code context. If this ever returns the set's rows, the
-    // resolver was re-pointed and a start-fresh project's job envelope changed.
     await expect(
-      resolveCodeContext({ userId: fx.ownerId, workspaceId: fx.workspaceId }),
+      resolveProjectCodeContext({
+        userId: fx.ownerId,
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+      }),
     ).resolves.toBeUndefined();
   });
 

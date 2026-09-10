@@ -177,6 +177,12 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
     );
     expect(peek.pullRequests).toEqual([
       {
+        // MOTIR-5005: the row's own cuid, which the REMOVE control addresses the
+        // delivery by. `expect.any(String)` rather than a literal because it is
+        // generated — but it stays inside `toEqual`, so the key must be PRESENT.
+        // Loosening this to `toMatchObject` would retire the exact-shape guard
+        // these two assertions exist to be.
+        id: expect.any(String),
         title: 'Throttle burst traffic',
         repo: 'moooon/acme',
         number: 41,
@@ -229,6 +235,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
     );
     expect(peek.pullRequests).toEqual([
       {
+        id: expect.any(String), // MOTIR-5005 — see the sibling case above
         title: `feat/${item.identifier}-done`, // headRef fallback
         repo: 'moooon/acme',
         number: 7,

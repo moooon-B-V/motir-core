@@ -551,8 +551,13 @@ describe('no shipped consumer of GithubPullRequest changes shape', () => {
     // mapper and the DTO is what a client parses.
     // MOTIR-4894 took `linkedManually` OFF this list, which is the half of the
     // retirement a client can observe: the wire shape lost a key.
+    // MOTIR-5005 ADDS `id` — the pull-request row's own cuid — because the
+    // Development row had no way to ADDRESS a delivery: `unlinkPullRequest`
+    // takes that cuid, so the remove control could not call the service the
+    // service was written for. A key GAINED is as observable as one lost, which
+    // is why it is edited here deliberately rather than discovered in CI.
     expect(Object.keys(dto).sort()).toEqual(
-      ['ci', 'number', 'repo', 'state', 'title', 'url'].sort(),
+      ['ci', 'id', 'number', 'repo', 'state', 'title', 'url'].sort(),
     );
     expect(dto).toMatchObject({ state: 'merged', number: 11, repo: 'moooon-B-V/motir-core' });
   });

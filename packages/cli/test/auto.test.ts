@@ -288,6 +288,15 @@ class FakeGit {
   ghAvailable = true;
   commitsOnBranch = 3;
 
+  /** A pull request already open on the session branch — the ORDINARY state at
+   *  close-out since MOTIR-3681 opens one at the first implemented card. */
+  existingPr: string | null = null;
+  /** What `gh pr list --json isDraft` answers (MOTIR-4967). */
+  prIsDraft = 'true';
+  /** Whether `gh pr ready` succeeds. */
+  prReadyOk = true;
+  prReadyCalls = 0;
+
   /** Whether the agent's work reached the remote (MOTIR-3004's push check). */
   agentPushed = true;
 
@@ -322,10 +331,19 @@ class FakeGit {
     }
     if (bin === 'gh') {
       if (!this.ghAvailable) return { exitCode: 127, stdout: '', stderr: 'gh: not found' };
-      if (args[1] === 'list') return ok('');
+      if (args[1] === 'list') {
+        // TWO different `pr list` calls now: `openSessionPr`'s (is there one?)
+        // and `markSessionPrReady`'s (is it a draft?). They are told apart by
+        // the field, exactly as `gh` tells them apart.
+        return args.includes('isDraft') ? ok(this.prIsDraft) : ok(this.existingPr ?? '');
+      }
       if (args[1] === 'create') {
         this.prCreated += 1;
         return ok('https://github.com/moooon/motir-core/pull/9001');
+      }
+      if (args[1] === 'ready') {
+        this.prReadyCalls += 1;
+        return this.prReadyOk ? ok('') : fail('draft PRs are disabled for this repository');
       }
     }
     return ok();
@@ -1248,11 +1266,11 @@ describe('the close-out survives a git failure', () => {
   });
 });
 
-describe('closeOutRepos under a HOLD pushes and opens nothing (MOTIR-3268)', () => {
-  it('reports HELD, having pushed the branch — a hold is about the pull REQUEST', async () => {
-    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
-    const git = new FakeGit();
-    const summary = await runAutoLoop({
+describe('the session pull request is a DRAFT until the close-out marks it ready (MOTIR-4967)', () => {
+  /** `runAutoLoop` with one leaf, opening its pull request eagerly like `motir auto`. */
+  async function runOneCard(git: FakeGit, server: FakeServer): Promise<AutoSummary> {
+    return runAutoLoop({
+      openPrEagerly: true,
       session: session(server),
       opts: {},
       kinds: undefined,
@@ -1265,46 +1283,180 @@ describe('closeOutRepos under a HOLD pushes and opens nothing (MOTIR-3268)', () 
       runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
       ownerId: OWNER,
     });
+  }
 
-    closeOutRepos(summary, git.runner, 'PROD-1 cannot claim to be implemented …');
+  it('a run that never reaches its close-out leaves a DRAFT — the case this card exists for', async () => {
+    // ⚠️ THE FAILURE PATH, not the happy one. A halted, interrupted or crashed
+    // run has integrated and pushed real work, and the mid-run open is what puts
+    // CI on it — but it has NOT finished the set it set out to finish, and a
+    // pull request marked ready claims it has. So the loop opens the draft and
+    // nothing in it ever ends the draft.
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    await runOneCard(git, server);
 
-    expect(summary.prs[0]).toMatchObject({ outcome: 'held', url: null });
-    expect(summary.prs[0]?.message).toContain('cannot claim to be implemented');
-    // ⚠️ The COMMITS are finished work, and a hold says nothing about them —
-    // leaving them in a local checkout for a human to discover would be a
-    // strictly worse outcome than the pull request this run declined to open.
-    expect(git.prCreated).toBe(0);
+    expect(git.prCreated).toBe(1);
+    expect(git.log.some((line) => line.includes('pr create') && line.includes('--draft'))).toBe(
+      true,
+    );
+    expect(git.prReadyCalls).toBe(0);
+  });
+
+  it('the CLOSE-OUT marks it ready — and only AFTER `updateSessionPr` has rewritten the title', async () => {
+    // ⚠️ THE ORDER IS THE RULE. The pull request opened at the first implemented
+    // card is titled from an EMPTY carried set, so it names 0 work items; the
+    // rewrite is what makes it describe the run. Marking it ready first notifies
+    // every reviewer about that title, which is precisely what the draft is for.
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    git.existingPr = 'https://github.com/moooon/motir-core/pull/9001';
+    const summary = await runOneCard(git, server);
+    git.log.length = 0;
+
+    closeOutRepos(summary, git.runner);
+
+    const edited = git.log.findIndex((line) => line.includes('gh pr edit'));
+    const readied = git.log.findIndex((line) => line.includes('gh pr ready'));
+    expect(edited).toBeGreaterThanOrEqual(0);
+    expect(readied).toBeGreaterThan(edited);
+    expect(summary.prs[0]).toMatchObject({ outcome: 'existing' });
+    expect(summary.prs[0]?.draft).toBeUndefined();
+    expect(renderAutoSummary(summary)).not.toContain('still a DRAFT');
+  });
+
+  it('leaves a pull request that is ALREADY ready alone — a resumed run must not fail', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    git.existingPr = 'https://github.com/moooon/motir-core/pull/9001';
+    git.prIsDraft = 'false';
+    const summary = await runOneCard(git, server);
+
+    closeOutRepos(summary, git.runner);
+
+    expect(git.prReadyCalls).toBe(0);
+    expect(summary.prs[0]?.draft).toBeUndefined();
+  });
+
+  it('REPORTS a failing `gh pr ready` and still completes the run', async () => {
+    // Same discipline as every other `gh` call in the close-out: the work is
+    // integrated, pushed and CI-checked, and a summary that aborts over `gh`
+    // hides it. What the operator gets instead is the draft, named, with the
+    // command that finishes it.
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    git.prReadyOk = false;
+    const summary = await runOneCard(git, server);
+
+    expect(() => closeOutRepos(summary, git.runner)).not.toThrow();
+
+    expect(summary.prs[0]).toMatchObject({ outcome: 'opened', draft: true });
+    expect(summary.prs[0]?.message).toContain('still a DRAFT');
+    expect(renderAutoSummary(summary)).toContain('still a DRAFT');
+    // The card is still recorded as integrated — the draft is downstream of it.
+    expect(server.integrated.map((r) => r.key)).toEqual(['PROD-1']);
+  });
+});
+
+describe('a container with UNLANDED children keeps its DRAFT — `held` retires (MOTIR-3268 → MOTIR-4967)', () => {
+  async function runOneCard(git: FakeGit, server: FakeServer): Promise<AutoSummary> {
+    return runAutoLoop({
+      openPrEagerly: true,
+      session: session(server),
+      opts: {},
+      kinds: undefined,
+      max: null,
+      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
+      runId: '20260820-010203',
+      branch: BRANCH,
+      run: git.runner,
+      clock: () => 0,
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
+    });
+  }
+
+  it('opens the pull request, does NOT mark it ready, and names the outstanding children', async () => {
+    // ⚠️ THE INVARIANT IS UNCHANGED AND ITS CARRIER IS NOT. A pull request must
+    // not claim a container is built while a child of its own is not — Bug
+    // MOTIR-3268 carried that by opening NOTHING, which also denied the finished
+    // work its CI. A draft carries it strictly better: it cannot be merged, so it
+    // can neither complete the container nor cascade `done` onto the very
+    // children that are missing.
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    const summary = await runOneCard(git, server);
+
+    closeOutRepos(summary, git.runner, {
+      containerKey: 'PROD-100',
+      openChildren: ['PROD-9', 'PROD-10'],
+    });
+
+    expect(summary.prs[0]).toMatchObject({ outcome: 'opened', draft: true });
+    expect(summary.prs[0]?.url).not.toBeNull();
+    expect(git.prReadyCalls).toBe(0);
+    // …and the commits are pushed, which the hold was already right about.
     expect(git.log.some((line) => line.startsWith('git push origin'))).toBe(true);
 
     const rendered = renderAutoSummary(summary);
-    expect(rendered).toContain('HELD — no pull request opened');
-    expect(rendered).toContain(`The work IS pushed to ${BRANCH}`);
+    expect(rendered).toContain('PROD-100 is NOT finished');
+    expect(rendered).toContain('PROD-9 — not implemented');
+    expect(rendered).toContain('PROD-10 — not implemented');
+    expect(rendered).toContain('stay DRAFTS');
+    expect(rendered).toContain('motir run PROD-100');
+    // ⚠️ NOTHING FOR THE OPERATOR TO UNDO. The predecessor offered three
+    // dispositions because the run had withheld the pull request on their
+    // behalf; nothing has been withheld here.
+    expect(rendered).not.toContain('NO pull request was opened');
+    expect(summary.prs.some((pr) => (pr.outcome as string) === 'held')).toBe(false);
   });
 
   it('an EMPTY branch still reports `empty` — the more specific of the two truths', async () => {
-    // The hold is checked AFTER the emptiness check on purpose: a branch that
-    // carries nothing cost the hold nothing, and saying `held` there would
-    // invite the operator to go looking for work that does not exist.
+    // Unchanged from the hold: a branch that carries nothing has no pull request
+    // to leave in draft, and saying otherwise would send the operator looking for
+    // work that does not exist.
     const server = new FakeServer([leaf('row-1', 'PROD-1')]);
     const git = new FakeGit();
     git.commitsOnBranch = 0;
-    const summary = await runAutoLoop({
-      session: session(server),
-      opts: {},
-      kinds: undefined,
-      max: null,
-      agent: { parsed: { command: 'fake', binary: 'fake', args: [] }, source: 'flag' },
-      runId: '20260820-010203',
-      branch: BRANCH,
-      run: git.runner,
-      clock: () => 0,
-      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
-      ownerId: OWNER,
+    const summary = await runOneCard(git, server);
+
+    closeOutRepos(summary, git.runner, {
+      containerKey: 'PROD-100',
+      openChildren: ['PROD-9'],
     });
 
-    closeOutRepos(summary, git.runner, 'PROD-1 cannot claim to be implemented …');
-
     expect(summary.prs[0]).toMatchObject({ outcome: 'empty' });
+  });
+
+  it('a FAILED open reports why the OPEN failed — not a message about draft state', async () => {
+    // ⚠️ THE OPEN'S REASON MUST SURVIVE. There is no pull request to mark ready,
+    // so asking `gh` would fail a second time and overwrite the one message a
+    // human can act on with one about draft state, which is not the problem.
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    const summary = await runOneCard(git, server);
+    git.ghAvailable = false;
+
+    closeOutRepos(summary, git.runner, {
+      containerKey: 'PROD-100',
+      openChildren: ['PROD-9'],
+    });
+
+    expect(summary.prs[0]).toMatchObject({ outcome: 'failed', url: null });
+    expect(summary.prs[0]?.draft).toBeUndefined();
+    expect(summary.prs[0]?.message).toContain('gh: not found');
+    expect(summary.prs[0]?.message).not.toContain('unlanded');
+  });
+
+  it('an EMPTY open-children list is an ordinary close-out — the container landed everything', async () => {
+    const server = new FakeServer([leaf('row-1', 'PROD-1')]);
+    const git = new FakeGit();
+    const summary = await runOneCard(git, server);
+
+    closeOutRepos(summary, git.runner, { containerKey: 'PROD-100', openChildren: [] });
+
+    expect(git.prReadyCalls).toBe(1);
+    expect(summary.outstanding).toBeUndefined();
+    expect(summary.prs[0]?.draft).toBeUndefined();
   });
 });
 

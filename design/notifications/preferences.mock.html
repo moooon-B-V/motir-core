@@ -697,7 +697,7 @@
                   </div>
                 </div>
 
-                <div class="mrow last">
+                <div class="mrow">
                   <div class="evt">
                     <div class="evt-label is-disabled">
                       An item you're watching changes status<span class="seam-tag">Soon</span>
@@ -729,6 +729,39 @@
                     </button>
                   </div>
                 </div>
+
+                <!-- MOTIR-5012 — the ACCESS-REFUSED row. Position: LAST, which is
+                     what NOTIFICATION_PREFERENCE_EVENT_TYPES' order puts it at —
+                     the matrix renders that array, and a new member is appended
+                     rather than sorted in. -->
+                <div class="mrow last">
+                  <div class="evt">
+                    <div class="evt-label">Code access couldn't be granted</div>
+                    <div class="evt-desc">
+                      Motir couldn't give you access to a repository it made for your project.
+                    </div>
+                  </div>
+                  <div class="cell">
+                    <button
+                      class="switch on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="Email for Code access couldn't be granted"
+                    >
+                      <span class="knob"></span>
+                    </button>
+                  </div>
+                  <div class="cell">
+                    <button
+                      class="switch on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="In-app for Code access couldn't be granted"
+                    >
+                      <span class="knob"></span>
+                    </button>
+                  </div>
+                </div>
               </div>
               <div class="defaults-note">
                 <span class="dot" aria-hidden="true"></span>
@@ -749,6 +782,20 @@
           untouched matrix already reflects "direct events on" without writing a row. The
           <strong>Watching</strong> event row is drawn <strong>disabled</strong> with a "Soon" tag —
           the Story 5.4 seam (the same seam the drawer's Watching tab draws).
+        </p>
+        <p class="panel-note">
+          <b
+            >MOTIR-5012 · <code>Code access couldn't be granted</code> is the fifth row, and it is
+            LAST because the matrix renders <code>NOTIFICATION_PREFERENCE_EVENT_TYPES</code> in
+            array order</b
+          >
+          — a new member is appended, never sorted in, so the four rows above keep the positions
+          users have learned. It is <b>settable</b> (not a seam) and defaults
+          <b>ON for both channels</b>, like every other direct event.
+          <b>Email ON is a decision, not an oversight.</b> This event's whole reason to exist is
+          that GITHUB's invitation email never left the building — Motir's own notification email is
+          a second, independent carrier, and suppressing it would re-create by default exactly the
+          silence the row was added to end. It is still the user's to turn off.
         </p>
       </section>
 
