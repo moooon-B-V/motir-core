@@ -325,6 +325,19 @@ export const githubPullRequestService = {
           headRef: input.headRef,
           baseRef: input.baseRef,
           title: input.title,
+          // ⚠️ NOT ASSERTED — the one field this caller is never asked about
+          // (MOTIR-5002). `link_pull_request` takes the refs and the title because
+          // an agent that has just run `gh pr create` truthfully knows them; it is
+          // not asked whether the pull request is a draft, so this row must not
+          // say. `undefined` is the repository input's word for that: the column
+          // stays NULL on this insert, and NULL is what makes
+          // `resyncLinkedPullRequest` decline rather than guess.
+          //
+          // Writing `false` here would be the defect with a different author. It
+          // costs nothing to leave: a row this arm CREATES means no delivery has
+          // arrived, so there is nothing to resync in the first place — and the
+          // delivery still to come is the authority that fills it in.
+          draft: undefined,
         };
         try {
           prId = (await githubPullRequestRepository.upsert(row, tx)).id;

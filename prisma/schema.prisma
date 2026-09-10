@@ -6127,6 +6127,36 @@ model GithubPullRequest {
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
   title                 String?
+  /// Whether the change request is a DRAFT — explicitly not offered for review —
+  /// as of the last delivery (MOTIR-5002). `NormalizedChangeRequest.draft` is
+  /// where it is read from the payload; this is where it survives the delivery.
+  ///
+  /// ⚠️ ITS ONE READER IS `resyncLinkedPullRequest`, and that narrowness is the
+  /// design. Every OTHER reader of this row must go on seeing a draft as an
+  /// ordinary OPEN pull request — the `deferred_open_pr` count that holds a
+  /// multi-repository parent open while one repository's chain is stopped, the
+  /// delivery-set gate, the Development surface — so nothing here keys on it and
+  /// nothing should. The link door needs it because a link carries no payload:
+  /// it synthesizes a change request from this row, and before this column it had
+  /// to pin `draft: false` and assert `implemented` about a pull request whose
+  /// author had said the opposite.
+  ///
+  /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — the same rule `base_ref`
+  /// and `merged_at` above state, for the same reason. A row mirrored before this
+  /// column existed genuinely does not know, and the two guesses are not
+  /// symmetric: `false` re-asserts the very defect on the population most likely
+  /// to be a draft (an in-flight parent run, whose pull request is a draft until
+  /// its last child lands), while `true` would strand a ready pull request's card.
+  /// So the resync DECLINES on null rather than choosing one, and the next
+  /// delivery fills it in.
+  ///
+  /// ⚠️ AND `undefined` IS NOT `null` AT THE WRITE. `UpsertGithubPullRequestInput`
+  /// takes it as a REQUIRED key whose value may be undefined — "I do not assert
+  /// draft-ness" — which leaves an existing value alone on update and the column
+  /// null on insert. That is what lets the link door create a placeholder row
+  /// without claiming to know, and the backfill (merged rows only, where the flag
+  /// decides nothing) say the same.
+  draft                 Boolean?
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///

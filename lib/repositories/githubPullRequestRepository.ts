@@ -32,6 +32,29 @@ export interface UpsertGithubPullRequestInput {
    *  only because rows written before it existed cannot know theirs. */
   baseRef: string;
   title: string | null;
+  /**
+   * Whether the change request is a DRAFT (MOTIR-5002) — the fact the LINK door
+   * could not read, because a link carries no payload and synthesizes its change
+   * request from this row.
+   *
+   * ⚠️ A REQUIRED KEY WHOSE VALUE MAY BE `undefined`, and that is the whole
+   * contract rather than a loose type. REQUIRED so the compiler enumerates the
+   * producers — the same argument `NormalizedChangeRequest.draft` makes for
+   * itself one layer up (MOTIR-4968): an optional field lets one writer omit it
+   * in silence, and the row then says `false` by omission about a pull request
+   * nobody asked. `undefined` so a writer that genuinely does not know can SAY
+   * so: Prisma reads it as "not provided", which leaves an existing value alone
+   * on update and the nullable column NULL on insert.
+   *
+   * The three producers, each of which declares:
+   *  · the status sync — a real boolean off the delivery. The authority.
+   *  · `linkPullRequestByCoordinates`'s create arm — `undefined`. A run linking
+   *    the moment `gh pr create` returns tells Motir the refs and the title and
+   *    is never asked about draft-ness; the delivery still to come is what knows.
+   *  · the historical backfill — `undefined`. It writes MERGED rows only, where
+   *    the flag decides nothing (`merged` answers the lifecycle first).
+   */
+  draft: boolean | undefined;
   /* ⚠️ `linkedManually` WAS A FIELD HERE and is removed by MOTIR-4894. It said
    * the association was DECLARED rather than inferred by the MOTIR-892
    * auto-resolver; MOTIR-3674 deleted that resolver, so the distinction had no
