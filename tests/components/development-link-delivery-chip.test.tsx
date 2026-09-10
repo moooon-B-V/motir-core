@@ -15,11 +15,16 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 
 const linkPullRequestAction = vi.fn();
 const listPullRequestCandidatesAction = vi.fn();
+// MOTIR-5005 added a third action to the control's module. The factory replaces
+// the module wholesale, so an export it omits is a hard import error in the
+// component under test — not a silently absent function.
+const unlinkPullRequestAction = vi.fn();
 const refresh = vi.fn();
 
 vi.mock('@/app/(authed)/items/[key]/actions', () => ({
   linkPullRequestAction: (...args: unknown[]) => linkPullRequestAction(...args),
   listPullRequestCandidatesAction: (...args: unknown[]) => listPullRequestCandidatesAction(...args),
+  unlinkPullRequestAction: (...args: unknown[]) => unlinkPullRequestAction(...args),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 

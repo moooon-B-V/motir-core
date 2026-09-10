@@ -45,6 +45,7 @@ function delivery(
   const { state = 'open', baseRef = 'main', defaultBranch = 'main' } = over;
   return {
     pullRequest: {
+      id: `pr-${repoLabel}-${number}`,
       title: `pull ${number}`,
       repo: repoLabel,
       number,

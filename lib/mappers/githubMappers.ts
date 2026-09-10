@@ -64,6 +64,7 @@ export function toGithubInstallationDTO(
  */
 export function toLinkedPullRequestDto(row: GithubPullRequestWithContext): LinkedPullRequestDto {
   return {
+    id: row.id,
     title: row.title ?? row.headRef,
     repo: `${row.repo.owner}/${row.repo.name}`,
     number: row.number,

@@ -29,6 +29,7 @@ function pr(
   over: Partial<LinkedPullRequestDto> = {},
 ): LinkedPullRequestDto {
   return {
+    id: `pr-${repoLabel}-${number}`,
     title: `pull ${number}`,
     repo: repoLabel,
     number,

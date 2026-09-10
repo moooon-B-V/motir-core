@@ -114,6 +114,7 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
       ...DATA,
       pullRequests: [
         {
+          id: 'pr-131',
           title: 'Add per-route rate limiting',
           repo: 'moooon/motir-core',
           number: 131,
@@ -122,6 +123,7 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           url: 'https://github.com/moooon/motir-core/pull/131',
         },
         {
+          id: 'pr-57',
           title: 'Throttle burst traffic on /v1',
           repo: 'moooon/motir-gateway',
           number: 57,
@@ -130,6 +132,7 @@ describe('IssueQuickViewPanel — the Development section (MOTIR-1579)', () => {
           url: 'https://github.com/moooon/motir-gateway/pull/57',
         },
         {
+          id: 'pr-119',
           title: 'Spike: webhook signatures',
           repo: 'moooon/motir-core',
           number: 119,

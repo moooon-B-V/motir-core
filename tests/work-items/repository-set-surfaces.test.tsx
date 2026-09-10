@@ -118,6 +118,7 @@ describe('RepositorySetField · the five delivery states', () => {
 
 function pr(repo: string, state: LinkedPullRequestDto['state']): LinkedPullRequestDto {
   return {
+    id: `pr-${repo}-7`,
     title: `Wire ${repo}`,
     repo: `moooon-B-V/${repo}`,
     number: 7,

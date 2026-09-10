@@ -6202,7 +6202,11 @@
         "excluded": "已跳过"
       },
       "repositoryNotCreated": "仓库尚未创建",
-      "repositorySkipped": "此项目已跳过"
+      "repositorySkipped": "此项目已跳过",
+      "unlinkAria": "移除与 {target} 的关联",
+      "unlinkConfirmBefore": "移除与",
+      "unlinkConfirmAfter": " 的关联吗？GitHub 上的拉取请求不会受到影响——只会移除此关联。",
+      "unlinkAction": "移除关联"
     },
     "orgDisconnect": {
       "title": "将 {repo} 从组织中断开连接",

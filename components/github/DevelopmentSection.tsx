@@ -77,9 +77,18 @@ type StrandedBase = string | null;
 function PullRequestRow({
   pr,
   strandedBase,
+  action,
 }: {
   pr: LinkedPullRequestDto;
   strandedBase: StrandedBase;
+  /** The row's trailing WRITE affordance — the remove control (Story
+   *  MOTIR-4878 · MOTIR-5005, design Panels 5d–5f), LAST in the row, after the
+   *  link-out. Supplied by the HOST rather than built here: this component is
+   *  shared with the read-only peek, which passes nothing and therefore draws no
+   *  control at all — not a disabled one (design Q1 / Q4). It is a `ReactNode`
+   *  rather than a flag because the control is a client component owned by the
+   *  detail page's route folder, and this file may not reach into it. */
+  action?: ReactNode;
 }) {
   const t = useTranslations('github');
   const state = PR_STATE_META[pr.state];
@@ -153,6 +162,7 @@ function PullRequestRow({
       >
         <ExternalLink className="h-4 w-4" aria-hidden />
       </a>
+      {action}
     </li>
   );
 }
@@ -311,6 +321,7 @@ export function DevelopmentSectionBody({
   pullRequests,
   itemIdentifier,
   manualLinkable = false,
+  rowAction,
   repoDelivery = [],
   deliveries = [],
 }: {
@@ -321,6 +332,16 @@ export function DevelopmentSectionBody({
    *  lives — the caption then adds "— or linked by hand from here" (design Panel
    *  5a). The read-only peek leaves it false (its caption names only auto-link). */
   manualLinkable?: boolean;
+  /**
+   * The trailing WRITE affordance for ONE linked-PR row (Story MOTIR-4878 ·
+   * MOTIR-5005) — called per row, its result rendered last in that row.
+   *
+   * Omitted by the read-only peek, which is the whole of design Q1: the peek's
+   * shipped contract is *"Read-only — editing lives on the full page"*, so it
+   * draws no control rather than a disabled one. The detail page passes the
+   * remove control, itself gated on `work_item:edit` by its host.
+   */
+  rowAction?: (pr: LinkedPullRequestDto) => ReactNode;
   /**
    * EVERY repository the item carries, with its delivery state (Story MOTIR-2725
    * · MOTIR-2415) — the item's own set, passed VERBATIM. The rows that get drawn
@@ -393,6 +414,7 @@ export function DevelopmentSectionBody({
             key={`${row.repo}#${row.number}`}
             pr={row.pr}
             strandedBase={row.strandedBase}
+            action={rowAction?.(row.pr)}
           />
         ))}
         {/* After the real rows: a placeholder per repository still owed one.

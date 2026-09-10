@@ -12,6 +12,7 @@ import {
   DevelopmentLinkProvider,
   LinkPullRequestDoor,
   LinkPullRequestForm,
+  RemovePullRequestLinkButton,
 } from './DevelopmentLinkControl';
 import { RUN_HISTORY_PAGE, type LateReads } from './lateReads';
 
@@ -179,6 +180,22 @@ export async function LateUpperSections({
             pullRequests={r.pullRequests}
             itemIdentifier={itemIdentifier}
             manualLinkable={canEdit}
+            // The per-row REMOVE control (Story MOTIR-4878 · MOTIR-5005,
+            // design Panels 5d–5f). Gated on the SAME `work_item:edit` the
+            // header door is — the key `unlinkPullRequestAction` and the MCP
+            // tool both assert — and passed only from THIS host: the read-only
+            // peek omits it, so its rows keep no trailing control at all rather
+            // than a disabled one (design Q1 / Q4).
+            rowAction={
+              canEdit
+                ? (pr) => (
+                    <RemovePullRequestLinkButton
+                      pullRequestId={pr.id}
+                      target={`${pr.repo} · #${pr.number}`}
+                    />
+                  )
+                : undefined
+            }
             // The item's repository set, VERBATIM (Story MOTIR-2725 ·
             // MOTIR-2415) — which rows it earns is the section's derivation,
             // not this page's. Pre-filtering here is what let this page and the
