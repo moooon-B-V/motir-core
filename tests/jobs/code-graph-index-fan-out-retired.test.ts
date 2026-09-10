@@ -3,6 +3,8 @@ import { JobTestEngine } from '../helpers/jobs';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
+import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { fakeOrchestrator } from '@motir/orchestrator';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import {
@@ -10,6 +12,7 @@ import {
   INDEX_REPO_REF,
   indexEventFor,
   driveIndexFleetFast,
+  resetTarballBodyTrap,
   seedIndexWorkspace,
   stubIndexFleet,
 } from '../helpers/indexFleet';
@@ -29,15 +32,34 @@ import {
 
 const REBUILD = { indexMode: 'rebuild' as const };
 
+/** The seeded workspace's organisation — the tenant the graph is keyed to now. */
+async function organizationOf(workspaceId: string): Promise<string> {
+  const row = await adminDb.workspace.findUniqueOrThrow({
+    where: { id: workspaceId },
+    select: { organizationId: true },
+  });
+  return row.organizationId;
+}
+
 beforeEach(async () => {
-  await truncateJobRuns();
   await truncateAuthTables();
+  await truncateJobRuns();
+  await adminDb.fleetInFlightSlot.deleteMany({});
+  _resetInstallationTokenCache();
+  fakeOrchestrator.reset();
+  resetTarballBodyTrap();
   stubIndexFleet();
+  // The supervision loop is a real `await` since MOTIR-3484, so a job-level test
+  // would otherwise sleep at the shipped cadence.
+  driveIndexFleetFast();
   containerExitsWith(0);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
+  await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
 describe('ONE container per (organisation, repoRef)', () => {
@@ -49,7 +71,11 @@ describe('ONE container per (organisation, repoRef)', () => {
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
     const engine = new JobTestEngine({ function: codeGraphIndex });
-    await driveIndexFleetFast(engine, indexEventFor(seeded));
+    await engine.execute({
+      events: [
+        indexEventFor({ installationId: seeded.installationId, workspaceId: seeded.workspaceId }),
+      ],
+    });
 
     // EXACTLY one boot. Under the old shape this was three.
     const distinct = new Set(boot.mock.calls.map((call) => JSON.stringify(call[0])));
@@ -61,13 +87,18 @@ describe('ONE container per (organisation, repoRef)', () => {
     // dispatch that still named a project as its tenant would satisfy the test
     // above and leave the graph keyed to the wrong thing.
     const seeded = await seedIndexWorkspace('fanoutorg', 2);
+    const organizationId = await organizationOf(seeded.workspaceId);
     const boot = vi.spyOn(codeGraphIndexDispatchService, 'bootIndexContainer');
 
     const engine = new JobTestEngine({ function: codeGraphIndex });
-    await driveIndexFleetFast(engine, indexEventFor(seeded));
+    await engine.execute({
+      events: [
+        indexEventFor({ installationId: seeded.installationId, workspaceId: seeded.workspaceId }),
+      ],
+    });
 
-    const payload = boot.mock.calls[0]?.[0] as { organizationId?: string } | undefined;
-    expect(payload?.organizationId).toBe(seeded.organizationId);
+    const payload = boot.mock.calls[0]?.[0];
+    expect(payload?.organizationId).toBe(organizationId);
   });
 
   it('`projectsIndexed` is 1 — the count of containers, which is now a constant', async () => {
@@ -80,7 +111,11 @@ describe('ONE container per (organisation, repoRef)', () => {
     const seeded = await seedIndexWorkspace('fanoutcount', 3);
 
     const engine = new JobTestEngine({ function: codeGraphIndex });
-    const { result } = await driveIndexFleetFast(engine, indexEventFor(seeded));
+    const { result } = await engine.execute({
+      events: [
+        indexEventFor({ installationId: seeded.installationId, workspaceId: seeded.workspaceId }),
+      ],
+    });
 
     expect(result).toMatchObject({ indexed: true, repoRef: INDEX_REPO_REF, projectsIndexed: 1 });
   });
@@ -132,6 +167,10 @@ describe('⚠️ `no_projects` SURVIVED, and its meaning narrowed', () => {
         id: 'historical-no-projects-row',
         workspaceId: seeded.workspaceId,
         functionId: 'system.code-graph-index',
+        eventName: 'system.code-graph-index',
+        eventId: 'evt-historical-no-projects-row',
+        lane: 'engine',
+        attempt: 1,
         status: 'succeeded',
         output: { indexed: false, reason: 'no_projects' },
       },

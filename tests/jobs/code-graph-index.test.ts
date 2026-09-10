@@ -185,9 +185,16 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     // every one of them is a place a reader is promised the row's whole
     // contents, and a card that widens the row is made to come past all of them.
     expect(result).toEqual({
+      // ⚠️ `projectsIndexed: 1`, AND IT USED TO BE THE PROJECT COUNT
+      // (MOTIR-4652 · Story MOTIR-4642). The field counts CONTAINERS; the
+      // fan-out that made that number equal the workspace's project count is
+      // retired, because the graph is keyed to the ORGANISATION and two projects
+      // sharing a repository shared a byte-identical graph. The field is kept —
+      // historical rows carry other values and a reader meeting one needs
+      // somewhere to learn what it meant.
       indexed: true,
       repoRef: REPO_REF,
-      projectsIndexed: 2,
+      projectsIndexed: 1,
       coreTimings: expect.any(Array),
       indexModes: expect.any(Array),
     });
@@ -201,8 +208,12 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     // drives. What must happen exactly once per project is the BOOT — and it
     // does, because that is the half that sits inside a memoized step. This is
     // the durability property stated as an assertion rather than as a comment.
-    expect(boot).toHaveBeenCalledTimes(2);
-    expect(fakeOrchestrator.provisioned).toHaveLength(2);
+    //
+    // ⚠️ ONCE PER REPOSITORY NOW, not once per project — the number is a
+    // CONSTANT rather than a ratio, which is what makes it a regression detector
+    // for a fan-out that came back at any width.
+    expect(boot).toHaveBeenCalledTimes(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
     expect(ids[0]).toBe('resolve-target');
@@ -212,17 +223,24 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     // billed — the failing-deployment case below is what asserts that.
     expect(ids).not.toContain('assert-fleet-configured');
 
-    for (const projectId of projectIds) {
-      const own = ids.filter((id) => id.endsWith(`:${projectId}`));
-      // The three that CLAIM, PROVISION and TEAR DOWN — in order, and nothing
-      // else. The admission backoff is INSIDE the first of them rather than
-      // spread across sixty ids (§13.3(c) says why it must be a step at all).
-      expect(own).toEqual([
-        `index-admit:${projectId}`,
-        `index-boot:${projectId}`,
-        `index-settle:${projectId}`,
-      ]);
-    }
+    // ⚠️ THE IDS BELONG TO ONE PROJECT NOW — THE ANCHOR (MOTIR-4652). This used
+    // to walk every project of the workspace, which was walking the fan-out.
+    // There is one container, and it is keyed by the project motir-ai resolves
+    // its run credential through; WHICH project that is is not a contract, so it
+    // is read off the ids and checked for membership rather than predicted.
+    const scoped = ids.filter((id) => /^index-(admit|boot|settle):/.test(id));
+    const anchors = new Set(scoped.map((id) => id.slice(id.indexOf(':') + 1)));
+    expect(anchors.size).toBe(1);
+    const anchorProjectId = [...anchors][0]!;
+    expect(projectIds).toContain(anchorProjectId);
+    // The three that CLAIM, PROVISION and TEAR DOWN — in order, and nothing
+    // else. The admission backoff is INSIDE the first of them rather than
+    // spread across sixty ids (§13.3(c) says why it must be a step at all).
+    expect(scoped).toEqual([
+      `index-admit:${anchorProjectId}`,
+      `index-boot:${anchorProjectId}`,
+      `index-settle:${anchorProjectId}`,
+    ]);
     // Not one poll or wait checkpoint survives — roughly 128 database writes per
     // 30-minute index, which is what the collapse buys.
     expect(
@@ -336,7 +354,7 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
 // THE LEDGER CONTRACT — one `job_run` per REPO, one `output.repoRef` (§6).
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('the ledger stays per REPO however many containers the fan-out boots', () => {
+describe('the ledger stays per REPO, and so does the container', () => {
   it.each([1, 2])(
     'writes ONE succeeded run with ONE repoRef for a workspace with %i project(s)',
     async (projectCount) => {
@@ -352,12 +370,16 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
         events: [indexEvent(installationId, workspaceId)],
       });
 
-      // One container PER (repo × project) — the fan-out really did widen.
-      expect(fakeOrchestrator.provisioned).toHaveLength(projectCount);
+      // ⚠️ ONE CONTAINER FOR BOTH ARMS (MOTIR-4652). This used to read
+      // `toHaveLength(projectCount)` — the fan-out really did widen, and the
+      // parametrisation existed to measure the widening. It measures the
+      // opposite property now: the count does NOT move with the project count,
+      // which is what "keyed to the organisation" means at this seam.
+      expect(fakeOrchestrator.provisioned).toHaveLength(1);
       expect(result).toEqual({
         indexed: true,
         repoRef: REPO_REF,
-        projectsIndexed: projectCount,
+        projectsIndexed: 1,
         coreTimings: expect.any(Array),
         indexModes: expect.any(Array),
       });
@@ -372,7 +394,7 @@ describe('the ledger stays per REPO however many containers the fan-out boots', 
       expect(runs[0]!.output).toEqual({
         indexed: true,
         repoRef: REPO_REF,
-        projectsIndexed: projectCount,
+        projectsIndexed: 1,
         coreTimings: expect.any(Array),
         indexModes: expect.any(Array),
       });
@@ -604,11 +626,17 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     });
 
     const ids = stepIds(ctx);
-    for (const projectId of projectIds) {
-      expect(ids).toContain(`index-admit:${projectId}`);
-      expect(ids).toContain(`index-boot:${projectId}`);
-      expect(ids).toContain(`index-settle:${projectId}`);
-    }
+    // ⚠️ THE ANCHOR'S ids, not every project's (MOTIR-4652) — one container, so
+    // one keyed set. The property under test is unchanged and is about the KEY,
+    // not the count: an id names the unit of work, so a replay finds the same
+    // memo.
+    const anchorProjectId = ids
+      .find((id) => id.startsWith('index-boot:'))!
+      .slice('index-boot:'.length);
+    expect(projectIds).toContain(anchorProjectId);
+    expect(ids).toContain(`index-admit:${anchorProjectId}`);
+    expect(ids).toContain(`index-boot:${anchorProjectId}`);
+    expect(ids).toContain(`index-settle:${anchorProjectId}`);
     // A positional id would re-point at a DIFFERENT project if the workspace's
     // project list changed between attempts. None exists — and the rule matters
     // MORE after the collapse, not less: there are three ids left and each one
@@ -1101,7 +1129,7 @@ describe('the job definition carries NO concurrency number', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
-  it('drives boot → poll → settle per project, and NEVER fetches bytes in-process', async () => {
+  it('drives boot → poll → settle ONCE, and NEVER fetches bytes in-process', async () => {
     const { workspaceId, projectIds, installationId } = await seedWorkspace('cgj-refresh', 2);
     stubIndexFleet();
     containerExitsWith(0);
@@ -1120,7 +1148,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     expect(result).toEqual({
       indexed: true,
       repoRef: REPO_REF,
-      projectsIndexed: 2,
+      projectsIndexed: 1,
       coreTimings: expect.any(Array),
       indexModes: expect.any(Array),
     });
@@ -1130,17 +1158,22 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     // The SAME three steps the first index writes — one code path, differing only
     // in the event and in the refresh job's debounce (MOTIR-2057), which is why
     // this suite asserts the shape on both jobs rather than trusting the sharing.
-    for (const projectId of projectIds) {
-      expect(ids.filter((id) => id.endsWith(`:${projectId}`))).toEqual([
-        `index-admit:${projectId}`,
-        `index-boot:${projectId}`,
-        `index-settle:${projectId}`,
-      ]);
-    }
+    // ⚠️ AND THE SAME ONE-CONTAINER SHAPE (MOTIR-4652): a refresh that still fanned
+    // out per project while the first index no longer did would be a divergence
+    // between two jobs whose whole point is that they are one path.
+    const scoped = ids.filter((id) => /^index-(admit|boot|settle):/.test(id));
+    const anchorProjectId = scoped[0]!.slice(scoped[0]!.indexOf(':') + 1);
+    expect(projectIds).toContain(anchorProjectId);
+    expect(scoped).toEqual([
+      `index-admit:${anchorProjectId}`,
+      `index-boot:${anchorProjectId}`,
+      `index-settle:${anchorProjectId}`,
+    ]);
 
     // ⚠️ THE DEFECT, INVERTED. A push used to buffer `motir-core`'s whole tree
-    // into this function and POST it; one container per (repo × project) now
-    // fetches it from the pre-signed URL instead, and the body is never read here.
+    // into this function and POST it; one container per (organisation, repoRef)
+    // now fetches it from the pre-signed URL instead, and the body is never read
+    // here.
     expect(tarballBodyWasTouched()).toBe(false);
     // Not "was not called" but "cannot be called": the byte-returning provider
     // method is gone from the seam entirely (MOTIR-2124), so no future edit can
@@ -1149,7 +1182,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
       (githubProvider as unknown as Record<string, unknown>)['fetchRepoTarball'],
     ).toBeUndefined();
     expect((motirAiClient as unknown as Record<string, unknown>)['indexCodeGraph']).toBeUndefined();
-    expect(fakeOrchestrator.provisioned).toHaveLength(2);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
     for (const spec of fakeOrchestrator.specs) {
       expect(spec.env['MOTIR_INDEX_TARBALL_URL']).toBe(TARBALL_URL);
     }
@@ -1221,7 +1254,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     expect(indexRun.result).toEqual({
       indexed: true,
       repoRef: REPO_REF,
-      projectsIndexed: 2,
+      projectsIndexed: 1,
       coreTimings: expect.any(Array),
       indexModes: expect.any(Array),
     });
