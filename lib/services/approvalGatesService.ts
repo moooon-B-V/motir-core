@@ -1,5 +1,11 @@
-import type { ApprovalGateState } from '@/generated/prisma/client';
-import type { ApprovalGateDTO, ApprovalGateKindDTO, GateDecision } from '@/lib/dto/approvalGate';
+import type { ApprovalGateState, Prisma } from '@/generated/prisma/client';
+import type {
+  ApprovalGateAuthorityDTO,
+  ApprovalGateDTO,
+  ApprovalGateDecisionSourceDTO,
+  ApprovalGateKindDTO,
+  GateDecision,
+} from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { handlerFor } from '@/lib/approvalGates/registry';
@@ -10,6 +16,7 @@ import {
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { userRepository } from '@/lib/repositories/userRepository';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -50,6 +57,22 @@ export interface DecideGateInput {
   decision: GateDecision;
   /** Why they said yes, or what they sent back. Free text, optional. */
   noteMd?: string | null;
+  /**
+   * THROUGH WHICH SURFACE this decision arrived — ADR §6a, *"a human click must
+   * be distinguishable from a programmatic call"*.
+   *
+   * ⚠️ REQUIRED, AND IT HAS NO DEFAULT ON PURPOSE. It is the one audit field the
+   * door cannot derive: every caller knows what it is and nothing inside the
+   * service does. A default would be a guess written into the one table an
+   * auditor trusts, and the likeliest default (`ui`) is the value that makes the
+   * strongest claim — that a person was present.
+   *
+   * `github` is legal here and is the SYNC path's answer (§6b's amendment): a
+   * review approved in GitHub's own UI, where nobody clicked in Motir. It is not
+   * reachable from this build's two callers, both of which have a human or a
+   * token behind them.
+   */
+  source: ApprovalGateDecisionSourceDTO;
 }
 
 export interface DecideGateResult {
@@ -71,6 +94,31 @@ export interface DecideGateResult {
 export interface WorkItemGateRead {
   gate: ApprovalGateDTO | null;
   canDecide: boolean;
+}
+
+/**
+ * WHO decided, in a form that SURVIVES their deletion — ADR §6a's second row
+ * (MOTIR-5046).
+ *
+ * `decidedById` is `onDelete: SetNull`, so the FK alone preserves *that* a
+ * decision happened and destroys *who made it*. Worse, a null FK already means
+ * something else in this table: §6b's `superseded` uses exactly that shape for
+ * *the question was withdrawn and nobody decided it*. So the row denormalises the
+ * actor's name and email AS AT THE DECISION, read here in the door's own
+ * transaction rather than joined at audit time — a join answers what the user
+ * row says today, which for a departed member is nothing at all.
+ *
+ * `Name <email>` — the form a reader already knows from a commit author, and one
+ * that stays legible when either half is missing. `User.name` is non-nullable but
+ * not non-EMPTY, so a blank one degrades to the bare email rather than to
+ * `<email>`; a user row that has vanished between the decision and this read (it
+ * cannot, inside the lock, but the type admits it) degrades to null, which the
+ * column is honest about.
+ */
+async function actorLabel(userId: string, tx: Prisma.TransactionClient): Promise<string | null> {
+  const user = await userRepository.findById(userId, tx);
+  if (!user) return null;
+  return user.name ? `${user.name} <${user.email}>` : user.email;
 }
 
 export const approvalGatesService = {
@@ -138,12 +186,23 @@ export const approvalGatesService = {
    *   3. **Refuse a gate that is not `awaiting`**, naming who decided it and when,
    *      so the surface can say so in place rather than as a toast that scrolls
    *      away.
-   *   4. **Write the decision** — `state`, `decidedById`, `decidedAt`, `noteMd`.
-   *   4b. **PIN what was approved** (§6c) — an approval keeps the bytes it was
+   *   4. **PIN what was approved** (§6c) — an approval keeps the bytes it was
    *      given on. MOTIR-4913, and it is in the DOOR rather than in a handler on
    *      purpose: retention belongs to the SUBJECT that was decided, never to the
    *      gate kind that carried the decision. Skipped for `request_changes`.
    *   5. **Run the kind's EFFECT**, dispatched through the registry.
+   *   6. **Write the decision** — `state`, `decidedById`, `decidedAt`, `noteMd`,
+   *      and §6a's five decision-time AUDIT columns.
+   *
+   * ⚠️ **THE WRITE IS LAST, AND THAT IS THE ORDER §6a ASKS FOR** (MOTIR-5046).
+   * It used to be step 4, above the pin and the effect. `outcome_ref` records
+   * WHAT THE DECISION CAUSED, which is not known until the effect returns — and
+   * §6a forbids the obvious alternative in as many words: *"Written IN the
+   * deciding write, never backfilled, and the immutability guard is what holds
+   * that."* `trg_approval_gate_decided_immutable` enforces it, so a decision
+   * written first and amended afterwards is REFUSED by the database rather than
+   * merely untidy. Nothing else moved, and nothing is weakened: the whole
+   * sequence is one transaction, so a failing effect still discards the decision.
    *
    * ⚠️ **NOTHING EXTERNAL HAPPENS INSIDE THE TRANSACTION.** There are no emails
    * and no webhooks in this card; the rule is stated and the seam is built so
@@ -241,11 +300,29 @@ export const approvalGatesService = {
       //     custom role, and un-auditable by the guard."* So the question goes to
       //     `projectAccessService`, which owns the always-pass rail; this service
       //     composes the answer and derives nothing.
-      const authorised =
-        item.assigneeId === ctx.userId ||
-        item.reporterId === ctx.userId ||
-        (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
-      if (!authorised) throw new ApprovalGateNotAuthorisedError(input.gateId);
+      //     ⚠️ IT RESOLVES TO **WHICH ARM**, NOT TO A BOOLEAN (MOTIR-5046; ADR
+      //     §6a — *under which PERMISSION*). The composition below used to be a
+      //     three-term `||`, which computes the answer to *may this press be
+      //     honoured?* and then throws away the answer to *on what grounds?* —
+      //     and the second is the question `decided_under_authority` exists to
+      //     freeze, precisely because a role that has since changed cannot be
+      //     re-derived later.
+      //
+      //     ⚠️ AND THE ORDER OF THE ARMS IS THE ROUTING ORDER, NOT AN
+      //     OPTIMISATION. §2 routes `assigneeId ?? reporterId`, so an actor who
+      //     is BOTH assignee and reporter was asked as the assignee, and that is
+      //     what the row must say. Testing `admin` last also keeps the
+      //     short-circuit that avoids the membership read for the common case —
+      //     a happy consequence of the correct order, never its reason.
+      const authority: ApprovalGateAuthorityDTO | null =
+        item.assigneeId === ctx.userId
+          ? 'assignee'
+          : item.reporterId === ctx.userId
+            ? 'reporter'
+            : (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx))
+              ? 'admin'
+              : null;
+      if (!authority) throw new ApprovalGateNotAuthorisedError(input.gateId);
 
       // 3 · REFUSE A GATE THAT IS NOT `awaiting`.
       //
@@ -265,21 +342,7 @@ export const approvalGatesService = {
         );
       }
 
-      // 4 · WRITE THE DECISION. Under the lock, before the effect — so a failing
-      // effect rolls the decision back with it and a gate is never left decided
-      // for a transition that did not happen.
-      const decided = await approvalGateRepository.decide(
-        locked.id,
-        {
-          state: DECISION_STATE[input.decision],
-          decidedById: ctx.userId,
-          decidedAt: new Date(),
-          noteMd: input.noteMd?.trim() ? input.noteMd : null,
-        },
-        tx,
-      );
-
-      // 4b · RETENTION — an APPROVAL PINS the version it was given on
+      // 4 · RETENTION — an APPROVAL PINS the version it was given on
       //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).
       //
       // ⚠️ IT IS HERE, IN THE GENERIC DOOR, AND NOT IN A HANDLER — and that
@@ -333,6 +396,59 @@ export const approvalGatesService = {
         input.decision === 'approve'
           ? await handler.approve(args)
           : await handler.requestChanges(args);
+
+      // 6 · WRITE THE DECISION — LAST, and carrying THE WHOLE AUDIT SET
+      //     (MOTIR-5046; ADR §6a).
+      //
+      // ⚠️ IT USED TO BE STEP 4, ABOVE THE PIN AND THE EFFECT, AND IT HAD TO
+      // MOVE. §6a says of `outcome_ref`: *"Written IN the deciding write, never
+      // backfilled, and the immutability guard is what holds that … so the
+      // outcome is known before the row is written."* Those two clauses are one
+      // instruction. `trg_approval_gate_decided_immutable` fires on any UPDATE
+      // whose OLD row is `approved` / `changes_requested`, so a decision written
+      // first and amended with its outcome afterwards is not merely untidy — the
+      // second statement is REFUSED by the database. The only place the outcome
+      // and the decision can be written together is after the effect has
+      // returned.
+      //
+      // ⚠️ AND THE ORDER COSTS THE OLD COMMENT'S GUARANTEE NOTHING. The reason
+      // given for writing first was *"a failing effect rolls the decision back
+      // with it"* — which is a property of the TRANSACTION, not of the order:
+      // every statement here is inside the door's single `withWorkspaceContext`,
+      // so an effect that throws discards a decision written before it and a
+      // decision never written at all, identically. What the order does change is
+      // the lock sequence, and it changes it not at all: the gate row is held
+      // `FOR UPDATE` from step 1, and the pin and the effect take
+      // `design_evidence` and `work_item` after it exactly as they did before.
+      const decided = await approvalGateRepository.decide(
+        locked.id,
+        {
+          state: DECISION_STATE[input.decision],
+          decidedById: ctx.userId,
+          decidedAt: new Date(),
+          noteMd: input.noteMd?.trim() ? input.noteMd : null,
+          // §6a's first row, answered by the KIND — never by this door. Read
+          // under the lock, so it is the version the subject had at the decision.
+          subjectVersion: await handler.subjectVersion(args),
+          // What survives `decidedById`'s `SetNull`. Read in this transaction, so
+          // it is the name and email as at the decision rather than as at the
+          // audit.
+          decidedByLabel: await actorLabel(ctx.userId, tx),
+          // The rung step 2(b) actually matched, rather than re-derived later
+          // against a role that may have changed.
+          decidedUnderAuthority: authority,
+          // The one field the door cannot derive — the caller says it.
+          decisionSource: input.source,
+          // WHAT IT CAUSED. `statusWritten` is null on exactly the arms that
+          // deliberately wrote nothing (`merge_writes_done`,
+          // `request_changes_moves_nothing`, `no_status_in_target_category`), and
+          // null is the honest record for those: the decision caused no
+          // transition, and `statusDeferredReason` says why on the returned
+          // effect. Never a stale value carried from a different arm.
+          outcomeRef: effect.statusWritten,
+        },
+        tx,
+      );
 
       return { gate: toApprovalGateDto(decided), effect };
     });

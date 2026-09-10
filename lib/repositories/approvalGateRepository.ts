@@ -1,6 +1,8 @@
 import {
   Prisma,
   type ApprovalGate,
+  type ApprovalGateAuthority,
+  type ApprovalGateDecisionSource,
   type ApprovalGateKind,
   type ApprovalGateState,
 } from '@/generated/prisma/client';
@@ -180,8 +182,19 @@ export const approvalGateRepository = {
   },
 
   /**
-   * Write the DECISION onto one gate — `state`, `decidedById`, `decidedAt` and
-   * the optional note (MOTIR-4790's decide door, step 4).
+   * Write the DECISION onto one gate — `state`, `decidedById`, `decidedAt`, the
+   * optional note, and THE FIVE DECISION-TIME AUDIT COLUMNS (MOTIR-4790's decide
+   * door; the audit set is MOTIR-4912's columns, written here by MOTIR-5046).
+   *
+   * ⚠️ EVERY AUDIT FIELD IS A REQUIRED PROPERTY OF `data`, THOUGH EVERY COLUMN IS
+   * NULLABLE — and that gap is the whole point. The columns shipped nullable so
+   * the migration could be additive on a populated table (they are legitimately
+   * null while a gate is `awaiting`), and the consequence was that this signature
+   * accepted a call that wrote none of them: for the entire life of MOTIR-4912
+   * every row in production carried six nulls, indistinguishable at every layer
+   * from a correct one, with nothing red anywhere. A caller that genuinely has no
+   * answer passes an explicit `null` and has SAID so; a caller that forgot no
+   * longer compiles. Do not relax these to optional to make a call site shorter.
    *
    * ⚠️ It carries NO state predicate, BY DESIGN — the same disposition
    * `acceptanceEvidenceRepository.markSupersededByWorkItem` records for the same
@@ -216,6 +229,18 @@ export const approvalGateRepository = {
       decidedById: string;
       decidedAt: Date;
       noteMd: string | null;
+      /** The subject's immutable version, from the KIND's own seam. */
+      subjectVersion: string | null;
+      /** The decider's name + email as at the decision — what survives the
+       *  `SetNull` on `decidedById`. */
+      decidedByLabel: string | null;
+      /** Which of §2's three rungs actually authorised the press. */
+      decidedUnderAuthority: ApprovalGateAuthority;
+      /** Which surface it arrived through. */
+      decisionSource: ApprovalGateDecisionSource;
+      /** What the decision CAUSED — null when it deliberately caused no status
+       *  write, which is a real answer rather than a missing one. */
+      outcomeRef: string | null;
     },
     tx: Prisma.TransactionClient,
   ): Promise<ApprovalGate> {
