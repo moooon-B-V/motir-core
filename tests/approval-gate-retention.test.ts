@@ -81,6 +81,12 @@ const stubbedPullRequestApprovalHandler: GateHandler = {
   async resolveSubject() {
     return null;
   },
+  // MOTIR-4909's card will answer this with the pull request's `headSha`
+  // (ADR §6a). Null here, which is the honest stand-in AND the case the door
+  // must survive: an unknown version records a null column, never a refusal.
+  async subjectVersion() {
+    return null;
+  },
   routeTo() {
     return null;
   },
@@ -214,7 +220,10 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
 
-    await approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
     await publish('v2');
 
     const summary = await ageAndSweep();
@@ -246,7 +255,10 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     const v1 = await publish('v1');
     const prGate = await gateOfKind('pull_request_approval', 'github-pull-request-1');
 
-    await approvalGatesService.decide({ gateId: prGate.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: prGate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
     await publish('v2');
     const summary = await ageAndSweep();
 
@@ -265,7 +277,7 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
   it('re-approving the SAME version keeps the FIRST pin, and a second version pins separately (§6d)', async () => {
     const v1 = await publish('v1');
     await approvalGatesService.decide(
-      { gateId: (await gateFor(v1.id)).id, decision: 'approve' },
+      { gateId: (await gateFor(v1.id)).id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     const firstPin = (await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } }))
@@ -274,7 +286,10 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     // A second approval on the same still-current version — a card can carry more
     // than one gate at a time (ADR §4's amendment).
     const second = await gateOfKind('pull_request_approval', 'github-pull-request-1');
-    await approvalGatesService.decide({ gateId: second.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: second.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
     const afterSecond = (await adminDb.designEvidence.findUniqueOrThrow({ where: { id: v1.id } }))
       .pinnedAt;
     expect(afterSecond?.getTime()).toBe(firstPin?.getTime());
@@ -283,7 +298,7 @@ describe('an APPROVED version keeps its bytes across a supersede (ADR §6c)', ()
     // BOTH versions are pinned — never "the approved one".
     const v2 = await publish('v2');
     await approvalGatesService.decide(
-      { gateId: (await gateFor(v2.id)).id, decision: 'approve' },
+      { gateId: (await gateFor(v2.id)).id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     const v3 = await publish('v3');
@@ -304,7 +319,12 @@ describe('an UNAPPROVED version still lets its bytes go — the intended loss (A
     const v1Gate = await gateFor(v1.id);
 
     await approvalGatesService.decide(
-      { gateId: v1Gate.id, decision: 'request_changes', noteMd: 'The port is too short.' },
+      {
+        gateId: v1Gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+        noteMd: 'The port is too short.',
+      },
       fx.ctx,
     );
     await publish('v2');
@@ -395,7 +415,7 @@ describe('a SUPERSEDED subject retires its AWAITING gate (ADR §6b)', () => {
     await publish('v2');
 
     await expect(
-      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve' }, fx.ctx),
+      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
     ).rejects.toBeInstanceOf(ApprovalGateSupersededError);
 
     // The refusal wrote nothing: the state is still the product's, not a person's.
@@ -407,7 +427,10 @@ describe('a SUPERSEDED subject retires its AWAITING gate (ADR §6b)', () => {
   it('leaves a DECIDED gate alone — an answer outlives its subject', async () => {
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
-    await approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
 
     await publish('v2');
 
@@ -440,7 +463,7 @@ describe('a publish RACING an approval cannot strand the approved bytes (ADR §6
     // every ordering of these two is safe even with the pin written AFTER the
     // decision's transaction — which is the bug §6c names.
     const [decided, published] = await Promise.allSettled([
-      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve' }, fx.ctx),
+      approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve', source: 'ui' }, fx.ctx),
       publish('v2'),
     ]);
 

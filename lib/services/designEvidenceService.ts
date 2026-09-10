@@ -3,6 +3,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { handlerFor } from '@/lib/approvalGates/registry';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -497,6 +498,20 @@ async function persistEvidence(
     // there. So a republish leaves the previous version's gate `superseded` and
     // the decide door refuses it (`ApprovalGateSupersededError`), which it always
     // did; what changed is that something now writes the state.
+    // ⚠️ AND IT CARRIES `routedToId` — §2's answer, COMPUTED HERE (MOTIR-5046).
+    // §6a: *"§2's answer computed at creation; the assignee can change
+    // afterwards"*, and that second clause is the whole reason the column exists:
+    // the live card cannot answer who the product actually ASKED, only who it
+    // would ask now. The answer comes from the KIND's own `routeTo` rather than
+    // from `assigneeId ?? reporterId` written out again here — a second copy of a
+    // routing rule is a second thing to keep in agreement with §2, and this door
+    // will create gates of other kinds as they register.
+    //
+    // This is `routeTo`'s FIRST caller. It had none because its parameter type
+    // demanded the gate row, which does not exist at the moment routing must be
+    // answered; `GateRoutingArgs` is that knot untied.
+    const routedToId = handlerFor('design_result').routeTo({ item: args.item, ctx, tx });
+
     await approvalGateRepository.create(
       {
         workspaceId: ctx.workspaceId,
@@ -504,6 +519,7 @@ async function persistEvidence(
         workItemId: args.item.id,
         kind: 'design_result',
         subjectId: evidence.id,
+        routedToId,
       },
       tx,
     );

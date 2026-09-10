@@ -1,5 +1,10 @@
 import type { DesignEvidence } from '@/generated/prisma/client';
-import type { GateEffect, GateEffectArgs, GateHandler } from '@/lib/approvalGates/registry';
+import type {
+  GateEffect,
+  GateEffectArgs,
+  GateHandler,
+  GateRoutingArgs,
+} from '@/lib/approvalGates/registry';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -39,8 +44,36 @@ export const designResultGateHandler: GateHandler<DesignEvidence> = {
     return designEvidenceRepository.findById(gate.subjectId, tx);
   },
 
-  /** ADR §2: `assigneeId ?? reporterId` — exactly ONE recipient, assignee first. */
-  routeTo({ item }: GateEffectArgs): string | null {
+  /**
+   * The VERSION those bytes are — the published `commitSha` (ADR §6a).
+   *
+   * ⚠️ IT GOES THROUGH {@link resolveSubject} RATHER THAN READING THE ROW ITSELF,
+   * which is not indirection for its own sake: the subject read carries the
+   * by-ID discipline in its own note — *a republish makes a different row
+   * current, and a current-row read would re-point an in-flight question at a
+   * version the reviewer never saw* — and that discipline is the whole content of
+   * this field. Two reads would be two chances to get it wrong, and the second
+   * one would be the one nobody re-reads.
+   *
+   * Null when the evidence row no longer resolves, and null when it resolves with
+   * no `commitSha` — a design published from a tree with no commit behind it.
+   * The door records either as null: an approval whose version is unknown is
+   * weaker evidence than one whose version is a sha, and a refusal here would
+   * throw the decision away to protect its own footnote.
+   */
+  async subjectVersion(args: GateEffectArgs): Promise<string | null> {
+    const subject = await this.resolveSubject(args);
+    return subject?.commitSha ?? null;
+  },
+
+  /** ADR §2: `assigneeId ?? reporterId` — exactly ONE recipient, assignee first.
+   *
+   *  Called by the PUBLISH path, which is where §6a says the answer is computed
+   *  ("at creation; the assignee can change afterwards") — so it takes
+   *  {@link GateRoutingArgs}, which is constructible before the gate row exists.
+   *  It reads nothing but the item, which is exactly what §2's rule quantifies
+   *  over. */
+  routeTo({ item }: GateRoutingArgs): string | null {
     return item.assigneeId ?? item.reporterId ?? null;
   },
 

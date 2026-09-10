@@ -122,16 +122,37 @@ export interface GateEffect {
     | 'no_status_in_target_category';
 }
 
-/** Everything a handler's verb needs, threaded from the door's own transaction. */
-export interface GateEffectArgs {
-  /** The gate row as it was read UNDER THE LOCK — never a snapshot from before. */
-  gate: Pick<ApprovalGate, 'id' | 'workspaceId' | 'projectId' | 'workItemId' | 'subjectId'>;
-  /** The work item the gate hangs off, read in the same transaction. */
+/**
+ * What ROUTING needs, and it is deliberately LESS than {@link GateEffectArgs}.
+ *
+ * ⚠️ `routeTo` is answered at CREATION — ADR §6a: *"§2's answer computed at
+ * creation; the assignee can change afterwards"* — and at creation THE GATE ROW
+ * DOES NOT EXIST YET. A routing signature that demanded the gate could therefore
+ * only be called after the row it is supposed to be written INTO had been
+ * inserted, which is why `routeTo` had no production caller at all until
+ * MOTIR-5046: the one moment it must answer is the one moment its own parameter
+ * could not be constructed.
+ *
+ * So routing takes the ITEM (which is all §2's rule reads — `assigneeId ??
+ * reporterId`) plus the caller's context and transaction. `GateEffectArgs`
+ * remains assignable to this, so a kind whose routing one day needs the gate can
+ * still be passed the full args by a DECISION-time caller; what it may not do is
+ * make the creation-time call impossible again.
+ */
+export interface GateRoutingArgs {
+  /** The work item the gate hangs off, read in the creating transaction. */
   item: WorkItem;
   ctx: ServiceContext;
-  /** The door's transaction. A handler NEVER opens its own — one service method,
-   *  one transaction (CLAUDE.md § 4-layer). */
+  /** The CREATING path's transaction — routing is resolved inside the same
+   *  transaction that inserts the row, so the answer and the row commit together
+   *  or not at all. */
   tx: Prisma.TransactionClient;
+}
+
+/** Everything a handler's verb needs, threaded from the door's own transaction. */
+export interface GateEffectArgs extends GateRoutingArgs {
+  /** The gate row as it was read UNDER THE LOCK — never a snapshot from before. */
+  gate: Pick<ApprovalGate, 'id' | 'workspaceId' | 'projectId' | 'workItemId' | 'subjectId'>;
   /**
    * This project's concrete key for the handler's {@link GateHandler.statusIntent},
    * resolved by the door BEFORE its transaction opened. Null when the handler
@@ -172,6 +193,30 @@ export interface GateHandler<TSubject = unknown> {
   resolveSubject(args: GateEffectArgs): Promise<TSubject | null>;
 
   /**
+   * The subject's IMMUTABLE VERSION at decision time — ADR §6a's first row, and
+   * *"the one that carries the whole claim"*: a design's `commitSha`, a pull
+   * request's `headSha`.
+   *
+   * ⚠️ IT IS A SEAM ON THE KIND, NOT A FIELD THE DOOR CAN READ. *"The version"*
+   * has no kind-free meaning — the answer lives on a different table for every
+   * kind, and the gate stores an opaque `subjectId` precisely so that nothing in
+   * the schema knows which one. A door that reached into design evidence to
+   * answer it would be the generic door growing knowledge of one kind, which is
+   * the thing §1's registry exists to prevent; the same reasoning §6c's
+   * amendment records for the retention pin, applied in the other direction.
+   *
+   * ⚠️ NULL IS A LEGITIMATE ANSWER and the door records it as one: a subject
+   * that no longer resolves, or one genuinely carrying no version (a design
+   * published from a working tree with no commit). What the door must never do is
+   * refuse the decision over it — the decision is the audit artefact, and a
+   * missing version makes the row weaker evidence, not an error.
+   *
+   * Read UNDER the door's lock, in its transaction, so the version recorded is
+   * the one the subject had when the decision was taken.
+   */
+  subjectVersion(args: GateEffectArgs): Promise<string | null>;
+
+  /**
    * WHO the gate is shown to — ADR §2: `assigneeId ?? reporterId`, exactly ONE
    * recipient.
    *
@@ -181,8 +226,13 @@ export interface GateHandler<TSubject = unknown> {
    * that is coherent rather than sloppy — widening authority costs the queue
    * nothing, because a reporter deciding from the item page never sees the gate
    * in their own tab.
+   *
+   * ⚠️ TAKES {@link GateRoutingArgs}, NOT `GateEffectArgs`, and that narrowing is
+   * what gives this method a caller at all — see the note on that type. The
+   * answer is written into `routed_to_id` by the CREATION path, in the same
+   * transaction as the insert.
    */
-  routeTo(args: GateEffectArgs): string | null;
+  routeTo(args: GateRoutingArgs): string | null;
 
   /**
    * The PERMISSION floor this kind's decision sits on, checked before the

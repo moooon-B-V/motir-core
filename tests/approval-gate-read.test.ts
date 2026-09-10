@@ -126,7 +126,10 @@ describe('approvalGatesService.getAwaitingForWorkItem', () => {
 
   it('does not return a DECIDED gate — the awaiting set is what the verbs read', async () => {
     const { item, gate } = await designSubtaskWithGate();
-    await approvalGatesService.decide({ gateId: gate.id, decision: 'request_changes' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: gate.id, decision: 'request_changes', source: 'ui' },
+      fx.ctx,
+    );
 
     const read = await approvalGatesService.getAwaitingForWorkItem(
       { workItemId: item.id, kind: 'design_result' },
@@ -169,7 +172,7 @@ describe('canDecide — the AUTHORITY answer, and it agrees with the door', () =
     // failure this pair exists to catch, and it can only be caught by running
     // BOTH — either half alone is self-consistent.
     const decided = await approvalGatesService.decide(
-      { gateId: gate.id, decision: 'approve' },
+      { gateId: gate.id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     expect(decided.gate.state).toBe('approved');
