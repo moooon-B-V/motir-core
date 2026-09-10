@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { resolveProjectCodeContext } from '@/lib/ai/codeContext';
 import { enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
+import { resolveEffectiveRepoDomain } from '@/lib/projectRepos/effectiveDomain';
 import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
@@ -46,6 +47,14 @@ import { organizationIdOf } from '../helpers/organizationOf';
 //   4. The row's two FKs behave as modelled: a deleted project takes its rows
 //      with it, while a deleted `GithubRepo` leaves a READABLE row with no claim
 //      rather than a dangling reference or a vanished plan.
+//   5. The SHIPPED COPY agrees with the isolation boundary (MOTIR-4997). This one
+//      is an IMPLICATION rather than a vocabulary rule, and that is the whole
+//      point of it: the antecedent is measured behaviour (a set-less project
+//      reaches nothing) and the consequent is the catalogs (no `github.*` string
+//      promises it reaches anything). A blocklist over the phrase would have been
+//      red from the day the phrase was written, because the phrase was TRUE then.
+//      This guard's verdict CHANGES when the rung retires, which is the only
+//      shape that could have caught MOTIR-4997.
 //
 // The assembled behavioural seams live in
 // `tests/integration/projectRepos/repositorySetStoryGate.test.ts`.
@@ -405,5 +414,127 @@ describe('what a delete does to a repository row', () => {
     // must not pretend it went away.
     const githubRepoRow = await adminDb.githubRepo.findUnique({ where: { id: repoId } });
     expect(githubRepoRow).not.toBeNull();
+  });
+});
+
+// ── 5 · The shipped COPY agrees with the isolation boundary (MOTIR-4997) ─────
+
+describe('a set-less project reaches NOTHING, and the catalogs say so', () => {
+  /** The claim the retired workspace rung used to license, in both shipped
+   *  locales. Never an identifier — these are sentences a user reads. */
+  const REACH_CLAIMS: { label: string; re: RegExp }[] = [
+    // "can also reach", "could also reach", "can still reach" — any case.
+    { label: 'en: also/still reach', re: /can (also|still) reach|could also reach/i },
+    // "…的项目…仍可访问…" — a project that lacks its own repositories reaching one anyway.
+    { label: 'zh: 仍可访问', re: /仍可访问/ },
+  ];
+
+  /** Connect a repository to the ORGANISATION, linking it to no project. This is
+   *  the state the retired rung used to make reachable: the organisation HAS a
+   *  repository, and the project has no rows of its own. */
+  async function connectOrgRepo(workspaceId: string, name: string): Promise<void> {
+    const installationId = `inst-${workspaceId}`;
+    const inst = await adminDb.githubInstallation.upsert({
+      where: { installationId },
+      create: {
+        installationId,
+        workspaceId,
+        accountLogin: 'moooon',
+        accountType: 'Organization',
+        provider: 'github',
+      },
+      update: {},
+    });
+    await adminDb.githubRepo.create({
+      data: {
+        installationId: inst.id,
+        workspaceId,
+        organizationId: await organizationIdOf(workspaceId),
+        repoId: `${name}-id`,
+        owner: 'moooon',
+        name,
+        defaultBranch: 'main',
+        archived: false,
+        provider: 'github',
+      },
+    });
+  }
+
+  /** Every string under `github.*` in one catalog, flattened to `key → value`. */
+  function githubStrings(locale: string): { key: string; value: string }[] {
+    const catalog = JSON.parse(
+      readFileSync(join(process.cwd(), 'messages', `${locale}.json`), 'utf8'),
+    ) as Record<string, unknown>;
+    const out: { key: string; value: string }[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (typeof node === 'string') {
+        out.push({ key: path, value: node });
+        return;
+      }
+      if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node)) walk(v, path ? `${path}.${k}` : k);
+      }
+    };
+    walk(catalog.github, 'github');
+    return out;
+  }
+
+  it('⚠️ the DOMAIN grants no inheritance — so no `github.*` string may promise it', async () => {
+    // ── THE ANTECEDENT, measured rather than asserted from the type ──────────
+    // MOTIR-4955 made the project link the repository isolation boundary. A
+    // project with NO rows of its own therefore reaches nothing: not for
+    // dispatch, not for pinning, not for the room.
+    const fx = await makeWorkItemFixture();
+    // The organisation connects a repository. Nobody links it to this project.
+    await connectOrgRepo(fx.workspaceId, 'acme-web');
+
+    const domain = await resolveEffectiveRepoDomain(fx.projectId, fx.ctx);
+
+    expect(domain.hasSet).toBe(false);
+    expect(domain.layersConnected).toBe(false);
+    expect(domain.connected).toEqual([]);
+    expect(domain.dispatchable).toEqual([]);
+    expect(domain.pinnable).toEqual([]);
+
+    // ── THE CONSEQUENT — the catalogs, in both locales ───────────────────────
+    // ⚠️ THIS IS THE HALF THAT WOULD HAVE GONE RED ON 2026-09-10. Before
+    // MOTIR-4955 the assertions above were FALSE — the workspace rung really did
+    // let a set-less project reach the organisation's repositories — so this
+    // block never ran and the copy describing that rung was correct. The moment
+    // the rung retired, the antecedent became true and these two sentences
+    // became the only thing standing between a person and a false blast radius
+    // on a destructive act:
+    //
+    //     github.inventory.foot            "…can also reach the ones connected in its workspace…"
+    //     github.orgDisconnect.alsoReachable "Any project with no repositories of its own can also reach this one…"
+    //
+    // Nothing was watching them. `tests/settings/organizationGitPage.test.tsx`
+    // asserted both by substring, which pins a sentence as PRESENT and says
+    // nothing about whether it is TRUE — so the mechanism could retire under
+    // them without a single check going red.
+    const offenders: string[] = [];
+    for (const locale of ['en', 'zh']) {
+      for (const { key, value } of githubStrings(locale)) {
+        for (const { label, re } of REACH_CLAIMS) {
+          if (re.test(value)) offenders.push(`${locale}:${key} matched ${label} — ${value}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('⚠️ the guard can FAIL — the patterns match the sentences this card removed', () => {
+    // A copy guard that matches nothing is indistinguishable from a broken
+    // regex, and it degrades silently as the catalogs are reworded. Pin the
+    // patterns against the exact strings MOTIR-4997 retired, so the guard is
+    // known to be load-bearing rather than merely green.
+    const retired = [
+      'Any project here that has no repositories of its own can also reach the ones connected in its workspace, whether or not it is named above.',
+      'Any project with no repositories of its own can also reach this one, whether or not it is named here.',
+      '尚未拥有自有仓库的项目，无论此处是否列出，都仍可访问该仓库。',
+    ];
+    for (const sentence of retired) {
+      expect(REACH_CLAIMS.some(({ re }) => re.test(sentence))).toBe(true);
+    }
   });
 });

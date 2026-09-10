@@ -1999,13 +1999,23 @@ they decided it:
 **`0 hosted by Motir` on a set-less project is therefore TRUE**, not an omission: the count is of what
 that section draws, and it draws this project's own rows.
 
-The classification is `organizationConnected` in `lib/projectRepos/roomSections.ts`, keyed on
+The classification WAS a helper in `lib/projectRepos/roomSections.ts`, keyed on
 `ProjectRepoRoomViewDto.hostOwner` — carried on the view since MOTIR-1939 and, until this bug, read
-by nothing but the onboarding step. **It is passed in, never read from the environment**, because the
-module is pure and client-safe on purpose; `hostOwner: null` (a deployment with no
-`GITHUB_FALLBACK_ORG`, which hosts nothing) classifies nothing and leaves the room exactly as it was.
+by nothing but the onboarding step. **It was passed in, never read from the environment**, because
+the module is pure and client-safe on purpose; `hostOwner: null` (a deployment with no
+`GITHUB_FALLBACK_ORG`, which hosts nothing) classified nothing and left the room exactly as it was.
 **And the fix is a classification, never a narrower read** — filtering inside `listByWorkspace` would
 un-dispatch every hosted repository to correct a settings page.
+
+> ⚠️ **SUPERSEDED (MOTIR-4954 · MOTIR-4955 · MOTIR-4998), and the paragraph above is kept as the
+> record of WHY the rule exists rather than as a pointer to live code.** The room no longer draws the
+> layered list at all, so it no longer makes this classification: MOTIR-4955 retired the workspace
+> rung and MOTIR-4998 deleted the helper once its last caller went. **The RULE is untouched** — a
+> repository Motir hosts is not the organisation's — and the predicate is still one predicate,
+> `isMotirHostedOwner` (`lib/git/hostOwnership.ts`, MOTIR-4892). Its live askers are now the
+> organisation inventory (`lib/mappers/organizationRepoMappers.ts`) and the CI meter's §5.1 gate
+> (`lib/ciMetering/config.ts`), and `tests/projectRepos/hostOwnershipAgreement.test.ts` pins those
+> two against each other.
 
 ## 16.3 · Drawn against SHIPPED reality — what was RENDERED first
 

@@ -463,6 +463,38 @@ kind)`.** For `design_result` there is one current design, so superseding frees
 the slot; for `pull_request_merge` a card carrying a repository SET legitimately
 has several open pull requests and therefore several simultaneous awaiting gates.
 
+> ### §6b — SHIPPED (MOTIR-4913, 2026-09-10): what WRITES `superseded`, and when
+>
+> The state has been in the enum since MOTIR-4788 and the decide door has refused
+> it since MOTIR-4790. **Nothing wrote it until now**, so a republish left the
+> prior version's gate `awaiting` and the Approvals tab kept asking about a
+> design that was no longer current.
+>
+> **The writer is the PUBLISH path** — `designEvidenceService`'s supersede
+> transaction, via
+> `approvalGateRepository.supersedeAwaitingByWorkItem(workItemId, 'design_result')`.
+> It writes `state` and **nothing else**: no actor, no authority, no note, no
+> `decided_at`. That is what keeps §6b's _"the audit can never read a withdrawn
+> question as a decision somebody made"_ true on the row rather than only in
+> prose, and `tests/approval-gate-retention.test.ts` asserts every one of those
+> columns is still null.
+>
+> **It is keyed on `(work_item_id, kind)`, not on the superseded subject's id**,
+> and that is a domain fact rather than a shortcut: `design_evidence` carries one
+> CURRENT row per work item, so an `awaiting` `design_result` gate on the item is
+> by construction asking about the version the publish is replacing.
+>
+> **⚠️ AND IT RUNS BEFORE THE `design_evidence` LOCK, WHICH IS A LOCK-ORDER
+> DECISION, NOT A STYLE ONE.** The decide door locks the GATE row (step 1) and
+> then writes `design_evidence` (§6c's pin, step 4b). A publish that locked
+> `design_evidence` first and reached for the gate afterwards would take the same
+> two locks in the opposite order — a deadlock, on precisely the interleaving §6c
+> exists for. Retiring the gate first makes both paths take `approval_gate` then
+> `design_evidence`, so the race resolves by WAITING and lands on one of two
+> legitimate outcomes: the publish wins and the decide door refuses with
+> `ApprovalGateSupersededError` (nothing was approved, nothing needed pinning), or
+> the decide wins and the supersede finds the pin and keeps the bytes.
+
 > ### §6b — AMENDMENT (MOTIR-4911, 2026-09-08): the `approved` WORK-ITEM status, and `decisionSource: github`
 >
 > **The gate state set above is unchanged and complete.** What was missing is
@@ -615,6 +647,42 @@ approved blobs to the GC.
 > **`design-result.md` §7 carries the pointer** — its statement of this clause is
 > amended in the same pull request, because the trigger it was told about has
 > changed.
+
+> ### §6c — SHIPPED (MOTIR-4913, 2026-09-10), and the AMENDMENT's restatement of the predicate is CORRECTED
+>
+> **The mechanism is a nullable `design_evidence.pinned_at`**, written by the
+> decide door on every APPROVAL — step 4b, in the decision's own transaction —
+> and read by the supersede path as one predicate on an existing branch: a row
+> with `pinned_at` set is made non-current WITHOUT its attachments being unlinked,
+> so the orphan-GC never reaches them. PIN, not FREEZE: the supersede always
+> proceeds.
+>
+> **⚠️ THE AMENDMENT ABOVE RESTATES THE PREDICATE AS _"does an approved gate on
+> this work item reference this `DesignEvidence` version?"_, AND THAT SENTENCE IS
+> NOT IMPLEMENTABLE — the correction it is part of is what proves it.** A gate
+> references its subject through `subject_id`, and a `pull_request_approval`
+> gate's subject is a PULL REQUEST, not a design version. So the only gate that
+> can be found "referencing this `DesignEvidence` version" is a `design_result`
+> one — which is exactly the kind-keying the amendment was written to remove. The
+> amendment's own governing sentence is the correct one and is what shipped:
+> **when a work item carrying a current design result is approved, pin THAT
+> version, whichever gate kind carried the decision.**
+>
+> **So the pin is a WRITE at decision time, not a JOIN at supersede time**, and
+> the difference is not cosmetic. At the moment of the decision the product knows
+> which version was current; at supersede time it can only know which gates
+> exist, and for every kind but one those gates say nothing about design bytes.
+> Writing the answer down is also what §6c already required for a second reason —
+> _written in the same transaction as the decision_ — so the two halves of the
+> rule turn out to be the same instruction.
+>
+> **What this buys, concretely:** the door contains no reference to a gate kind,
+> and `pull_request_approval` inherits the pin the day MOTIR-4909 / MOTIR-4910
+> register it, with no line of code in its handler.
+>
+> **First pin wins on any one row.** §6d's _per approved version_ accumulates
+> across DIFFERENT rows; re-approving the SAME version keeps the timestamp of the
+> decision that first bought the retention, rather than quietly re-dating it.
 
 #### 6d. The reopen lifecycle, and why the guard keys on `awaiting`
 

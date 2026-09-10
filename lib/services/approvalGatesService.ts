@@ -10,6 +10,7 @@ import {
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -138,6 +139,10 @@ export const approvalGatesService = {
    *      so the surface can say so in place rather than as a toast that scrolls
    *      away.
    *   4. **Write the decision** — `state`, `decidedById`, `decidedAt`, `noteMd`.
+   *   4b. **PIN what was approved** (§6c) — an approval keeps the bytes it was
+   *      given on. MOTIR-4913, and it is in the DOOR rather than in a handler on
+   *      purpose: retention belongs to the SUBJECT that was decided, never to the
+   *      gate kind that carried the decision. Skipped for `request_changes`.
    *   5. **Run the kind's EFFECT**, dispatched through the registry.
    *
    * ⚠️ **NOTHING EXTERNAL HAPPENS INSIDE THE TRANSACTION.** There are no emails
@@ -147,12 +152,11 @@ export const approvalGatesService = {
    * database work only; anything that leaves the process belongs after the
    * commit, in the door's caller.
    *
-   * ⚠️ **WHAT IS DELIBERATELY NOT HERE.** Pinning an approved version's bytes
-   * (ADR §6c), the supersede predicate, and the product-written `superseded`
-   * transition (§6b) are **MOTIR-4913's**, `blocked_by` this card — the epic-wide
-   * re-plan split this card at exactly that seam because the two together
-   * re-crossed the estimation gate. This door REFUSES a `superseded` gate today;
-   * nothing writes that state yet.
+   * ⚠️ **WHERE THE OTHER HALF OF MOTIR-4913 LIVES.** The supersede predicate and
+   * the product-written `superseded` transition (§6b) are in the PUBLISH path
+   * (`designEvidenceService`), because that is where a subject stops being
+   * current. This door has always REFUSED a `superseded` gate; what changed is
+   * that a republish now writes that state.
    */
   async decide(input: DecideGateInput, ctx: ServiceContext): Promise<DecideGateResult> {
     // ── BEFORE THE TRANSACTION ────────────────────────────────────────────────
@@ -274,6 +278,40 @@ export const approvalGatesService = {
         },
         tx,
       );
+
+      // 4b · RETENTION — an APPROVAL PINS the version it was given on
+      //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).
+      //
+      // ⚠️ IT IS HERE, IN THE GENERIC DOOR, AND NOT IN A HANDLER — and that
+      // placement IS the rule rather than a tidiness preference. §6c originally
+      // keyed retention on the `design_result` gate; §1's amendment then made the
+      // KIND depend on whether the card has a pull request, so a design that
+      // opened one is approved through `pull_request_approval`. A pin written by
+      // the design handler would therefore stop firing for the COMMON case, with
+      // no error and no failing test — the supersede path would simply find
+      // nothing to keep, unlink as it always did, and the orphan-GC would reclaim
+      // the bytes seven days later. The general form, worth holding on to: **a
+      // retention rule belongs to the SUBJECT that was decided, never to the door
+      // the decision came through.**
+      //
+      // So this asks one kind-free question — *does this work item carry a
+      // current design result?* — and it is a no-op for every card that does not.
+      // When `pull_request_approval` registers (MOTIR-4909 / MOTIR-4910) it
+      // inherits the pin by existing, with no line of code in its handler.
+      //
+      // ⚠️ ONLY APPROVALS PIN. `changes_requested` moves nothing and keeps
+      // nothing: the gate ROW records who sent it back and why, and the bytes go
+      // with the next publish. That is §6c's intended loss.
+      //
+      // ⚠️ IN THIS TRANSACTION, which is what §6c asks for in as many words —
+      // *written afterwards, a republish racing an approval re-opens the window
+      // it exists to close.* The gate row is held under the lock taken in step 1,
+      // and the publish path retires an `awaiting` gate BEFORE it locks
+      // `design_evidence`, so the two paths take the same two locks in the same
+      // ORDER and a race resolves by waiting rather than by deadlocking.
+      if (input.decision === 'approve') {
+        await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
+      }
 
       // 5 · THE KIND'S EFFECT, dispatched through the registry — in the SAME
       // transaction, which is what makes "approving unblocks the cards
