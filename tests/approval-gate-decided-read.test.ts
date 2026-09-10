@@ -130,7 +130,10 @@ describe('the frame reads a gate WHATEVER its state', () => {
   it('keeps the APPROVED gate on the card after the decision — state `E` survives a reload', async () => {
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
-    await approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
 
     const read = await approvalGatesService.getForWorkItem(
       { workItemId: card.id, kind: 'design_result' },
@@ -151,7 +154,10 @@ describe('the frame reads a gate WHATEVER its state', () => {
   it('keeps a CHANGES-REQUESTED gate too — state `F`', async () => {
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
-    await approvalGatesService.decide({ gateId: v1Gate.id, decision: 'request_changes' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'request_changes', source: 'ui' },
+      fx.ctx,
+    );
 
     const read = await approvalGatesService.getForWorkItem(
       { workItemId: card.id, kind: 'design_result' },
@@ -187,7 +193,7 @@ describe('the frame reads a gate WHATEVER its state', () => {
   it('a LIVE question outranks a decided one, however much older it is', async () => {
     const v1 = await publish('v1');
     await approvalGatesService.decide(
-      { gateId: (await gateFor(v1.id)).id, decision: 'approve' },
+      { gateId: (await gateFor(v1.id)).id, decision: 'approve', source: 'ui' },
       fx.ctx,
     );
     await reopen();
@@ -227,12 +233,18 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     // repository and destroys the older evidence here.
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
-    await approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
 
     await reopen();
     const v2 = await publish('v2');
     const v2Gate = await gateFor(v2.id);
-    await approvalGatesService.decide({ gateId: v2Gate.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v2Gate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
 
     // TWO approved gates, each about its OWN bytes.
     const approved = await adminDb.approvalGate.findMany({
@@ -257,7 +269,10 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     // approved version even after a newer design is published.
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
-    await approvalGatesService.decide({ gateId: v1Gate.id, decision: 'approve' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'approve', source: 'ui' },
+      fx.ctx,
+    );
     await reopen();
     const v2 = await publish('v2');
 
@@ -279,7 +294,10 @@ describe('approvals ACCUMULATE — approve, reopen, republish, approve again', (
     // purpose — and the line has to say so rather than reassure.
     const v1 = await publish('v1');
     const v1Gate = await gateFor(v1.id);
-    await approvalGatesService.decide({ gateId: v1Gate.id, decision: 'request_changes' }, fx.ctx);
+    await approvalGatesService.decide(
+      { gateId: v1Gate.id, decision: 'request_changes', source: 'ui' },
+      fx.ctx,
+    );
 
     const subject = await designEvidenceService.getForGateSubject(
       { workItemId: card.id, subjectId: v1Gate.subjectId },
