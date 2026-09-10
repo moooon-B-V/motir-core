@@ -2,6 +2,7 @@ import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
@@ -417,6 +418,41 @@ async function persistEvidence(
         tx,
       );
     }
+
+    // THE APPROVAL GATE (Story MOTIR-4778 · Subtask MOTIR-4790; ADR
+    // docs/decisions/approval-gates.md §6a). A gate is an EAGER row, written
+    // **when its subject appears** — here, in the publish's own transaction —
+    // rather than derived on read. Two things force it and both are
+    // requirements elsewhere in the story: the partial unique index over the
+    // `awaiting` state cannot exist without a row, and the decide door's
+    // `SELECT … FOR UPDATE` has nothing to lock without one. A derived model is
+    // the eager model minus its index and its lock.
+    //
+    // ⚠️ ONE GATE PER PUBLISHED VERSION, keyed on the EVIDENCE row, not on the
+    // card. `subjectId` is `evidence.id`, which was created a few statements
+    // above and is therefore new — so the partial unique
+    // `(work_item_id, kind, subject_id) WHERE state = 'awaiting'` can never
+    // collide here, and the publish is idempotent against it by construction.
+    // ADR §6d step 5 is explicit that a republish *"supersedes the old row and
+    // gets its own new gate, `awaiting`"*: a gate asks about specific BYTES, so
+    // re-pointing an existing gate at a new version would silently change the
+    // question under whoever is reading it.
+    //
+    // ⚠️ RETIRING THE PRIOR gate to `superseded` is **MOTIR-4913's**,
+    // `blocked_by` this card — as are §6c's pin and the supersede predicate on
+    // the unlink above. Until it lands, a republish leaves the previous version's
+    // gate `awaiting`; the decide door already refuses a `superseded` gate, so
+    // nothing has to change there when that card ships.
+    await approvalGateRepository.create(
+      {
+        workspaceId: ctx.workspaceId,
+        projectId: args.item.projectId,
+        workItemId: args.item.id,
+        kind: 'design_result',
+        subjectId: evidence.id,
+      },
+      tx,
+    );
 
     // Re-read so the caller gets the evidence WITH its just-inserted assets.
     // Non-null by construction: the row was created in THIS transaction, a few
