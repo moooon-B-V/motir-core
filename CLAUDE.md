@@ -794,6 +794,75 @@ token block (it is newer than they are).
 
 ---
 
+## ⚠️ Publishing a design result RAISES AN APPROVAL GATE — the card is not finished, it is WAITING ON A PERSON
+
+**EXTREMELY IMPORTANT: the moment `publish_design_result` succeeds, Motir writes
+an `awaiting` approval gate on that card, in the same transaction. Your output is
+now the SUBJECT of a decision somebody else makes. You do not make it, you cannot
+make it, and nothing downstream of that card moves until they do.**
+
+This is the missing-not-false case: nothing else in this file was wrong about
+gates, it simply said nothing, so an agent finishing a design card had no reason
+to think anything came after the publish. The failure that produces is a run that
+reports a card finished while it is sitting in somebody's queue —
+[`docs/approval-gates.md`](docs/approval-gates.md) is the user-facing half, and
+[`docs/decisions/approval-gates.md`](docs/decisions/approval-gates.md) is the
+decision record.
+
+**Three sentences, and they are the whole of what you need:**
+
+1. **What your output creates.** A published design result raises a gate on that
+   card. Nothing you do raises it and nothing you do avoids it — it is written by
+   the publish path itself (`designEvidenceService`), so it exists whether or not
+   you were expecting it.
+2. **Who it waits on.** The card's **assignee**, or its **reporter** when there
+   is no assignee. They press **Approve** — or **Request changes**, which records
+   a note and moves nothing. **What Approve MOVES depends on whether a merge is
+   coming**, and the card's own delivery rows answer that, not a setting: with no
+   open pull request the approval writes the project's done category itself and
+   is TERMINAL; with one open, it records the decision and writes no status,
+   because the merge is the single writer of `done`. A design card that opened a
+   `design/*` pull request is the second case, which is the ordinary one for the
+   work you will be doing.
+3. **You do not decide it.** There is no agent path to approving a gate, and
+   there is not meant to be. The gate table is the human-in-the-loop evidence;
+   an agent-written approval would put a decision nobody made into the one table
+   an audit trusts to contain only decisions people made.
+
+**So report the card as PUBLISHED AND AWAITING APPROVAL, never as finished.**
+Say which card, say the evidence id the publish returned, and say that a person
+still has to press something. _"Design published, card done"_ is the sentence to
+never write.
+
+**Two consequences that bite in a run:**
+
+- **A `blocked_by` on a design card is not released by your publish.** Readiness
+  reads `done`, and your publish writes no status at all — so a chain that
+  continues _"once the design lands"_ continues after the human press (no pull
+  request) or after Yue merges the design PR (there is one), never after your
+  commit. A parent run that assumes otherwise stalls on a dependent whose blocker
+  is still `in_review`, and the fix is to report the gate, not to re-run
+  anything.
+- **Republishing RETIRES the pending question.** A second publish supersedes the
+  first version and marks its `awaiting` gate `superseded`, so a reviewer is
+  never asked about bytes that are no longer current. That is correct and it is
+  not free: if somebody was mid-review, their question disappears. Do not
+  republish to "refresh" a card — republish because the design changed.
+
+**And what an approval KEEPS is decided at the moment of the decision, not
+later.** Approving pins that exact version's files (`design_evidence.pinned_at`)
+so a later supersede cannot feed them to the orphan-GC. A version that was sent
+back keeps its decision record and loses its bytes on the ordinary seven-day
+sweep — the intended loss. Nothing about that is yours to manage; it is here so
+you do not treat a superseded design's missing files as a defect.
+
+**The merge gate does not exist.** Opening a pull request raises no gate today —
+merging still happens on GitHub, exactly as it always has, and
+`docs/approval-gates.md` § _What does not exist yet_ is the list to trust over
+any inference from this section.
+
+---
+
 ## ⚠️ E2E tests wait on the AUTHORITATIVE signal — never race optimistic / async UI
 
 **EXTREMELY IMPORTANT: a Playwright assertion against an OPTIMISTIC or
