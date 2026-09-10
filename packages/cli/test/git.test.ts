@@ -3,6 +3,7 @@ import {
   ensureSessionBranchOnOrigin,
   execCommand,
   GitError,
+  markSessionPrReady,
   openSessionPr,
   updateSessionPr,
   pushSessionBranchIfAhead,
@@ -242,7 +243,7 @@ describe("sessionBranchCommits — the agents' own messages (MOTIR-2411)", () =>
 describe('openSessionPr — reported, never thrown', () => {
   const input = { branch: 'motir/auto-1', title: 'Motir auto run', body: 'the body' };
 
-  it('returns the EXISTING pull request rather than opening a second one', () => {
+  it('returns the EXISTING pull request rather than opening a second one, and TOUCHES it not at all', () => {
     const { run, log } = scriptedRunner((bin, args) =>
       args[1] === 'list' ? ok('https://github.test/pull/7') : ok(),
     );
@@ -252,6 +253,11 @@ describe('openSessionPr — reported, never thrown', () => {
       outcome: 'existing',
     });
     expect(log.some((cmd) => cmd.includes('pr create'))).toBe(false);
+    // ⚠️ MOTIR-4967 — neither re-drafted nor marked ready. A pull request a
+    // HUMAN has already marked ready must survive a resumed run, and one still
+    // in draft is marked ready by the close-out, not by whoever finds it.
+    expect(log.some((cmd) => cmd.includes('pr ready'))).toBe(false);
+    expect(log.some((cmd) => cmd.includes('--draft'))).toBe(false);
   });
 
   it('opens one and reads the URL off gh’s last line', () => {
@@ -268,6 +274,25 @@ describe('openSessionPr — reported, never thrown', () => {
     // Against main, from the session branch — and NEVER a merge.
     expect(log.some((cmd) => cmd.includes('--base main'))).toBe(true);
     expect(log.some((cmd) => cmd.includes('pr merge'))).toBe(false);
+  });
+
+  it('opens it as a DRAFT — asserted on the `gh pr create` ARGV (MOTIR-4967)', () => {
+    // ⚠️ THE ARGV, not a wrapper's return value. `--draft` is one token in one
+    // array, and the only thing that can prove it is there is the array the
+    // runner was handed — a mocked helper that answered "draft: true" would pass
+    // whether or not the flag was ever passed to `gh`.
+    const { run, log } = scriptedRunner((bin, args) =>
+      args[1] === 'list' ? ok('') : ok('https://github.test/pull/9'),
+    );
+    openSessionPr('/repo', input, run);
+
+    const create = log.find((cmd) => cmd.includes('pr create'));
+    expect(create).toBeDefined();
+    expect(create!.split(' ')).toContain('--draft');
+    // The early open exists so CI runs on the work as it lands, and a draft
+    // still runs it — what the draft withholds is the REVIEW REQUEST, which a
+    // pull request titled "0 work items" has no business making.
+    expect(create).toContain('--base main');
   });
 
   it('REPORTS a gh failure with the manual fallback instead of throwing away the run', () => {
@@ -357,5 +382,69 @@ describe('updateSessionPr — the close-out completes what the early open could 
     expect(result.ok).toBe(false);
     expect(result.message).toContain('motir/auto-1');
     expect(result.message).toContain('gh: not found');
+  });
+});
+
+describe('markSessionPrReady — the half that ENDS the draft (MOTIR-4967)', () => {
+  it('marks the pull request ready, by BRANCH, when the open one is a draft', () => {
+    const { run, log } = scriptedRunner((bin, args) => (args[1] === 'list' ? ok('true') : ok('')));
+
+    expect(markSessionPrReady('/repo', 'motir/auto-1', run)).toEqual({ ok: true, changed: true });
+    expect(log).toEqual([
+      'gh pr list --head motir/auto-1 --state open --json isDraft --jq .[0].isDraft',
+      'gh pr ready motir/auto-1',
+    ]);
+  });
+
+  it('does NOTHING to a pull request that is already ready — the idempotence a resumed run needs', () => {
+    // The same property `openSessionPr` gets by listing before it creates: a
+    // re-invoked run must not fail, and it must not touch a pull request a human
+    // has already marked ready.
+    const { run, log } = scriptedRunner((bin, args) => (args[1] === 'list' ? ok('false') : ok('')));
+
+    expect(markSessionPrReady('/repo', 'motir/auto-1', run)).toEqual({ ok: true, changed: false });
+    expect(log.some((cmd) => cmd.includes('pr ready'))).toBe(false);
+  });
+
+  it('ATTEMPTS the ready when the list cannot answer — a stranded draft is the worse error', () => {
+    // `false` is the one definitive "nothing to do". A missing `gh`, an
+    // unparseable answer or no row at all falls through to the attempt, because
+    // `gh pr ready` on a ready pull request is harmless while a draft nobody
+    // marked ready waits for a human who does not know it is waiting.
+    for (const listed of [fail('not authenticated'), ok(''), ok('null')]) {
+      const { run, log } = scriptedRunner((bin, args) => (args[1] === 'list' ? listed : ok('')));
+      expect(markSessionPrReady('/repo', 'motir/auto-1', run).ok).toBe(true);
+      expect(log.some((cmd) => cmd === 'gh pr ready motir/auto-1')).toBe(true);
+    }
+  });
+
+  it('REPORTS a gh failure and never throws — and says the pull request is still a DRAFT', () => {
+    // By the time this runs the work is integrated, pushed and CI-checked. The
+    // same discipline `openSessionPr` and `updateSessionPr` apply: a summary that
+    // aborts over `gh` hides finished work.
+    const { run } = scriptedRunner((bin, args) =>
+      args[1] === 'list' ? ok('true') : fail('gh: not found'),
+    );
+
+    const result = markSessionPrReady('/repo', 'motir/auto-1', run);
+    expect(result.ok).toBe(false);
+    expect(result.changed).toBe(false);
+    expect(result.message).toContain('gh: not found');
+    expect(result.message).toContain('still a DRAFT');
+    // The recovery command, named, because the operator is the only one who can
+    // run it now.
+    expect(result.message).toContain('gh pr ready motir/auto-1');
+  });
+
+  it('names whatever `gh` said — stderr, else stdout, else the bare exit code', () => {
+    const say = (result: CommandResult): string | undefined =>
+      markSessionPrReady('/r', 'b', (bin, args) => (args[1] === 'list' ? ok('true') : result))
+        .message;
+
+    expect(say({ exitCode: 1, stdout: 'ignored', stderr: 'said on stderr' })).toContain(
+      'said on stderr',
+    );
+    expect(say({ exitCode: 1, stdout: 'said on stdout', stderr: '' })).toContain('said on stdout');
+    expect(say({ exitCode: 7, stdout: '', stderr: '' })).toContain('gh exited 7');
   });
 });

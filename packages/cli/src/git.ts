@@ -256,7 +256,8 @@ export interface SessionPrResult {
 }
 
 /**
- * Open (or find) the ONE pull request for a session branch.
+ * Open (or find) the ONE pull request for a session branch, AS A DRAFT
+ * (MOTIR-4967).
  *
  * A `gh` failure is REPORTED, never thrown: by the time this runs the agents'
  * work is already integrated and pushed, so aborting the summary over a missing
@@ -316,13 +317,28 @@ export function openSessionPr(
     cwd,
   );
   if (existing.exitCode === 0 && existing.stdout.trim()) {
+    // ⚠️ AN EXISTING PULL REQUEST IS LEFT EXACTLY AS IT IS — no `--draft`, no
+    // `gh pr ready`. A human who marked this one ready is not to be re-drafted by
+    // a resumed run, and one still in draft is marked ready by the close-out
+    // (`markSessionPrReady`) rather than here.
     return { url: existing.stdout.trim(), outcome: 'existing' };
   }
+  // ⚠️ A DRAFT (MOTIR-4967). The pull request is opened at this repository's
+  // FIRST implemented card so its checks run against the work as it lands — and
+  // a title written then counts one card for ever, so what the early open must
+  // NOT do is ask anybody to review it. A draft still runs CI, so the whole
+  // reason for the early open survives; the close-out marks it ready once
+  // `updateSessionPr` has written the title and body of the whole run.
+  //
+  // It is also load-bearing beyond tidiness: a draft cannot be merged, so a
+  // session pull request linked to a container cannot close that container's
+  // children mid-run through the downward cascade.
   const created = run(
     'gh',
     [
       'pr',
       'create',
+      '--draft',
       '--base',
       'main',
       '--head',
@@ -346,4 +362,78 @@ export function openSessionPr(
   // `gh pr create` prints the URL as its last line.
   const url = created.stdout.split('\n').filter(Boolean).pop() ?? null;
   return { url, outcome: 'opened' };
+}
+
+export interface SessionPrReadyResult {
+  /** `false` only when `gh` was asked and refused. */
+  ok: boolean;
+  /** Whether THIS call is what took the pull request out of draft. */
+  changed: boolean;
+  message?: string;
+}
+
+/**
+ * Mark a session branch's pull request READY FOR REVIEW (MOTIR-4967).
+ *
+ * ── The half that makes the draft a LIFECYCLE rather than a flag ───────────
+ * `openSessionPr` opens a draft at the first implemented card; this is what ends
+ * it, and the close-out calls it AFTER `updateSessionPr` has written the title
+ * and body of the whole run. That order is the point: the pull request becomes
+ * reviewable only once it describes what it carries, so a reviewer is never
+ * notified about a body that says "0 work items".
+ *
+ * ⚠️ A RUN THAT NEVER REACHES ITS CLOSE-OUT THEREFORE LEAVES A DRAFT, and that
+ * is the intended outcome rather than a gap. A halted, interrupted or crashed run
+ * has integrated and pushed real work — which must not be lost — but it has not
+ * finished the set it set out to finish, and a stranded review request claims it
+ * has.
+ *
+ * ⚠️ IT LISTS BEFORE IT ACTS, which is the same property `openSessionPr` gets
+ * from listing before creating: a resumed or re-invoked run must not fail, and it
+ * must not touch a pull request a human has already marked ready. `isDraft`
+ * answering `false` is the one definitive "nothing to do" — anything else
+ * (a missing `gh`, an unparseable answer, no row at all) falls through to the
+ * attempt, because leaving a draft stranded is the worse of the two errors and
+ * `gh pr ready` on a ready pull request is itself harmless.
+ *
+ * Reported, never thrown, for the reason every `gh` call in this file reports:
+ * the work is integrated, pushed and CI-checked by the time this runs, and a
+ * summary that aborts over `gh` hides it.
+ */
+export function markSessionPrReady(
+  cwd: string,
+  branch: string,
+  run: CommandRunner = execCommand,
+): SessionPrReadyResult {
+  const state = run(
+    'gh',
+    [
+      'pr',
+      'list',
+      '--head',
+      branch,
+      '--state',
+      'open',
+      '--json',
+      'isDraft',
+      '--jq',
+      '.[0].isDraft',
+    ],
+    cwd,
+  );
+  if (state.exitCode === 0 && state.stdout.trim() === 'false') {
+    return { ok: true, changed: false };
+  }
+  const ready = run('gh', ['pr', 'ready', branch], cwd);
+  if (ready.exitCode !== 0) {
+    return {
+      ok: false,
+      changed: false,
+      message:
+        `Opened, but could not mark ${branch}'s pull request ready for review: ` +
+        `${ready.stderr || ready.stdout || `gh exited ${ready.exitCode}`}. ` +
+        `It is still a DRAFT — \`gh pr ready ${branch}\` finishes it.`,
+    };
+  }
+  return { ok: true, changed: true };
 }

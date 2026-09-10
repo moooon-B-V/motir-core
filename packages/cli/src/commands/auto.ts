@@ -61,6 +61,7 @@ import {
   execCommand,
   workReachedRemote,
   GitError,
+  markSessionPrReady,
   openSessionPr,
   updateSessionPr,
   pushSessionBranchIfAhead,
@@ -409,11 +410,18 @@ export interface LoopInput {
    * Open each repository's pull request at its FIRST implemented card, rather
    * than only at the close-out (Story MOTIR-3655 · MOTIR-3681).
    *
-   * ⚠️ OPT-IN, and only `motir auto` opts in. The SCOPED run shares this loop and
-   * can finish under a HOLD (Bug MOTIR-3268 — a parent must not claim to be built
-   * while a child of its own is not), which is computed at close-out from state
-   * the loop does not have mid-iteration. Opening eagerly there would open the
-   * very pull request the hold withholds.
+   * ⚠️ OPT-IN, and `motir auto` is the only caller of this loop. The gate was
+   * once a SAFETY one — the scoped run could finish under a hold (Bug
+   * MOTIR-3268) that an eager open would have defeated — and MOTIR-4967 retired
+   * that hold: every session pull request now opens as a DRAFT, which carries the
+   * same invariant without withholding CI, so nothing about opening early is
+   * unsafe for any lane any more.
+   *
+   * What is left is a plain fact about which loop each lane runs: the scoped run
+   * drains through `commands/scopeDrain.ts`, which has a loop of its own and does
+   * not call `ensureRepoPullRequest` at all. Giving the scoped lane the same
+   * first-implemented-card timing is a change to THAT loop, not a flag flipped
+   * here.
    */
   openPrEagerly?: boolean;
   session: ProjectSession;
@@ -705,14 +713,11 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // still runs at the end and REWRITES it from every record, so a reviewer
       // reads the whole run (see `closeOutRepo`).
       //
-      // ⚠️ GATED ON THE LANE, and the gate is not decoration. The SCOPED run
-      // (`motir run <parent>`, `commands/dispatch.ts`) shares this loop and can
-      // finish under a HOLD — `closeOutRepos(summary, run, hold)`, Bug
-      // MOTIR-3268: a parent must not claim to be built while a child of its own
-      // is not. That hold is computed at close-out, from state this loop does not
-      // have mid-iteration, so an eager open here would open exactly the pull
-      // request the hold exists to withhold. `motir auto` has no such hold and is
-      // the only lane that opts in.
+      // ⚠️ AND WHAT IT OPENS IS A DRAFT (MOTIR-4967), which is what makes an
+      // early open safe rather than merely early: it runs CI on the work as it
+      // lands while refusing review, and it cannot be merged — so it cannot claim
+      // the container is built while a child of its own is not, which is the
+      // invariant Bug MOTIR-3268's hold used to carry by opening nothing.
       if (openPrEagerly && landedWork(record)) {
         for (const session of repo ?? []) {
           ensureRepoPullRequest(session, runId, run);
@@ -1440,8 +1445,8 @@ export async function transitionToImplemented(
 }
 
 /**
- * Make sure THIS repository's session pull request exists, mid-run
- * (Story MOTIR-3655 · MOTIR-3681).
+ * Make sure THIS repository's session pull request exists — as a DRAFT, mid-run
+ * (Story MOTIR-3655 · MOTIR-3681 · MOTIR-4967).
  *
  * Called after every card that LANDS, so the first implemented card in each
  * repository opens that repository's pull request and every card after it finds
@@ -1553,19 +1558,28 @@ export function closeOutRepos(
   summary: AutoSummary,
   run: CommandRunner,
   /**
-   * A one-line reason to PUSH but not to open (Bug MOTIR-3268), or `null` for the
-   * ordinary close-out.
+   * The claimed container's CURRENT children that have not landed
+   * (`readOpenChildren`), or `null` when there is no container to re-read —
+   * `motir auto` and a sprint scope both pass nothing.
    *
-   * ⚠️ THE PUSH STILL HAPPENS, and that is the substantive half of the choice. A
-   * hold is a statement about the pull REQUEST — that a parent must not claim to
-   * be built while a child of its own is not — and it says nothing about the
-   * commits, which are finished work that must not be left sitting in a local
-   * checkout for a human to discover.
+   * ⚠️ IT DECIDES READY, NOT WHETHER TO OPEN — and that is the whole of what
+   * MOTIR-4967 changed about Bug MOTIR-3268. A container with an open child used
+   * to get NO pull request, on the reasoning that one opened over it claims the
+   * container is built. It now gets a DRAFT: a draft cannot be merged, so it
+   * cannot close the container or cascade `done` onto the very children that are
+   * missing — and the work gets CI, which the hold denied it.
    */
-  hold: string | null = null,
+  open: { containerKey: string; openChildren: readonly string[] } | null = null,
 ): void {
+  const outstanding = open && open.openChildren.length > 0 ? open : null;
+  if (outstanding) {
+    summary.outstanding = {
+      containerKey: outstanding.containerKey,
+      keys: [...outstanding.openChildren],
+    };
+  }
   for (const repo of summary.repos) {
-    const report = closeOutRepo(summary, repo, run, hold);
+    const report = closeOutRepo(summary, repo, run, outstanding);
     summary.prs.push(report);
   }
 }
@@ -1574,7 +1588,7 @@ function closeOutRepo(
   summary: AutoSummary,
   repo: RepoSession,
   run: CommandRunner,
-  hold: string | null,
+  outstanding: { containerKey: string; openChildren: readonly string[] } | null,
 ): PrReport {
   const base = { repoName: repo.repoName, branch: repo.branch };
   try {
@@ -1585,12 +1599,6 @@ function closeOutRepo(
 
     if (!sessionBranchHasCommits(repo.cwd, repo.branch, run)) {
       return { ...base, url: null, outcome: 'empty' };
-    }
-    // ⚠️ AFTER the emptiness check, so a branch carrying nothing still reports
-    // `empty` — the more specific of the two truths, and the one that says the
-    // hold cost this repository nothing.
-    if (hold !== null) {
-      return { ...base, url: null, outcome: 'held', message: hold };
     }
     // Only THIS repo's items belong in THIS repo's pull request: the branch
     // carries the ones integrated onto it, and the failures listed alongside are
@@ -1646,12 +1654,44 @@ function closeOutRepo(
       );
       if (!refreshed.ok) refreshMessage = refreshed.message;
     }
+
+    // ⚠️ READY COMES LAST, AND THE ORDER IS THE RULE (MOTIR-4967). The pull
+    // request opened at the first implemented card carries a title that counts
+    // ONE card — `updateSessionPr` above is what makes it describe the whole run.
+    // Marking it ready before that rewrite would notify every reviewer about a
+    // body saying "0 work items", which is the exact failure the draft exists to
+    // prevent; doing it after means the pull request becomes reviewable only once
+    // it is worth reading.
+    //
+    // ⚠️ AND NOT AT ALL WHILE A CHILD IS OUTSTANDING. That is Bug MOTIR-3268's
+    // invariant, carried by the draft rather than by withholding the pull
+    // request: a draft cannot merge, so it cannot complete the container or
+    // cascade `done` onto the children that have not been built.
+    //
+    // ⚠️ AND NOT WHEN THERE IS NO PULL REQUEST TO MARK. A `failed` open already
+    // carries the reason a human needs; asking `gh` to ready a branch that has
+    // none would fail a second time and overwrite that reason with a message
+    // about draft state, which is not the problem.
+    let draftMessage: string | undefined;
+    if (result.outcome === 'failed') {
+      draftMessage = undefined;
+    } else if (outstanding) {
+      draftMessage =
+        `${outstanding.containerKey} still has ${outstanding.openChildren.length} unlanded ` +
+        `child${outstanding.openChildren.length === 1 ? '' : 'ren'} ` +
+        `(${outstanding.openChildren.join(', ')}) — see above.`;
+    } else {
+      const ready = markSessionPrReady(repo.cwd, repo.branch, run);
+      if (!ready.ok) draftMessage = ready.message;
+    }
+
     return {
       ...base,
       url: result.url,
       outcome: result.outcome,
-      ...(result.message || refreshMessage
-        ? { message: result.message ?? refreshMessage ?? '' }
+      ...(draftMessage ? { draft: true } : {}),
+      ...(draftMessage || result.message || refreshMessage
+        ? { message: draftMessage ?? result.message ?? refreshMessage ?? '' }
         : {}),
     };
   } catch (err) {
