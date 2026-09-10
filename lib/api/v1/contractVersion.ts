@@ -332,5 +332,28 @@
  *   was `1.24.0` at `4dc08ff39`, so this claims `1.25.0`. If a sibling has taken
  *   it since, RENUMBER this entry — it names the FIELD rather than a position.
  *   MOTIR-3157 is the bug filed the last time a shape moved without the number.
+ *
+ * - `1.26.0` — MOTIR-5048 adds `linkWorkItemPullRequest`
+ *   (`POST /api/v1/work-items/{key}/pull-requests`): DECLARE which pull request
+ *   delivers a work item. The link is the ONLY association a pull request has —
+ *   the title parse was retired by MOTIR-3674 — and it was reachable only
+ *   through the `link_pull_request` MCP tool, so only a dispatched AGENT could
+ *   write one. `packages/cli` retired its MCP transport in 11.5.6, which left an
+ *   ORCHESTRATOR unable to say what its own session pull request delivers.
+ *
+ *   Additive: ONE new operation (§8's first allowed change). No declared shape
+ *   changed and nothing was removed. It is gated on `work_item:edit` — the key
+ *   the service already asserts and the same key the MCP tool declares, so two
+ *   doors onto one write cannot disagree about who may open it, and
+ *   `CLI_TOKEN_GRANT` already carries it, so no grant is widened.
+ *
+ *   The response omits the pull-request row's internal cuid: §7 keeps the cuid
+ *   off the wire, and a caller already holds the coordinate it sent. It reports
+ *   `created` instead — whether this call WROTE the row because no webhook
+ *   delivery had arrived yet, which is the case the operation exists for.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE, the same rule: `V1_CONTRACT_VERSION`
+ *   was `1.25.0` at `d4981d354`, so this claims `1.26.0`. If a sibling has taken
+ *   it since, RENUMBER this entry — it names the OPERATION rather than a position.
  */
-export const V1_CONTRACT_VERSION = '1.25.0';
+export const V1_CONTRACT_VERSION = '1.26.0';

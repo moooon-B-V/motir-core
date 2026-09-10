@@ -684,6 +684,24 @@ export const DEFAULT_V1: V1Script = {
   'POST /api/v1/work-items/{key}/claim': { body: v1Claim('PROD-1') },
   'GET /api/v1/work-items/{key}/dispatch-prompt': { body: v1DispatchPrompt('PROD-1') },
   'POST /api/v1/work-items/{key}/integration': { body: v1Integration('PROD-1') },
+  // MOTIR-5048 — the delivery LINK. `linkPullRequest` reads nothing off the
+  // reply (the client returns void), so the default body only has to parse; what
+  // a test asserts is the REQUEST, which is where a dropped ref or a mis-keyed
+  // address would show.
+  'POST /api/v1/work-items/{key}/pull-requests': {
+    body: {
+      key: 'PROD-1',
+      created: true,
+      pullRequest: {
+        repo: 'acme/web',
+        number: 1,
+        title: 'A pull request',
+        url: 'https://github.com/acme/web/pull/1',
+        state: 'open',
+        ci: null,
+      },
+    },
+  },
   'POST /api/v1/sessions/complete': { body: v1CloseOut('motir/session-1') },
   // 202, not 200: the submit is ACCEPTED, and the handle describes a job that
   // has not run yet.
