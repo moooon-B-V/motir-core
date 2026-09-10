@@ -590,9 +590,9 @@ know more than it does. Every state carries an icon **and** a word, never colour
 > weight on the same line (one asks _how many_, the other asks _where_), and the per-row state
 > table's rule that **state is never colour alone** and **a state pill is not used on a tinted row**.
 >
-> **⚠️ And one fact MOTIR-5014 needs, verified rather than assumed:
-> `components/planning/repositories/RepositoryRow.tsx` has exactly ONE importer —
-> `RepositorySetStep.tsx`.** The settings room composes its own `TakeoverRow`, and
+> **⚠️ And one fact MOTIR-5014 needed, verified rather than assumed: the establish
+> step's repository row had exactly ONE importer — `RepositorySetStep.tsx`.**
+> (MOTIR-5014 has since deleted it, which is why this names it rather than its path.) The settings room composes its own `TakeoverRow`, and
 > `/settings/project/code-access` its own rows. So deleting the `own` and `set` modes **orphans that
 > whole component and the ~40 `repositorySet.*` keys only it reads**; they are not carried by the
 > room, and §10's reconciliation table lists each one with its true consumer so that the deletion is
@@ -1150,8 +1150,9 @@ Three of the things this asset composes already exist as running code or as ship
 Per `notes.html` **#73** — _"'design against shipped reality' means SEE the pixels, not read the
 code"_ — all of them were **rendered before anything was drawn**, and the mock mirrors those renders:
 
-1. **`components/planning/repositories/RepositoryRow.tsx` — shipped code (MOTIR-1782, merged in
-   `cefe76c9`).** ⚠️ **The card's premise that "the repo-set step ships as a mock" was already stale
+1. **The establish step's repository row — shipped code (MOTIR-1782, merged in `cefe76c9`;
+   DELETED with the technical path by MOTIR-5014, so this records what was rendered rather than a
+   file to open).** ⚠️ **The card's premise that "the repo-set step ships as a mock" was already stale
    when this ran** — MOTIR-1782 landed the step as real components, so the row was rendered headless
    from its own source + the real compiled `globals.css` (a throwaway happy-dom render → Tailwind v4
    via `@tailwindcss/postcss` → Playwright). What the render corrected, that reading the `.tsx`

@@ -140,7 +140,7 @@ describe('the post-approval step’s vocabulary cannot come back', () => {
       // The two retired labels, by their SHIPPED English strings — read from the
       // catalog where they still exist for the settings surface that kept them,
       // so this assertion cannot drift from what a user would actually see.
-      const connect = String((en as Record<string, never>)['repositorySet']['connectGithub']);
+      const connect = en.repositorySet.connectGithub;
       expect(text, `${name} renders the retired connect ask`).not.toContain(connect);
       expect(text, `${name} renders the retired technical-path door`).not.toContain(
         'I already have code',

@@ -126,7 +126,7 @@ describe('NotificationDrawer — the access-refused row', () => {
     // and the placeholder filled the way the row fills it. Re-typing the sentence
     // here would let the catalog and this assertion drift apart while both stayed
     // green — and the copy IS the deliverable of the design card.
-    const template = (en as Record<string, never>)['notifications']['summary']['accessRefused'];
+    const template = en.notifications.summary.accessRefused;
     const expected = String(template)
       .replace(/<\/?s>/g, '')
       .replace('{project}', 'Acme booking');
@@ -156,7 +156,7 @@ describe('NotificationDrawer — the access-refused row', () => {
     // `actorFallback` ("Someone") would put a FICTIONAL actor into the summary
     // grammar — nobody did this to the user; Motir tried something on their
     // behalf and GitHub said no.
-    const fallback = String((en as Record<string, never>)['notifications']['actorFallback']);
+    const fallback = en.notifications.actorFallback;
     expect(row.textContent).not.toContain(fallback);
   });
 });

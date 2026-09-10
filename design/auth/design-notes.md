@@ -1328,8 +1328,9 @@ whatever host the operator publishes**, which for the hosted service is
 `motir.co` — a different application. Panel 13 gives them the shipped external-link
 treatment: lucide `external-link` at **13px**, inline after the label, **in the
 link's own colour** so it reads as part of the link rather than as an adjacent
-control. That mirrors `components/github/DevelopmentSection.tsx` and
-`components/planning/repositories/RepositoryRow.tsx`, which is where it ships today.
+control. That mirrors `components/github/DevelopmentSection.tsx`, which is where it
+ships today. (A second instance lived in the establish step's repository row until
+MOTIR-5014 deleted the technical path with it.)
 
 The anchors are plain `<a>`, **not** client-navigating links: a cross-origin
 `next/link` looks identical until it is used. The decision is made once here rather
