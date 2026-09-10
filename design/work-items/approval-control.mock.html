@@ -1,0 +1,1315 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The UNIVERSAL APPROVAL FRAME — the port, the verbs, and every state — MOTIR-4778
+      · MOTIR-4789
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the UNIVERSAL APPROVAL FRAME — Subtask
+      MOTIR-4789, the design that blocks the code Subtask MOTIR-4792 and,
+      through it, every consumer.
+
+      ⚠️ SECOND CUT. The first drew the BUTTON as the shared element and left
+      the subject as a stub, and was rejected on review: "Approve button
+      without review doesn't stand — the user needs to see what he is
+      approving. That's why it's called universal: a universal frame/port the
+      user can see what to approve, then approve, decline buttons." (Yue,
+      2026-09-08, on motir-core#2715.)
+
+      SO THE UNIVERSAL ELEMENT IS THE FRAME, NOT THE VERB PAIR. What a person
+      learns once is what REVIEWING looks like; the button is the last band of
+      it. The frame has three bands — header (what am I looking at, which
+      version), THE PORT (the subject, rendered), the VERBS (below the port,
+      because you decide after you look). The port's CONTENT varies by kind;
+      the frame does not.
+
+      WITHDRAWN by this cut: the first asset's rule that "the control sits at
+      the HEAD of the section, never below the artefact". That moved the button
+      further from the thing it decides. The frame removes the problem it was
+      trying to solve.
+
+      GROUNDED IN (read at design time, not invented):
+        · docs/decisions/approval-gates.md — MERGED on main at 9840d00ea.
+          §1 (subject/kind/state/record + the registry), §2 (routing
+          assigneeId ?? reporterId; two permission keys), §3 (approve flips the
+          design subtask done), §6a (the AUDIT record), §6b (the four states
+          incl. the product-written `superseded`), §6c (approval PINS the
+          version's bytes), §6d (the reopen lifecycle).
+        · design/work-items/design-result.mock.html — the design PORT's
+          contents: the note, the sandboxed mock frame at its 32rem height, the
+          screenshot. COMPOSED, not redrawn.
+        · design/work-items/acceptance-panel.mock.html — the shipped approval
+          gesture. What is carried and what deliberately differs is in the notes.
+
+      SCOPE. This asset draws THE FRAME and the DESIGN PORT. The MERGE port's
+      contents belong to MOTIR-4882 and appear here only as a labelled
+      placeholder, which is what proves the frame is universal without
+      specifying that card's content. The Approvals TAB is MOTIR-4879 and is
+      not drawn — but its tab STRIP and the rail are COMPOSED in panel 0b, because
+      an asset owes the door to its own surface, not only the room.
+
+      COMPOSES ONLY SHIPPED PRIMITIVES — ContentSectionCard (.card), Button
+      variants (.btn-*), Pill (tint bg + --el-text-strong, finding #35), and
+      the avatar/meta grammar the acceptance panel already uses. Tokens copied
+      1:1 from packages/design-system/theme.css; colour ONLY via Tier-3
+      --el-*, shape via the element-semantic radius/spacing/height/shadow
+      tokens.
+
+      INK — captions on tinted surfaces use --el-text-secondary (6.18-6.80:1),
+      never --el-text-muted (4.12-4.34:1 off-white). --el-text-faint is not
+      painted. Danger text on a surface is --el-danger-on-surface;
+      --el-danger-text is never used, being the ink FOR a danger fill.
+
+      PANELS (multi-panel board — review EACH):
+        0 · Placement — the frame's TWO homes, with the door to each:
+             /items/[key] (the Design result section) and
+             /workbench?tab=approvals (a row on the Workbench).
+        1 · ANATOMY — the three bands, annotated.
+        A · awaiting, YOURS — port live, verbs below it.
+        B · awaiting, NOT yours — port live, NO verbs, who it waits on.
+        C · confirming — what approving is about to do, over the port.
+        D · in flight — the decision is being recorded.
+        E · approved — the record, and that this version's bytes are PINNED.
+        F · changes requested — the note foregrounded.
+        G · superseded — the question was withdrawn; the port points forward.
+        H · refused — someone decided it first; the port is still readable.
+        X · PORT FAILED — the subject cannot be shown, so there are NO verbs.
+        U · UNIVERSAL — the same frame, a different port (MOTIR-4882's).
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 tokens — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --color-link-pressed: #005bb1;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-warning: var(--color-warning);
+        --el-success: var(--color-success);
+        --el-info: var(--color-info);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-story: var(--color-accent-green);
+        /* newer than the mock this block was lifted from — packages/design-system/theme.css */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-text-identifier: var(--color-slate);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-green: #2fc94f;
+        --color-success: #2fc94f;
+        --color-warning: #f08c00;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #4088cc;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.2);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --el-switch-knob: #d4d4d4;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      body {
+        margin: 0;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      .board {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+        display: flex;
+        flex-direction: column;
+        gap: 30px;
+      }
+      .boardTitle {
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0;
+      }
+      .boardLead {
+        margin: 0;
+        color: var(--el-text-secondary);
+        max-width: 78ch;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .panelLabel {
+        font-size: 12px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+      }
+      .panelNote {
+        margin: 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        max-width: 84ch;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+
+      /* ══ THE APPROVAL FRAME — the element this asset exists to fix ═══════ */
+      .frame {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* band 1 — the header: what am I looking at, which version */
+      .frameHead {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        background: var(--el-surface-soft);
+        border-bottom: 1px solid var(--el-border);
+      }
+      .frameWhat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .frameKind {
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .frameMeta {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .key {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+
+      /* band 2 — THE PORT: the subject, rendered */
+      .port {
+        position: relative;
+        background: var(--el-surface);
+        border-bottom: 1px solid var(--el-border);
+        min-height: 196px;
+        max-height: 320px;
+        overflow: auto;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .portExpand {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11.5px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .portNote {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-input);
+        padding: 10px 12px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .portNote h4 {
+        margin: 0 0 4px;
+        font-size: 11.5px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+      /* the sandboxed mock — the design port's centrepiece */
+      .portMock {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        min-height: 128px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding: 16px 20px;
+        line-height: 1.7;
+        flex-direction: column;
+        background-image: repeating-linear-gradient(
+          45deg,
+          transparent,
+          transparent 9px,
+          rgba(0, 0, 0, 0.022) 9px,
+          rgba(0, 0, 0, 0.022) 18px
+        );
+      }
+      .portCite {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .portCite code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        background: var(--el-muted);
+        border-radius: var(--radius-control);
+        padding: 1px 5px;
+        color: var(--el-text-identifier);
+      }
+
+      /* band 3 — the VERBS, below the port */
+      .frameFoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 14px;
+        background: var(--el-page-bg);
+      }
+      .footWhy {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .verbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-quiet {
+        background: transparent;
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .btn[disabled] {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        white-space: nowrap;
+        flex: none;
+      }
+      .pill-await {
+        background: var(--el-tint-yellow);
+      }
+      .pill-ok {
+        background: var(--el-tint-mint);
+      }
+      .pill-changes {
+        background: var(--el-tint-peach);
+      }
+      .pill-gone {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .pill-live {
+        background: var(--el-tint-sky);
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+      }
+
+      /* the decided record — the AUDIT face (ADR 6a) */
+      .record {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding: 11px 14px;
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .record b {
+        font-weight: 620;
+        color: var(--el-text);
+      }
+      .avatar {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-size: 10px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .pinned {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-tint-mint);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+
+      /* confirm — an inline band OVER the verbs, never a modal */
+      .confirm {
+        background: var(--el-tint-lavender);
+        border-top: 1px solid var(--el-border);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .confirm strong {
+        color: var(--el-text-strong);
+      }
+      .confirm ul {
+        margin: 6px 0 0;
+        padding-left: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+
+      /* refusal / port failure — ink is --el-danger-on-surface */
+      .alert {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 11px 14px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-danger-surface, var(--el-tint-rose));
+        font-size: 13px;
+        color: var(--el-danger-on-surface);
+      }
+      .alertNext {
+        color: var(--el-text-secondary);
+      }
+      .port-dead {
+        background: var(--el-muted);
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .spin {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+        flex: none;
+      }
+
+      /* anatomy annotations */
+      .anat {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .anatNum {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      .anatList {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 14px;
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+      }
+
+      /* placement — the app shell, composed from design/shell + design/workbench */
+      .shell {
+        display: grid;
+        grid-template-columns: 132px 1fr;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        background: var(--el-page-bg);
+      }
+      .rail {
+        background: var(--el-surface);
+        border-right: 1px solid var(--el-border);
+        padding: 10px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .railItem {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+      }
+      .railItem--on {
+        background: var(--el-muted);
+        color: var(--el-text);
+        font-weight: 620;
+      }
+      .shellMain {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      .crumb {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        padding-bottom: 4px;
+      }
+      .tabs {
+        display: flex;
+        gap: 2px;
+        background: var(--el-muted);
+        border-radius: var(--radius-btn);
+        padding: 2px;
+        margin-bottom: 4px;
+        flex-wrap: wrap;
+      }
+      .tab {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        white-space: nowrap;
+      }
+      .tab--on {
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-weight: 620;
+        box-shadow: var(--shadow-subtle);
+      }
+      .tab b {
+        font-weight: 700;
+      }
+
+      /* placement */
+      .page {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .ghost {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .ghost--here {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 2px var(--el-tint-lavender);
+        color: var(--el-text);
+      }
+      .stateCap {
+        font-size: 13px;
+        font-weight: 650;
+        margin: 0 0 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <header class="panel">
+        <h1 class="boardTitle">
+          The universal approval frame — a port you review in, and the verbs beneath it
+        </h1>
+        <p class="boardLead">
+          MOTIR-4789, second cut. The universal element is the <strong>frame</strong>, not the
+          button: what a person learns once is what REVIEWING looks like. Three bands — a header
+          saying what you are looking at, <strong>the PORT that renders it</strong>, and the verbs
+          below. The port's contents vary by kind; the frame does not. Its states, routing and
+          record are settled by <code>docs/decisions/approval-gates.md</code> (merged,
+          <code>9840d00ea</code>) — where that record and this asset disagree, the record wins.
+        </p>
+        <p class="panelNote">
+          <strong>Withdrawn from the first cut:</strong> the rule that the control sits at the HEAD
+          of the section. It moved the button further from the thing it decides. The frame removes
+          the problem that rule was trying to solve.
+        </p>
+      </header>
+
+      <!-- 0 · PLACEMENT — TWO homes, with their real routes and doors -->
+      <section class="panel">
+        <div class="panelLabel">
+          0 · Placement — the frame has TWO homes, and this is the door to each
+        </div>
+        <p class="panelNote">
+          The frame is not a page. It renders wherever a decision is met, and there are exactly two
+          such places. <strong>This is what "universal" buys</strong> — one review surface, reached
+          two ways, so a person never learns a second way to approve.
+        </p>
+
+        <div class="grid2">
+          <!-- 0a — the item page -->
+          <div>
+            <p class="stateCap">
+              0a · <span class="key">/items/[key]</span> — the work item detail page
+            </p>
+            <div class="shell">
+              <div class="rail">
+                <div class="railItem">Workbench</div>
+                <div class="railItem railItem--on">Work items</div>
+                <div class="railItem">Boards</div>
+                <div class="railItem">Plans</div>
+              </div>
+              <div class="shellMain">
+                <div class="crumb">
+                  <span class="key">MOTIR-4321</span> · Design the approvals row treatment
+                </div>
+                <div class="ghost">Description · Acceptance criteria · Context refs</div>
+                <div class="ghost">Development — branch, pull request, checks</div>
+                <div class="ghost ghost--here">
+                  <strong>Design result</strong> — <em>the frame IS this section</em>
+                </div>
+                <div class="ghost">Attachments · Activity</div>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              <strong>The door:</strong> you are already on the card. The frame REPLACES today's
+              read-only <code>DesignResultPanel</code> in the late stack
+              (<code>LateSections.tsx</code>) — same slot, same position after Development, now with
+              a port and verbs instead of a panel with no buttons.
+            </p>
+          </div>
+
+          <!-- 0b — the Workbench -->
+          <div>
+            <p class="stateCap">
+              0b · <span class="key">/workbench?tab=approvals</span> — the Workbench
+            </p>
+            <div class="shell">
+              <div class="rail">
+                <div class="railItem railItem--on">Workbench</div>
+                <div class="railItem">Work items</div>
+                <div class="railItem">Boards</div>
+                <div class="railItem">Plans</div>
+              </div>
+              <div class="shellMain">
+                <div class="tabs">
+                  <span class="tab">To do</span><span class="tab">In progress</span
+                  ><span class="tab">Recently finished</span><span class="tab">Watching</span
+                  ><span class="tab tab--on">Approvals <b>2</b></span>
+                </div>
+                <div class="ghost ghost--here">
+                  <strong>a row</strong> — <em>the frame renders here</em>
+                </div>
+                <div class="ghost">a second row</div>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              <strong>The door:</strong> the <em>Workbench</em> rail entry — the first primary entry
+              and where signing in lands (<code>AUTHED_LANDING_PATH = '/workbench'</code>) — then
+              the <strong>Approvals</strong> tab. <strong>That tab slot already ships:</strong>
+              <code>WorkbenchTab</code> is
+              <code>todo | in-progress | finished | watching | approvals</code>
+              (MOTIR-4777), so this asset adds no navigation.
+            </p>
+          </div>
+        </div>
+
+        <p class="panelNote">
+          <strong>What each card owns, so the boundary is legible:</strong> the rail and the tab
+          STRIP are <code>design/workbench/</code>'s, shipped by MOTIR-4777 and composed here rather
+          than redrawn. The Approvals <strong>rows</strong>, their ordering and the
+          nothing-awaits-you state are <strong>MOTIR-4879</strong>'s.
+          <strong>This asset specifies the FRAME</strong> — the thing inside both, identical in
+          each.
+        </p>
+      </section>
+
+      <!-- 1 · ANATOMY -->
+      <section class="panel">
+        <div class="panelLabel">
+          1 · Anatomy — three bands (and state A: awaiting, yours to decide)
+        </div>
+        <div class="grid2">
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Design result</span>
+                <span class="frameMeta"
+                  >Published 12 minutes ago · version <span class="key">9840d00e</span></span
+                >
+              </div>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="port">
+              <button class="portExpand" type="button">Expand ⤢</button>
+              <div class="portNote">
+                <h4>What changed</h4>
+                The approval control is drawn once, with a panel per state, and the design-result
+                body is composed rather than redrawn.
+              </div>
+              <div class="portMock">
+                the sandboxed mock, rendered at its 32rem height<br />
+                <span class="portCite"
+                  >contents specified in <code>design-result.mock.html</code></span
+                >
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy"
+                >Approving moves <span class="key">MOTIR-4321</span> to Done.</span
+              >
+              <span class="verbs">
+                <button class="btn btn-secondary" type="button">Request changes</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </span>
+            </div>
+          </div>
+          <div class="anatList">
+            <div class="anat">
+              <span class="anatNum">1</span
+              ><span
+                ><strong>Header</strong> — what you are looking at, which version, when it arrived,
+                and the state. Same shape for every kind; only the words change.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="anatNum">2</span
+              ><span
+                ><strong>The PORT</strong> — the subject, RENDERED. A floor height so it is never a
+                sliver, a ceiling with its own scroll so it never pushes the verbs off screen, and
+                <strong>Expand</strong> for a subject that deserves the whole viewport. This is the
+                band the whole story is named after.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="anatNum">3</span
+              ><span
+                ><strong>The verbs</strong> — <strong>below</strong> the port, because you decide
+                after you look. Beside them, in words, what approving will DO.</span
+              >
+            </div>
+            <p class="panelNote" style="margin-top: 4px">
+              The port's CONTENT is the only thing a new gate kind supplies. That is what makes the
+              frame universal, and it is why the merge kind needs no second control, no second
+              confirm and no second decided treatment.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- STATES -->
+      <section class="panel">
+        <div class="panelLabel">The frame in every state</div>
+        <p class="panelNote">
+          Each is the SAME frame with different props. In every one of them the port is present —
+          except X, which is the state that exists <em>because</em> it cannot be.
+        </p>
+
+        <div class="grid2">
+          <!-- B -->
+          <div>
+            <p class="stateCap">B · awaiting — not yours to decide</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta"
+                    >Published 12 minutes ago · version <span class="key">9840d00e</span></span
+                  >
+                </div>
+                <span class="pill pill-await"
+                  ><span class="dot" aria-hidden="true"></span>Awaiting</span
+                >
+              </div>
+              <div class="port">
+                <div class="portNote">
+                  <h4>What changed</h4>
+                  The approval control is drawn once, with a panel per state.
+                </div>
+                <div class="portMock">the sandboxed mock, rendered at its 32rem height</div>
+              </div>
+              <div class="frameFoot">
+                <span class="footWhy"
+                  >Waiting on <strong>Mara S.</strong> — this work item's assignee.</span
+                >
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              <strong>The port is still there.</strong> A reader who may not decide can still see
+              what is being decided — only the verbs are absent.
+            </p>
+          </div>
+
+          <!-- C -->
+          <div>
+            <p class="stateCap">C · confirming</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta"
+                    >Published 12 minutes ago · version <span class="key">9840d00e</span></span
+                  >
+                </div>
+                <span class="pill pill-await"
+                  ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+                >
+              </div>
+              <div class="port">
+                <div class="portNote">
+                  <h4>What changed</h4>
+                  The approval control is drawn once, with a panel per state.
+                </div>
+                <div class="portMock">the sandboxed mock, rendered at its 32rem height</div>
+              </div>
+              <div class="confirm">
+                <div>
+                  <strong>Approving this design will:</strong>
+                  <ul>
+                    <li>record that you approved it, with the time and this version;</li>
+                    <li>keep this version's files, so the decision stays checkable;</li>
+                    <li>
+                      move <span class="key">MOTIR-4321</span> to Done, starting 3 work items
+                      waiting on it.
+                    </li>
+                  </ul>
+                </div>
+                <span class="verbs">
+                  <button class="btn btn-quiet" type="button">Cancel</button>
+                  <button class="btn btn-primary" type="button">Yes, approve</button>
+                </span>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              An inline band <strong>over the verbs</strong>, never a modal — a modal would take the
+              port off screen at the moment the reader wants one last look.
+            </p>
+          </div>
+
+          <!-- D -->
+          <div>
+            <p class="stateCap">D · in flight</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta">Recording your decision…</span>
+                </div>
+                <span class="pill pill-live"
+                  ><span class="dot" aria-hidden="true"></span>Recording</span
+                >
+              </div>
+              <div class="port">
+                <div class="portNote">
+                  <h4>What changed</h4>
+                  The approval control is drawn once, with a panel per state.
+                </div>
+                <div class="portMock">the sandboxed mock, rendered at its 32rem height</div>
+              </div>
+              <div class="frameFoot">
+                <span class="footWhy"><span class="spin" aria-hidden="true"></span></span>
+                <span class="verbs">
+                  <button class="btn btn-secondary" type="button" disabled>Request changes</button>
+                  <button class="btn btn-primary" type="button" disabled>Approve</button>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- E -->
+          <div>
+            <p class="stateCap">E · approved</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta"
+                    >Approved · version <span class="key">9840d00e</span></span
+                  >
+                </div>
+                <span class="pill pill-ok"
+                  ><span class="dot" aria-hidden="true"></span>Approved</span
+                >
+              </div>
+              <div class="port">
+                <div class="portNote">
+                  <h4>What changed</h4>
+                  The approval control is drawn once, with a panel per state.
+                </div>
+                <div class="portMock">
+                  the sandboxed mock — <strong>the version that was approved</strong>
+                </div>
+              </div>
+              <div class="record">
+                <span><span class="avatar" aria-hidden="true">YZ</span> <b>Zhu Yue</b></span>
+                <span>8 Sep 2026, 04:12</span>
+                <span>moved <span class="key">MOTIR-4321</span> to Done</span>
+                <span class="pinned">Files kept</span>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              The port keeps showing <strong>the approved version</strong> even after a newer design
+              is published — which is what §6c's pin is FOR. Without the port this state would be a
+              row of metadata about something nobody can look at any more.
+            </p>
+          </div>
+
+          <!-- F -->
+          <div>
+            <p class="stateCap">F · changes requested</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta"
+                    >Sent back · version <span class="key">9840d00e</span></span
+                  >
+                </div>
+                <span class="pill pill-changes"
+                  ><span class="dot" aria-hidden="true"></span>Changes requested</span
+                >
+              </div>
+              <div class="port">
+                <div class="portNote">
+                  <h4>What was asked for</h4>
+                  The confirm step should say what approving does, not just ask twice.
+                </div>
+                <div class="portMock">the sandboxed mock — the version that was sent back</div>
+              </div>
+              <div class="record">
+                <span><span class="avatar" aria-hidden="true">YZ</span> <b>Zhu Yue</b></span>
+                <span>8 Sep 2026, 03:58</span>
+                <span>the agent will publish a new version</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- G -->
+          <div>
+            <p class="stateCap">G · superseded — the question was withdrawn</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta"
+                    >Version <span class="key">9840d00e</span> · no longer current</span
+                  >
+                </div>
+                <span class="pill pill-gone"
+                  ><span class="dot" aria-hidden="true"></span>Withdrawn</span
+                >
+              </div>
+              <div class="port port-dead">
+                A newer design was published, so this question was withdrawn.<br />
+                <span class="portCite">Nobody decided it. The current version is above.</span>
+              </div>
+              <div class="record">
+                <span>No decision · no one to attribute · 8 Sep 2026, 04:20</span>
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              Deliberately colourless and deliberately verb-less. It is written by the PRODUCT, not
+              a person, and the audit must never read it as a decision somebody made.
+            </p>
+          </div>
+
+          <!-- H -->
+          <div>
+            <p class="stateCap">H · refused — someone decided it first</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta"
+                    >Published 12 minutes ago · version <span class="key">9840d00e</span></span
+                  >
+                </div>
+                <span class="pill pill-await"
+                  ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+                >
+              </div>
+              <div class="port">
+                <div class="portNote">
+                  <h4>What changed</h4>
+                  The approval control is drawn once, with a panel per state.
+                </div>
+                <div class="portMock">the sandboxed mock, rendered at its 32rem height</div>
+              </div>
+              <div class="alert">
+                <span aria-hidden="true">⚠</span>
+                <span
+                  ><b>Mara S. approved this a moment ago.</b>
+                  <span class="alertNext"
+                    >Your decision was not recorded. Reload to see theirs.</span
+                  >
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- X -->
+          <div>
+            <p class="stateCap">X · the port FAILED — so there are no verbs</p>
+            <div class="frame">
+              <div class="frameHead">
+                <div class="frameWhat">
+                  <span class="frameKind">Design result</span>
+                  <span class="frameMeta">Version <span class="key">9840d00e</span></span>
+                </div>
+                <span class="pill pill-await"
+                  ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+                >
+              </div>
+              <div class="port port-dead">
+                This design could not be shown.<br />
+                <span class="portCite">Its files did not load.</span>
+              </div>
+              <div class="alert">
+                <span aria-hidden="true">⚠</span>
+                <span
+                  ><b>You cannot approve what cannot be shown.</b>
+                  <span class="alertNext">Retry, or ask the agent to republish.</span>
+                </span>
+              </div>
+              <div class="frameFoot">
+                <span class="footWhy">The verbs return when the subject renders.</span>
+                <span class="verbs"
+                  ><button class="btn btn-secondary" type="button">Retry</button></span
+                >
+              </div>
+            </div>
+            <p class="panelNote" style="margin-top: 6px">
+              <strong>This state exists because the frame does.</strong> A design that drew only a
+              button had nowhere to put this failure, so the button would have stayed live over a
+              subject nobody could see.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- U · UNIVERSAL -->
+      <section class="panel">
+        <div class="panelLabel">
+          U · Universal — the KIND decides the VERBS; the PORT follows what the card PRODUCED
+        </div>
+        <p class="panelNote">
+          The proof that the frame is universal: swap the port's contents and nothing else moves —
+          same header shape, same verbs, same confirm, same decided treatment.
+          <strong>The port is chosen by what the card PRODUCED, not by the gate's kind</strong>
+          (ADR §1, amended by MOTIR-4911). The two frames below carry the SAME kind —
+          <span class="key">pull_request_approval</span> — and different ports, which is the
+          sharpest form the claim takes: a design that opened a pull request is approved through the
+          pull-request gate and <em>still shows its mock</em>.
+        </p>
+        <div class="grid2">
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Pull request · code</span>
+                <span class="frameMeta">
+                  <span class="key">motir-core#2801</span> · branch
+                  <span class="key">MOTIR-4792-approval-control</span> →
+                  <span class="key">main</span>
+                </span>
+              </div>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="port">
+              <button class="portExpand" type="button">Expand ⤢</button>
+              <div class="portMock">
+                WHAT CHANGED, and HOW TO TEST IT<br />
+                <span class="portCite"
+                  >port contents owned by <strong>MOTIR-4906</strong>; the diff is a link out, not
+                  the lead (ADR §9)</span
+                >
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy"
+                >Approving records your yes; the merge is what finishes the card.</span
+              >
+              <span class="verbs">
+                <button class="btn btn-secondary" type="button">Request changes</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </span>
+            </div>
+          </div>
+          <div class="frame">
+            <div class="frameHead">
+              <div class="frameWhat">
+                <span class="frameKind">Pull request · design</span>
+                <span class="frameMeta">
+                  <span class="key">motir-core#2802</span> · branch
+                  <span class="key">MOTIR-4789-approval-frame</span> →
+                  <span class="key">main</span>
+                </span>
+              </div>
+              <span class="pill pill-await"
+                ><span class="dot" aria-hidden="true"></span>Awaiting you</span
+              >
+            </div>
+            <div class="port">
+              <button class="portExpand" type="button">Expand ⤢</button>
+              <div class="portMock">
+                THE SAME DESIGN PORT AS STATE A — the note, the sandboxed mock, the screenshot<br />
+                <span class="portCite"
+                  >same gate kind as the frame at left, different port — because this card produced
+                  a DESIGN</span
+                >
+              </div>
+            </div>
+            <div class="frameFoot">
+              <span class="footWhy"
+                >Approving records your yes; the merge is what finishes the card.</span
+              >
+              <span class="verbs">
+                <button class="btn btn-secondary" type="button">Request changes</button>
+                <button class="btn btn-primary" type="button">Approve</button>
+              </span>
+            </div>
+          </div>
+          <div class="anatList">
+            <div class="anat">
+              <span class="anatNum">✓</span
+              ><span>Header band — identical shape, different words.</span>
+            </div>
+            <div class="anat">
+              <span class="anatNum">✓</span
+              ><span
+                >Port — <strong>the only band that changes</strong>, and only its contents.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="anatNum">✓</span
+              ><span
+                >Verbs — identical, below the port, with the consequence stated beside them.</span
+              >
+            </div>
+            <div class="anat">
+              <span class="anatNum">✓</span
+              ><span
+                >Every state above applies unchanged, including X: a subject that will not load is a
+                decision nobody may take.</span
+              >
+            </div>
+            <p class="panelNote" style="margin-top: 4px">
+              <strong>This is what MOTIR-4796's one-language test asserts</strong> — the same
+              component in every context, not a family of look-alikes. The kind supplies the verb
+              SET, which is how a choice gate's N options (MOTIR-4914) reach the same band without a
+              second control.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
