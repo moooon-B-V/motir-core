@@ -173,6 +173,18 @@ export class ApprovalGateAlreadyDecidedError extends ApprovalGateError {
     readonly state: 'approved' | 'changes_requested',
     readonly decidedById: string | null,
     readonly decidedAt: Date | null,
+    /**
+     * WHO decided it, in words that survive their departure — the row's
+     * `decidedByLabel` (the audit set, MOTIR-4912). Carried BESIDE
+     * `decidedById` rather than instead of it, and for a reason the refusal
+     * surface makes concrete: the id is a join key and the label is the only
+     * thing a person can be shown. A control that rendered the id would print a
+     * cuid where the design draws a name (Subtask MOTIR-4792, design panel `H`).
+     *
+     * Null is a real answer — a decider whose account was removed leaves both
+     * null — so the copy has an unattributed arm rather than a placeholder.
+     */
+    readonly decidedByLabel: string | null = null,
   ) {
     super(
       `Approval gate ${gateId} was already decided (${state})${

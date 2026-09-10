@@ -139,6 +139,7 @@ export const approvalGateRepository = {
     state: ApprovalGateState;
     decidedById: string | null;
     decidedAt: Date | null;
+    decidedByLabel: string | null;
   } | null> {
     const rows = await tx.$queryRaw<
       Array<{
@@ -151,6 +152,7 @@ export const approvalGateRepository = {
         state: ApprovalGateState;
         decidedById: string | null;
         decidedAt: Date | null;
+        decidedByLabel: string | null;
       }>
     >`
       SELECT "id",
@@ -161,7 +163,15 @@ export const approvalGateRepository = {
              "subject_id"    AS "subjectId",
              "state",
              "decided_by_id" AS "decidedById",
-             "decided_at"    AS "decidedAt"
+             "decided_at"    AS "decidedAt",
+             -- READ for the REFUSAL, never for a write. The narrow column list
+             -- above exists so a caller cannot write from this snapshot; this
+             -- one joins decided_by_id / decided_at, which are here for the same
+             -- reason - they are what lets the door's already-decided refusal
+             -- NAME the winner instead of reporting a bare conflict
+             -- (MOTIR-4792). The id is a join key; the label is the only part
+             -- of it a person can be shown.
+             "decided_by_label" AS "decidedByLabel"
       FROM "approval_gate"
       WHERE "id" = ${id}
       FOR UPDATE

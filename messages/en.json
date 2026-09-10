@@ -7935,5 +7935,77 @@
         "unknown": "Behind by an unknown number of commits"
       }
     }
+  },
+  "approvalGate": {
+    "state": {
+      "awaitingYou": "Awaiting you",
+      "awaiting": "Awaiting",
+      "recording": "Recording",
+      "approved": "Approved",
+      "changesRequested": "Changes requested"
+    },
+    "verb": {
+      "approve": "Approve",
+      "requestChanges": "Request changes"
+    },
+    "waitingOn": "Waiting on {name}.",
+    "theAssignee": "this work item's assignee",
+    "confirm": {
+      "title": "Approving this will:",
+      "cancel": "Cancel",
+      "proceed": "Yes, {verb}"
+    },
+    "record": {
+      "unattributed": "No longer attributable",
+      "willRepublish": "the agent will publish a new version"
+    },
+    "refusal": {
+      "alreadyDecided": {
+        "byName": "{name} decided this a moment ago.",
+        "unattributed": "Someone decided this a moment ago.",
+        "next": "Your decision was not recorded. Reload to see theirs."
+      },
+      "superseded": {
+        "title": "A newer version was published, so this question was withdrawn.",
+        "next": "Nobody decided it. Reload to see the current version."
+      },
+      "notAuthorised": {
+        "title": "This decision is not yours to make.",
+        "next": "It can be decided by the work item's assignee, its reporter, or a workspace admin."
+      },
+      "notFound": {
+        "title": "This decision is no longer here.",
+        "next": "Reload the page to see where it went."
+      },
+      "kindUnregistered": {
+        "title": "Motir cannot decide this kind of approval yet.",
+        "next": "The work to support it is planned. Nothing you did caused this."
+      },
+      "alreadyAwaiting": {
+        "title": "Another decision on this subject is already waiting.",
+        "next": "Reload the page to see it."
+      },
+      "decidedImmutable": {
+        "title": "This decision was already recorded and cannot be changed.",
+        "next": "Reload the page. If this keeps happening, it is a defect worth reporting."
+      },
+      "unexpected": {
+        "title": "Your decision could not be recorded.",
+        "next": "Check your connection and try again."
+      }
+    },
+    "designResult": {
+      "kindLabel": "Design result",
+      "meta": {
+        "withVersion": "version {version}",
+        "plain": "the published design"
+      },
+      "consequence": "Approving moves {key} to Done.",
+      "confirm": {
+        "records": "record that you approved it, with the time and this version;",
+        "keepsFiles": "keep this version's files, so the decision stays checkable;",
+        "movesToDone": "move {key} to Done, starting the work items waiting on it."
+      }
+    }
   }
 }

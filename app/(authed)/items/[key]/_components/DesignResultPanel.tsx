@@ -24,9 +24,20 @@ import type { DesignAssetDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence
 // feature has NO entitlement axis, so unlike the acceptance panel beside it
 // there is no upsell and no toggle to render.
 //
-// The panel is READ-ONLY: it exposes no control that writes and never advances
-// the item's status. Approve / request-changes and the revise loop belong to the
-// runtime design-approval gate (§7), whose surface COMPOSES this one.
+// ⚠️ THIS PANEL IS THE APPROVAL FRAME'S PORT — it is no longer the section.
+// `LateSections` mounts `DesignResultSection`, which renders the frame
+// (`components/approvals/ApprovalGateControl.tsx`) with THIS component as band 2
+// (Story MOTIR-4778 · Subtask MOTIR-4792; `docs/decisions/approval-gates.md` §7,
+// and `design/work-items/design-notes.md` § The UNIVERSAL APPROVAL FRAME, whose
+// placement table says the frame IS the Design result section). What lives here
+// is still exactly what it was — the note, the sandboxed mock, the screenshots,
+// the provenance — and the verbs that decide it live one level up, BELOW the
+// port, because you decide after you look.
+//
+// This component itself still writes nothing and still advances no status; the
+// sentence that used to stand here said that of the SECTION, which is no longer
+// true, and a careful present-tense comment asserting a boundary is exactly the
+// kind that outranks the code in the next reader's mind.
 
 /**
  * The height the design measured for a PUBLISHED ARTIFACT in this panel

@@ -134,6 +134,17 @@ const pillVariants = cva(
         // the inactive badge apart from the neutral chip; AA-safe (slate on muted
         // clears AA both themes).
         archived: 'bg-(--el-archived-pill-bg) text-(--el-archived-pill-text) border-transparent',
+        // A decision is WAITING on somebody (Story MOTIR-4778 · MOTIR-4792,
+        // design `design/work-items/approval-control.mock.html` — the approval
+        // frame's `pill-await`). Yellow, and the tint is chosen for DISTINCTNESS
+        // rather than for mood: the frame renders four chips a reader must tell
+        // apart at a glance — awaiting, recording (`severity="info"`, sky),
+        // approved (`severity="success"`, mint) and changes-requested
+        // (`severity="warning"`, peach) — and `--el-tint-yellow` was the only
+        // slot none of the other three had spent. `tone` rather than `severity`
+        // because waiting is not a severity; it sits beside `private` and
+        // `archived`, which are states rather than judgements.
+        awaiting: 'bg-(--el-tint-yellow) text-(--el-text-strong) border-transparent',
       },
     },
     defaultVariants: {},

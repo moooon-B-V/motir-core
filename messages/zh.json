@@ -7931,5 +7931,77 @@
         "unknown": "落后的提交数未知"
       }
     }
+  },
+  "approvalGate": {
+    "state": {
+      "awaitingYou": "等待你处理",
+      "awaiting": "等待处理",
+      "recording": "正在记录",
+      "approved": "已批准",
+      "changesRequested": "已要求修改"
+    },
+    "verb": {
+      "approve": "批准",
+      "requestChanges": "要求修改"
+    },
+    "waitingOn": "等待 {name} 处理。",
+    "theAssignee": "该工作项的负责人",
+    "confirm": {
+      "title": "批准后将会：",
+      "cancel": "取消",
+      "proceed": "确认{verb}"
+    },
+    "record": {
+      "unattributed": "已无法追溯到具体成员",
+      "willRepublish": "代理将发布新版本"
+    },
+    "refusal": {
+      "alreadyDecided": {
+        "byName": "{name} 刚刚已经做出了决定。",
+        "unattributed": "已有人刚刚做出了决定。",
+        "next": "你的决定未被记录。请重新加载以查看对方的决定。"
+      },
+      "superseded": {
+        "title": "已发布更新的版本，因此该问题已被撤回。",
+        "next": "无人对其做出决定。请重新加载以查看当前版本。"
+      },
+      "notAuthorised": {
+        "title": "该决定不由你做出。",
+        "next": "可由该工作项的负责人、报告人或工作区管理员决定。"
+      },
+      "notFound": {
+        "title": "该决定已不在此处。",
+        "next": "请重新加载页面以查看其去向。"
+      },
+      "kindUnregistered": {
+        "title": "Motir 尚不支持此类审批。",
+        "next": "相关工作已在计划中。这不是你操作导致的。"
+      },
+      "alreadyAwaiting": {
+        "title": "该对象已有另一项决定在等待处理。",
+        "next": "请重新加载页面以查看。"
+      },
+      "decidedImmutable": {
+        "title": "该决定已记录，无法更改。",
+        "next": "请重新加载页面。若反复出现，这是一个值得上报的缺陷。"
+      },
+      "unexpected": {
+        "title": "无法记录你的决定。",
+        "next": "请检查网络连接后重试。"
+      }
+    },
+    "designResult": {
+      "kindLabel": "设计成果",
+      "meta": {
+        "withVersion": "版本 {version}",
+        "plain": "已发布的设计"
+      },
+      "consequence": "批准后 {key} 将标记为已完成。",
+      "confirm": {
+        "records": "记录你已批准，连同时间与该版本；",
+        "keepsFiles": "保留该版本的文件，使该决定始终可核查；",
+        "movesToDone": "将 {key} 标记为已完成，并解除对其等待中的工作项的阻塞。"
+      }
+    }
   }
 }
