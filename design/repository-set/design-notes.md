@@ -4,24 +4,37 @@
 where it comes to live, who on the team can get into it, and what the standing _"it's yours — move
 it whenever you want"_ actually opens onto.
 
-| Surface                                                                                                    | Asset                                                                                                               | Card                                                                                                      | Sections    |
-| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------- |
-| **The establish step** at plan approval                                                                    | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png)             | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code)                                                      | §0–§13      |
-| **The take-it-over flow** — move a repository to your own GitHub                                           | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                                     | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga)                                              | §14         |
-| **Team code access** — who else on the team can clone it                                                   | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)                         | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API)                                              | **§15**     |
-| **The room's two registries** — hosted set + workspace-connected, and the room's own `Add repository` door | [`repositories-room.mock.html`](./repositories-room.mock.html) + [`repositories-room.png`](./repositories-room.png) | MOTIR-3126 (bug: design + surface), MOTIR-3086 (the ladder), **MOTIR-4674** (the door + the two removals) | **§16–§17** |
+| Surface                                                                                                    | Asset                                                                                                               | Card                                                                                                                             | Sections    |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **The establish step** at plan approval                                                                    | [`repository-set.mock.html`](./repository-set.mock.html) + [`repository-set.png`](./repository-set.png)             | MOTIR-1778 (design) → MOTIR-1782 / MOTIR-1900 (code) · **v5: MOTIR-5011 (design) → MOTIR-5014 / MOTIR-5015 / MOTIR-5016 (code)** | §0–§13      |
+| **The take-it-over flow** — move a repository to your own GitHub                                           | [`takeover.mock.html`](./takeover.mock.html) + [`takeover.png`](./takeover.png)                                     | MOTIR-1938 (design) → MOTIR-1939 (surface), MOTIR-711 (saga)                                                                     | §14         |
+| **Team code access** — who else on the team can clone it                                                   | [`team-access.mock.html`](./team-access.mock.html) + [`team-access.png`](./team-access.png)                         | MOTIR-1944 (design) → MOTIR-1945 (surface), MOTIR-1910 (API)                                                                     | **§15**     |
+| **The room's two registries** — hosted set + workspace-connected, and the room's own `Add repository` door | [`repositories-room.mock.html`](./repositories-room.mock.html) + [`repositories-room.png`](./repositories-room.png) | MOTIR-3126 (bug: design + surface), MOTIR-3086 (the ladder), **MOTIR-4674** (the door + the two removals)                        | **§16–§17** |
 
-**Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13).** §0–§13 are the design
-reference for the step at plan approval that gives an approved plan somewhere for its code to live —
-and then gives the user a way to reach it. It is the layout source of truth for **MOTIR-1782** (the
-approval-step UI) and **MOTIR-1900** (collaborator access), and the surface **MOTIR-1785**'s E2E +
-acceptance video walk.
+**Story MOTIR-1775 · subtask MOTIR-1778 (design gate, Principle #13). Re-scoped to v5 by Story
+MOTIR-5010 · subtask MOTIR-5011.** §0–§13 are the design reference for the step at plan approval
+that gives an approved plan somewhere for its code to live — and then gives the user a way to reach
+it. It is the layout source of truth for **MOTIR-1782** (the approval-step UI) and **MOTIR-1900**
+(collaborator access), and the surface **MOTIR-1785**'s E2E + acceptance video walk.
+
+> **⚠️ READ §0.1's v5 ROW FIRST.** As of 2026-09-10 this asset is **HOSTED-ONLY and SILENT**: the
+> board draws panels **0 · 1 · 1b · 2 · 8** and nothing else. §5's access PROMPT and §6's technical
+> path are superseded — their sections are KEPT, each opening with a box saying what left, where it
+> went, and which of their rules are still live. **Panel numbers 3–7 are retired and not reused**,
+> so every existing citation of them still resolves. A reader arriving from MOTIR-1782 or MOTIR-1900
+> looking for the connect prompt should start at §0.1.
 
 - **Asset of record:** [`repository-set.mock.html`](./repository-set.mock.html) — the source of
   truth, built from the real design system. Its `.png` export
   ([`repository-set.png`](./repository-set.png)) is the board/PR-visible face.
 - **Definition of done (three files, PER SURFACE):** `design-notes.md` +
   `<surface>.mock.html` + `<surface>.png`. All seven files are committed.
+- **v5 render settings for `repository-set.png`:** `node scripts/render-design-mock.mjs
+design/repository-set/repository-set.mock.html` — viewport **1200 × 900** at
+  `deviceScaleFactor: 2`, exporting **2400 × 11496**. The exporter's baseline verdict was **EXACT**
+  (its render of the asset at `HEAD` was byte-identical to the committed PNG), so the whole
+  difference between the old export and this one is this revision's diff and none of it is
+  environment drift. The committed height fell from **20176** to **11496** — five panels' worth.
 - **Scope:** pixels and copy only. No React, no route, no `en.json` entries — those are
   MOTIR-1782's / MOTIR-1900's / MOTIR-1939's.
 
@@ -29,17 +42,21 @@ acceptance video walk.
 
 ## 0. The answer in one line
 
-**Motir hosts your code — for everyone. Then Motir gets you access to it.** One sentence and one
-button to say yes; one prompt afterwards to connect GitHub so you can actually clone what Motir
-made you; and a small "I already have code" for the people who have their own.
+**Motir hosts your code — for everyone. Then Motir gets you access to it, and tells you it did.**
+One sentence and one button to say yes; the collaborator invitation goes out with the repositories;
+and the state that follows **reports which account it went to**. Nothing on this surface asks the
+user anything about repositories, because by the time they are standing here the product already
+knows.
 
-Everything technical — repository names, roles, the derivation's "why", the full per-row state
-machine — lives **behind that small link**, and appears only once a user has said they already have
-code, which is how they self-identify as someone the word "repository" means something to.
+**v5 removed two things and moved neither of them into a new corner of this step.** The access
+PROMPT went, because the invitation is sent at establish. The technical path — "I already have
+code", the rows, the roles, the derivation's "why", the full per-row state machine — went to
+**onboarding**, which is the only place a project without a repository can be
+(MOTIR-4753). What is left is one statement, one action, and one report.
 
 ---
 
-## 0.1 · Revision history — this asset has been re-scoped twice, and both are recorded
+## 0.1 · Revision history — this asset has been re-scoped THREE times, and all three are recorded
 
 | Version                | What it drew                                                                                           | Why it changed                                                                                                                       |
 | ---------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -47,6 +64,12 @@ code, which is how they self-identify as someone the word "repository" means som
 | **v2**                 | The derived set, as editable rows, as the default surface                                              | Yue at design review: **too technical.** A founder cannot judge whether three repositories is right — `notes.html` #151, second time |
 | **v3**                 | "Motir will host your code" as the default; the rows behind "I already have code"                      | Right shape, wrong era — see below                                                                                                   |
 | **v4 (this revision)** | Same default, plus the **access step**; the account-creation branch deleted; the main line re-inverted | The ADR's ownership amendment (MOTIR-1893) + the access gap it opened (MOTIR-1900) + drawing a post-Epic-9 audience as today's user  |
+| **v5 (current)**       | HOSTED-ONLY and SILENT — panels 0, 1, 1b, 2 and 8; §5 and §6 superseded; `created` REPORTS             | MOTIR-4753 gave the repository question to ONBOARDING in September; nothing swept this asset — MOTIR-5011                            |
+
+**⚠️ v4's row still says "(this revision)", and it is left standing rather than corrected.** The
+rows are the record of what each revision decided, and editing an earlier one to keep a label
+accurate is how a revision history stops being evidence. Read the LAST row as the current revision;
+v5 is it.
 
 ### Why v2 was wrong (kept, because it is the load-bearing product rule)
 
@@ -129,6 +152,96 @@ The **model** is untouched. The set still holds as many rows as the architecture
 carries roles and per-row state, `targetRepo` still resolves through it (ADR §5), and the row
 lifecycle is still §4.1's. Panels 1, 1b, 2, 6 and 7 are v3's, edited — not redrawn.
 
+### What v5 changed, and why (MOTIR-5011 · Story MOTIR-5010, 2026-09-10)
+
+**The one-line reason: this asset was authored in July against a product in which THIS was the first
+place anyone was asked about repositories. It stopped being that in September, and nothing swept
+it.** MOTIR-4753 shipped the **routing verdict**: before any planning
+begins, a session reads the project and decides `continue` / `onboard_new_project` /
+`onboard_existing_project` / `wait_for_index`, and `parseRoutingVerdict` refuses `continue` outright
+when `!baseline.hasRepository` (`motir-ai` `src/llm/onboardingRouting.ts:210`). _You may find a
+repository insufficient; you may not find its absence sufficient._ So **only onboarding plans
+without a repository — that is what onboarding IS** — and connecting a repository the user already
+owns is onboarding's `connect` step, drawn in [`design/onboarding-migrate/`](../onboarding-migrate/design-notes.md)
+Panel 1. Everything this asset drew about that question became a **second answer to a settled
+question**, which is how a product starts contradicting itself: one surface telling a person their
+code is ready while another offers to connect the account it just used.
+
+**Three changes, and each is recorded by SECTION number below rather than performed silently.**
+
+**1 · §4's `created` state STOPS ASKING — it REPORTS, in two arms.** Its forward action was
+`repositorySet.connectGithub` (into panel 3). The collaborator invitation
+MOTIR-1900 already specifies as _"a side effect after commit, degrading
+gracefully"_ is now **SENT at establish**, so the state says what happened rather than asking for
+what it needs:
+
+- **Arm A — identity known.** The ownership promise, _"Your code is ready"_, and the shipped
+  `IdentityHeader` with an **invited** caption naming the account. Primary **Go to my backlog**,
+  quiet **Open the invitation**. It keeps **Use a different account**, and that is not a residue of
+  the ask: a mechanism that shows you which account was granted admin on your private code and
+  offers no way to correct it is worse than one that asks. **What left is the ASK for the identity,
+  never the ability to fix it.**
+- **Arm B — no connected identity.** One quiet line — the shipped `notInvitedDetail`, _"Motir
+  doesn't know your GitHub account yet"_ — with the door to `/settings/project/code-access`, whose
+  label **reuses `repositorySet.outcomeNeedsAccess`** rather than restating its string. That is what
+  makes "agrees with the rail word for word" a property of the code instead of a promise in these
+  notes: `PlanDetail.codeOutcomeOf` already resolves this exact state as `needs_access` and
+  `PlanReviewRail` already renders it as **"Finish setting up access"**.
+
+**2 · §5's access step (panels 3–4) is SUPERSEDED as a PROMPT, and survives as ROW STATE.**
+
+| What §5 held                                                                                           | Where it goes                                                                                                                    | Why                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Panel 3 — the connect prompt** (`accessTitle` / `accessLead` / `accessWhichAccount` / `accessLater`) | **Deleted.** Onboarding's `connect` step is where the identity is obtained                                                       | Motir already has the account by the time a plan can be approved; asking again is the defect                                    |
+| **Panel 3b — the `IdentityHeader`**                                                                    | **Kept, moved into §4's `created` arm A**                                                                                        | It was never the ask — it is the REPORT, and the report is the thing v5 is adding                                               |
+| **Panel 4 — the per-row invitation states** (`invited` · `accepted` · `not invited`)                   | **`/settings/project/code-access`**, which already draws all three per person and per repository (`settings.codeAccess.state.*`) | Nothing about the states changes; what goes is a second surface drawing them. Verified against the shipped key set, not assumed |
+| **`notInvitedDetail`**                                                                                 | **Kept, on §4's `created` arm B**                                                                                                | The one row-state string this surface still needs, because arm B IS that state at set level                                     |
+
+**3 · §6's technical path (panels 5–7) LEAVES for `design/onboarding-migrate/`.** Its subject —
+connecting a repository the user already owns — is onboarding's. **v5 records the move and removes
+the panels; it does not redraw them there**, and it deliberately does not amend
+`design/onboarding-migrate/` at all: that asset already draws the `connect` step, and a design card
+that edits two areas' assets is two cards.
+
+**4 · §7's panel 8 is RE-READ, and v5 draws 8b.** Its two arms turned on _whether the access step is
+primary_; v5 deletes the step from both, so that axis separates nothing. The surviving question is
+smaller — **whether the REPORT is worth showing at all** once the hosted agent pushes for the user —
+and the answer is **yes, it stays**: the invitation is sent whether or not the user ever clones
+anything, and the ownership promise directly above it is a promise they cannot act on without
+knowing which account holds the keys. **8a is no longer drawn.** Its home is this table and the row
+above, not an artboard: a mock is the layout source of truth, and a board that still draws a retired
+control is a specification for putting it back.
+
+### The panel NUMBERS 3–7 are retired, not reused
+
+The board runs 0 · 1 · 1b · 2 · 8. **The gap is deliberate and is the cheapest part of this
+revision**: every citation of "panel 4" or "panel 6" in MOTIR-1782, MOTIR-1785, MOTIR-1900 and this
+file's own §11–§13 keeps resolving to the thing that left, rather than to something new wearing its
+number. Renumbering would have silently redirected all of them.
+
+### v5 supersedes PART of MOTIR-1900's acceptance criteria — the connect prompt, and only that
+
+MOTIR-1900 is `done` and shipped; this is not a re-opening of it, and the
+same _flagged, not quietly dropped_ form v4 used for MOTIR-1778 applies.
+
+**Superseded:** its **connect prompt** — the requirement that the user be asked to connect GitHub
+from this step before the invitation can be sent. v5 sends the invitation at establish and reports
+it, so the prompt has no trigger left on this surface.
+
+**Untouched, and still the specification:**
+
+- **The invitation mechanism itself** — invite the approving user as an admin collaborator on each
+  repository Motir creates, resolved from `GithubIdentity.githubLogin` and **never from a typed
+  handle**. v5 depends on this rather than changing it.
+- **The three per-row invitation states** (`invited` · `accepted` · `not invited`) and their copy.
+  They move surface (above); they do not change.
+- **The re-send**, and **the graceful degradation** — _"a side effect after commit"_: an invitation
+  failure never fails the row, because creation already succeeded. v5 leans on this harder than v4
+  did, since establish now carries the invite, and it is what makes MOTIR-5016's refusal
+  notification the only user-visible consequence of a refusal.
+- **Which account gets access** — connected, never typed, and therefore SHOWN (§5's own subsection,
+  which is why the `IdentityHeader` survives the panel it was drawn in).
+
 ---
 
 ## 1. Where every decision came from (no flow is invented here)
@@ -200,10 +313,41 @@ services (`tests/e2e/_helpers/plans-review-seed.ts`), full-page screenshots at 1
 - **`/settings/workspace/github`** (nav label **"Git"**) — the two-grant connect flow. Panel 5b
   mirrors it as the hand-off target and redraws none of it.
 
-**Re-verified for this revision:** `git diff c76e2b7a origin/main` over `app/(authed)/plans`,
+**Re-verified for v4:** `git diff c76e2b7a origin/main` over `app/(authed)/plans`,
 `components/planning`, `app/globals.css`, `packages/design-system/theme.css` and
-`app/(authed)/settings/workspace/github` is **empty** — none of the composed shipped surfaces has
-moved since those renders, so they still describe reality and were not re-shot.
+`app/(authed)/settings/workspace/github` was **empty** — none of the composed shipped surfaces had
+moved since those renders, so they still described reality and were not re-shot.
+
+**⚠️ Re-verified for v5 (2026-09-10), and the same command now returns a LARGE diff — so it was
+checked file by file rather than quoted as a verdict.** Six weeks of planning-surface work landed in
+between (`ProjectRoadmapCanvas`, `PlanningWorkspaceOverlay`, `ProposalPeek`, and a 2,908-line
+`theme.css` revision), and a stale "the diff is empty" line is exactly the sentence that makes a
+drifted asset read as verified. What this asset actually composes was re-read on `origin/main`
+`a55348224`:
+
+- **`components/planning/PlanReviewRail.tsx`** — mirrored element for element, and the mirror still
+  holds: serif title + `STATUS_TINT.approved` pill, the `itemCount` line, the history `<ol>`, and
+  `DecidedOutcome`. **It has GAINED the one thing v5 depends on**: the `PlanCodeOutcome` line
+  (`data-testid="plan-code-outcome"`), whose `needs_access` arm renders `AlertTriangle` in
+  `--el-warning` + `repositorySet.outcomeNeedsAccess`. That is the shipped element §4's arm B now
+  agrees with, and it is agreed with by reusing its key.
+- **`components/planning/PlanDetail.tsx`** — `codeOutcomeOf` already computes exactly arm B's
+  condition: a `created` row whose `access.state` is `not_invited` resolves to `needs_access`. **v5
+  draws a state the product already computes**; it does not invent one.
+- **`packages/design-system/theme.css`** — the mock's `:root` block was re-generated against it and
+  diffed key by key: **301 tokens, one real drift** (`--el-status-done`, now a `color-mix`), which
+  this revision refreshes. No other value moved, so the asset's palette is current rather than
+  assumed to be.
+- **`app/(authed)/settings/project/code-access/`** — NEW since v4, and it is what makes §5's
+  hand-off real rather than aspirational: `settings.codeAccess.state.*` draws `invited` /
+  `accepted` / `notInvited` per person and per repository, including `notInvitedSelf`, which is
+  word-for-word `repositorySet.notInvitedDetail`.
+
+**No new render was shot for v5, and that is a decision rather than a skip.** The step is the only
+surface this asset draws that is not mirrored from shipped markup, and v5 REMOVES from it — the
+frames that stay (panels 1, 1b, 2) are v4's, unchanged except for the CTA row. Where v5 adds, it
+adds the `IdentityHeader` that panel 3b already mirrored from
+`gitSettingsPrimitives.tsx`, and a warning line whose ink and icon are the rail's own.
 
 The route header, the box, the `grid-cols-[1fr_22rem]` split and every element of the rail are
 **mirrored markup**, not stylized stand-ins. **The step is the only new surface.**
@@ -223,22 +367,40 @@ The route header, the box, the `grid-cols-[1fr_22rem]` split and every element o
    the truthful use of the space.
 
 ```
-/plans/[id] ─[ Approve — add 24 items ]→ the step ─[ Continue ]→ get access ─[ Connect GitHub ]→ live
- (planned)     materializes + derives    "Motir will   Motir sets    "Get access     invite sent    (rail:
-               the repo set              host your      it up         to your code"   + accepted    "Your code
-                                         code"                                                      is ready")
+/plans/[id] ─[ Approve — add 24 items ]→ the step ─[ Continue ]→ the report ─────────────────→ live
+ (planned)     materializes + derives    "Motir will   Motir sets    "Your code is ready"       (rail:
+               the repo set              host your      it up +       + WHO was invited          "Your code
+                                         code"          invites                                  is ready")
 ```
 
 **The rail's outcome gains exactly one plain line — "Your code is ready" — and never a repository
-count or name.** If the user leaves access unfinished, that line reads **"Finish setting up
-access"** instead.
+count or name.** If nobody could be invited, that line reads **"Finish setting up access"** instead,
+and §4's `created` arm B says the same words on the step itself.
 
-**Re-entry (the no-dead-end guarantee).** The set is durable (ADR §4.4), so the step is
-re-enterable. The door back exists for the three cases that need it: setup didn't finish (panel 2,
-`failed`), the invitation is pending or was never sent (panel 4), and the user later decides to use
-code they already have. The permanent home for all three is the code-context surface
-(**MOTIR-1764** / Story MOTIR-1754) — **not drawn here**. The step earns **no new left-nav entry**:
-it is an action inside an existing surface, not a first-class project VIEW (`notes.html` #99).
+**⚠️ v5 · THE ACCESS PATH INTO this step is re-read, and it is the reason for the whole revision.**
+The question §3 answers is _"from which UI is this reached?"_, and the honest v5 answer has two
+halves:
+
+- **Forward, this step is reached exactly one way: by approving a plan**, which is unchanged from
+  v4. It earns **no new left-nav entry** — it is an action inside an existing surface, not a
+  first-class project VIEW (`notes.html` #99).
+- **Backwards, it is no longer reachable as a repository DESTINATION at all**, and that is new. A
+  user who wants to connect code they already have does not come here; they go to **onboarding**,
+  because a project with no repository cannot be planned at all (MOTIR-4753). This step is
+  downstream of that decision by construction, which is what makes deleting §6 safe rather than
+  merely tidy.
+
+**Re-entry (the no-dead-end guarantee) — kept, with every door moved OFF this step.** The set is
+durable (ADR §4.4), so nothing is lost by leaving. What changed is where the doors are:
+
+| Case                                | v4's door                          | v5's door                                                                    |
+| ----------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| setup didn't finish                 | §4 `failed` → **Try again**        | unchanged — it is about repositories this step is creating, so it stays here |
+| the invitation is pending or unsent | panel 4 / panel 3's connect prompt | **`/settings/project/code-access`**, reached from §4 `created` arm B's door  |
+| the user has code of their own      | panel 5's "I already have code"    | **onboarding** (`design/onboarding-migrate/` Panel 1) — never this step      |
+
+The code-context surface (**MOTIR-1764** / Story MOTIR-1754) remains the durable home of the set
+itself and is still **not drawn here**.
 
 ### Why this is a step and not a gate
 
@@ -254,9 +416,10 @@ it is an action inside an existing surface, not a first-class project VIEW (`not
 ## 4. The default path (panels 1, 1b, 2) — the whole thing for most users
 
 **Panel 1.** Overline, one serif statement, one sentence of body, **the ownership promise**, one
-primary, one quiet secondary. Absent by design: repository name, role, account, count, rows, table
-chrome, seed source, reorder, per-row menu, "add a repository". The only branch is **I already have
-code**, sized like the exception it is.
+primary. Absent by design: repository name, role, account, count, rows, table chrome, seed source,
+reorder, per-row menu, "add a repository". **v5: and no branch either** — the quiet
+`repositorySet.iHaveCode` secondary led to §6's technical path, which has left for onboarding, so
+the panel is now one statement, one guarantee and one action.
 
 **The ownership promise is on the main line, not in a footnote.** ADR §3's amendment makes Motir the
 default holder of every new project's code, which the ADR itself calls a trust surface "the product
@@ -277,24 +440,65 @@ also the only place the count is spoken (**Set up 2 repositories**).
 **Panel 2 — three states, in plain language.** The ADR's six per-row states are the _model_; this
 path renders only what the user can act on:
 
-| ADR state                            | Default path                                                                                             | Forward path                                      |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `creating`                           | **"Setting up your code…"** — one `role="status"` line for the whole set                                 | (resolves)                                        |
-| `created`                            | **"Your code is ready"** + the ownership promise                                                         | **Connect GitHub** (panel 3) · _Go to my backlog_ |
-| `failed`                             | **"Motir couldn't finish setting up your code"** + what it costs (nothing yet)                           | **Try again** · _I already have code_             |
-| `proposed` · `connected` · `skipped` | **cannot occur** — nothing is proposed for approval, nothing is adopted, and there is nothing to decline | —                                                 |
+| ADR state                              | Default path                                                                                             | Forward path                                                             |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `creating`                             | **"Setting up your code…"** — one `role="status"` line for the whole set                                 | (resolves)                                                               |
+| `created` · **arm A** (identity known) | **"Your code is ready"** + the ownership promise + the `IdentityHeader` naming the invited account       | **Go to my backlog** · _Open the invitation_ · _Use a different account_ |
+| `created` · **arm B** (no identity)    | the same, plus one `role="status"` line: _"Motir doesn't know your GitHub account yet"_ + its door       | **Go to my backlog** · _Finish setting up access_                        |
+| `failed`                               | **"Motir couldn't finish setting up your code"** + what it costs (nothing yet)                           | **Try again**                                                            |
+| `proposed` · `connected` · `skipped`   | **cannot occur** — nothing is proposed for approval, nothing is adopted, and there is nothing to decline | —                                                                        |
 
 **No per-repository progress, no repository name in the error, no GitHub status code** on this path.
 The failure copy names the consequence in the user's terms — _"Your plan is safe in your backlog.
 Nothing is lost — Motir will tell you if a task needs code that isn't ready yet"_ — which is the
 honest hand-off to the code-blind signal MOTIR-1754 renders.
 
-**`created` is the one state that continues**, which is the whole of change 3: the code now exists,
-and the next thing the user needs is a way to reach it.
+**⚠️ v5 · `created` is the state that REPORTS, and it is the whole of this revision.** In v4 it was
+the one state that CONTINUED — into the access prompt — because the code existed and the user still
+had to be asked for the account to invite. Motir now has that account before the plan can be
+approved at all, so the invitation is sent at establish and this state says what happened.
+
+**The two arms are not a branch the user chooses; they are what Motir knows.** Arm A is the
+overwhelmingly common one — a project reaches plan approval through onboarding, and onboarding is
+where GitHub was connected. Arm B exists because "connected" is a property of the ACTOR, not of the
+project: a teammate who did not run onboarding can approve a plan, and inventing an invitation for
+an account Motir does not have would be worse than saying so.
+
+**Arm B says it in the rail's own words, by REUSING its key.** `PlanDetail.codeOutcomeOf` already
+resolves a `created` row with `access.state === 'not_invited'` to `needs_access`, and
+`PlanReviewRail` renders that as `repositorySet.outcomeNeedsAccess` — **"Finish setting up access"**.
+The panel's door is that same key, not a second string that happens to match today. Its explanatory
+sentence is the shipped `repositorySet.notInvitedDetail`, which `/settings/project/code-access` also
+says about the same state (`settings.codeAccess.state.notInvitedSelf`). Three surfaces, one
+sentence, because it is one fact.
+
+**A report is not a silent surface.** Arm A keeps **Use a different account**, which re-runs the
+connect rather than opening a field (§5's own rule, unchanged). It is not a residue of the ask: the
+whole reason the account is SHOWN is that a typed handle could invite a stranger to a private
+repository, and showing the user which account got admin while offering no way to correct it would
+make that guarantee worse, not better. What v5 removed is the ASK for an identity Motir already
+had.
 
 ---
 
-## 5. The access step (panels 3–4) — new, and on the main line
+## 5. The access step (panels 3–4) — ⚠️ SUPERSEDED AS A PROMPT IN v5; kept as the record
+
+> **⚠️ v5 (MOTIR-5011): panels 3 and 4 are NOT DRAWN any more.** The section is kept, unedited below
+> this box, because it is the reasoning behind decisions v5 depends on — which account gets access,
+> why it is shown and never typed, why an invitation failure never fails a row — and deleting it
+> would delete the reasons along with the panels. **Read it as history plus three live rules**, not
+> as a specification of a surface:
+>
+> | What §5 held                                  | Status in v5                                                                                                                                                                                                |
+> | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **Panel 3, the connect PROMPT**               | **GONE.** The identity is obtained by onboarding's `connect` step; the invitation is sent at establish. Nothing on this step asks for an account                                                            |
+> | **Panel 3b, the `IdentityHeader`**            | **LIVE, relocated** into §4's `created` arm A — it was always the REPORT rather than the ask                                                                                                                |
+> | **_Which account gets access_ (below)**       | **LIVE, unchanged.** Connected, never typed, and therefore SHOWN. It is why arm A keeps **Use a different account**                                                                                         |
+> | **Panel 4, the per-row invitation states**    | **LIVE, relocated** to `/settings/project/code-access`, which draws all three per person and per repository. `notInvitedDetail` also stays here, as arm B's line                                            |
+> | **_An invitation failure never fails a row_** | **LIVE, and load-bearing.** Establish now carries the invite, so this is what keeps a refusal from costing the user their repositories — and MOTIR-5016's notification is its only user-visible consequence |
+>
+> **The teammate-access gap below (MOTIR-1910) is NOT closed by v5** and is not narrowed by it
+> either: v5 moves where the owner's own invitation is reported, and invites nobody new.
 
 **Panel 3 — the connect prompt.** _"Get access to your code."_ Three properties are load-bearing and
 each is drawn, not just asserted:
@@ -365,7 +569,34 @@ know more than it does. Every state carries an icon **and** a word, never colour
 
 ---
 
-## 6. The technical path (panels 5–7) — behind "I already have code"
+## 6. The technical path (panels 5–7) — ⚠️ LEFT FOR `design/onboarding-migrate/` IN v5
+
+> **⚠️ v5 (MOTIR-5011): panels 5, 6 and 7 are NOT DRAWN any more, and their subject is not this
+> asset's.** Connecting a repository the user already owns is **onboarding's** — drawn in
+> [`design/onboarding-migrate/`](../onboarding-migrate/design-notes.md) Panel 1, and reached through
+> the migrate wizard's `connect` step. A project with no repository cannot be planned at all
+> (`parseRoutingVerdict` refuses `continue` when `!baseline.hasRepository`), so **a user standing at
+> plan approval has already answered this question** and the door here was a second answer to it.
+>
+> **v5 records the move and removes the panels; it does NOT redraw them there.** That is deliberate:
+> `design/onboarding-migrate/` already draws the `connect` step, and a design card that edits two
+> areas' assets is two cards. If onboarding's own drawing turns out to be missing something these
+> panels had, that is a card against **that** area — not a reason to keep a second copy alive here.
+>
+> **What this section is still FOR.** Everything below is unedited, and three things in it are
+> decisions rather than pixels, worth reading before anyone redraws the same ground in onboarding:
+> why a single quiet secondary replaced the `Segmented` (a two-way control with one real option is a
+> lie about the choice on offer), why `Add a repository` and `Use one of mine` are never at the same
+> weight on the same line (one asks _how many_, the other asks _where_), and the per-row state
+> table's rule that **state is never colour alone** and **a state pill is not used on a tinted row**.
+>
+> **⚠️ And one fact MOTIR-5014 needs, verified rather than assumed:
+> `components/planning/repositories/RepositoryRow.tsx` has exactly ONE importer —
+> `RepositorySetStep.tsx`.** The settings room composes its own `TakeoverRow`, and
+> `/settings/project/code-access` its own rows. So deleting the `own` and `set` modes **orphans that
+> whole component and the ~40 `repositorySet.*` keys only it reads**; they are not carried by the
+> room, and §10's reconciliation table lists each one with its true consumer so that the deletion is
+> a decision rather than a discovery.
 
 **Panel 5.** One short confirmation — **"Use the code you already have"** — then the **shipped**
 connect flow. The re-wording matters: this door is an alternative **SOURCE**, not an alternative
@@ -452,6 +683,35 @@ primary after `created` changes — which is exactly why the access step is its 
 rather than a fourth branch welded into panel 2's `created` state, and it is the one thing MOTIR-1782
 should keep swappable.
 
+### ⚠️ v5 RE-READ — the variant's AXIS is gone, v5 draws 8b, and MOTIR-1782's swappability is retired
+
+The paragraph above is v4's and is kept because it is what the two arms MEANT. **v5 deletes the
+access step from both of them**, so the axis they turned on — _is the prompt primary?_ — no longer
+separates anything: the step reports, and the primary is **Go to my backlog** before Epic 9 and
+after it.
+
+**The surviving question is smaller, and it is answered here rather than left open: is the REPORT
+worth showing at all once the hosted agent pushes for the user?** **Yes — it stays, unchanged.**
+Two reasons, and neither is about developers:
+
+1. **The invitation is sent whether or not anyone ever clones anything.** A user has been granted
+   admin on a private repository; a product that never mentions it is keeping a fact about their own
+   access from them.
+2. **The ownership promise sits directly above it** — _"move it to your own GitHub whenever you
+   want"_ — and that is a promise nobody can act on without knowing which account holds the keys.
+   Suppressing the report would leave the guarantee true and unusable.
+
+The earlier reading — that access is an aside for developers — was a property of the **PROMPT**
+(which cost a click and a decision), not of the **FACT** (which costs one line).
+
+**8a is no longer drawn**, and its home is §0.1's revision history. A board that still draws a
+retired control is a specification for putting it back, which is precisely how this surface came to
+ask a question the product had already answered.
+
+**And the swappability this section asked MOTIR-1782 to preserve is retired.** _"The one thing
+MOTIR-1782 should keep swappable"_ was which action is primary after `created`; there is one action
+now, in both eras. MOTIR-5015 does not need a seam here, and should not build one.
+
 ---
 
 ## 8. Primitives — every element, and what it is
@@ -508,6 +768,7 @@ design.
 | Quiet secondaries and links                                       | `--el-link`                                                          |
 | "ready" state icon · `created` row                                | `--el-success` · `--el-success-surface`                              |
 | **`invited`** icon · **`accepted`** icon · **`not invited`** icon | `--el-info` · `--el-success` · `--el-warning`                        |
+| **v5 · `created` arm B's line** (`.access-note`) · its icon       | `--el-text-secondary` · `--el-warning`                               |
 | Invitation state WORD (on a tinted row)                           | `--el-text-strong`                                                   |
 | `connected` row · its icon                                        | `--el-notice-info-bg` · `--el-info`                                  |
 | failure icon · `failed` row · its ink                             | `--el-danger` · `--el-danger-surface` · `--el-danger-surface-text`   |
@@ -636,6 +897,107 @@ Namespace **`repositorySet`**. MOTIR-1782 / MOTIR-1900 add these to `messages/en
 label) — the control they belonged to no longer exists. `failedLimit` is replaced by
 `failedDeclined`, because the repository limit it named was the user's account limit and creation no
 longer happens there. `readyDetail` and `seeWhereItLives` fold into `promise` and the access step.
+
+### ⚠️ v5 · THE RECONCILIATION — every `repositorySet.*` key, against the SHIPPED catalog
+
+**This table is the specification MOTIR-5014 / MOTIR-5015 implement, so it is reconciled against
+`messages/en.json` rather than against the three tables above.** Those were written at v4 and have
+drifted from the catalog in both directions since; the drift is recorded at the end of this
+subsection rather than quietly patched, because a table that disagrees with the catalog is how a key
+gets deleted that something else still reads.
+
+**Verified mechanically over the shipped tree at `origin/main` `a55348224`**: 87 keys in
+`repositorySet` (81 flat + 6 under `role.*`), each grepped against its five possible consumers —
+`RepositorySetStep.tsx`, `RepositoryRow.tsx`, `PlanReviewRail.tsx`, and the settings room's
+`TakeoverModal.tsx` / `TakeoverRow.tsx`.
+
+**⚠️ THE DISCRIMINATOR THAT MATTERS: _retired from this SURFACE_ is not _deletable from the
+CATALOG_.** Six keys this step stops using are read by the takeover surface in project settings,
+which this story does not touch. Deleting them with the modes would break a surface nobody was
+looking at.
+
+#### A · SURVIVES on the v5 step
+
+| Key                                                                        | Where in v5                                                                                         |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `overline` · `title` · `lead` · `promise` · `promiseDoor` · `continueCta`  | panel 1 / 1b — the whole default screen                                                             |
+| `working` · `workingDetail`                                                | panel 2 `creating`                                                                                  |
+| `ready` · `goToBacklog`                                                    | panel 2 `created`, BOTH arms                                                                        |
+| `identityCaption` · `useOtherAccount` · `invitedDetail` · `openInvitation` | panel 2 `created` **arm A** — the report                                                            |
+| `notInvitedDetail`                                                         | panel 2 `created` **arm B** — the line                                                              |
+| `outcomeNeedsAccess`                                                       | **arm B's door label AND the rail's outcome** — one key, two places, which is what makes them agree |
+| `setupFailed` · `setupFailedDetail` · `tryAgain`                           | panel 2 `failed`                                                                                    |
+| `actionError`                                                              | the establish action's own failure                                                                  |
+
+`identityVerified` is **not a key** and never was — arm A's badge reuses the shipped
+`github.identity.verified` from `IdentityHeader`. The v4 table listed it as one; it is corrected in
+F below.
+
+#### B · RETIRED from this surface, but **LIVE elsewhere — DO NOT DELETE**
+
+| Key             | Section it leaves                     | Who still reads it                     |
+| --------------- | ------------------------------------- | -------------------------------------- |
+| `accessLead`    | §5 (panel 3)                          | `TakeoverModal.tsx` — project settings |
+| `accessLater`   | §5 (panel 3)                          | `TakeoverModal.tsx`                    |
+| `connectGithub` | §4 `created`, §5 (panel 3), §6 (rows) | `TakeoverModal.tsx`                    |
+| `createdDetail` | §6 (panel 7)                          | `TakeoverRow.tsx`                      |
+| `stateCreated`  | §6 (panel 7)                          | `TakeoverRow.tsx`                      |
+| `stateFailed`   | §6 (panel 7)                          | `TakeoverRow.tsx`                      |
+
+#### C · RETIRED and ORPHANED — no consumer survives, so these are the deletable set
+
+**§4 · the default path.** `iHaveCode` — the door to §6, which has left for onboarding.
+
+**§5 · the access step (the PROMPT half).** `accessTitle` · `accessWhichAccount` · `invitedTitle` ·
+`accessError` · `resendInvitation`. (The invitation's own repair now lives on
+`/settings/project/code-access` as `settings.codeAccess.resend`.)
+
+**§5 · the per-row invitation states.** `stateInvited` · `invitedRowDetail` · `stateAccepted` ·
+`acceptedRowDetail` · `stateNotInvited` — all three states are drawn by
+`settings.codeAccess.state.*`, per person and per repository. `notInvitedDetail` is the ONE
+exception and stays (set A).
+
+**§6 · the technical path.** `ownTitle` · `ownLead` · `letMotirHost` · `setTitle` · `setLead` ·
+`setLeadAnon` · `useOneOfMine` · `nameLabelForRole` · `nameLabelOne` · `pickerLabelForRole` ·
+`pickerLabelOne` · `pickerPlaceholder` · `pickerHint` · `pickerEmpty` · `grantMore` ·
+`claimedOption` · `seedStarter` · `seedInitialised` · `monorepoHint` · `whyPlanItemRole` ·
+`whyPreplanPlatform` · `whyDefaultWeb` · `addRow` · `addRowName` · `rowActions` · `moveUp` ·
+`moveDown` · `removeRow` · `skipRow` · `setUpOne` · `setUpMany` · `notNow` · `setupNote` ·
+`stateCreating` · `stateCreatingDetail` · `stateConnected` · `connectedDetail` · `stateArchived` ·
+`archivedDetail` · `stateSkipped` · `skippedTitle` · `skippedDetail` · `createAfterAll` ·
+`retryRow` · `summaryPartial` · `finishSetup` · `finishHint` · **and all six `role.*` glosses**
+(`web` · `api` · `mobile` · `shared` · `infra` · `other`).
+
+**These are orphaned because `RepositoryRow.tsx` has exactly one importer, `RepositorySetStep.tsx`**
+(§6's box). The settings room composes `TakeoverRow`, and code-access composes its own rows, so
+nothing else picks them up.
+
+#### D · NOT this surface's, and untouched
+
+`outcomeReady` and `finishSetupLink` belong to `PlanReviewRail` (the `ready` and `unfinished`
+outcomes). v5 touches neither, which is the point of MOTIR-5018's criterion that
+`tests/e2e/plans-review.spec.ts` must pass unchanged.
+
+#### E · NEW keys v5 introduces
+
+**None.** Both arms are assembled from keys that already ship — which is the strongest evidence
+available that v5 is a REMOVAL rather than a redesign, and it is why arm B can agree with the rail
+"word for word" as a property of the code rather than as a promise in these notes.
+
+#### F · The v4 tables' own drift, corrected here rather than left standing
+
+**Listed above but NOT in the catalog** (specified, then shipped under different names — a key drawn
+in a panel and absent from the table is a defect in the card that drew it, and the inverse is a
+defect in this one): `whyTrigger` and `whyApi` shipped as `whyPlanItemRole` / `whyPreplanPlatform` /
+`whyDefaultWeb`; `roleGlossWeb` / `roleGlossApi` shipped as the `role.*` sub-object;
+`failedNameTaken` / `failedDeclined` never shipped as keys at all; `identityVerified` is an alias of
+`github.identity.verified`, as its own row already said.
+
+**In the catalog but absent from the v4 tables**: `accessError` · `actionError` · `addRowName` ·
+`setLeadAnon` · `setUpOne` · `pickerEmpty` · `pickerPlaceholder` · `stateArchived` ·
+`archivedDetail` · `claimedOption` · `whyDefaultWeb` · `whyPlanItemRole` · `whyPreplanPlatform` ·
+the six `role.*` glosses. Each is classified in A–C above, so the reconciliation is total over the
+shipped set rather than over what an earlier revision happened to write down.
 
 ### Accessible names — the superstring audit
 
