@@ -38,11 +38,21 @@ import type { GateRefusal } from '@/lib/approvalGates/refusals';
 // the merge kind needs no second control, no second confirm and no second
 // decided treatment.
 //
-// WHAT THIS CARD DOES NOT DRAW, each owned by a sibling it blocks:
+// WHAT THIS CARD DOES NOT DRAW, owned by a sibling it blocks:
 //   · the port's FLOOR, its ceiling-with-own-scroll and Expand, and the `X`
-//     state whose verbs are gated on the port having RENDERED — MOTIR-5032;
-//   · state `E`'s PINNED port and its "Files kept" line, and state `G`
-//     (superseded), both of which need a read of a NON-awaiting gate — MOTIR-5033.
+//     state whose verbs are gated on the port having RENDERED — MOTIR-5032.
+//
+// STATES `E` (approved) AND `G` (superseded) LANDED IN MOTIR-5033, and each
+// needed something the awaiting-only read could not give:
+//   · `E` renders the version identifier the audit pinned and says whether the
+//     files were kept — and its PORT shows THE VERSION THAT WAS APPROVED, which
+//     the caller supplies by reading the gate's own subject rather than the
+//     card's current design (ADR §6c);
+//   · `G` is written by the PRODUCT, never a person, so it is colourless,
+//     verb-less, names nobody, and its port is DEAD — it does not render the
+//     subject at all. The audit must never read a withdrawal as somebody's
+//     answer, and a live Approve button over a withdrawn question would be
+//     exactly that.
 
 /**
  * One verb in band 3.
@@ -88,6 +98,17 @@ export interface ApprovalGateControlProps {
   confirmConsequences: ReactNode[];
   /** Who the gate is waiting on, for state `B`. */
   routedToLabel?: string | null;
+  /**
+   * State `E` only — whether the approved version's FILES are still there.
+   *
+   * ⚠️ SUPPLIED BY THE KIND, and nullable, because retention is a fact about
+   * the SUBJECT rather than about the gate: a design's answer is
+   * `design_evidence.pinned_at`, a merge's would be something else, and a kind
+   * that retains nothing has no line to draw. `null` renders NOTHING — it is
+   * *not asked* rather than *not kept*, and collapsing the two would put a
+   * false reassurance on the one surface built to be checkable.
+   */
+  filesKept?: boolean | null;
   /**
    * Record the decision. Resolves to a refusal the frame draws IN PLACE, or
    * null on success — at which point the caller has already reconciled.
@@ -236,12 +257,25 @@ export function ApprovalGateControl({
   consequence,
   confirmConsequences,
   routedToLabel,
+  filesKept = null,
   onDecide,
 }: ApprovalGateControlProps) {
   const t = useTranslations('approvalGate');
   const [phase, setPhase] = useState<Phase>({ kind: 'awaiting' });
 
   const decided = gate.state === 'approved' || gate.state === 'changes_requested';
+  // ⚠️ `withdrawn` IS NOT A KIND OF `decided`, and the whole of state `G` is
+  // that distinction. `superseded` is written by the PRODUCT when a newer
+  // version is published (ADR §6b) — no actor, no authority, no note — so it
+  // shares the verb-less treatment and shares nothing else: it names nobody,
+  // and it must never be summarised as a decision anybody made.
+  //
+  // ⚠️ AND BEFORE THIS BRANCH EXISTED IT FELL THROUGH TO THE AWAITING ARM,
+  // which drew LIVE VERBS over a question the product had already withdrawn.
+  // The door refused them (`ApprovalGateSupersededError`), so the cost was a
+  // reader pressing Approve on a design nobody could approve — but the frame
+  // is the thing that is supposed to make that unpressable.
+  const withdrawn = gate.state === 'superseded';
 
   async function run(verb: GateVerb) {
     setPhase({ kind: 'pending' });
@@ -252,26 +286,35 @@ export function ApprovalGateControl({
     setPhase(refusal ? { kind: 'refused', refusal } : { kind: 'awaiting' });
   }
 
-  const stateLabel = decided
-    ? gate.state === 'approved'
-      ? t('state.approved')
-      : t('state.changesRequested')
-    : phase.kind === 'pending'
-      ? t('state.recording')
-      : canDecide
-        ? t('state.awaitingYou')
-        : t('state.awaiting');
+  const stateLabel = withdrawn
+    ? t('state.withdrawn')
+    : decided
+      ? gate.state === 'approved'
+        ? t('state.approved')
+        : t('state.changesRequested')
+      : phase.kind === 'pending'
+        ? t('state.recording')
+        : canDecide
+          ? t('state.awaitingYou')
+          : t('state.awaiting');
 
   // The four chips a reader must tell apart at a glance. `tone="awaiting"` is
   // the frame's own (added to the primitive by this card); the other three reuse
   // the shipped severities the design's tints already name.
-  const pillProps: PillProps = decided
-    ? gate.state === 'approved'
-      ? { severity: 'success' }
-      : { severity: 'warning' }
-    : phase.kind === 'pending'
-      ? { severity: 'info' }
-      : { tone: 'awaiting' };
+  const pillProps: PillProps = withdrawn
+    ? // ⚠️ DELIBERATELY COLOURLESS — the design's `pill-gone`, a quiet muted
+      // fill with slate ink. `tone="archived"` already IS that recipe (an
+      // inactive state, not a severity), so this reuses it rather than minting
+      // a fifth tone for the same two tokens. Any hue here would read as a
+      // judgement, and nobody made one.
+      { tone: 'archived' }
+    : decided
+      ? gate.state === 'approved'
+        ? { severity: 'success' }
+        : { severity: 'warning' }
+      : phase.kind === 'pending'
+        ? { severity: 'info' }
+        : { tone: 'awaiting' };
 
   return (
     <div className="overflow-hidden rounded-(--radius-card) border border-(--el-border)">
@@ -282,20 +325,77 @@ export function ApprovalGateControl({
         stateLabel={stateLabel}
       />
 
-      {/* BAND 2 — THE PORT. Present in every state this card draws. The floor,
-          the ceiling and Expand are MOTIR-5032's; what is here is the subject. */}
-      <div className="px-4 py-4">{port}</div>
+      {/* BAND 2 — THE PORT. The floor, the ceiling and Expand are MOTIR-5032's;
+          what is here is the subject.
+
+          ⚠️ EXCEPT IN `G`, WHERE THE PORT IS DEAD AND THE FRAME DECIDES THAT,
+          NOT THE CALLER. A withdrawn question is about bytes that are no longer
+          current and were never approved, so they are not pinned and are
+          reclaimed — rendering them would show a reader a version the product
+          has moved past, in the one state whose entire message is that it HAS
+          moved past it. Gating it here rather than in each consumer is the same
+          discipline the verb set gets: a rule a call site must remember is a
+          convention, and the first consumer to forget it draws the withdrawn
+          subject as though it were live. */}
+      {withdrawn ? (
+        <div className="flex flex-col items-center justify-center gap-1 bg-(--el-muted) px-4 py-10 text-center">
+          <p className="text-[13px] text-(--el-text-secondary)">{t('withdrawn.port')}</p>
+          <p className="text-xs text-(--el-text-secondary)">{t('withdrawn.portCite')}</p>
+        </div>
+      ) : (
+        <div className="px-4 py-4">{port}</div>
+      )}
 
       {phase.kind === 'refused' ? <RefusalAlert refusal={phase.refusal} /> : null}
 
-      {/* BAND 3 — decided: the record. Awaiting: the verbs, or who it waits on. */}
-      {decided ? (
+      {/* BAND 3 — withdrawn: no decision at all. Decided: the record. Awaiting:
+          the verbs, or who it waits on. */}
+      {withdrawn ? (
+        // ⚠️ NO ACTOR AND NO DECISION TIME. `decidedById` / `decidedAt` /
+        // `noteMd` are all null on a `superseded` row by construction, so this
+        // strip could not name a person even if it tried — but rendering the
+        // ordinary record strip with its fallbacks would print "No longer
+        // attributable", which says *somebody decided and we lost who*. The
+        // opposite is true and the audit turns on the difference. The time
+        // shown is when the question was WITHDRAWN (the row's own clock), said
+        // in those words: it is not a decision time, and there is no decision.
+        <RecordStrip>
+          <span>{t('withdrawn.record')}</span>
+          <span>{t('withdrawn.at', { when: new Date(gate.updatedAt).toLocaleString() })}</span>
+        </RecordStrip>
+      ) : decided ? (
         <RecordStrip>
           <span className="font-medium text-(--el-text)">
             {gate.decidedByLabel ?? t('record.unattributed')}
           </span>
           {gate.decidedAt ? <span>{new Date(gate.decidedAt).toLocaleString()}</span> : null}
+          {/* ⚠️ THE VERSION, FROM THE AUDIT COLUMN — never re-derived from
+              whatever design is current now. `subjectVersion` is the immutable
+              answer to WHAT was approved (ADR §6a), and it is the reason this
+              row is evidence rather than a name with a date beside it. */}
+          {gate.subjectVersion ? (
+            <span className="font-mono text-(--el-text-identifier)">
+              {t('record.version', { version: gate.subjectVersion.slice(0, 8) })}
+            </span>
+          ) : null}
           {gate.state === 'changes_requested' ? <span>{t('record.willRepublish')}</span> : null}
+          {/* ⚠️ ONLY ON AN APPROVAL, AND ONLY WHEN THE KIND ANSWERED. §6c pins
+              for approvals alone, so the line has no meaning on a rejection —
+              and `null` means the kind was not asked, which renders nothing
+              rather than a guess. The NOT-kept arm is drawn as plainly as the
+              kept one: an unconditional reassurance is the failure this line
+              exists to prevent. */}
+          {gate.state === 'approved' && filesKept !== null ? (
+            filesKept ? (
+              <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-tint-mint) px-2 py-0.5 font-semibold text-(--el-text-strong)">
+                {t('record.filesKept')}
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-(--radius-badge) bg-(--el-muted) px-2 py-0.5 font-semibold text-(--el-text-secondary)">
+                {t('record.filesNotKept')}
+              </span>
+            )
+          ) : null}
         </RecordStrip>
       ) : phase.kind === 'confirming' ? (
         // ⚠️ AN INLINE BAND OVER THE VERBS, NEVER A MODAL — a modal would take

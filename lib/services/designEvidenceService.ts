@@ -25,6 +25,7 @@ import { toDesignEvidenceDto } from '@/lib/mappers/designEvidenceMappers';
 import type {
   DesignAssetKindDTO,
   DesignEvidenceDTO,
+  DesignGateSubjectDTO,
   DesignUploadTargetDTO,
   DesignUploadTokensDTO,
 } from '@/lib/dto/designEvidence';
@@ -835,5 +836,41 @@ export const designEvidenceService = {
       (tx) => designEvidenceRepository.findCurrentByWorkItem(workItemId, tx),
     );
     return row ? toDesignEvidenceDto(row) : null;
+  },
+
+  /**
+   * The design version a DECIDED approval gate was about — the port's contents
+   * in the frame's states `E` and `F` (Subtask MOTIR-5033; ADR §6c).
+   *
+   * ⚠️ READ BY THE GATE'S `subjectId`, never by `findCurrentByWorkItem`, and
+   * this is the same instruction the gate registry's own `resolveSubject`
+   * carries for the same reason: *a gate asks about the bytes somebody was
+   * looking at, and a republish makes a different row current.* A port fed the
+   * current row would re-point a decided question at a version the decider
+   * never saw, silently, and the screen would look right.
+   *
+   * ⚠️ THE `workItemId` IS A GUARD, NOT A LOOKUP KEY. `design_evidence.id` is a
+   * cuid the caller took off a gate row, and the gate and the evidence are
+   * joined only by convention — so this asserts the row belongs to the card
+   * being rendered and returns the empty answer when it does not. Under RLS a
+   * cross-workspace row is already invisible; this closes the narrower
+   * cross-CARD case inside one workspace, where nothing else would.
+   *
+   * `filesKept` is `pinnedAt` off the ROW, never `state === 'approved'` off the
+   * gate — the DTO's own note says why that distinction is the point of the
+   * line rather than a nicety.
+   */
+  async getForGateSubject(
+    input: { workItemId: string; subjectId: string },
+    ctx: ServiceContext,
+  ): Promise<DesignGateSubjectDTO> {
+    const row = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => designEvidenceRepository.findById(input.subjectId, tx),
+    );
+    // A row that is gone is the EXPECTED answer for a version that was sent
+    // back: only an approval pins, so `changes_requested` bytes are reclaimed.
+    if (!row || row.workItemId !== input.workItemId) return { evidence: null, filesKept: false };
+    return { evidence: toDesignEvidenceDto(row), filesKept: row.pinnedAt !== null };
   },
 };
