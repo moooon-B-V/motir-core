@@ -1,23 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  connectedNotInSet,
-  organizationConnected,
-  splitRoomSections,
-  summarizeRepositories,
-} from '@/lib/projectRepos/roomSections';
+import { splitRoomSections, summarizeRepositories } from '@/lib/projectRepos/roomSections';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
-import type {
-  ProjectRepoConnectedDto,
-  ProjectRepoDto,
-  ProjectRepoTakeoverStateDto,
-} from '@/lib/dto/projectRepos';
-
-/** The provisioning organisation, as `ProjectRepoRoomViewDto.hostOwner` carries
- *  it. ⚠️ MOTIR-4954: `splitRoomSections` and `summarizeRepositories` no longer
- *  take it — they read the project's links, whose ownership is on the row — so it
- *  is passed only to `organizationConnected`, the predicate that still classifies
- *  a LAYERED repository for the callers outside this room. */
-const HOST_OWNER = 'motir-projects';
+import type { ProjectRepoDto, ProjectRepoTakeoverStateDto } from '@/lib/dto/projectRepos';
 
 // THE ROOM'S SECTION SPLIT (MOTIR-3126) — pure, so it is ruled on here rather than
 // through a render.
@@ -27,47 +11,32 @@ const HOST_OWNER = 'motir-projects';
 // asserted is the rule itself: which side of the split a repository falls on, and
 // what the header's counts are over.
 
-describe('connectedNotInSet', () => {
-  it('drops a connected repository a set row already names', () => {
-    const out = connectedNotInSet(
-      [row({ name: 'acme-web' })],
-      [connected('acme-web'), connected('design-tokens')],
-    );
-    expect(out.map((r) => r.name)).toEqual(['design-tokens']);
-  });
-
-  it('matches case-insensitively — two spellings are ONE checkout identity', () => {
-    // The rule `mergeDomainsByName` applies for dispatch. A row spelled one way
-    // and an installation entry spelled another are the same repository, and
-    // showing it twice is how a person concludes they have two.
-    const out = connectedNotInSet([row({ name: 'Acme-Web' })], [connected('acme-web')]);
-    expect(out).toEqual([]);
-  });
-
-  it('matches on the REALIZED name, which is what a checkout answers to', () => {
-    // The host's casing wins over the row's authored name, exactly as
-    // `toProjectRepoNames` prefers it: someone renamed the repository on GitHub
-    // and the row kept the old intent.
-    const out = connectedNotInSet(
-      [row({ name: 'old-name', realized: 'acme-web' })],
-      [connected('acme-web')],
-    );
-    expect(out).toEqual([]);
-  });
-
-  it('keeps a row that has NOT been realized from claiming a different name', () => {
-    const out = connectedNotInSet([row({ name: 'acme-api' })], [connected('acme-web')]);
-    expect(out.map((r) => r.name)).toEqual(['acme-web']);
-  });
-
-  it('de-duplicates the connected list against itself and preserves its order', () => {
-    const out = connectedNotInSet(
-      [],
-      [connected('motir-core'), connected('motir-ai'), connected('MOTIR-CORE')],
-    );
-    expect(out.map((r) => r.name)).toEqual(['motir-core', 'motir-ai']);
-  });
-});
+// ── ⚠️ WHAT MOTIR-4998 REMOVED FROM THIS FILE, AND WHY EACH WENT ─────────────
+// Two `describe` blocks are gone, both because their SUBJECT is gone rather than
+// because their assertions stopped being worth making. The functions they covered
+// classified the LAYERED registry — the repositories the scope ladder supplied to
+// a project holding no `project_repository` row — which MOTIR-4955 retired at the
+// source (`effectiveDomain.ts` returns `connected: []`) and MOTIR-4954 stopped
+// this page drawing. Neither had a production caller left.
+//
+//   - `describe('connectedNotInSet')` — five cases over a de-duplication of the
+//     layered list against the set, keyed on the REALIZED repository name. It has
+//     no successor and none is owed: there is no second list to de-duplicate
+//     AGAINST any more, which is a stronger statement than the dedup was. The
+//     name-preference rule it leaned on is `toProjectRepoNames`' own and is
+//     covered where that function lives.
+//
+//   - `describe('a repository under the PROVISIONING organisation')` — four cases
+//     over the MOTIR-4867 classification. ⚠️ THESE DID NOT LOSE THEIR PROPERTY,
+//     THEY CHANGED ADDRESS. Three of them (the classification itself, its
+//     case-insensitivity, and the `hostOwner: null` arm that classifies nothing on
+//     a deployment which cannot provision) are properties of `isMotirHostedOwner`,
+//     and they are asserted — as a captured comparison between the two surfaces
+//     that still ask it — in `tests/projectRepos/hostOwnershipAgreement.test.ts`.
+//     The fourth, reading the owner off a `repoRef` and degrading honestly on a
+//     ref with no `/`, covered a private helper that parsed `owner/name` out of a
+//     `ProjectRepoConnectedDto`; nothing constructs that shape any more, so that
+//     case has no subject at either address and is not re-pointed.
 
 // ⚠️ THE ORG SECTION IS THE LADDER'S ANSWER (bug MOTIR-4820).
 //
@@ -178,71 +147,6 @@ describe('summarizeRepositories', () => {
   });
 });
 
-// ⚠️ A REPOSITORY MOTIR HOSTS IS NOT THE ORGANISATION'S (bug MOTIR-4867),
-// RE-POINTED BY MOTIR-4954.
-//
-// `connected` is `githubRepoRepository.listByWorkspace`, filtered on
-// `github_repo.workspace_id` and nothing else — the read that answers *can this
-// workspace dispatch into it*, which MOTIR-1931 widened on purpose so a
-// repository Motir CREATES for a workspace is a legal `targetRepo`. Read as
-// *whose is it*, a Motir-hosted repository was drawn under `From your
-// organisation` and counted in `yours` — whose own promise is *the user owns it,
-// Motir never bills its CI, and there is nothing to move*, all three inverted.
-//
-// ⚠️ THE ROOM NO LONGER ASKS THIS QUESTION AT ALL, which is a stronger fix than
-// the classification was: it draws links, and a link's ownership comes from its
-// own row. So these cases move OFF `splitRoomSections` / `summarizeRepositories`
-// and onto `organizationConnected` itself, which is the shared predicate and is
-// still live — `lib/services/projectRepoRoomService.ts` composes the room view
-// with its sibling `connectedNotInSet`, and `hostOwnershipAgreement.test.ts` pins
-// it against the organisation inventory. Deleting these cases with the caller
-// would leave that predicate unguarded on the way to MOTIR-4955, which is the
-// card that retires it.
-describe('a repository under the PROVISIONING organisation', () => {
-  it('is not the organisation`s — the classification MOTIR-4867 added, at its own door', () => {
-    expect(
-      organizationConnected([hostedConnected('motir'), orgConnected('motir-core')], HOST_OWNER).map(
-        (r) => r.repoRef,
-      ),
-    ).toEqual(['moooon-B-V/motir-core']);
-  });
-
-  it('matches the owner CASE-INSENSITIVELY — a GitHub login is, and the value is configuration', () => {
-    // `provisioningOrgLogin()` returns whatever an operator typed into
-    // `GITHUB_FALLBACK_ORG`; the same comparison the CI meter's §5.1 gate makes.
-    expect(
-      organizationConnected([hostedConnected('motir', 'MOTIR-Projects')], 'motir-projects'),
-    ).toEqual([]);
-  });
-
-  it('⚠️ classifies NOTHING when `hostOwner` is null — a deployment that cannot provision hosts nothing', () => {
-    // The counterfactual that keeps this rule from narrowing a self-hosted
-    // deployment. With no `GITHUB_FALLBACK_ORG` there is no provisioning org, so
-    // the answer is byte-for-byte what it was before the rule existed.
-    expect(
-      organizationConnected([hostedConnected('motir'), orgConnected('motir-core')], null).map(
-        (r) => r.repoRef,
-      ),
-    ).toEqual(['motir-projects/motir', 'moooon-B-V/motir-core']);
-  });
-
-  it('reads the owner off `repoRef`, and degrades honestly on a ref with no owner', () => {
-    // `ProjectRepoConnectedDto` carries no `owner` column — its own doc says why
-    // — so the owner is the `repoRef` segment. A ref that somehow holds no `/` is
-    // nobody's provisioning org, so it stays.
-    const bare: ProjectRepoConnectedDto = {
-      name: 'motir',
-      repoRef: 'motir',
-      defaultBranch: 'main',
-    };
-    expect(organizationConnected([bare], HOST_OWNER)).toEqual([bare]);
-  });
-});
-
-function connected(name: string): ProjectRepoConnectedDto {
-  return { name, repoRef: `acme-inc/${name}`, defaultBranch: 'main' };
-}
-
 function row(opts: {
   name: string;
   realized?: string;
@@ -291,19 +195,4 @@ function row(opts: {
  *  repository, which is what `seedSource` records and all it records. */
 function orgRow(name: string): ProjectRepoDto {
   return { ...row({ name }), seedSource: SEED_SOURCE_ORGANIZATION };
-}
-
-/** A layered repository under the ORGANISATION — the ordinary case, and what the
- *  section is named for. */
-function orgConnected(name: string): ProjectRepoConnectedDto {
-  return { name, repoRef: `moooon-B-V/${name}`, defaultBranch: 'main' };
-}
-
-/** A layered repository under the PROVISIONING organisation — one MOTIR created,
- *  mirrored into this workspace's `github_repo` by `persistProvisionedRepo` so it
- *  is a legal `targetRepo` (MOTIR-1931), and reaching the room through the same
- *  workspace-scoped read. The owner is a PARAMETER so the case-insensitivity case
- *  can vary its spelling without hard-coding a login twice. */
-function hostedConnected(name: string, owner: string = HOST_OWNER): ProjectRepoConnectedDto {
-  return { name, repoRef: `${owner}/${name}`, defaultBranch: 'main' };
 }

@@ -392,10 +392,13 @@ describe('⚠️ AC 2 — the ORGANISATION`s inventory never reaches a row of th
 
   it('⚠️ AND THE SURVIVING TWIN IS GONE — the duplicate had no dedup to escape', () => {
     // The card's own instruction: fix the duplicate by removing its CAUSE, not by
-    // hardening `connectedNotInSet`. The server already applied that dedup and the
-    // twin came from the island's post-mutation recompute. With no second list
-    // there is nothing left to de-duplicate against, so the name appears once by
-    // construction rather than by a rule that can be got wrong again.
+    // hardening the dedup. The server already applied one — the layered list was
+    // subtracted against the set before rendering — and the twin came from the
+    // island's post-mutation recompute anyway. With no second list there is
+    // nothing left to de-duplicate against, so the name appears once by
+    // construction rather than by a rule that can be got wrong again. (That
+    // helper was deleted with its last caller in MOTIR-4998; the assertion below
+    // is unchanged, because it was never about the dedup.)
     layeredRoom(SEVEN, [ORG_ROW('r1', 'motir-core')]);
     const section = screen.getByRole('region', { name: 'From your organisation' });
     expect(within(section).getAllByText('motir-core')).toHaveLength(1);
