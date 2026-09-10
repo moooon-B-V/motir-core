@@ -136,9 +136,15 @@ export const firstAuditTriggerService = {
       return { repoRef, submitted: 0, outcomes: [], skipped: 'lookup_failed' };
     }
 
-    // A workspace with no project has nowhere to put an audit — the same clean
-    // verdict `resolveIndexTarget` returns as `no_projects`, and the index that
-    // reached here cannot have had one either.
+    // A workspace with no project has nowhere to put an audit. An AUDIT is
+    // project-scoped and stays so — MOTIR-4642 moved the code GRAPH to the
+    // organisation, not the audit — so this verdict is about this service's own
+    // question and is unchanged by that story.
+    //
+    // ⚠️ IT SHARES A SPELLING WITH `IndexSkipReason.no_projects` AND IS A
+    // DIFFERENT UNION (MOTIR-4652). That one narrowed to "no project to resolve a
+    // run credential through"; this one still means "nowhere to put an audit". A
+    // sweep that treated the two as one value would delete a live verdict.
     if (projects.length === 0)
       return { repoRef, submitted: 0, outcomes: [], skipped: 'no_projects' };
 
