@@ -2,7 +2,7 @@ import type * as React from 'react';
 import { getTranslations } from 'next-intl/server';
 import { ContentSectionCard } from './ContentSectionCard';
 import { AcceptancePanel } from './AcceptancePanel';
-import { DesignResultPanel } from './DesignResultPanel';
+import { DesignResultSection } from './DesignResultSection';
 import { AttachmentsPanel } from './AttachmentsPanel';
 import { ActivitySection } from './ActivitySection';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
@@ -219,7 +219,13 @@ export async function LateUpperSections({
       ) : null}
       {showDesignResult ? (
         <ContentSectionCard title={tDesignResult('title')} subtitle={tDesignResult('gloss')}>
-          <DesignResultPanel evidence={r.designEvidence} isDesignCard={r.isDesignCard} />
+          <DesignResultSection
+            evidence={r.designEvidence}
+            isDesignCard={r.isDesignCard}
+            gate={r.designGate.gate}
+            canDecide={r.designGate.canDecide}
+            itemIdentifier={itemIdentifier}
+          />
         </ContentSectionCard>
       ) : null}
     </>

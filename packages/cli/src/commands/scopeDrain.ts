@@ -2,6 +2,7 @@ import { info } from '../output.js';
 import { GitError, type CommandRunner } from '../git.js';
 import {
   classifyReadyItem,
+  landedWork,
   type AutoSummary,
   type DispatchRecord,
   type PlanningRecord,
@@ -9,7 +10,13 @@ import {
   type SkipRecord,
   type StopReason,
 } from '../autoLoop.js';
-import { RepoSessions, dispatchOne, type AutoOptions, type ResolvedAgent } from './auto.js';
+import {
+  RepoSessions,
+  dispatchOne,
+  ensureRepoPullRequest,
+  type AutoOptions,
+  type ResolvedAgent,
+} from './auto.js';
 import { findingsPolicyOf, resolveDispatchTarget, resolveDispatchTargets } from '../dispatch.js';
 import { orderClaimedSet, unsatisfiedBlockers, type ScopeEdges } from '../scopedRun.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from '../dispatchRunReporter.js';
@@ -35,11 +42,23 @@ import type { ProjectSession } from '../session.js';
 // prevent. `test/scopeDrain.test.ts` fails if a ready read is issued mid-drain.
 //
 // ── REUSE, NOT REINVENTION ────────────────────────────────────────────────
-// `RepoSessions`, `dispatchOne` and `closeOutRepos` are `motir auto`'s, exported
-// rather than copied. The two loops differ in how they pick the next card and in
-// nothing else — the claim, the agent spawn, the replan check, the bootstrap
-// check, the push check and the integration are ONE pipeline, and a fork of it
-// would be two places for those checks to drift.
+// `RepoSessions`, `dispatchOne`, `ensureRepoPullRequest` and `closeOutRepos` are
+// `motir auto`'s, exported rather than copied. The two loops differ in how they
+// pick the next card and in nothing else — the claim, the agent spawn, the
+// replan check, the bootstrap check, the push check, the integration and the
+// mid-run pull-request open are ONE pipeline, and a fork of it would be two
+// places for those checks to drift.
+//
+// ⚠️ AND THAT LIST GREW BY ONE THE HARD WAY (MOTIR-4999). The eager open used to
+// live behind `LoopInput.openPrEagerly`, a flag only `motir auto` passed — so
+// this loop, which never reads that flag because it never runs `runAutoLoop`,
+// silently deferred every session pull request to the close-out. A whole story's
+// work sat on the session branch with no pull request and therefore no CI until
+// its last child landed, which is precisely what opening early exists to avoid,
+// and it is worst on THIS lane: a drain builds later children on top of earlier
+// ones, so a red check at card two is worth far more than a red check at card
+// ten. Read a "lane" difference between these two loops as a defect until proven
+// otherwise.
 
 export interface ScopeDrainInput {
   session: ProjectSession;
@@ -233,6 +252,30 @@ export async function drainScope(input: ScopeDrainInput): Promise<AutoSummary> {
       records.push(record);
       if (record.outcome === 'integrated' || record.outcome === 'implemented') {
         satisfied.add(item.key);
+      }
+
+      // MOTIR-4999 — OPEN THE PULL REQUEST AT THE FIRST CARD THAT LANDS, per
+      // repository, exactly as `runAutoLoop` does. Same helper, same trigger:
+      // `landedWork`, so a card that failed or was refused opens nothing and the
+      // next successful card in that repository opens it instead.
+      //
+      // `ensureRepoPullRequest` lists before it creates, so every later
+      // iteration finds the same pull request and this is a no-op — the run
+      // holds no "have I opened it?" state, which is what makes a resumed drain
+      // safe. The close-out still runs and REWRITES the title and body from
+      // every record, so a reviewer reads the whole scope even though the pull
+      // request existed from the first card.
+      //
+      // ⚠️ AND WHAT IT OPENS IS A DRAFT (MOTIR-4967) — which is what makes an
+      // early open safe on THIS lane in particular. A scoped run's pull request
+      // hangs off the container it claimed, and a draft cannot be merged, so it
+      // cannot complete that container or cascade `done` onto children that have
+      // not been built. Bug MOTIR-3268's hold carried that invariant by opening
+      // nothing at all; the draft carries it without withholding CI.
+      if (landedWork(record)) {
+        for (const session of repo ?? []) {
+          ensureRepoPullRequest(session, runId, run);
+        }
       }
 
       // ⚠️ A REFUSED CARD STOPS THE RUN, and `--keep-going` does not override it

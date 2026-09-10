@@ -133,6 +133,25 @@ and it _"fires on agent success, which is often before a pull request exists"_ �
 `work-item-delivery-links.md`'s own sentence, three paragraphs above the table
 that schedules the column's removal.
 
+> **⚠️ AMENDMENT (MOTIR-4999, 2026-09-10) — REASON ONE IS NARROWED; THE DECISION
+> IS NOT.** The paragraph below is left as it was written, and its central claim
+> no longer holds: `commands/scopeDrain.ts` now calls `ensureRepoPullRequest` on
+> the same `landedWork` trigger `runAutoLoop` uses, so the scoped run opens its
+> pull request at its FIRST landed card too. `openPrEagerly` is consequently no
+> longer a lane gate at all — it survives only as a seam `test/auto.test.ts` uses
+> to drive that loop's close-out-only path — and the sentence _"on that lane no
+> pull request exists on the session branch until close-out"_ is false as of this
+> card.
+>
+> **What survives, and it is what the section is FOR: the window still exists.**
+> `mark_integrated` writes `session_branch` and flips the card to Implemented
+> BEFORE the eager open runs, so the first card of every scoped run is still
+> integrated with no `work_item_delivery` row anywhere — and
+> `work_item_delivery.github_pull_request_id` is NOT NULL, so a delivery join
+> still cannot answer readiness there. What changed is the window's SIZE (the
+> first card, rather than the whole run), never whether it is empty. Reason two
+> below is untouched and was already the load-bearing one.
+
 **The window is not a moment; for one whole lane it is the entire run.**
 MOTIR-3734 says the run _"opens the pull request at the first IMPLEMENTED card"_.
 That is true of `motir auto` only:

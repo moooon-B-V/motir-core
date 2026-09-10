@@ -6223,7 +6223,7 @@
       "lead": "Which repositories Motir can read is the GitHub App’s own screen, so the removal happens there. Here is what it will do.",
       "gitlabLead": "It is removed from every project in {org}, not only the one you came from.",
       "projects": "{count, plural, =0 {No project uses this repository yet.} one {# project loses this repository.} other {# projects lose this repository.}}",
-      "alsoReachable": "Any project with no repositories of its own can also reach this one, whether or not it is named here.",
+      "onlyLinked": "These are the only projects affected. A project reaches only the repositories linked to it, so nothing outside this list loses access.",
       "codeIndex": "The code index Motir built from it is kept for {days} days. Re-adding the repository before then cancels the removal; after that, re-adding it means a full index.",
       "continueOnGithub": "Continue on GitHub",
       "confirm": "Disconnect",
@@ -6239,7 +6239,7 @@
     "inventory": {
       "title": "Repositories",
       "caption": "Every repository connected to this organisation. Any project can pick one; the index is built once and shared.",
-      "foot": "A repository no project uses stays connected and stays indexed — the next project that adds it pays nothing. Any project here that has no repositories of its own can also reach the ones connected in its workspace, whether or not it is named above.",
+      "foot": "A repository no project uses stays connected and stays indexed — the next project that adds it pays nothing. A project reaches only the repositories linked to it, so connecting one here makes it available to add rather than automatically in reach.",
       "empty": "No repositories are connected yet. Add one from a project’s Repositories settings.",
       "provider": {
         "github": "GitHub",
@@ -7872,6 +7872,78 @@
       "drift": {
         "commits": "{count, plural, one {# commit behind} other {# commits behind}}",
         "unknown": "Behind by an unknown number of commits"
+      }
+    }
+  },
+  "approvalGate": {
+    "state": {
+      "awaitingYou": "Awaiting you",
+      "awaiting": "Awaiting",
+      "recording": "Recording",
+      "approved": "Approved",
+      "changesRequested": "Changes requested"
+    },
+    "verb": {
+      "approve": "Approve",
+      "requestChanges": "Request changes"
+    },
+    "waitingOn": "Waiting on {name}.",
+    "theAssignee": "this work item's assignee",
+    "confirm": {
+      "title": "Approving this will:",
+      "cancel": "Cancel",
+      "proceed": "Yes, {verb}"
+    },
+    "record": {
+      "unattributed": "No longer attributable",
+      "willRepublish": "the agent will publish a new version"
+    },
+    "refusal": {
+      "alreadyDecided": {
+        "byName": "{name} decided this a moment ago.",
+        "unattributed": "Someone decided this a moment ago.",
+        "next": "Your decision was not recorded. Reload to see theirs."
+      },
+      "superseded": {
+        "title": "A newer version was published, so this question was withdrawn.",
+        "next": "Nobody decided it. Reload to see the current version."
+      },
+      "notAuthorised": {
+        "title": "This decision is not yours to make.",
+        "next": "It can be decided by the work item's assignee, its reporter, or a workspace admin."
+      },
+      "notFound": {
+        "title": "This decision is no longer here.",
+        "next": "Reload the page to see where it went."
+      },
+      "kindUnregistered": {
+        "title": "Motir cannot decide this kind of approval yet.",
+        "next": "The work to support it is planned. Nothing you did caused this."
+      },
+      "alreadyAwaiting": {
+        "title": "Another decision on this subject is already waiting.",
+        "next": "Reload the page to see it."
+      },
+      "decidedImmutable": {
+        "title": "This decision was already recorded and cannot be changed.",
+        "next": "Reload the page. If this keeps happening, it is a defect worth reporting."
+      },
+      "unexpected": {
+        "title": "Your decision could not be recorded.",
+        "next": "Check your connection and try again."
+      }
+    },
+    "designResult": {
+      "kindLabel": "Design result",
+      "meta": {
+        "withVersion": "version {version}",
+        "plain": "the published design"
+      },
+      "consequence": "Approving moves {key} to Done.",
+      "confirm": {
+        "records": "record that you approved it, with the time and this version;",
+        "keepsFiles": "keep this version's files, so the decision stays checkable;",
+        "movesToDone": "move {key} to Done, starting the work items waiting on it."
       }
     }
   }

@@ -580,30 +580,55 @@ describe('drainScope — the shapes an older or richer server produces', () => {
 // the seam from the other caller; this proves a summary built by the DRAIN
 // reaches the same close-out and gets the same draft.
 
-describe('the scoped drain’s summary goes through the same draft close-out', () => {
-  /** A runner that records every call and answers `gh` like a live repository. */
-  function recordingGit(over: { existingPr?: string; isDraft?: string } = {}): {
-    run: CommandRunner;
-    log: string[];
-  } {
-    const log: string[] = [];
-    const run: CommandRunner = (bin, args) => {
-      log.push(`${bin} ${args.join(' ')}`);
-      if (bin === 'gh') {
-        if (args[1] === 'list') {
-          return args.includes('isDraft') ? ok(over.isDraft ?? 'true') : ok(over.existingPr ?? '');
-        }
-        if (args[1] === 'create') return ok('https://github.test/pull/9001');
+/**
+ * A runner that records every call and answers `gh` like a live repository —
+ * PER CHECKOUT and STATEFUL: a `pr create` registers the pull request, so the
+ * next `pr list` in that same checkout answers with it, exactly as GitHub would.
+ *
+ * ⚠️ THE STATE IS LOAD-BEARING SINCE MOTIR-4999, and it was not before. With the
+ * drain opening the pull request mid-run, a fake answering `pr list` from a fixed
+ * seed would let the close-out open a SECOND pull request off the same branch —
+ * a sequence no live repository can produce, and precisely the one the
+ * list-before-create no-op exists to prevent. `--json isDraft` is answered from
+ * `over.isDraft` throughout: draft state is what `markSessionPrReady` reads, and
+ * no call in these tests changes it.
+ */
+function recordingGit(over: { existingPr?: string; isDraft?: string } = {}): {
+  run: CommandRunner;
+  log: string[];
+} {
+  const log: string[] = [];
+  /** `checkout → its open pull request`, grown by every `pr create`. */
+  const open = new Map<string, string>();
+  let nextPr = 9001;
+  const run: CommandRunner = (bin, args, cwd) => {
+    log.push(`${bin} ${args.join(' ')} @${cwd}`);
+    if (bin === 'gh') {
+      if (args[1] === 'list') {
+        if (args.includes('isDraft')) return ok(over.isDraft ?? 'true');
+        return ok(open.get(cwd) ?? over.existingPr ?? '');
       }
-      // The close-out counts the branch's commits with `rev-list --count`; the
-      // shared GIT stub answers every git read with a sha, which parses to NaN
-      // and would report the branch EMPTY before any `gh` ran.
-      if (bin === 'git' && args[0] === 'rev-list') return ok('3');
-      return GIT(bin, args, '/');
-    };
-    return { run, log };
-  }
+      if (args[1] === 'create') {
+        const url = `https://github.test/pull/${nextPr}`;
+        nextPr += 1;
+        open.set(cwd, url);
+        return ok(url);
+      }
+    }
+    // The close-out counts the branch's commits with `rev-list --count`; the
+    // shared GIT stub answers every git read with a sha, which parses to NaN
+    // and would report the branch EMPTY before any `gh` ran.
+    if (bin === 'git' && args[0] === 'rev-list') return ok('3');
+    return GIT(bin, args, '/');
+  };
+  return { run, log };
+}
 
+/** Every `gh pr create` the log recorded, as its raw argv line. */
+const created = (log: readonly string[]): string[] =>
+  log.filter((line) => line.startsWith('gh pr create'));
+
+describe('the scoped drain’s summary goes through the same draft close-out', () => {
   it('opens a DRAFT and marks it ready — after the title rewrite', async () => {
     const { run, log } = recordingGit({ existingPr: 'https://github.test/pull/9001' });
     const summary = await drive([member('PROD-2')], { 'PROD-2': [] }, { run });
@@ -628,7 +653,125 @@ describe('the scoped drain’s summary goes through the same draft close-out', (
 
     expect(log.some((line) => line.includes('pr create') && line.includes('--draft'))).toBe(true);
     expect(log.some((line) => line.includes('gh pr ready'))).toBe(false);
-    expect(summary.prs[0]).toMatchObject({ outcome: 'opened', draft: true });
+    // ⚠️ `existing`, NOT `opened` (MOTIR-4999). The drain opened it at the first
+    // card that landed, so the close-out finds it — which is what `closeOutRepo`
+    // means by *"`existing` is now the ORDINARY outcome rather than a resumed-run
+    // edge"*. What this test is about is unchanged and is asserted above: the
+    // pull request is a DRAFT and is NOT readied while a child is outstanding.
+    expect(summary.prs[0]).toMatchObject({ outcome: 'existing', draft: true });
     expect(renderAutoSummary(summary)).toContain('PROD-1 is NOT finished');
+  });
+});
+
+// ── the pull request opens MID-DRAIN, not at the close-out (MOTIR-4999) ────
+//
+// ⚠️ ASSERTED FROM THE DRAIN'S OWN LOOP, and that is the entire point of putting
+// these here rather than widening `test/auto.test.ts`. The eager open lived
+// behind `LoopInput.openPrEagerly`, a flag `motir auto` passed and this loop
+// never saw — because this loop does not run `runAutoLoop` at all. A test driving
+// `runAutoLoop` therefore proved the timing for the lane that already had it and
+// said nothing whatsoever about the lane the decision was written for, which is
+// how the gap survived a careful reading of the file that contains it.
+//
+// ⚠️ AND NONE OF THESE CALL `closeOutRepos`. The close-out opens a pull request
+// too, so a test that ran it could not tell an eager open from a late one — the
+// absence of that call is what makes each assertion below about the DRAIN.
+
+describe('the drain opens each repository’s session pull request as its work lands', () => {
+  it('opens it at the FIRST card that lands, as a DRAFT, before the drain reaches the next card', async () => {
+    const { run, log } = recordingGit();
+    /** How many cards had been dispatched when each `gh pr create` fired. */
+    const createdAfter: number[] = [];
+    const watching: CommandRunner = (bin, args, cwd) => {
+      if (bin === 'gh' && args[1] === 'create') createdAfter.push(fake.dispatched.length);
+      return run(bin, args, cwd);
+    };
+
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3')],
+      { 'PROD-3': ['PROD-2'] },
+      { run: watching },
+    );
+
+    // The timing claim, stated as a measurement rather than as an ordering of
+    // log lines: the pull request existed while ONE card had been dispatched and
+    // the second had not been reached.
+    expect(createdAfter).toEqual([1]);
+    expect(summary.records.map((r) => r.outcome)).toEqual(['integrated', 'integrated']);
+
+    const argv = created(log)[0]!;
+    expect(argv).toContain('--draft');
+    expect(argv).toContain('--base main');
+    expect(argv).toContain('--head motir/auto-x');
+    expect(argv).toContain(`@${join(fake.root, 'motir-core')}`);
+  });
+
+  it('opens NO second pull request when a later card lands in the same repository', async () => {
+    // `openSessionPr` lists before it creates, so every card after the first
+    // finds the same pull request. The drain holds no "have I opened it?" state
+    // of its own — which is what makes a resumed drain safe — so this is the
+    // assertion that the no-op is real rather than merely intended.
+    const { run, log } = recordingGit();
+
+    const summary = await drive(
+      [member('PROD-2'), member('PROD-3'), member('PROD-4')],
+      { 'PROD-3': ['PROD-2'], 'PROD-4': ['PROD-3'] },
+      { run },
+    );
+
+    expect(summary.records.map((r) => r.outcome)).toEqual([
+      'integrated',
+      'integrated',
+      'integrated',
+    ]);
+    expect(created(log)).toHaveLength(1);
+  });
+
+  it('opens NOTHING for a card that does not LAND — failed or replanned', async () => {
+    // `landedWork` is the trigger, exactly as it is in `runAutoLoop`: an agent
+    // that failed before integrating leaves nothing to review, and a card the
+    // agent REFUSED is not delivered work either. In both cases the repository
+    // session exists — the branch was created before the agent ran — so a
+    // trigger keyed on "did we touch a repo?" would have opened one here.
+    const failing = recordingGit();
+    const failed = await drive(
+      [member('PROD-2')],
+      {},
+      {
+        run: failing.run,
+        agentResults: () => ({ exitCode: 1, signal: null }),
+      },
+    );
+    expect(failed.records[0]?.outcome).toBe('failed');
+    expect(failed.repos).toHaveLength(1);
+    expect(created(failing.log)).toEqual([]);
+
+    replanned.add('PROD-2');
+    const refusing = recordingGit();
+    const refused = await drive([member('PROD-2')], {}, { run: refusing.run });
+    expect(refused.records[0]?.outcome).toBe('replanned');
+    expect(created(refusing.log)).toEqual([]);
+  });
+
+  it('opens ONE per repository it landed work in, and none for a repository it did not touch', async () => {
+    mkdirSync(join(fake.root, 'motir-ai'), { recursive: true });
+    // A checkout the drain never routes a card into. It exists so the assertion
+    // below is about what the drain TOUCHED rather than about what happens to be
+    // on disk — the two are the same set only by accident.
+    mkdirSync(join(fake.root, 'motir-gateway'), { recursive: true });
+    repoSets['PROD-2'] = [
+      { name: 'motir-core', cloneUrl: null, defaultBranch: null, delivery: null },
+      { name: 'motir-ai', cloneUrl: null, defaultBranch: null, delivery: null },
+    ];
+    const { run, log } = recordingGit();
+
+    const summary = await drive([member('PROD-2')], {}, { run });
+
+    expect(summary.repos.map((r) => r.repoName)).toEqual(['motir-core', 'motir-ai']);
+    expect(created(log)).toHaveLength(2);
+    for (const repo of ['motir-core', 'motir-ai']) {
+      expect(created(log).some((line) => line.endsWith(`@${join(fake.root, repo)}`))).toBe(true);
+    }
+    expect(log.some((line) => line.includes(join(fake.root, 'motir-gateway')))).toBe(false);
   });
 });

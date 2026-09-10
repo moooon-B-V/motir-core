@@ -6,6 +6,10 @@ import type {
   NormalizedChangeRequest,
 } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';
+// The provider REGISTRY — `resyncLinkedPullRequest` asks the seam for the
+// lifecycle its synthesized change request maps to, rather than stating one as a
+// literal (MOTIR-5002).
+import { getGitProvider } from '@/lib/git';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
@@ -300,6 +304,17 @@ export async function syncChangeRequestStatus(
       // happened in other repositories, whose only record is this row.
       baseRef: cr.baseRef,
       title: cr.title,
+      // Whether this delivery says the pull request is a DRAFT (MOTIR-5002).
+      // THIS is the authoritative writer of the column: a delivery is the only
+      // thing that ever sees the payload field, and before it was persisted the
+      // fact died with the request that carried it. The LINK door then had to
+      // guess, and guessed `false`.
+      //
+      // Written on EVERY delivery, not only the draft ones — the value flips both
+      // ways (`ready_for_review`, and a pull request converted back to a draft),
+      // so a write conditioned on `cr.draft` being true would leave the row
+      // asserting a draft-ness the host had already retracted.
+      draft: cr.draft,
       // ⚠️ NO LINK IS WRITTEN HERE, and there is no longer a field to omit
       // (MOTIR-3721 stopped writing it, MOTIR-3757 dropped it). A delivery says
       // what a pull request IS; only `link_pull_request` says which cards it
@@ -1274,6 +1289,17 @@ export async function resyncLinkedPullRequest(
   // the trunk" and "merged onto a dead branch". `linkPullRequestByCoordinates`
   // always writes one, so this skips only rows an older delivery created.
   if (subject.baseRef === null) return null;
+  // ⚠️ AND A ROW THAT DOES NOT KNOW ITS DRAFT-NESS DOES NOT RESYNC (MOTIR-5002) —
+  // the same rule as the line above, for a column added for this reader.
+  //
+  // `draft` is nullable and never backfilled, so null means UNKNOWN: a row
+  // mirrored before the column existed, or a placeholder this door's own create
+  // arm wrote for a run that linked before any delivery arrived. Neither guess is
+  // available. Reading it as `false` is the defect this card removes, and reading
+  // it as `true` would strand a ready pull request's card. So the honest answer is
+  // to decline, and it costs nothing where it fires: a placeholder row means no
+  // delivery has landed yet, and the one still to come does the transition itself.
+  if (subject.draft === null) return null;
 
   const cr: NormalizedChangeRequest = {
     providerRepoId: subject.repo.repoId,
@@ -1283,28 +1309,39 @@ export async function resyncLinkedPullRequest(
     headRef: subject.headRef,
     baseRef: subject.baseRef,
     title: subject.title,
-    // ⚠️ ASSUMED, NOT KNOWN — and this is the one field on this synthesized shape
-    // the stored row cannot supply (MOTIR-4968). `github_pull_request` models
-    // draft-ness nowhere, deliberately (a draft must stay an OPEN linked pull
-    // request to the `deferred_open_pr` count), so a resync has no way to tell a
-    // draft from a ready pull request and this path keeps the behaviour it had:
-    // linking a card to an already-open pull request moves it to `implemented`.
-    //
-    // The residual defect that follows is FILED rather than fixed here —
-    // MOTIR-5002 — because fixing it means deciding whether to persist
-    // draft-ness, which is a schema decision this card did not make: a DRAFT
-    // whose `opened` delivery has already landed (a no-op now, correctly) is
-    // still flipped to `implemented` by a later `link_pull_request` — the same
-    // wrong assertion this card removes from the webhook door, reached through
-    // the link door instead.
-    draft: false,
+    // KNOWN, not assumed (MOTIR-5002). This field used to be pinned `false` with
+    // a comment saying the stored row could not supply it — which was true, and
+    // was the whole defect: a draft whose `opened` delivery had already landed (a
+    // no-op, correctly) was flipped to `implemented` by a later
+    // `link_pull_request`, asserting through the link door exactly what
+    // MOTIR-4968 had just stopped the webhook door asserting. The row supplies it
+    // now, and the null arm above is what keeps that supply honest.
+    draft: subject.draft,
   };
 
-  // The literal is unchanged for the same reason: it is what this path has always
-  // asserted, and the `draft` above is what makes that assertion honest rather
-  // than accidental. It is NOT routed through `changeRequestLifecycle`, which
-  // would only re-derive `'implemented'` from the guess above.
-  return syncChangeRequestStatus(cr, 'implemented', async (tx) => {
+  // ROUTED THROUGH THE SEAM, not a literal (MOTIR-5002). The `'implemented'` this
+  // used to pass was correct for as long as every open pull request meant
+  // `implemented`, and it stopped being correct the moment a draft could mean
+  // otherwise — with nothing connecting the two facts, because a literal consults
+  // nothing. `changeRequestLifecycle` is the one place that mapping is decided,
+  // and this door now asks it the same question the webhook door does, off a
+  // `draft` it actually knows.
+  //
+  // Its answer here is exactly one of two, and both are wanted: `'implemented'`
+  // for a ready pull request (the feature this function exists for, unchanged),
+  // and `null` for a draft — which `syncChangeRequestStatus` honours by RECORDING
+  // the delivery and transitioning nothing. The other two arms are unreachable
+  // from here by the guards above (`merged` and `state: 'closed'` both return
+  // early), so nothing about a merge is re-derived from a link.
+  //
+  // The provider comes off the REPO row, like every other per-repo read in this
+  // file — a GitLab merge request reaches this door too if one is ever linked, and
+  // its seam has its own draft arm.
+  const lifecycle = getGitProvider(subject.repo.provider as GitProviderId).changeRequestLifecycle(
+    cr,
+  );
+
+  return syncChangeRequestStatus(cr, lifecycle, async (tx) => {
     // The same bind the providers' own resolvers do, for the same reason: the
     // repo row is where the tenant is learned, and everything the sync reads
     // below it lives in tables with no `system_admin` arm (MOTIR-2880).

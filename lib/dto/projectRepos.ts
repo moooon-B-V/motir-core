@@ -410,10 +410,26 @@ export interface ProjectRepoEstablishViewDto {
  * A WORKSPACE-CONNECTED repository that belongs to this project's domain but has
  * no `project_repository` row (MOTIR-3126).
  *
- * The wire form of the OTHER registry — the repositories the workspace connected
- * through the GitHub App, which `lib/projectRepos/effectiveDomain.ts` layers under
- * the set for a project that arrived with code of its own (and which ARE the whole
- * domain for a project with no set, the shape Motir's own project is in).
+ * ⚠️ NOTHING PRODUCES ONE ANY MORE, AND THE TYPE IS KEPT ON PURPOSE (MOTIR-4998).
+ * This was the wire form of the OTHER registry — the repositories the scope ladder
+ * LAYERED under the set for a project with no repositories of its own. MOTIR-4955
+ * retired that rung (`lib/projectRepos/effectiveDomain.ts` returns `connected: []`,
+ * a literal) and MOTIR-4954 stopped the room drawing it, so every list of this
+ * shape the product builds today is empty.
+ *
+ * **Its remaining purpose is to keep that emptiness ASSERTABLE.** It is the element
+ * type of `ProjectRepoRoomViewDto.connected`, the compatibility field the room view
+ * still carries, and the reason that field is worth carrying is that a test can put
+ * a NON-empty list on it and assert the room draws nothing — which is the only way
+ * to state *"the retired section stays retired"* as a property rather than as an
+ * absence nobody checks. Delete the type and that detector goes with it
+ * (`tests/projectRepos/repositoriesRoomOrgSection.test.ts` — *`hostOwner` and
+ * `connectedInDomain` change NOTHING now*; `tests/components/repositories-room.test.tsx`
+ * — *`connectedInDomain` does not add a section*).
+ *
+ * So this is a fixture-facing type with one live reader, not an orphan: retiring it
+ * is a decision about whether that regression is still worth detecting, and belongs
+ * with the card that removes the compatibility field itself.
  *
  * ⚠️ IT IS NOT A `ProjectRepoDto`, and the difference is the point. A set row has a
  * role, a position, a state, a takeover and an access record because Motir created
@@ -422,9 +438,9 @@ export interface ProjectRepoEstablishViewDto {
  * Giving it a half-filled `ProjectRepoDto` would invite exactly the merged list the
  * room deliberately does not render (design §16.2).
  *
- * Deliberately CARRIES NO ID. Both sources of this shape — the room's server read
- * (`ConnectedRepoName`, which has no `GithubRepo.id`) and the establish view's
- * `connectCandidates` (which does) — agree on `repoRef`, and `owner/name` is unique
+ * Deliberately CARRIES NO ID. Both sources this shape ever had — the room's server
+ * read (`ConnectedRepoName`, which has no `GithubRepo.id`) and the establish view's
+ * `connectCandidates` (which does) — agreed on `repoRef`, and `owner/name` is unique
  * per host, so it is the identity a consumer keys on. Carrying an id that only one
  * source can supply would make the two disagree about what a row IS.
  */

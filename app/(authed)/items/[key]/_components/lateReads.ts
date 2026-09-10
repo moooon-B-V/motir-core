@@ -7,6 +7,7 @@ import { attachmentsService } from '@/lib/services/attachmentsService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { designEvidenceService } from '@/lib/services/designEvidenceService';
+import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ActivityHistoryPageDto, ActivityAllPageDto } from '@/lib/dto/activity';
@@ -58,6 +59,13 @@ export interface LateReads {
   designEvidence: Awaited<ReturnType<typeof designEvidenceService.getCurrentForWorkItem>>;
   isDesignCard: boolean;
   /**
+   * The AWAITING `design_result` approval gate for this card, and whether THIS
+   * actor may decide it (Story MOTIR-4778 · Subtask MOTIR-4792). `gate: null`
+   * when nothing is pending, which is the ordinary case and renders exactly what
+   * the section rendered before the frame existed.
+   */
+  designGate: Awaited<ReturnType<typeof approvalGatesService.getAwaitingForWorkItem>>;
+  /**
    * This card's runs, newest first (MOTIR-1796). `null` on a failed read — the
    * section renders its own state, per this module's containment rule.
    *
@@ -104,6 +112,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       acceptanceEligibility,
       acceptanceEvidence,
       designEvidence,
+      designGate,
       runs,
     ] = await Promise.all([
       workItemsService.listLinkedPullRequests(itemId, input.fullCtx),
@@ -149,6 +158,20 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
         : null,
       showAcceptance ? acceptanceEvidenceService.getCurrentForStory(itemId, ctx) : null,
       designEvidenceService.getCurrentForWorkItem(itemId, ctx),
+      // Contained like its neighbours: a failed gate read must not take the
+      // whole late stack down, and "nothing awaiting" is the honest fallback —
+      // it renders the section without verbs rather than an error the reader
+      // cannot act on.
+      (async () => {
+        try {
+          return await approvalGatesService.getAwaitingForWorkItem(
+            { workItemId: itemId, kind: 'design_result' },
+            ctx,
+          );
+        } catch {
+          return { gate: null, canDecide: false };
+        }
+      })(),
       (async () => {
         try {
           return await dispatchRunService.listRunsForWorkItemKey(
@@ -175,6 +198,7 @@ export function readLateSections(input: LateReadsInput): Promise<LateReads> {
       canDecideAcceptance: input.canEdit && input.itemStatus === 'in_review',
       designEvidence,
       isDesignCard: input.itemType === 'design',
+      designGate,
       runs,
     };
   })();

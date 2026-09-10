@@ -106,6 +106,33 @@ export const designEvidenceRepository = {
   },
 
   /**
+   * PIN one row's bytes against the orphan-GC — the retention half of an
+   * approval (MOTIR-4913; ADR §6c and its MOTIR-4911 amendment).
+   *
+   * ⚠️ It writes ONLY `pinned_at`, and only when the row does not already carry
+   * one. The guard is not a concurrency device — the caller holds this row's
+   * `FOR UPDATE` lock from {@link lockCurrentByWorkItem} — it is what makes the
+   * FIRST approval's timestamp the one that survives a re-approval of the same
+   * version. §6d's *per approved version* accumulates across DIFFERENT rows; the
+   * same row pinned twice is one retention decision, and re-stamping it would
+   * quietly move the date of a decision somebody made earlier.
+   *
+   * ⚠️ A zero-row result is a legitimate answer here, unlike the silent no-op
+   * `approvalGateRepository.decide` refuses to build: both of its causes are
+   * correct end states — the row is already pinned, or a concurrent publish
+   * superseded it out from under the lock — and neither is a refusal being
+   * swallowed. The caller reports which by re-reading, never by inferring from
+   * the count.
+   */
+  async pinById(id: string, tx: Prisma.TransactionClient): Promise<number> {
+    const result = await tx.designEvidence.updateMany({
+      where: { id, pinnedAt: null },
+      data: { pinnedAt: new Date() },
+    });
+    return result.count;
+  },
+
+  /**
    * WITHDRAW one row by id — `is_current → false` with NOTHING taking the slot,
    * plus the audit stamp that says so (MOTIR-3215).
    *

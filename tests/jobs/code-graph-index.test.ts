@@ -216,7 +216,7 @@ describe('system.code-graph-index — ONE composition, memoized at the side effe
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
-    expect(ids[0]).toBe('resolve-target');
+    expect(ids[0]).toBe('resolve-target-v2');
     // ⚠️ AND `assert-fleet-configured` IS NO LONGER A STEP. It is a read of
     // process configuration that throws; under §13.1's test nothing exists twice
     // if it runs again. It still runs, still first, still before anything is
@@ -547,7 +547,7 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     // Nothing was spent, in dispatch order: no config gate, no admission slot, no
     // boot, no container.
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
-    expect(ids).toEqual(['resolve-target']);
+    expect(ids).toEqual(['resolve-target-v2']);
     expect(boot).not.toHaveBeenCalled();
     expect(fakeOrchestrator.provisioned).toEqual([]);
     const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
@@ -671,7 +671,7 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     const engine = new JobTestEngine({ function: codeGraphIndex });
     const { result, ctx } = await engine.execute({
       events: [indexEvent(installationId, workspaceId)],
-      steps: [{ id: 'resolve-target', handler: () => resolved }],
+      steps: [{ id: 'resolve-target-v2', handler: () => resolved }],
     });
 
     // It resumed the SAME project's work. The drifted project is not indexed by
@@ -1154,7 +1154,7 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
     });
 
     const ids = stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
-    expect(ids[0]).toBe('resolve-target');
+    expect(ids[0]).toBe('resolve-target-v2');
     // The SAME three steps the first index writes — one code path, differing only
     // in the event and in the refresh job's debounce (MOTIR-2057), which is why
     // this suite asserts the shape on both jobs rather than trusting the sharing.

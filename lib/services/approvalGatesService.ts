@@ -1,5 +1,5 @@
 import type { ApprovalGateState } from '@/generated/prisma/client';
-import type { ApprovalGateDTO } from '@/lib/dto/approvalGate';
+import type { ApprovalGateDTO, ApprovalGateKindDTO, GateDecision } from '@/lib/dto/approvalGate';
 import type { GateEffect } from '@/lib/approvalGates/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { handlerFor } from '@/lib/approvalGates/registry';
@@ -10,6 +10,7 @@ import {
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -31,10 +32,10 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // enum, a handler, and a renderer. No second vocabulary, no second control, no
 // second decide door.
 
-/** The two verbs. A kind may later carry a verb SET (ADR §1's amendment,
- *  `decision_choice`), which is why the door takes a decision rather than
- *  exposing `approve()` / `requestChanges()` as separate methods. */
-export type GateDecision = 'approve' | 'request_changes';
+/** The two verbs — DECLARED in `lib/dto/approvalGate.ts` (the client/server
+ *  boundary; see its own note) and re-exported here so every existing caller of
+ *  this service keeps resolving it unchanged. */
+export type { GateDecision };
 
 const DECISION_STATE: Record<
   GateDecision,
@@ -57,7 +58,68 @@ export interface DecideGateResult {
   effect: GateEffect;
 }
 
+/**
+ * What a SURFACE needs to render one gate: the gate itself, and whether THIS
+ * actor may press its verbs (Story MOTIR-4778 · Subtask MOTIR-4792).
+ *
+ * ⚠️ `canDecide` is the AUTHORITY answer, not the ROUTING one, and the frame
+ * renders the difference: a gate is SHOWN to one person (`assigneeId ??
+ * reporterId`) and may be PRESSED by three (assignee OR reporter OR admin, ADR
+ * §2's amendment). State `B` — the port live, the verbs absent — is exactly a
+ * reader for whom this is `false`.
+ */
+export interface WorkItemGateRead {
+  gate: ApprovalGateDTO | null;
+  canDecide: boolean;
+}
+
 export const approvalGatesService = {
+  /**
+   * The AWAITING gate of one KIND on one work item, plus whether this actor may
+   * decide it — the read the approval FRAME renders from (Subtask MOTIR-4792).
+   *
+   * ⚠️ SCOPED BY KIND, and that is not a convenience. A card carrying a
+   * repository SET legitimately holds SEVERAL simultaneous awaiting gates — ADR
+   * §6b's uniqueness is `(workItemId, kind, subjectId)` — so *"the awaiting
+   * gate"* is only a well-formed question once a kind is named. The design
+   * result section names `design_result`; the merge section will name its own.
+   * Returns the OLDEST when a kind somehow has more than one, matching the
+   * repository's `createdAt asc`, so the surface is deterministic rather than
+   * arbitrary.
+   *
+   * ⚠️ NO LOCK AND NO TRANSACTION OF ITS OWN. This is a render read: the
+   * decision it feeds re-derives every field under the lock in `decide` below,
+   * and nothing here may be carried into that write. A gate this read reports
+   * `awaiting` can be decided by somebody else a millisecond later, which is
+   * precisely the race state `H` exists to draw.
+   */
+  async getAwaitingForWorkItem(
+    input: { workItemId: string; kind: ApprovalGateKindDTO },
+    ctx: ServiceContext,
+  ): Promise<WorkItemGateRead> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const item = await workItemRepository.findById(input.workItemId, tx);
+      // A cross-workspace row is indistinguishable from one that never existed,
+      // exactly as the decide door has it — no existence leak through a read.
+      if (!item || item.workspaceId !== ctx.workspaceId) return { gate: null, canDecide: false };
+
+      const gates = await approvalGateRepository.findAwaitingByWorkItem(input.workItemId, tx);
+      const row = gates.find((g) => g.kind === input.kind) ?? null;
+      if (!row) return { gate: null, canDecide: false };
+
+      // The SAME composition the decide door applies, and composed the same way
+      // — the admin arm is ASKED of `projectAccessService`, never derived here
+      // (the second-policy-path rule this service already records). A surface
+      // that derived its own answer would draw verbs the door then refuses.
+      const canDecide =
+        item.assigneeId === ctx.userId ||
+        item.reporterId === ctx.userId ||
+        (await projectAccessService.isWorkspaceManagerFor(item.projectId, ctx, tx));
+
+      return { gate: toApprovalGateDto(row), canDecide };
+    });
+  },
+
   /**
    * DECIDE one gate. **The only way a gate's state ever changes.**
    *
@@ -77,6 +139,10 @@ export const approvalGatesService = {
    *      so the surface can say so in place rather than as a toast that scrolls
    *      away.
    *   4. **Write the decision** — `state`, `decidedById`, `decidedAt`, `noteMd`.
+   *   4b. **PIN what was approved** (§6c) — an approval keeps the bytes it was
+   *      given on. MOTIR-4913, and it is in the DOOR rather than in a handler on
+   *      purpose: retention belongs to the SUBJECT that was decided, never to the
+   *      gate kind that carried the decision. Skipped for `request_changes`.
    *   5. **Run the kind's EFFECT**, dispatched through the registry.
    *
    * ⚠️ **NOTHING EXTERNAL HAPPENS INSIDE THE TRANSACTION.** There are no emails
@@ -86,12 +152,11 @@ export const approvalGatesService = {
    * database work only; anything that leaves the process belongs after the
    * commit, in the door's caller.
    *
-   * ⚠️ **WHAT IS DELIBERATELY NOT HERE.** Pinning an approved version's bytes
-   * (ADR §6c), the supersede predicate, and the product-written `superseded`
-   * transition (§6b) are **MOTIR-4913's**, `blocked_by` this card — the epic-wide
-   * re-plan split this card at exactly that seam because the two together
-   * re-crossed the estimation gate. This door REFUSES a `superseded` gate today;
-   * nothing writes that state yet.
+   * ⚠️ **WHERE THE OTHER HALF OF MOTIR-4913 LIVES.** The supersede predicate and
+   * the product-written `superseded` transition (§6b) are in the PUBLISH path
+   * (`designEvidenceService`), because that is where a subject stops being
+   * current. This door has always REFUSED a `superseded` gate; what changed is
+   * that a republish now writes that state.
    */
   async decide(input: DecideGateInput, ctx: ServiceContext): Promise<DecideGateResult> {
     // ── BEFORE THE TRANSACTION ────────────────────────────────────────────────
@@ -196,6 +261,7 @@ export const approvalGatesService = {
           locked.state,
           locked.decidedById,
           locked.decidedAt,
+          locked.decidedByLabel,
         );
       }
 
@@ -212,6 +278,40 @@ export const approvalGatesService = {
         },
         tx,
       );
+
+      // 4b · RETENTION — an APPROVAL PINS the version it was given on
+      //      (MOTIR-4913; ADR §6c, with its MOTIR-4911 amendment).
+      //
+      // ⚠️ IT IS HERE, IN THE GENERIC DOOR, AND NOT IN A HANDLER — and that
+      // placement IS the rule rather than a tidiness preference. §6c originally
+      // keyed retention on the `design_result` gate; §1's amendment then made the
+      // KIND depend on whether the card has a pull request, so a design that
+      // opened one is approved through `pull_request_approval`. A pin written by
+      // the design handler would therefore stop firing for the COMMON case, with
+      // no error and no failing test — the supersede path would simply find
+      // nothing to keep, unlink as it always did, and the orphan-GC would reclaim
+      // the bytes seven days later. The general form, worth holding on to: **a
+      // retention rule belongs to the SUBJECT that was decided, never to the door
+      // the decision came through.**
+      //
+      // So this asks one kind-free question — *does this work item carry a
+      // current design result?* — and it is a no-op for every card that does not.
+      // When `pull_request_approval` registers (MOTIR-4909 / MOTIR-4910) it
+      // inherits the pin by existing, with no line of code in its handler.
+      //
+      // ⚠️ ONLY APPROVALS PIN. `changes_requested` moves nothing and keeps
+      // nothing: the gate ROW records who sent it back and why, and the bytes go
+      // with the next publish. That is §6c's intended loss.
+      //
+      // ⚠️ IN THIS TRANSACTION, which is what §6c asks for in as many words —
+      // *written afterwards, a republish racing an approval re-opens the window
+      // it exists to close.* The gate row is held under the lock taken in step 1,
+      // and the publish path retires an `awaiting` gate BEFORE it locks
+      // `design_evidence`, so the two paths take the same two locks in the same
+      // ORDER and a race resolves by waiting rather than by deadlocking.
+      if (input.decision === 'approve') {
+        await designEvidenceService.pinCurrentForWorkItem(locked.workItemId, tx);
+      }
 
       // 5 · THE KIND'S EFFECT, dispatched through the registry — in the SAME
       // transaction, which is what makes "approving unblocks the cards
