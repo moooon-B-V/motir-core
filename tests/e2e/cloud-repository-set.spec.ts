@@ -392,14 +392,16 @@ test('the rail flips to “Your code is ready” once the invitation goes out', 
   // button on the step, which is what a real retry (**Try again**, or a later
   // visit that finds unresolved rows) does.
   await connectGithubIdentity(seed.userId);
-  const granted = page.waitForResponse(
-    (r) => /\/repositories\/access$/.test(r.url()) && r.request().method() === 'POST',
-  );
+  // ⚠️ NO `page.waitForResponse` HERE, deliberately. The write is driven through
+  // `page.request` — an `APIRequestContext`, which does NOT emit the page's
+  // `response` events — so a wait armed against it can never resolve and the
+  // test ends holding a pending promise. The response object IS the
+  // authoritative signal (CLAUDE.md § E2E: "the write's own response"), and the
+  // committed state is re-read by the navigation below.
   const res = await page.request.post(`/api/projects/${seed.projectKey}/repositories/access`, {
     data: {},
   });
   expect(res.status(), 'the invitations were sent').toBe(200);
-  void granted;
 
   await page.goto(`/plans/${seed.planId}`);
   // Now BOTH the step's status line and the rail's outcome read "Your code is
@@ -523,7 +525,14 @@ test('a GitHub refusal does not cost the user their code — the repositories st
   //
   // What IS asserted here is the half only a browser can see: that the refusal
   // leaves this surface honest.
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  //
+  // ⚠️ ASSERTED BY THE STEP'S OWN FAILURE COPY, NOT BY `getByRole('alert')`.
+  // Radix's `Toast.Provider` mounts an EMPTY `role="alert"` live region for the
+  // life of the shell — it is how a toast is announced — so `getByRole('alert')`
+  // is ≥ 1 on every authed page and a `toHaveCount(0)` against it can never pass.
+  // The step's failure arm is the thing being denied, so it is what gets named.
+  await expect(page.getByText("Motir couldn't finish setting up your code")).toHaveCount(0);
+  await expect(page.getByText(/Your plan is safe in your backlog/)).toHaveCount(0);
 });
 
 /* ⚠️ SIX TESTS WERE REMOVED BY MOTIR-5018, NOT WEAKENED — each drove a surface
