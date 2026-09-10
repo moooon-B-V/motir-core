@@ -43,8 +43,73 @@ const PROVIDER: GitProviderId = 'gitlab';
 /** GitLab MR actions that drive the status machine. Other `object_attributes.action`
  *  values (`update` — a title edit / new commits / label change / assignee change,
  *  `approved`, `unapproved`) carry no lifecycle change to sync — the GitLab
- *  analogue of GitHub's ignored `synchronize`. */
+ *  analogue of GitHub's ignored `synchronize`.
+ *
+ *  ⚠️ `update` IS STILL ABSENT AND MUST STAY ABSENT (MOTIR-5001). The moment a
+ *  draft MR is marked READY arrives under that action, and the fix is NOT to add
+ *  it here: membership in this set is a per-DELIVERY gate, so an `update` member
+ *  would run the status sync on every push, label and assignee change in every
+ *  connected GitLab project — precisely the per-push cost GitHub's `synchronize`
+ *  exclusion is reasoned out to avoid. The un-draft moment is admitted by a
+ *  PREDICATE over the delivery instead (`clearedDraftFlag` below), which fires at
+ *  most once per merge request. */
 const HANDLED_MR_ACTIONS = new Set(['open', 'reopen', 'close', 'merge']);
+
+/** The GitLab MR action that carries an un-draft — and, indistinguishably, every
+ *  push / label / assignee / title edit. It is admitted ONLY by `clearedDraftFlag`. */
+const UPDATE_MR_ACTION = 'update';
+
+/** GitLab's own draft-title prefixes, as its `MergeRequest::DRAFT_REGEX` spells
+ *  them. `WIP:` / `[WIP]` were the pre-14.0 spelling and are still what a
+ *  sufficiently old self-hosted instance emits, so they are read as well as
+ *  written — this is a detector, never a formatter. */
+const DRAFT_TITLE_PREFIX = /^\s*(\[draft\]|\(draft\)|draft:|\[wip\]|\(wip\)|wip:)/i;
+
+/**
+ * Did THIS delivery clear the merge request's draft flag?
+ *
+ * ⚠️ THE QUESTION IS ABOUT THE TRANSITION, NOT THE STATE, and that is the whole
+ * reason it is answered here rather than on the seam. `NormalizedChangeRequest`
+ * carries what the merge request IS (`draft: false` at this moment) and has no
+ * notion of what CHANGED — and a delivery whose title was edited while the MR was
+ * already ready normalizes to exactly the same shape as this one. Only GitLab's
+ * `changes` object separates them, and it never crosses the seam.
+ *
+ * TWO tells, in priority order:
+ *
+ *  1. **`changes.draft`** — the modern payload, and AUTHORITATIVE in both
+ *     directions. `{ previous: true, current: false }` is the un-draft; a
+ *     `{ previous: false, current: true }` (ready → draft) is NOT the inverse rung
+ *     and must transition nothing, so its presence is what stops the title tell
+ *     below from being consulted at all.
+ *  2. **`changes.title`, only when `changes.draft` is absent** — the legacy tell.
+ *     Before GitLab surfaced `draft` in the changes object, removing the `Draft: `
+ *     prefix WAS the un-draft, and it arrived as an ordinary title change. A
+ *     self-hosted instance lags the SaaS release by arbitrary amounts, so this arm
+ *     is not dead code on a schedule — it is the only tell some deployments emit.
+ */
+function clearedDraftFlag(body: Record<string, unknown>): boolean {
+  const changes = asRecord(body['changes']);
+  if (!changes) return false;
+
+  const draftChange = asRecord(changes['draft']);
+  if (draftChange) return draftChange['previous'] === true && draftChange['current'] === false;
+
+  const titleChange = asRecord(changes['title']);
+  if (!titleChange) return false;
+  const previous = titleChange['previous'];
+  const current = titleChange['current'];
+  if (typeof previous !== 'string' || typeof current !== 'string') return false;
+  return DRAFT_TITLE_PREFIX.test(previous) && !DRAFT_TITLE_PREFIX.test(current);
+}
+
+/** Does this delivery carry a lifecycle change worth driving the status machine
+ *  with? Either its action is one of the four that always do, or it is the
+ *  `update` that un-drafted the merge request (MOTIR-5001). */
+function carriesLifecycleChange(action: string, body: Record<string, unknown>): boolean {
+  if (HANDLED_MR_ACTIONS.has(action)) return true;
+  return action === UPDATE_MR_ACTION && clearedDraftFlag(body);
+}
 
 export type GitlabWebhookResult =
   | { event: 'ignored'; reason: string }
@@ -88,19 +153,22 @@ export const gitlabWebhookService = {
    * the shared seam decides that, not this dispatcher, so nothing here reads
    * `draft`. A draft MR that is closed or merged still carries a real lifecycle.
    *
-   * ⚠️ KNOWN GAP, and it is GitLab-only: the moment a draft MR is marked READY
-   * arrives as `action: 'update'`, which `HANDLED_MR_ACTIONS` deliberately does
-   * NOT handle (it is the analogue of GitHub's `synchronize` and fires on every
-   * push, label and assignee change). So on GitLab a draft MR gets no
-   * `implemented` rung at all — it stays where it is until the `merge` action
-   * completes it. GitHub's half of this is `ready_for_review`, which IS handled.
-   * Closing the gap needs a narrower predicate than the whole `update` action —
-   * `changes.draft` on the payload — which is its own decision and its own card:
-   * MOTIR-5001.
+   * ⚠️ THE UN-DRAFT MOMENT IS GITLAB-SHAPED, AND IT IS A PREDICATE RATHER THAN A
+   * SET MEMBER (MOTIR-5001). GitHub emits a dedicated `ready_for_review` action, so
+   * its half is one entry in `HANDLED_PR_ACTIONS`. GitLab has no such action: a
+   * draft becoming ready is an `update`, which is also what it emits for a pushed
+   * commit, a label, an assignee and a title edit — the event we want is buried in
+   * the event we most want to ignore. So the gate admits `update` ONLY when this
+   * delivery's `changes` object says the draft flag was cleared, which fires at
+   * most once per merge request; the whole action stays out of the set.
+   *
+   * Nothing further is owed once the gate lets it through: at that moment the MR's
+   * own `draft` is already `false` and its state is still `opened`, so the shared
+   * seam resolves `implemented` on its own. The fix is a GATE, not a new signal.
    */
   async handleMergeRequest(body: Record<string, unknown>): Promise<GitlabWebhookResult> {
     const action = asRecord(body['object_attributes'])?.['action'];
-    if (typeof action === 'string' && !HANDLED_MR_ACTIONS.has(action)) {
+    if (typeof action === 'string' && !carriesLifecycleChange(action, body)) {
       return { event: 'pull_request', outcome: 'ignored_action' };
     }
     const provider = getGitProvider(PROVIDER);
