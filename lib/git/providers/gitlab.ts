@@ -359,15 +359,28 @@ export const gitlabProvider: GitProvider = {
       headRef,
       baseRef,
       title: typeof attrs['title'] === 'string' ? attrs['title'] : null,
+      // The DRAFT flag (MOTIR-4968). GitLab carries BOTH names on
+      // `object_attributes` — `draft` is the current one and `work_in_progress`
+      // the legacy alias it kept for compatibility — so read either rather than
+      // picking one and hoping every deployment agrees. Self-hosted GitLab
+      // instances lag the SaaS release by arbitrary amounts, which is exactly
+      // the case a single-name read would fail silently on.
+      draft: attrs['draft'] === true || attrs['work_in_progress'] === true,
     };
   },
 
   // PURE and payload-only, exactly as GitHub's is: the trunk check that turns
   // `done` into an actual completion lives in the shared consumer, which holds the
   // mirrored default branch (MOTIR-1873).
-  changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle {
+  changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle | null {
     if (cr.merged) return 'done';
     if (cr.state === 'closed') return 'todo'; // closed WITHOUT merging — not done
+    // ⚠️ OPEN AND A DRAFT — NO LIFECYCLE AT ALL (MOTIR-4968), identical to
+    // GitHub's arm and in the same position for the same reason: after the
+    // merged and closed arms, so a CLOSED draft still resolves to `todo`.
+    // "A draft is not implemented" is provider-agnostic by construction, which
+    // is what this shared contract exists for.
+    if (cr.draft) return null;
     // OPEN — the code exists and CI has not spoken for it (MOTIR-3005). NOT
     // `in_review`: that state is written by the CI-feedback consumer alone.
     return 'implemented';

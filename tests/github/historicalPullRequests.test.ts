@@ -100,6 +100,13 @@ describe('normalizeHistoricalPullRequest', () => {
       headRef: 'subtask/MOTIR-42-slug',
       baseRef: 'main',
       title: 'A change (MOTIR-42)',
+      // MOTIR-4968 — the seam grew a required `draft`, and this backfill states
+      // it as a LITERAL false for the same reason it states `state: 'closed'`:
+      // this path only ever produces a MERGED pull request, which is never a
+      // draft and which the lifecycle answers `done` on before the draft guard
+      // is reached. That is exactly the parity this test asserts, so the field
+      // belongs in the expectation rather than being excluded from it.
+      draft: false,
     });
     expect(pr!.mergedAt.toISOString()).toBe('2026-06-20T10:00:00.000Z');
   });

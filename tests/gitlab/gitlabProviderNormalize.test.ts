@@ -41,6 +41,32 @@ describe('gitlab.parseChangeRequestEvent', () => {
       headRef: 'subtask/MOTIR-1474-gitlab',
       baseRef: 'main',
       title: 'feat: a thing',
+      draft: false,
+    });
+  });
+
+  // MOTIR-4968 — the GitLab half of the DRAFT flag, asserted on its own so the
+  // seam cannot have one provider silently omitting it. GitLab carries BOTH
+  // names, so both are read.
+  it('reads the DRAFT flag off `draft` (MOTIR-4968)', () => {
+    expect(gitlab.parseChangeRequestEvent(mrEvent({ draft: true }))).toMatchObject({
+      state: 'open',
+      draft: true,
+    });
+  });
+
+  it('reads the DRAFT flag off the legacy `work_in_progress` alias too', () => {
+    // Self-hosted GitLab lags the SaaS release arbitrarily, so a single-name read
+    // would fail silently on exactly the deployments that cannot upgrade.
+    expect(gitlab.parseChangeRequestEvent(mrEvent({ work_in_progress: true }))).toMatchObject({
+      draft: true,
+    });
+  });
+
+  it('normalizes a MISSING draft field to false, never to a truthy guess', () => {
+    expect(gitlab.parseChangeRequestEvent(mrEvent())).toMatchObject({ draft: false });
+    expect(gitlab.parseChangeRequestEvent(mrEvent({ draft: 'yes' }))).toMatchObject({
+      draft: false,
     });
   });
 
@@ -76,6 +102,7 @@ describe('gitlab.changeRequestLifecycle', () => {
     headRef: 'b',
     baseRef: 'main',
     title: null,
+    draft: false,
   } as const;
 
   it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {
@@ -84,6 +111,27 @@ describe('gitlab.changeRequestLifecycle', () => {
     );
     expect(gitlab.changeRequestLifecycle({ ...base, state: 'closed', merged: true })).toBe('done');
     expect(gitlab.changeRequestLifecycle({ ...base, state: 'closed', merged: false })).toBe('todo');
+  });
+
+  // MOTIR-4968 — identical to GitHub's arm, asserted separately: "a draft is not
+  // implemented" is provider-agnostic by construction, and the way that stays true
+  // is that both implementations are held to it.
+  it('maps an OPEN DRAFT to NO lifecycle (MOTIR-4968)', () => {
+    expect(
+      gitlab.changeRequestLifecycle({ ...base, state: 'open', merged: false, draft: true }),
+    ).toBeNull();
+  });
+
+  it('still maps a CLOSED draft to todo — the case a top-of-function guard swallows', () => {
+    expect(
+      gitlab.changeRequestLifecycle({ ...base, state: 'closed', merged: false, draft: true }),
+    ).toBe('todo');
+  });
+
+  it('still maps a MERGED draft to done', () => {
+    expect(
+      gitlab.changeRequestLifecycle({ ...base, state: 'closed', merged: true, draft: true }),
+    ).toBe('done');
   });
 });
 

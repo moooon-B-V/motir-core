@@ -390,6 +390,12 @@ export const githubProvider: GitProvider = {
       headRef,
       baseRef,
       title: typeof pr['title'] === 'string' ? pr['title'] : null,
+      // The DRAFT flag (MOTIR-4968), read in the same idiom as `merged` beside
+      // it: GitHub reports a draft as `state: 'open'`, so this boolean is the
+      // only thing that separates "open, awaiting review" from "open, explicitly
+      // not offered". `=== true` rather than a truthiness coercion for the same
+      // reason `merged` uses it — an absent field is not a draft.
+      draft: pr['draft'] === true,
     };
   },
 
@@ -398,9 +404,23 @@ export const githubProvider: GitProvider = {
   // repository's default branch is settled by the consumer
   // (`changeRequestStatusSync`), which is the only layer holding the mirrored
   // `GithubRepo.defaultBranch` this seam cannot read (MOTIR-1873).
-  changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle {
+  changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle | null {
     if (cr.merged) return 'done';
     if (cr.state === 'closed') return 'todo'; // closed WITHOUT merging — not done
+    // ⚠️ OPEN AND A DRAFT — NO LIFECYCLE AT ALL (MOTIR-4968). The code exists and
+    // is explicitly NOT offered for review, so calling it `implemented` asserts
+    // something false about a pull request whose author has said the opposite.
+    // The card becomes `implemented` on `ready_for_review` instead, which is the
+    // moment that actually means it.
+    //
+    // ⚠️ THE POSITION OF THIS LINE IS THE RULE. It sits AFTER the two arms above
+    // and not at the top of the function, because a blanket early return would
+    // also swallow the two draft cases that MUST still act: a draft CLOSED
+    // without merging (GitHub permits it; `draft: true, state: 'closed'`) has to
+    // resolve to `todo` or an abandoned draft strands its card wherever it was,
+    // and a `merged` draft has to resolve to `done` — GitHub blocks that today,
+    // and this seam must not depend on it continuing to.
+    if (cr.draft) return null;
     // OPEN — the code exists and CI has not spoken for it (MOTIR-3005). NOT
     // `in_review`: that state is written by the CI-feedback consumer alone.
     return 'implemented';

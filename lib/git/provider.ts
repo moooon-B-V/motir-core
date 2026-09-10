@@ -270,8 +270,21 @@ export interface GitProvider {
    * branch (MOTIR-1873), and only the consumer can tell — the mirrored default
    * branch is a DB read this pure seam deliberately cannot make. So a provider
    * must never try to gate completion here.
+   *
+   * ⚠️ `null` means NO LIFECYCLE CHANGE, and it is a real answer rather than a
+   * failure (MOTIR-4968): an OPEN DRAFT is code that exists and is explicitly
+   * NOT offered for review, so it is neither `implemented` nor anything else.
+   * The consumer RECORDS the delivery and skips the transition — it must not
+   * treat this as malformed, and it must not fall back to a default.
+   *
+   * ⚠️ AND THE ORDER OF THE ARMS IS THE WHOLE OF THE DRAFT RULE. The guard
+   * belongs where `implemented` is DECIDED — AFTER the merged and closed arms —
+   * never as a blanket early return, which would also swallow a draft that is
+   * CLOSED without merging (`draft: true, state: 'closed'`, which every host
+   * permits and which must still resolve to `todo`) and a `merged` draft (which
+   * GitHub blocks today and which this seam must not depend on it blocking).
    */
-  changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle;
+  changeRequestLifecycle(cr: NormalizedChangeRequest): ChangeRequestLifecycle | null;
 
   /**
    * Normalize a raw CI / pipeline webhook payload into the provider-agnostic

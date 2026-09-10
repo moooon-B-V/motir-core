@@ -57,6 +57,27 @@ describe('github.parseChangeRequestEvent', () => {
       headRef: 'subtask/MOTIR-891-github-app',
       baseRef: 'main',
       title: 'feat: a thing',
+      draft: false,
+    });
+  });
+
+  // MOTIR-4968 — the DRAFT flag, read off `pull_request.draft`. The payload has
+  // always carried it; the seam did not, which is why a draft was
+  // indistinguishable from a ready pull request.
+  it('reads the DRAFT flag off a real draft payload (MOTIR-4968)', () => {
+    expect(github.parseChangeRequestEvent(prEvent({ draft: true }))).toMatchObject({
+      state: 'open',
+      merged: false,
+      draft: true,
+    });
+  });
+
+  it('normalizes a MISSING draft field to false, never to a truthy guess', () => {
+    // GitHub always sends it, but the parser is strict everywhere else and is
+    // strict here: `=== true`, so an absent or non-boolean field is not a draft.
+    expect(github.parseChangeRequestEvent(prEvent())).toMatchObject({ draft: false });
+    expect(github.parseChangeRequestEvent(prEvent({ draft: 'yes' }))).toMatchObject({
+      draft: false,
     });
   });
 
@@ -88,6 +109,7 @@ describe('github.changeRequestLifecycle', () => {
     headRef: 'b',
     baseRef: 'main',
     title: null,
+    draft: false,
   } as const;
 
   it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {
@@ -96,6 +118,28 @@ describe('github.changeRequestLifecycle', () => {
     );
     expect(github.changeRequestLifecycle({ ...base, state: 'closed', merged: true })).toBe('done');
     expect(github.changeRequestLifecycle({ ...base, state: 'closed', merged: false })).toBe('todo');
+  });
+
+  // MOTIR-4968 — the draft arm, and the two cases a blanket early return breaks.
+  it('maps an OPEN DRAFT to NO lifecycle (MOTIR-4968)', () => {
+    expect(
+      github.changeRequestLifecycle({ ...base, state: 'open', merged: false, draft: true }),
+    ).toBeNull();
+  });
+
+  it('still maps a CLOSED draft to todo — the case a top-of-function guard swallows', () => {
+    // GitHub permits closing a draft without merging. If the draft guard sat
+    // above the closed arm this would answer null and the card would be stranded
+    // wherever it was, which is the whole reason the guard's POSITION is the rule.
+    expect(
+      github.changeRequestLifecycle({ ...base, state: 'closed', merged: false, draft: true }),
+    ).toBe('todo');
+  });
+
+  it('still maps a MERGED draft to done — the seam does not depend on GitHub blocking it', () => {
+    expect(
+      github.changeRequestLifecycle({ ...base, state: 'closed', merged: true, draft: true }),
+    ).toBe('done');
   });
 });
 
