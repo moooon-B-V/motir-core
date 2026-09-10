@@ -168,8 +168,18 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
     const timer = setTimeout(() => {
       if (!cancelled) setState('failed');
     }, PROBE_TIMEOUT_MS);
+    // ⚠️ DISARMED THE MOMENT THE PROBE SETTLES, IN BOTH ARMS — clearing it only
+    // in the effect's cleanup is not enough, and the difference is a real
+    // defect rather than tidiness. A successful probe does not re-run the
+    // effect, so a timer cleared only on cleanup stays armed over a frame that
+    // has already loaded and fires `'failed'` ten seconds later — retracting a
+    // rendered port and, now that the verbs are gated on it, taking a live
+    // decision away from a reader looking straight at its subject. Caught by
+    // `design-result-port-report.test.ts`'s "does NOT fire the timeout once the
+    // probe has settled".
     fetch(url, { method: 'GET', redirect: 'manual' })
       .then((res) => {
+        clearTimeout(timer);
         if (cancelled) return;
         // `type: 'opaqueredirect'` (the 302 we expect) reports `ok: false` and
         // `status: 0`, so treat any non-error settlement as reachable and let
@@ -177,6 +187,7 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
         setState(res.type === 'opaqueredirect' || res.ok ? 'ready' : 'failed');
       })
       .catch(() => {
+        clearTimeout(timer);
         if (!cancelled) setState('failed');
       });
     return () => {
@@ -185,16 +196,18 @@ function MockFrame({ asset }: { asset: DesignAssetDTO }) {
     };
   }, [url, attempt]);
 
-  // ⚠️ REPORTED TO THE APPROVAL FRAME ABOVE, AND `!url` IS A FAILURE RATHER THAN
-  // A SILENCE (MOTIR-5032). A mock asset whose blob has been reclaimed still
-  // carries its `sourcePath`, so the row exists and the bytes do not — the
-  // "subject the resolver returned as unavailable" arm. This component's own
-  // answer to that is `return null` below, which renders NOTHING: correct for a
-  // read-only panel, and exactly the state in which a live Approve button over
-  // an empty box would be worst. So it reports the failure BEFORE the early
-  // return, which is also what keeps the hook call unconditional.
+  // ⚠️ REPORTED TO THE APPROVAL FRAME ABOVE (MOTIR-5032) — the probe's own three
+  // outcomes, and nothing else.
+  //
+  // The `!url` case is NOT reported here, and that is a reachability fact rather
+  // than an oversight: the only call site filters on it
+  // (`assets.filter((a) => a.kind === 'mock' && a.url)`), so a url-less mock
+  // never reaches this component and an arm for it would be dead branch. The
+  // asset whose blob HAS been reclaimed is a real case and is answered one level
+  // up, in the panel's own `hasSubject` report, which is where the filter leaves
+  // it. The `return null` below stays as the defensive floor it already was.
   useReportPortRenderStatus(
-    !url ? 'failed' : state === 'ready' ? 'rendered' : state === 'failed' ? 'failed' : 'rendering',
+    state === 'ready' ? 'rendered' : state === 'failed' ? 'failed' : 'rendering',
   );
 
   if (!url) return null;
