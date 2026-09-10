@@ -609,9 +609,6 @@
         background: var(--el-accent);
         color: var(--el-accent-text);
       }
-      .estep .ebtn-quiet {
-        color: var(--el-info);
-      }
       /* The BAND: the same step, at the top of the pane, on a hairline. */
       .estep.band {
         padding: 14px 18px;
@@ -984,11 +981,10 @@
               <div class="estep band" style="border-bottom: 1px solid var(--el-border)">
                 <div class="erow">
                   <div>
-                    <div class="eyebrow">Next</div>
+                    <div class="eyebrow">Your project's code</div>
                     <h3>Motir will host your code</h3>
                   </div>
-                  <button class="ebtn ebtn-primary">Create repositories</button>
-                  <button class="ebtn ebtn-quiet">I'll connect my own</button>
+                  <button class="ebtn ebtn-primary">Continue</button>
                 </div>
               </div>
               <div
@@ -1047,6 +1043,32 @@
             behaviour, its treatment and its states are Part IX's to specify, and Part VIII
             specifies only that it sits at the bar's right end, opposite the switcher. Leaving it
             undrawn is how a pane ends up with two control bars.
+          </div>
+          <div class="note-box">
+            <b
+              >⚠️ AMENDED 2026-09-10 (MOTIR-5050) — the band above is composed for a project that
+              HAS code to establish, and the frame was refreshed to the shipped step.</b
+            >
+            Two corrections. First the copy: the band had carried an invented
+            <code>Next</code> overline with <b>Create repositories</b> and
+            <b>I'll connect my own</b> — a stylized stand-in that v5 (MOTIR-5014) had since
+            overtaken, since the shipped step has the <code>Your project's code</code> overline,
+            <b>one</b>
+            action and no branch at all. A composed element that drifts from what it composes is the
+            thing composition exists to prevent, so it now mirrors
+            <code>RepositorySetStep</code>.<br /><br />
+            <b
+              >Second, and structurally: for a project whose repository set arrived SETTLED there is
+              no band here at all</b
+            >
+            — every row <code>connected</code>, because the repositories are the organisation's and
+            onboarding connected them. The pane header then sits directly on the body, which is the
+            arrangement this panel's own argument predicts: the switcher governs the BODY and the
+            band is not part of the body, so removing the band moves nothing and the bar keeps its
+            position. <b>Nothing in this panel's decision changes</b> — it is drawn for both
+            populations rather than re-decided.
+            <code>design/repository-set/design-notes.md</code> §7b is the design of record, and
+            <code>plans-surface.mock.html</code>'s Panel H·v6 draws the absence.
           </div>
         </div>
       </div>
